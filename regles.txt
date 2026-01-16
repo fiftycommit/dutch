@@ -1,0 +1,37 @@
+Règles du jeu du Dutch
+
+Règles générales : 
+
+Tous les joueurs ont 4 cartes dans leur deck mais ne peuvent en retourner que 2 au début de la partie et une seule fois 
+Chaque carte à une position et les joueurs peuvent choisir à n'importe quel moment de changer leur emplacement (en ne regardant pas les cartes)
+Chaque joueur va devoir piocher à tour de rôle en regardant la carte piochée et va devoir décider s’il souhaite conserver la carte qu’il vient de piocher ou non, si il ne la garde pas il place la carte dans la défausse (et tout le monde voit la carte qu'il vient de defausser) et si il la garde il la place dans son deck.
+
+Le but étant d’obtenir le plus faible score de points et si possible d’arriver à 0 
+
+Si un joueur se débarrasse d’une carte et pose une carte (défausse) dont j’ai la même valeur j’ai le droit de m’en débarrasser aussi (peut-être compliqué a devlopper donc fonctionnalité bonus)
+Exemple l’adversaire se débarrasse d’un 4 de cœur et dans mon jeu j’ai un 4 de pic 
+J’ai le droit de poser le 4 au milieu et ainsi éliminer une carte de mon jeu afin de réduire mon score 
+
+Lorsque que je pense avoir le plus faible score parmi tous mes adversaires je dois crier dutch lorsque c’est à mon tour de piocher et la partie s’arrête et tous les joueurs doivent retourner leur cartes (Donc dans l'application, on aura un bouton Dutch)
+Si quelqu'un à un score de cartes moins élevé, je suis éliminer et le classement se fait par score de cartes
+On peut choisir de faire une partie rapide ou un mode tournoi où on aura 8eme de finale puis demi finale puis finale (Si on joue a 4, 1 eliminer à chaque tour)
+
+Pour l'instant, on aura qu'un mode solo et 3 bots qui auront des comportements distincts
+
+En quelques mot le but de ce jeu est de mémoriser les cartes de son jeu et de s’en débarrasser dès que l’occasion se présente afin d’obtenir le plus faibles score de point 
+
+Valeur des cartes : 
+
+Roi rouge il vaut 0 points 
+Roi Noir 13 
+Dame 12 points 
+Vallet = 11 pts 
+Etc….. 
+3 = 3 pts
+Joker = 0 points et s’il est posé au milieu (dans la pile) pouvoir de mélanger le jeu d’une personne qu'on veut
+
+Cartes spéciales : 
+Joker = 0 points et s’il est posé au milieu (dans la pile) pouvoir de mélanger le jeu d’une personne qu'on veut
+La carte 7 permet de regarder une des cartes de son jeu qu’on ne connaît pas 
+La carte 10 permet de regarder la carte du jeu de quelqu’un d’autre 
+La carte V (vallet) permet d’échanger une carte de son jeu ou du jeu de quelqu’un d’autres ou d’échanger une carte entre eux 

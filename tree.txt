@@ -1,0 +1,599 @@
+maxmbey@MacBook-Pro-de-Max dutch-v2 % tree
+.
+├── analysis_options.yaml
+├── assets
+│   ├── images
+│   │   └── cards
+│   │       ├── 01-carreau.svg
+│   │       ├── 01-coeur.svg
+│   │       ├── 01-pique.svg
+│   │       ├── 01-trefle.svg
+│   │       ├── 02-carreau.svg
+│   │       ├── 02-coeur.svg
+│   │       ├── 02-pique.svg
+│   │       ├── 02-trefle.svg
+│   │       ├── 03-carreau.svg
+│   │       ├── 03-coeur.svg
+│   │       ├── 03-pique.svg
+│   │       ├── 03-trefle.svg
+│   │       ├── 04-carreau.svg
+│   │       ├── 04-coeur.svg
+│   │       ├── 04-pique.svg
+│   │       ├── 04-trefle.svg
+│   │       ├── 05-carreau.svg
+│   │       ├── 05-coeur.svg
+│   │       ├── 05-pique.svg
+│   │       ├── 05-trefle.svg
+│   │       ├── 06-carreau.svg
+│   │       ├── 06-coeur.svg
+│   │       ├── 06-pique.svg
+│   │       ├── 06-trefle.svg
+│   │       ├── 07-carreau.svg
+│   │       ├── 07-coeur.svg
+│   │       ├── 07-pique.svg
+│   │       ├── 07-trefle.svg
+│   │       ├── 08-carreau.svg
+│   │       ├── 08-coeur.svg
+│   │       ├── 08-pique.svg
+│   │       ├── 08-trefle.svg
+│   │       ├── 09-carreau.svg
+│   │       ├── 09-coeur.svg
+│   │       ├── 09-pique.svg
+│   │       ├── 09-trefle.svg
+│   │       ├── 10-carreau.svg
+│   │       ├── 10-coeur.svg
+│   │       ├── 10-pique.svg
+│   │       ├── 10-trefle.svg
+│   │       ├── D-carreau.svg
+│   │       ├── D-coeur.svg
+│   │       ├── D-pique.svg
+│   │       ├── D-trefle.svg
+│   │       ├── dos-bleu.svg
+│   │       ├── joker-noir.svg
+│   │       ├── joker-rouge.svg
+│   │       ├── R-carreau.svg
+│   │       ├── R-coeur.svg
+│   │       ├── R-pique.svg
+│   │       ├── R-trefle.svg
+│   │       ├── V-carreau.svg
+│   │       ├── V-coeur.svg
+│   │       ├── V-pique.svg
+│   │       └── V-trefle.svg
+│   ├── music
+│   └── sounds
+├── build
+│   ├── 3db25abb13e29dfd86c6b9b67f5bf79a.cache.dill.track.dill
+│   ├── 60cc4bed0c7a62d0572035abee4e5f6e
+│   │   ├── _composite.stamp
+│   │   ├── dart_build_result.json
+│   │   ├── dart_build.d
+│   │   ├── dart_build.stamp
+│   │   ├── gen_dart_plugin_registrant.stamp
+│   │   ├── gen_localizations.stamp
+│   │   └── outputs.json
+│   ├── flutter_assets
+│   │   ├── AssetManifest.bin
+│   │   ├── AssetManifest.bin.json
+│   │   ├── assets
+│   │   │   └── images
+│   │   │       └── cards
+│   │   │           ├── 01-carreau.svg
+│   │   │           ├── 01-coeur.svg
+│   │   │           ├── 01-pique.svg
+│   │   │           ├── 01-trefle.svg
+│   │   │           ├── 02-carreau.svg
+│   │   │           ├── 02-coeur.svg
+│   │   │           ├── 02-pique.svg
+│   │   │           ├── 02-trefle.svg
+│   │   │           ├── 03-carreau.svg
+│   │   │           ├── 03-coeur.svg
+│   │   │           ├── 03-pique.svg
+│   │   │           ├── 03-trefle.svg
+│   │   │           ├── 04-carreau.svg
+│   │   │           ├── 04-coeur.svg
+│   │   │           ├── 04-pique.svg
+│   │   │           ├── 04-trefle.svg
+│   │   │           ├── 05-carreau.svg
+│   │   │           ├── 05-coeur.svg
+│   │   │           ├── 05-pique.svg
+│   │   │           ├── 05-trefle.svg
+│   │   │           ├── 06-carreau.svg
+│   │   │           ├── 06-coeur.svg
+│   │   │           ├── 06-pique.svg
+│   │   │           ├── 06-trefle.svg
+│   │   │           ├── 07-carreau.svg
+│   │   │           ├── 07-coeur.svg
+│   │   │           ├── 07-pique.svg
+│   │   │           ├── 07-trefle.svg
+│   │   │           ├── 08-carreau.svg
+│   │   │           ├── 08-coeur.svg
+│   │   │           ├── 08-pique.svg
+│   │   │           ├── 08-trefle.svg
+│   │   │           ├── 09-carreau.svg
+│   │   │           ├── 09-coeur.svg
+│   │   │           ├── 09-pique.svg
+│   │   │           ├── 09-trefle.svg
+│   │   │           ├── 10-carreau.svg
+│   │   │           ├── 10-coeur.svg
+│   │   │           ├── 10-pique.svg
+│   │   │           ├── 10-trefle.svg
+│   │   │           ├── D-carreau.svg
+│   │   │           ├── D-coeur.svg
+│   │   │           ├── D-pique.svg
+│   │   │           ├── D-trefle.svg
+│   │   │           ├── dos-bleu.svg
+│   │   │           ├── joker-noir.svg
+│   │   │           ├── joker-rouge.svg
+│   │   │           ├── R-carreau.svg
+│   │   │           ├── R-coeur.svg
+│   │   │           ├── R-pique.svg
+│   │   │           ├── R-trefle.svg
+│   │   │           ├── V-carreau.svg
+│   │   │           ├── V-coeur.svg
+│   │   │           ├── V-pique.svg
+│   │   │           └── V-trefle.svg
+│   │   ├── FontManifest.json
+│   │   ├── fonts
+│   │   │   └── MaterialIcons-Regular.otf
+│   │   ├── NOTICES
+│   │   ├── packages
+│   │   │   └── cupertino_icons
+│   │   │       └── assets
+│   │   │           └── CupertinoIcons.ttf
+│   │   └── shaders
+│   │       ├── ink_sparkle.frag
+│   │       └── stretch_effect.frag
+│   ├── ios
+│   │   └── XCBuildData
+│   │       └── PIFCache
+│   │           ├── project
+│   │           │   └── PROJECT@v11_mod=96a6d9d908aceaf154508b1de2ba7486_hash=bfdfe7dc352907fc980b868725387e98plugins=1OJSG6M1FOV3XYQCBH7Z29RZ0FPR9XDE1-json
+│   │           ├── target
+│   │           │   ├── TARGET@v11_hash=58f850f934eb0d9dff2b45eb5398c71f-json
+│   │           │   ├── TARGET@v11_hash=77496ddae510bd3c080ceb02bc247fb1-json
+│   │           │   ├── TARGET@v11_hash=804ce7b3d272bbb6653b5dced25d136a-json
+│   │           │   ├── TARGET@v11_hash=8d4ca266b6e67dbe0152b15114a7a96b-json
+│   │           │   ├── TARGET@v11_hash=9437a806a0a0382fe79670beb6aaf60e-json
+│   │           │   ├── TARGET@v11_hash=9da1d3b0fad271d01463d91ca27e833d-json
+│   │           │   ├── TARGET@v11_hash=bb3dc5491a4889b8835a5ef03e107968-json
+│   │           │   └── TARGET@v11_hash=cde6c7baeb648c61209e7172384260f8-json
+│   │           └── workspace
+│   │               └── WORKSPACE@v11_hash=(null)_subobjects=945e9923220a72ca4169b4f36a3bed67-json
+│   ├── native_assets
+│   │   └── web
+│   └── native_hooks
+├── devtools_options.yaml
+├── docs
+│   ├── assets
+│   │   ├── AssetManifest.bin
+│   │   ├── AssetManifest.bin.json
+│   │   ├── assets
+│   │   │   └── images
+│   │   │       └── cards
+│   │   │           ├── 01-carreau.svg
+│   │   │           ├── 01-coeur.svg
+│   │   │           ├── 01-pique.svg
+│   │   │           ├── 01-trefle.svg
+│   │   │           ├── 02-carreau.svg
+│   │   │           ├── 02-coeur.svg
+│   │   │           ├── 02-pique.svg
+│   │   │           ├── 02-trefle.svg
+│   │   │           ├── 03-carreau.svg
+│   │   │           ├── 03-coeur.svg
+│   │   │           ├── 03-pique.svg
+│   │   │           ├── 03-trefle.svg
+│   │   │           ├── 04-carreau.svg
+│   │   │           ├── 04-coeur.svg
+│   │   │           ├── 04-pique.svg
+│   │   │           ├── 04-trefle.svg
+│   │   │           ├── 05-carreau.svg
+│   │   │           ├── 05-coeur.svg
+│   │   │           ├── 05-pique.svg
+│   │   │           ├── 05-trefle.svg
+│   │   │           ├── 06-carreau.svg
+│   │   │           ├── 06-coeur.svg
+│   │   │           ├── 06-pique.svg
+│   │   │           ├── 06-trefle.svg
+│   │   │           ├── 07-carreau.svg
+│   │   │           ├── 07-coeur.svg
+│   │   │           ├── 07-pique.svg
+│   │   │           ├── 07-trefle.svg
+│   │   │           ├── 08-carreau.svg
+│   │   │           ├── 08-coeur.svg
+│   │   │           ├── 08-pique.svg
+│   │   │           ├── 08-trefle.svg
+│   │   │           ├── 09-carreau.svg
+│   │   │           ├── 09-coeur.svg
+│   │   │           ├── 09-pique.svg
+│   │   │           ├── 09-trefle.svg
+│   │   │           ├── 10-carreau.svg
+│   │   │           ├── 10-coeur.svg
+│   │   │           ├── 10-pique.svg
+│   │   │           ├── 10-trefle.svg
+│   │   │           ├── D-carreau.svg
+│   │   │           ├── D-coeur.svg
+│   │   │           ├── D-pique.svg
+│   │   │           ├── D-trefle.svg
+│   │   │           ├── dos-bleu.svg
+│   │   │           ├── joker-noir.svg
+│   │   │           ├── joker-rouge.svg
+│   │   │           ├── R-carreau.svg
+│   │   │           ├── R-coeur.svg
+│   │   │           ├── R-pique.svg
+│   │   │           ├── R-trefle.svg
+│   │   │           ├── V-carreau.svg
+│   │   │           ├── V-coeur.svg
+│   │   │           ├── V-pique.svg
+│   │   │           └── V-trefle.svg
+│   │   ├── FontManifest.json
+│   │   ├── fonts
+│   │   │   └── MaterialIcons-Regular.otf
+│   │   ├── NOTICES
+│   │   ├── packages
+│   │   │   └── cupertino_icons
+│   │   │       └── assets
+│   │   │           └── CupertinoIcons.ttf
+│   │   └── shaders
+│   │       ├── ink_sparkle.frag
+│   │       └── stretch_effect.frag
+│   ├── canvaskit
+│   │   ├── canvaskit.js
+│   │   ├── canvaskit.js.symbols
+│   │   ├── canvaskit.wasm
+│   │   ├── chromium
+│   │   │   ├── canvaskit.js
+│   │   │   ├── canvaskit.js.symbols
+│   │   │   └── canvaskit.wasm
+│   │   ├── skwasm_heavy.js
+│   │   ├── skwasm_heavy.js.symbols
+│   │   ├── skwasm_heavy.wasm
+│   │   ├── skwasm.js
+│   │   ├── skwasm.js.symbols
+│   │   └── skwasm.wasm
+│   ├── favicon.png
+│   ├── flutter_bootstrap.js
+│   ├── flutter_service_worker.js
+│   ├── flutter.js
+│   ├── icons
+│   │   ├── Icon-192.png
+│   │   ├── Icon-512.png
+│   │   ├── Icon-maskable-192.png
+│   │   └── Icon-maskable-512.png
+│   ├── index.html
+│   ├── main.dart.js
+│   ├── manifest.json
+│   └── version.json
+├── dutch_game_specs.md
+├── dutch_game.iml
+├── ios
+│   ├── Flutter
+│   │   ├── AppFrameworkInfo.plist
+│   │   ├── Debug.xcconfig
+│   │   ├── ephemeral
+│   │   │   ├── flutter_lldb_helper.py
+│   │   │   └── flutter_lldbinit
+│   │   ├── flutter_export_environment.sh
+│   │   ├── Generated.xcconfig
+│   │   └── Release.xcconfig
+│   ├── Podfile
+│   ├── Podfile.lock
+│   ├── Pods
+│   │   ├── Headers
+│   │   ├── Local Podspecs
+│   │   │   ├── audioplayers_darwin.podspec.json
+│   │   │   ├── Flutter.podspec.json
+│   │   │   ├── path_provider_foundation.podspec.json
+│   │   │   └── shared_preferences_foundation.podspec.json
+│   │   ├── Pods.xcodeproj
+│   │   │   ├── project.pbxproj
+│   │   │   └── xcuserdata
+│   │   │       └── maxmbey.xcuserdatad
+│   │   │           └── xcschemes
+│   │   │               ├── audioplayers_darwin.xcscheme
+│   │   │               ├── Flutter.xcscheme
+│   │   │               ├── path_provider_foundation-path_provider_foundation_privacy.xcscheme
+│   │   │               ├── path_provider_foundation.xcscheme
+│   │   │               ├── Pods-Runner.xcscheme
+│   │   │               ├── Pods-RunnerTests.xcscheme
+│   │   │               ├── shared_preferences_foundation-shared_preferences_foundation_privacy.xcscheme
+│   │   │               ├── shared_preferences_foundation.xcscheme
+│   │   │               └── xcschememanagement.plist
+│   │   └── Target Support Files
+│   │       ├── audioplayers_darwin
+│   │       │   ├── audioplayers_darwin-dummy.m
+│   │       │   ├── audioplayers_darwin-Info.plist
+│   │       │   ├── audioplayers_darwin-prefix.pch
+│   │       │   ├── audioplayers_darwin-umbrella.h
+│   │       │   ├── audioplayers_darwin.debug.xcconfig
+│   │       │   ├── audioplayers_darwin.modulemap
+│   │       │   └── audioplayers_darwin.release.xcconfig
+│   │       ├── Flutter
+│   │       │   ├── Flutter.debug.xcconfig
+│   │       │   └── Flutter.release.xcconfig
+│   │       ├── path_provider_foundation
+│   │       │   ├── path_provider_foundation-dummy.m
+│   │       │   ├── path_provider_foundation-Info.plist
+│   │       │   ├── path_provider_foundation-prefix.pch
+│   │       │   ├── path_provider_foundation-umbrella.h
+│   │       │   ├── path_provider_foundation.debug.xcconfig
+│   │       │   ├── path_provider_foundation.modulemap
+│   │       │   ├── path_provider_foundation.release.xcconfig
+│   │       │   └── ResourceBundle-path_provider_foundation_privacy-path_provider_foundation-Info.plist
+│   │       ├── Pods-Runner
+│   │       │   ├── Pods-Runner-acknowledgements.markdown
+│   │       │   ├── Pods-Runner-acknowledgements.plist
+│   │       │   ├── Pods-Runner-dummy.m
+│   │       │   ├── Pods-Runner-frameworks-Debug-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Debug-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Profile-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Profile-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Release-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Release-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks.sh
+│   │       │   ├── Pods-Runner-Info.plist
+│   │       │   ├── Pods-Runner-umbrella.h
+│   │       │   ├── Pods-Runner.debug.xcconfig
+│   │       │   ├── Pods-Runner.modulemap
+│   │       │   ├── Pods-Runner.profile.xcconfig
+│   │       │   └── Pods-Runner.release.xcconfig
+│   │       ├── Pods-RunnerTests
+│   │       │   ├── Pods-RunnerTests-acknowledgements.markdown
+│   │       │   ├── Pods-RunnerTests-acknowledgements.plist
+│   │       │   ├── Pods-RunnerTests-dummy.m
+│   │       │   ├── Pods-RunnerTests-Info.plist
+│   │       │   ├── Pods-RunnerTests-umbrella.h
+│   │       │   ├── Pods-RunnerTests.debug.xcconfig
+│   │       │   ├── Pods-RunnerTests.modulemap
+│   │       │   ├── Pods-RunnerTests.profile.xcconfig
+│   │       │   └── Pods-RunnerTests.release.xcconfig
+│   │       └── shared_preferences_foundation
+│   │           ├── ResourceBundle-shared_preferences_foundation_privacy-shared_preferences_foundation-Info.plist
+│   │           ├── shared_preferences_foundation-dummy.m
+│   │           ├── shared_preferences_foundation-Info.plist
+│   │           ├── shared_preferences_foundation-prefix.pch
+│   │           ├── shared_preferences_foundation-umbrella.h
+│   │           ├── shared_preferences_foundation.debug.xcconfig
+│   │           ├── shared_preferences_foundation.modulemap
+│   │           └── shared_preferences_foundation.release.xcconfig
+│   ├── Runner
+│   │   ├── AppDelegate.swift
+│   │   ├── Assets.xcassets
+│   │   │   ├── AppIcon.appiconset
+│   │   │   │   ├── Contents.json
+│   │   │   │   ├── Icon-App-1024x1024@1x.png
+│   │   │   │   ├── Icon-App-20x20@1x.png
+│   │   │   │   ├── Icon-App-20x20@2x.png
+│   │   │   │   ├── Icon-App-20x20@3x.png
+│   │   │   │   ├── Icon-App-29x29@1x.png
+│   │   │   │   ├── Icon-App-29x29@2x.png
+│   │   │   │   ├── Icon-App-29x29@3x.png
+│   │   │   │   ├── Icon-App-40x40@1x.png
+│   │   │   │   ├── Icon-App-40x40@2x.png
+│   │   │   │   ├── Icon-App-40x40@3x.png
+│   │   │   │   ├── Icon-App-60x60@2x.png
+│   │   │   │   ├── Icon-App-60x60@3x.png
+│   │   │   │   ├── Icon-App-76x76@1x.png
+│   │   │   │   ├── Icon-App-76x76@2x.png
+│   │   │   │   └── Icon-App-83.5x83.5@2x.png
+│   │   │   └── LaunchImage.imageset
+│   │   │       ├── Contents.json
+│   │   │       ├── LaunchImage.png
+│   │   │       ├── LaunchImage@2x.png
+│   │   │       ├── LaunchImage@3x.png
+│   │   │       └── README.md
+│   │   ├── Base.lproj
+│   │   │   ├── LaunchScreen.storyboard
+│   │   │   └── Main.storyboard
+│   │   ├── GeneratedPluginRegistrant.h
+│   │   ├── GeneratedPluginRegistrant.m
+│   │   ├── Info.plist
+│   │   └── Runner-Bridging-Header.h
+│   ├── Runner.xcodeproj
+│   │   ├── project.pbxproj
+│   │   ├── project.xcworkspace
+│   │   │   ├── contents.xcworkspacedata
+│   │   │   └── xcshareddata
+│   │   │       ├── IDEWorkspaceChecks.plist
+│   │   │       ├── swiftpm
+│   │   │       │   └── configuration
+│   │   │       └── WorkspaceSettings.xcsettings
+│   │   └── xcshareddata
+│   │       └── xcschemes
+│   │           └── Runner.xcscheme
+│   ├── Runner.xcworkspace
+│   │   ├── contents.xcworkspacedata
+│   │   ├── xcshareddata
+│   │   │   ├── IDEWorkspaceChecks.plist
+│   │   │   ├── swiftpm
+│   │   │   │   └── configuration
+│   │   │   └── WorkspaceSettings.xcsettings
+│   │   └── xcuserdata
+│   │       └── maxmbey.xcuserdatad
+│   │           └── UserInterfaceState.xcuserstate
+│   └── RunnerTests
+│       └── RunnerTests.swift
+├── lib
+│   ├── main.dart
+│   ├── models
+│   │   ├── card.dart
+│   │   ├── game_settings.dart
+│   │   ├── game_state.dart
+│   │   ├── player.dart
+│   │   └── save_slot.dart
+│   ├── providers
+│   │   ├── game_provider.dart
+│   │   └── settings_provider.dart
+│   ├── screens
+│   │   ├── game_screen.dart
+│   │   ├── game_setup_screen.dart
+│   │   ├── main_menu_screen.dart
+│   │   ├── memorization_screen.dart
+│   │   ├── results_screen.dart
+│   │   ├── rules_screen.dart
+│   │   ├── settings_screen.dart
+│   │   ├── splash_screen.dart
+│   │   └── stats_screen.dart
+│   ├── services
+│   │   ├── bot_ai.dart
+│   │   ├── game_logic.dart
+│   │   ├── haptic_service.dart
+│   │   ├── sound_service.dart
+│   │   └── stats_service.dart
+│   ├── utils
+│   │   └── screen_utils.dart
+│   └── widgets
+│       ├── card_widget.dart
+│       ├── haptic_button.dart
+│       ├── player_avatar.dart
+│       ├── player_hand.dart
+│       └── special_power_dialogs.dart
+├── macos
+│   ├── Flutter
+│   │   ├── ephemeral
+│   │   │   ├── flutter_export_environment.sh
+│   │   │   └── Flutter-Generated.xcconfig
+│   │   ├── Flutter-Debug.xcconfig
+│   │   ├── Flutter-Release.xcconfig
+│   │   └── GeneratedPluginRegistrant.swift
+│   ├── Podfile
+│   ├── Podfile.lock
+│   ├── Pods
+│   │   ├── Headers
+│   │   ├── Local Podspecs
+│   │   │   ├── audioplayers_darwin.podspec.json
+│   │   │   ├── FlutterMacOS.podspec.json
+│   │   │   ├── path_provider_foundation.podspec.json
+│   │   │   └── shared_preferences_foundation.podspec.json
+│   │   ├── Pods.xcodeproj
+│   │   │   ├── project.pbxproj
+│   │   │   └── xcuserdata
+│   │   │       └── maxmbey.xcuserdatad
+│   │   │           └── xcschemes
+│   │   │               ├── audioplayers_darwin.xcscheme
+│   │   │               ├── FlutterMacOS.xcscheme
+│   │   │               ├── path_provider_foundation-path_provider_foundation_privacy.xcscheme
+│   │   │               ├── path_provider_foundation.xcscheme
+│   │   │               ├── Pods-Runner.xcscheme
+│   │   │               ├── Pods-RunnerTests.xcscheme
+│   │   │               ├── shared_preferences_foundation-shared_preferences_foundation_privacy.xcscheme
+│   │   │               ├── shared_preferences_foundation.xcscheme
+│   │   │               └── xcschememanagement.plist
+│   │   └── Target Support Files
+│   │       ├── audioplayers_darwin
+│   │       │   ├── audioplayers_darwin-dummy.m
+│   │       │   ├── audioplayers_darwin-Info.plist
+│   │       │   ├── audioplayers_darwin-prefix.pch
+│   │       │   ├── audioplayers_darwin-umbrella.h
+│   │       │   ├── audioplayers_darwin.debug.xcconfig
+│   │       │   ├── audioplayers_darwin.modulemap
+│   │       │   └── audioplayers_darwin.release.xcconfig
+│   │       ├── FlutterMacOS
+│   │       │   ├── FlutterMacOS.debug.xcconfig
+│   │       │   └── FlutterMacOS.release.xcconfig
+│   │       ├── path_provider_foundation
+│   │       │   ├── path_provider_foundation-dummy.m
+│   │       │   ├── path_provider_foundation-Info.plist
+│   │       │   ├── path_provider_foundation-prefix.pch
+│   │       │   ├── path_provider_foundation-umbrella.h
+│   │       │   ├── path_provider_foundation.debug.xcconfig
+│   │       │   ├── path_provider_foundation.modulemap
+│   │       │   ├── path_provider_foundation.release.xcconfig
+│   │       │   └── ResourceBundle-path_provider_foundation_privacy-path_provider_foundation-Info.plist
+│   │       ├── Pods-Runner
+│   │       │   ├── Pods-Runner-acknowledgements.markdown
+│   │       │   ├── Pods-Runner-acknowledgements.plist
+│   │       │   ├── Pods-Runner-dummy.m
+│   │       │   ├── Pods-Runner-frameworks-Debug-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Debug-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Profile-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Profile-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Release-input-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks-Release-output-files.xcfilelist
+│   │       │   ├── Pods-Runner-frameworks.sh
+│   │       │   ├── Pods-Runner-Info.plist
+│   │       │   ├── Pods-Runner-umbrella.h
+│   │       │   ├── Pods-Runner.debug.xcconfig
+│   │       │   ├── Pods-Runner.modulemap
+│   │       │   ├── Pods-Runner.profile.xcconfig
+│   │       │   └── Pods-Runner.release.xcconfig
+│   │       ├── Pods-RunnerTests
+│   │       │   ├── Pods-RunnerTests-acknowledgements.markdown
+│   │       │   ├── Pods-RunnerTests-acknowledgements.plist
+│   │       │   ├── Pods-RunnerTests-dummy.m
+│   │       │   ├── Pods-RunnerTests-Info.plist
+│   │       │   ├── Pods-RunnerTests-umbrella.h
+│   │       │   ├── Pods-RunnerTests.debug.xcconfig
+│   │       │   ├── Pods-RunnerTests.modulemap
+│   │       │   ├── Pods-RunnerTests.profile.xcconfig
+│   │       │   └── Pods-RunnerTests.release.xcconfig
+│   │       └── shared_preferences_foundation
+│   │           ├── ResourceBundle-shared_preferences_foundation_privacy-shared_preferences_foundation-Info.plist
+│   │           ├── shared_preferences_foundation-dummy.m
+│   │           ├── shared_preferences_foundation-Info.plist
+│   │           ├── shared_preferences_foundation-prefix.pch
+│   │           ├── shared_preferences_foundation-umbrella.h
+│   │           ├── shared_preferences_foundation.debug.xcconfig
+│   │           ├── shared_preferences_foundation.modulemap
+│   │           └── shared_preferences_foundation.release.xcconfig
+│   ├── Runner
+│   │   ├── AppDelegate.swift
+│   │   ├── Assets.xcassets
+│   │   │   └── AppIcon.appiconset
+│   │   │       ├── app_icon_1024.png
+│   │   │       ├── app_icon_128.png
+│   │   │       ├── app_icon_16.png
+│   │   │       ├── app_icon_256.png
+│   │   │       ├── app_icon_32.png
+│   │   │       ├── app_icon_512.png
+│   │   │       ├── app_icon_64.png
+│   │   │       └── Contents.json
+│   │   ├── Base.lproj
+│   │   │   └── MainMenu.xib
+│   │   ├── Configs
+│   │   │   ├── AppInfo.xcconfig
+│   │   │   ├── Debug.xcconfig
+│   │   │   ├── Release.xcconfig
+│   │   │   └── Warnings.xcconfig
+│   │   ├── DebugProfile.entitlements
+│   │   ├── Info.plist
+│   │   ├── MainFlutterWindow.swift
+│   │   └── Release.entitlements
+│   ├── Runner.xcodeproj
+│   │   ├── project.pbxproj
+│   │   ├── project.xcworkspace
+│   │   │   └── xcshareddata
+│   │   │       ├── IDEWorkspaceChecks.plist
+│   │   │       └── swiftpm
+│   │   │           └── configuration
+│   │   └── xcshareddata
+│   │       └── xcschemes
+│   │           └── Runner.xcscheme
+│   ├── Runner.xcworkspace
+│   │   ├── contents.xcworkspacedata
+│   │   └── xcshareddata
+│   │       ├── IDEWorkspaceChecks.plist
+│   │       └── swiftpm
+│   │           └── configuration
+│   └── RunnerTests
+│       └── RunnerTests.swift
+├── PROJECT_STATUS.md
+├── pubspec.lock
+├── pubspec.yaml
+├── QUICK_START.md
+├── README.md
+├── regles.txt
+├── test
+│   └── widget_test.dart
+└── web
+    ├── favicon.png
+    ├── icons
+    │   ├── Icon-192.png
+    │   ├── Icon-512.png
+    │   ├── Icon-maskable-192.png
+    │   └── Icon-maskable-512.png
+    ├── index.html
+    └── manifest.json
+
+119 directories, 475 files
+maxmbey@MacBook-Pro-de-Max dutch-v2 % 
+
