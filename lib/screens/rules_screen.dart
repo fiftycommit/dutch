@@ -12,8 +12,13 @@ class RulesScreen extends StatelessWidget {
         title: const Text('Règles du jeu'),
         backgroundColor: const Color(0xFF1a3a28),
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
+        ),
+        titleTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
         ),
       ),
       body: SingleChildScrollView(
@@ -23,61 +28,68 @@ class RulesScreen extends StatelessWidget {
           children: [
             _buildSection(
               context,
-              '🎯 But du jeu',
-              'Avoir le MOINS de points possible à la fin de la partie.',
+              '🎯 Objectif du jeu',
+              'Le but du Dutch est de terminer la manche avec le moins de points possible.\n\n'
+              'À chaque tour, les joueurs essaient d’échanger leurs cartes les plus pénalisantes '
+              'et de mémoriser leurs cartes pour prendre l’avantage.',
             ),
 
             _buildSection(
               context,
-              '🎴 Début de partie',
-              '• Chaque joueur reçoit 4 cartes face cachée\n'
-              '• Tu peux regarder 2 de tes cartes au début\n'
-              '• Les cartes se cachent après quelques secondes',
+              '🔄 Déroulement d’un tour',
+              'À votre tour, vous n\'avez que DEUX choix :\n\n'
+              '1️⃣ Piocher une carte\n'
+              '• Vous pouvez soit échanger la carte piochée avec une carte de votre main.\n'
+              '  → La carte de votre main est alors défaussée et la carte piochée remplace la carte défaussée.\n'
+              '• Soit défausser directement la carte piochée.\n'
+              '  → Si elle a un pouvoir, vous pouvez l’activer.\n'
+              '• Puis la défausse collective s\'active.\n\n'
+              '⚠️ Si vous piochez, vous ne pourrez PLUS annoncer Dutch durant ce tour.\n\n'
+              '2️⃣ Annoncer « DUTCH »\n'
+              '• Uniquement si vous n\'avez pas pioché.\n'
+              '• Possible à tout moment, mais recommandé si vous pensez avoir le score le plus bas.\n',
             ),
 
             _buildSection(
               context,
-              '🔄 Ton tour',
-              '1️⃣ Pioche une carte\n'
-              '2️⃣ Choisis :\n'
-              '   • GARDER la carte : elle remplace une de tes 4 cartes\n'
-              '   • DÉFAUSSER : la carte va à la poubelle\n'
-              '   • Si tu défausses une carte spéciale, son pouvoir s\'active !',
+              '♻️ Défausse collective',
+              'À chaque carte défaussée :\n\n'
+              '• Tous les joueurs peuvent défausser une carte STRICTEMENT identique '
+              '(même valeur et même couleur).\n'
+              '• Il faut se souvenir de la position de sa carte.\n\n'
+              '⚠️ Attention :\n'
+              '• Mauvaise carte → vous la reprenez et piochez une carte de pénalité.\n'
+              '• Regarder une carte sans autorisation → carte de pénalité.\n\n'
+              'ℹ️ Les Rois rouges (♥ ♦) valent 0 point.',
             ),
 
             _buildSection(
               context,
-              '⚡ Pouvoirs Spéciaux',
-              '• 7, 8, 9 : Tu peux regarder une de tes cartes\n'
-              '• 10, 11, 12 : Tu peux regarder une carte adverse\n'
-              '• Valet (V) : Échange une de tes cartes avec un adversaire (à l\'aveugle)\n'
-              '• Dame (D) : Regarde une carte de chaque joueur\n'
-              '• Roi Noir (♠️♣️) : Vaut 13 points (Aïe !)\n'
-              '• Roi Rouge (♥️♦️) : Vaut 0 point (Génial !)\n'
-              '• Joker : Mélange tout le jeu !',
+              '🏁 Fin de la manche',
+              'Quand un joueur annonce « DUTCH » :\n\n'
+              '• Tous les joueurs révèlent leurs cartes.\n'
+              '• Les points sont comptés.\n\n'
+              '✅ Si le joueur a le plus petit score, il gagne la manche.\n'
+              '❌ S’il n’a PAS le plus petit score, il est dernier.\n'
+              '🤝 En cas d’égalité, le joueur ayant dit Dutch l’emporte.',
             ),
+
+            _buildCardValuesTable(context),
 
             _buildSection(
               context,
-              '🔥 Le DUTCH',
-              '• Quand tu penses avoir le score le plus bas, crie "DUTCH" !\n'
-              '• Le tour se termine immédiatement.\n'
-              '• Si tu as bien le score le plus bas : TU GAGNES ! (0 pts)\n'
-              '• Si tu t\'es trompé : TU PERDS ! (Pénalité + Carte de punition)',
-            ),
-
-            // --- NOUVELLE SECTION CLASSEMENT ---
-            _buildSection(
-              context,
-              '📈 Classement & Niveaux',
-              'Gagne des points (RP) pour monter en grade et affronter des Bots plus forts !\n\n'
-              '• Victoire : +50 RP\n'
-              '• Victoire par Dutch : +80 RP\n'
-              '• Défaite : -20 RP\n'
-              '• Dutch Raté : -50 RP (Attention !)\n\n'
-              '🏅 Bronze (<150) : Bots Faciles\n'
-              '🥈 Argent (150-450) : Bots Moyens\n'
-              '🥇 Or (450+) : Bots Difficiles',
+              '✨ Cartes spéciales (Pouvoirs)',
+              'Les pouvoirs s’activent UNIQUEMENT quand la carte est défaussée.\n\n'
+              '🃏 Joker (0 point)\n'
+              '• Mélange le jeu d’un joueur de ton choix.\n\n'
+              '7️⃣ Le Sept\n'
+              '• Regarde une de vos cartes que vous ne connaissez pas.\n\n'
+              '🔟 Le Dix\n'
+              '• Regarde une carte du jeu d’un adversaire.\n\n'
+              '🤵 Le Valet (11 points)\n'
+              '• Échange une carte :\n'
+              '  – soit avec un adversaire\n'
+              '  – soit entre deux adversaires.',
             ),
           ],
         ),
@@ -87,12 +99,13 @@ class RulesScreen extends StatelessWidget {
 
   Widget _buildSection(BuildContext context, String title, String content) {
     return Container(
+      width: double.infinity,
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
-      padding: EdgeInsets.all(ScreenUtils.spacing(context, 12)),
+      padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
         color: const Color(0xFF1a472a),
-        borderRadius: BorderRadius.circular(ScreenUtils.borderRadius(context, 8)),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2d5f3e)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,21 +113,96 @@ class RulesScreen extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: Colors.amber.shade300,
-              fontSize: ScreenUtils.scaleFont(context, 14),
+              color: const Color(0xFF81c784),
+              fontSize: ScreenUtils.scaleFont(context, 18),
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: ScreenUtils.spacing(context, 8)),
+          SizedBox(height: ScreenUtils.spacing(context, 12)),
           Text(
             content,
             style: TextStyle(
-              color: Colors.white,
-              fontSize: ScreenUtils.scaleFont(context, 11),
-              height: 1.5,
+              color: Colors.white.withOpacity(0.9),
+              fontSize: ScreenUtils.scaleFont(context, 15),
+              height: 1.4,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCardValuesTable(BuildContext context) {
+    final rows = [
+      ['🃏 Joker', '0 point'],
+      ['👑 Roi rouge (♥ ♦)', '0 point'],
+      ['As', '1 point'],
+      ['2 à 10', 'Valeur de la carte (Exemple : 4 vaut 4 points)'],
+      ['🤵 Valet', '11 points'],
+      ['👸 Dame', '12 points'],
+      ['👑 Roi noir (♠ ♣)', '13 points'],
+    ];
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
+      padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1a472a),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2d5f3e)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '🃏 Valeur des cartes',
+            style: TextStyle(
+              color: const Color(0xFF81c784),
+              fontSize: ScreenUtils.scaleFont(context, 18),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: ScreenUtils.spacing(context, 12)),
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(2),
+              1: FlexColumnWidth(1),
+            },
+            border: TableBorder.all(color: Colors.white24),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: Colors.white12),
+                children: [
+                  _tableCell(context, 'Carte', true),
+                  _tableCell(context, 'Valeur', true),
+                ],
+              ),
+              ...rows.map(
+                (row) => TableRow(
+                  children: [
+                    _tableCell(context, row[0]),
+                    _tableCell(context, row[1]),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableCell(BuildContext context, String text, [bool header = false]) {
+    return Padding(
+      padding: EdgeInsets.all(ScreenUtils.spacing(context, 8)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white.withOpacity(header ? 1 : 0.9),
+          fontWeight: header ? FontWeight.bold : FontWeight.normal,
+          fontSize: ScreenUtils.scaleFont(context, 14),
+        ),
       ),
     );
   }
