@@ -118,31 +118,37 @@ class GameLogic {
   }
 
   PlayingCard? playerCard = player.hand[cardIndex];
-  if (playerCard == null) return false; 
+    if (playerCard == null) return false; 
 
-  PlayingCard topDiscard = gameState.discardPile.last;
+    PlayingCard topDiscard = gameState.discardPile.last;
 
-  if (playerCard.value == topDiscard.value) {
-    gameState.discardPile.add(playerCard);
-    
-    List<PlayingCard> newHand = List.from(player.hand);
-    List<bool> newKnownCards = List.from(player.knownCards);
-    
-    newHand.removeAt(cardIndex);
-    newKnownCards.removeAt(cardIndex);
-    
-    player.hand = newHand;
-    player.knownCards = newKnownCards;
+    // ✅ CHANGEMENT CRUCIAL : Utiliser la nouvelle méthode matches()
+    // Cela prend en compte la couleur des Rois !
+    if (playerCard.matches(topDiscard)) {
+      gameState.discardPile.add(playerCard);
+      
+      List<PlayingCard> newHand = List.from(player.hand);
+      List<bool> newKnownCards = List.from(player.knownCards);
+      
+      newHand.removeAt(cardIndex);
+      newKnownCards.removeAt(cardIndex);
+      
+      player.hand = newHand;
+      player.knownCards = newKnownCards;
 
-    gameState.addToHistory("⚡ MATCH ! ${player.name} pose un ${playerCard.value} !");
-    _checkSpecialPower(gameState, playerCard);
-    return true;
-  } else {
-    gameState.addToHistory("🚫 ${player.name} rate son match (${playerCard.value}) ! Pénalité !");
-    applyPenalty(gameState, player);
-    return false;
+      // ✅ Utiliser displayName pour un meilleur affichage
+      gameState.addToHistory("⚡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
+      _checkSpecialPower(gameState, playerCard);
+      return true;
+    } else {
+      // ✅ Message plus clair avec displayName
+      gameState.addToHistory(
+        "🚫 ${player.name} rate son match (${playerCard.displayName} ≠ ${topDiscard.displayName}) ! Pénalité !"
+      );
+      applyPenalty(gameState, player);
+      return false;
+    }
   }
-}
 
   static void applyPenalty(GameState gameState, Player player) {
     if (gameState.deck.isEmpty) _refillDeck(gameState);

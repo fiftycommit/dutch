@@ -19,7 +19,6 @@ class SettingsProvider with ChangeNotifier {
   bool get hapticEnabled => _settings.hapticEnabled;
   bool get useSBMM => _settings.useSBMM;
   
-  // C'EST LUI QUI MANQUAIT 👇
   Difficulty get luckDifficulty => _settings.luckDifficulty; 
   
   Difficulty get botDifficulty => _settings.botDifficulty;
@@ -27,14 +26,14 @@ class SettingsProvider with ChangeNotifier {
 
   void toggleSound(bool value) {
   _settings = _settings.copyWith(soundEnabled: value);
-  SoundService.setEnabled(value); // <--- AJOUT CRUCIAL
+  SoundService.setEnabled(value); 
   _saveSettings();
   notifyListeners();
 }
 
   void toggleHaptic(bool value) {
   _settings = _settings.copyWith(hapticEnabled: value);
-  HapticService.setEnabled(value); // <--- AJOUT CRUCIAL
+  HapticService.setEnabled(value); 
   _saveSettings();
   notifyListeners();
 }

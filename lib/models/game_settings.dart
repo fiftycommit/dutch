@@ -32,16 +32,15 @@ class GameSettings {
 
   GameSettings({
     this.luckDifficulty = Difficulty.medium,
-    this.botDifficulty = Difficulty.medium, // ✅ RESTAURÉ
+    this.botDifficulty = Difficulty.medium, 
     this.reactionTimeMs = 3000,
-    this.useSBMM = true,
+    this.useSBMM = false,
     this.cardBackStyle = 'classic',
     this.soundEnabled = true,
     this.hapticEnabled = true,
     this.playerName = "Vous",
   });
 
-  // ✅ RESTAURÉ : Indispensable pour SettingsProvider
   GameSettings copyWith({
     Difficulty? luckDifficulty,
     Difficulty? botDifficulty,
@@ -64,13 +63,12 @@ class GameSettings {
     );
   }
 
-  // ✅ RESTAURÉ : Indispensable pour le chargement JSON
   factory GameSettings.fromJson(Map<String, dynamic> json) {
     return GameSettings(
       luckDifficulty: Difficulty.values[json['luckDifficulty'] ?? 1],
       botDifficulty: Difficulty.values[json['botDifficulty'] ?? 1],
       reactionTimeMs: json['reactionTimeMs'] ?? 3000,
-      useSBMM: json['useSBMM'] ?? true,
+      useSBMM: json['useSBMM'] ?? false,
       cardBackStyle: json['cardBackStyle'] ?? 'classic',
       soundEnabled: json['soundEnabled'] ?? true,
       hapticEnabled: json['hapticEnabled'] ?? true,
@@ -78,7 +76,6 @@ class GameSettings {
     );
   }
 
-  // ✅ RESTAURÉ : Indispensable pour la sauvegarde JSON
   Map<String, dynamic> toJson() {
     return {
       'luckDifficulty': luckDifficulty.index,

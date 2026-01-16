@@ -13,7 +13,6 @@ class PlayingCard {
     required this.id,
   });
 
-  // Factory pour créer les cartes
   factory PlayingCard.create(String suit, String value) {
     int points = _calculatePoints(suit, value);
     bool isSpecial = _isSpecialCard(value);
@@ -28,7 +27,23 @@ class PlayingCard {
     );
   }
 
-  // ✅ Le getter pour l'affichage des images
+  String get matchValue {
+    // Pour les Rois, on différencie par couleur
+    if (value == 'K') {
+      if (suit == 'hearts' || suit == 'diamonds') {
+        return 'K_RED';  // Roi rouge
+      } else {
+        return 'K_BLACK'; // Roi noir
+      }
+    }
+    // Pour les Jokers, ils matchent entre eux
+    if (value == 'JOKER') {
+      return 'JOKER';
+    }
+    // Pour les autres cartes, la valeur suffit
+    return value;
+  }
+
   String get imagePath {
     // Cas du Joker
     if (value == 'JOKER') {
@@ -38,7 +53,6 @@ class PlayingCard {
       return 'assets/images/cards/joker-noir.svg';
     }
 
-    // Conversion de la Valeur (ex: 'A' -> '01', 'K' -> 'R')
     String fileValue;
     switch (value) {
       case 'A': fileValue = '01'; break;
@@ -68,17 +82,50 @@ class PlayingCard {
   }
 
   static int _calculatePoints(String suit, String value) {
+    // Roi rouge = 0 points
     if (value == 'K' && (suit == 'hearts' || suit == 'diamonds')) return 0; 
+    
+    // Joker = 0 points
     if (value == 'JOKER') return 0; 
+    
+    // Roi noir = 13 points
     if (value == 'K' && (suit == 'clubs' || suit == 'spades')) return 13; 
+    
+    // Dame = 12 points
     if (value == 'Q' || value == 'D') return 12; 
+    
+    // Valet = 11 points
     if (value == 'J' || value == 'V') return 11; 
+    
+    // As = 1 point
     if (value == 'A') return 1; 
+    
+    // Autres cartes (2-10) = leur valeur
     return int.tryParse(value) ?? 0; 
   }
 
-  // ✅ CORRECTION : Seulement 7, 10, V et JOKER ont des pouvoirs
   static bool _isSpecialCard(String value) {
     return ['7', '10', 'V', 'JOKER'].contains(value);
+  }
+
+  bool matches(PlayingCard other) {
+    return this.matchValue == other.matchValue;
+  }
+
+  String get displayName {
+    if (value == 'K') {
+      if (suit == 'hearts' || suit == 'diamonds') {
+        return 'Roi Rouge';
+      } else {
+        return 'Roi Noir';
+      }
+    }
+    
+    if (value == 'JOKER') return 'Joker';
+    if (value == 'A') return 'As';
+    if (value == 'V' || value == 'J') return 'Valet';
+    if (value == 'D' || value == 'Q') return 'Dame';
+    
+    return value;
   }
 }

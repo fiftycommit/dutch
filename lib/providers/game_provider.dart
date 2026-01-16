@@ -445,22 +445,23 @@ class GameProvider with ChangeNotifier {
       return;
     }
 
-    debugPrint("   - Carte défausse: ${topCard.value}");
+    debugPrint("   - Carte défausse: ${topCard.displayName}");
 
     for (var bot in _gameState!.players.where((p) => !p.isHuman)) {
-       if (Random().nextDouble() > 0.3) { 
-         for (int i = 0; i < bot.hand.length; i++) {
-           if (bot.hand[i].value == topCard.value) {
-             debugPrint("   ✅ ${bot.name} tente un match");
-             attemptMatch(i, forcedPlayer: bot);
-             return; 
-           }
-         }
-       }
+      if (Random().nextDouble() > 0.3) { 
+        for (int i = 0; i < bot.hand.length; i++) {
+          // ✅ CHANGEMENT : Utiliser matches() au lieu de comparer value
+          if (bot.hand[i].matches(topCard)) {
+            debugPrint("   ✅ ${bot.name} tente un match avec ${bot.hand[i].displayName}");
+            attemptMatch(i, forcedPlayer: bot);
+            return; 
+          }
+        }
+      }
     }
-    
+  
     debugPrint("   - Aucun bot n'a réagi");
-  }
+  } 
 
   bool _checkInstantEnd() {
     if (_gameState == null) return false;
