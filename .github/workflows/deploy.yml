@@ -25,7 +25,7 @@ jobs:
       # ⚠️ IMPORTANT : Remplace '/dutch_game/' par le nom de ton repo GitHub
       # Garde bien les slashs au début et à la fin !
       - name: Build Web
-        run: flutter build web --release --base-href /dutch_game/
+        run: flutter build web --release --base-href /dutch/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
