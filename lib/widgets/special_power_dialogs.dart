@@ -66,6 +66,17 @@ class SpecialPowerDialogs {
                     );
                   }),
                 ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    gameProvider.skipSpecialPower();
+                  },
+                  child: const Text(
+                    "PASSER",
+                    style: TextStyle(color: Colors.white54, fontSize: 16),
+                  ),
+                ),
               ] else ...[
                 _buildOpponentSelection(context, gameProvider, gameState),
               ],
@@ -145,6 +156,17 @@ class SpecialPowerDialogs {
             );
           }).toList(),
         ),
+        const SizedBox(height: 20),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            gp.skipSpecialPower();
+          },
+          child: const Text(
+            "PASSER",
+            style: TextStyle(color: Colors.white54, fontSize: 16),
+          ),
+        ),
       ],
     );
   }
@@ -189,6 +211,17 @@ class SpecialPowerDialogs {
                     ),
                   );
                 }),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  gp.skipSpecialPower();
+                },
+                child: const Text(
+                  "PASSER",
+                  style: TextStyle(color: Colors.white54, fontSize: 16),
+                ),
               ),
             ],
           ),

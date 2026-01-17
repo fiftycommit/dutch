@@ -537,7 +537,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         } else if (val == '10') {
           debugPrint("      🎯 Dialogue carte 10");
           SpecialPowerDialogs.showLookCardDialog(context, trigger, false); 
-        } else if (val == 'J' || val == 'V') {
+        } else if (val == 'V') {
           debugPrint("      🎯 Dialogue Valet");
           SpecialPowerDialogs.showValetSwapDialog(context, trigger);
         } else if (val == 'JOKER') {
