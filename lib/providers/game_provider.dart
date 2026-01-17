@@ -21,6 +21,9 @@ class GameProvider with ChangeNotifier {
   Timer? _reactionTimer;
   int _currentReactionTimeMs = 3000; 
   int _currentSlotId = 1;
+  
+  // 🎯 NOUVEAU : MMR du joueur pour le SBMM
+  int? _playerMMR;
 
   void createNewGame({
     required List<Player> players, 
@@ -28,12 +31,14 @@ class GameProvider with ChangeNotifier {
     required Difficulty difficulty, 
     required int reactionTimeMs,
     int tournamentRound = 1,
-    int saveSlot = 1, 
-  }) {
+    int saveSlot = 1,
+    bool useSBMM = false, // 🆕 PARAMÈTRE SBMM
+  }) async {
     debugPrint("🎮 [createNewGame] CRÉATION NOUVELLE PARTIE");
     debugPrint("   - Joueurs: ${players.map((p) => p.name).toList()}");
     debugPrint("   - Mode: $gameMode");
     debugPrint("   - Difficulté: $difficulty");
+    debugPrint("   - SBMM: $useSBMM");
     
     _gameState = GameLogic.initializeGame(
       players: players, 
@@ -44,6 +49,23 @@ class GameProvider with ChangeNotifier {
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
     
+    // 🎯 NOUVEAU : Charger le MMR UNIQUEMENT si SBMM activé
+    if (useSBMM) {
+      final stats = await StatsService.getStats(slotId: saveSlot);
+      _playerMMR = stats['mmr'] ?? 0;
+      debugPrint("   - MMR du joueur: $_playerMMR (SBMM activé)");
+    } else {
+      _playerMMR = null; // ✅ Pas de MMR en mode manuel
+      debugPrint("   - Mode manuel (pas de MMR)");
+    }
+    
+    // 🧠 NOUVEAU : Initialiser les cartes mentales des bots
+    for (var player in _gameState!.players) {
+      if (!player.isHuman) {
+        player.mentalMap = List.filled(player.hand.length, null);
+      }
+    }
+    
     debugPrint("   - Phase initiale: ${_gameState!.phase}");
     debugPrint("   - Joueur initial: ${_gameState!.currentPlayer.name}");
     debugPrint("   - Est bot: ${!_gameState!.currentPlayer.isHuman}");
@@ -53,7 +75,6 @@ class GameProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ NOUVELLE MÉTHODE: Forcer le check du tour bot
   void checkIfBotShouldPlay() {
     debugPrint("🔍 [checkIfBotShouldPlay] Vérification...");
     
@@ -144,7 +165,7 @@ class GameProvider with ChangeNotifier {
 
     if (_gameState!.isWaitingForSpecialPower) {
       debugPrint("   ⚡ Pouvoir spécial en attente: ${_gameState!.specialCardToActivate?.value}");
-      Future.delayed(const Duration(milliseconds: 500)).then((_) {
+      Future.delayed(const Duration(milliseconds: 1300)).then((_) {
         if (_gameState != null && _gameState!.isWaitingForSpecialPower) {
           notifyListeners();
         }
@@ -194,47 +215,32 @@ class GameProvider with ChangeNotifier {
   }
 
   void attemptMatch(int cardIndex, {Player? forcedPlayer}) async {
-    debugPrint("🔥🔥🔥 [attemptMatch] ═══════════════════════════════════════");
-    debugPrint("🎯 [attemptMatch] ENTRÉE DANS LA FONCTION");
-    debugPrint("   📍 Index carte: $cardIndex");
-    debugPrint("   📍 forcedPlayer fourni: ${forcedPlayer?.name ?? 'NULL'}");
+    debugPrint("🔥 [attemptMatch] ENTRÉE");
+    debugPrint("   🔍 Index carte: $cardIndex");
+    debugPrint("   🔍 forcedPlayer fourni: ${forcedPlayer?.name ?? 'NULL'}");
     
     if (_gameState == null) {
-      debugPrint("   ❌ GameState NULL - ABANDON");
-      debugPrint("🔥🔥🔥 [attemptMatch] FIN PRÉMATURÉE ════════════════════════");
+      debugPrint("   ❌ GameState NULL");
       return;
     }
     
     debugPrint("   ✅ GameState OK");
-    debugPrint("   📍 Phase actuelle: ${_gameState!.phase}");
+    debugPrint("   🔍 Phase actuelle: ${_gameState!.phase}");
     
     if (_gameState!.phase != GamePhase.reaction) {
       debugPrint("   ❌ Phase incorrecte: ${_gameState!.phase}");
-      debugPrint("   ⚠️ ATTENDU: GamePhase.reaction");
-      debugPrint("🔥🔥🔥 [attemptMatch] FIN - Mauvaise phase ═══════════════════");
       return;
     }
 
     debugPrint("   ✅ Phase REACTION confirmée");
 
     Player player = forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
-    debugPrint("   📍 Joueur sélectionné: ${player.name}");
-    debugPrint("   📍 ID joueur: ${player.id}");
-    debugPrint("   📍 Est humain: ${player.isHuman}");
-    debugPrint("   📍 Taille main: ${player.hand.length}");
-    debugPrint("   📍 Main complète: ${player.hand.map((c) => c.value).toList()}");
+    debugPrint("   🔍 Joueur sélectionné: ${player.name}");
     
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
       debugPrint("   ❌ Index hors limites!");
-      debugPrint("   - Index demandé: $cardIndex");
-      debugPrint("   - Taille main: ${player.hand.length}");
-      debugPrint("🔥🔥🔥 [attemptMatch] FIN - Index invalide ═══════════════════");
       return;
     }
-    
-    debugPrint("   ✅ Index valide");
-    debugPrint("   📍 Carte du joueur à l'index $cardIndex: ${player.hand[cardIndex].value}");
-    debugPrint("   📍 Carte du dessus de défausse: ${_gameState!.topDiscardCard?.value ?? 'NULL'}");
     
     debugPrint("   🎲 APPEL GameLogic.matchCard...");
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
@@ -249,7 +255,8 @@ class GameProvider with ChangeNotifier {
         notifyListeners();
         
         if (!player.isHuman) {
-          await BotAI.useBotSpecialPower(_gameState!);
+          // 🎯 MODIFIÉ : Passer le MMR au bot
+          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
           notifyListeners();
           
           if (_gameState!.phase == GamePhase.reaction) {
@@ -257,8 +264,8 @@ class GameProvider with ChangeNotifier {
           }
         }
       } else {
-        debugPrint("   ⏱️ Prolongation du timer de réaction (+1000ms)");
-        _extendReactionTime(1000);
+        debugPrint("   ⏱️ Prolongation du timer de réaction (+2000ms)");
+        _extendReactionTime(2000);
         notifyListeners();
       }
     } else {
@@ -273,8 +280,6 @@ class GameProvider with ChangeNotifier {
         notifyListeners();
       }
     }
-    
-    debugPrint("🔥🔥🔥 [attemptMatch] FIN ═══════════════════════════════════════");
   }
 
   void _extendReactionTime(int milliseconds) {
@@ -344,7 +349,7 @@ class GameProvider with ChangeNotifier {
     
     if (_gameState!.phase == GamePhase.reaction) {
        debugPrint("   ⏱️ Prolongation timer réaction");
-       _extendReactionTime(1000);
+       _extendReactionTime(2000);
     } else if (_gameState!.phase == GamePhase.playing) {
        debugPrint("   🎬 Lancement phase réaction");
        startReactionPhase();
@@ -401,12 +406,10 @@ class GameProvider with ChangeNotifier {
     debugPrint("   - Phase avant: ${_gameState!.phase}");
     debugPrint("   - Joueur avant: ${_gameState!.currentPlayer.name}");
 
-    // Nettoyer l'état des pouvoirs
     _gameState!.isWaitingForSpecialPower = false; 
     _gameState!.specialCardToActivate = null;
     shakingCardIndices.clear();
 
-    // Vérifier si Dutch a été crié
     if (_gameState!.dutchCallerId != null) {
        debugPrint("   📢 Dutch détecté -> Fin de partie");
        _gameState!.phase = GamePhase.dutchCalled;
@@ -414,7 +417,6 @@ class GameProvider with ChangeNotifier {
        return;
     }
 
-    // Passer au tour suivant
     _gameState!.phase = GamePhase.playing;
     _gameState!.nextTurn();
     _gameState!.reactionStartTime = null;
@@ -424,7 +426,6 @@ class GameProvider with ChangeNotifier {
     
     notifyListeners();
 
-    // Vérifier si c'est le tour d'un bot
     _checkAndPlayBotTurn();
   }
 
@@ -449,10 +450,10 @@ class GameProvider with ChangeNotifier {
 
     for (var bot in _gameState!.players.where((p) => !p.isHuman)) {
       if (Random().nextDouble() > 0.3) { 
-        for (int i = 0; i < bot.hand.length; i++) {
-          // ✅ CHANGEMENT : Utiliser matches() au lieu de comparer value
-          if (bot.hand[i].matches(topCard)) {
-            debugPrint("   ✅ ${bot.name} tente un match avec ${bot.hand[i].displayName}");
+        // 🧠 MODIFIÉ : Le bot vérifie sa carte mentale, pas la réalité
+        for (int i = 0; i < bot.mentalMap.length; i++) {
+          if (bot.mentalMap[i] != null && bot.mentalMap[i]!.matches(topCard)) {
+            debugPrint("   ✅ ${bot.name} pense avoir un match avec ${bot.mentalMap[i]!.displayName}");
             attemptMatch(i, forcedPlayer: bot);
             return; 
           }
@@ -494,7 +495,6 @@ class GameProvider with ChangeNotifier {
     debugPrint("   - Joueur actuel: ${_gameState!.currentPlayer.name} (isHuman: ${_gameState!.currentPlayer.isHuman})");
     debugPrint("   - Phase actuelle: ${_gameState!.phase}");
 
-    // Si c'est le tour d'un humain → rien à faire
     if (_gameState!.currentPlayer.isHuman) {
       debugPrint("   ✅ Tour humain, on s'arrête");
       isProcessing = false;
@@ -502,7 +502,6 @@ class GameProvider with ChangeNotifier {
       return;
     }
 
-    // Boucle bot
     int loopCount = 0;
     while (_gameState != null &&
           !_gameState!.currentPlayer.isHuman && 
@@ -535,30 +534,28 @@ class GameProvider with ChangeNotifier {
       try {
         debugPrint("   🤖 Le bot ${_gameState!.currentPlayer.name} joue...");
         
-        // Le bot joue son tour
-        await BotAI.playBotTurn(_gameState!);
+        // 🎯 MODIFIÉ : Passer le MMR au bot
+        await BotAI.playBotTurn(_gameState!, playerMMR: _playerMMR);
         debugPrint("   ✅ Tour du bot terminé");
         
         notifyListeners(); 
 
-        // Vérifier si Dutch a été crié
         if (_gameState!.phase == GamePhase.dutchCalled) {
           debugPrint("   📢 DUTCH crié ! Fin de partie");
           endGame();
           return;
         }
 
-        // Gérer le pouvoir spécial si nécessaire
         if (_gameState!.isWaitingForSpecialPower) {
           debugPrint("   ⚡ Pouvoir spécial en attente: ${_gameState!.specialCardToActivate?.value}");
           await Future.delayed(const Duration(milliseconds: 800));
           
-          await BotAI.useBotSpecialPower(_gameState!);
+          // 🎯 MODIFIÉ : Passer le MMR au bot
+          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
           debugPrint("   ✅ Pouvoir spécial utilisé");
           
           notifyListeners();
           
-          // Nettoyer l'état du pouvoir
           _gameState!.isWaitingForSpecialPower = false;
           _gameState!.specialCardToActivate = null;
           debugPrint("   🧹 État du pouvoir nettoyé");
@@ -568,7 +565,6 @@ class GameProvider with ChangeNotifier {
         debugPrint("   🚨 ERREUR Bot: $e");
         debugPrint("   Stack trace: $stackTrace");
         
-        // En cas d'erreur, défausser la carte piochée
         if (_gameState != null && _gameState!.drawnCard != null) {
           _gameState!.discardPile.add(_gameState!.drawnCard!);
           _gameState!.drawnCard = null;
@@ -578,7 +574,6 @@ class GameProvider with ChangeNotifier {
 
       debugPrint("   📊 Phase après actions: ${_gameState!.phase}");
 
-      // TOUJOURS lancer la phase de réaction après une action
       if (_gameState != null && _gameState!.phase == GamePhase.playing) {
         debugPrint("   ⏱️ Lancement phase réaction...");
         startReactionPhase();
@@ -601,21 +596,30 @@ class GameProvider with ChangeNotifier {
     if (_gameState == null) return;
     GameLogic.endGame(_gameState!);
     
+    // 🆕 Récupérer le classement complet
+    List<Player> ranking = _gameState!.getFinalRanking();
     Player human = _gameState!.players.firstWhere((p) => p.isHuman);
-    bool isWin = _gameState!.getFinalRanking().first.id == human.id;
+    
+    // 🆕 Trouver la position du joueur humain (1, 2, 3, 4)
+    int playerRank = ranking.indexWhere((p) => p.id == human.id) + 1;
+    
     bool calledDutch = _gameState!.dutchCallerId == human.id;
-    bool wonDutch = calledDutch && isWin;
+    bool wonDutch = calledDutch && playerRank == 1;
+    bool isSBMM = _playerMMR != null;
 
-    debugPrint("   - Victoire: $isWin");
+    debugPrint("   - Classement: #$playerRank");
     debugPrint("   - Dutch appelé: $calledDutch");
     debugPrint("   - Dutch gagné: $wonDutch");
+    debugPrint("   - Mode SBMM: $isSBMM");
 
+    // ✅ TOUJOURS sauvegarder, mais indiquer si SBMM ou non
     StatsService.saveGameResult(
-      isWin: isWin,
+      playerRank: playerRank,
       score: _gameState!.getFinalScore(human),
       calledDutch: calledDutch,
       wonDutch: wonDutch,
-      slotId: _currentSlotId, 
+      slotId: _currentSlotId,
+      isSBMM: isSBMM, // ✅ NOUVEAU : flag pour RP
     );
     
     notifyListeners();
@@ -643,6 +647,10 @@ class GameProvider with ChangeNotifier {
     if (survivors.length < 2) return;
 
     debugPrint("   - Survivants: ${survivors.map((p) => p.name).toList()}");
+    
+    // ✅ CORRECTION : Conserver le mode SBMM
+    bool wasSBMM = _playerMMR != null;
+    debugPrint("   - SBMM: $wasSBMM");
 
     createNewGame(
       players: survivors,
@@ -650,7 +658,8 @@ class GameProvider with ChangeNotifier {
       difficulty: _gameState!.difficulty,
       reactionTimeMs: _currentReactionTimeMs,
       tournamentRound: _gameState!.tournamentRound + 1,
-      saveSlot: _currentSlotId
+      saveSlot: _currentSlotId,
+      useSBMM: wasSBMM, // ✅ CONSERVER LE MODE SBMM
     );
   }
 }

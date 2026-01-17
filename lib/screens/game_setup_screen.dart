@@ -173,6 +173,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       difficulty: settings.luckDifficulty,
       reactionTimeMs: settings.reactionTimeMs,
       saveSlot: widget.saveSlot,
+      useSBMM: useSBMM, // ✅ PASSER LE MODE SBMM
     );
     
     // ✅ CHANGEMENT : Navigation vers MemorizationScreen au lieu de GameScreen

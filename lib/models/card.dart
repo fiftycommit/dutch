@@ -83,13 +83,13 @@ class PlayingCard {
 
   static int _calculatePoints(String suit, String value) {
     // Roi rouge = 0 points
-    if (value == 'K' && (suit == 'hearts' || suit == 'diamonds')) return 0; 
+    if (value == 'R' && (suit == 'hearts' || suit == 'diamonds')) return 0; 
     
     // Joker = 0 points
     if (value == 'JOKER') return 0; 
     
     // Roi noir = 13 points
-    if (value == 'K' && (suit == 'clubs' || suit == 'spades')) return 13; 
+    if (value == 'R' && (suit == 'clubs' || suit == 'spades')) return 13; 
     
     // Dame = 12 points
     if (value == 'Q' || value == 'D') return 12; 
@@ -115,17 +115,17 @@ class PlayingCard {
   String get displayName {
     if (value == 'K') {
       if (suit == 'hearts' || suit == 'diamonds') {
-        return 'Roi Rouge';
+        return ' Roi Rouge';
       } else {
-        return 'Roi Noir';
+        return ' Roi Noir';
       }
     }
     
-    if (value == 'JOKER') return 'Joker';
-    if (value == 'A') return 'As';
-    if (value == 'V' || value == 'J') return 'Valet';
-    if (value == 'D' || value == 'Q') return 'Dame';
+    if (value == 'JOKER') return ' Joker';
+    if (value == 'A') return ' A';
+    if (value == 'V' || value == 'J') return ' Valet';
+    if (value == 'D' || value == 'Q') return 'e Dame';
     
-    return value;
+    return ' $value';
   }
 }

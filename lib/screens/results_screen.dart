@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/game_state.dart';
-import '../models/player.dart'; // Nécessaire pour le type Player
+import '../models/player.dart';
 import '../providers/game_provider.dart';
 import '../utils/screen_utils.dart';
-import '../widgets/player_avatar.dart'; // ✅ AJOUT : Pour l'avatar des joueurs
+import '../widgets/player_avatar.dart';
 import 'main_menu_screen.dart';
+import 'memorization_screen.dart'; // ✅ IMPORT AJOUTÉ
 
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
@@ -95,15 +96,16 @@ class ResultsScreen extends StatelessWidget {
                           child: ElevatedButton(
                             onPressed: () {
                               if (isTournament && !isTournamentOver) {
-                                // TOURNOI : Manche suivante
+                                // ✅ TOURNOI : Manche suivante
+                                debugPrint("🏆 Manche suivante déclenchée");
                                 gameProvider.startNextTournamentRound();
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(builder: (context) => const MainMenuScreen()), // On recharge clean ou on renvoie vers GameScreen si la logique le permettait direct
-                                  (route) => false,
+                                
+                                // ✅ NAVIGATION CORRIGÉE : Vers MemorizationScreen
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(
+                                    builder: (context) => const MemorizationScreen()
+                                  ),
                                 );
-                                // Note: Idéalement, startNextTournamentRound relance le jeu et on navigue vers GameScreen
-                                // Mais comme la navigation est gérée dans GameSetup, ici on simplifie le retour Menu ou GameScreen
-                                // SI ta méthode startNextGame renvoie vers GameScreen directement, c'est mieux.
                               } else {
                                 // PARTIE RAPIDE ou FIN TOURNOI : Retour Menu
                                 Navigator.of(context).pushAndRemoveUntil(
@@ -145,6 +147,7 @@ class ResultsScreen extends StatelessWidget {
     bool isWinner = rank == 1;
     // Vérifie si ce joueur est celui qui a crié Dutch
     bool isDutchCaller = gs.dutchCallerId == player.id;
+
     // Est-il éliminé ? (A crié Dutch mais n'a pas gagné, donc rank != 1)
     bool isEliminated = isDutchCaller && !isWinner;
     
@@ -155,14 +158,36 @@ class ResultsScreen extends StatelessWidget {
     String pointsChangeText = "";
     Color pointsColor = Colors.grey;
 
-    if (isWinner) {
-      // Victoire : +50 ou +80 si c'est grâce à un Dutch réussi
-      pointsChangeText = isDutchCaller ? "+80 RP" : "+50 RP";
-      pointsColor = Colors.greenAccent;
-    } else {
-      // Défaite : -20 ou -50 si Dutch raté
-      pointsChangeText = isEliminated ? "-50 RP" : "-20 RP";
-      pointsColor = Colors.redAccent;
+    switch (rank) {
+      case 1: // 🥇 Premier
+        if (isDutchCaller) {
+          pointsChangeText = "+80 RP"; // 50 + 30 bonus Dutch
+          pointsColor = Colors.amber;
+        } else {
+          pointsChangeText = "+50 RP";
+          pointsColor = Colors.greenAccent;
+        }
+        break;
+        
+      case 2: // 🥈 Deuxième
+        pointsChangeText = "+25 RP";
+        pointsColor = Colors.lightGreenAccent;
+        break;
+        
+      case 3: // 🥉 Troisième
+        pointsChangeText = "-15 RP";
+        pointsColor = Colors.orange;
+        break;
+        
+      case 4: // 💀 Quatrième
+        if (isEliminated) {
+          pointsChangeText = "-60 RP"; // -30 défaite + -30 Dutch raté
+          pointsColor = Colors.red;
+        } else {
+          pointsChangeText = "-30 RP";
+          pointsColor = Colors.redAccent;
+        }
+        break;
     }
 
     return Container(

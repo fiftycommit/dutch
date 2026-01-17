@@ -331,14 +331,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   Widget _buildCenterTable(GameState gs, GameProvider gp, bool isMyTurn, bool hasDrawn) {
     bool isReaction = gs.phase == GamePhase.reaction;
-    String topCardValue = gs.topDiscardCard?.value ?? "?";
-
+    //String topCardValue = gs.topDiscardCard?.value ?? "?";
+    String topCardValue = gs.topDiscardCard?.displayName ?? "?";
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (isReaction) ...[
           Text(
-            "Vite ! Avez-vous un $topCardValue ?", 
+            "Vite ! Avez-vous un$topCardValue ?", 
             style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 5)])
           ),
           const SizedBox(height: 5),
@@ -480,24 +481,57 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildSpecialPowerOverlay(GameProvider gp, GameState gs) {
-    if (gs.specialCardToActivate == null) return const SizedBox();
+    debugPrint("🔍 [_buildSpecialPowerOverlay] ENTREE");
+    debugPrint("   - specialCardToActivate: ${gs.specialCardToActivate?.value}");
+    debugPrint("   - isWaitingForSpecialPower: ${gs.isWaitingForSpecialPower}");
+    debugPrint("   - currentPlayer: ${gs.currentPlayer.name}");
+    debugPrint("   - isHuman: ${gs.currentPlayer.isHuman}");
+    
+    if (gs.specialCardToActivate == null) {
+      debugPrint("   ❌ Pas de carte spéciale, retour SizedBox");
+      return const SizedBox();
+    }
+
+    if (!gs.currentPlayer.isHuman) {
+      debugPrint("   ❌ Pas un humain, retour SizedBox");
+      return const SizedBox();
+    }
+    
+    debugPrint("   ✅ Affichage du dialogue via PostFrameCallback");
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ModalRoute.of(context)?.isCurrent == true) {
+      debugPrint("   📢 [PostFrameCallback] EXECUTION");
+      debugPrint("      - Route isCurrent: ${ModalRoute.of(context)?.isCurrent}");
+      debugPrint("      - isWaitingForSpecialPower: ${gs.isWaitingForSpecialPower}");
+      
+      if (ModalRoute.of(context)?.isCurrent == true && gs.isWaitingForSpecialPower) {
         PlayingCard trigger = gs.specialCardToActivate!;
         String val = trigger.value;
+        
+        debugPrint("      ✅ Conditions OK, affichage dialogue pour: $val");
+        
         if (val == '7') {
+          debugPrint("      🎯 Dialogue carte 7");
           SpecialPowerDialogs.showLookCardDialog(context, trigger, true); 
         } else if (val == '10') {
+          debugPrint("      🎯 Dialogue carte 10");
           SpecialPowerDialogs.showLookCardDialog(context, trigger, false); 
         } else if (val == 'J' || val == 'V') {
+          debugPrint("      🎯 Dialogue Valet");
           SpecialPowerDialogs.showValetSwapDialog(context, trigger);
         } else if (val == 'JOKER') {
+          debugPrint("      🎯 Dialogue Joker");
           SpecialPowerDialogs.showJokerDialog(context, trigger);
         } else {
+          debugPrint("      ⏭️ Carte sans dialogue, skip direct");
           gp.skipSpecialPower(); 
         }
+      } else {
+        debugPrint("      ❌ Conditions NON OK, pas de dialogue");
       }
     });
+    
+    debugPrint("   🖤 Retour Container noir");
     return Container(color: Colors.black54); 
   }
 

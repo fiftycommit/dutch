@@ -146,28 +146,126 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildHistoryList(List<dynamic> history) {
     if (history.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Aucune partie jouée", style: TextStyle(color: Colors.white38))));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20), 
+          child: Text(
+            "Aucune partie jouée", 
+            style: TextStyle(color: Colors.white38)
+          )
+        )
+      );
     }
 
     return Column(
       children: history.map((match) {
-        bool isWin = match['win'] ?? false;
+        // ✅ CORRECTION : Utiliser 'rank' au lieu de 'win'
+        int rank = match['rank'] ?? 4; // Défaut : 4ème place si pas de données
+        bool isWin = rank == 1; // Victoire = 1ère place
+        
         int score = match['score'] ?? 0;
+        int mmrChange = match['mmrChange'] ?? 0; // 🆕 Récupérer le changement MMR
+        
         DateTime date = DateTime.tryParse(match['date'] ?? "") ?? DateTime.now();
-        String dateStr = "${date.day}/${date.month} ${date.hour}h${date.minute}";
+        String dateStr = "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}"; // ✅ Format hh:mm
+
+        // 🆕 Icône selon le classement
+        IconData icon;
+        Color iconColor;
+        String resultText;
+        
+        switch (rank) {
+          case 1:
+            icon = Icons.emoji_events; // 🏆
+            iconColor = Colors.amber;
+            resultText = "Victoire";
+            break;
+          case 2:
+            icon = Icons.sentiment_satisfied;
+            iconColor = Colors.lightGreenAccent;
+            resultText = "2ème place";
+            break;
+          case 3:
+            icon = Icons.sentiment_neutral;
+            iconColor = Colors.orange;
+            resultText = "3ème place";
+            break;
+          default: // 4ème
+            icon = Icons.sentiment_dissatisfied;
+            iconColor = Colors.redAccent;
+            resultText = "Défaite";
+        }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: isWin ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2),
+            color: isWin 
+              ? Colors.green.withValues(alpha: 0.2) 
+              : Colors.red.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: isWin ? Colors.green.withValues(alpha: 0.5) : Colors.red.withValues(alpha: 0.5))
+            border: Border.all(
+              color: isWin 
+                ? Colors.green.withValues(alpha: 0.5) 
+                : Colors.red.withValues(alpha: 0.5)
+            )
           ),
           child: ListTile(
-            leading: Icon(isWin ? Icons.thumb_up : Icons.thumb_down, color: isWin ? Colors.green : Colors.red),
-            title: Text(isWin ? "Victoire" : "Défaite", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            subtitle: Text(dateStr, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            trailing: Text("$score pts", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            leading: Icon(icon, color: iconColor),
+            title: Row(
+              children: [
+                Text(
+                  resultText, 
+                  style: const TextStyle(
+                    color: Colors.white, 
+                    fontWeight: FontWeight.bold
+                  )
+                ),
+                const SizedBox(width: 8),
+                // 🆕 Badge de classement
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "#$rank",
+                    style: TextStyle(
+                      color: iconColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Text(
+              dateStr, 
+              style: const TextStyle(color: Colors.white54, fontSize: 12)
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  "$score pts", 
+                  style: const TextStyle(
+                    color: Colors.white, 
+                    fontSize: 16, 
+                    fontWeight: FontWeight.bold
+                  )
+                ),
+                // 🆕 Afficher le changement MMR
+                Text(
+                  mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP",
+                  style: TextStyle(
+                    color: mmrChange > 0 ? Colors.greenAccent : Colors.redAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }).toList(),

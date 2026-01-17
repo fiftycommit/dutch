@@ -126,8 +126,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
                           _buildMenuButton(
                             context,
-                            label: 'JOUER',
-                            icon: Icons.play_arrow,
+                            label: 'PARTIE RAPIDE',
+                            icon: Icons.flash_on,
                             isPrimary: true,
                             onPressed: () async {
                               await Navigator.push(

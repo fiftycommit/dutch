@@ -64,7 +64,7 @@ class GameState {
   static List<PlayingCard> createFullDeck() {
     List<PlayingCard> deck = [];
     List<String> suits = ['hearts', 'diamonds', 'clubs', 'spades'];
-    List<String> values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'K']; 
+    List<String> values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R']; 
     for (var suit in suits) {
       for (var value in values) {
         deck.add(PlayingCard.create(suit, value));
@@ -78,10 +78,9 @@ class GameState {
   // 🔥 SYSTÈME DE MÉLANGE AMÉLIORÉ V2
   void smartShuffle() {
     Random rnd = Random();
-    
     if (difficulty == Difficulty.easy) {
       // ✅ MODE DÉTENDU : Mélange 100% aléatoire pur
-      deck.shuffle(rnd);
+      deck.shuffle();
       addToHistory("🎲 Mélange aléatoire pur (Mode Détendu)");
       
     } else if (difficulty == Difficulty.medium) {
@@ -108,10 +107,10 @@ class GameState {
       }
       
       // 2️⃣ Mélanger chaque catégorie individuellement
-      excellent.shuffle(rnd);
-      good.shuffle(rnd);
-      medium.shuffle(rnd);
-      bad.shuffle(rnd);
+      excellent.shuffle();
+      good.shuffle();
+      medium.shuffle();
+      bad.shuffle();
       
       // 3️⃣ Reconstruction en "paquets" (plus naturel qu'une lasagne régulière)
       deck.clear();
@@ -119,9 +118,10 @@ class GameState {
       // Distribution en paquets de 2-4 cartes
       while (excellent.isNotEmpty || good.isNotEmpty || medium.isNotEmpty || bad.isNotEmpty) {
         List<List<PlayingCard>> cats = [excellent, good, medium, bad];
-        cats.shuffle(rnd); // Ordre aléatoire des catégories
+        cats.shuffle(); // Ordre aléatoire des catégories
         
         // Prendre un mini-paquet (2-4 cartes) d'une catégorie aléatoire
+        
         int packetSize = 2 + rnd.nextInt(3); // 2 à 4 cartes
         for (int i = 0; i < packetSize; i++) {
           for (var cat in cats) {
@@ -156,9 +156,9 @@ class GameState {
         }
       }
       
-      heaven.shuffle(rnd);
-      earth.shuffle(rnd);
-      hell.shuffle(rnd);
+      heaven.shuffle();
+      earth.shuffle();
+      hell.shuffle();
       
       deck.clear();
       
