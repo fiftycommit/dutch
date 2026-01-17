@@ -142,59 +142,60 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  // ✅ LE BLOC AMÉLIORÉ EST ICI
   Widget _buildPlayerResult(BuildContext context, Player player, int rank, GameState gs) {
     bool isWinner = rank == 1;
-    // Vérifie si ce joueur est celui qui a crié Dutch
     bool isDutchCaller = gs.dutchCallerId == player.id;
-
-    // Est-il éliminé ? (A crié Dutch mais n'a pas gagné, donc rank != 1)
     bool isEliminated = isDutchCaller && !isWinner;
-    
-    // Calcul du score (somme des cartes)
     int score = gs.getFinalScore(player);
     
-    // Texte et couleur des RP (Points de classement)
+    // ✅ NOUVEAU : Récupérer le mode SBMM depuis le GameProvider
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    bool isSBMM = gameProvider.playerMMR != null;
+    
     String pointsChangeText = "";
     Color pointsColor = Colors.grey;
 
-    switch (rank) {
-      case 1: // 🥇 Premier
-        if (isDutchCaller) {
-          pointsChangeText = "+80 RP"; // 50 + 30 bonus Dutch
-          pointsColor = Colors.amber;
-        } else {
-          pointsChangeText = "+50 RP";
-          pointsColor = Colors.greenAccent;
-        }
-        break;
-        
-      case 2: // 🥈 Deuxième
-        pointsChangeText = "+25 RP";
-        pointsColor = Colors.lightGreenAccent;
-        break;
-        
-      case 3: // 🥉 Troisième
-        pointsChangeText = "-15 RP";
-        pointsColor = Colors.orange;
-        break;
-        
-      case 4: // 💀 Quatrième
-        if (isEliminated) {
-          pointsChangeText = "-60 RP"; // -30 défaite + -30 Dutch raté
-          pointsColor = Colors.red;
-        } else {
-          pointsChangeText = "-30 RP";
-          pointsColor = Colors.redAccent;
-        }
-        break;
+    // ✅ MODIFICATION : Affichage conditionnel selon le mode
+    if (!isSBMM) {
+      // Mode Manuel : pas de RP
+      pointsChangeText = "Mode Manuel";
+      pointsColor = Colors.white54;
+    } else {
+      // Mode SBMM : calcul des RP
+      switch (rank) {
+        case 1:
+          if (isDutchCaller) {
+            pointsChangeText = "+80 RP";
+            pointsColor = Colors.amber;
+          } else {
+            pointsChangeText = "+50 RP";
+            pointsColor = Colors.greenAccent;
+          }
+          break;
+        case 2:
+          pointsChangeText = "+25 RP";
+          pointsColor = Colors.lightGreenAccent;
+          break;
+        case 3:
+          pointsChangeText = "-15 RP";
+          pointsColor = Colors.orange;
+          break;
+        case 4:
+          if (isEliminated) {
+            pointsChangeText = "-60 RP";
+            pointsColor = Colors.red;
+          } else {
+            pointsChangeText = "-30 RP";
+            pointsColor = Colors.redAccent;
+          }
+          break;
+      }
     }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // Fond Rouge si éliminé, Or si gagnant, sinon transparent sombre
         color: isEliminated 
             ? Colors.red.withValues(alpha: 0.2) 
             : (isWinner ? Colors.amber.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
@@ -203,7 +204,6 @@ class ResultsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Rang (#1, #2...)
           Text(
             "#$rank",
             style: TextStyle(
@@ -214,11 +214,9 @@ class ResultsScreen extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           
-          // Avatar
           PlayerAvatar(player: player, size: 50),
           const SizedBox(width: 16),
           
-          // Infos Joueur (Nom + Badge Dutch/Eliminé)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,7 +246,6 @@ class ResultsScreen extends StatelessWidget {
             ),
           ),
           
-          // Score cartes et Gain/Perte RP
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

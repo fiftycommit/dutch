@@ -24,6 +24,7 @@ class GameProvider with ChangeNotifier {
   
   // 🎯 NOUVEAU : MMR du joueur pour le SBMM
   int? _playerMMR;
+  int? get playerMMR => _playerMMR; // ✅ GETTER PUBLIC
 
   void createNewGame({
     required List<Player> players, 

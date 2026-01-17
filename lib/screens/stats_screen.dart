@@ -9,8 +9,6 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  // On ne charge plus une seule future, mais on construira l'UI slot par slot
-  
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
@@ -68,7 +66,6 @@ class _StatsScreenState extends State<StatsScreen> {
         }
 
         final stats = snapshot.data ?? {};
-        // Même vide, on affiche les zéros
         
         return ListView(
           padding: EdgeInsets.fromLTRB(16, topPadding + 100, 16, 20),
@@ -159,24 +156,22 @@ class _StatsScreenState extends State<StatsScreen> {
 
     return Column(
       children: history.map((match) {
-        // ✅ CORRECTION : Utiliser 'rank' au lieu de 'win'
-        int rank = match['rank'] ?? 4; // Défaut : 4ème place si pas de données
-        bool isWin = rank == 1; // Victoire = 1ère place
+        int rank = match['rank'] ?? 4;
+        bool isWin = rank == 1;
         
         int score = match['score'] ?? 0;
-        int mmrChange = match['mmrChange'] ?? 0; // 🆕 Récupérer le changement MMR
+        int mmrChange = match['mmrChange'] ?? 0;
         
         DateTime date = DateTime.tryParse(match['date'] ?? "") ?? DateTime.now();
-        String dateStr = "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}"; // ✅ Format hh:mm
+        String dateStr = "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}";
 
-        // 🆕 Icône selon le classement
         IconData icon;
         Color iconColor;
         String resultText;
         
         switch (rank) {
           case 1:
-            icon = Icons.emoji_events; // 🏆
+            icon = Icons.emoji_events;
             iconColor = Colors.amber;
             resultText = "Victoire";
             break;
@@ -190,10 +185,24 @@ class _StatsScreenState extends State<StatsScreen> {
             iconColor = Colors.orange;
             resultText = "3ème place";
             break;
-          default: // 4ème
+          default:
             icon = Icons.sentiment_dissatisfied;
             iconColor = Colors.redAccent;
             resultText = "Défaite";
+        }
+
+        // ✅ NOUVEAU : Affichage conditionnel selon mmrChange
+        String rpText;
+        Color rpColor;
+        
+        if (mmrChange == 0) {
+          // Mode Manuel
+          rpText = "Mode Manuel";
+          rpColor = Colors.white54;
+        } else {
+          // Mode SBMM
+          rpText = mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP";
+          rpColor = mmrChange > 0 ? Colors.greenAccent : Colors.redAccent;
         }
 
         return Container(
@@ -221,7 +230,6 @@ class _StatsScreenState extends State<StatsScreen> {
                   )
                 ),
                 const SizedBox(width: 8),
-                // 🆕 Badge de classement
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
@@ -255,11 +263,11 @@ class _StatsScreenState extends State<StatsScreen> {
                     fontWeight: FontWeight.bold
                   )
                 ),
-                // 🆕 Afficher le changement MMR
+                // ✅ MODIFICATION : Affichage conditionnel
                 Text(
-                  mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP",
+                  rpText,
                   style: TextStyle(
-                    color: mmrChange > 0 ? Colors.greenAccent : Colors.redAccent,
+                    color: rpColor,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -285,7 +293,7 @@ class _StatsScreenState extends State<StatsScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await StatsService.resetStats(slotId: slotId);
-              setState(() {}); // Rafraîchit l'UI
+              setState(() {});
             },
             child: const Text("Effacer", style: TextStyle(color: Colors.red)),
           ),
