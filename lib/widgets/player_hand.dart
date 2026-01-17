@@ -87,7 +87,7 @@ class PlayerHandWidget extends StatelessWidget {
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.red.withOpacity(0.5), // ✅ Rouge pour erreur
+                            color: Colors.red.withValues(alpha: 0.5), // ✅ Rouge pour erreur
                             blurRadius: 10,
                             spreadRadius: 2,
                           )

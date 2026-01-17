@@ -11,6 +11,7 @@ import '../widgets/player_avatar.dart';
 import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
+import 'dutch_reveal_screen.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -52,12 +53,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _checkAndNavigateIfEnded() {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     if (gameProvider.gameState != null && gameProvider.gameState!.phase == GamePhase.ended) {
-      debugPrint("🏁 [GameScreen] Partie terminée, navigation vers ResultsScreen");
+      debugPrint("🏁 [GameScreen] Partie terminée");
+      
       if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-        Navigator.pushReplacement(
-          context, 
-          MaterialPageRoute(builder: (context) => const ResultsScreen())
-        );
+        // ✅ Si Dutch a été appelé, passer par DutchRevealScreen
+        if (gameProvider.gameState!.dutchCallerId != null) {
+          debugPrint("   📢 Dutch détecté -> Navigation vers DutchRevealScreen");
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DutchRevealScreen()),
+          );
+        } else {
+          // ✅ Sinon, aller directement aux résultats
+          debugPrint("   📊 Pas de Dutch -> Navigation vers ResultsScreen");
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const ResultsScreen()),
+          );
+        }
       }
     }
   }
@@ -101,10 +114,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (gameState != null && gameState.phase == GamePhase.ended) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-           Navigator.pushReplacement(
-             context, 
-             MaterialPageRoute(builder: (context) => const ResultsScreen())
-           );
+          // ✅ Si Dutch a été appelé, passer par DutchRevealScreen
+          if (gameState.dutchCallerId != null) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DutchRevealScreen()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const ResultsScreen()),
+            );
+          }
         }
       });
     }
@@ -584,7 +605,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       content: const Text("Quitter la partie ? (Les données ne seront pas sauvegardés)", style: TextStyle(color: Colors.white70)), 
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non", style: TextStyle(color: Colors.white))), 
-        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui", style: TextStyle(color: Colors.redAccent)))
+        TextButton(
+          onPressed: () {
+            // ✅ AJOUTER CES 2 LIGNES :
+            final gp = Provider.of<GameProvider>(context, listen: false);
+            gp.quitGame(); // Nettoyer le gameState
+            
+            Navigator.pop(ctx, true);
+          }, 
+          child: const Text("Oui", style: TextStyle(color: Colors.redAccent))
+        )
       ]
     )); 
   }

@@ -248,6 +248,7 @@ class GameProvider with ChangeNotifier {
     debugPrint("   📊 RÉSULTAT matchCard: ${success ? 'SUCCÈS ✅' : 'ÉCHEC ❌'}");
     
     if (success) {
+      // ✅ MATCH RÉUSSI
       debugPrint("   🎉 MATCH RÉUSSI!");
       shakingCardIndices.clear();
       
@@ -256,7 +257,6 @@ class GameProvider with ChangeNotifier {
         notifyListeners();
         
         if (!player.isHuman) {
-          // 🎯 MODIFIÉ : Passer le MMR au bot
           await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
           notifyListeners();
           
@@ -270,14 +270,26 @@ class GameProvider with ChangeNotifier {
         notifyListeners();
       }
     } else {
-      debugPrint("   ❌ MATCH ÉCHOUÉ - Pénalité appliquée");
+      // ❌ MATCH RATÉ
+      debugPrint("   ❌ MATCH ÉCHOUÉ - Pénalité appliquée par GameLogic");
       
+      // ✅ L'index de la carte de pénalité est celui qui vient d'être ajouté
+      // GameLogic.matchCard a déjà appliqué la pénalité, donc la carte est déjà dans la main
+      int penaltyCardIndex = player.hand.length - 1; // Dernière carte = pénalité
+      
+      debugPrint("   📍 Shake rouge sur carte de pénalité #$penaltyCardIndex");
+      
+      // ✅ ANIMATION SHAKE SUR LA NOUVELLE CARTE (si c'est le joueur humain)
       if (player.isHuman) {
-        debugPrint("   🔔 Animation shake pour joueur humain");
-        shakingCardIndices.add(cardIndex);
+        shakingCardIndices.clear(); // Nettoyer les anciens shakes
+        shakingCardIndices.add(penaltyCardIndex); // Shake sur la carte de pénalité
         notifyListeners();
+        
+        // Attendre un peu pour l'animation
         await Future.delayed(const Duration(milliseconds: 500));
-        shakingCardIndices.remove(cardIndex);
+        
+        // Retirer le shake
+        shakingCardIndices.remove(penaltyCardIndex);
         notifyListeners();
       }
     }
@@ -595,7 +607,13 @@ class GameProvider with ChangeNotifier {
     debugPrint("🏁 [endGame] FIN DE PARTIE");
     
     if (_gameState == null) return;
-    GameLogic.endGame(_gameState!);
+    _gameState!.phase = GamePhase.ended;
+
+    for (var p in _gameState!.players) {
+      for (int i = 0; i < p.knownCards.length; i++) {
+         p.knownCards[i] = true;
+      }
+    }
     
     // 🆕 Récupérer le classement complet
     List<Player> ranking = _gameState!.getFinalRanking();
@@ -662,5 +680,15 @@ class GameProvider with ChangeNotifier {
       saveSlot: _currentSlotId,
       useSBMM: wasSBMM, // ✅ CONSERVER LE MODE SBMM
     );
+  }
+
+  void quitGame() {
+    debugPrint("🚪 [quitGame] Nettoyage du gameState");
+    _gameState = null;
+    isProcessing = false;
+    shakingCardIndices.clear();
+    _reactionTimer?.cancel();
+    _playerMMR = null;
+    notifyListeners();
   }
 }
