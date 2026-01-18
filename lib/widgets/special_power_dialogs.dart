@@ -6,7 +6,7 @@ import '../providers/game_provider.dart';
 import 'card_widget.dart';
 
 class SpecialPowerDialogs {
-  // ✅ Carte 7 : Regarder UNE de ses cartes
+  // Carte 7 : Regarder UNE de ses cartes
   static void showLookCardDialog(
       BuildContext context, PlayingCard trigger, bool ownCard) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -141,8 +141,29 @@ class SpecialPowerDialogs {
 
   static Widget _buildOpponentSelection(
       BuildContext context, GameProvider gp, gameState) {
+    // ✅ NOUVEAU : Filtrer les adversaires qui ont encore des cartes
     List<Player> opponents =
-        gameState.players.where((p) => !p.isHuman).toList();
+        gameState.players.where((p) => !p.isHuman && p.hand.isNotEmpty).toList();
+
+    if (opponents.isEmpty) {
+      return Column(
+        children: [
+          const Text("Aucun adversaire n'a de cartes !",
+              style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+          const SizedBox(height: 20),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              gp.skipSpecialPower();
+            },
+            child: const Text(
+              "OK",
+              style: TextStyle(color: Colors.white54, fontSize: 16),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -162,7 +183,8 @@ class SpecialPowerDialogs {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              child: Text(opponent.name, style: const TextStyle(fontSize: 14)),
+              child: Text("${opponent.displayAvatar} ${opponent.name}", 
+                  style: const TextStyle(fontSize: 14)),
             );
           }).toList(),
         ),
@@ -594,7 +616,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.shuffle, color: Colors.red, size: 40),
               const SizedBox(height: 12),
               const Text(
-                "🃏 JOKER : CHAOS",
+                "🃏 JOKER : CHAOS",
                 style: TextStyle(
                     color: Colors.red,
                     fontSize: 20,
@@ -699,8 +721,11 @@ class SpecialPowerDialogs {
     );
   }
 
-  static void showBotSwapNotification(BuildContext context, String botName,
+  static void showBotSwapNotification(BuildContext context, Player bot,
       String targetName, int targetCardIndex) {
+    // ✅ Obtenir la position du bot
+    String botDisplay = _getBotPositionDisplay(context, bot);
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -723,7 +748,7 @@ class SpecialPowerDialogs {
               ),
               const SizedBox(height: 12),
               Text(
-                "$botName a échangé une carte avec ${targetName == "Vous" ? "vous" : targetName} !",
+                "$botDisplay a échangé une carte avec ${targetName == "Vous" ? "vous" : targetName} !",
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -759,8 +784,11 @@ class SpecialPowerDialogs {
   }
 
   static void showBotJokerNotification(
-      BuildContext context, String botName, String targetName) {
+      BuildContext context, Player bot, String targetName) {
     final isMe = targetName == "Vous";
+    
+    // ✅ Obtenir la position du bot
+    String botDisplay = _getBotPositionDisplay(context, bot);
 
     showDialog(
       context: context,
@@ -787,7 +815,7 @@ class SpecialPowerDialogs {
               ),
               const SizedBox(height: 12),
               Text(
-                "$botName a utilisé le Joker !",
+                "$botDisplay a utilisé le Joker !",
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -820,5 +848,36 @@ class SpecialPowerDialogs {
         ),
       ),
     );
+  }
+  
+  /// ✅ NOUVELLE FONCTION : Obtenir l'affichage du bot (emoji + position)
+  static String _getBotPositionDisplay(BuildContext context, Player bot) {
+    try {
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      final players = gameProvider.gameState?.players;
+      if (players == null) return bot.name;
+      
+      // Trouver l'index du bot
+      int index = players.indexWhere((p) => p.id == bot.id);
+      String position;
+      
+      switch (index) {
+        case 1:
+          position = "Bot Gauche";
+          break;
+        case 2:
+          position = "Bot Haut";
+          break;
+        case 3:
+          position = "Bot Droite";
+          break;
+        default:
+          position = "";
+      }
+      
+      return "${bot.displayAvatar} $position";
+    } catch (e) {
+      return bot.name;
+    }
   }
 }

@@ -135,7 +135,7 @@ class BotAI {
         case "Argent":
           return criticalMoment ? 1400 : 1000;
         case "Or":
-          return criticalMoment ? 1800 : 1200; // Max 1.8s au lieu de 2.5s
+          return criticalMoment ? 1800 : 1200;
         default:
           return 1000;
       }
@@ -158,16 +158,15 @@ class BotAI {
     int threshold;
 
     switch (personality) {
-      case BotPersonality.aggressive: // 🏃 FAST
+      case BotPersonality.aggressive:
         threshold = difficulty.name == "Bronze" ? 10 :
                    difficulty.name == "Argent" ? 6 : 4;
         break;
 
-      case BotPersonality.cautious: // 🧠 RÉFLÉCHI (très prudent)
+      case BotPersonality.cautious:
         threshold = difficulty.name == "Bronze" ? 8 :
                    difficulty.name == "Argent" ? 5 : 3;
         
-        // ✅ Vérifier qu'aucun adversaire n'a un meilleur score
         if (difficulty.name != "Bronze") {
           for (var p in gs.players) {
             if (p.id != bot.id && p.getEstimatedScore() <= threshold) {
@@ -178,21 +177,19 @@ class BotAI {
         }
         break;
 
-      case BotPersonality.balanced: // ⚖️ ÉQUILIBRÉ (adaptatif)
+      case BotPersonality.balanced:
         bool endGame = gs.players.any((p) => p.hand.length <= 2);
         
         if (endGame) {
-          // Fin de partie : plus agressif
           threshold = difficulty.name == "Bronze" ? 8 :
                      difficulty.name == "Argent" ? 5 : 3;
         } else {
-          // Début : plus prudent
           threshold = difficulty.name == "Bronze" ? 6 :
                      difficulty.name == "Argent" ? 4 : 2;
         }
         break;
 
-      default: // Par défaut : seuils standards
+      default:
         threshold = difficulty.dutchThreshold;
     }
 
@@ -216,23 +213,22 @@ class BotAI {
     int drawnVal = drawn.points;
     BotPersonality? personality = bot.botPersonality;
 
-    // 🎯 Seuil de défausse selon personnalité et difficulté
     int discardThreshold;
     
     switch (personality) {
-      case BotPersonality.aggressive: // 🏃 FAST
+      case BotPersonality.aggressive:
         discardThreshold = difficulty.name == "Bronze" ? 9 :
                           difficulty.name == "Argent" ? 7 : 5;
         break;
 
-      case BotPersonality.cautious: // 🧠 RÉFLÉCHI (optimise)
+      case BotPersonality.cautious:
         discardThreshold = difficulty.name == "Bronze" ? 8 :
                           difficulty.name == "Argent" ? 6 : 4;
         break;
 
-      case BotPersonality.balanced: // ⚖️ ÉQUILIBRÉ (adaptatif)
+      case BotPersonality.balanced:
         bool endGame = gs.players.any((p) => p.hand.length <= 2);
-        discardThreshold = endGame ? 6 : 8; // Plus agressif en fin de partie
+        discardThreshold = endGame ? 6 : 8;
         break;
 
       default:
@@ -241,7 +237,6 @@ class BotAI {
 
     debugPrint("📊 Seuil de défausse: $discardThreshold pour ${personality?.toString()}");
 
-    // Chercher une carte connue plus haute dans la carte mentale
     int replaceIdx = -1;
     for (int i = 0; i < bot.mentalMap.length; i++) {
       if (bot.mentalMap[i] != null && bot.mentalMap[i]!.points > drawnVal) {
@@ -251,13 +246,11 @@ class BotAI {
       }
     }
 
-    // Sinon prendre une carte inconnue
     if (replaceIdx == -1) {
       replaceIdx = _chooseUnknownCard(bot);
       debugPrint("❓ Carte inconnue choisie: index $replaceIdx");
     }
 
-    // Décision : remplacer ou défausser
     if (replaceIdx != -1 && drawnVal < discardThreshold) {
       debugPrint("✅ DÉCISION: REMPLACER (index $replaceIdx)");
 
@@ -280,7 +273,6 @@ class BotAI {
 
   /// 👁️ Choisir quelle carte regarder avec le 7
   static int _chooseCardToLook(Player bot, BotDifficulty difficulty) {
-    // 🧠 RÉFLÉCHI Or : regarde les cartes inconnues en priorité
     if (bot.botPersonality == BotPersonality.cautious && difficulty.name == "Or") {
       List<int> unknown = [];
       for (int i = 0; i < bot.hand.length; i++) {
@@ -293,7 +285,6 @@ class BotAI {
       }
     }
 
-    // Par défaut : carte inconnue aléatoire
     return _chooseUnknownCard(bot);
   }
 
@@ -304,13 +295,11 @@ class BotAI {
 
     BotPersonality? personality = bot.botPersonality;
 
-    // 🧠 RÉFLÉCHI : espionne celui avec le meilleur score estimé
     if (personality == BotPersonality.cautious && difficulty.name != "Bronze") {
       opponents.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
       return opponents.first;
     }
 
-    // ⚔️ FAST/AGRESSIF : cible aléatoire
     return opponents[_random.nextInt(opponents.length)];
   }
 
@@ -318,14 +307,12 @@ class BotAI {
   static Future<void> _executeValetStrategy(GameState gs, Player bot, BotDifficulty difficulty) async {
     BotPersonality? personality = bot.botPersonality;
     
-    // ✅ FIX : Choisir la cible stratégiquement au lieu de toujours l'humain
     Player? target = _chooseValetTarget(gs, bot, difficulty);
     if (target == null || target.hand.isEmpty) return;
 
     int myCardIdx = _chooseBadCard(bot);
     int targetIdx;
 
-    // 🧠 RÉFLÉCHI Or : essaie de prendre la meilleure carte de l'adversaire
     if (personality == BotPersonality.cautious && difficulty.name == "Or") {
       targetIdx = _chooseBestCardIndex(target);
     } else {
@@ -343,58 +330,111 @@ class BotAI {
     GameLogic.swapCards(gs, bot, myCardIdx, target, targetIdx);
     debugPrint("🔄 Bot échange sa carte #$myCardIdx avec la carte #$targetIdx de ${target.name}");
 
-    // Notification si cible = humain
     if (target.isHuman && _context != null) {
       final gameProvider = Provider.of<GameProvider>(_context!, listen: false);
       gameProvider.pauseReactionTimerForNotification();
 
       SpecialPowerDialogs.showBotSwapNotification(
-          _context!, bot.name, target.name, targetIdx);
+          _context!, bot, target.name, targetIdx);
       await Future.delayed(const Duration(milliseconds: 2000));
 
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
-  /// 🎯 Choisir la cible du Valet (FIX du bug !)
+  /// 🎯 Choisir la cible du Valet avec pondération stratégique
   static Player? _chooseValetTarget(GameState gs, Player bot, BotDifficulty difficulty) {
-    List<Player> opponents = gs.players.where((p) => p.id != bot.id).toList();
+    List<Player> opponents = gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.isEmpty) return null;
 
     BotPersonality? personality = bot.botPersonality;
 
-    // ⚔️ FAST Bronze : cible aléatoire
-    if (personality == BotPersonality.aggressive && difficulty.name == "Bronze") {
+    if (difficulty.name == "Bronze") {
       return opponents[_random.nextInt(opponents.length)];
     }
 
-    // ⚔️ FAST Argent/Or : cible celui avec le meilleur score (sabotage compétitif)
     if (personality == BotPersonality.aggressive) {
-      opponents.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
-      return opponents.first; // Celui avec le meilleur score
-    }
-
-    // 🧠 RÉFLÉCHI : cible celui qui va probablement appeler Dutch
-    if (personality == BotPersonality.cautious && difficulty.name == "Or") {
-      for (var p in opponents) {
-        if (p.getEstimatedScore() <= 5) {
-          debugPrint("🎯 Valet cible ${p.name} (score estimé faible, risque Dutch)");
-          return p;
-        }
+      List<Player> lowCardTargets = opponents.where((p) => p.hand.length <= 3).toList();
+      
+      if (lowCardTargets.isNotEmpty && _random.nextDouble() < 0.75) {
+        return lowCardTargets[_random.nextInt(lowCardTargets.length)];
+      } else {
+        return opponents[_random.nextInt(opponents.length)];
       }
     }
 
-    // ⚖️ ÉQUILIBRÉ : cible le meilleur score si fin de partie, sinon aléatoire
+    if (personality == BotPersonality.cautious) {
+      if (_random.nextDouble() < 0.85) {
+        return _selectValetTargetWeighted(opponents, difficulty);
+      } else {
+        return opponents[_random.nextInt(opponents.length)];
+      }
+    }
+
     if (personality == BotPersonality.balanced) {
       bool endGame = gs.players.any((p) => p.hand.length <= 2);
-      if (endGame) {
-        opponents.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
-        return opponents.first;
+      
+      if (endGame && _random.nextDouble() < 0.6) {
+        return _selectValetTargetWeighted(opponents, difficulty);
+      } else if (!endGame && _random.nextDouble() < 0.3) {
+        return _selectValetTargetWeighted(opponents, difficulty);
       }
     }
 
-    // Par défaut : cible aléatoire (plus de ciblage systématique de l'humain !)
     return opponents[_random.nextInt(opponents.length)];
+  }
+
+  /// 🎯 Sélection pondérée de la cible Valet
+  static Player _selectValetTargetWeighted(List<Player> opponents, BotDifficulty difficulty) {
+    Map<Player, double> threatScores = {};
+    
+    for (var player in opponents) {
+      double score = 0.0;
+      
+      int cardCount = player.hand.length;
+      if (cardCount == 1) {
+        score += 120.0;
+      } else if (cardCount == 2) {
+        score += 80.0;
+      } else if (cardCount == 3) {
+        score += 45.0;
+      } else if (cardCount == 4) {
+        score += 20.0;
+      } else {
+        score += 8.0;
+      }
+      
+      int estimatedScore = player.getEstimatedScore();
+      if (estimatedScore <= 5) {
+        score += 30.0;
+      } else if (estimatedScore <= 10) {
+        score += 18.0;
+      } else if (estimatedScore <= 15) {
+        score += 10.0;
+      }
+      
+      double randomBonus = _random.nextDouble() * 30.0;
+      
+      if (difficulty.name == "Or") {
+        score += randomBonus * 0.5;
+      } else {
+        score += randomBonus * 1.0;
+      }
+      
+      threatScores[player] = score;
+    }
+    
+    Player selectedTarget = opponents.first;
+    double maxScore = 0.0;
+    
+    threatScores.forEach((player, score) {
+      if (score > maxScore) {
+        maxScore = score;
+        selectedTarget = player;
+      }
+    });
+    
+    return selectedTarget;
   }
 
   /// 🃏 Stratégie Joker selon personnalité
@@ -402,20 +442,29 @@ class BotAI {
     BotPersonality? personality = bot.botPersonality;
     
     List<Player> possibleTargets = gs.players.where((p) => p.id != bot.id).toList();
+    
     if (possibleTargets.isEmpty) {
-      possibleTargets = [bot]; // Se mélanger soi-même en dernier recours
+      possibleTargets = [bot];
     }
 
     Player? target;
 
-    // 🧠 RÉFLÉCHI : mélange celui avec le meilleur score estimé
     if (personality == BotPersonality.cautious && difficulty.name != "Bronze") {
-      possibleTargets.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
-      target = possibleTargets.first;
-      debugPrint("🧠 Joker stratégique sur ${target.name} (meilleur score)");
+      target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+      debugPrint("🧠 Joker stratégique sur ${target.name} (${target.hand.length} cartes, score estimé: ${target.getEstimatedScore()})");
+    } else if (personality == BotPersonality.aggressive) {
+      if (difficulty.name == "Or" && _random.nextDouble() < 0.6) {
+        target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+      } else {
+        target = possibleTargets[_random.nextInt(possibleTargets.length)];
+      }
+      debugPrint("⚔️ Joker rapide sur ${target.name}");
     } else {
-      // Autres : cible aléatoire
-      target = possibleTargets[_random.nextInt(possibleTargets.length)];
+      if (difficulty.name != "Bronze" && _random.nextDouble() < 0.3) {
+        target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+      } else {
+        target = possibleTargets[_random.nextInt(possibleTargets.length)];
+      }
     }
 
     GameLogic.jokerEffect(gs, target);
@@ -427,20 +476,69 @@ class BotAI {
 
     debugPrint("🃏 Bot mélange les cartes de ${target.name}");
 
-    // Notification si cible = humain
     if (target.isHuman && _context != null) {
       final gameProvider = Provider.of<GameProvider>(_context!, listen: false);
       gameProvider.pauseReactionTimerForNotification();
 
       SpecialPowerDialogs.showBotJokerNotification(
-          _context!, bot.name, target.name);
-      await Future.delayed(const Duration(milliseconds: 2000));
+          _context!, bot, target.name);
+      await Future.delayed(const Duration(milliseconds: 3000));
 
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
-  /// 🎴 Utilitaires pour choisir des cartes
+  /// 🎯 Sélection pondérée de la cible Joker
+  static Player _selectJokerTargetWeighted(List<Player> targets, BotDifficulty difficulty) {
+    Map<Player, double> threatScores = {};
+    
+    for (var player in targets) {
+      double score = 0.0;
+      
+      int cardCount = player.hand.length;
+      if (cardCount <= 2) {
+        score += 50.0;
+      } else if (cardCount == 3) {
+        score += 30.0;
+      } else if (cardCount == 4) {
+        score += 15.0;
+      }
+      
+      int estimatedScore = player.getEstimatedScore();
+      if (estimatedScore <= 5) {
+        score += 20.0;
+      } else if (estimatedScore <= 10) {
+        score += 10.0;
+      } else if (estimatedScore <= 15) {
+        score += 5.0;
+      }
+      
+      double randomFactor = _random.nextDouble() * 20.0;
+      
+      if (difficulty.name == "Or") {
+        score += randomFactor * 0.5;
+      } else if (difficulty.name == "Argent") {
+        score += randomFactor * 1.0;
+      } else {
+        score += randomFactor * 2.0;
+      }
+      
+      threatScores[player] = score;
+    }
+    
+    Player selectedTarget = targets.first;
+    double maxScore = 0.0;
+    
+    threatScores.forEach((player, score) {
+      if (score > maxScore) {
+        maxScore = score;
+        selectedTarget = player;
+      }
+    });
+    
+    return selectedTarget;
+  }
+
   static int _chooseUnknownCard(Player bot) {
     List<int> unknownIndices = [];
     for (int i = 0; i < bot.hand.length; i++) {
@@ -455,7 +553,6 @@ class BotAI {
   }
 
   static int _chooseBadCard(Player bot) {
-    // Chercher la pire carte dans la carte mentale
     int worstIdx = 0;
     int worstValue = -1;
 
@@ -466,7 +563,6 @@ class BotAI {
       }
     }
 
-    // Si aucune carte connue, prendre une inconnue
     if (worstValue == -1) {
       return _chooseUnknownCard(bot);
     }
@@ -475,12 +571,9 @@ class BotAI {
   }
 
   static int _chooseBestCardIndex(Player target) {
-    // Essayer de deviner la meilleure carte (aléatoire pour l'instant)
-    // TODO : Améliorer avec espionnage du 10
     return _random.nextInt(target.hand.length);
   }
 
-  /// 🎯 Conversion BotPersonality → BotDifficulty (mode manuel)
   static BotDifficulty _getDifficultyFromPersonality(BotPersonality? personality) {
     if (personality == null) return BotDifficulty.silver;
 

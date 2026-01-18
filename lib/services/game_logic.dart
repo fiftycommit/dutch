@@ -45,15 +45,15 @@ class GameLogic {
       String starterName = players[randomIndex].isHuman
           ? "Vous commencez"
           : "${players[randomIndex].name} commence";
-      gameState.addToHistory("🎲 Tirage au sort : $starterName !");
+      gameState.addToHistory("ðŸŽ² Tirage au sort : $starterName !");
     }
 
-    // 🔍 VAR TACTIQUE : Distribution initiale
+    // ðŸ” VAR TACTIQUE : Distribution initiale
     Player human = gameState.players.firstWhere((p) => p.isHuman);
-    debugPrint("\n🔍 [VAR - INIT] --------------------------------------");
+    debugPrint("\nðŸ” [VAR - INIT] --------------------------------------");
     debugPrint(
-        "🏁 Main de DÉPART du joueur : ${human.hand.map((c) => c.value).toList()}");
-    debugPrint("🆔 IDs des cartes : ${human.hand.map((c) => c.id).toList()}");
+        "ðŸ Main de DÃ‰PART du joueur : ${human.hand.map((c) => c.value).toList()}");
+    debugPrint("ðŸ†” IDs des cartes : ${human.hand.map((c) => c.id).toList()}");
     debugPrint("-------------------------------------------------------\n");
 
     return gameState;
@@ -67,7 +67,7 @@ class GameLogic {
           human.knownCards[index] = true;
         }
       }
-      gameState.addToHistory("Vous avez mémorisé vos cartes.");
+      gameState.addToHistory("Vous avez mÃ©morisÃ© vos cartes.");
     } catch (e) {
       debugPrint("Erreur initialReveal: $e");
     }
@@ -80,10 +80,10 @@ class GameLogic {
       gameState.drawnCard = gameState.deck.removeLast();
       gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
 
-      // 🔍 VAR TACTIQUE : Pioche
+      // ðŸ” VAR TACTIQUE : Pioche
       if (gameState.currentPlayer.isHuman) {
         debugPrint(
-            "\n🔍 [VAR - DRAW] Vous avez pioché : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
+            "\nðŸ” [VAR - DRAW] Vous avez piochÃ© : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
       }
     } else {
       endGame(gameState);
@@ -93,17 +93,17 @@ class GameLogic {
   static void discardDrawnCard(GameState gameState) {
     if (gameState.drawnCard == null) return;
 
-    // 🔍 VAR TACTIQUE - REJET
+    // ðŸ” VAR TACTIQUE - REJET
     debugPrint(
-        "\n🔍 [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
+        "\nðŸ” [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
     debugPrint(
-        "✋ Main INCHANGÉE : ${gameState.currentPlayer.hand.map((c) => c.value).toList()}");
+        "âœ‹ Main INCHANGÃ‰E : ${gameState.currentPlayer.hand.map((c) => c.value).toList()}");
 
     PlayingCard card = gameState.drawnCard!;
     gameState.discardPile.add(card);
     gameState.drawnCard = null;
     gameState.addToHistory(
-        "${gameState.currentPlayer.name} rejette la carte piochée.");
+        "${gameState.currentPlayer.name} rejette la carte piochÃ©e.");
 
     _checkSpecialPower(gameState, card);
   }
@@ -113,14 +113,14 @@ class GameLogic {
 
     Player player = gameState.currentPlayer;
 
-    // 🔍 VAR TACTIQUE : État avant échange
-    debugPrint("\n🔍 [VAR - REPLACE] --------------------------------------");
-    debugPrint("👤 Joueur : ${player.name}");
-    debugPrint("✋ Main AVANT : ${player.hand.map((c) => c.value).toList()}");
+    // ðŸ” VAR TACTIQUE : Ã‰tat avant Ã©change
+    debugPrint("\nðŸ” [VAR - REPLACE] --------------------------------------");
+    debugPrint("ðŸ‘¤ Joueur : ${player.name}");
+    debugPrint("âœ‹ Main AVANT : ${player.hand.map((c) => c.value).toList()}");
     debugPrint(
-        "🃏 Carte visée (Index $cardIndex) : ${player.hand[cardIndex].value} (ID: ${player.hand[cardIndex].id})");
+        "ðŸƒ Carte visÃ©e (Index $cardIndex) : ${player.hand[cardIndex].value} (ID: ${player.hand[cardIndex].id})");
     debugPrint(
-        "📥 Carte piochée à insérer : ${gameState.drawnCard!.value} (ID: ${gameState.drawnCard!.id})");
+        "ðŸ“¥ Carte piochÃ©e Ã  insÃ©rer : ${gameState.drawnCard!.value} (ID: ${gameState.drawnCard!.id})");
 
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
       debugPrint(
@@ -136,11 +136,11 @@ class GameLogic {
     gameState.drawnCard = null;
 
     gameState.discardPile.add(oldCard);
-    gameState.addToHistory("${player.name} échange une carte.");
+    gameState.addToHistory("${player.name} Ã©change une carte.");
 
-    // 🔍 VAR TACTIQUE : État après échange
-    debugPrint("✅ Main APRÈS : ${player.hand.map((c) => c.value).toList()}");
-    debugPrint("🗑️ Défausse : ${gameState.discardPile.last.value}");
+    // ðŸ” VAR TACTIQUE : Ã‰tat aprÃ¨s Ã©change
+    debugPrint("âœ… Main APRÃˆS : ${player.hand.map((c) => c.value).toList()}");
+    debugPrint("ðŸ—‘ï¸ DÃ©fausse : ${gameState.discardPile.last.value}");
     debugPrint("-------------------------------------------------------\n");
 
     _checkSpecialPower(gameState, oldCard);
@@ -159,7 +159,7 @@ class GameLogic {
 
     PlayingCard topDiscard = gameState.discardPile.last;
 
-    // ✅ CHANGEMENT CRUCIAL : Utiliser la nouvelle méthode matches()
+    // âœ… CHANGEMENT CRUCIAL : Utiliser la nouvelle mÃ©thode matches()
     // Cela prend en compte la couleur des Rois !
     if (playerCard.matches(topDiscard)) {
       gameState.discardPile.add(playerCard);
@@ -173,15 +173,19 @@ class GameLogic {
       player.hand = newHand;
       player.knownCards = newKnownCards;
 
-      // ✅ Utiliser displayName pour un meilleur affichage
+      // âœ… Utiliser displayName pour un meilleur affichage
       gameState.addToHistory(
-          "⚡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
-      _checkSpecialPower(gameState, playerCard);
+          "âš¡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
+      // ✅ FIX BUG : Les pouvoirs ne s'activent QUE pendant le tour du joueur
+      // Pas pendant la défausse collective (phase réaction)
+      if (gameState.phase != GamePhase.reaction) {
+        _checkSpecialPower(gameState, playerCard);
+      }
       return true;
     } else {
-      // ✅ Message plus clair avec displayName
+      // âœ… Message plus clair avec displayName
       gameState.addToHistory(
-          "🚫 ${player.name} rate son match (${playerCard.displayName} ≠ ${topDiscard.displayName}) ! Pénalité !");
+          "ðŸš« ${player.name} rate son match (${playerCard.displayName} â‰  ${topDiscard.displayName}) ! PÃ©nalitÃ© !");
       applyPenalty(gameState, player);
       return false;
     }
@@ -202,13 +206,13 @@ class GameLogic {
     player.hand = newHand;
     player.knownCards = newKnownCards;
 
-    gameState.addToHistory("⚠️ ${player.name} prend une carte de pénalité.");
+    gameState.addToHistory("âš ï¸ ${player.name} prend une carte de pÃ©nalitÃ©.");
   }
 
   static void lookAtCard(GameState gameState, Player target, int cardIndex) {
     if (cardIndex >= 0 && cardIndex < target.knownCards.length) {
       gameState.addToHistory(
-          "👁️ ${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
+          "ðŸ‘ï¸ ${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
     }
   }
 
@@ -229,7 +233,7 @@ class GameLogic {
     if (idx2 < p2.knownCards.length) p2.knownCards[idx2] = false;
 
     gameState.addToHistory(
-        "🔄 Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.");
+        "ðŸ”„ Ã‰change : ${p1.name} carte #${idx1 + 1} â†” ${p2.name} carte #${idx2 + 1}.");
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {
@@ -240,7 +244,7 @@ class GameLogic {
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
 
     gameState.addToHistory(
-        "🃏 JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
+        "ðŸƒ JOKER ! ${gameState.currentPlayer.name} mÃ©lange ${targetPlayer.name} !");
   }
 
   static void _checkSpecialPower(GameState gameState, PlayingCard card) {
@@ -255,7 +259,7 @@ class GameLogic {
     if (gameState.dutchCallerId != null) return;
     gameState.dutchCallerId = gameState.currentPlayer.id;
     gameState.phase = GamePhase.dutchCalled;
-    gameState.addToHistory('🎯 ${gameState.currentPlayer.name} crie DUTCH !');
+    gameState.addToHistory('ðŸŽ¯ ${gameState.currentPlayer.name} crie DUTCH !');
   }
 
   static void endGame(GameState gameState) {
@@ -275,6 +279,15 @@ class GameLogic {
       gameState.discardPile.add(top);
       gameState.deck.shuffle(_random);
       gameState.addToHistory("♻️ La pioche est vide, on mélange la défausse !");
+    } else {
+      // ✅ NOUVEAU : Si Dutch a été appelé, ne pas terminer immédiatement
+      // Sinon, terminer la partie car plus de cartes disponibles
+      if (gameState.dutchCallerId != null) {
+        gameState.phase = GamePhase.dutchCalled;
+        gameState.addToHistory("🏁 Plus de cartes disponibles - Fin de partie");
+      } else {
+        endGame(gameState);
+      }
     }
   }
 }
