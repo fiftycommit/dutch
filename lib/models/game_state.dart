@@ -4,18 +4,19 @@ import 'player.dart';
 import 'game_settings.dart';
 
 enum GameMode { quick, tournament }
+
 enum GamePhase { setup, playing, reaction, dutchCalled, ended }
 
 class GameState {
   List<Player> players;
   List<PlayingCard> deck;
   List<PlayingCard> discardPile;
-  
+
   int currentPlayerIndex;
   GameMode gameMode;
   GamePhase phase;
   final Difficulty difficulty;
-  
+
   int tournamentRound;
   List<String> eliminatedPlayerIds;
   PlayingCard? drawnCard;
@@ -41,12 +42,12 @@ class GameState {
     this.dutchCallerId,
     this.reactionStartTime,
     List<String>? actionHistory,
-  }) : 
-    eliminatedPlayerIds = eliminatedPlayerIds ?? [],
-    actionHistory = actionHistory ?? [];
+  })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
+        actionHistory = actionHistory ?? [];
 
   Player get currentPlayer => players[currentPlayerIndex];
-  PlayingCard? get topDiscardCard => discardPile.isNotEmpty ? discardPile.last : null;
+  PlayingCard? get topDiscardCard =>
+      discardPile.isNotEmpty ? discardPile.last : null;
   int get remainingDeckCards => deck.length;
 
   void nextTurn() {
@@ -56,7 +57,8 @@ class GameState {
   }
 
   void addToHistory(String action) {
-    String time = "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}";
+    String time =
+        "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}";
     actionHistory.insert(0, "[$time] $action");
     if (actionHistory.length > 50) actionHistory.removeLast();
   }
@@ -64,7 +66,21 @@ class GameState {
   static List<PlayingCard> createFullDeck() {
     List<PlayingCard> deck = [];
     List<String> suits = ['hearts', 'diamonds', 'clubs', 'spades'];
-    List<String> values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R']; 
+    List<String> values = [
+      'A',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      'V',
+      'D',
+      'R'
+    ];
     for (var suit in suits) {
       for (var value in values) {
         deck.add(PlayingCard.create(suit, value));
@@ -82,19 +98,19 @@ class GameState {
       // ✅ MODE DÉTENDU : Mélange 100% aléatoire pur
       deck.shuffle();
       addToHistory("🎲 Mélange aléatoire pur (Mode Détendu)");
-      
     } else if (difficulty == Difficulty.medium) {
       // ✅ MODE TACTIQUE : Distribution équilibrée avec paquets aléatoires
-      
+
       // 1️⃣ Catégoriser les cartes
-      List<PlayingCard> excellent = []; // 0-3 points (A, 2, 3, Rois rouges, Jokers)
-      List<PlayingCard> good = [];      // 4-6 points
-      List<PlayingCard> medium = [];    // 7-9 points
-      List<PlayingCard> bad = [];       // 10-13 points
-      
+      List<PlayingCard> excellent =
+          []; // 0-3 points (A, 2, 3, Rois rouges, Jokers)
+      List<PlayingCard> good = []; // 4-6 points
+      List<PlayingCard> medium = []; // 7-9 points
+      List<PlayingCard> bad = []; // 10-13 points
+
       for (var card in deck) {
         int val = card.points;
-        
+
         if (val <= 3) {
           excellent.add(card);
         } else if (val <= 6) {
@@ -105,23 +121,26 @@ class GameState {
           bad.add(card);
         }
       }
-      
+
       // 2️⃣ Mélanger chaque catégorie individuellement
       excellent.shuffle();
       good.shuffle();
       medium.shuffle();
       bad.shuffle();
-      
+
       // 3️⃣ Reconstruction en "paquets" (plus naturel qu'une lasagne régulière)
       deck.clear();
-      
+
       // Distribution en paquets de 2-4 cartes
-      while (excellent.isNotEmpty || good.isNotEmpty || medium.isNotEmpty || bad.isNotEmpty) {
+      while (excellent.isNotEmpty ||
+          good.isNotEmpty ||
+          medium.isNotEmpty ||
+          bad.isNotEmpty) {
         List<List<PlayingCard>> cats = [excellent, good, medium, bad];
         cats.shuffle(); // Ordre aléatoire des catégories
-        
+
         // Prendre un mini-paquet (2-4 cartes) d'une catégorie aléatoire
-        
+
         int packetSize = 2 + rnd.nextInt(3); // 2 à 4 cartes
         for (int i = 0; i < packetSize; i++) {
           for (var cat in cats) {
@@ -132,21 +151,20 @@ class GameState {
           }
         }
       }
-      
+
       // 4️⃣ Mélange partiel (20%) pour éviter la prévisibilité
       _partialShuffle(deck, 0.20);
       addToHistory("⚖️ Mélange équilibré (Mode Tactique)");
-      
     } else {
       // ✅ MODE CHALLENGER : Gradient progressif (bon → moyen → difficile)
-      
-      List<PlayingCard> heaven = [];  // 0-4 points
-      List<PlayingCard> earth = [];   // 5-8 points
-      List<PlayingCard> hell = [];    // 9-13 points
-      
+
+      List<PlayingCard> heaven = []; // 0-4 points
+      List<PlayingCard> earth = []; // 5-8 points
+      List<PlayingCard> hell = []; // 9-13 points
+
       for (var card in deck) {
         int val = card.points;
-        
+
         if (val <= 4) {
           heaven.add(card);
         } else if (val <= 8) {
@@ -155,19 +173,19 @@ class GameState {
           hell.add(card);
         }
       }
-      
+
       heaven.shuffle();
       earth.shuffle();
       hell.shuffle();
-      
+
       deck.clear();
-      
+
       // ✅ AMÉLIORATION : Gradient 30% bon / 40% moyen / 30% difficile
       int totalCards = heaven.length + earth.length + hell.length;
       int phase1 = (totalCards * 0.30).round(); // 30% : Majoritairement bonnes
       int phase2 = (totalCards * 0.40).round(); // 40% : Mélange équilibré
       // phase3 : le reste (30%) : Majoritairement difficiles
-      
+
       // Phase 1 : Bonnes cartes prédominantes (50% excellent, 30% good, 20% bad)
       for (int i = 0; i < phase1; i++) {
         double roll = rnd.nextDouble();
@@ -183,7 +201,7 @@ class GameState {
           deck.add(earth.removeLast());
         }
       }
-      
+
       // Phase 2 : Équilibre (distribution égale)
       for (int i = 0; i < phase2; i++) {
         List<List<PlayingCard>> cats = [heaven, earth, hell];
@@ -195,7 +213,7 @@ class GameState {
           }
         }
       }
-      
+
       // Phase 3 : Mauvaises cartes prédominantes (60% hell, 30% earth, 10% heaven)
       while (hell.isNotEmpty || earth.isNotEmpty || heaven.isNotEmpty) {
         double roll = rnd.nextDouble();
@@ -211,7 +229,7 @@ class GameState {
           deck.add(earth.removeLast());
         }
       }
-      
+
       // Mélange partiel très léger (10%) pour éviter les patterns
       _partialShuffle(deck, 0.10);
       addToHistory("🔥 Mélange exigeant (Mode Challenger)");
@@ -222,11 +240,11 @@ class GameState {
   void _partialShuffle(List<PlayingCard> cards, double ratio) {
     Random rnd = Random();
     int swaps = (cards.length * ratio).round();
-    
+
     for (int i = 0; i < swaps; i++) {
       int a = rnd.nextInt(cards.length);
       int b = rnd.nextInt(cards.length);
-      
+
       var temp = cards[a];
       cards[a] = cards[b];
       cards[b] = temp;
@@ -236,29 +254,28 @@ class GameState {
   // 🔥 DISTRIBUTION AMÉLIORÉE : Sans Jokers ni cartes spéciales au début
   void dealCards() {
     Random rnd = Random();
-    
+
     // 1️⃣ Séparer les cartes "normales" des cartes "spéciales"
     List<PlayingCard> normalCards = [];
     List<PlayingCard> specialCards = [];
-    
+
     for (var card in deck) {
       // Carte spéciale = Joker OU pouvoir spécial (7, 10, V uniquement)
-      if (card.value == 'JOKER' || 
-          ['7', '10', 'V'].contains(card.value)) {
+      if (card.value == 'JOKER' || ['7', '10', 'V'].contains(card.value)) {
         specialCards.add(card);
       } else {
         normalCards.add(card);
       }
     }
-    
+
     // 2️⃣ Mélanger les cartes normales
     normalCards.shuffle(rnd);
-    
+
     // 3️⃣ Distribuer UNIQUEMENT des cartes normales
     for (var player in players) {
       player.hand = List<PlayingCard>.from([]);
       player.knownCards = List<bool>.from([]);
-      
+
       for (int i = 0; i < 4; i++) {
         if (normalCards.isNotEmpty) {
           player.hand.add(normalCards.removeLast());
@@ -266,33 +283,43 @@ class GameState {
         }
       }
     }
-    
+
     // 4️⃣ Reconstituer le deck : cartes normales restantes + cartes spéciales
     deck.clear();
     deck.addAll(normalCards);
     deck.addAll(specialCards);
-    
+
     // 5️⃣ Mélanger le deck final
     deck.shuffle(rnd);
-    
+
     // 📊 Debug : Vérifier la composition
     int jokers = deck.where((c) => c.value == 'JOKER').length;
     int specials = deck.where((c) => ['7', '10', 'V'].contains(c.value)).length;
-    addToHistory("🎴 Deck recomposé : $jokers Jokers, $specials cartes spéciales");
+    addToHistory(
+        "🎴 Deck recomposé : $jokers Jokers, $specials cartes spéciales");
   }
-  
+
   int _getCardValue(PlayingCard card) {
-     if (card.value == 'K' && (card.suit == 'hearts' || card.suit == 'diamonds')) return 0;
-     if (card.value == 'JOKER') return -1;
-     switch (card.value) {
-      case 'A': return 1;
-      case 'V': case 'J': return 11;
-      case 'D': case 'Q': return 12;
-      case 'K': case 'R': return 13;
-      default: return int.tryParse(card.value) ?? 7; 
+    if (card.value == 'K' && (card.suit == 'hearts' || card.suit == 'diamonds'))
+      return 0;
+    if (card.value == 'JOKER') return -1;
+    switch (card.value) {
+      case 'A':
+        return 1;
+      case 'V':
+      case 'J':
+        return 11;
+      case 'D':
+      case 'Q':
+        return 12;
+      case 'K':
+      case 'R':
+        return 13;
+      default:
+        return int.tryParse(card.value) ?? 7;
     }
   }
-  
+
   void shuffleDeckRandomly() {
     deck.shuffle(Random());
   }
@@ -318,7 +345,7 @@ class GameState {
     int callerScore = getFinalScore(caller);
     for (var p in players) {
       if (p.id != caller.id && getFinalScore(p) <= callerScore) {
-        return false; 
+        return false;
       }
     }
     return true;

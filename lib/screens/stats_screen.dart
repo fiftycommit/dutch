@@ -18,7 +18,9 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: AppBar(
-          title: const Text('Statistiques', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          title: const Text('Statistiques',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.white),
@@ -58,15 +60,18 @@ class _StatsScreenState extends State<StatsScreen> {
       future: StatsService.getStats(slotId: slotId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Colors.amber));
+          return const Center(
+              child: CircularProgressIndicator(color: Colors.amber));
         }
-        
+
         if (snapshot.hasError) {
-          return Center(child: Text("Erreur : ${snapshot.error}", style: const TextStyle(color: Colors.red)));
+          return Center(
+              child: Text("Erreur : ${snapshot.error}",
+                  style: const TextStyle(color: Colors.red)));
         }
 
         final stats = snapshot.data ?? {};
-        
+
         return ListView(
           padding: EdgeInsets.fromLTRB(16, topPadding + 100, 16, 20),
           children: [
@@ -77,9 +82,14 @@ class _StatsScreenState extends State<StatsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Historique", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text("Historique",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold)),
                 IconButton(
-                  icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 20),
+                  icon: const Icon(Icons.delete_forever,
+                      color: Colors.redAccent, size: 20),
                   onPressed: () => _confirmReset(context, slotId),
                   tooltip: "Effacer ce profil",
                 )
@@ -96,7 +106,7 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildSummaryCards(Map<String, dynamic> stats) {
     int played = stats['gamesPlayed'] ?? 0;
     int won = stats['gamesWon'] ?? 0;
-    int best = stats['bestScore'] ?? 999; 
+    int best = stats['bestScore'] ?? 999;
     if (best == 999 && stats['bestScore'] == null) best = 0;
 
     double winRate = played > 0 ? (won / played * 100) : 0;
@@ -105,17 +115,37 @@ class _StatsScreenState extends State<StatsScreen> {
       children: [
         Row(
           children: [
-            Expanded(child: _StatCard(title: "Parties", value: "$played", icon: Icons.sports_esports, color: Colors.blue)),
+            Expanded(
+                child: _StatCard(
+                    title: "Parties",
+                    value: "$played",
+                    icon: Icons.sports_esports,
+                    color: Colors.blue)),
             const SizedBox(width: 10),
-            Expanded(child: _StatCard(title: "Victoires", value: "$won", icon: Icons.emoji_events, color: Colors.amber)),
+            Expanded(
+                child: _StatCard(
+                    title: "Victoires",
+                    value: "$won",
+                    icon: Icons.emoji_events,
+                    color: Colors.amber)),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _StatCard(title: "Win Rate", value: "${winRate.toStringAsFixed(1)}%", icon: Icons.pie_chart, color: Colors.green)),
+            Expanded(
+                child: _StatCard(
+                    title: "Win Rate",
+                    value: "${winRate.toStringAsFixed(1)}%",
+                    icon: Icons.pie_chart,
+                    color: Colors.green)),
             const SizedBox(width: 10),
-            Expanded(child: _StatCard(title: "Meilleur Score", value: "$best", icon: Icons.star, color: Colors.purple)),
+            Expanded(
+                child: _StatCard(
+                    title: "Meilleur Score",
+                    value: "$best",
+                    icon: Icons.star,
+                    color: Colors.purple)),
           ],
         ),
       ],
@@ -129,13 +159,20 @@ class _StatsScreenState extends State<StatsScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: Colors.white10, borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
-          const Text("Efficacité DUTCH", style: TextStyle(color: Colors.white70)),
+          const Text("Efficacité DUTCH",
+              style: TextStyle(color: Colors.white70)),
           const SizedBox(height: 10),
-          Text("${successRate.toStringAsFixed(1)}%", style: const TextStyle(color: Colors.amber, fontSize: 32, fontWeight: FontWeight.bold)),
-          Text("$wins réussis sur $calls tentés", style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          Text("${successRate.toStringAsFixed(1)}%",
+              style: const TextStyle(
+                  color: Colors.amber,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold)),
+          Text("$wins réussis sur $calls tentés",
+              style: const TextStyle(color: Colors.white38, fontSize: 12)),
         ],
       ),
     );
@@ -144,31 +181,29 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildHistoryList(List<dynamic> history) {
     if (history.isEmpty) {
       return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20), 
-          child: Text(
-            "Aucune partie jouée", 
-            style: TextStyle(color: Colors.white38)
-          )
-        )
-      );
+          child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text("Aucune partie jouée",
+                  style: TextStyle(color: Colors.white38))));
     }
 
     return Column(
       children: history.map((match) {
         int rank = match['rank'] ?? 4;
         bool isWin = rank == 1;
-        
+
         int score = match['score'] ?? 0;
         int mmrChange = match['mmrChange'] ?? 0;
-        
-        DateTime date = DateTime.tryParse(match['date'] ?? "") ?? DateTime.now();
-        String dateStr = "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}";
+
+        DateTime date =
+            DateTime.tryParse(match['date'] ?? "") ?? DateTime.now();
+        String dateStr =
+            "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}";
 
         IconData icon;
         Color iconColor;
         String resultText;
-        
+
         switch (rank) {
           case 1:
             icon = Icons.emoji_events;
@@ -194,7 +229,7 @@ class _StatsScreenState extends State<StatsScreen> {
         // ✅ NOUVEAU : Affichage conditionnel selon mmrChange
         String rpText;
         Color rpColor;
-        
+
         if (mmrChange == 0) {
           // Mode Manuel
           rpText = "Mode Manuel";
@@ -208,30 +243,25 @@ class _StatsScreenState extends State<StatsScreen> {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: isWin 
-              ? Colors.green.withValues(alpha: 0.2) 
-              : Colors.red.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isWin 
-                ? Colors.green.withValues(alpha: 0.5) 
-                : Colors.red.withValues(alpha: 0.5)
-            )
-          ),
+              color: isWin
+                  ? Colors.green.withValues(alpha: 0.2)
+                  : Colors.red.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: isWin
+                      ? Colors.green.withValues(alpha: 0.5)
+                      : Colors.red.withValues(alpha: 0.5))),
           child: ListTile(
             leading: Icon(icon, color: iconColor),
             title: Row(
               children: [
-                Text(
-                  resultText, 
-                  style: const TextStyle(
-                    color: Colors.white, 
-                    fontWeight: FontWeight.bold
-                  )
-                ),
+                Text(resultText,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: iconColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(4),
@@ -247,22 +277,17 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
               ],
             ),
-            subtitle: Text(
-              dateStr, 
-              style: const TextStyle(color: Colors.white54, fontSize: 12)
-            ),
+            subtitle: Text(dateStr,
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  "$score pts", 
-                  style: const TextStyle(
-                    color: Colors.white, 
-                    fontSize: 16, 
-                    fontWeight: FontWeight.bold
-                  )
-                ),
+                Text("$score pts",
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
                 // ✅ MODIFICATION : Affichage conditionnel
                 Text(
                   rpText,
@@ -285,10 +310,14 @@ class _StatsScreenState extends State<StatsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1a3a28),
-        title: Text("Réinitialiser Profil $slotId ?", style: const TextStyle(color: Colors.white)),
-        content: const Text("Tout l'historique sera effacé.", style: TextStyle(color: Colors.white70)),
+        title: Text("Réinitialiser Profil $slotId ?",
+            style: const TextStyle(color: Colors.white)),
+        content: const Text("Tout l'historique sera effacé.",
+            style: TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annuler")),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -309,7 +338,11 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
 
-  const _StatCard({required this.title, required this.value, required this.icon, required this.color});
+  const _StatCard(
+      {required this.title,
+      required this.value,
+      required this.icon,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -325,8 +358,13 @@ class _StatCard extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
+          Text(title,
+              style: const TextStyle(color: Colors.white54, fontSize: 12)),
         ],
       ),
     );

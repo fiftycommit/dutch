@@ -1,0 +1,15 @@
+- quand on a l'écran qui nous dit que quelqu'un a échangé une carte avec nous ou que quelqu'un a mélangé notre paquet, le temps de réaction doit se mettre en pause
+- j'ai défaussé un 10 dans la défausse collective, mon pouvoir ne m'a pas été proposé et le jeu a bugué
+
+
+
+
+Ajouter aux règles : 
+- Les modes de jeu (Mode manuel, Mode SBMM)
+- Comment fonctionne le mode SBMM avec le système de RP, comment les bots montent
+- Comment se passe un tournoi
+
+Dis le moi avant, je vois si c'est bon puis tu le fais. Tu me dis comment ça se passe en lisant le code et non en devinant grâce à ce que je t'avais dit
+
+
+ 

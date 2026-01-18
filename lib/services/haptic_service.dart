@@ -1,11 +1,11 @@
 import 'package:flutter/services.dart';
 
 enum HapticIntensity {
-  light,    // Clic léger
-  medium,   // Clic moyen
-  heavy,    // Clic fort
-  error,    // Vibration d'erreur
-  success,  // Vibration de succès
+  light, // Clic léger
+  medium, // Clic moyen
+  heavy, // Clic fort
+  error, // Vibration d'erreur
+  success, // Vibration de succès
 }
 
 class HapticService {

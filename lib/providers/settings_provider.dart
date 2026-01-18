@@ -18,25 +18,25 @@ class SettingsProvider with ChangeNotifier {
   bool get soundEnabled => _settings.soundEnabled;
   bool get hapticEnabled => _settings.hapticEnabled;
   bool get useSBMM => _settings.useSBMM;
-  
-  Difficulty get luckDifficulty => _settings.luckDifficulty; 
-  
+
+  Difficulty get luckDifficulty => _settings.luckDifficulty;
+
   Difficulty get botDifficulty => _settings.botDifficulty;
   int get reactionTimeMs => _settings.reactionTimeMs;
 
   void toggleSound(bool value) {
-  _settings = _settings.copyWith(soundEnabled: value);
-  SoundService.setEnabled(value); 
-  _saveSettings();
-  notifyListeners();
-}
+    _settings = _settings.copyWith(soundEnabled: value);
+    SoundService.setEnabled(value);
+    _saveSettings();
+    notifyListeners();
+  }
 
   void toggleHaptic(bool value) {
-  _settings = _settings.copyWith(hapticEnabled: value);
-  HapticService.setEnabled(value); 
-  _saveSettings();
-  notifyListeners();
-}
+    _settings = _settings.copyWith(hapticEnabled: value);
+    HapticService.setEnabled(value);
+    _saveSettings();
+    notifyListeners();
+  }
 
   void toggleSBMM(bool value) {
     _settings = _settings.copyWith(useSBMM: value);

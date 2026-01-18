@@ -27,7 +27,7 @@ class PlayerHandWidget extends StatelessWidget {
     debugPrint("   - isActive: $isActive");
     debugPrint("   - onCardTap fourni: ${onCardTap != null}");
     debugPrint("   - Nombre de cartes: ${player.hand.length}");
-    
+
     return SizedBox(
       height: _getHandHeight(),
       child: Row(
@@ -54,7 +54,7 @@ class PlayerHandWidget extends StatelessWidget {
         debugPrint("   - Joueur: ${player.name}");
         debugPrint("   - isActive: $isActive");
         debugPrint("   - onCardTap fourni: ${onCardTap != null}");
-        
+
         if (onCardTap != null && isActive) {
           debugPrint("   ✅ CONDITIONS REMPLIES - Appel onCardTap($index)");
           onCardTap!(index);
@@ -63,8 +63,9 @@ class PlayerHandWidget extends StatelessWidget {
           debugPrint("      - onCardTap null: ${onCardTap == null}");
           debugPrint("      - isActive false: ${!isActive}");
         }
-        
-        debugPrint("🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════");
+
+        debugPrint(
+            "🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════");
       },
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: _getCardSpacing()),
@@ -74,20 +75,24 @@ class PlayerHandWidget extends StatelessWidget {
           duration: const Duration(milliseconds: 500),
           builder: (context, shakeValue, child) {
             // Shake horizontal pour l'erreur
-            final offset = isSelected ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20) : 0.0;
-            
+            final offset = isSelected
+                ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20)
+                : 0.0;
+
             return Transform.translate(
               offset: Offset(offset - 10, 0),
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
-                      ? Border.all(color: Colors.red, width: 3) // ✅ Rouge pour erreur
+                      ? Border.all(
+                          color: Colors.red, width: 3) // ✅ Rouge pour erreur
                       : null,
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.red.withValues(alpha: 0.5), // ✅ Rouge pour erreur
+                            color: Colors.red
+                                .withValues(alpha: 0.5), // ✅ Rouge pour erreur
                             blurRadius: 10,
                             spreadRadius: 2,
                           )
@@ -112,11 +117,9 @@ class PlayerHandWidget extends StatelessWidget {
 
     if (taille == CardSize.small) {
       return 70;
-    }
-    else if (taille == CardSize.medium) {
+    } else if (taille == CardSize.medium) {
       return 100;
-    }
-    else if (taille == CardSize.large) {
+    } else if (taille == CardSize.large) {
       return 140;
     }
     return 70;
@@ -127,11 +130,9 @@ class PlayerHandWidget extends StatelessWidget {
 
     if (taille == CardSize.small) {
       return 2;
-    }
-    else if (taille == CardSize.medium) {
+    } else if (taille == CardSize.medium) {
       return 4;
-    }
-    else if (taille == CardSize.large) {
+    } else if (taille == CardSize.large) {
       return 6;
     }
     return 2;

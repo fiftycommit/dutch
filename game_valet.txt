@@ -1,0 +1,2794 @@
+🎮 [createNewGame] CRÉATION NOUVELLE PARTIE
+   - Joueurs: [Vous, Alex, Casey, Prof]
+   - Mode: GameMode.quick
+   - Difficulté: Difficulty.medium
+   - SBMM: false
+
+🔍 [VAR - INIT] --------------------------------------
+🏁 Main de DÉPART du joueur : [4, 3, 3, A]
+🆔 IDs des cartes : [4_spades, 3_hearts, 3_spades, A_diamonds]
+-------------------------------------------------------
+
+   - Mode manuel (pas de MMR)
+   - Phase initiale: GamePhase.setup
+   - Joueur initial: Alex
+   - Est bot: true
+🎬 [MemorizationScreen] INIT
+📊 [MemorizationScreen] Cartes sélectionnées: {}
+✅ [MemorizationScreen] Sélection carte 0
+📊 [MemorizationScreen] Cartes sélectionnées: {0}
+✅ [MemorizationScreen] Sélection carte 1
+📊 [MemorizationScreen] Cartes sélectionnées: {0, 1}
+🎯 [MemorizationScreen] CONFIRMATION - Cartes sélectionnées: {0, 1}
+👁️ [MemorizationScreen] Cartes révélées temporairement
+🎭 [_showRevealedCardsDialog] Affichage dialogue
+
+🔍 [VAR - MEMO] --------------------------------------
+👀 Tu as regardé les indices : {0, 1}
+🃏 Valeurs révélées : [4, 3]
+-------------------------------------------------------
+
+   ⏳ Attente 3 secondes...
+📊 [MemorizationScreen] Cartes sélectionnées: {0, 1}
+   ✅ Fin de mémorisation
+   🚪 Dialogue fermé
+🙈 [MemorizationScreen] Toutes les cartes masquées
+🎮 [MemorizationScreen] Passage en phase PLAYING
+👤 [MemorizationScreen] Joueur actuel: Alex
+🤖 [MemorizationScreen] Est un bot: true
+🚀 [MemorizationScreen] Navigation vers GameScreen
+🎮 [GameScreen] INIT
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+🎮 [GameScreen] PostFrameCallback
+📊 [GameScreen] État du jeu:
+   - Phase: GamePhase.playing
+   - Joueur actuel: Alex
+   - Est humain: false
+   - isProcessing: false
+🤖 [GameScreen] Démarrage tour du bot
+🔔 [GameScreen] Build détecté: bot doit jouer
+🤖 [GameScreen] Appel _checkAndPlayBotTurn
+🔍 [MemorizationScreen] Check post-navigation
+🔍 [checkIfBotShouldPlay] Vérification...
+   ✅ Bot doit jouer, déclenchement...
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+📊 [MemorizationScreen] Cartes sélectionnées: {0, 1}
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+Could not find a set of Noto fonts to display all missing characters. Please add a font asset for the missing
+characters. See: https://flutter.dev/docs/cookbook/design/fonts
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 9
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 9 (9 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 3
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 9
+✋ Main INCHANGÉE : [6, A, R, 5]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+   - Carte défausse:  9
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 2
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 2 (2 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 3
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 3)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [2, D, 8, 9]
+🃏 Carte visée (Index 3) : 9 (ID: 9_diamonds)
+📥 Carte piochée à insérer : 2 (ID: 2_hearts)
+✅ Main APRÈS : [2, D, 8, 2]
+🗑️ Défausse : 9
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+   - Carte défausse:  9
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: R
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: R (0 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 2)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Prof
+✋ Main AVANT : [3, 6, 2, 8]
+🃏 Carte visée (Index 2) : 2 (ID: 2_clubs)
+📥 Carte piochée à insérer : R (ID: R_hearts)
+✅ Main APRÈS : [3, 6, R, 8]
+🗑️ Défausse : 2
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+   - Carte défausse:  2
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 4 (Suite: diamonds)
+   ✅ Carte piochée: 4
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+🗑️ [discardDrawnCard] DÉBUT
+   - Carte défaussée: 4
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 4
+✋ Main INCHANGÉE : [4, 3, 3, A]
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 4
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🃏 Création carte #3
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #0
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(0)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 0
+   - Phase actuelle: GamePhase.reaction
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: 4
+   ✅ PHASE REACTION confirmée
+   - Tentative match en phase réaction (JOUEUR HUMAIN)
+   - Joueur humain trouvé: Vous
+   - Main du joueur: [4, 3, 3, A]
+   - Carte sélectionnée: 4
+   🎯 APPEL attemptMatch avec forcedPlayer
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 0
+   🔍 forcedPlayer fourni: Vous
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Vous
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   - Carte défausse:  4
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 5
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 5 (5 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 3
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 3)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Alex
+✋ Main AVANT : [6, A, R, 5]
+🃏 Carte visée (Index 3) : 5 (ID: 5_spades)
+📥 Carte piochée à insérer : 5 (ID: 5_clubs)
+✅ Main APRÈS : [6, A, R, 5]
+🗑️ Défausse : 5
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   - Carte défausse:  5
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 23 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 10
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 10 (10 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 0
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 10
+✋ Main INCHANGÉE : [2, D, 8, 2]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: 10
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+🔍 Bot regarde la carte #0 de Vous
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   - Carte défausse:  10
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+💭 Bot oublie sa carte #2
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 5
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 5 (5 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 1
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Prof
+✋ Main AVANT : [3, 6, R, 8]
+🃏 Carte visée (Index 1) : 6 (ID: 6_hearts)
+📥 Carte piochée à insérer : 5 (ID: 5_hearts)
+✅ Main APRÈS : [3, 5, R, 8]
+🗑️ Défausse : 6
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   - Carte défausse:  6
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 10 (Suite: spades)
+   ✅ Carte piochée: 10
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #1
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(1)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 1
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: 6
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 1
+   - Carte à insérer: 10
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [3, 3, A]
+🃏 Carte visée (Index 1) : 3 (ID: 3_spades)
+📥 Carte piochée à insérer : 10 (ID: 10_spades)
+✅ Main APRÈS : [3, 10, A]
+🗑️ Défausse : 3
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 3
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🃏 Création carte #2
+   - Carte défausse:  3
+   - Aucun bot n'a réagi
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #0
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(0)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 0
+   - Phase actuelle: GamePhase.reaction
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: 3
+   ✅ PHASE REACTION confirmée
+   - Tentative match en phase réaction (JOUEUR HUMAIN)
+   - Joueur humain trouvé: Vous
+   - Main du joueur: [3, 10, A]
+   - Carte sélectionnée: 3
+   🎯 APPEL attemptMatch avec forcedPlayer
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 0
+   🔍 forcedPlayer fourni: Vous
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Vous
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 26 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 8
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 8 (8 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 8
+✋ Main INCHANGÉE : [6, A, R, 5]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  8
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+💭 Bot oublie sa carte #3
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 7
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 7 (7 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 1
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [2, D, 8, 2]
+🃏 Carte visée (Index 1) : D (ID: D_diamonds)
+📥 Carte piochée à insérer : 7 (ID: 7_clubs)
+✅ Main APRÈS : [2, 7, 8, 2]
+🗑️ Défausse : D
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse: e Dame
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 26 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: A
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: A (1 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 1 (5 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Prof
+✋ Main AVANT : [3, 5, R, 8]
+🃏 Carte visée (Index 1) : 5 (ID: 5_hearts)
+📥 Carte piochée à insérer : A (ID: A_clubs)
+✅ Main APRÈS : [3, A, R, 8]
+🗑️ Défausse : 5
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  5
+   ✅ Alex pense avoir un match avec  5
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 3
+   🔍 forcedPlayer fourni: Alex
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Alex
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 4 (Suite: hearts)
+   ✅ Carte piochée: 4
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #1
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(1)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 1
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: 5
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 1
+   - Carte à insérer: 4
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [10, A]
+🃏 Carte visée (Index 1) : A (ID: A_diamonds)
+📥 Carte piochée à insérer : 4 (ID: 4_hearts)
+✅ Main APRÈS : [10, 4]
+🗑️ Défausse : A
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  A
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 21 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: JOKER
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: JOKER (0 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 3 (5 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 3)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Alex
+✋ Main AVANT : [6, A, R]
+   🚨 ERREUR Bot: RangeError (index): Index out of range: index should be less than 3: 3
+   Stack trace: dart-sdk/lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart 274:3  throw_
+dart-sdk/lib/_internal/js_dev_runtime/private/js_array.dart 608:7            _get]
+package:dutch_game/services/game_logic.dart 115:67                           replaceCard
+package:dutch_game/services/bot_ai.dart 207:17                               <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 623:19          <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 648:23          <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 542:3           _asyncStartSync
+package:dutch_game/services/bot_ai.dart 159:23                               _decideCardAction
+package:dutch_game/services/bot_ai.dart 51:11                                <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 623:19          <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 648:23          <fn>
+dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 594:19          <fn>
+dart-sdk/lib/async/zone.dart 1849:54                                         runUnary
+dart-sdk/lib/async/future_impl.dart 222:18                                   handleValue
+dart-sdk/lib/async/future_impl.dart 948:44                                   handleValueCallback
+dart-sdk/lib/async/future_impl.dart 977:13                                   _propagateToListeners
+dart-sdk/lib/async/future_impl.dart 711:7                                    [_complete]
+dart-sdk/lib/async/future.dart 436:15                                        <fn>
+dart-sdk/lib/_internal/js_dev_runtime/private/isolate_helper.dart 47:11      internalCallback
+
+   🗑️ Carte piochée défaussée (erreur)
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  Joker
+   ✅ Alex pense avoir un match avec  Joker
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 3
+   🔍 forcedPlayer fourni: Alex
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Alex
+   ❌ Index hors limites!
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 2
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 2 (2 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 1 (7 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [2, 7, 8, 2]
+🃏 Carte visée (Index 1) : 7 (ID: 7_clubs)
+📥 Carte piochée à insérer : 2 (ID: 2_diamonds)
+✅ Main APRÈS : [2, 2, 8, 2]
+🗑️ Défausse : 7
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: 7
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+👁️ Bot regarde sa carte #3 et l'enregistre
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  7
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 22 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: R
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: R (13 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 0
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : R
+✋ Main INCHANGÉE : [3, A, R, 8]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  R
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 9 (Suite: spades)
+   ✅ Carte piochée: 9
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #0
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(0)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 0
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: R
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 0
+   - Carte à insérer: 9
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [10, 4]
+🃏 Carte visée (Index 0) : 10 (ID: 10_spades)
+📥 Carte piochée à insérer : 9 (ID: 9_spades)
+✅ Main APRÈS : [9, 4]
+🗑️ Défausse : 10
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⚡ Pouvoir spécial en attente: 10
+⏸️ [_pauseReactionTimer] Aucun timer actif
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🔍 [_buildSpecialPowerOverlay] ENTREE
+   - specialCardToActivate: 10
+   - isWaitingForSpecialPower: true
+   - currentPlayer: Vous
+   - isHuman: true
+   ✅ Affichage du dialogue via PostFrameCallback
+   🖤 Retour Container noir
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   📢 [PostFrameCallback] EXECUTION
+      - Route isCurrent: true
+      - isWaitingForSpecialPower: true
+      ✅ Conditions OK, affichage dialogue pour: 10
+      🎯 Dialogue carte 10
+🎨 [GameScreen] BUILD
+🔍 [_buildSpecialPowerOverlay] ENTREE
+   - specialCardToActivate: 10
+   - isWaitingForSpecialPower: true
+   - currentPlayer: Vous
+   - isHuman: true
+   ✅ Affichage du dialogue via PostFrameCallback
+   🖤 Retour Container noir
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   📢 [PostFrameCallback] EXECUTION
+      - Route isCurrent: false
+      - isWaitingForSpecialPower: true
+      ❌ Conditions NON OK, pas de dialogue
+🎨 [GameScreen] BUILD
+🔍 [_buildSpecialPowerOverlay] ENTREE
+   - specialCardToActivate: 10
+   - isWaitingForSpecialPower: true
+   - currentPlayer: Vous
+   - isHuman: true
+   ✅ Affichage du dialogue via PostFrameCallback
+   🖤 Retour Container noir
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   📢 [PostFrameCallback] EXECUTION
+      - Route isCurrent: false
+      - isWaitingForSpecialPower: true
+      ❌ Conditions NON OK, pas de dialogue
+👁️ [executeLookAtCard] Casey - Index: 1
+⏭️ [skipSpecialPower] DÉBUT
+   - Phase avant: GamePhase.playing
+   🎬 Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   - Phase après: GamePhase.reaction
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  10
+   - Aucun bot n'a réagi
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 21 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: D
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: D (12 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : D
+✋ Main INCHANGÉE : [6, A, R]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse: e Dame
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 18 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: A
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: A (1 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 1 (2 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [2, 2, 8, 2]
+🃏 Carte visée (Index 1) : 2 (ID: 2_diamonds)
+📥 Carte piochée à insérer : A (ID: A_spades)
+✅ Main APRÈS : [2, A, 8, 2]
+🗑️ Défausse : 2
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  2
+   ✅ Casey pense avoir un match avec  2
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 3
+   🔍 forcedPlayer fourni: Casey
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Casey
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 22 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: V
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: V (11 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 3
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : V
+✋ Main INCHANGÉE : [3, A, R, 8]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: V
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🔄 Bot échange sa carte #1 avec la carte #0 de Vous
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  Valet
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 4 (Suite: clubs)
+   ✅ Carte piochée: 4
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #1
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(1)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 1
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: V
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 1
+   - Carte à insérer: 4
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [A, 4]
+🃏 Carte visée (Index 1) : 4 (ID: 4_hearts)
+📥 Carte piochée à insérer : 4 (ID: 4_clubs)
+✅ Main APRÈS : [A, 4]
+🗑️ Défausse : 4
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 2
+   🃏 Création carte #0
+   🃏 Création carte #1
+   - Carte défausse:  4
+   - Aucun bot n'a réagi
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #1
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(1)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 1
+   - Phase actuelle: GamePhase.reaction
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: 4
+   ✅ PHASE REACTION confirmée
+   - Tentative match en phase réaction (JOUEUR HUMAIN)
+   - Joueur humain trouvé: Vous
+   - Main du joueur: [A, 4]
+   - Carte sélectionnée: 4
+   🎯 APPEL attemptMatch avec forcedPlayer
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 1
+   🔍 forcedPlayer fourni: Vous
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Vous
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 21 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 7
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 7 (7 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 2)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Alex
+✋ Main AVANT : [6, A, R]
+🃏 Carte visée (Index 2) : R (ID: R_diamonds)
+📥 Carte piochée à insérer : 7 (ID: 7_hearts)
+✅ Main APRÈS : [6, A, 7]
+🗑️ Défausse : R
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  R
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 15 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 6
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 6 (6 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 0
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 0)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [2, A, 8]
+🃏 Carte visée (Index 0) : 2 (ID: 2_spades)
+📥 Carte piochée à insérer : 6 (ID: 6_spades)
+✅ Main APRÈS : [6, A, 8]
+🗑️ Défausse : 2
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  2
+   ✅ Casey pense avoir un match avec  2
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 3
+   🔍 forcedPlayer fourni: Casey
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Casey
+   ❌ Index hors limites!
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: V
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: V (11 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 3
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : V
+✋ Main INCHANGÉE : [3, 9, R, 8]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: V
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔄 Bot échange sa carte #2 avec la carte #0 de Vous
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  Valet
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 8 (Suite: clubs)
+   ✅ Carte piochée: 8
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #0
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(0)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 0
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: V
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 0
+   - Carte à insérer: 8
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [R]
+🃏 Carte visée (Index 0) : R (ID: R_hearts)
+📥 Carte piochée à insérer : 8 (ID: 8_clubs)
+✅ Main APRÈS : [8]
+🗑️ Défausse : R
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  R
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 21 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 10
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 10 (10 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 0
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 10
+✋ Main INCHANGÉE : [6, A, 7]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: 10
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔍 Bot regarde la carte #0 de Vous
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  10
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 14 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: JOKER
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: JOKER (0 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 0 (6 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 0)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [6, A, 8]
+🃏 Carte visée (Index 0) : 6 (ID: 6_spades)
+📥 Carte piochée à insérer : JOKER (ID: JOKER_joker)
+✅ Main APRÈS : [JOKER, A, 8]
+🗑️ Défausse : 6
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  6
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 6
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 6 (6 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 1
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Prof
+✋ Main AVANT : [3, 9, A, 8]
+🃏 Carte visée (Index 1) : 9 (ID: 9_spades)
+📥 Carte piochée à insérer : 6 (ID: 6_clubs)
+✅ Main APRÈS : [3, 6, A, 8]
+🗑️ Défausse : 9
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  9
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : V (Suite: hearts)
+   ✅ Carte piochée: V
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🗑️ [discardDrawnCard] DÉBUT
+   - Carte défaussée: V
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : V
+✋ Main INCHANGÉE : [8]
+   ⚡ Pouvoir spécial en attente: V
+⏸️ [_pauseReactionTimer] Aucun timer actif
+🎨 [GameScreen] BUILD
+🔍 [_buildSpecialPowerOverlay] ENTREE
+   - specialCardToActivate: V
+   - isWaitingForSpecialPower: true
+   - currentPlayer: Vous
+   - isHuman: true
+   ✅ Affichage du dialogue via PostFrameCallback
+   🖤 Retour Container noir
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   📢 [PostFrameCallback] EXECUTION
+      - Route isCurrent: true
+      - isWaitingForSpecialPower: true
+      ✅ Conditions OK, affichage dialogue pour: V
+      🎯 Dialogue Valet
+🎨 [GameScreen] BUILD
+🔍 [_buildSpecialPowerOverlay] ENTREE
+   - specialCardToActivate: V
+   - isWaitingForSpecialPower: true
+   - currentPlayer: Vous
+   - isHuman: true
+   ✅ Affichage du dialogue via PostFrameCallback
+   🖤 Retour Container noir
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   📢 [PostFrameCallback] EXECUTION
+      - Route isCurrent: false
+      - isWaitingForSpecialPower: true
+      ❌ Conditions NON OK, pas de dialogue
+⏭️ [skipSpecialPower] DÉBUT
+   - Phase avant: GamePhase.playing
+   🎬 Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   - Phase après: GamePhase.reaction
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  Valet
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 21 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 5
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 5 (5 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 2 (7 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 2)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Alex
+✋ Main AVANT : [6, A, 7]
+🃏 Carte visée (Index 2) : 7 (ID: 7_hearts)
+📥 Carte piochée à insérer : 5 (ID: 5_diamonds)
+✅ Main APRÈS : [6, A, 5]
+🗑️ Défausse : 7
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: 7
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+👁️ Bot regarde sa carte #0 et l'enregistre
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  7
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 8 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 10
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 10 (10 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : 10
+✋ Main INCHANGÉE : [JOKER, A, 8]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   ⚡ Pouvoir spécial en attente: 10
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔍 Bot regarde la carte #0 de Vous
+   ✅ Pouvoir spécial utilisé
+   🧹 État du pouvoir nettoyé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  10
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 27 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 3
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 3 (3 pts)
+🔄 [_decideCardAction] Carte mentale plus haute trouvée: index 1 (6 pts)
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Prof
+✋ Main AVANT : [3, 6, A, 8]
+🃏 Carte visée (Index 1) : 6 (ID: 6_clubs)
+📥 Carte piochée à insérer : 3 (ID: 3_diamonds)
+✅ Main APRÈS : [3, 3, A, 8]
+🗑️ Défausse : 6
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  6
+   ✅ Alex pense avoir un match avec  6
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 0
+   🔍 forcedPlayer fourni: Alex
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Alex
+   🎲 APPEL GameLogic.matchCard...
+   📊 RÉSULTAT matchCard: SUCCÈS ✅
+   🎉 MATCH RÉUSSI!
+   ⏱️ Prolongation du timer de réaction (+2000ms)
+⏱️ [_extendReactionTime] Extension de 2000ms
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : R (Suite: clubs)
+   ✅ Carte piochée: R
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🗑️ [discardDrawnCard] DÉBUT
+   - Carte défaussée: R
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : R
+✋ Main INCHANGÉE : [8]
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  R
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+💭 Bot oublie sa carte #1
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 13 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: D
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: D (12 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 1
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : D
+✋ Main INCHANGÉE : [A, 5]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse: e Dame
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Casey (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Casey
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Casey joue...
+🤖 [playBotTurn] DÉBUT - Bot: Casey
+🎯 [playBotTurn] Difficulté: Argent
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 8 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 7
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 7 (7 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 2)
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Casey
+✋ Main AVANT : [JOKER, A, 8]
+🃏 Carte visée (Index 2) : 8 (ID: 8_spades)
+📥 Carte piochée à insérer : 7 (ID: 7_spades)
+✅ Main APRÈS : [JOKER, A, 7]
+🗑️ Défausse : 8
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  8
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Casey
+   - Phase après: GamePhase.playing
+   - Joueur après: Prof
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Prof (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Prof
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Prof joue...
+🤖 [playBotTurn] DÉBUT - Bot: Prof
+🎯 [playBotTurn] Difficulté: Argent
+💭 Bot oublie sa carte #1
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 28 (seuil Dutch: 5)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: D
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: D (12 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 2
+🗑️ [_decideCardAction] DÉCISION: DÉFAUSSER
+
+🔍 [VAR - DISCARD] Joueur rejette la carte : D
+✋ Main INCHANGÉE : [3, 3, A, 8]
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse: e Dame
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Prof
+   - Phase après: GamePhase.playing
+   - Joueur après: Vous
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Vous (isHuman: true)
+   - Phase actuelle: GamePhase.playing
+   ✅ Tour humain, on s'arrête
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🎴 [drawCard] DÉBUT
+
+🔍 [VAR - DRAW] Vous avez pioché : 9 (Suite: hearts)
+   ✅ Carte piochée: 9
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔥🔥🔥 [PlayerHandWidget._buildCard] ════════════════════
+👆 TAP DÉTECTÉ sur carte #0
+   - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   ✅ CONDITIONS REMPLIES - Appel onCardTap(0)
+🔥🔥🔥 [_handleCardTap] ═══════════════════════════════
+👆 [_handleCardTap] CLICK DÉTECTÉ !
+   - Index carte: 0
+   - Phase actuelle: GamePhase.playing
+   - Joueur actuel: Vous
+   - isHuman: true
+   - Carte du dessus: D
+   ℹ️ PHASE PLAYING - Tour du joueur
+   - Remplacement de carte
+🔄 [replaceCard] DÉBUT - Index: 0
+   - Carte à insérer: 9
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Vous
+✋ Main AVANT : [8]
+🃏 Carte visée (Index 0) : 8 (ID: 8_clubs)
+📥 Carte piochée à insérer : 9 (ID: 9_hearts)
+✅ Main APRÈS : [9]
+🗑️ Défausse : 8
+-------------------------------------------------------
+
+   ✅ Carte remplacée
+   ⏱️ Lancement phase réaction
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════
+🔥🔥🔥 [PlayerHandWidget._buildCard] FIN ═══════════════════
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  8
+   - Aucun bot n'a réagi
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Vous
+   - Phase après: GamePhase.playing
+   - Joueur après: Alex
+🎮 [_checkAndPlayBotTurn] DÉBUT
+   - Joueur actuel: Alex (isHuman: false)
+   - Phase actuelle: GamePhase.playing
+   🔄 BOUCLE 1 - Joueur: Alex
+   ⏳ Attente 800ms...
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   🤖 Le bot Alex joue...
+🤖 [playBotTurn] DÉBUT - Bot: Alex
+🎯 [playBotTurn] Difficulté: Bronze
+🧠 [playBotTurn] Mémoire décayée
+⏳ [playBotTurn] Temps de réflexion: 1000ms
+🎯 Score estimé du bot: 13 (seuil Dutch: 8)
+🎴 [playBotTurn] Le bot pioche...
+✅ [playBotTurn] Carte piochée: 7
+🤔 [playBotTurn] Décision de l'action...
+🤔 [_decideCardAction] DÉBUT
+🎴 [_decideCardAction] Carte piochée: 7 (7 pts)
+❓ [_decideCardAction] Carte inconnue choisie: index 1
+✅ [_decideCardAction] DÉCISION: REMPLACER (index 1)
+😵 Bot confus ! Il croit toujours avoir l'ancienne carte
+
+🔍 [VAR - REPLACE] --------------------------------------
+👤 Joueur : Alex
+✋ Main AVANT : [A, 5]
+🃏 Carte visée (Index 1) : 5 (ID: 5_diamonds)
+📥 Carte piochée à insérer : 7 (ID: 7_diamonds)
+✅ Main APRÈS : [A, 7]
+🗑️ Défausse : 5
+-------------------------------------------------------
+
+🏁 [_decideCardAction] FIN
+✅ [playBotTurn] Action décidée et exécutée
+🏁 [playBotTurn] FIN
+   ✅ Tour du bot terminé
+   📊 Phase après actions: GamePhase.playing
+   ⏱️ Lancement phase réaction...
+⏱️ [startReactionPhase] DÉBUT (bonus: 0ms)
+   ✅ Phase réaction activée
+🤖 [_simulateBotReaction] Simulation réaction bots
+   ⏰ Timer: 3000ms
+   ✅ Phase réaction lancée, sortie de boucle
+   🏁 FIN - isProcessing = false
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: true
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+   - Carte défausse:  5
+   ✅ Alex pense avoir un match avec  5
+🔥 [attemptMatch] ENTRÉE
+   🔍 Index carte: 2
+   🔍 forcedPlayer fourni: Alex
+   ✅ GameState OK
+   🔍 Phase actuelle: GamePhase.reaction
+   ✅ Phase REACTION confirmée
+   🔍 Joueur sélectionné: Alex
+   ❌ Index hors limites!
+   ⏰ Timer expiré -> endReactionPhase
+🏁 [endReactionPhase] DÉBUT
+   - Phase avant: GamePhase.reaction
+   - Joueur avant: Alex
+   - Phase après: GamePhase.playing
+   - Joueur après: Casey
+🎮 [_checkAndPlayBotTurn] DÉBUT
+🏁 [_checkInstantEnd] Deck vide -> Fin de partie
+🏁 [endGame] FIN DE PARTIE
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Alex:
+   -  A (hearts): 1 pts
+   -  7 (diamonds): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Casey:
+   -  Joker (joker): 0 pts
+   -  A (spades): 1 pts
+   -  7 (spades): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Alex:
+   -  A (hearts): 1 pts
+   -  7 (diamonds): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Casey:
+   -  Joker (joker): 0 pts
+   -  A (spades): 1 pts
+   -  7 (spades): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Prof:
+   -  3 (clubs): 3 pts
+   -  3 (diamonds): 3 pts
+   -  A (clubs): 1 pts
+   -  8 (hearts): 8 pts
+   📊 TOTAL: 15
+   - Classement: #3
+   - Dutch appelé: false
+   - Dutch gagné: false
+   - Mode SBMM: false
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+   ❌ Fin instantanée
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Alex:
+   -  A (hearts): 1 pts
+   -  7 (diamonds): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Casey:
+   -  Joker (joker): 0 pts
+   -  A (spades): 1 pts
+   -  7 (spades): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Alex:
+   -  A (hearts): 1 pts
+   -  7 (diamonds): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Casey:
+   -  Joker (joker): 0 pts
+   -  A (spades): 1 pts
+   -  7 (spades): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Prof:
+   -  3 (clubs): 3 pts
+   -  3 (diamonds): 3 pts
+   -  A (clubs): 1 pts
+   -  8 (hearts): 8 pts
+   📊 TOTAL: 15
+🎨 [GameScreen] BUILD
+🃏 [PlayerHandWidget] BUILD - Joueur: Vous
+   - isActive: false
+   - onCardTap fourni: true
+   - Nombre de cartes: 1
+   🃏 Création carte #0
+🔢 [calculateScore] Calcul pour Alex:
+   -  A (hearts): 1 pts
+   -  7 (diamonds): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Casey:
+   -  Joker (joker): 0 pts
+   -  A (spades): 1 pts
+   -  7 (spades): 7 pts
+   📊 TOTAL: 8
+🔢 [calculateScore] Calcul pour Vous:
+   -  9 (hearts): 9 pts
+   📊 TOTAL: 9
+🔢 [calculateScore] Calcul pour Prof:
+   -  3 (clubs): 3 pts
+   -  3 (diamonds): 3 pts
+   -  A (clubs): 1 pts
+   -  8 (hearts): 8 pts
+   📊 TOTAL: 15
+🎮 [GameScreen] DISPOSE
+
+

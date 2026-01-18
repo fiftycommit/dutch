@@ -1,38 +1,27 @@
 // Enum pour la difficulté (Chance/Mélange)
-enum Difficulty { 
-  easy, 
-  medium, 
-  hard 
-}
+enum Difficulty { easy, medium, hard }
 
 // Enum pour la personnalité des bots
-enum BotPersonality { 
-  beginner, 
-  novice, 
-  balanced, 
-  cautious, 
-  aggressive, 
-  legend 
-}
+enum BotPersonality { beginner, novice, balanced, cautious, aggressive, legend }
 
 class GameSettings {
   // Difficulté liée à la chance (Mélange)
   Difficulty luckDifficulty;
-  
+
   // Difficulté par défaut des bots (Sauvegardée dans les réglages)
-  Difficulty botDifficulty; 
-  
+  Difficulty botDifficulty;
+
   int reactionTimeMs;
   bool useSBMM;
   String cardBackStyle;
-  
+
   bool soundEnabled;
   bool hapticEnabled;
   String playerName;
 
   GameSettings({
     this.luckDifficulty = Difficulty.medium,
-    this.botDifficulty = Difficulty.medium, 
+    this.botDifficulty = Difficulty.medium,
     this.reactionTimeMs = 3000,
     this.useSBMM = false,
     this.cardBackStyle = 'classic',

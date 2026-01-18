@@ -79,9 +79,8 @@ class PlayerAvatar extends StatelessWidget {
               borderRadius: BorderRadius.circular(
                 ScreenUtils.borderRadius(context, 10),
               ),
-              border: isActive
-                  ? Border.all(color: Colors.amber, width: 1)
-                  : null,
+              border:
+                  isActive ? Border.all(color: Colors.amber, width: 1) : null,
             ),
             child: Text(
               player.displayName,

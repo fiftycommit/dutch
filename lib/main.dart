@@ -6,6 +6,8 @@ import 'providers/game_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -49,6 +51,7 @@ class DutchGameApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Dutch Card Game',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

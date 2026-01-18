@@ -15,8 +15,10 @@ class MemorizationScreen extends StatefulWidget {
   State<MemorizationScreen> createState() => _MemorizationScreenState();
 }
 
-class _MemorizationScreenState extends State<MemorizationScreen> with TickerProviderStateMixin {
-  Set<int> _selectedCards = {}; // ✅ Cartes sélectionnées (mais PAS encore révélées)
+class _MemorizationScreenState extends State<MemorizationScreen>
+    with TickerProviderStateMixin {
+  Set<int> _selectedCards =
+      {}; // ✅ Cartes sélectionnées (mais PAS encore révélées)
   bool _isRevealing = false;
   late AnimationController _pulseController;
 
@@ -40,7 +42,7 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
     final gameState = gameProvider.gameState;
-    
+
     if (gameState == null) {
       debugPrint("⚠️ [MemorizationScreen] GameState NULL");
       return const Scaffold(
@@ -48,7 +50,51 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
       );
     }
 
-    final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
+    final humanPlayer = gameState.players.where((p) => p.isHuman).firstOrNull;
+
+    if (humanPlayer == null) {
+      // Mode spectateur : joueur éliminé
+      debugPrint(
+          "⚠️ [MemorizationScreen] Aucun joueur humain (mode spectateur)");
+
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.visibility_off,
+                    size: 60, color: Colors.white54),
+                const SizedBox(height: 20),
+                const Text(
+                  "VOUS ÊTES ÉLIMINÉ",
+                  style: TextStyle(
+                    fontFamily: 'Rye',
+                    fontSize: 32,
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  "Les bots continuent...",
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                ),
+                const SizedBox(height: 30),
+                const CircularProgressIndicator(color: Colors.amber),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final canConfirm = _selectedCards.length == 2;
 
     debugPrint("📊 [MemorizationScreen] Cartes sélectionnées: $_selectedCards");
@@ -74,9 +120,10 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.visibility, size: 60, color: Colors.white54),
+                        const Icon(Icons.visibility,
+                            size: 60, color: Colors.white54),
                         SizedBox(height: ScreenUtils.spacing(context, 20)),
-                        
+
                         Text(
                           "MÉMORISATION",
                           style: TextStyle(
@@ -85,13 +132,16 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                             color: Colors.amber,
                             fontWeight: FontWeight.bold,
                             shadows: const [
-                              Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))
+                              Shadow(
+                                  color: Colors.black45,
+                                  blurRadius: 10,
+                                  offset: Offset(2, 2))
                             ],
                           ),
                         ),
-                        
+
                         SizedBox(height: ScreenUtils.spacing(context, 10)),
-                        
+
                         Text(
                           "Clique sur 2 cartes pour les mémoriser.",
                           style: TextStyle(
@@ -99,9 +149,9 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                             fontSize: ScreenUtils.scaleFont(context, 16),
                           ),
                         ),
-                        
+
                         SizedBox(height: ScreenUtils.spacing(context, 30)),
-                        
+
                         // ✅ CARTES (Sélection SANS révélation immédiate)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -119,10 +169,12 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                                   builder: (context, child) {
                                     return Transform.scale(
                                       scale: isSelected
-                                          ? 1.0 + (_pulseController.value * 0.05)
+                                          ? 1.0 +
+                                              (_pulseController.value * 0.05)
                                           : 1.0,
                                       child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 300),
+                                        duration:
+                                            const Duration(milliseconds: 300),
                                         transform: Matrix4.translationValues(
                                           0,
                                           isSelected ? -10 : 0,
@@ -130,15 +182,18 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                                         ),
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(
-                                            ScreenUtils.borderRadius(context, 8),
+                                            ScreenUtils.borderRadius(
+                                                context, 8),
                                           ),
                                           border: isSelected
-                                              ? Border.all(color: Colors.amber, width: 3)
+                                              ? Border.all(
+                                                  color: Colors.amber, width: 3)
                                               : null,
                                           boxShadow: isSelected
                                               ? [
                                                   BoxShadow(
-                                                    color: Colors.amber.withOpacity(0.5),
+                                                    color: Colors.amber
+                                                        .withOpacity(0.5),
                                                     blurRadius: 15,
                                                     spreadRadius: 3,
                                                   )
@@ -158,15 +213,17 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                             );
                           }),
                         ),
-                        
+
                         SizedBox(height: ScreenUtils.spacing(context, 30)),
-                        
+
                         // Bouton de confirmation
                         AnimatedOpacity(
                           opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
                           duration: const Duration(milliseconds: 300),
                           child: ElevatedButton(
-                            onPressed: canConfirm && !_isRevealing ? _confirmAndStart : null,
+                            onPressed: canConfirm && !_isRevealing
+                                ? _confirmAndStart
+                                : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.amber,
                               foregroundColor: Colors.black,
@@ -188,7 +245,8 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                               canConfirm
                                   ? "C'EST BON !"
                                   : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -206,10 +264,11 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
 
   void _onCardTap(int index) {
     if (_isRevealing) {
-      debugPrint("⏸️ [MemorizationScreen] Action bloquée (révélation en cours)");
+      debugPrint(
+          "⏸️ [MemorizationScreen] Action bloquée (révélation en cours)");
       return;
     }
-    
+
     setState(() {
       if (_selectedCards.contains(index)) {
         debugPrint("❌ [MemorizationScreen] Désélection carte $index");
@@ -224,13 +283,15 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
   void _confirmAndStart() async {
     if (_selectedCards.length != 2 || _isRevealing) return;
 
-    debugPrint("🎯 [MemorizationScreen] CONFIRMATION - Cartes sélectionnées: $_selectedCards");
+    debugPrint(
+        "🎯 [MemorizationScreen] CONFIRMATION - Cartes sélectionnées: $_selectedCards");
 
     setState(() => _isRevealing = true);
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    final humanPlayer = gameProvider.gameState!.players.firstWhere((p) => p.isHuman);
-    
+    final humanPlayer =
+        gameProvider.gameState!.players.firstWhere((p) => p.isHuman);
+
     // ✅ Révéler TEMPORAIREMENT les cartes sélectionnées
     for (int index in _selectedCards) {
       humanPlayer.knownCards[index] = true;
@@ -253,11 +314,13 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
     gameProvider.gameState!.phase = GamePhase.playing;
     gameProvider.gameState!.isWaitingForSpecialPower = false;
     gameProvider.gameState!.specialCardToActivate = null;
-    
+
     debugPrint("🎮 [MemorizationScreen] Passage en phase PLAYING");
-    debugPrint("👤 [MemorizationScreen] Joueur actuel: ${gameProvider.gameState!.currentPlayer.name}");
-    debugPrint("🤖 [MemorizationScreen] Est un bot: ${!gameProvider.gameState!.currentPlayer.isHuman}");
-    
+    debugPrint(
+        "👤 [MemorizationScreen] Joueur actuel: ${gameProvider.gameState!.currentPlayer.name}");
+    debugPrint(
+        "🤖 [MemorizationScreen] Est un bot: ${!gameProvider.gameState!.currentPlayer.isHuman}");
+
     if (!mounted) return;
 
     // ✅ Naviguer vers l'écran de jeu
@@ -265,9 +328,9 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
       context,
       MaterialPageRoute(builder: (context) => const GameScreen()),
     );
-    
+
     debugPrint("🚀 [MemorizationScreen] Navigation vers GameScreen");
-    
+
     // ✅ CRITIQUE: Vérifier si un bot doit jouer après la navigation
     Future.delayed(const Duration(milliseconds: 300), () {
       debugPrint("🔍 [MemorizationScreen] Check post-navigation");
@@ -277,11 +340,17 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
 
   Future<void> _showRevealedCardsDialog(Player humanPlayer) async {
     debugPrint("🎭 [_showRevealedCardsDialog] Affichage dialogue");
-    
-    final revealedCards = _selectedCards.map((idx) => humanPlayer.hand[idx]).toList();
-    
-    debugPrint("   - Cartes à afficher: ${revealedCards.map((c) => c.value).toList()}");
-    
+
+    final revealedCards =
+        _selectedCards.map((idx) => humanPlayer.hand[idx]).toList();
+
+    // 🔍 VAR TACTIQUE : Révélation
+    debugPrint("\n🔍 [VAR - MEMO] --------------------------------------");
+    debugPrint("👀 Tu as regardé les indices : $_selectedCards");
+    debugPrint(
+        "🃏 Valeurs révélées : ${revealedCards.map((c) => c.value).toList()}");
+    debugPrint("-------------------------------------------------------\n");
+
     // Afficher le dialogue
     showDialog(
       context: context,
@@ -290,7 +359,8 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
         onWillPop: () async => false, // Empêcher la fermeture
         child: Dialog(
           backgroundColor: Colors.black87,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -307,7 +377,7 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                   ),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Afficher les 2 cartes révélées
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -322,16 +392,16 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
                     );
                   }).toList(),
                 ),
-                
+
                 const SizedBox(height: 20),
                 const Text(
                   "Mémorisez bien ces cartes !",
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Indicateur de progression
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -363,19 +433,19 @@ class _MemorizationScreenState extends State<MemorizationScreen> with TickerProv
         ),
       ),
     );
-    
+
     debugPrint("   ⏳ Attente 3 secondes...");
-    
+
     // Attendre 3 secondes pour mémoriser
     await Future.delayed(const Duration(seconds: 3));
-    
+
     debugPrint("   ✅ Fin de mémorisation");
-    
+
     if (!mounted) {
       debugPrint("   ⚠️ Widget non monté, abandon");
       return;
     }
-    
+
     // Fermer le dialogue
     Navigator.of(context, rootNavigator: true).pop();
     debugPrint("   🚪 Dialogue fermé");

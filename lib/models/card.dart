@@ -31,7 +31,7 @@ class PlayingCard {
     // Pour les Rois, on différencie par couleur
     if (value == 'K') {
       if (suit == 'hearts' || suit == 'diamonds') {
-        return 'K_RED';  // Roi rouge
+        return 'K_RED'; // Roi rouge
       } else {
         return 'K_BLACK'; // Roi noir
       }
@@ -55,11 +55,22 @@ class PlayingCard {
 
     String fileValue;
     switch (value) {
-      case 'A': fileValue = '01'; break;
-      case 'J': case 'V': fileValue = 'V'; break; // Valet
-      case 'Q': case 'D': fileValue = 'D'; break; // Dame
-      case 'K': case 'R': fileValue = 'R'; break; // Roi
-      default: 
+      case 'A':
+        fileValue = '01';
+        break;
+      case 'J':
+      case 'V':
+        fileValue = 'V';
+        break; // Valet
+      case 'Q':
+      case 'D':
+        fileValue = 'D';
+        break; // Dame
+      case 'K':
+      case 'R':
+        fileValue = 'R';
+        break; // Roi
+      default:
         // Pour 2 à 10, on ajoute un '0' devant si nécessaire (ex: '2' -> '02')
         if (int.tryParse(value) != null) {
           fileValue = value.padLeft(2, '0');
@@ -71,11 +82,20 @@ class PlayingCard {
     // Conversion de la Couleur (anglais -> français)
     String fileSuit;
     switch (suit) {
-      case 'hearts': fileSuit = 'coeur'; break;
-      case 'diamonds': fileSuit = 'carreau'; break;
-      case 'clubs': fileSuit = 'trefle'; break;
-      case 'spades': fileSuit = 'pique'; break;
-      default: fileSuit = suit;
+      case 'hearts':
+        fileSuit = 'coeur';
+        break;
+      case 'diamonds':
+        fileSuit = 'carreau';
+        break;
+      case 'clubs':
+        fileSuit = 'trefle';
+        break;
+      case 'spades':
+        fileSuit = 'pique';
+        break;
+      default:
+        fileSuit = suit;
     }
 
     return 'assets/images/cards/$fileValue-$fileSuit.svg';
@@ -83,25 +103,25 @@ class PlayingCard {
 
   static int _calculatePoints(String suit, String value) {
     // Roi rouge = 0 points
-    if (value == 'R' && (suit == 'hearts' || suit == 'diamonds')) return 0; 
-    
+    if (value == 'R' && (suit == 'hearts' || suit == 'diamonds')) return 0;
+
     // Joker = 0 points
-    if (value == 'JOKER') return 0; 
-    
+    if (value == 'JOKER') return 0;
+
     // Roi noir = 13 points
-    if (value == 'R' && (suit == 'clubs' || suit == 'spades')) return 13; 
-    
+    if (value == 'R' && (suit == 'clubs' || suit == 'spades')) return 13;
+
     // Dame = 12 points
-    if (value == 'Q' || value == 'D') return 12; 
-    
+    if (value == 'Q' || value == 'D') return 12;
+
     // Valet = 11 points
-    if (value == 'J' || value == 'V') return 11; 
-    
+    if (value == 'J' || value == 'V') return 11;
+
     // As = 1 point
-    if (value == 'A') return 1; 
-    
+    if (value == 'A') return 1;
+
     // Autres cartes (2-10) = leur valeur
-    return int.tryParse(value) ?? 0; 
+    return int.tryParse(value) ?? 0;
   }
 
   static bool _isSpecialCard(String value) {
@@ -120,12 +140,12 @@ class PlayingCard {
         return ' Roi Noir';
       }
     }
-    
+
     if (value == 'JOKER') return ' Joker';
     if (value == 'A') return ' A';
     if (value == 'V' || value == 'J') return ' Valet';
     if (value == 'D' || value == 'Q') return 'e Dame';
-    
+
     return ' $value';
   }
 }

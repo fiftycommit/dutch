@@ -9,9 +9,9 @@ class Player {
   final BotPersonality? botPersonality;
   final int position;
 
-  List<PlayingCard> hand; 
+  List<PlayingCard> hand;
   List<bool> knownCards;
-  
+
   List<PlayingCard?> mentalMap;
 
   Player({
@@ -23,20 +23,19 @@ class Player {
     List<PlayingCard>? hand,
     List<bool>? knownCards,
     List<PlayingCard?>? mentalMap,
-  }) : 
-    hand = hand ?? [],
-    knownCards = knownCards ?? [],
-    mentalMap = mentalMap ?? [];
-    
-  Player.clone(Player other) 
-    : id = other.id,
-      name = other.name,
-      isHuman = other.isHuman,
-      botPersonality = other.botPersonality,
-      position = other.position,
-      hand = List.from(other.hand),
-      knownCards = List.from(other.knownCards),
-      mentalMap = List.from(other.mentalMap);
+  })  : hand = hand ?? [],
+        knownCards = knownCards ?? [],
+        mentalMap = mentalMap ?? [];
+
+  Player.clone(Player other)
+      : id = other.id,
+        name = other.name,
+        isHuman = other.isHuman,
+        botPersonality = other.botPersonality,
+        position = other.position,
+        hand = List.from(other.hand),
+        knownCards = List.from(other.knownCards),
+        mentalMap = List.from(other.mentalMap);
 
   int calculateScore() {
     int score = 0;
@@ -55,7 +54,7 @@ class Player {
     }
 
     int estimatedScore = 0;
-    
+
     for (int i = 0; i < hand.length; i++) {
       if (i < mentalMap.length && mentalMap[i] != null) {
         estimatedScore += mentalMap[i]!.points;
@@ -63,7 +62,7 @@ class Player {
         estimatedScore += 7;
       }
     }
-    
+
     return estimatedScore;
   }
 
@@ -71,9 +70,9 @@ class Player {
     while (mentalMap.length <= index) {
       mentalMap.add(null);
     }
-    
+
     mentalMap[index] = card;
-    
+
     if (index < knownCards.length) {
       knownCards[index] = true;
     }
@@ -96,18 +95,24 @@ class Player {
   String get displayName => name;
 
   String get displayAvatar {
-    if (isHuman) return "👩🏾‍💻"; 
-    
+    if (isHuman) return "👩🏾‍💻";
+
     if (botPersonality != null) {
       switch (botPersonality!) {
-        case BotPersonality.beginner: return "👶";
-        case BotPersonality.novice: return "😸";
-        case BotPersonality.balanced: return "😼";
-        case BotPersonality.cautious: return "🛡️";
-        case BotPersonality.aggressive: return "⚔️";
-        case BotPersonality.legend: return "👑";
+        case BotPersonality.beginner:
+          return "👶";
+        case BotPersonality.novice:
+          return "😸";
+        case BotPersonality.balanced:
+          return "😼";
+        case BotPersonality.cautious:
+          return "🛡️";
+        case BotPersonality.aggressive:
+          return "⚔️";
+        case BotPersonality.legend:
+          return "👑";
       }
     }
-    return "🤖"; 
+    return "🤖";
   }
 }

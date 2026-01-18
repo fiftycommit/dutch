@@ -1,16 +1,16 @@
 import 'package:flutter/services.dart';
 
 enum SoundType {
-  cardFlip,      // Carte retournée
-  cardDraw,      // Carte piochée
-  cardDiscard,   // Carte défaussée
-  cardPlace,     // Carte placée
-  buttonTap,     // Bouton cliqué
-  dutch,         // Cri "Dutch!"
+  cardFlip, // Carte retournée
+  cardDraw, // Carte piochée
+  cardDiscard, // Carte défaussée
+  cardPlace, // Carte placée
+  buttonTap, // Bouton cliqué
+  dutch, // Cri "Dutch!"
   powerActivate, // Pouvoir activé
-  win,           // Victoire
-  lose,          // Défaite
-  error,         // Erreur
+  win, // Victoire
+  lose, // Défaite
+  error, // Erreur
 }
 
 class SoundService {

@@ -6,7 +6,8 @@ import '../providers/game_provider.dart';
 import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
 import 'main_menu_screen.dart';
-import 'memorization_screen.dart'; // ✅ IMPORT AJOUTÉ
+import 'memorization_screen.dart';
+import 'dutch_reveal_screen.dart'; // ✅ AJOUT
 
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
@@ -21,10 +22,12 @@ class ResultsScreen extends StatelessWidget {
           }
 
           final gameState = gameProvider.gameState!;
+
           final ranking = gameState.getFinalRanking();
           final isTournament = gameState.gameMode == GameMode.tournament;
-          
-          bool isTournamentOver = isTournament && gameState.tournamentRound >= 3;
+
+          bool isTournamentOver =
+              isTournament && gameState.tournamentRound >= 3;
 
           return Container(
             decoration: const BoxDecoration(
@@ -38,17 +41,24 @@ class ResultsScreen extends StatelessWidget {
               child: Column(
                 children: [
                   SizedBox(height: ScreenUtils.spacing(context, 20)),
-                  
+
                   // Titre
                   Text(
-                    isTournament 
-                      ? (isTournamentOver ? "FIN DU TOURNOI" : "MANCHE ${gameState.tournamentRound} TERMINÉE")
-                      : "RÉSULTATS",
+                    isTournament
+                        ? (isTournamentOver
+                            ? "FIN DU TOURNOI"
+                            : "MANCHE ${gameState.tournamentRound} TERMINÉE")
+                        : "RÉSULTATS",
                     style: TextStyle(
                       fontFamily: 'Rye',
                       fontSize: ScreenUtils.scaleFont(context, 32),
                       color: Colors.white,
-                      shadows: const [Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))],
+                      shadows: const [
+                        Shadow(
+                            color: Colors.black45,
+                            blurRadius: 10,
+                            offset: Offset(2, 2))
+                      ],
                     ),
                   ),
 
@@ -61,76 +71,55 @@ class ResultsScreen extends StatelessWidget {
                       itemCount: ranking.length,
                       itemBuilder: (context, index) {
                         final player = ranking[index];
-                        return _buildPlayerResult(context, player, index + 1, gameState);
+                        return _buildPlayerResult(
+                            context, player, index + 1, gameState);
                       },
                     ),
                   ),
 
-                  // Boutons d'action
+                  // Bouton d'action unique (centré)
                   Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        // Bouton Quitter
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
+                    child: Center(
+                      child: SizedBox(
+                        width: 300,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (isTournament && !isTournamentOver) {
+                              // TOURNOI : Manche suivante
+                              debugPrint("🏆 Manche suivante déclenchée");
+                              gameProvider.startNextTournamentRound();
+
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const MemorizationScreen()),
+                              );
+                            } else {
+                              // PARTIE RAPIDE ou FIN TOURNOI : Retour Menu
                               Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const MainMenuScreen()),
                                 (route) => false,
                               );
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white54),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text("QUITTER"),
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                        ),
-                        
-                        const SizedBox(width: 16),
-
-                        // Bouton Continuer / Terminer
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              if (isTournament && !isTournamentOver) {
-                                // ✅ TOURNOI : Manche suivante
-                                debugPrint("🏆 Manche suivante déclenchée");
-                                gameProvider.startNextTournamentRound();
-                                
-                                // ✅ NAVIGATION CORRIGÉE : Vers MemorizationScreen
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (context) => const MemorizationScreen()
-                                  ),
-                                );
-                              } else {
-                                // PARTIE RAPIDE ou FIN TOURNOI : Retour Menu
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-                                  (route) => false,
-                                );
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: Text(
-                              (isTournament && !isTournamentOver) 
-                                ? 'MANCHE SUIVANTE >>' 
+                          child: Text(
+                            (isTournament && !isTournamentOver)
+                                ? 'MANCHE SUIVANTE >>'
                                 : 'TERMINER',
-                              style: const TextStyle(
-                                color: Colors.white, 
+                            style: const TextStyle(
+                                color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 18
-                              ),
-                            ),
+                                fontSize: 18),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
@@ -142,26 +131,28 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayerResult(BuildContext context, Player player, int rank, GameState gs) {
+  Widget _buildPlayerResult(
+      BuildContext context, Player player, int rank, GameState gs) {
     bool isWinner = rank == 1;
     bool isDutchCaller = gs.dutchCallerId == player.id;
     bool isEliminated = isDutchCaller && !isWinner;
     int score = gs.getFinalScore(player);
-    
-    // ✅ NOUVEAU : Récupérer le mode SBMM depuis le GameProvider
+
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     bool isSBMM = gameProvider.playerMMR != null;
-    
+    bool isTournament = gs.gameMode == GameMode.tournament;
+
+    // ✅ NOUVEAU : Déterminer si éliminé en tournoi
+    bool isTournamentEliminated =
+        isTournament && rank == gs.players.length && !isWinner;
+
     String pointsChangeText = "";
     Color pointsColor = Colors.grey;
 
-    // ✅ MODIFICATION : Affichage conditionnel selon le mode
     if (!isSBMM) {
-      // Mode Manuel : pas de RP
       pointsChangeText = "Mode Manuel";
       pointsColor = Colors.white54;
     } else {
-      // Mode SBMM : calcul des RP
       switch (rank) {
         case 1:
           if (isDutchCaller) {
@@ -196,9 +187,11 @@ class ResultsScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isEliminated 
-            ? Colors.red.withValues(alpha: 0.2) 
-            : (isWinner ? Colors.amber.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
+        color: isEliminated
+            ? Colors.red.withValues(alpha: 0.2)
+            : (isWinner
+                ? Colors.amber.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.05)),
         borderRadius: BorderRadius.circular(12),
         border: isEliminated ? Border.all(color: Colors.red, width: 2) : null,
       ),
@@ -213,10 +206,8 @@ class ResultsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          
           PlayerAvatar(player: player, size: 50),
           const SizedBox(width: 16),
-          
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,37 +216,71 @@ class ResultsScreen extends StatelessWidget {
                   children: [
                     Text(
                       player.name,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
                     ),
                     if (isDutchCaller) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
-                        child: const Text("DUTCH", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(4)),
+                        child: const Text("DUTCH",
+                            style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10)),
                       ),
-                    ]
+                    ],
+                    // ✅ NOUVEAU : Badge ÉLIMINÉ
+                    if (isTournamentEliminated) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(4)),
+                        child: const Text("ÉLIMINÉ",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10)),
+                      ),
+                    ],
                   ],
                 ),
                 if (isEliminated)
                   const Text(
                     "❌ ÉLIMINÉ (Dutch raté !)",
-                    style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
                   ),
               ],
             ),
           ),
-          
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 "$score pts",
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold),
               ),
               Text(
                 pointsChangeText,
-                style: TextStyle(color: pointsColor, fontSize: 12, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: pointsColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
               ),
             ],
           ),

@@ -30,66 +30,61 @@ class RulesScreen extends StatelessWidget {
               context,
               '🎯 Objectif du jeu',
               'Le but du Dutch est de terminer la manche avec le moins de points possible.\n\n'
-              'À chaque tour, les joueurs essaient d’échanger leurs cartes les plus pénalisantes '
-              'et de mémoriser leurs cartes pour prendre l’avantage.',
+                  'À chaque tour, les joueurs essaient d’échanger leurs cartes les plus pénalisantes '
+                  'et de mémoriser leurs cartes pour prendre l’avantage.',
             ),
-
             _buildSection(
               context,
               '🔄 Déroulement d’un tour',
               'À votre tour, vous n\'avez que DEUX choix :\n\n'
-              '1️⃣ Piocher une carte\n'
-              '• Vous pouvez soit échanger la carte piochée avec une carte de votre main.\n'
-              '  → La carte de votre main est alors défaussée et la carte piochée remplace la carte défaussée.\n'
-              '• Soit défausser directement la carte piochée.\n'
-              '  → Si elle a un pouvoir, vous pouvez l’activer.\n'
-              '• Puis la défausse collective s\'active.\n\n'
-              '⚠️ Si vous piochez, vous ne pourrez PLUS annoncer Dutch durant ce tour.\n\n'
-              '2️⃣ Annoncer « DUTCH »\n'
-              '• Uniquement si vous n\'avez pas pioché.\n'
-              '• Possible à tout moment, mais recommandé si vous pensez avoir le score le plus bas.\n',
+                  '1️⃣ Piocher une carte\n'
+                  '• Vous pouvez soit échanger la carte piochée avec une carte de votre main.\n'
+                  '  → La carte de votre main est alors défaussée et la carte piochée remplace la carte défaussée.\n'
+                  '• Soit défausser directement la carte piochée.\n'
+                  '  → Si elle a un pouvoir, vous pouvez l’activer.\n'
+                  '• Puis la défausse collective s\'active.\n\n'
+                  '⚠️ Si vous piochez, vous ne pourrez PLUS annoncer Dutch durant ce tour.\n\n'
+                  '2️⃣ Annoncer « DUTCH »\n'
+                  '• Uniquement si vous n\'avez pas pioché.\n'
+                  '• Possible à tout moment, mais recommandé si vous pensez avoir le score le plus bas.\n',
             ),
-
             _buildSection(
               context,
               '♻️ Défausse collective',
               'À chaque carte défaussée :\n\n'
-              '• Tous les joueurs peuvent défausser une carte STRICTEMENT identique '
-              '(même valeur et même couleur).\n'
-              '• Il faut se souvenir de la position de sa carte.\n\n'
-              '⚠️ Attention :\n'
-              '• Mauvaise carte → vous la reprenez et piochez une carte de pénalité.\n'
-              '• Regarder une carte sans autorisation → carte de pénalité.\n\n'
-              'ℹ️ Les Rois rouges (♥ ♦) valent 0 point.',
+                  '• Tous les joueurs peuvent défausser une carte STRICTEMENT identique '
+                  '(même valeur et même couleur).\n'
+                  '• Il faut se souvenir de la position de sa carte.\n\n'
+                  '⚠️ Attention :\n'
+                  '• Mauvaise carte → vous la reprenez et piochez une carte de pénalité.\n'
+                  '• Regarder une carte sans autorisation → carte de pénalité.\n\n'
+                  'ℹ️ Les Rois rouges (♥ ♦) valent 0 point.',
             ),
-
             _buildSection(
               context,
               '🏁 Fin de la manche',
               'Quand un joueur annonce « DUTCH » :\n\n'
-              '• Tous les joueurs révèlent leurs cartes.\n'
-              '• Les points sont comptés.\n\n'
-              '✅ Si le joueur a le plus petit score, il gagne la manche.\n'
-              '❌ S’il n’a PAS le plus petit score, il est dernier.\n'
-              '🤝 En cas d’égalité, le joueur ayant dit Dutch l’emporte.',
+                  '• Tous les joueurs révèlent leurs cartes.\n'
+                  '• Les points sont comptés.\n\n'
+                  '✅ Si le joueur a le plus petit score, il gagne la manche.\n'
+                  '❌ S’il n’a PAS le plus petit score, il est dernier.\n'
+                  '🤝 En cas d’égalité, le joueur ayant dit Dutch l’emporte.',
             ),
-
             _buildCardValuesTable(context),
-
             _buildSection(
               context,
               '✨ Cartes spéciales (Pouvoirs)',
               'Les pouvoirs s’activent UNIQUEMENT quand la carte est défaussée.\n\n'
-              '🃏 Joker (0 point)\n'
-              '• Mélange le jeu d’un joueur de ton choix.\n\n'
-              '7️⃣ Le Sept\n'
-              '• Regarde une de vos cartes que vous ne connaissez pas.\n\n'
-              '🔟 Le Dix\n'
-              '• Regarde une carte du jeu d’un adversaire.\n\n'
-              '🤵 Le Valet (11 points)\n'
-              '• Échange une carte :\n'
-              '  – soit avec un adversaire\n'
-              '  – soit entre deux adversaires.',
+                  '🃏 Joker (0 point)\n'
+                  '• Mélange le jeu d’un joueur de ton choix.\n\n'
+                  '7️⃣ Le Sept\n'
+                  '• Regarde une de vos cartes que vous ne connaissez pas.\n\n'
+                  '🔟 Le Dix\n'
+                  '• Regarde une carte du jeu d’un adversaire.\n\n'
+                  '🤵 Le Valet (11 points)\n'
+                  '• Échange une carte :\n'
+                  '  – soit avec un adversaire\n'
+                  '  – soit entre deux adversaires.',
             ),
           ],
         ),

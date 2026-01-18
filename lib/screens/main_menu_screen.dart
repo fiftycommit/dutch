@@ -14,7 +14,7 @@ class MainMenuScreen extends StatefulWidget {
 
 class _MainMenuScreenState extends State<MainMenuScreen> {
   int selectedSlot = 1;
-  
+
   Map<int, Map<String, dynamic>> slotsData = {};
   bool isLoading = true;
 
@@ -71,16 +71,22 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 20),
-                          const Icon(Icons.style, size: 80, color: Colors.amber),
+                          const Icon(Icons.style,
+                              size: 80, color: Colors.amber),
                           const SizedBox(height: 10),
                           const Text(
                             'DUTCH\' 78',
                             style: TextStyle(
-                              fontFamily: 'Rye', 
+                              fontFamily: 'Rye',
                               fontSize: 60,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              shadows: [Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))],
+                              shadows: [
+                                Shadow(
+                                    color: Colors.black45,
+                                    blurRadius: 10,
+                                    offset: Offset(2, 2))
+                              ],
                             ),
                           ),
                           const Text(
@@ -92,7 +98,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          
+
                           const SizedBox(height: 50),
 
                           // --- SÉLECTEUR DE SLOT (RANKED) ---
@@ -103,18 +109,20 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [1, 2, 3].map((slotId) {
                                 final data = slotsData[slotId] ?? {};
-                                
+
                                 // ✅ CORRECTION ICI : On récupère le MMR et le Rang
                                 final mmr = data['mmr'] ?? 0;
-                                final rankName = StatsService.getRankName(mmr); // Bronze, Argent, Or
-                                
+                                final rankName = StatsService.getRankName(
+                                    mmr); // Bronze, Argent, Or
+
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0),
                                   child: _buildSaveSlotCard(
-                                    slotId, 
-                                    "Joueur $slotId", 
-                                    rankName,        // Affiche "Argent" au lieu de "Niv 1"
-                                    "$mmr RP",       // Affiche les points
+                                    slotId,
+                                    "Joueur $slotId",
+                                    rankName, // Affiche "Argent" au lieu de "Niv 1"
+                                    "$mmr RP", // Affiche les points
                                     selectedSlot == slotId,
                                     _getRankColor(rankName), // Couleur du rang
                                   ),
@@ -143,7 +151,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                             },
                           ),
                           const SizedBox(height: 16),
-                          
+
                           _buildMenuButton(
                             context,
                             label: 'TOURNOI',
@@ -173,7 +181,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                 icon: Icons.settings,
                                 label: 'Réglages',
                                 onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+                                  Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SettingsScreen()));
                                 },
                               ),
                               const SizedBox(width: 20),
@@ -181,7 +193,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                 icon: Icons.menu_book,
                                 label: 'Règles',
                                 onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const RulesScreen()));
+                                  Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const RulesScreen()));
                                 },
                               ),
                               const SizedBox(width: 20),
@@ -189,7 +205,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                 icon: Icons.bar_chart,
                                 label: 'Stats',
                                 onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const StatsScreen()));
+                                  Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const StatsScreen()));
                                 },
                               ),
                             ],
@@ -211,13 +231,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   // Petite aide pour la couleur du rang
   Color _getRankColor(String rank) {
     switch (rank) {
-      case 'Or': return Colors.amber;
-      case 'Argent': return const Color(0xFFC0C0C0);
-      default: return const Color(0xFFCD7F32); // Bronze
+      case 'Or':
+        return Colors.amber;
+      case 'Argent':
+        return const Color(0xFFC0C0C0);
+      default:
+        return const Color(0xFFCD7F32); // Bronze
     }
   }
 
-  Widget _buildSaveSlotCard(int id, String name, String rank, String rp, bool isSelected, Color rankColor) {
+  Widget _buildSaveSlotCard(int id, String name, String rank, String rp,
+      bool isSelected, Color rankColor) {
     return GestureDetector(
       onTap: () => setState(() => selectedSlot = id),
       child: AnimatedContainer(
@@ -227,25 +251,48 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         decoration: BoxDecoration(
           color: isSelected ? rankColor : Colors.black.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: Colors.white, width: 2) : Border.all(color: Colors.transparent, width: 2),
-          boxShadow: isSelected ? [BoxShadow(color: rankColor.withValues(alpha: 0.5), blurRadius: 10)] : [],
+          border: isSelected
+              ? Border.all(color: Colors.white, width: 2)
+              : Border.all(color: Colors.transparent, width: 2),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                      color: rankColor.withValues(alpha: 0.5), blurRadius: 10)
+                ]
+              : [],
         ),
         child: Column(
           children: [
-            Icon(Icons.person, color: isSelected ? Colors.black : Colors.white70, size: 30),
+            Icon(Icons.person,
+                color: isSelected ? Colors.black : Colors.white70, size: 30),
             const SizedBox(height: 4),
-            Text(name, style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            Text(name,
+                style: TextStyle(
+                    color: isSelected ? Colors.black : Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12)),
             // Affichage du Rang en GRAS
-            Text(rank, style: TextStyle(color: isSelected ? Colors.black87 : rankColor, fontWeight: FontWeight.bold, fontSize: 11)),
+            Text(rank,
+                style: TextStyle(
+                    color: isSelected ? Colors.black87 : rankColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11)),
             // Affichage des points
-            Text(rp, style: TextStyle(color: isSelected ? Colors.black54 : Colors.grey, fontSize: 10)),
+            Text(rp,
+                style: TextStyle(
+                    color: isSelected ? Colors.black54 : Colors.grey,
+                    fontSize: 10)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMenuButton(BuildContext context, {required String label, required IconData icon, required bool isPrimary, required VoidCallback onPressed}) {
+  Widget _buildMenuButton(BuildContext context,
+      {required String label,
+      required IconData icon,
+      required bool isPrimary,
+      required VoidCallback onPressed}) {
     return SizedBox(
       width: 200,
       child: ElevatedButton.icon(
@@ -256,14 +303,18 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           backgroundColor: isPrimary ? Colors.amber : const Color(0xFF2d5f3e),
           foregroundColor: isPrimary ? Colors.black : Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: isPrimary ? 8 : 4,
         ),
       ),
     );
   }
 
-  Widget _buildIconButton({required IconData icon, required String label, required VoidCallback onPressed}) {
+  Widget _buildIconButton(
+      {required IconData icon,
+      required String label,
+      required VoidCallback onPressed}) {
     return Column(
       children: [
         IconButton(
@@ -276,7 +327,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ],
     );
   }

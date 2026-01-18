@@ -12,7 +12,8 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RÉGLAGES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('RÉGLAGES',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1a3a28),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -28,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _buildSectionHeader("MÉCANIQUE DE JEU"),
-            
+
             // --- CURSEUR : TEMPS DE RÉACTION ---
             Container(
               padding: const EdgeInsets.all(16),
@@ -43,17 +44,20 @@ class SettingsScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Vitesse Défausse", style: TextStyle(color: Colors.white, fontSize: 16)),
+                      const Text("Vitesse Défausse",
+                          style: TextStyle(color: Colors.white, fontSize: 16)),
                       Text(
-                        "${(settings.reactionTimeMs / 1000).toStringAsFixed(1)} s", 
-                        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)
-                      ),
+                          "${(settings.reactionTimeMs / 1000).toStringAsFixed(1)} s",
+                          style: const TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
                     ],
                   ),
                   Slider(
                     value: settings.reactionTimeMs.toDouble(),
-                    min: 2000, 
-                    max: 6000, 
+                    min: 2000,
+                    max: 6000,
                     divisions: 8,
                     activeColor: Colors.amber,
                     inactiveColor: Colors.white24,
@@ -68,10 +72,10 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             // --- MÉTHODE DE MÉLANGE (DIFFICULTÉ DU JEU) ---
             _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
-            
+
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.1),
@@ -80,32 +84,29 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 children: [
                   _buildShuffleOption(
-                    settings, 
-                    Difficulty.easy, 
-                    "DÉTENDU", 
-                    "Mélange 100% aléatoire. Chance pure.\nIdéal pour les parties rapides.",
-                    Colors.green
-                  ),
+                      settings,
+                      Difficulty.easy,
+                      "DÉTENDU",
+                      "Mélange 100% aléatoire. Chance pure.\nIdéal pour les parties rapides.",
+                      Colors.green),
                   const Divider(height: 1, color: Colors.white24),
                   _buildShuffleOption(
-                    settings, 
-                    Difficulty.medium, 
-                    "TACTIQUE", 
-                    "Mélange pondéré et équilibré.\nMoins de chaos, plus de stratégie.",
-                    Colors.amber
-                  ),
+                      settings,
+                      Difficulty.medium,
+                      "TACTIQUE",
+                      "Mélange pondéré et équilibré.\nMoins de chaos, plus de stratégie.",
+                      Colors.amber),
                   const Divider(height: 1, color: Colors.white24),
                   _buildShuffleOption(
-                    settings, 
-                    Difficulty.hard, 
-                    "CHALLENGER", 
-                    "Pioche exigeante.\nLes bonnes cartes se méritent.",
-                    Colors.red
-                  ),
+                      settings,
+                      Difficulty.hard,
+                      "CHALLENGER",
+                      "Pioche exigeante.\nLes bonnes cartes se méritent.",
+                      Colors.red),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 30),
             _buildSectionHeader("AUDIO & IMMERSION"),
             _buildSwitchTile(
@@ -120,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
               settings.hapticEnabled,
               (val) => settings.toggleHaptic(val),
             ),
-            
+
             const SizedBox(height: 10),
             _buildSwitchTile(
               "SBMM (Adaptatif)",
@@ -137,20 +138,27 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10, left: 4),
-      child: Text(
-        title, 
-        style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)
-      ),
+      child: Text(title,
+          style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, bool value, Function(bool) onChanged) {
+  Widget _buildSwitchTile(
+      String title, String subtitle, bool value, Function(bool) onChanged) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12)),
       child: SwitchListTile(
-        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        title: Text(title,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(color: Colors.white54, fontSize: 12)),
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.amber,
@@ -158,7 +166,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildShuffleOption(SettingsProvider settings, Difficulty level, String label, String desc, Color color) {
+  Widget _buildShuffleOption(SettingsProvider settings, Difficulty level,
+      String label, String desc, Color color) {
     // On utilise luckDifficulty pour stocker le mode de mélange
     bool isSelected = settings.luckDifficulty == level;
     return InkWell(
@@ -166,19 +175,30 @@ class SettingsScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
+          color:
+              isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
         ),
         child: Row(
           children: [
-            Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? color : Colors.white24),
+            Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: isSelected ? color : Colors.white24),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: TextStyle(color: isSelected ? color : Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(label,
+                      style: TextStyle(
+                          color: isSelected ? color : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text(desc, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(desc,
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12)),
                 ],
               ),
             ),

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 // Profils d'appareils pour gérer les layouts
 enum DeviceProfile {
-  iPhonePortrait,    // iPhone en mode portrait
-  iPhoneLandscape,   // iPhone en mode paysage
-  iPadPortrait,      // iPad en mode portrait
-  iPadLandscape,     // iPad en mode paysage
+  iPhonePortrait, // iPhone en mode portrait
+  iPhoneLandscape, // iPhone en mode paysage
+  iPadPortrait, // iPad en mode portrait
+  iPadLandscape, // iPad en mode paysage
 }
 
 class ScreenUtils {
@@ -132,9 +132,13 @@ class ScreenUtils {
   // Obtenir le profil d'appareil actuel
   static DeviceProfile getDeviceProfile(BuildContext context) {
     if (isTablet(context)) {
-      return isPortrait(context) ? DeviceProfile.iPadPortrait : DeviceProfile.iPadLandscape;
+      return isPortrait(context)
+          ? DeviceProfile.iPadPortrait
+          : DeviceProfile.iPadLandscape;
     } else {
-      return isPortrait(context) ? DeviceProfile.iPhonePortrait : DeviceProfile.iPhoneLandscape;
+      return isPortrait(context)
+          ? DeviceProfile.iPhonePortrait
+          : DeviceProfile.iPhoneLandscape;
     }
   }
 
@@ -158,7 +162,8 @@ class ScreenUtils {
 
   // Espacement adaptatif
   static double spacing(BuildContext context, double baseSpacing) {
-    return scale(context, baseSpacing).clamp(baseSpacing * 0.7, baseSpacing * 1.3);
+    return scale(context, baseSpacing)
+        .clamp(baseSpacing * 0.7, baseSpacing * 1.3);
   }
 
   // Taille de bouton adaptative
@@ -167,7 +172,8 @@ class ScreenUtils {
   }
 
   // Padding adaptatif
-  static EdgeInsets adaptivePadding(BuildContext context, {
+  static EdgeInsets adaptivePadding(
+    BuildContext context, {
     double horizontal = 16.0,
     double vertical = 16.0,
   }) {
@@ -249,7 +255,8 @@ class ScreenUtils {
     final profile = getDeviceProfile(context);
     final screenWidth = width(context);
     final screenHeight = height(context);
-    final smallestDimension = screenWidth < screenHeight ? screenWidth : screenHeight;
+    final smallestDimension =
+        screenWidth < screenHeight ? screenWidth : screenHeight;
 
     switch (profile) {
       case DeviceProfile.iPhonePortrait:

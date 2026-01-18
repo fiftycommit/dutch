@@ -1,10 +1,10 @@
 class BotDifficulty {
   final String name;
-  final double forgetChancePerTurn;    
-  final double confusionOnSwap;        
-  final int dutchThreshold;            
-  final double reactionSpeed;          
-  final double matchAccuracy;          
+  final double forgetChancePerTurn;
+  final double confusionOnSwap;
+  final int dutchThreshold;
+  final double reactionSpeed;
+  final double matchAccuracy;
 
   const BotDifficulty({
     required this.name,
@@ -17,29 +17,29 @@ class BotDifficulty {
 
   static const BotDifficulty bronze = BotDifficulty(
     name: "Bronze",
-    forgetChancePerTurn: 0.20,     
-    confusionOnSwap: 0.40,         
-    dutchThreshold: 8,             
-    reactionSpeed: 0.5,            
-    matchAccuracy: 0.7,            
+    forgetChancePerTurn: 0.20,
+    confusionOnSwap: 0.40,
+    dutchThreshold: 8,
+    reactionSpeed: 0.5,
+    matchAccuracy: 0.7,
   );
 
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
-    forgetChancePerTurn: 0.09,     
-    confusionOnSwap: 0.14,         
-    dutchThreshold: 5,             
-    reactionSpeed: 0.75,           
-    matchAccuracy: 0.85,           
+    forgetChancePerTurn: 0.09,
+    confusionOnSwap: 0.14,
+    dutchThreshold: 5,
+    reactionSpeed: 0.75,
+    matchAccuracy: 0.85,
   );
 
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
-    forgetChancePerTurn: 0.04,     
-    confusionOnSwap: 0.02,          
-    dutchThreshold: 4,             
-    reactionSpeed: 1.0,            
-    matchAccuracy: 0.95,           
+    forgetChancePerTurn: 0.04,
+    confusionOnSwap: 0.02,
+    dutchThreshold: 4,
+    reactionSpeed: 1.0,
+    matchAccuracy: 0.95,
   );
 
   static BotDifficulty fromMMR(int mmr) {

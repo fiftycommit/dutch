@@ -28,7 +28,8 @@ class HapticButton extends StatefulWidget {
   State<HapticButton> createState() => _HapticButtonState();
 }
 
-class _HapticButtonState extends State<HapticButton> with SingleTickerProviderStateMixin {
+class _HapticButtonState extends State<HapticButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
 

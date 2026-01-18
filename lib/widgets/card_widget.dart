@@ -52,7 +52,8 @@ class CardWidget extends StatelessWidget {
         width: width,
         height: height,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
+          borderRadius:
+              BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.3),
@@ -62,7 +63,8 @@ class CardWidget extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
+          borderRadius:
+              BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
           child: _buildCardImage(width, height),
         ),
       ),
