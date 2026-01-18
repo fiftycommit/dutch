@@ -172,8 +172,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               if (gameState.phase == GamePhase.dutchCalled)
                 _buildDutchNotification(gameState),
-              if (gameState.isWaitingForSpecialPower &&
-                  gameState.currentPlayer.isHuman)
+              if (gameState.isWaitingForSpecialPower)
                 _buildSpecialPowerOverlay(gameProvider, gameState),
               if (gameProvider.isProcessing)
                 Positioned(
@@ -555,6 +554,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
 
     if (!gs.currentPlayer.isHuman) {
+      debugPrint("   ❌ Pas un humain, retour SizedBox");
+      return const SizedBox();
+    }
+
+    Player? playerWithPower;
+
+    // Si c'est le tour d'un joueur et qu'il a un pouvoir
+    if (gs.currentPlayer.isHuman && gs.isWaitingForSpecialPower) {
+      playerWithPower = gs.currentPlayer;
+    } else {
+      // Sinon, chercher le joueur humain (cas du match en réaction)
+      try {
+        playerWithPower = gs.players.firstWhere((p) => p.isHuman);
+      } catch (e) {
+        debugPrint("   ❌ Pas de joueur humain");
+        return const SizedBox();
+      }
+    }
+
+    if (!playerWithPower.isHuman) {
       debugPrint("   ❌ Pas un humain, retour SizedBox");
       return const SizedBox();
     }

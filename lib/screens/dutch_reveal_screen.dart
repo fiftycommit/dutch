@@ -17,120 +17,206 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  int currentCardIndex = 0; // Quelle carte on révèle (0 à max)
-  Map<String, int> currentScores = {}; // Scores progressifs
+  int currentCardIndex = 0;
+  Map<String, int> currentScores = {};
   late AnimationController _flipController;
   late AnimationController _scoreController;
-  String? winnerId; // ID du gagnant
+  String? winnerId;
   bool revealComplete = false;
+  bool isFlipping = false;
+  
+  // ✅ NOUVEAU : Un controller par colonne pour synchroniser manuellement
+  Map<String, ScrollController> _scrollControllers = {};
+  
+  // ✅ NOUVEAU : Hauteur fixe d'une "case" de grille
+  static const double GRID_CELL_HEIGHT = 68.0; // Carte (64px) + espacement (4px)
 
   @override
   void initState() {
     super.initState();
+    
+    debugPrint("🎬 [DutchRevealScreen] INIT");
 
     _flipController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
     _scoreController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
 
-    // Initialiser les scores à 0
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final players = gameProvider.gameState!.players;
+    
+    debugPrint("   - Nombre de joueurs: ${players.length}");
+    
     for (var player in players) {
       currentScores[player.id] = 0;
+      // ✅ Créer un controller par joueur
+      _scrollControllers[player.id] = ScrollController();
+      debugPrint("   - Controller créé pour ${player.name}");
     }
 
-    // Démarrer la révélation après un court délai
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      _revealNextCard();
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      debugPrint("🎬 Début de la révélation");
+      _revealNextCardColumn();
     });
   }
 
   @override
   void dispose() {
+    debugPrint("🎬 [DutchRevealScreen] DISPOSE");
     _flipController.dispose();
     _scoreController.dispose();
+    // ✅ Disposer tous les scroll controllers
+    for (var controller in _scrollControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  void _revealNextCard() async {
+  // ✅ NOUVEAU : Scroll synchronisé de TOUTES les colonnes en même temps
+  Future<void> _scrollToNextGridCell() async {
+    debugPrint("📜 [_scrollToNextGridCell] DEBUT");
+    debugPrint("   - currentCardIndex: $currentCardIndex");
+    debugPrint("   - Nombre de controllers: ${_scrollControllers.length}");
+    
+    if (!mounted) {
+      debugPrint("   ❌ Widget non monté");
+      return;
+    }
+    
+    if (_scrollControllers.isEmpty) {
+      debugPrint("   ❌ Pas de scroll controllers");
+      return;
+    }
+
+    double targetOffset = GRID_CELL_HEIGHT * currentCardIndex;
+    debugPrint("   - Target offset: $targetOffset");
+    
+    // ✅ Animer TOUTES les colonnes ensemble vers la même position
+    List<Future> animations = [];
+    
+    for (var entry in _scrollControllers.entries) {
+      String playerId = entry.key;
+      ScrollController controller = entry.value;
+      
+      if (!controller.hasClients) {
+        debugPrint("   ⚠️ Controller pour $playerId n'a pas de clients");
+        continue;
+      }
+      
+      debugPrint("   - Animation pour $playerId vers $targetOffset");
+      
+      animations.add(
+        controller.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        ),
+      );
+    }
+    
+    if (animations.isNotEmpty) {
+      debugPrint("   ✅ Lancement de ${animations.length} animations");
+      await Future.wait(animations);
+      debugPrint("   ✅ Animations terminées");
+    } else {
+      debugPrint("   ⚠️ Aucune animation à lancer");
+    }
+  }
+
+  void _revealNextCardColumn() async {
+    debugPrint("🎴 [_revealNextCardColumn] DEBUT - Index: $currentCardIndex");
+    
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final players = gameProvider.gameState!.players;
 
-    // Trouver le nombre max de cartes
     int maxCards = players.map((p) => p.hand.length).reduce(math.max);
+    debugPrint("   - Max cartes: $maxCards");
 
     if (currentCardIndex >= maxCards) {
-      // Toutes les cartes révélées, trouver le gagnant
-      await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint("   ✅ Toutes les cartes révélées");
+      await Future.delayed(const Duration(milliseconds: 800));
       _highlightWinner();
       return;
     }
 
-    // Animation de flip
+    // ✅ NOUVEAU : Scroller AVANT le flip (toutes les colonnes ensemble)
+    debugPrint("   📜 Scroll vers index $currentCardIndex");
+    await _scrollToNextGridCell();
+
+    debugPrint("   🔄 Début flip");
+    setState(() {
+      isFlipping = true;
+    });
+
     await _flipController.forward();
 
+    debugPrint("   ✅ Flip terminé, mise à jour des scores");
     setState(() {
+      isFlipping = false;
+      
       // Mettre à jour les scores
       for (var player in players) {
         if (currentCardIndex < player.hand.length) {
-          currentScores[player.id] =
-              currentScores[player.id]! + player.hand[currentCardIndex].points;
+          int cardPoints = player.hand[currentCardIndex].points;
+          currentScores[player.id] = currentScores[player.id]! + cardPoints;
+          debugPrint("   - ${player.name}: +$cardPoints pts = ${currentScores[player.id]}");
         }
       }
     });
 
-    // Animation de score
     await _scoreController.forward();
     await _scoreController.reverse();
-
-    // Reset flip pour la prochaine carte
     await _flipController.reverse();
 
     setState(() {
       currentCardIndex++;
     });
 
-    // Petit délai avant la prochaine carte
-    await Future.delayed(const Duration(milliseconds: 300));
+    debugPrint("   ⏸️ Pause 600ms");
+    await Future.delayed(const Duration(milliseconds: 600));
 
     if (mounted) {
-      _revealNextCard();
+      debugPrint("   ➡️ Carte suivante");
+      _revealNextCardColumn();
+    } else {
+      debugPrint("   ❌ Widget non monté, arrêt");
     }
   }
 
   void _highlightWinner() async {
+    debugPrint("🏆 [_highlightWinner] DEBUT");
+    
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
     
-    // Trouver le joueur avec le plus petit score
     String? minId;
     int minScore = 999;
     
     for (var entry in currentScores.entries) {
+      debugPrint("   - ${entry.key}: ${entry.value} pts");
       if (entry.value < minScore) {
         minScore = entry.value;
         minId = entry.key;
       }
     }
     
+    debugPrint("   🏆 Gagnant: $minId avec $minScore pts");
+    
     setState(() {
       winnerId = minId;
       revealComplete = true;
     });
     
-    // Attendre 2 secondes avant de passer aux résultats
     await Future.delayed(const Duration(milliseconds: 2000));
     
-    // ✅ IMPORTANT : Remettre dutchCallerId à null pour éviter la boucle
     if (mounted && gameState.dutchCallerId != null) {
       debugPrint("🔄 [DutchRevealScreen] Reset dutchCallerId pour éviter la boucle");
-      gameState.dutchCallerId = null; // ⚠️ On efface le flag Dutch
+      gameState.dutchCallerId = null;
       
       Navigator.pushReplacement(
         context,
@@ -165,7 +251,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                 children: [
                   const SizedBox(height: 20),
 
-                  // Titre
                   const Icon(Icons.campaign, size: 60, color: Colors.amber),
                   const SizedBox(height: 10),
                   const Text(
@@ -196,7 +281,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
                   const SizedBox(height: 30),
 
-                  // Colonnes des joueurs
+                  // ✅ NOUVEAU : Grille synchronisée
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -217,21 +302,16 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 
-  // Ordonner les joueurs : Haut, Droite, Bas (humain), Gauche
   List<Player> _orderPlayers(List<Player> allPlayers) {
     Player human = allPlayers.firstWhere((p) => p.isHuman);
     List<Player> bots = allPlayers.where((p) => !p.isHuman).toList();
 
-    // Si 4 joueurs : Haut (bot0), Droite (bot1), Bas (humain), Gauche (bot2)
-    // Si 3 joueurs : Haut (bot0), Bas (humain), Droite (bot1)
-    // Si 2 joueurs : Bas (humain), Haut (bot0)
-
     List<Player> ordered = [];
 
-    if (bots.length >= 1) ordered.add(bots[0]); // Haut
-    if (bots.length >= 2) ordered.add(bots[1]); // Droite
-    ordered.add(human); // Bas (toujours)
-    if (bots.length >= 3) ordered.add(bots[2]); // Gauche
+    if (bots.length >= 1) ordered.add(bots[0]);
+    if (bots.length >= 2) ordered.add(bots[1]);
+    ordered.add(human);
+    if (bots.length >= 3) ordered.add(bots[2]);
 
     return ordered;
   }
@@ -240,6 +320,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     bool isWinner = winnerId == player.id;
     int displayScore = currentScores[player.id] ?? 0;
     bool isDutchCaller = gameState.dutchCallerId == player.id;
+    
+    // ✅ NOUVEAU : Détecter si le joueur n'a plus de cartes à révéler
+    bool hasNoMoreCards = currentCardIndex >= player.hand.length;
 
     return Expanded(
       child: AnimatedContainer(
@@ -314,26 +397,61 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
             const SizedBox(height: 12),
 
-            // Cartes
+            // ✅ NOUVEAU : Grille de cartes synchronisée
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: List.generate(player.hand.length, (index) {
-                    bool isRevealed = index < currentCardIndex;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: _FlipCard(
-                        card: player.hand[index],
-                        isRevealed: isRevealed,
-                        animationValue: isRevealed
-                            ? (index == currentCardIndex - 1
-                                ? _flipController.value
-                                : 1.0)
-                            : 0.0,
+              child: Stack(
+                children: [
+                  // Liste scrollable des cartes
+                  SingleChildScrollView(
+                    controller: _scrollControllers[player.id],
+                    physics: const NeverScrollableScrollPhysics(), // Scroll contrôlé
+                    child: Column(
+                      children: List.generate(player.hand.length, (index) {
+                        bool isRevealed = index < currentCardIndex;
+                        return Container(
+                          height: GRID_CELL_HEIGHT,
+                          alignment: Alignment.center,
+                          child: _FlipCard(
+                            card: player.hand[index],
+                            isRevealed: isRevealed,
+                            animationValue: isRevealed
+                                ? (index == currentCardIndex - 1
+                                    ? _flipController.value
+                                    : 1.0)
+                                : 0.0,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                  
+                  // ✅ NOUVEAU : Indicateur visuel si plus de cartes
+                  if (hasNoMoreCards && !revealComplete)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.red.withValues(alpha: 0.0),
+                              Colors.red,
+                              Colors.red.withValues(alpha: 0.0),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withValues(alpha: 0.6),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  }),
-                ),
+                    ),
+                ],
               ),
             ),
 
@@ -394,13 +512,11 @@ class _FlipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Animation de rotation 3D
     final angle = animationValue * math.pi;
     final transform = Matrix4.identity()
-      ..setEntry(3, 2, 0.001) // Perspective
+      ..setEntry(3, 2, 0.001)
       ..rotateY(angle);
 
-    // Déterminer quelle face montrer
     bool showFront = animationValue > 0.5;
 
     return Transform(
@@ -408,7 +524,7 @@ class _FlipCard extends StatelessWidget {
       alignment: Alignment.center,
       child: showFront && isRevealed
           ? Transform(
-              transform: Matrix4.rotationY(math.pi), // Flip la face avant
+              transform: Matrix4.rotationY(math.pi),
               alignment: Alignment.center,
               child: CardWidget(
                 card: card,
@@ -417,7 +533,7 @@ class _FlipCard extends StatelessWidget {
               ),
             )
           : CardWidget(
-              card: null, // Dos de carte
+              card: null,
               size: CardSize.small,
               isRevealed: false,
             ),

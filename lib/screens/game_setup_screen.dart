@@ -6,7 +6,7 @@ import '../models/game_settings.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/stats_service.dart';
-import 'memorization_screen.dart'; // ✅ CHANGEMENT : On navigue vers MemorizationScreen
+import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isTournament;
@@ -161,31 +161,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
     ];
 
-    List<BotPersonality> personalities = [];
-
-    switch (botLevel) {
-      case Difficulty.easy:
-        personalities = [
-          BotPersonality.beginner,
-          BotPersonality.novice,
-          BotPersonality.novice
-        ];
-        break;
-      case Difficulty.medium:
-        personalities = [
-          BotPersonality.novice,
-          BotPersonality.balanced,
-          BotPersonality.cautious
-        ];
-        break;
-      case Difficulty.hard:
-        personalities = [
-          BotPersonality.balanced,
-          BotPersonality.cautious,
-          BotPersonality.legend
-        ];
-        break;
-    }
+    // ✅ NOUVEAU : Attribution des personnalités selon la difficulté
+    List<BotPersonality> personalities = _getBotPersonalities(botLevel);
 
     for (int i = 0; i < 3; i++) {
       players.add(Player(
@@ -207,36 +184,76 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       difficulty: settings.luckDifficulty,
       reactionTimeMs: settings.reactionTimeMs,
       saveSlot: widget.saveSlot,
-      useSBMM: useSBMM, // ✅ PASSER LE MODE SBMM
+      useSBMM: useSBMM,
     );
 
-    // ✅ CHANGEMENT : Navigation vers MemorizationScreen au lieu de GameScreen
     Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (context) => const MemorizationScreen()));
   }
 
+  /// 🎭 NOUVEAU : Obtenir les personnalités selon la difficulté
+  List<BotPersonality> _getBotPersonalities(Difficulty level) {
+    switch (level) {
+      case Difficulty.easy:
+        // Bronze : 1 Fast, 2 Équilibrés (comportement simple)
+        return [
+          BotPersonality.aggressive, // Fast
+          BotPersonality.balanced,   // Équilibré
+          BotPersonality.balanced,   // Équilibré
+        ];
+
+      case Difficulty.medium:
+        // Argent : Mix équilibré (1 Fast, 1 Équilibré, 1 Réfléchi)
+        return [
+          BotPersonality.aggressive, // Fast
+          BotPersonality.balanced,   // Équilibré
+          BotPersonality.cautious,   // Réfléchi
+        ];
+
+      case Difficulty.hard:
+        // Or : Équipe compétitive (1 Fast optimisé, 1 Équilibré, 1 Réfléchi)
+        return [
+          BotPersonality.aggressive, // Fast (très optimisé)
+          BotPersonality.balanced,   // Équilibré adaptatif
+          BotPersonality.cautious,   // Réfléchi (stratège)
+        ];
+    }
+  }
+
+  /// 🏷️ NOUVEAU : Noms des bots selon leur personnalité
   String _getBotName(BotPersonality personality, int index) {
     List<String> names;
+    
     switch (personality) {
+      case BotPersonality.aggressive: // 🏃 FAST
+        names = ["Flash", "Speedy", "Bolt"];
+        break;
+
+      case BotPersonality.cautious: // 🧠 RÉFLÉCHI
+        names = ["Sherlock", "Brain", "Prof"];
+        break;
+
+      case BotPersonality.balanced: // ⚖️ ÉQUILIBRÉ
+        names = ["Jordan", "Casey", "Morgan"];
+        break;
+
+      // Anciens (ne devraient plus être utilisés mais on les garde)
       case BotPersonality.beginner:
         names = ["Noob", "Junior", "Bleu"];
         break;
+
       case BotPersonality.novice:
         names = ["Alex", "Sam", "Lou"];
         break;
-      case BotPersonality.balanced:
-        names = ["Jordan", "Casey", "Morgan"];
-        break;
-      case BotPersonality.cautious:
-        names = ["Sherlock", "Brain", "Prof"];
-        break;
-      case BotPersonality.aggressive:
-        names = ["Rambo", "Viper", "Spike"];
-        break;
+
       case BotPersonality.legend:
         names = ["Zeus", "Athena", "Thor"];
         break;
+
+      default:
+        names = ["Bot1", "Bot2", "Bot3"];
     }
+    
     return names[index % names.length];
   }
 }

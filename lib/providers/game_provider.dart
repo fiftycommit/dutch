@@ -66,6 +66,18 @@ class GameProvider with ChangeNotifier {
     for (var player in _gameState!.players) {
       if (!player.isHuman) {
         player.mentalMap = List.filled(player.hand.length, null);
+        
+        // ✅ NOUVEAU : Les bots mémorisent aussi 2 cartes aléatoires au début
+        List<int> availableIndices = List.generate(player.hand.length, (i) => i);
+        availableIndices.shuffle();
+        
+        // Mémoriser les 2 premières cartes aléatoires
+        for (int i = 0; i < 2 && i < player.hand.length; i++) {
+          int index = availableIndices[i];
+          player.updateMentalMap(index, player.hand[index]);
+        }
+        
+        debugPrint("   🤖 ${player.name} mémorise 2 cartes au début");
       }
     }
 
@@ -272,8 +284,11 @@ class GameProvider with ChangeNotifier {
           notifyListeners();
 
           if (_gameState!.phase == GamePhase.reaction) {
+            // ✅ FIX : Ajouter du bonus au temps restant au lieu d'écraser le timer
+            if (_remainingReactionTimeMs != null) {
+              _remainingReactionTimeMs = _remainingReactionTimeMs! + 1000;
+            }
             _resumeReactionTimer();
-            _extendReactionTime(1000);
           }
         } else {
           debugPrint(
@@ -281,6 +296,12 @@ class GameProvider with ChangeNotifier {
 
           while (_gameState != null && _gameState!.isWaitingForSpecialPower) {
             await Future.delayed(const Duration(milliseconds: 100));
+          }
+
+          // ✅ FIX : Si gameState est null (quit), sortir immédiatement
+          if (_gameState == null) {
+            debugPrint("   ⚠️ GameState null (quit pendant pouvoir) - Sortie");
+            return;
           }
 
           debugPrint("   ✅ Pouvoir utilisé, reprise du timer");
@@ -382,13 +403,14 @@ class GameProvider with ChangeNotifier {
       return;
     }
 
-    if (_gameState!.phase == GamePhase.reaction) {
-      debugPrint("   ⏱️ Reprise timer réaction");
-      _resumeReactionTimer(); // ✅ NOUVEAU : au lieu de _extendReactionTime
-    } else if (_gameState!.phase == GamePhase.playing) {
+    // ✅ FIX : Ne pas reprendre le timer si on vient d'un match en réaction
+    // (c'est déjà géré dans attemptMatch ligne 307)
+    // On reprend le timer SEULEMENT si on vient d'un discard/replace en phase playing
+    if (_gameState!.phase == GamePhase.playing) {
       debugPrint("   🎬 Lancement phase réaction");
       startReactionPhase();
     }
+    // Si on est en phase reaction, ne rien faire : le timer reprendra dans attemptMatch
 
     debugPrint("   - Phase après: ${_gameState!.phase}");
   }
