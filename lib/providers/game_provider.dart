@@ -29,6 +29,10 @@ class GameProvider with ChangeNotifier {
   int? _playerMMR;
   int? get playerMMR => _playerMMR; // ✅ GETTER PUBLIC
 
+  // 🏆 NOUVEAU : Stockage du classement final du tournoi
+  List<TournamentResult>? _tournamentFinalRanking;
+  List<TournamentResult>? get tournamentFinalRanking => _tournamentFinalRanking;
+
   void createNewGame({
     required List<Player> players,
     required GameMode gameMode,
@@ -43,6 +47,11 @@ class GameProvider with ChangeNotifier {
     debugPrint("   - Mode: $gameMode");
     debugPrint("   - Difficulté: $difficulty");
     debugPrint("   - SBMM: $useSBMM");
+
+    // 🏆 RESET du classement tournoi si nouvelle partie
+    if (tournamentRound == 1) {
+      _tournamentFinalRanking = null;
+    }
 
     _gameState = GameLogic.initializeGame(
         players: players,
@@ -239,8 +248,8 @@ class GameProvider with ChangeNotifier {
 
   void attemptMatch(int cardIndex, {Player? forcedPlayer}) async {
     debugPrint("🔥 [attemptMatch] ENTRÉE");
-    debugPrint("   🔍 Index carte: $cardIndex");
-    debugPrint("   🔍 forcedPlayer fourni: ${forcedPlayer?.name ?? 'NULL'}");
+    debugPrint("   📍 Index carte: $cardIndex");
+    debugPrint("   📍 forcedPlayer fourni: ${forcedPlayer?.name ?? 'NULL'}");
 
     if (_gameState == null) {
       debugPrint("   ❌ GameState NULL");
@@ -248,7 +257,7 @@ class GameProvider with ChangeNotifier {
     }
 
     debugPrint("   ✅ GameState OK");
-    debugPrint("   🔍 Phase actuelle: ${_gameState!.phase}");
+    debugPrint("   📍 Phase actuelle: ${_gameState!.phase}");
 
     if (_gameState!.phase != GamePhase.reaction) {
       debugPrint("   ❌ Phase incorrecte: ${_gameState!.phase}");
@@ -259,238 +268,274 @@ class GameProvider with ChangeNotifier {
 
     Player player =
         forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
-    debugPrint("   🔍 Joueur sélectionné: ${player.name}");
+    debugPrint("   📍 Joueur sélectionné: ${player.name}");
 
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
       debugPrint("   ❌ Index hors limites!");
       return;
     }
 
-    debugPrint("   🎲 APPEL GameLogic.matchCard...");
+    debugPrint("   ✅ Index valide, carte: ${player.hand[cardIndex]?.value}");
+
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
-    debugPrint("   📊 RÉSULTAT matchCard: ${success ? 'SUCCÈS ✅' : 'ÉCHEC ❌'}");
+    debugPrint("   🎯 Résultat match: $success");
 
-    if (success) {
-      debugPrint("   🎉 MATCH RÉUSSI!");
-      shakingCardIndices.clear();
+    if (!success) {
+      shakingCardIndices.add(cardIndex);
+      debugPrint("   📳 Ajout index $cardIndex aux cartes qui tremblent");
+      notifyListeners();
 
-      if (_gameState!.isWaitingForSpecialPower) {
-        debugPrint("   ⚡ Pouvoir spécial détecté");
-        _pauseReactionTimer();
-        notifyListeners();
-
-        if (!player.isHuman) {
-          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
-          notifyListeners();
-
-          if (_gameState!.phase == GamePhase.reaction) {
-            // ✅ FIX : Ajouter du bonus au temps restant au lieu d'écraser le timer
-            if (_remainingReactionTimeMs != null) {
-              _remainingReactionTimeMs = _remainingReactionTimeMs! + 1000;
-            }
-            _resumeReactionTimer();
-          }
-        } else {
-          debugPrint(
-              "   ⏸️ Attente de l'utilisation du pouvoir par l'humain...");
-
-          while (_gameState != null && _gameState!.isWaitingForSpecialPower) {
-            await Future.delayed(const Duration(milliseconds: 100));
-          }
-
-          // ✅ FIX : Si gameState est null (quit), sortir immédiatement
-          if (_gameState == null) {
-            debugPrint("   ⚠️ GameState null (quit pendant pouvoir) - Sortie");
-            return;
-          }
-
-          debugPrint("   ✅ Pouvoir utilisé, reprise du timer");
-
-          if (_gameState != null && _gameState!.phase == GamePhase.reaction) {
-            _resumeReactionTimer();
-          }
-        }
-      } else {
-        debugPrint("   ⏱️ Prolongation du timer de réaction (+2000ms)");
-        _extendReactionTime(2000);
-        notifyListeners();
-      }
-    } else {
-      debugPrint("   ❌ MATCH ÉCHOUÉ - Pénalité appliquée par GameLogic");
-
-      int penaltyCardIndex =
-          player.hand.length - 1; // Dernière carte = pénalité
-
-      debugPrint("   📍 Shake rouge sur carte de pénalité #$penaltyCardIndex");
-
-      // ✅ ANIMATION SHAKE SUR LA NOUVELLE CARTE (si c'est le joueur humain)
-      if (player.isHuman) {
-        shakingCardIndices.clear();
-        shakingCardIndices.add(penaltyCardIndex);
-        notifyListeners();
-
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        shakingCardIndices.remove(penaltyCardIndex);
-        notifyListeners();
-      }
-    }
-  }
-
-  void _extendReactionTime(int milliseconds) {
-    debugPrint("⏱️ [_extendReactionTime] Extension de ${milliseconds}ms");
-
-    if (_reactionTimer == null || !_reactionTimer!.isActive) {
-      debugPrint("   ⚠️ Timer non actif");
-      return;
+      await Future.delayed(const Duration(milliseconds: 500));
+      shakingCardIndices.remove(cardIndex);
+      debugPrint("   📳 Retrait index $cardIndex des cartes qui tremblent");
     }
 
-    _reactionTimer?.cancel();
-
-    _reactionTimer = Timer(Duration(milliseconds: milliseconds), () {
-      debugPrint("   ⏰ Timer expiré -> endReactionPhase");
-      endReactionPhase();
-    });
-  }
-
-  void executeLookAtCard(Player target, int cardIndex) {
-    debugPrint("👁️ [executeLookAtCard] ${target.name} - Index: $cardIndex");
-
-    if (_gameState == null) return;
-    GameLogic.lookAtCard(_gameState!, target, cardIndex);
     notifyListeners();
-    skipSpecialPower();
+    debugPrint("   🔔 notifyListeners() appelé");
   }
 
-  void executeSwapCard(int myCardIndex, Player target, int targetCardIndex) {
-    debugPrint(
-        "🔄 [executeSwapCard] Ma carte: $myCardIndex <-> ${target.name}: $targetCardIndex");
-
-    if (_gameState == null) return;
-    Player me = _gameState!.players.firstWhere((p) => p.isHuman);
-    GameLogic.swapCards(_gameState!, me, myCardIndex, target, targetCardIndex);
-    notifyListeners();
-    skipSpecialPower();
-  }
-
-  void executeJokerEffect(Player targetPlayer) {
-    debugPrint("🃏 [executeJokerEffect] Cible: ${targetPlayer.name}");
-
-    if (_gameState == null) return;
-    GameLogic.jokerEffect(_gameState!, targetPlayer);
-    notifyListeners();
-    skipSpecialPower();
-  }
-
-  void skipSpecialPower() {
-    debugPrint("⏭️ [skipSpecialPower] DÉBUT");
+  void takeFromDiscard() {
+    debugPrint("📤 [takeFromDiscard] DÉBUT");
 
     if (_gameState == null) {
       debugPrint("   ❌ GameState NULL");
       return;
     }
 
-    debugPrint("   - Phase avant: ${_gameState!.phase}");
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
-    _gameState!.addToHistory("Pouvoir terminé");
-
-    notifyListeners();
-
-    if (_checkInstantEnd()) {
-      debugPrint("   🏁 Fin instantanée");
+    if (_gameState!.phase != GamePhase.playing) {
+      debugPrint("   ❌ Phase incorrecte: ${_gameState!.phase}");
       return;
     }
 
-    // ✅ FIX : Ne pas reprendre le timer si on vient d'un match en réaction
-    // (c'est déjà géré dans attemptMatch ligne 307)
-    // On reprend le timer SEULEMENT si on vient d'un discard/replace en phase playing
-    if (_gameState!.phase == GamePhase.playing) {
-      debugPrint("   🎬 Lancement phase réaction");
-      startReactionPhase();
+    if (!_gameState!.currentPlayer.isHuman) {
+      debugPrint("   ❌ Pas le tour de l'humain");
+      return;
     }
-    // Si on est en phase reaction, ne rien faire : le timer reprendra dans attemptMatch
 
-    debugPrint("   - Phase après: ${_gameState!.phase}");
+    if (_gameState!.drawnCard != null) {
+      debugPrint("   ❌ Carte déjà piochée");
+      return;
+    }
+
+    if (_gameState!.discardPile.isEmpty) {
+      debugPrint("   ❌ Défausse vide");
+      return;
+    }
+
+    _gameState!.drawnCard = _gameState!.discardPile.removeLast();
+    _gameState!.addToHistory(
+        "${_gameState!.currentPlayer.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
+    debugPrint("   ✅ Carte prise: ${_gameState!.drawnCard?.value}");
+
+    notifyListeners();
   }
 
   void callDutch() {
-    debugPrint("📢 [callDutch] DUTCH APPELÉ");
+    debugPrint("📢 [callDutch] DÉBUT");
 
-    if (_gameState == null) return;
-    GameLogic.callDutch(_gameState!);
-    notifyListeners();
+    if (_gameState == null) {
+      debugPrint("   ❌ GameState NULL");
+      return;
+    }
+
+    if (_gameState!.phase != GamePhase.playing) {
+      debugPrint("   ❌ Phase incorrecte");
+      return;
+    }
+
+    if (!_gameState!.currentPlayer.isHuman) {
+      debugPrint("   ❌ Pas le tour de l'humain");
+      return;
+    }
+
+    if (_gameState!.drawnCard != null) {
+      debugPrint("   ❌ Carte piochée en cours");
+      return;
+    }
+
+    final human = _gameState!.currentPlayer;
+    _gameState!.phase = GamePhase.dutchCalled;
+    _gameState!.dutchCallerId = human.id;
+    _gameState!.addToHistory("📢 ${human.name} crie DUTCH !");
+
+    debugPrint("   ✅ Dutch appelé par ${human.name}");
     endGame();
   }
 
-  void _pauseReactionTimer() {
-    if (_reactionTimer == null || !_reactionTimer!.isActive) {
-      debugPrint("⏸️ [_pauseReactionTimer] Aucun timer actif");
-      return;
+  void skipSpecialPower() {
+    debugPrint("⏭️ [skipSpecialPower] Pouvoir ignoré");
+
+    if (_gameState == null) return;
+
+    _gameState!.isWaitingForSpecialPower = false;
+    _gameState!.specialCardToActivate = null;
+    _gameState!.addToHistory("⏭️ Pouvoir spécial ignoré.");
+
+    notifyListeners();
+
+    _resumeReactionTimer(); // ✅ NOUVEAU : Reprendre si on était en pause
+
+    if (_gameState!.phase == GamePhase.playing) {
+      startReactionPhase();
     }
-
-    if (_gameState == null || _gameState!.reactionStartTime == null) {
-      debugPrint("⏸️ [_pauseReactionTimer] Pas de temps de départ");
-      return;
-    }
-
-    // Calculer le temps écoulé
-    final elapsed = DateTime.now().difference(_gameState!.reactionStartTime!);
-    _remainingReactionTimeMs = _currentReactionTimeMs - elapsed.inMilliseconds;
-
-    if (_remainingReactionTimeMs! < 0) {
-      _remainingReactionTimeMs = 0;
-    }
-
-    debugPrint(
-        "⏸️ [_pauseReactionTimer] Timer en pause - Temps restant: ${_remainingReactionTimeMs}ms");
-
-    // Annuler le timer
-    _reactionTimer?.cancel();
-    _reactionPauseTime = DateTime.now();
   }
 
-  void _resumeReactionTimer() {
-    if (_remainingReactionTimeMs == null) {
-      debugPrint("▶️ [_resumeReactionTimer] Pas de temps restant sauvegardé");
-      return;
-    }
-
-    if (_gameState == null) {
-      debugPrint("▶️ [_resumeReactionTimer] GameState NULL");
-      return;
-    }
-
+  void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
     debugPrint(
-        "▶️ [_resumeReactionTimer] Reprise avec ${_remainingReactionTimeMs}ms restants");
+        "⚡ [useSpecialPower] Cible: Joueur $targetPlayerIndex, Carte $targetCardIndex");
 
-    // Recréer le timer avec le temps restant
-    _reactionTimer =
-        Timer(Duration(milliseconds: _remainingReactionTimeMs!), () {
-      debugPrint("   ⏰ Timer expiré -> endReactionPhase");
-      endReactionPhase();
-    });
+    if (_gameState == null) return;
 
-    // Réinitialiser le temps de pause
-    _reactionPauseTime = null;
-    _remainingReactionTimeMs = null;
+    PlayingCard? specialCard = _gameState!.specialCardToActivate;
+    if (specialCard == null) {
+      debugPrint("   ❌ Pas de carte spéciale");
+      return;
+    }
+
+    Player currentPlayer = _gameState!.currentPlayer;
+    Player targetPlayer = _gameState!.players[targetPlayerIndex];
+
+    if (specialCard.value == '7' || specialCard.value == '8') {
+      // Regarder une de SES cartes
+      if (targetCardIndex < currentPlayer.hand.length) {
+        currentPlayer.knownCards[targetCardIndex] = true;
+        _gameState!.addToHistory(
+            "👁️ ${currentPlayer.name} regarde sa carte #${targetCardIndex + 1}");
+      }
+    } else if (specialCard.value == '9' || specialCard.value == '10') {
+      // Regarder une carte ADVERSE
+      if (targetCardIndex < targetPlayer.hand.length) {
+        _gameState!.lastSpiedCard = targetPlayer.hand[targetCardIndex];
+        _gameState!.addToHistory(
+            "🔍 ${currentPlayer.name} espionne ${targetPlayer.name} (carte #${targetCardIndex + 1})");
+      }
+    } else if (specialCard.value == 'J' || specialCard.value == 'Q') {
+      // Échanger à l'aveugle
+      _gameState!.pendingSwap = {
+        'targetPlayer': targetPlayerIndex,
+        'targetCard': targetCardIndex,
+        'ownCard': null,
+      };
+      debugPrint("   📝 Swap en attente: cible définie");
+      notifyListeners();
+      return;
+    }
+
+    _gameState!.isWaitingForSpecialPower = false;
+    _gameState!.specialCardToActivate = null;
+    notifyListeners();
+
+    _resumeReactionTimer(); // ✅ NOUVEAU : Reprendre si on était en pause
+
+    if (_gameState!.phase == GamePhase.playing) {
+      startReactionPhase();
+    }
   }
 
+  void completeSwap(int ownCardIndex) {
+    debugPrint("🔄 [completeSwap] Ma carte: $ownCardIndex");
+
+    if (_gameState == null || _gameState!.pendingSwap == null) return;
+
+    int targetPlayerIndex = _gameState!.pendingSwap!['targetPlayer'];
+    int targetCardIndex = _gameState!.pendingSwap!['targetCard'];
+
+    Player currentPlayer = _gameState!.currentPlayer;
+    Player targetPlayer = _gameState!.players[targetPlayerIndex];
+
+    // Effectuer l'échange
+    PlayingCard? myCard = currentPlayer.hand[ownCardIndex];
+    PlayingCard? theirCard = targetPlayer.hand[targetCardIndex];
+
+    currentPlayer.hand[ownCardIndex] = theirCard;
+    targetPlayer.hand[targetCardIndex] = myCard;
+
+    // Reset des connaissances
+    currentPlayer.knownCards[ownCardIndex] = false;
+    targetPlayer.knownCards[targetCardIndex] = false;
+
+    _gameState!.addToHistory(
+        "🔄 ${currentPlayer.name} échange avec ${targetPlayer.name}");
+
+    _gameState!.pendingSwap = null;
+    _gameState!.isWaitingForSpecialPower = false;
+    _gameState!.specialCardToActivate = null;
+
+    notifyListeners();
+
+    _resumeReactionTimer(); // ✅ NOUVEAU : Reprendre si on était en pause
+
+    if (_gameState!.phase == GamePhase.playing) {
+      startReactionPhase();
+    }
+  }
+
+  // 🆕 NOUVELLE MÉTHODE : Exécuter le pouvoir "regarder une carte"
+  void executeLookAtCard(Player target, int cardIndex) {
+    debugPrint("👁️ [executeLookAtCard] Cible: ${target.name}, Index: $cardIndex");
+
+    if (_gameState == null) return;
+
+    if (cardIndex >= 0 && cardIndex < target.hand.length) {
+      // Si c'est le joueur humain qui regarde sa propre carte
+      if (target.isHuman) {
+        target.knownCards[cardIndex] = true;
+      }
+      // Stocker la carte espionnée pour l'affichage
+      _gameState!.lastSpiedCard = target.hand[cardIndex];
+      
+      GameLogic.lookAtCard(_gameState!, target, cardIndex);
+    }
+
+    _gameState!.isWaitingForSpecialPower = false;
+    _gameState!.specialCardToActivate = null;
+    notifyListeners();
+
+    _resumeReactionTimer();
+
+    if (_gameState!.phase == GamePhase.playing) {
+      startReactionPhase();
+    }
+  }
+
+  // 🆕 NOUVELLE MÉTHODE : Exécuter l'effet du Joker
+  void executeJokerEffect(Player target) {
+    debugPrint("🃏 [executeJokerEffect] Cible: ${target.name}");
+
+    if (_gameState == null) return;
+
+    GameLogic.jokerEffect(_gameState!, target);
+
+    // Si c'est le joueur humain qui est ciblé, il oublie toutes ses cartes
+    if (target.isHuman) {
+      for (int i = 0; i < target.knownCards.length; i++) {
+        target.knownCards[i] = false;
+      }
+    }
+
+    _gameState!.isWaitingForSpecialPower = false;
+    _gameState!.specialCardToActivate = null;
+    notifyListeners();
+
+    _resumeReactionTimer();
+
+    if (_gameState!.phase == GamePhase.playing) {
+      startReactionPhase();
+    }
+  }
+
+  // 🆕 NOUVELLE MÉTHODE : Pause du timer pour les notifications des bots
   void pauseReactionTimerForNotification() {
-    debugPrint(
-        "⏸️ [pauseReactionTimerForNotification] Pause pour notification");
     _pauseReactionTimer();
   }
 
+  // 🆕 NOUVELLE MÉTHODE : Reprise du timer après les notifications des bots
   void resumeReactionTimerAfterNotification() {
-    debugPrint(
-        "▶️ [resumeReactionTimerAfterNotification] Reprise après notification");
     _resumeReactionTimer();
   }
 
-  void startReactionPhase({int bonusTime = 0}) {
-    debugPrint("⏱️ [startReactionPhase] DÉBUT (bonus: ${bonusTime}ms)");
+  void startReactionPhase() {
+    debugPrint("⏱️ [startReactionPhase] DÉBUT");
 
     if (_gameState == null) {
       debugPrint("   ❌ GameState NULL");
@@ -498,57 +543,94 @@ class GameProvider with ChangeNotifier {
     }
 
     _gameState!.phase = GamePhase.reaction;
-    _gameState!.reactionStartTime = DateTime.now();
+    _gameState!.reactionTimeRemaining = _currentReactionTimeMs;
+    debugPrint("   - Temps initial: $_currentReactionTimeMs ms");
 
-    debugPrint("   ✅ Phase réaction activée");
-    notifyListeners();
+    _reactionTimer?.cancel();
+
+    _reactionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (_gameState == null) {
+        timer.cancel();
+        return;
+      }
+
+      _gameState!.reactionTimeRemaining -= 100;
+
+      if (_gameState!.reactionTimeRemaining <= 0) {
+        debugPrint("   ⏰ Temps écoulé!");
+        timer.cancel();
+        _endReactionPhase();
+      }
+
+      notifyListeners();
+    });
 
     _simulateBotReaction();
-
-    _reactionTimer?.cancel();
-    final totalTime = _currentReactionTimeMs + bonusTime;
-    debugPrint("   ⏰ Timer: ${totalTime}ms");
-
-    _reactionTimer = Timer(Duration(milliseconds: totalTime), () {
-      debugPrint("   ⏰ Timer expiré -> endReactionPhase");
-      endReactionPhase();
-    });
   }
 
-  void endReactionPhase() {
-    debugPrint("🏁 [endReactionPhase] DÉBUT");
+  // ✅ NOUVEAU : Pause du timer de réaction
+  void _pauseReactionTimer() {
+    if (_reactionTimer != null && _reactionTimer!.isActive) {
+      _reactionTimer!.cancel();
+      _reactionPauseTime = DateTime.now();
+      _remainingReactionTimeMs = _gameState?.reactionTimeRemaining;
+      debugPrint(
+          "   ⏸️ Timer réaction en pause (${_remainingReactionTimeMs}ms restants)");
+    }
+  }
+
+  // ✅ NOUVEAU : Reprise du timer de réaction
+  void _resumeReactionTimer() {
+    if (_remainingReactionTimeMs != null &&
+        _remainingReactionTimeMs! > 0 &&
+        _gameState != null) {
+      debugPrint(
+          "   ▶️ Reprise timer réaction (${_remainingReactionTimeMs}ms restants)");
+
+      _gameState!.reactionTimeRemaining = _remainingReactionTimeMs!;
+
+      _reactionTimer?.cancel();
+      _reactionTimer =
+          Timer.periodic(const Duration(milliseconds: 100), (timer) {
+        if (_gameState == null) {
+          timer.cancel();
+          return;
+        }
+
+        _gameState!.reactionTimeRemaining -= 100;
+
+        if (_gameState!.reactionTimeRemaining <= 0) {
+          debugPrint("   ⏰ Temps écoulé (après reprise)!");
+          timer.cancel();
+          _endReactionPhase();
+        }
+
+        notifyListeners();
+      });
+
+      _reactionPauseTime = null;
+      _remainingReactionTimeMs = null;
+    }
+  }
+
+  void _endReactionPhase() {
+    debugPrint("🔚 [_endReactionPhase] Fin phase réaction");
+
+    if (_gameState == null) return;
 
     _reactionTimer?.cancel();
-
-    if (_gameState == null) {
-      debugPrint("   ❌ GameState NULL");
-      return;
-    }
-
-    debugPrint("   - Phase avant: ${_gameState!.phase}");
-    debugPrint("   - Joueur avant: ${_gameState!.currentPlayer.name}");
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
-    shakingCardIndices.clear();
-
-    if (_gameState!.dutchCallerId != null) {
-      debugPrint("   📢 Dutch détecté -> Fin de partie");
-      _gameState!.phase = GamePhase.dutchCalled;
-      notifyListeners();
-      return;
-    }
-
     _gameState!.phase = GamePhase.playing;
-    _gameState!.nextTurn();
-    _gameState!.reactionStartTime = null;
+    _gameState!.lastSpiedCard = null;
 
-    debugPrint("   - Phase après: ${_gameState!.phase}");
-    debugPrint("   - Joueur après: ${_gameState!.currentPlayer.name}");
+    GameLogic.nextPlayer(_gameState!);
+    debugPrint("   - Prochain joueur: ${_gameState!.currentPlayer.name}");
 
     notifyListeners();
 
-    _checkAndPlayBotTurn();
+    if (!_gameState!.currentPlayer.isHuman) {
+      debugPrint("   🤖 C'est un bot, on lance son tour");
+      _checkAndPlayBotTurn();
+    }
   }
 
   void _simulateBotReaction() async {
@@ -756,6 +838,116 @@ class GameProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // 🏆 NOUVEAU : Vérifier si le joueur humain est éliminé en tournoi
+  bool isHumanEliminatedInTournament() {
+    if (_gameState == null) return false;
+    if (_gameState!.gameMode != GameMode.tournament) return false;
+
+    List<Player> ranking = _gameState!.getFinalRanking();
+    Player human = _gameState!.players.firstWhere((p) => p.isHuman);
+
+    // L'humain est éliminé s'il est dernier du classement
+    int humanRank = ranking.indexWhere((p) => p.id == human.id) + 1;
+    return humanRank == ranking.length;
+  }
+
+  // 🏆 NOUVEAU : Simuler les manches restantes entre bots et calculer le classement final
+  void finishTournamentForHuman() {
+    debugPrint("🏆 [finishTournamentForHuman] L'humain est éliminé, simulation des manches restantes");
+
+    if (_gameState == null) return;
+
+    List<Player> ranking = _gameState!.getFinalRanking();
+    Player human = _gameState!.players.firstWhere((p) => p.isHuman);
+    int currentRound = _gameState!.tournamentRound;
+
+    // Initialiser le classement final
+    _tournamentFinalRanking = [];
+
+    // L'humain est éliminé à cette manche - sa position finale dépend de quand il a été éliminé
+    // Manche 1 (4 joueurs) -> éliminé = 4ème
+    // Manche 2 (3 joueurs) -> éliminé = 3ème
+    // Manche 3 (2 joueurs) -> éliminé = 2ème
+    int humanFinalPosition = 5 - currentRound; // 4, 3, 2 selon la manche
+
+    debugPrint("   - Manche actuelle: $currentRound");
+    debugPrint("   - Position finale humain: $humanFinalPosition");
+
+    // Récupérer les survivants (tous sauf le dernier)
+    List<Player> survivors = [];
+    for (int i = 0; i < ranking.length - 1; i++) {
+      survivors.add(ranking[i]);
+    }
+
+    // Simuler les manches restantes entre bots
+    List<Player> currentPlayers = survivors;
+    int simulatedRound = currentRound + 1;
+
+    while (currentPlayers.length > 1 && simulatedRound <= 3) {
+      debugPrint("   🤖 Simulation manche $simulatedRound avec ${currentPlayers.length} bots");
+
+      // Simuler une manche (ordre aléatoire pour déterminer l'éliminé)
+      currentPlayers.shuffle();
+      Player eliminated = currentPlayers.removeLast();
+
+      int eliminatedPosition = 5 - simulatedRound;
+      _tournamentFinalRanking!.add(TournamentResult(
+        player: eliminated,
+        finalPosition: eliminatedPosition,
+        eliminatedAtRound: simulatedRound,
+      ));
+
+      debugPrint("   - ${eliminated.name} éliminé à la manche $simulatedRound (position $eliminatedPosition)");
+      simulatedRound++;
+    }
+
+    // Le dernier bot restant est le gagnant
+    if (currentPlayers.isNotEmpty) {
+      _tournamentFinalRanking!.add(TournamentResult(
+        player: currentPlayers.first,
+        finalPosition: 1,
+        eliminatedAtRound: null, // Gagnant
+      ));
+      debugPrint("   🥇 ${currentPlayers.first.name} gagne le tournoi");
+    }
+
+    // Ajouter l'humain à sa position
+    _tournamentFinalRanking!.add(TournamentResult(
+      player: human,
+      finalPosition: humanFinalPosition,
+      eliminatedAtRound: currentRound,
+    ));
+
+    // Trier par position finale
+    _tournamentFinalRanking!.sort((a, b) => a.finalPosition.compareTo(b.finalPosition));
+
+    debugPrint("   📊 Classement final du tournoi:");
+    for (var result in _tournamentFinalRanking!) {
+      debugPrint("      #${result.finalPosition}: ${result.player.name}");
+    }
+
+    // Marquer le tournoi comme terminé
+    _gameState!.tournamentRound = 3; // Force la fin du tournoi
+
+    notifyListeners();
+  }
+
+  // 🏆 NOUVEAU : Obtenir les RP gagnés/perdus selon la position en tournoi
+  int getTournamentRP(int finalPosition) {
+    switch (finalPosition) {
+      case 1:
+        return 150; // Gagnant du tournoi
+      case 2:
+        return 60;  // Finaliste
+      case 3:
+        return -5;  // 3ème place
+      case 4:
+        return -30; // 4ème place (éliminé en 1ère manche)
+      default:
+        return 0;
+    }
+  }
+
   void startNextTournamentRound() {
     debugPrint("🏆 [startNextTournamentRound] Manche suivante");
 
@@ -811,6 +1003,7 @@ class GameProvider with ChangeNotifier {
     shakingCardIndices.clear();
     _reactionTimer?.cancel();
     _playerMMR = null;
+    _tournamentFinalRanking = null; // 🏆 NOUVEAU : Reset du classement tournoi
 
     // ✅ NOUVEAU : Nettoyer les variables de pause
     _reactionPauseTime = null;
@@ -818,4 +1011,17 @@ class GameProvider with ChangeNotifier {
 
     notifyListeners();
   }
+}
+
+// 🏆 NOUVEAU : Classe pour stocker les résultats du tournoi
+class TournamentResult {
+  final Player player;
+  final int finalPosition;
+  final int? eliminatedAtRound; // null si gagnant
+
+  TournamentResult({
+    required this.player,
+    required this.finalPosition,
+    this.eliminatedAtRound,
+  });
 }
