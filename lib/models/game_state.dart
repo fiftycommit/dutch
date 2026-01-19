@@ -27,10 +27,9 @@ class GameState {
   DateTime? reactionStartTime;
   List<String> actionHistory;
 
-  // 🆕 NOUVELLES PROPRIÉTÉS pour les pouvoirs spéciaux
-  int reactionTimeRemaining = 0;        // Temps restant pour la phase réaction
-  PlayingCard? lastSpiedCard;           // Dernière carte espionnée (pouvoir 9/10)
-  Map<String, dynamic>? pendingSwap;    // Échange en attente (pouvoir J/Q)
+  int reactionTimeRemaining = 0;
+  PlayingCard? lastSpiedCard;
+  Map<String, dynamic>? pendingSwap;
 
   GameState({
     required this.players,
@@ -89,23 +88,20 @@ class GameState {
   }
 
   // ============================================================
-  // 🎴 SMART SHUFFLE - VERSION BRUTALE
+  // 🎴 SMART SHUFFLE
   // ============================================================
   void smartShuffle() {
     Random rnd = Random();
     
     if (difficulty == Difficulty.easy) {
-      // Mode facile : mélange aléatoire pur
       deck.shuffle();
-      addToHistory("🎲 Mélange aléatoire pur (Mode Détendu)");
+      addToHistory("🎲 Mélange aléatoire (Mode Détendu)");
       
     } else if (difficulty == Difficulty.medium) {
-      // ============================================================
-      // MODE MEDIUM : ~50% de mauvaises cartes au début des pioches
-      // ============================================================
-      List<PlayingCard> good = [];      // 0-5 pts (A, 2, 3, 4, 5)
-      List<PlayingCard> medium = [];    // 6-8 pts (6, 7, 8)
-      List<PlayingCard> bad = [];       // 9+ pts (9, 10, V, D, R, Joker)
+      // MODE MEDIUM: 50% mauvaises au début
+      List<PlayingCard> good = [];
+      List<PlayingCard> medium = [];
+      List<PlayingCard> bad = [];
 
       for (var card in deck) {
         int val = card.points;
@@ -124,7 +120,7 @@ class GameState {
 
       deck.clear();
       
-      // PHASE 1 : FOND DU DECK (pioché en DERNIER) - Bonnes cartes
+      // Fond: bonnes cartes
       int phase1Count = 20;
       for (int i = 0; i < phase1Count; i++) {
         double roll = rnd.nextDouble();
@@ -141,7 +137,7 @@ class GameState {
         }
       }
       
-      // PHASE 2 : MILIEU DU DECK - Mix
+      // Milieu: mix
       int phase2Count = 17;
       for (int i = 0; i < phase2Count; i++) {
         double roll = rnd.nextDouble();
@@ -158,7 +154,7 @@ class GameState {
         }
       }
       
-      // PHASE 3 : HAUT DU DECK (pioché en PREMIER) - 50% mauvaises
+      // Haut (pioché en premier): 50% mauvaises
       while (good.isNotEmpty || medium.isNotEmpty || bad.isNotEmpty) {
         double roll = rnd.nextDouble();
         if (roll < 0.50 && bad.isNotEmpty) {
@@ -178,13 +174,10 @@ class GameState {
       addToHistory("⚖️ Mélange tactique (Mode Équilibré)");
       
     } else {
-      // ============================================================
-      // MODE HARD : 80% de mauvaises cartes PARTOUT
-      // Les bonnes cartes sont ENTERRÉES au fond du deck !
-      // ============================================================
-      List<PlayingCard> good = [];      // 0-4 pts (A, 2, 3, 4) - TRÈS RARE
-      List<PlayingCard> medium = [];    // 5-7 pts (5, 6, 7)
-      List<PlayingCard> bad = [];       // 8+ pts (8, 9, 10, V, D, R, Joker) - DOMINANT
+      // MODE HARD: 80% mauvaises
+      List<PlayingCard> good = [];
+      List<PlayingCard> medium = [];
+      List<PlayingCard> bad = [];
 
       for (var card in deck) {
         int val = card.points;
@@ -203,12 +196,11 @@ class GameState {
 
       deck.clear();
 
-      // PHASE 1 : FOND DU DECK (pioché en DERNIER) - ENTERRER les bonnes cartes
+      // Enterrer les bonnes au fond
       while (good.isNotEmpty) {
         deck.add(good.removeLast());
       }
       
-      // Quelques moyennes au fond aussi
       int mediumForBottom = (medium.length * 0.4).round();
       for (int i = 0; i < mediumForBottom && medium.isNotEmpty; i++) {
         deck.add(medium.removeLast());
@@ -216,7 +208,7 @@ class GameState {
       
       debugPrint("🔥 [HARD] Fond du deck: ${deck.length} cartes (bonnes enterrées)");
       
-      // PHASE 2 : HAUT DU DECK (pioché en PREMIER) - 80% mauvaises !
+      // 80% mauvaises en haut
       while (bad.isNotEmpty || medium.isNotEmpty) {
         double roll = rnd.nextDouble();
         
@@ -249,153 +241,30 @@ class GameState {
   }
 
   // ============================================================
-  // 🃏 DEAL CARDS - VERSION BRUTALE
-  // En mode HARD : les joueurs reçoivent des MAUVAISES cartes !
+  // 🃏 DEAL CARDS - VERSION ANTI-MATCH
   // ============================================================
   void dealCards() {
     Random rnd = Random();
     
-    // Séparer les cartes spéciales (on ne les distribue pas en main de départ)
-    List<PlayingCard> normalCards = [];
-    List<PlayingCard> specialCards = [];
-
-    for (var card in deck) {
-      if (card.value == 'JOKER' || ['7', '10', 'V'].contains(card.value)) {
-        specialCards.add(card);
-      } else {
-        normalCards.add(card);
-      }
-    }
-
-    // ============================================================
-    // 🔥 DISTRIBUTION SELON LA DIFFICULTÉ
-    // ============================================================
-    
     if (difficulty == Difficulty.easy) {
-      // MODE EASY : Distribution aléatoire
-      normalCards.shuffle(rnd);
-      
+      _dealCardsEasy(rnd);
     } else if (difficulty == Difficulty.medium) {
-      // MODE MEDIUM : Mix de bonnes et mauvaises cartes
-      List<PlayingCard> goodCards = normalCards.where((c) => c.points <= 5).toList();
-      List<PlayingCard> mediumCards = normalCards.where((c) => c.points >= 6 && c.points <= 8).toList();
-      List<PlayingCard> badCards = normalCards.where((c) => c.points >= 9).toList();
-      
-      goodCards.shuffle(rnd);
-      mediumCards.shuffle(rnd);
-      badCards.shuffle(rnd);
-      
-      // Réorganiser : mauvaises d'abord (seront distribuées), bonnes ensuite (resteront dans le deck)
-      normalCards = [];
-      
-      // Pour chaque joueur : 2 mauvaises + 2 moyennes/bonnes
-      int playersCount = players.length;
-      int badNeeded = playersCount * 2;
-      int mediumNeeded = playersCount * 1;
-      int goodNeeded = playersCount * 1;
-      
-      // Ajouter les cartes à distribuer EN PREMIER (seront prises par removeLast)
-      // Donc on les met à la FIN de normalCards
-      
-      // D'abord les bonnes (resteront dans le deck après distribution)
-      normalCards.addAll(goodCards);
-      normalCards.addAll(mediumCards.skip(mediumNeeded));
-      normalCards.addAll(badCards.skip(badNeeded));
-      
-      // Ensuite le mix pour la distribution (sera pris en premier)
-      for (int i = 0; i < playersCount * 4; i++) {
-        double roll = rnd.nextDouble();
-        if (roll < 0.50 && badCards.isNotEmpty && badNeeded > 0) {
-          normalCards.add(badCards.removeLast());
-          badNeeded--;
-        } else if (roll < 0.75 && mediumCards.isNotEmpty && mediumNeeded > 0) {
-          normalCards.add(mediumCards.removeLast());
-          mediumNeeded--;
-        } else if (goodCards.isNotEmpty && goodNeeded > 0) {
-          normalCards.add(goodCards.removeLast());
-          goodNeeded--;
-        } else if (badCards.isNotEmpty) {
-          normalCards.add(badCards.removeLast());
-        } else if (mediumCards.isNotEmpty) {
-          normalCards.add(mediumCards.removeLast());
-        } else if (goodCards.isNotEmpty) {
-          normalCards.add(goodCards.removeLast());
-        }
-      }
-      
+      _dealCardsMedium(rnd);
     } else {
-      // ============================================================
-      // 🔥 MODE HARD : QUE des mauvaises cartes en main de départ !
-      // Minimum 8 points par carte !
-      // ============================================================
-      List<PlayingCard> goodCards = normalCards.where((c) => c.points <= 4).toList();
-      List<PlayingCard> mediumCards = normalCards.where((c) => c.points >= 5 && c.points <= 7).toList();
-      List<PlayingCard> badCards = normalCards.where((c) => c.points >= 8).toList();
-      
-      goodCards.shuffle(rnd);
-      mediumCards.shuffle(rnd);
-      badCards.shuffle(rnd);
-      
-      normalCards = [];
-      
-      // 🔥 ENTERRER les bonnes cartes au FOND (ne seront jamais distribuées)
-      normalCards.addAll(goodCards);
-      
-      // Mettre quelques moyennes au fond aussi
-      int mediumToHide = (mediumCards.length * 0.5).round();
-      for (int i = 0; i < mediumToHide && mediumCards.isNotEmpty; i++) {
-        normalCards.add(mediumCards.removeLast());
-      }
-      
-      // Mélanger le reste des moyennes avec les mauvaises
-      List<PlayingCard> cardsForDistribution = [];
-      cardsForDistribution.addAll(mediumCards);
-      cardsForDistribution.addAll(badCards);
-      cardsForDistribution.shuffle(rnd);
-      
-      // 🔥 FORCER des mauvaises cartes (8+ pts) pour la distribution
-      // On veut 4 cartes par joueur, avec au moins 3 mauvaises (8+ pts)
-      int playersCount = players.length;
-      int totalCardsNeeded = playersCount * 4;
-      
-      List<PlayingCard> distributionPile = [];
-      
-      // Séparer les vraies mauvaises (8+) des moyennes (5-7)
-      List<PlayingCard> reallyBad = cardsForDistribution.where((c) => c.points >= 8).toList();
-      List<PlayingCard> justMedium = cardsForDistribution.where((c) => c.points < 8).toList();
-      
-      reallyBad.shuffle(rnd);
-      justMedium.shuffle(rnd);
-      
-      // Pour chaque joueur : 3-4 mauvaises cartes
-      for (int i = 0; i < totalCardsNeeded; i++) {
-        // 85% de chance de donner une mauvaise carte (8+)
-        if (rnd.nextDouble() < 0.85 && reallyBad.isNotEmpty) {
-          distributionPile.add(reallyBad.removeLast());
-        } else if (justMedium.isNotEmpty) {
-          distributionPile.add(justMedium.removeLast());
-        } else if (reallyBad.isNotEmpty) {
-          distributionPile.add(reallyBad.removeLast());
-        }
-      }
-      
-      // Ajouter le reste au deck (pour les pioches futures)
-      normalCards.addAll(justMedium);
-      normalCards.addAll(reallyBad);
-      
-      // Ajouter la pile de distribution à la fin (sera prise par removeLast)
-      normalCards.addAll(distributionPile);
-      
-      debugPrint("🔥 [HARD dealCards] Distribution: ${distributionPile.length} cartes");
-      debugPrint("🔥 [HARD dealCards] Cartes 8+: ${distributionPile.where((c) => c.points >= 8).length}");
+      _dealCardsHard(rnd);
     }
+  }
 
-    // ============================================================
-    // DISTRIBUTION AUX JOUEURS
-    // ============================================================
+  void _dealCardsEasy(Random rnd) {
+    // Séparer les Jokers
+    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
+    
+    normalCards.shuffle(rnd);
+    
     for (var player in players) {
-      player.hand = List<PlayingCard>.from([]);
-      player.knownCards = List<bool>.from([]);
+      player.hand = [];
+      player.knownCards = [];
       for (int i = 0; i < 4; i++) {
         if (normalCards.isNotEmpty) {
           player.hand.add(normalCards.removeLast());
@@ -404,21 +273,227 @@ class GameState {
       }
     }
 
-    // Reconstruire le deck avec les cartes restantes
     deck.clear();
     deck.addAll(normalCards);
-    deck.addAll(specialCards);
+    deck.addAll(jokers);
     deck.shuffle(rnd);
-
-    int jokers = deck.where((c) => c.value == 'JOKER').length;
-    int specials = deck.where((c) => ['7', '10', 'V'].contains(c.value)).length;
-    addToHistory("🎴 Deck recomposé : $jokers Jokers, $specials cartes spéciales");
     
-    // Debug des mains
+    _logDealResults();
+  }
+
+  void _dealCardsMedium(Random rnd) {
+    // Séparer les Jokers
+    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
+    
+    // Grouper par valeur
+    Map<String, List<PlayingCard>> cardsByValue = {};
+    for (var card in normalCards) {
+      cardsByValue.putIfAbsent(card.value, () => []);
+      cardsByValue[card.value]!.add(card);
+    }
+    for (var cards in cardsByValue.values) {
+      cards.shuffle(rnd);
+    }
+    
+    // Valeurs par catégorie
+    List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
+    List<String> mediumValues = ['7', '6', '5'];
+    List<String> goodValues = ['4', '3', '2', 'A'];
+    
+    // Distribution: 50% mauvaises, avec séparation partielle
+    _distributeWithSeparation(
+      cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
+      badCardsPerPlayer: 2,
+      separationStrength: 0.7,
+    );
+  }
+
+  void _dealCardsHard(Random rnd) {
+    // Séparer les Jokers
+    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
+    
+    // Grouper par valeur
+    Map<String, List<PlayingCard>> cardsByValue = {};
+    for (var card in normalCards) {
+      cardsByValue.putIfAbsent(card.value, () => []);
+      cardsByValue[card.value]!.add(card);
+    }
+    for (var cards in cardsByValue.values) {
+      cards.shuffle(rnd);
+    }
+    
+    // Valeurs par catégorie (inclut 7, 10, V pour plus de variété)
+    List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
+    List<String> mediumValues = ['7', '6', '5'];
+    List<String> goodValues = ['4', '3', '2', 'A'];
+    
+    // 🔥 Distribution BRUTALE: ~3 mauvaises par joueur, valeurs uniques
+    _distributeWithSeparation(
+      cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
+      badCardsPerPlayer: 3,
+      separationStrength: 1.0,
+    );
+  }
+
+  void _distributeWithSeparation(
+    Map<String, List<PlayingCard>> cardsByValue,
+    List<String> badValues,
+    List<String> mediumValues,
+    List<String> goodValues,
+    List<PlayingCard> jokers,
+    Random rnd, {
+    required int badCardsPerPlayer,
+    required double separationStrength,
+  }) {
+    int numPlayers = players.length;
+    
+    // Mélanger l'ordre des joueurs
+    List<int> playerOrder = List.generate(numPlayers, (i) => i);
+    playerOrder.shuffle(rnd);
+    
+    // Mélanger les valeurs
+    badValues = List.from(badValues)..shuffle(rnd);
+    mediumValues = List.from(mediumValues)..shuffle(rnd);
+    goodValues = List.from(goodValues)..shuffle(rnd);
+    
+    List<List<PlayingCard>> hands = List.generate(numPlayers, (_) => []);
+    Set<String> globalUsedValues = {};
+    
+    // PHASE 1: Donner des mauvaises cartes UNIQUES à chaque joueur
+    for (int playerIdx in playerOrder) {
+      int cardsGiven = 0;
+      
+      for (var value in badValues) {
+        if (cardsGiven >= badCardsPerPlayer) break;
+        
+        // Séparation: éviter les valeurs déjà données
+        if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
+          continue;
+        }
+        
+        if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
+          hands[playerIdx].add(cardsByValue[value]!.removeLast());
+          globalUsedValues.add(value);
+          cardsGiven++;
+        }
+      }
+    }
+    
+    // PHASE 2: Compléter avec moyennes (uniques si possible)
+    List<String> remaining = [...badValues, ...mediumValues];
+    remaining.shuffle(rnd);
+    
+    for (int playerIdx in playerOrder) {
+      Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
+      
+      for (var value in remaining) {
+        if (hands[playerIdx].length >= 3) break;
+        
+        if (playerValues.contains(value)) continue;
+        
+        if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
+          continue;
+        }
+        
+        if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
+          hands[playerIdx].add(cardsByValue[value]!.removeLast());
+          globalUsedValues.add(value);
+          playerValues.add(value);
+        }
+      }
+    }
+    
+    // PHASE 3: Compléter à 4 cartes (prendre ce qui reste)
+    List<String> allValues = [...badValues, ...mediumValues, ...goodValues];
+    
+    for (int playerIdx in playerOrder) {
+      Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
+      
+      while (hands[playerIdx].length < 4) {
+        bool cardAdded = false;
+        
+        allValues.shuffle(rnd);
+        for (var value in allValues) {
+          // Éviter doublon dans sa propre main
+          if (playerValues.contains(value)) continue;
+          
+          if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
+            hands[playerIdx].add(cardsByValue[value]!.removeLast());
+            playerValues.add(value);
+            cardAdded = true;
+            break;
+          }
+        }
+        
+        // Dernier recours: prendre n'importe quoi
+        if (!cardAdded) {
+          for (var value in allValues) {
+            if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
+              hands[playerIdx].add(cardsByValue[value]!.removeLast());
+              cardAdded = true;
+              break;
+            }
+          }
+        }
+        
+        if (!cardAdded) break;
+      }
+    }
+    
+    // Assigner les mains aux joueurs
+    for (int i = 0; i < numPlayers; i++) {
+      players[i].hand = hands[i];
+      players[i].knownCards = List.filled(hands[i].length, false);
+    }
+    
+    // Reconstruire le deck: bonnes au fond, mauvaises en haut
+    deck.clear();
+    
+    for (var value in goodValues) {
+      if (cardsByValue[value] != null) {
+        deck.addAll(cardsByValue[value]!);
+      }
+    }
+    for (var value in mediumValues) {
+      if (cardsByValue[value] != null) {
+        deck.addAll(cardsByValue[value]!);
+      }
+    }
+    for (var value in badValues) {
+      if (cardsByValue[value] != null) {
+        deck.addAll(cardsByValue[value]!);
+      }
+    }
+    
+    deck.addAll(jokers);
+    deck.shuffle(rnd);
+    
+    _logDealResults();
+  }
+
+  void _logDealResults() {
+    int jokers = deck.where((c) => c.value == 'JOKER').length;
+    addToHistory("🎴 Distribution terminée ($jokers Jokers dans le deck)");
+    
+    // Debug
+    Set<String> allValues = {};
+    int duplicates = 0;
+    
     for (var player in players) {
       int handScore = player.hand.fold(0, (sum, card) => sum + card.points);
-      debugPrint("🃏 ${player.name}: ${player.hand.map((c) => '${c.value}(${c.points})').toList()} = $handScore pts");
+      List<String> values = player.hand.map((c) => c.value).toList();
+      
+      for (var v in values) {
+        if (allValues.contains(v)) duplicates++;
+        allValues.add(v);
+      }
+      
+      debugPrint("🃏 ${player.name}: $values = $handScore pts");
     }
+    
+    debugPrint("⚔️ Valeurs en double (matchs possibles): $duplicates");
   }
 
   void shuffleDeckRandomly() {
