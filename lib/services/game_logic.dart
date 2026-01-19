@@ -19,6 +19,7 @@ class GameLogic {
     for (var p in players) {
       p.hand = [];
       p.knownCards = [];
+      p.mentalMap = []; // ✅ Reset mentalMap aussi
     }
 
     GameState gameState = GameState(
@@ -33,6 +34,13 @@ class GameLogic {
 
     gameState.smartShuffle();
     gameState.dealCards();
+
+    // ✅ NOUVEAU: Initialiser la mémoire des bots (ils mémorisent 2 cartes comme le joueur)
+    for (var player in players) {
+      if (!player.isHuman) {
+        player.initializeBotMemory();
+      }
+    }
 
     if (gameState.deck.isNotEmpty) {
       PlayingCard firstCard = gameState.deck.removeLast();
@@ -49,9 +57,14 @@ class GameLogic {
     }
 
     Player human = gameState.players.firstWhere((p) => p.isHuman);
-    debugPrint("\n🔍 [VAR - INIT] --------------------------------------");
+    debugPrint("\n📝 [VAR - INIT] --------------------------------------");
     debugPrint("🃏 Main de DÉPART du joueur : ${human.hand.map((c) => c.value).toList()}");
     debugPrint("🔢 IDs des cartes : ${human.hand.map((c) => c.id).toList()}");
+    
+    // ✅ Debug: Afficher ce que les bots ont mémorisé
+    for (var bot in players.where((p) => !p.isHuman)) {
+      debugPrint("🤖 ${bot.name} mémorise: ${bot.mentalMap.where((c) => c != null).map((c) => c!.value).toList()}");
+    }
     debugPrint("-------------------------------------------------------\n");
 
     return gameState;
@@ -79,7 +92,7 @@ class GameLogic {
       gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
 
       if (gameState.currentPlayer.isHuman) {
-        debugPrint("\n🔍 [VAR - DRAW] Vous avez pioché : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
+        debugPrint("\n📝 [VAR - DRAW] Vous avez pioché : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
       }
     } else {
       endGame(gameState);
@@ -89,7 +102,7 @@ class GameLogic {
   static void discardDrawnCard(GameState gameState) {
     if (gameState.drawnCard == null) return;
 
-    debugPrint("\n🔍 [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
+    debugPrint("\n📝 [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
     debugPrint("✋ Main INCHANGÉE : ${gameState.currentPlayer.hand.map((c) => c.value).toList()}");
 
     PlayingCard card = gameState.drawnCard!;
@@ -105,7 +118,7 @@ class GameLogic {
 
     Player player = gameState.currentPlayer;
 
-    debugPrint("\n🔍 [VAR - REPLACE] --------------------------------------");
+    debugPrint("\n📝 [VAR - REPLACE] --------------------------------------");
     debugPrint("👤 Joueur : ${player.name}");
     debugPrint("✋ Main AVANT : ${player.hand.map((c) => c.value).toList()}");
     debugPrint("🎯 Carte visée (Index $cardIndex) : ${player.hand[cardIndex].value} (ID: ${player.hand[cardIndex].id})");
@@ -157,6 +170,11 @@ class GameLogic {
 
       player.hand = newHand;
       player.knownCards = newKnownCards;
+      
+      // ✅ NOUVEAU: Mettre à jour la mentalMap du bot aussi
+      if (!player.isHuman && cardIndex < player.mentalMap.length) {
+        player.mentalMap.removeAt(cardIndex);
+      }
 
       gameState.addToHistory("⚡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
       if (gameState.phase != GamePhase.reaction) {
@@ -184,6 +202,11 @@ class GameLogic {
 
     player.hand = newHand;
     player.knownCards = newKnownCards;
+    
+    // ✅ NOUVEAU: Ajouter null à la mentalMap du bot
+    if (!player.isHuman) {
+      player.mentalMap.add(null);
+    }
 
     gameState.addToHistory("⚠️ ${player.name} prend une carte de pénalité.");
   }
@@ -205,6 +228,14 @@ class GameLogic {
 
     if (idx1 < p1.knownCards.length) p1.knownCards[idx1] = false;
     if (idx2 < p2.knownCards.length) p2.knownCards[idx2] = false;
+    
+    // ✅ NOUVEAU: Mettre à jour les mentalMaps des bots
+    if (!p1.isHuman && idx1 < p1.mentalMap.length) {
+      p1.mentalMap[idx1] = null; // Le bot oublie cette carte (elle a changé)
+    }
+    if (!p2.isHuman && idx2 < p2.mentalMap.length) {
+      p2.mentalMap[idx2] = null; // Le bot oublie cette carte (elle a changé)
+    }
 
     gameState.addToHistory("🔄 Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.");
   }
@@ -215,6 +246,11 @@ class GameLogic {
     targetPlayer.hand = shuffledHand;
 
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
+    
+    // ✅ NOUVEAU: Reset la mentalMap du bot ciblé
+    if (!targetPlayer.isHuman) {
+      targetPlayer.mentalMap = List.filled(targetPlayer.hand.length, null);
+    }
 
     gameState.addToHistory("🃏 JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
   }
@@ -260,7 +296,7 @@ class GameLogic {
     } else {
       if (gameState.dutchCallerId != null) {
         gameState.phase = GamePhase.dutchCalled;
-        gameState.addToHistory("🏁 Plus de cartes disponibles - Fin de partie");
+        gameState.addToHistory("📌 Plus de cartes disponibles - Fin de partie");
       } else {
         endGame(gameState);
       }

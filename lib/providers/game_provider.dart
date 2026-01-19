@@ -74,19 +74,7 @@ class GameProvider with ChangeNotifier {
     // 🧠 NOUVEAU : Initialiser les cartes mentales des bots
     for (var player in _gameState!.players) {
       if (!player.isHuman) {
-        player.mentalMap = List.filled(player.hand.length, null);
-        
-        // ✅ NOUVEAU : Les bots mémorisent aussi 2 cartes aléatoires au début
-        List<int> availableIndices = List.generate(player.hand.length, (i) => i);
-        availableIndices.shuffle();
-        
-        // Mémoriser les 2 premières cartes aléatoires
-        for (int i = 0; i < 2 && i < player.hand.length; i++) {
-          int index = availableIndices[i];
-          player.updateMentalMap(index, player.hand[index]);
-        }
-        
-        debugPrint("   🤖 ${player.name} mémorise 2 cartes au début");
+        player.initializeBotMemory();
       }
     }
 
@@ -634,13 +622,10 @@ class GameProvider with ChangeNotifier {
   }
 
   void _simulateBotReaction() async {
-    debugPrint("🤖 [_simulateBotReaction] Simulation réaction bots");
-
-    if (_gameState == null) return;
-    await Future.delayed(Duration(milliseconds: Random().nextInt(1000) + 500));
+    debugPrint("🤖 [_simulateBotReaction] Début simulation");
 
     if (_gameState == null || _gameState!.phase != GamePhase.reaction) {
-      debugPrint("   ⚠️ Phase changée, annulation");
+      debugPrint("   ⚠️ Phase incorrecte, annulation");
       return;
     }
 
@@ -652,17 +637,28 @@ class GameProvider with ChangeNotifier {
 
     debugPrint("   - Carte défausse: ${topCard.displayName}");
 
+    // ✅ NOUVEAU: Utiliser BotAI.tryReactionMatch pour chaque bot
     for (var bot in _gameState!.players.where((p) => !p.isHuman)) {
-      if (Random().nextDouble() > 0.3) {
-        // 🧠 MODIFIÉ : Le bot vérifie sa carte mentale, pas la réalité
-        for (int i = 0; i < bot.mentalMap.length; i++) {
-          if (bot.mentalMap[i] != null && bot.mentalMap[i]!.matches(topCard)) {
-            debugPrint(
-                "   ✅ ${bot.name} pense avoir un match avec ${bot.mentalMap[i]!.displayName}");
-            attemptMatch(i, forcedPlayer: bot);
-            return;
-          }
-        }
+      if (_gameState == null || _gameState!.phase != GamePhase.reaction) {
+        debugPrint("   ⚠️ Phase changée, arrêt");
+        return;
+      }
+
+      // Délai aléatoire avant que le bot réagisse
+      int delay = Random().nextInt(800) + 300; // 300-1100ms
+      await Future.delayed(Duration(milliseconds: delay));
+
+      if (_gameState == null || _gameState!.phase != GamePhase.reaction) {
+        return;
+      }
+
+      // ✅ Utiliser la nouvelle méthode tryReactionMatch de BotAI
+      bool matched = await BotAI.tryReactionMatch(_gameState!, bot, playerMMR: _playerMMR);
+      
+      if (matched) {
+        debugPrint("   ⚡ ${bot.name} a réussi un match en réaction!");
+        notifyListeners();
+        return; // Un seul match par phase de réaction
       }
     }
 
