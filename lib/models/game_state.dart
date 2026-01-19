@@ -89,14 +89,18 @@ class GameState {
 
   void smartShuffle() {
     Random rnd = Random();
+    
     if (difficulty == Difficulty.easy) {
+      // Mode facile : mélange aléatoire pur
       deck.shuffle();
       addToHistory("🎲 Mélange aléatoire pur (Mode Détendu)");
+      
     } else if (difficulty == Difficulty.medium) {
-      List<PlayingCard> excellent = [];
-      List<PlayingCard> good = [];
-      List<PlayingCard> medium = [];
-      List<PlayingCard> bad = [];
+      // Mode medium : début équilibré, légère tendance aux mauvaises cartes en milieu/fin
+      List<PlayingCard> excellent = []; // 0-3 pts (A, 2, 3)
+      List<PlayingCard> good = [];      // 4-6 pts (4, 5, 6)
+      List<PlayingCard> medium = [];    // 7-9 pts (7, 8, 9)
+      List<PlayingCard> bad = [];       // 10+ pts (10, V, D, R, Joker)
 
       for (var card in deck) {
         int val = card.points;
@@ -117,33 +121,103 @@ class GameState {
       bad.shuffle();
 
       deck.clear();
-
+      
+      // ✅ FIX: Structure le deck pour que les MAUVAISES cartes soient piochées plus tôt
+      // Rappel: removeLast() pioche depuis la FIN, donc on met les mauvaises à la fin
+      
+      int totalCards = excellent.length + good.length + medium.length + bad.length;
+      int phase1 = (totalCards * 0.25).round(); // Début de partie
+      int phase2 = (totalCards * 0.35).round(); // Milieu
+      int phase3 = (totalCards * 0.25).round(); // Fin milieu
+      // Phase 4 = reste (~15%)                  // Fin de partie
+      
+      // Phase 1 (début - en bas du deck, pioché en dernier): Mix équilibré
+      for (int i = 0; i < phase1; i++) {
+        double roll = rnd.nextDouble();
+        if (roll < 0.30 && excellent.isNotEmpty) {
+          deck.add(excellent.removeLast());
+        } else if (roll < 0.55 && good.isNotEmpty) {
+          deck.add(good.removeLast());
+        } else if (roll < 0.80 && medium.isNotEmpty) {
+          deck.add(medium.removeLast());
+        } else if (bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        } else {
+          // Fallback
+          for (var cat in [medium, good, excellent, bad]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
+          }
+        }
+      }
+      
+      // Phase 2 (milieu): Tendance medium/bad
+      for (int i = 0; i < phase2; i++) {
+        double roll = rnd.nextDouble();
+        if (roll < 0.15 && excellent.isNotEmpty) {
+          deck.add(excellent.removeLast());
+        } else if (roll < 0.35 && good.isNotEmpty) {
+          deck.add(good.removeLast());
+        } else if (roll < 0.65 && medium.isNotEmpty) {
+          deck.add(medium.removeLast());
+        } else if (bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        } else {
+          for (var cat in [medium, good, bad, excellent]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
+          }
+        }
+      }
+      
+      // Phase 3: Plus de mauvaises cartes
+      for (int i = 0; i < phase3; i++) {
+        double roll = rnd.nextDouble();
+        if (roll < 0.10 && excellent.isNotEmpty) {
+          deck.add(excellent.removeLast());
+        } else if (roll < 0.25 && good.isNotEmpty) {
+          deck.add(good.removeLast());
+        } else if (roll < 0.50 && medium.isNotEmpty) {
+          deck.add(medium.removeLast());
+        } else if (bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        } else {
+          for (var cat in [bad, medium, good, excellent]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
+          }
+        }
+      }
+      
+      // Phase 4 (haut du deck - pioché en premier): Ce qui reste, tendance mauvaise
       while (excellent.isNotEmpty || good.isNotEmpty || medium.isNotEmpty || bad.isNotEmpty) {
-        List<List<PlayingCard>> cats = [excellent, good, medium, bad];
-        cats.shuffle();
-        int packetSize = 2 + rnd.nextInt(3);
-        for (int i = 0; i < packetSize; i++) {
-          for (var cat in cats) {
-            if (cat.isNotEmpty) {
-              deck.add(cat.removeLast());
-              break;
-            }
+        double roll = rnd.nextDouble();
+        if (roll < 0.45 && bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        } else if (roll < 0.70 && medium.isNotEmpty) {
+          deck.add(medium.removeLast());
+        } else if (roll < 0.85 && good.isNotEmpty) {
+          deck.add(good.removeLast());
+        } else if (excellent.isNotEmpty) {
+          deck.add(excellent.removeLast());
+        } else {
+          for (var cat in [bad, medium, good, excellent]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
           }
         }
       }
 
-      _partialShuffle(deck, 0.20);
+      _partialShuffle(deck, 0.12); // Moins de shuffle pour garder la structure
       addToHistory("⚖️ Mélange équilibré (Mode Tactique)");
+      
     } else {
-      List<PlayingCard> heaven = [];
-      List<PlayingCard> earth = [];
-      List<PlayingCard> hell = [];
+      // Mode HARD : Les premières pioches sont souvent mauvaises
+      List<PlayingCard> heaven = []; // 0-3 pts (très bonnes)
+      List<PlayingCard> earth = [];  // 4-7 pts (moyennes)
+      List<PlayingCard> hell = [];   // 8+ pts (mauvaises)
 
       for (var card in deck) {
         int val = card.points;
-        if (val <= 4) {
+        if (val <= 3) {
           heaven.add(card);
-        } else if (val <= 8) {
+        } else if (val <= 7) {
           earth.add(card);
         } else {
           hell.add(card);
@@ -157,51 +231,60 @@ class GameState {
       deck.clear();
 
       int totalCards = heaven.length + earth.length + hell.length;
-      int phase1 = (totalCards * 0.30).round();
-      int phase2 = (totalCards * 0.40).round();
+      int phase1 = (totalCards * 0.30).round(); // Fond du deck (pioché en dernier)
+      int phase2 = (totalCards * 0.35).round(); // Milieu
+      // Phase 3 = reste (~35%)                  // Haut du deck (pioché en premier)
 
+      // ✅ FIX: INVERSER LA LOGIQUE
+      // Phase 1 (FOND du deck - pioché EN DERNIER): Quelques bonnes cartes
       for (int i = 0; i < phase1; i++) {
         double roll = rnd.nextDouble();
-        if (roll < 0.50 && heaven.isNotEmpty) {
+        if (roll < 0.35 && heaven.isNotEmpty) {
           deck.add(heaven.removeLast());
-        } else if (roll < 0.80 && earth.isNotEmpty) {
+        } else if (roll < 0.70 && earth.isNotEmpty) {
           deck.add(earth.removeLast());
         } else if (hell.isNotEmpty) {
           deck.add(hell.removeLast());
-        } else if (heaven.isNotEmpty) {
-          deck.add(heaven.removeLast());
-        } else if (earth.isNotEmpty) {
-          deck.add(earth.removeLast());
-        }
-      }
-
-      for (int i = 0; i < phase2; i++) {
-        List<List<PlayingCard>> cats = [heaven, earth, hell];
-        cats.shuffle(rnd);
-        for (var cat in cats) {
-          if (cat.isNotEmpty) {
-            deck.add(cat.removeLast());
-            break;
+        } else {
+          for (var cat in [earth, heaven, hell]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
           }
         }
       }
 
-      while (hell.isNotEmpty || earth.isNotEmpty || heaven.isNotEmpty) {
+      // Phase 2 (MILIEU): Mix avec tendance mauvaise
+      for (int i = 0; i < phase2; i++) {
         double roll = rnd.nextDouble();
-        if (roll < 0.60 && hell.isNotEmpty) {
-          deck.add(hell.removeLast());
-        } else if (roll < 0.90 && earth.isNotEmpty) {
-          deck.add(earth.removeLast());
-        } else if (heaven.isNotEmpty) {
+        if (roll < 0.15 && heaven.isNotEmpty) {
           deck.add(heaven.removeLast());
+        } else if (roll < 0.45 && earth.isNotEmpty) {
+          deck.add(earth.removeLast());
         } else if (hell.isNotEmpty) {
           deck.add(hell.removeLast());
-        } else if (earth.isNotEmpty) {
-          deck.add(earth.removeLast());
+        } else {
+          for (var cat in [earth, hell, heaven]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
+          }
         }
       }
 
-      _partialShuffle(deck, 0.10);
+      // Phase 3 (HAUT du deck - pioché EN PREMIER): Majoritairement mauvaises !
+      while (hell.isNotEmpty || earth.isNotEmpty || heaven.isNotEmpty) {
+        double roll = rnd.nextDouble();
+        if (roll < 0.55 && hell.isNotEmpty) {
+          deck.add(hell.removeLast());
+        } else if (roll < 0.85 && earth.isNotEmpty) {
+          deck.add(earth.removeLast());
+        } else if (heaven.isNotEmpty) {
+          deck.add(heaven.removeLast());
+        } else {
+          for (var cat in [hell, earth, heaven]) {
+            if (cat.isNotEmpty) { deck.add(cat.removeLast()); break; }
+          }
+        }
+      }
+
+      _partialShuffle(deck, 0.08); // Très peu de shuffle pour garder la difficulté
       addToHistory("🔥 Mélange exigeant (Mode Challenger)");
     }
   }
