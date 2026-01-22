@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
-import '../models/card.dart';
+//import '../models/card.dart';
 import '../providers/game_provider.dart';
 import '../widgets/card_widget.dart';
 import '../utils/screen_utils.dart';
@@ -17,8 +17,7 @@ class MemorizationScreen extends StatefulWidget {
 
 class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
-  Set<int> _selectedCards =
-      {}; // ✅ Cartes sélectionnées (mais PAS encore révélées)
+  Set<int> _selectedCards = {}; // ✅ Cartes sélectionnées (mais PAS encore révélées)
   bool _isRevealing = false;
   late AnimationController _pulseController;
 
@@ -40,12 +39,12 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
   @override
   Widget build(BuildContext context) {
-    final gameProvider = Provider.of<GameProvider>(context);
-    final gameState = gameProvider.gameState;
+    final gameState = context.watch<GameProvider>().gameState;
 
     if (gameState == null) {
       debugPrint("⚠️ [MemorizationScreen] GameState NULL");
       return const Scaffold(
+        backgroundColor: Color(0xFF0d2818), // ✅ Couleur de fond
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
@@ -54,10 +53,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
     if (humanPlayer == null) {
       // Mode spectateur : joueur éliminé
-      debugPrint(
-          "⚠️ [MemorizationScreen] Aucun joueur humain (mode spectateur)");
+      debugPrint("⚠️ [MemorizationScreen] Aucun joueur humain (mode spectateur)");
 
       return Scaffold(
+        backgroundColor: const Color(0xFF0d2818), // ✅ Couleur de fond
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -70,8 +69,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.visibility_off,
-                    size: 60, color: Colors.white54),
+                const Icon(Icons.visibility_off, size: 60, color: Colors.white54),
                 const SizedBox(height: 20),
                 const Text(
                   "VOUS ÊTES ÉLIMINÉ",
@@ -95,12 +93,16 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         ),
       );
     }
+    
     final canConfirm = _selectedCards.length == 2;
 
     debugPrint("📊 [MemorizationScreen] Cartes sélectionnées: $_selectedCards");
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0d2818), // ✅ Couleur de fond du Scaffold
       body: Container(
+        width: double.infinity, // ✅ Prendre toute la largeur
+        height: double.infinity, // ✅ Prendre toute la hauteur
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -109,153 +111,150 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           ),
         ),
         child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.visibility,
-                            size: 60, color: Colors.white54),
-                        SizedBox(height: ScreenUtils.spacing(context, 20)),
-
-                        Text(
-                          "MÉMORISATION",
-                          style: TextStyle(
-                            fontFamily: 'Rye',
-                            fontSize: ScreenUtils.scaleFont(context, 36),
-                            color: Colors.amber,
-                            fontWeight: FontWeight.bold,
-                            shadows: const [
-                              Shadow(
-                                  color: Colors.black45,
-                                  blurRadius: 10,
-                                  offset: Offset(2, 2))
-                            ],
-                          ),
-                        ),
-
-                        SizedBox(height: ScreenUtils.spacing(context, 10)),
-
-                        Text(
-                          "Clique sur 2 cartes pour les mémoriser.",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: ScreenUtils.scaleFont(context, 16),
-                          ),
-                        ),
-
-                        SizedBox(height: ScreenUtils.spacing(context, 30)),
-
-                        // ✅ CARTES (Sélection SANS révélation immédiate)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(4, (index) {
-                            final isSelected = _selectedCards.contains(index);
-
-                            return Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: ScreenUtils.spacing(context, 8),
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _onCardTap(index),
-                                child: AnimatedBuilder(
-                                  animation: _pulseController,
-                                  builder: (context, child) {
-                                    return Transform.scale(
-                                      scale: isSelected
-                                          ? 1.0 +
-                                              (_pulseController.value * 0.05)
-                                          : 1.0,
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 300),
-                                        transform: Matrix4.translationValues(
-                                          0,
-                                          isSelected ? -10 : 0,
-                                          0,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            ScreenUtils.borderRadius(
-                                                context, 8),
-                                          ),
-                                          border: isSelected
-                                              ? Border.all(
-                                                  color: Colors.amber, width: 3)
-                                              : null,
-                                          boxShadow: isSelected
-                                              ? [
-                                                  BoxShadow(
-                                                    color: Colors.amber
-                                                        .withOpacity(0.5),
-                                                    blurRadius: 15,
-                                                    spreadRadius: 3,
-                                                  )
-                                                ]
-                                              : null,
-                                        ),
-                                        child: CardWidget(
-                                          card: null, // ✅ Toujours DOS
-                                          size: CardSize.large,
-                                          isRevealed: false, // ✅ Toujours FAUX
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-
-                        SizedBox(height: ScreenUtils.spacing(context, 30)),
-
-                        // Bouton de confirmation
-                        AnimatedOpacity(
-                          opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
-                          duration: const Duration(milliseconds: 300),
-                          child: ElevatedButton(
-                            onPressed: canConfirm && !_isRevealing
-                                ? _confirmAndStart
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black,
-                              padding: EdgeInsets.symmetric(
-                                horizontal: ScreenUtils.spacing(context, 40),
-                                vertical: ScreenUtils.spacing(context, 20),
-                              ),
-                              textStyle: TextStyle(
-                                fontSize: ScreenUtils.scaleFont(context, 18),
-                                fontWeight: FontWeight.bold,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  ScreenUtils.borderRadius(context, 12),
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              canConfirm
-                                  ? "C'EST BON !"
-                                  : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          child: SingleChildScrollView(
+            child: SizedBox(
+              width: double.infinity, // ✅ Forcer le contenu à prendre toute la largeur
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: ScreenUtils.spacing(context, 16),
+                  vertical: ScreenUtils.spacing(context, 20),
                 ),
-              );
-            },
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center, // ✅ Centrage horizontal
+                  children: [
+                    const Icon(Icons.visibility, size: 60, color: Colors.white54),
+                    SizedBox(height: ScreenUtils.spacing(context, 20)),
+
+                    Text(
+                      "MÉMORISATION",
+                      textAlign: TextAlign.center, // ✅ Centrage du texte
+                      style: TextStyle(
+                        fontFamily: 'Rye',
+                        fontSize: ScreenUtils.scaleFont(context, 36),
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        shadows: const [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 10,
+                            offset: Offset(2, 2),
+                          )
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: ScreenUtils.spacing(context, 10)),
+
+                    Text(
+                      "Clique sur 2 cartes pour les mémoriser.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: ScreenUtils.scaleFont(context, 16),
+                      ),
+                    ),
+
+                    SizedBox(height: ScreenUtils.spacing(context, 30)),
+
+                    // ✅ CARTES avec Wrap centré
+                    Center( // ✅ Wrap dans un Center explicite
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center, // ✅ Centrage vertical
+                        spacing: ScreenUtils.spacing(context, 8),
+                        runSpacing: ScreenUtils.spacing(context, 8),
+                        children: List.generate(4, (index) {
+                          final isSelected = _selectedCards.contains(index);
+
+                          return GestureDetector(
+                            onTap: () => _onCardTap(index),
+                            child: AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: isSelected
+                                      ? 1.0 + (_pulseController.value * 0.05)
+                                      : 1.0,
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    transform: Matrix4.translationValues(
+                                      0,
+                                      isSelected ? -10 : 0,
+                                      0,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(
+                                        ScreenUtils.borderRadius(context, 8),
+                                      ),
+                                      border: isSelected
+                                          ? Border.all(color: Colors.amber, width: 3)
+                                          : null,
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: Colors.amber.withOpacity(0.5),
+                                                blurRadius: 15,
+                                                spreadRadius: 3,
+                                              )
+                                            ]
+                                          : null,
+                                    ),
+                                    child: CardWidget(
+                                      card: null,
+                                      size: CardSize.large,
+                                      isRevealed: false,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+
+                    SizedBox(height: ScreenUtils.spacing(context, 30)),
+
+                    // Bouton de confirmation
+                    Center( // ✅ Centrer le bouton
+                      child: AnimatedOpacity(
+                        opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
+                        duration: const Duration(milliseconds: 300),
+                        child: ElevatedButton(
+                          onPressed: canConfirm && !_isRevealing ? _confirmAndStart : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: ScreenUtils.spacing(context, 40),
+                              vertical: ScreenUtils.spacing(context, 20),
+                            ),
+                            textStyle: TextStyle(
+                              fontSize: ScreenUtils.scaleFont(context, 18),
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                ScreenUtils.borderRadius(context, 12),
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            canConfirm
+                                ? "C'EST BON !"
+                                : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    SizedBox(height: ScreenUtils.spacing(context, 20)),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
