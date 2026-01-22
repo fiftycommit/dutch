@@ -28,24 +28,20 @@ class PlayingCard {
   }
 
   String get matchValue {
-    // Pour les Rois, on différencie par couleur
     if (value == 'K') {
       if (suit == 'hearts' || suit == 'diamonds') {
-        return 'K_RED'; // Roi rouge
+        return 'K_RED'; 
       } else {
-        return 'K_BLACK'; // Roi noir
+        return 'K_BLACK';
       }
     }
-    // Pour les Jokers, ils matchent entre eux
     if (value == 'JOKER') {
       return 'JOKER';
     }
-    // Pour les autres cartes, la valeur suffit
     return value;
   }
 
   String get imagePath {
-    // Cas du Joker
     if (value == 'JOKER') {
       if (suit == 'hearts' || suit == 'diamonds') {
         return 'assets/images/cards/joker-rouge.svg';
@@ -61,17 +57,16 @@ class PlayingCard {
       case 'J':
       case 'V':
         fileValue = 'V';
-        break; // Valet
+        break;
       case 'Q':
       case 'D':
         fileValue = 'D';
-        break; // Dame
+        break; 
       case 'K':
       case 'R':
         fileValue = 'R';
-        break; // Roi
+        break; 
       default:
-        // Pour 2 à 10, on ajoute un '0' devant si nécessaire (ex: '2' -> '02')
         if (int.tryParse(value) != null) {
           fileValue = value.padLeft(2, '0');
         } else {
@@ -79,7 +74,6 @@ class PlayingCard {
         }
     }
 
-    // Conversion de la Couleur (anglais -> français)
     String fileSuit;
     switch (suit) {
       case 'hearts':
@@ -102,25 +96,18 @@ class PlayingCard {
   }
 
   static int _calculatePoints(String suit, String value) {
-    // Roi rouge = 0 points
     if (value == 'R' && (suit == 'hearts' || suit == 'diamonds')) return 0;
 
-    // Joker = 0 points
     if (value == 'JOKER') return 0;
 
-    // Roi noir = 13 points
     if (value == 'R' && (suit == 'clubs' || suit == 'spades')) return 13;
 
-    // Dame = 12 points
     if (value == 'Q' || value == 'D') return 12;
 
-    // Valet = 11 points
     if (value == 'J' || value == 'V') return 11;
 
-    // As = 1 point
     if (value == 'A') return 1;
 
-    // Autres cartes (2-10) = leur valeur
     return int.tryParse(value) ?? 0;
   }
 
