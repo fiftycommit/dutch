@@ -19,7 +19,7 @@ class GameLogic {
     for (var p in players) {
       p.hand = [];
       p.knownCards = [];
-      p.mentalMap = []; // ✅ Reset mentalMap aussi
+      p.mentalMap = []; // â Reset mentalMap aussi
     }
 
     GameState gameState = GameState(
@@ -35,7 +35,7 @@ class GameLogic {
     gameState.smartShuffle();
     gameState.dealCards();
 
-    // ✅ NOUVEAU: Initialiser la mémoire des bots (ils mémorisent 2 cartes comme le joueur)
+    // â NOUVEAU: Initialiser la mémoire des bots (ils mémorisent 2 cartes comme le joueur)
     for (var player in players) {
       if (!player.isHuman) {
         player.initializeBotMemory();
@@ -53,17 +53,17 @@ class GameLogic {
       String starterName = players[randomIndex].isHuman
           ? "Vous commencez"
           : "${players[randomIndex].name} commence";
-      gameState.addToHistory("🎲 Tirage au sort : $starterName !");
+      gameState.addToHistory("ð² Tirage au sort : $starterName !");
     }
 
     Player human = gameState.players.firstWhere((p) => p.isHuman);
-    debugPrint("\n📝 [VAR - INIT] --------------------------------------");
-    debugPrint("🃏 Main de DÉPART du joueur : ${human.hand.map((c) => c.value).toList()}");
-    debugPrint("🔢 IDs des cartes : ${human.hand.map((c) => c.id).toList()}");
+    debugPrint("\nð [VAR - INIT] --------------------------------------");
+    debugPrint("ð Main de DÃPART du joueur : ${human.hand.map((c) => c.value).toList()}");
+    debugPrint("ð¢ IDs des cartes : ${human.hand.map((c) => c.id).toList()}");
     
-    // ✅ Debug: Afficher ce que les bots ont mémorisé
+    // â Debug: Afficher ce que les bots ont mémorisé
     for (var bot in players.where((p) => !p.isHuman)) {
-      debugPrint("🤖 ${bot.name} mémorise: ${bot.mentalMap.where((c) => c != null).map((c) => c!.value).toList()}");
+      debugPrint("ð¤ ${bot.name} mémorise: ${bot.mentalMap.where((c) => c != null).map((c) => c!.value).toList()}");
     }
     debugPrint("-------------------------------------------------------\n");
 
@@ -92,7 +92,7 @@ class GameLogic {
       gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
 
       if (gameState.currentPlayer.isHuman) {
-        debugPrint("\n📝 [VAR - DRAW] Vous avez pioché : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
+        debugPrint("\nð [VAR - DRAW] Vous avez pioché : ${gameState.drawnCard!.value} (Suite: ${gameState.drawnCard!.suit})");
       }
     } else {
       endGame(gameState);
@@ -102,8 +102,8 @@ class GameLogic {
   static void discardDrawnCard(GameState gameState) {
     if (gameState.drawnCard == null) return;
 
-    debugPrint("\n📝 [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
-    debugPrint("✋ Main INCHANGÉE : ${gameState.currentPlayer.hand.map((c) => c.value).toList()}");
+    debugPrint("\nð [VAR - DISCARD] Joueur rejette la carte : ${gameState.drawnCard!.value}");
+    debugPrint("â Main INCHANGÃE : ${gameState.currentPlayer.hand.map((c) => c.value).toList()}");
 
     PlayingCard card = gameState.drawnCard!;
     gameState.discardPile.add(card);
@@ -118,11 +118,11 @@ class GameLogic {
 
     Player player = gameState.currentPlayer;
 
-    debugPrint("\n📝 [VAR - REPLACE] --------------------------------------");
-    debugPrint("👤 Joueur : ${player.name}");
-    debugPrint("✋ Main AVANT : ${player.hand.map((c) => c.value).toList()}");
-    debugPrint("🎯 Carte visée (Index $cardIndex) : ${player.hand[cardIndex].value} (ID: ${player.hand[cardIndex].id})");
-    debugPrint("📥 Carte piochée à insérer : ${gameState.drawnCard!.value} (ID: ${gameState.drawnCard!.id})");
+    debugPrint("\nð [VAR - REPLACE] --------------------------------------");
+    debugPrint("ð¤ Joueur : ${player.name}");
+    debugPrint("â Main AVANT : ${player.hand.map((c) => c.value).toList()}");
+    debugPrint("ð¯ Carte visée (Index $cardIndex) : ${player.hand[cardIndex].value} (ID: ${player.hand[cardIndex].id})");
+    debugPrint("ð¥ Carte piochée Ã  insérer : ${gameState.drawnCard!.value} (ID: ${gameState.drawnCard!.id})");
 
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
       debugPrint("Erreur critique: Tentative de remplacement hors limites ($cardIndex)");
@@ -139,8 +139,8 @@ class GameLogic {
     gameState.discardPile.add(oldCard);
     gameState.addToHistory("${player.name} échange une carte.");
 
-    debugPrint("✅ Main APRÈS : ${player.hand.map((c) => c.value).toList()}");
-    debugPrint("🗑️ Défausse : ${gameState.discardPile.last.value}");
+    debugPrint("â Main APRÃS : ${player.hand.map((c) => c.value).toList()}");
+    debugPrint("ðï¸ Défausse : ${gameState.discardPile.last.value}");
     debugPrint("-------------------------------------------------------\n");
 
     _checkSpecialPower(gameState, oldCard);
@@ -171,18 +171,18 @@ class GameLogic {
       player.hand = newHand;
       player.knownCards = newKnownCards;
       
-      // ✅ NOUVEAU: Mettre à jour la mentalMap du bot aussi
+      // â NOUVEAU: Mettre Ã  jour la mentalMap du bot aussi
       if (!player.isHuman && cardIndex < player.mentalMap.length) {
         player.mentalMap.removeAt(cardIndex);
       }
 
-      gameState.addToHistory("⚡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
+      gameState.addToHistory("â¡ MATCH ! ${player.name} pose ${playerCard.displayName} !");
       if (gameState.phase != GamePhase.reaction) {
         _checkSpecialPower(gameState, playerCard);
       }
       return true;
     } else {
-      gameState.addToHistory("🚫 ${player.name} rate son match (${playerCard.displayName} ≠ ${topDiscard.displayName}) ! Pénalité !");
+      gameState.addToHistory("ð« ${player.name} rate son match (${playerCard.displayName} â  ${topDiscard.displayName}) ! Pénalité !");
       applyPenalty(gameState, player);
       return false;
     }
@@ -203,17 +203,17 @@ class GameLogic {
     player.hand = newHand;
     player.knownCards = newKnownCards;
     
-    // ✅ NOUVEAU: Ajouter null à la mentalMap du bot
+    // â NOUVEAU: Ajouter null Ã  la mentalMap du bot
     if (!player.isHuman) {
       player.mentalMap.add(null);
     }
 
-    gameState.addToHistory("⚠️ ${player.name} prend une carte de pénalité.");
+    gameState.addToHistory("â ï¸ ${player.name} prend une carte de pénalité.");
   }
 
   static void lookAtCard(GameState gameState, Player target, int cardIndex) {
     if (cardIndex >= 0 && cardIndex < target.knownCards.length) {
-      gameState.addToHistory("👁️ ${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
+      gameState.addToHistory("ðï¸ ${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
     }
   }
 
@@ -229,7 +229,7 @@ class GameLogic {
     if (idx1 < p1.knownCards.length) p1.knownCards[idx1] = false;
     if (idx2 < p2.knownCards.length) p2.knownCards[idx2] = false;
     
-    // ✅ NOUVEAU: Mettre à jour les mentalMaps des bots
+    // â NOUVEAU: Mettre Ã  jour les mentalMaps des bots
     if (!p1.isHuman && idx1 < p1.mentalMap.length) {
       p1.mentalMap[idx1] = null; // Le bot oublie cette carte (elle a changé)
     }
@@ -237,7 +237,7 @@ class GameLogic {
       p2.mentalMap[idx2] = null; // Le bot oublie cette carte (elle a changé)
     }
 
-    gameState.addToHistory("🔄 Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.");
+    gameState.addToHistory("ð Ãchange : ${p1.name} carte #${idx1 + 1} â ${p2.name} carte #${idx2 + 1}.");
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {
@@ -247,12 +247,12 @@ class GameLogic {
 
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
     
-    // ✅ NOUVEAU: Reset la mentalMap du bot ciblé
+    // â NOUVEAU: Reset la mentalMap du bot ciblé
     if (!targetPlayer.isHuman) {
       targetPlayer.mentalMap = List.filled(targetPlayer.hand.length, null);
     }
 
-    gameState.addToHistory("🃏 JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
+    gameState.addToHistory("ð JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
   }
 
   static void _checkSpecialPower(GameState gameState, PlayingCard card) {
@@ -267,7 +267,7 @@ class GameLogic {
     if (gameState.dutchCallerId != null) return;
     gameState.dutchCallerId = gameState.currentPlayer.id;
     gameState.phase = GamePhase.dutchCalled;
-    gameState.addToHistory('🏳️ ${gameState.currentPlayer.name} crie DUTCH !');
+    gameState.addToHistory('ð³ï¸ ${gameState.currentPlayer.name} crie DUTCH !');
   }
 
   static void endGame(GameState gameState) {
@@ -279,10 +279,10 @@ class GameLogic {
     }
   }
 
-  // 🆕 NOUVELLE MÉTHODE : Passer au joueur suivant
+  // ð NOUVELLE MÃTHODE : Passer au joueur suivant
   static void nextPlayer(GameState gameState) {
     gameState.nextTurn();
-    debugPrint("➡️ Prochain joueur: ${gameState.currentPlayer.name}");
+    debugPrint("â¡ï¸ Prochain joueur: ${gameState.currentPlayer.name}");
   }
 
   static void _refillDeck(GameState gameState) {
@@ -292,11 +292,11 @@ class GameLogic {
       gameState.discardPile.clear();
       gameState.discardPile.add(top);
       gameState.deck.shuffle(_random);
-      gameState.addToHistory("♻️ La pioche est vide, on mélange la défausse !");
+      gameState.addToHistory("â»ï¸ La pioche est vide, on mélange la défausse !");
     } else {
       if (gameState.dutchCallerId != null) {
         gameState.phase = GamePhase.dutchCalled;
-        gameState.addToHistory("📌 Plus de cartes disponibles - Fin de partie");
+        gameState.addToHistory("ð Plus de cartes disponibles - Fin de partie");
       } else {
         endGame(gameState);
       }

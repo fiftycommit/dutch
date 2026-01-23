@@ -46,7 +46,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Fond dégradé
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -101,7 +100,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
                           const SizedBox(height: 50),
 
-                          // --- SÉLECTEUR DE SLOT (RANKED) ---
                           if (isLoading)
                             const CircularProgressIndicator(color: Colors.amber)
                           else
@@ -109,11 +107,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [1, 2, 3].map((slotId) {
                                 final data = slotsData[slotId] ?? {};
-
-                                // ✅ CORRECTION ICI : On récupère le MMR et le Rang
                                 final mmr = data['mmr'] ?? 0;
-                                final rankName = StatsService.getRankName(
-                                    mmr); // Bronze, Argent, Or
+                                final rankName = StatsService.getRankName(mmr);
 
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -121,10 +116,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                   child: _buildSaveSlotCard(
                                     slotId,
                                     "Joueur $slotId",
-                                    rankName, // Affiche "Argent" au lieu de "Niv 1"
-                                    "$mmr RP", // Affiche les points
+                                    rankName,
+                                    "$mmr RP",
                                     selectedSlot == slotId,
-                                    _getRankColor(rankName), // Couleur du rang
+                                    _getRankColor(rankName),
                                   ),
                                 );
                               }).toList(),
@@ -173,7 +168,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
                           const SizedBox(height: 40),
 
-                          // Boutons secondaires
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -228,7 +222,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
-  // Petite aide pour la couleur du rang
   Color _getRankColor(String rank) {
     switch (rank) {
       case 'Or':
@@ -271,13 +264,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     color: isSelected ? Colors.black : Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 12)),
-            // Affichage du Rang en GRAS
             Text(rank,
                 style: TextStyle(
                     color: isSelected ? Colors.black87 : rankColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 11)),
-            // Affichage des points
             Text(rp,
                 style: TextStyle(
                     color: isSelected ? Colors.black54 : Colors.grey,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
-//import '../models/card.dart';
 import '../providers/game_provider.dart';
 import '../widgets/card_widget.dart';
 import '../utils/screen_utils.dart';
@@ -17,14 +16,13 @@ class MemorizationScreen extends StatefulWidget {
 
 class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
-  Set<int> _selectedCards = {}; // ✅ Cartes sélectionnées (mais PAS encore révélées)
+  Set<int> _selectedCards = {};
   bool _isRevealing = false;
   late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    debugPrint("🎬 [MemorizationScreen] INIT");
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -42,9 +40,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final gameState = context.watch<GameProvider>().gameState;
 
     if (gameState == null) {
-      debugPrint("⚠️ [MemorizationScreen] GameState NULL");
       return const Scaffold(
-        backgroundColor: Color(0xFF0d2818), // ✅ Couleur de fond
+        backgroundColor: Color(0xFF0d2818),
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
@@ -52,11 +49,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final humanPlayer = gameState.players.where((p) => p.isHuman).firstOrNull;
 
     if (humanPlayer == null) {
-      // Mode spectateur : joueur éliminé
-      debugPrint("⚠️ [MemorizationScreen] Aucun joueur humain (mode spectateur)");
-
       return Scaffold(
-        backgroundColor: const Color(0xFF0d2818), // ✅ Couleur de fond
+        backgroundColor: const Color(0xFF0d2818),
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -96,13 +90,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     
     final canConfirm = _selectedCards.length == 2;
 
-    debugPrint("📊 [MemorizationScreen] Cartes sélectionnées: $_selectedCards");
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0d2818), // ✅ Couleur de fond du Scaffold
+      backgroundColor: const Color(0xFF0d2818),
       body: Container(
-        width: double.infinity, // ✅ Prendre toute la largeur
-        height: double.infinity, // ✅ Prendre toute la hauteur
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -113,7 +105,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         child: SafeArea(
           child: SingleChildScrollView(
             child: SizedBox(
-              width: double.infinity, // ✅ Forcer le contenu à prendre toute la largeur
+              width: double.infinity,
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: ScreenUtils.spacing(context, 16),
@@ -121,14 +113,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center, // ✅ Centrage horizontal
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Icon(Icons.visibility, size: 60, color: Colors.white54),
                     SizedBox(height: ScreenUtils.spacing(context, 20)),
 
                     Text(
                       "MÉMORISATION",
-                      textAlign: TextAlign.center, // ✅ Centrage du texte
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'Rye',
                         fontSize: ScreenUtils.scaleFont(context, 36),
@@ -157,11 +149,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
                     SizedBox(height: ScreenUtils.spacing(context, 30)),
 
-                    // ✅ CARTES avec Wrap centré
-                    Center( // ✅ Wrap dans un Center explicite
+                    Center(
                       child: Wrap(
                         alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center, // ✅ Centrage vertical
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: ScreenUtils.spacing(context, 8),
                         runSpacing: ScreenUtils.spacing(context, 8),
                         children: List.generate(4, (index) {
@@ -216,8 +207,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
                     SizedBox(height: ScreenUtils.spacing(context, 30)),
 
-                    // Bouton de confirmation
-                    Center( // ✅ Centrer le bouton
+                    Center(
                       child: AnimatedOpacity(
                         opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
                         duration: const Duration(milliseconds: 300),
@@ -262,18 +252,12 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   }
 
   void _onCardTap(int index) {
-    if (_isRevealing) {
-      debugPrint(
-          "⏸️ [MemorizationScreen] Action bloquée (révélation en cours)");
-      return;
-    }
+    if (_isRevealing) return;
 
     setState(() {
       if (_selectedCards.contains(index)) {
-        debugPrint("❌ [MemorizationScreen] Désélection carte $index");
         _selectedCards.remove(index);
       } else if (_selectedCards.length < 2) {
-        debugPrint("✅ [MemorizationScreen] Sélection carte $index");
         _selectedCards.add(index);
       }
     });
@@ -282,75 +266,51 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   void _confirmAndStart() async {
     if (_selectedCards.length != 2 || _isRevealing) return;
 
-    debugPrint(
-        "🎯 [MemorizationScreen] CONFIRMATION - Cartes sélectionnées: $_selectedCards");
-
     setState(() => _isRevealing = true);
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final humanPlayer =
         gameProvider.gameState!.players.firstWhere((p) => p.isHuman);
 
-    // ✅ Révéler TEMPORAIREMENT les cartes sélectionnées
+    // â Révéler TEMPORAIREMENT les cartes sélectionnées
     for (int index in _selectedCards) {
       humanPlayer.knownCards[index] = true;
     }
-    debugPrint("👁️ [MemorizationScreen] Cartes révélées temporairement");
 
-    // ✅ Afficher un dialogue avec les cartes révélées
+    // â Afficher un dialogue avec les cartes révélées
     if (!mounted) return;
     await _showRevealedCardsDialog(humanPlayer);
 
-    // ✅ Masquer TOUTES les cartes après mémorisation
+    // â Masquer TOUTES les cartes après mémorisation
     for (var p in gameProvider.gameState!.players) {
       for (int i = 0; i < p.hand.length; i++) {
         p.knownCards[i] = false;
       }
     }
-    debugPrint("🙈 [MemorizationScreen] Toutes les cartes masquées");
 
-    // ✅ Passer en phase PLAYING
+    // â Passer en phase PLAYING
     gameProvider.gameState!.phase = GamePhase.playing;
     gameProvider.gameState!.isWaitingForSpecialPower = false;
     gameProvider.gameState!.specialCardToActivate = null;
 
-    debugPrint("🎮 [MemorizationScreen] Passage en phase PLAYING");
-    debugPrint(
-        "👤 [MemorizationScreen] Joueur actuel: ${gameProvider.gameState!.currentPlayer.name}");
-    debugPrint(
-        "🤖 [MemorizationScreen] Est un bot: ${!gameProvider.gameState!.currentPlayer.isHuman}");
-
     if (!mounted) return;
 
-    // ✅ Naviguer vers l'écran de jeu
+    // â Naviguer vers l'écran de jeu
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const GameScreen()),
     );
 
-    debugPrint("🚀 [MemorizationScreen] Navigation vers GameScreen");
-
-    // ✅ CRITIQUE: Vérifier si un bot doit jouer après la navigation
+    // â CRITIQUE: Vérifier si un bot doit jouer après la navigation
     Future.delayed(const Duration(milliseconds: 300), () {
-      debugPrint("🔍 [MemorizationScreen] Check post-navigation");
       gameProvider.checkIfBotShouldPlay();
     });
   }
 
   Future<void> _showRevealedCardsDialog(Player humanPlayer) async {
-    debugPrint("🎭 [_showRevealedCardsDialog] Affichage dialogue");
-
     final revealedCards =
         _selectedCards.map((idx) => humanPlayer.hand[idx]).toList();
 
-    // 🔍 VAR TACTIQUE : Révélation
-    debugPrint("\n🔍 [VAR - MEMO] --------------------------------------");
-    debugPrint("👀 Tu as regardé les indices : $_selectedCards");
-    debugPrint(
-        "🃏 Valeurs révélées : ${revealedCards.map((c) => c.value).toList()}");
-    debugPrint("-------------------------------------------------------\n");
-
-    // Afficher le dialogue
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -433,20 +393,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       ),
     );
 
-    debugPrint("   ⏳ Attente 3 secondes...");
-
-    // Attendre 3 secondes pour mémoriser
     await Future.delayed(const Duration(seconds: 3));
 
-    debugPrint("   ✅ Fin de mémorisation");
+    if (!mounted) return;
 
-    if (!mounted) {
-      debugPrint("   ⚠️ Widget non monté, abandon");
-      return;
-    }
-
-    // Fermer le dialogue
     Navigator.of(context, rootNavigator: true).pop();
-    debugPrint("   🚪 Dialogue fermé");
   }
 }

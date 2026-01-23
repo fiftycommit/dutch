@@ -50,7 +50,7 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // POUR LE RÉGLAGE DE LA CHANCE
+  // POUR LE RÃGLAGE DE LA CHANCE
   void setLuckDifficulty(Difficulty difficulty) {
     _settings = _settings.copyWith(luckDifficulty: difficulty);
     _saveSettings();

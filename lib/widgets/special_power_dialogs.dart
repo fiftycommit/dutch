@@ -27,7 +27,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.visibility, color: Colors.amber, size: 40),
               const SizedBox(height: 12),
               Text(
-                ownCard ? "👁️ REGARDER UNE CARTE" : "🔍 ESPIONNER",
+                ownCard ? "ðï¸ REGARDER UNE CARTE" : "ð ESPIONNER",
                 style: const TextStyle(
                     color: Colors.amber,
                     fontSize: 20,
@@ -36,7 +36,7 @@ class SpecialPowerDialogs {
               const SizedBox(height: 8),
               Text(
                 ownCard
-                    ? "Choisissez UNE de vos cartes à regarder"
+                    ? "Choisissez UNE de vos cartes Ã  regarder"
                     : "Choisissez un adversaire puis une de ses cartes",
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
@@ -106,7 +106,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.check_circle, color: Colors.green, size: 40),
               const SizedBox(height: 12),
               const Text(
-                "CARTE RÉVÉLÉE",
+                "CARTE RÃVÃLÃE",
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -141,7 +141,7 @@ class SpecialPowerDialogs {
 
   static Widget _buildOpponentSelection(
       BuildContext context, GameProvider gp, gameState) {
-    // ✅ NOUVEAU : Filtrer les adversaires qui ont encore des cartes
+    // â NOUVEAU : Filtrer les adversaires qui ont encore des cartes
     List<Player> opponents =
         gameState.players.where((p) => !p.isHuman && p.hand.isNotEmpty).toList();
 
@@ -266,7 +266,7 @@ class SpecialPowerDialogs {
     );
   }
 
-  // ✅ VALET : Échange universel entre n'importe quels 2 joueurs
+  // â VALET : Ãchange universel entre n'importe quels 2 joueurs
   static void showValetSwapDialog(BuildContext context, PlayingCard trigger) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
@@ -286,7 +286,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.swap_horiz, color: Colors.purple, size: 40),
               const SizedBox(height: 12),
               const Text(
-                "🔄 VALET : ÉCHANGE",
+                "ð VALET : ÃCHANGE",
                 style: TextStyle(
                     color: Colors.purple,
                     fontSize: 20,
@@ -294,7 +294,7 @@ class SpecialPowerDialogs {
               ),
               const SizedBox(height: 8),
               const Text(
-                "Échangez 2 cartes à l'aveugle",
+                "Ãchangez 2 cartes Ã  l'aveugle",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -327,7 +327,7 @@ class SpecialPowerDialogs {
     );
   }
 
-  // ✅ NOUVEAU : Échange universel (n'importe qui avec n'importe qui)
+  // â NOUVEAU : Ãchange universel (n'importe qui avec n'importe qui)
   static void _showUniversalSwap(
       BuildContext context, GameProvider gp, List<Player> allPlayers) {
     Player? player1;
@@ -350,7 +350,7 @@ class SpecialPowerDialogs {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("1️⃣ Joueur A :",
+                    const Text("1ï¸â£ Joueur A :",
                         style: TextStyle(color: Colors.white, fontSize: 14)),
                     const SizedBox(height: 8),
                     Wrap(
@@ -385,7 +385,7 @@ class SpecialPowerDialogs {
                     if (player1 != null) ...[
                       const SizedBox(height: 16),
                       Text(
-                          "2️⃣ Carte de ${player1!.isHuman ? 'votre main' : player1!.name} :",
+                          "2ï¸â£ Carte de ${player1!.isHuman ? 'votre main' : player1!.name} :",
                           style: const TextStyle(
                               color: Colors.white, fontSize: 14)),
                       const SizedBox(height: 8),
@@ -415,7 +415,7 @@ class SpecialPowerDialogs {
                       ),
                     ],
                     const SizedBox(height: 20),
-                    const Text("3️⃣ Joueur B :",
+                    const Text("3ï¸â£ Joueur B :",
                         style: TextStyle(color: Colors.white, fontSize: 14)),
                     const SizedBox(height: 8),
                     Wrap(
@@ -451,7 +451,7 @@ class SpecialPowerDialogs {
                     if (player2 != null) ...[
                       const SizedBox(height: 16),
                       Text(
-                          "4️⃣ Carte de ${player2!.isHuman ? 'votre main' : player2!.name} :",
+                          "4ï¸â£ Carte de ${player2!.isHuman ? 'votre main' : player2!.name} :",
                           style: const TextStyle(
                               color: Colors.white, fontSize: 14)),
                       const SizedBox(height: 8),
@@ -523,7 +523,7 @@ class SpecialPowerDialogs {
                                   p2.knownCards[card2!] = false;
 
                                   gp.gameState!.addToHistory(
-                                      "🔄 Échange : $name1 carte #${card1! + 1} ↔ $name2 carte #${card2! + 1}.");
+                                      "ð Ãchange : $name1 carte #${card1! + 1} â $name2 carte #${card2! + 1}.");
 
                                   gp.skipSpecialPower();
                                 }
@@ -533,7 +533,7 @@ class SpecialPowerDialogs {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 12),
                           ),
-                          child: const Text("ÉCHANGER",
+                          child: const Text("ÃCHANGER",
                               style: TextStyle(fontSize: 16)),
                         ),
                       ],
@@ -564,7 +564,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.swap_horiz, color: Colors.white, size: 50),
               const SizedBox(height: 12),
               const Text(
-                "ÉCHANGE EFFECTUÉ",
+                "ÃCHANGE EFFECTUÃ",
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -572,7 +572,7 @@ class SpecialPowerDialogs {
               ),
               const SizedBox(height: 12),
               Text(
-                "$player1 carte #${card1 + 1} ↔ $player2 carte #${card2 + 1}",
+                "$player1 carte #${card1 + 1} â $player2 carte #${card2 + 1}",
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -596,7 +596,7 @@ class SpecialPowerDialogs {
     );
   }
 
-  // ✅ JOKER : Mélanger la main d'un joueur
+  // â JOKER : Mélanger la main d'un joueur
   static void showJokerDialog(BuildContext context, PlayingCard trigger) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
@@ -616,7 +616,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.shuffle, color: Colors.red, size: 40),
               const SizedBox(height: 12),
               const Text(
-                "🃏 JOKER : CHAOS",
+                "ðÂ JOKER : CHAOS",
                 style: TextStyle(
                     color: Colors.red,
                     fontSize: 20,
@@ -685,8 +685,8 @@ class SpecialPowerDialogs {
               const SizedBox(height: 12),
               Text(
                 isMe
-                    ? "VOS CARTES ONT ÉTÉ MÉLANGÉES !"
-                    : "CARTES DE ${target.name.toUpperCase()} MÉLANGÉES !",
+                    ? "VOS CARTES ONT ÃTÃ MÃLANGÃES !"
+                    : "CARTES DE ${target.name.toUpperCase()} MÃLANGÃES !",
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     color: Colors.white,
@@ -723,7 +723,7 @@ class SpecialPowerDialogs {
 
   static void showBotSwapNotification(BuildContext context, Player bot,
       String targetName, int targetCardIndex) {
-    // ✅ Obtenir la position du bot
+    // â Obtenir la position du bot
     String botDisplay = _getBotPositionDisplay(context, bot);
     
     showDialog(
@@ -740,7 +740,7 @@ class SpecialPowerDialogs {
               const Icon(Icons.swap_horiz, color: Colors.white, size: 50),
               const SizedBox(height: 12),
               const Text(
-                "🤵 VALET !",
+                "ð¤µ VALET !",
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -787,7 +787,7 @@ class SpecialPowerDialogs {
       BuildContext context, Player bot, String targetName) {
     final isMe = targetName == "Vous";
     
-    // ✅ Obtenir la position du bot
+    // â Obtenir la position du bot
     String botDisplay = _getBotPositionDisplay(context, bot);
 
     showDialog(
@@ -805,8 +805,8 @@ class SpecialPowerDialogs {
               const SizedBox(height: 12),
               Text(
                 isMe
-                    ? "VOS CARTES ONT ÉTÉ MÉLANGÉES !"
-                    : "CARTES DE ${targetName.toUpperCase()} MÉLANGÉES !",
+                    ? "VOS CARTES ONT ÃTÃ MÃLANGÃES !"
+                    : "CARTES DE ${targetName.toUpperCase()} MÃLANGÃES !",
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     color: Colors.white,
@@ -850,7 +850,7 @@ class SpecialPowerDialogs {
     );
   }
   
-  /// ✅ NOUVELLE FONCTION : Obtenir l'affichage du bot (emoji + position)
+  /// â NOUVELLE FONCTION : Obtenir l'affichage du bot (emoji + position)
   static String _getBotPositionDisplay(BuildContext context, Player bot) {
     try {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);

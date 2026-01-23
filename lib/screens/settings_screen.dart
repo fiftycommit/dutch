@@ -30,7 +30,6 @@ class SettingsScreen extends StatelessWidget {
           children: [
             _buildSectionHeader("MÉCANIQUE DE JEU"),
 
-            // --- CURSEUR : TEMPS DE RÉACTION ---
             Container(
               padding: const EdgeInsets.all(16),
               margin: const EdgeInsets.only(bottom: 20),
@@ -73,7 +72,6 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
 
-            // --- MÉTHODE DE MÉLANGE (DIFFICULTÉ DU JEU) ---
             _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
 
             Container(
@@ -168,7 +166,6 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildShuffleOption(SettingsProvider settings, Difficulty level,
       String label, String desc, Color color) {
-    // On utilise luckDifficulty pour stocker le mode de mélange
     bool isSelected = settings.luckDifficulty == level;
     return InkWell(
       onTap: () => settings.setLuckDifficulty(level),

@@ -226,7 +226,7 @@ class _StatsScreenState extends State<StatsScreen> {
             resultText = "Défaite";
         }
 
-        // ✅ NOUVEAU : Affichage conditionnel selon mmrChange
+
         String rpText;
         Color rpColor;
 
@@ -288,7 +288,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
-                // ✅ MODIFICATION : Affichage conditionnel
+
                 Text(
                   rpText,
                   style: TextStyle(

@@ -7,7 +7,6 @@ import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
 import 'main_menu_screen.dart';
 import 'memorization_screen.dart';
-import 'dutch_reveal_screen.dart';
 
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
@@ -22,19 +21,13 @@ class ResultsScreen extends StatelessWidget {
           }
 
           final gameState = gameProvider.gameState!;
-          final ranking = gameState.getFinalRanking();
           final isTournament = gameState.gameMode == GameMode.tournament;
 
-          // 🏆 Vérifier si l'humain est éliminé en tournoi
           bool isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
           
-          // 🏆 Le tournoi est terminé si :
-          // - On a atteint la manche 3 (finale)
-          // - OU l'humain a été éliminé
           bool isTournamentOver = isTournament && 
               (gameState.tournamentRound >= 3 || isHumanEliminated);
 
-          // 🏆 Si l'humain vient d'être éliminé et qu'on n'a pas encore simulé
           if (isHumanEliminated && gameProvider.tournamentFinalRanking == null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               gameProvider.finishTournamentForHuman();
@@ -74,7 +67,6 @@ class ResultsScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // 🏆 Sous-titre si l'humain est éliminé
                   if (isHumanEliminated && gameProvider.tournamentFinalRanking != null) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -111,7 +103,7 @@ class ResultsScreen extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () {
                             if (isTournament && !isTournamentOver) {
-                              debugPrint("🏆 Manche suivante déclenchée");
+
                               gameProvider.startNextTournamentRound();
 
                               Navigator.of(context).pushReplacement(
@@ -154,7 +146,7 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  // 🏆 Construire la liste de classement selon le contexte
+
   Widget _buildRankingList(BuildContext context, GameProvider gameProvider, 
       GameState gameState, bool isTournament, bool isTournamentOver) {
     
@@ -182,7 +174,7 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  // 🏆 Afficher le résultat final du tournoi
+
   Widget _buildTournamentFinalResult(BuildContext context, TournamentResult result, GameProvider gameProvider) {
     bool isWinner = result.finalPosition == 1;
     bool isHuman = result.player.isHuman;
@@ -228,7 +220,7 @@ class ResultsScreen extends StatelessWidget {
       backgroundColor = Colors.amber.withOpacity(0.2);
       borderColor = Colors.amber;
     } else if (isHuman && isEliminated) {
-      // 🔴 HUMAIN ÉLIMINÉ = ROUGE
+
       backgroundColor = Colors.red.withOpacity(0.2);
       borderColor = Colors.red;
     } else if (isEliminated) {

@@ -78,16 +78,16 @@ class CardWidget extends StatelessWidget {
         'assets/images/cards/dos-bleu.svg',
         width: w,
         height: h,
-        fit: BoxFit.contain, // ✅ Image entière
+        fit: BoxFit.contain, // â Image entière
       );
     }
 
     // Sinon, on affiche la face
     return SvgPicture.asset(
-      card!.imagePath, // ✅ Utilise le getter défini dans le fichier précédent
+      card!.imagePath, // â Utilise le getter défini dans le fichier précédent
       width: w,
       height: h,
-      fit: BoxFit.contain, // ✅ Image entière
+      fit: BoxFit.contain, // â Image entière
       placeholderBuilder: (context) => Container(
         color: Colors.white,
         child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),

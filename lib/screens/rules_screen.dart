@@ -30,18 +30,18 @@ class RulesScreen extends StatelessWidget {
               context,
               '🎯 Objectif du jeu',
               'Le but du Dutch est de terminer la manche avec le moins de points possible.\n\n'
-                  'À chaque tour, les joueurs essaient d’échanger leurs cartes les plus pénalisantes '
-                  'et de mémoriser leurs cartes pour prendre l’avantage.',
+                  'À chaque tour, les joueurs essaient d\'échanger leurs cartes les plus pénalisantes '
+                  'et de mémoriser leurs cartes pour prendre l\'avantage.',
             ),
             _buildSection(
               context,
-              '🔄 Déroulement d’un tour',
+              '🔄 Déroulement d\'un tour',
               'À votre tour, vous n\'avez que DEUX choix :\n\n'
                   '1️⃣ Piocher une carte\n'
                   '• Vous pouvez soit échanger la carte piochée avec une carte de votre main.\n'
                   '  → La carte de votre main est alors défaussée et la carte piochée remplace la carte défaussée.\n'
                   '• Soit défausser directement la carte piochée.\n'
-                  '  → Si elle a un pouvoir, vous pouvez l’activer.\n'
+                  '  → Si elle a un pouvoir, vous pouvez l\'activer.\n'
                   '• Puis la défausse collective s\'active.\n\n'
                   '⚠️ Si vous piochez, vous ne pourrez PLUS annoncer Dutch durant ce tour.\n\n'
                   '2️⃣ Annoncer « DUTCH »\n'
@@ -67,24 +67,24 @@ class RulesScreen extends StatelessWidget {
                   '• Tous les joueurs révèlent leurs cartes.\n'
                   '• Les points sont comptés.\n\n'
                   '✅ Si le joueur a le plus petit score, il gagne la manche.\n'
-                  '❌ S’il n’a PAS le plus petit score, il est dernier.\n'
-                  '🤝 En cas d’égalité, le joueur ayant dit Dutch l’emporte.',
+                  '❌ S\'il n\'a PAS le plus petit score, il est dernier.\n'
+                  '🤝 En cas d\'égalité, le joueur ayant dit Dutch l\'emporte.',
             ),
             _buildCardValuesTable(context),
             _buildSection(
               context,
               '✨ Cartes spéciales (Pouvoirs)',
-              'Les pouvoirs s’activent UNIQUEMENT quand la carte est défaussée.\n\n'
+              'Les pouvoirs s\'activent UNIQUEMENT quand la carte est défaussée.\n\n'
                   '🃏 Joker (0 point)\n'
-                  '• Mélange le jeu d’un joueur de ton choix.\n\n'
+                  '• Mélange le jeu d\'un joueur de ton choix.\n\n'
                   '7️⃣ Le Sept\n'
                   '• Regarde une de vos cartes que vous ne connaissez pas.\n\n'
                   '🔟 Le Dix\n'
-                  '• Regarde une carte du jeu d’un adversaire.\n\n'
+                  '• Regarde une carte du jeu d\'un adversaire.\n\n'
                   '🤵 Le Valet (11 points)\n'
                   '• Échange une carte :\n'
-                  '  – soit avec un adversaire\n'
-                  '  – soit entre deux adversaires.',
+                  '  → soit avec un adversaire\n'
+                  '  → soit entre deux adversaires.',
             ),
           ],
         ),
@@ -117,7 +117,7 @@ class RulesScreen extends StatelessWidget {
           Text(
             content,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
               fontSize: ScreenUtils.scaleFont(context, 15),
               height: 1.4,
             ),
@@ -167,7 +167,7 @@ class RulesScreen extends StatelessWidget {
             border: TableBorder.all(color: Colors.white24),
             children: [
               TableRow(
-                decoration: BoxDecoration(color: Colors.white12),
+                decoration: const BoxDecoration(color: Colors.white12),
                 children: [
                   _tableCell(context, 'Carte', true),
                   _tableCell(context, 'Valeur', true),
@@ -194,7 +194,7 @@ class RulesScreen extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: Colors.white.withOpacity(header ? 1 : 0.9),
+          color: Colors.white.withValues(alpha: header ? 1 : 0.9),
           fontWeight: header ? FontWeight.bold : FontWeight.normal,
           fontSize: ScreenUtils.scaleFont(context, 14),
         ),

@@ -24,15 +24,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    debugPrint("🎮 [GameScreen] INIT");
-
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      debugPrint("🎮 [GameScreen] PostFrameCallback");
       _checkAndNavigateIfEnded();
       _checkAndStartBotTurn();
     });
@@ -40,7 +37,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    debugPrint("🎮 [GameScreen] DISPOSE");
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
@@ -53,19 +49,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _checkAndNavigateIfEnded() {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     if (gameProvider.gameState != null && gameProvider.gameState!.phase == GamePhase.ended) {
-      debugPrint("🏁 [GameScreen] Partie terminée");
-      
       if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-        // ✅ Si Dutch a été appelé, passer par DutchRevealScreen
         if (gameProvider.gameState!.dutchCallerId != null) {
-          debugPrint("   📢 Dutch détecté -> Navigation vers DutchRevealScreen");
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const DutchRevealScreen()),
           );
         } else {
-          // ✅ Sinon, aller directement aux résultats
-          debugPrint("   📊 Pas de Dutch -> Navigation vers ResultsScreen");
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const ResultsScreen()),
@@ -79,42 +69,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final gameState = gameProvider.gameState;
 
-    if (gameState == null) {
-      debugPrint("⚠️ [GameScreen] GameState NULL");
-      return;
-    }
-
-    debugPrint("📊 [GameScreen] État du jeu:");
-    debugPrint("   - Phase: ${gameState.phase}");
-    debugPrint("   - Joueur actuel: ${gameState.currentPlayer.name}");
-    debugPrint("   - Est humain: ${gameState.currentPlayer.isHuman}");
-    debugPrint("   - isProcessing: ${gameProvider.isProcessing}");
+    if (gameState == null) return;
 
     if (!gameState.currentPlayer.isHuman &&
         gameState.phase == GamePhase.playing &&
         !gameProvider.isProcessing) {
-      debugPrint("🤖 [GameScreen] Démarrage tour du bot");
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
-          debugPrint("🤖 [GameScreen] Appel _checkAndPlayBotTurn");
           gameProvider.gameState;
         }
       });
-    } else {
-      debugPrint("👤 [GameScreen] Tour humain ou phase incorrecte");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("🎨 [GameScreen] BUILD");
-
     final gameState = context.watch<GameProvider>().gameState;
 
     if (gameState != null && gameState.phase == GamePhase.ended) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-          // ✅ Si Dutch a été appelé, passer par DutchRevealScreen
           if (gameState.dutchCallerId != null) {
             Navigator.pushReplacement(
               context,
@@ -135,7 +109,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       body: Consumer<GameProvider>(
         builder: (context, gameProvider, child) {
           if (!gameProvider.hasActiveGame) {
-            debugPrint("⚠️ [GameScreen] Pas de partie active");
             return const Center(
                 child: CircularProgressIndicator(color: Colors.amber));
           }
@@ -147,7 +120,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 !gameState.currentPlayer.isHuman &&
                 gameState.phase == GamePhase.playing &&
                 !gameProvider.isProcessing) {
-              debugPrint("🔔 [GameScreen] Build détecté: bot doit jouer");
               gameProvider.gameState;
             }
           });
@@ -199,7 +171,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         gs.currentPlayer.id == human.id && gs.phase == GamePhase.playing;
     bool hasDrawn = gs.drawnCard != null;
 
-    // ✅ FIX : Pendant la phase de réaction, tout le monde peut cliquer sur ses cartes
     bool canInteractWithCards = isMyTurn || gs.phase == GamePhase.reaction;
 
     return Stack(
@@ -310,11 +281,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       PlayerHandWidget(
                         player: human,
                         isHuman: true,
-                        isActive:
-                            canInteractWithCards, // ✅ FIX : Peut cliquer pendant la réaction
+                        isActive: canInteractWithCards,
                         onCardTap: (index) => _handleCardTap(gp, gs, index),
-                        selectedIndices: gp.shakingCardIndices
-                            .toList(), // ✅ Animation d'erreur
+                        selectedIndices: gp.shakingCardIndices.toList(),
                         cardSize: CardSize.medium,
                       ),
                     ],
@@ -384,7 +353,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildCenterTable(
       GameState gs, GameProvider gp, bool isMyTurn, bool hasDrawn) {
     bool isReaction = gs.phase == GamePhase.reaction;
-    //String topCardValue = gs.topDiscardCard?.value ?? "?";
     String topCardValue = gs.topDiscardCard?.displayName ?? "?";
 
     return Column(
@@ -501,121 +469,54 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _handleCardTap(GameProvider gp, GameState gs, int index) {
-    debugPrint("🔥🔥🔥 [_handleCardTap] ═══════════════════════════════");
-    debugPrint("👆 [_handleCardTap] CLICK DÉTECTÉ !");
-    debugPrint("   - Index carte: $index");
-    debugPrint("   - Phase actuelle: ${gs.phase}");
-    debugPrint("   - Joueur actuel: ${gs.currentPlayer.name}");
-    debugPrint("   - isHuman: ${gs.currentPlayer.isHuman}");
-    debugPrint("   - Carte du dessus: ${gs.topDiscardCard?.value}");
-
     if (gs.phase == GamePhase.reaction) {
-      debugPrint("   ✅ PHASE REACTION confirmée");
-      debugPrint("   - Tentative match en phase réaction (JOUEUR HUMAIN)");
-
       final humanPlayer = gs.players.firstWhere((p) => p.isHuman);
-      debugPrint("   - Joueur humain trouvé: ${humanPlayer.name}");
-      debugPrint(
-          "   - Main du joueur: ${humanPlayer.hand.map((c) => c.value).toList()}");
-      debugPrint("   - Carte sélectionnée: ${humanPlayer.hand[index].value}");
-
-      debugPrint("   🎯 APPEL attemptMatch avec forcedPlayer");
       gp.attemptMatch(index, forcedPlayer: humanPlayer);
     } else if (gs.phase == GamePhase.playing && gs.currentPlayer.isHuman) {
-      debugPrint("   ℹ️ PHASE PLAYING - Tour du joueur");
-
       if (gs.drawnCard != null) {
-        debugPrint("   - Remplacement de carte");
         gp.replaceCard(index);
-      } else {
-        debugPrint("   - Pas de carte piochée, aucune action");
       }
-    } else {
-      debugPrint("   ❌ AUCUNE ACTION POSSIBLE");
-      debugPrint("   - Phase: ${gs.phase}");
-      debugPrint("   - Tour du joueur: ${gs.currentPlayer.name}");
-      debugPrint("   - Est humain: ${gs.currentPlayer.isHuman}");
     }
-
-    debugPrint("🔥🔥🔥 [_handleCardTap] FIN ═══════════════════════════════");
   }
 
   Widget _buildSpecialPowerOverlay(GameProvider gp, GameState gs) {
-    debugPrint("🔍 [_buildSpecialPowerOverlay] ENTREE");
-    debugPrint(
-        "   - specialCardToActivate: ${gs.specialCardToActivate?.value}");
-    debugPrint("   - isWaitingForSpecialPower: ${gs.isWaitingForSpecialPower}");
-    debugPrint("   - currentPlayer: ${gs.currentPlayer.name}");
-    debugPrint("   - isHuman: ${gs.currentPlayer.isHuman}");
-
-    if (gs.specialCardToActivate == null) {
-      debugPrint("   ❌ Pas de carte spéciale, retour SizedBox");
-      return const SizedBox();
-    }
-
-    if (!gs.currentPlayer.isHuman) {
-      debugPrint("   ❌ Pas un humain, retour SizedBox");
-      return const SizedBox();
-    }
+    if (gs.specialCardToActivate == null) return const SizedBox();
+    if (!gs.currentPlayer.isHuman) return const SizedBox();
 
     Player? playerWithPower;
 
-    // Si c'est le tour d'un joueur et qu'il a un pouvoir
     if (gs.currentPlayer.isHuman && gs.isWaitingForSpecialPower) {
       playerWithPower = gs.currentPlayer;
     } else {
-      // Sinon, chercher le joueur humain (cas du match en réaction)
       try {
         playerWithPower = gs.players.firstWhere((p) => p.isHuman);
       } catch (e) {
-        debugPrint("   ❌ Pas de joueur humain");
         return const SizedBox();
       }
     }
 
-    if (!playerWithPower.isHuman) {
-      debugPrint("   ❌ Pas un humain, retour SizedBox");
-      return const SizedBox();
-    }
-
-    debugPrint("   ✅ Affichage du dialogue via PostFrameCallback");
+    if (!playerWithPower.isHuman) return const SizedBox();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      debugPrint("   📢 [PostFrameCallback] EXECUTION");
-      debugPrint(
-          "      - Route isCurrent: ${ModalRoute.of(context)?.isCurrent}");
-      debugPrint(
-          "      - isWaitingForSpecialPower: ${gs.isWaitingForSpecialPower}");
-
       if (ModalRoute.of(context)?.isCurrent == true &&
           gs.isWaitingForSpecialPower) {
         PlayingCard trigger = gs.specialCardToActivate!;
         String val = trigger.value;
 
-        debugPrint("      ✅ Conditions OK, affichage dialogue pour: $val");
-
         if (val == '7') {
-          debugPrint("      🎯 Dialogue carte 7");
           SpecialPowerDialogs.showLookCardDialog(context, trigger, true);
         } else if (val == '10') {
-          debugPrint("      🎯 Dialogue carte 10");
           SpecialPowerDialogs.showLookCardDialog(context, trigger, false);
         } else if (val == 'V') {
-          debugPrint("      🎯 Dialogue Valet");
           SpecialPowerDialogs.showValetSwapDialog(context, trigger);
         } else if (val == 'JOKER') {
-          debugPrint("      🎯 Dialogue Joker");
           SpecialPowerDialogs.showJokerDialog(context, trigger);
         } else {
-          debugPrint("      ⏭️ Carte sans dialogue, skip direct");
           gp.skipSpecialPower();
         }
-      } else {
-        debugPrint("      ❌ Conditions NON OK, pas de dialogue");
       }
     });
 
-    debugPrint("   🖤 Retour Container noir");
     return Container(color: Colors.black54);
   }
 
@@ -693,7 +594,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 title: const Text("Quitter ?",
                     style: TextStyle(color: Colors.white)),
                 content: const Text(
-                    "Quitter la partie ? (Les données ne seront pas sauvegardés)",
+                    "Quitter la partie ? (Les données ne seront pas sauvegardées)",
                     style: TextStyle(color: Colors.white70)),
                 actions: [
                   TextButton(
@@ -702,15 +603,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                           style: TextStyle(color: Colors.white))),
                   TextButton(
                       onPressed: () {
-                        // ✅ AJOUTER CES 2 LIGNES :
                         final gp =
                             Provider.of<GameProvider>(context, listen: false);
-                        gp.quitGame(); // Nettoyer le gameState
-
+                        gp.quitGame();
                         Navigator.pop(ctx, true);
                       },
                       child: const Text("Oui",
-                          style: TextStyle(color: Colors.redAccent)))
+                          style: TextStyle(color: Colors.redAccent))),
                 ]));
   }
 }

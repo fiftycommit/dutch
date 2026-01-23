@@ -2,7 +2,6 @@ import 'dart:math';
 import 'card.dart';
 import 'player.dart';
 import 'game_settings.dart';
-import 'package:flutter/foundation.dart';
 
 enum GameMode { quick, tournament }
 
@@ -88,14 +87,14 @@ class GameState {
   }
 
   // ============================================================
-  // 🎴 SMART SHUFFLE
+  // ð´ SMART SHUFFLE
   // ============================================================
   void smartShuffle() {
     Random rnd = Random();
     
     if (difficulty == Difficulty.easy) {
       deck.shuffle();
-      addToHistory("🎲 Mélange aléatoire (Mode Détendu)");
+      addToHistory("ð² Mélange aléatoire (Mode Détendu)");
       
     } else if (difficulty == Difficulty.medium) {
       // MODE MEDIUM: 50% mauvaises au début
@@ -174,7 +173,6 @@ class GameState {
       addToHistory("⚖️ Mélange tactique (Mode Équilibré)");
       
     } else {
-      // MODE HARD: 80% mauvaises
       List<PlayingCard> good = [];
       List<PlayingCard> medium = [];
       List<PlayingCard> bad = [];
@@ -196,7 +194,6 @@ class GameState {
 
       deck.clear();
 
-      // Enterrer les bonnes au fond
       while (good.isNotEmpty) {
         deck.add(good.removeLast());
       }
@@ -206,9 +203,7 @@ class GameState {
         deck.add(medium.removeLast());
       }
       
-      debugPrint("🔥 [HARD] Fond du deck: ${deck.length} cartes (bonnes enterrées)");
-      
-      // 80% mauvaises en haut
+
       while (bad.isNotEmpty || medium.isNotEmpty) {
         double roll = rnd.nextDouble();
         
@@ -220,11 +215,10 @@ class GameState {
           deck.add(bad.removeLast());
         }
       }
-      
-      debugPrint("🔥 [HARD] Deck total: ${deck.length} cartes");
+
 
       _partialShuffle(deck, 0.02);
-      addToHistory("🔥 Mélange BRUTAL (Mode Challenger)");
+      addToHistory("ð¥ Mélange BRUTAL (Mode Challenger)");
     }
   }
 
@@ -240,9 +234,7 @@ class GameState {
     }
   }
 
-  // ============================================================
-  // 🃏 DEAL CARDS - VERSION ANTI-MATCH
-  // ============================================================
+
   void dealCards() {
     Random rnd = Random();
     
@@ -282,11 +274,9 @@ class GameState {
   }
 
   void _dealCardsMedium(Random rnd) {
-    // Séparer les Jokers
     List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
     List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
     
-    // Grouper par valeur
     Map<String, List<PlayingCard>> cardsByValue = {};
     for (var card in normalCards) {
       cardsByValue.putIfAbsent(card.value, () => []);
@@ -296,12 +286,10 @@ class GameState {
       cards.shuffle(rnd);
     }
     
-    // Valeurs par catégorie
     List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
     List<String> mediumValues = ['7', '6', '5'];
     List<String> goodValues = ['4', '3', '2', 'A'];
     
-    // Distribution: 50% mauvaises, avec séparation partielle
     _distributeWithSeparation(
       cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
       badCardsPerPlayer: 2,
@@ -310,11 +298,9 @@ class GameState {
   }
 
   void _dealCardsHard(Random rnd) {
-    // Séparer les Jokers
     List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
     List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
     
-    // Grouper par valeur
     Map<String, List<PlayingCard>> cardsByValue = {};
     for (var card in normalCards) {
       cardsByValue.putIfAbsent(card.value, () => []);
@@ -324,12 +310,11 @@ class GameState {
       cards.shuffle(rnd);
     }
     
-    // Valeurs par catégorie (inclut 7, 10, V pour plus de variété)
     List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
     List<String> mediumValues = ['7', '6', '5'];
     List<String> goodValues = ['4', '3', '2', 'A'];
     
-    // 🔥 Distribution BRUTALE: ~3 mauvaises par joueur, valeurs uniques
+
     _distributeWithSeparation(
       cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
       badCardsPerPlayer: 3,
@@ -361,14 +346,14 @@ class GameState {
     List<List<PlayingCard>> hands = List.generate(numPlayers, (_) => []);
     Set<String> globalUsedValues = {};
     
-    // PHASE 1: Donner des mauvaises cartes UNIQUES à chaque joueur
+    // PHASE 1: Donner des mauvaises cartes UNIQUES Ã  chaque joueur
     for (int playerIdx in playerOrder) {
       int cardsGiven = 0;
       
       for (var value in badValues) {
         if (cardsGiven >= badCardsPerPlayer) break;
         
-        // Séparation: éviter les valeurs déjà données
+        // Séparation: éviter les valeurs déjÃ  données
         if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
           continue;
         }
@@ -381,7 +366,6 @@ class GameState {
       }
     }
     
-    // PHASE 2: Compléter avec moyennes (uniques si possible)
     List<String> remaining = [...badValues, ...mediumValues];
     remaining.shuffle(rnd);
     
@@ -405,7 +389,6 @@ class GameState {
       }
     }
     
-    // PHASE 3: Compléter à 4 cartes (prendre ce qui reste)
     List<String> allValues = [...badValues, ...mediumValues, ...goodValues];
     
     for (int playerIdx in playerOrder) {
@@ -416,7 +399,6 @@ class GameState {
         
         allValues.shuffle(rnd);
         for (var value in allValues) {
-          // Éviter doublon dans sa propre main
           if (playerValues.contains(value)) continue;
           
           if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
@@ -427,7 +409,6 @@ class GameState {
           }
         }
         
-        // Dernier recours: prendre n'importe quoi
         if (!cardAdded) {
           for (var value in allValues) {
             if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
@@ -442,13 +423,11 @@ class GameState {
       }
     }
     
-    // Assigner les mains aux joueurs
     for (int i = 0; i < numPlayers; i++) {
       players[i].hand = hands[i];
       players[i].knownCards = List.filled(hands[i].length, false);
     }
     
-    // Reconstruire le deck: bonnes au fond, mauvaises en haut
     deck.clear();
     
     for (var value in goodValues) {
@@ -475,26 +454,9 @@ class GameState {
 
   void _logDealResults() {
     int jokers = deck.where((c) => c.value == 'JOKER').length;
-    addToHistory("🎴 Distribution terminée ($jokers Jokers dans le deck)");
-    
-    // Debug
-    Set<String> allValues = {};
-    int duplicates = 0;
-    
-    for (var player in players) {
-      int handScore = player.hand.fold(0, (sum, card) => sum + card.points);
-      List<String> values = player.hand.map((c) => c.value).toList();
-      
-      for (var v in values) {
-        if (allValues.contains(v)) duplicates++;
-        allValues.add(v);
-      }
-      
-      debugPrint("🃏 ${player.name}: $values = $handScore pts");
-    }
-    
-    debugPrint("⚔️ Valeurs en double (matchs possibles): $duplicates");
+    addToHistory("🃏 Distribution terminée ($jokers Jokers dans le deck)");
   }
+
 
   void shuffleDeckRandomly() {
     deck.shuffle(Random());

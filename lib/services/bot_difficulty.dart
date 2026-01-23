@@ -5,8 +5,8 @@ class BotDifficulty {
   final int dutchThreshold;            // Score max pour appeler Dutch
   final double reactionSpeed;          // Vitesse de réaction (0-1)
   final double matchAccuracy;          // Précision des matchs
-  final double reactionMatchChance;    // ✅ NOUVEAU: Chance de tenter un match en réaction
-  final int keepCardThreshold;         // ✅ NOUVEAU: Seuil pour garder une carte piochée
+  final double reactionMatchChance;    // â NOUVEAU: Chance de tenter un match en réaction
+  final int keepCardThreshold;         // â NOUVEAU: Seuil pour garder une carte piochée
 
   const BotDifficulty({
     required this.name,
@@ -19,43 +19,43 @@ class BotDifficulty {
     required this.keepCardThreshold,
   });
 
-  // ✅ BRONZE : Bot débutant, fait beaucoup d'erreurs
+  // â BRONZE : Bot débutant, fait beaucoup d'erreurs
   static const BotDifficulty bronze = BotDifficulty(
     name: "Bronze",
     forgetChancePerTurn: 0.25,      // Oublie souvent (25%)
     confusionOnSwap: 0.45,          // Très confus après échange (45%)
     dutchThreshold: 12,             // Dutch seulement si très bas score
-    reactionSpeed: 0.4,             // Lent à réagir
+    reactionSpeed: 0.4,             // Lent Ã  réagir
     matchAccuracy: 0.65,            // Rate souvent ses matchs (35% d'erreur)
     reactionMatchChance: 0.20,      // Tente rarement de matcher en réaction
-    keepCardThreshold: 8,           // Garde les cartes jusqu'à 8 pts
+    keepCardThreshold: 8,           // Garde les cartes jusqu'Ã  8 pts
   );
 
-  // ✅ ARGENT : Bot intermédiaire, joue correctement
+  // â ARGENT : Bot intermédiaire, joue correctement
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
     forgetChancePerTurn: 0.10,      // Oublie parfois (10%)
     confusionOnSwap: 0.15,          // Parfois confus (15%)
-    dutchThreshold: 6,              // Dutch à 6 pts ou moins
+    dutchThreshold: 6,              // Dutch Ã  6 pts ou moins
     reactionSpeed: 0.70,            // Réaction correcte
     matchAccuracy: 0.85,            // Bon au match (15% d'erreur)
     reactionMatchChance: 0.50,      // 50% de chance de matcher en réaction
-    keepCardThreshold: 6,           // Garde les cartes jusqu'à 6 pts
+    keepCardThreshold: 6,           // Garde les cartes jusqu'Ã  6 pts
   );
 
-  // ✅ OR : Bot expert, très stratégique
+  // â OR : Bot expert, très stratégique
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
     forgetChancePerTurn: 0.02,      // Oublie très rarement (2%)
     confusionOnSwap: 0.05,          // Quasi jamais confus (5%)
-    dutchThreshold: 4,              // Dutch agressif à 4 pts
+    dutchThreshold: 4,              // Dutch agressif Ã  4 pts
     reactionSpeed: 0.95,            // Réaction quasi instantanée
     matchAccuracy: 0.95,            // Excellent au match (5% d'erreur)
     reactionMatchChance: 0.80,      // Match très souvent en réaction (80%)
-    keepCardThreshold: 5,           // Exigeant, garde seulement ≤5 pts
+    keepCardThreshold: 5,           // Exigeant, garde seulement â¤5 pts
   );
 
-  // ✅ NOUVEAU : PLATINE - Bot quasi parfait (pour mode très difficile)
+  // â NOUVEAU : PLATINE - Bot quasi parfait (pour mode très difficile)
   static const BotDifficulty platinum = BotDifficulty(
     name: "Platine",
     forgetChancePerTurn: 0.01,      // Mémoire quasi parfaite

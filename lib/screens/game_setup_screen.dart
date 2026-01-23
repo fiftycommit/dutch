@@ -148,30 +148,45 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   void _startGame(BuildContext context, bool useSBMM) async {
     setState(() => _isLoading = true);
 
-    Difficulty botLevel;
 
+    BotSkillLevel skillLevel;
     if (useSBMM) {
-      botLevel =
-          await StatsService.getRecommendedDifficulty(slotId: widget.saveSlot);
+      Difficulty recommendedDifficulty = await StatsService.getRecommendedDifficulty(slotId: widget.saveSlot);
+      skillLevel = _difficultyToSkillLevel(recommendedDifficulty);
     } else {
-      botLevel = selectedBotDifficulty;
+      skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
     }
 
     List<Player> players = [
       Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
     ];
 
-    // ✅ NOUVEAU : Attribution des personnalités selon la difficulté
-    List<BotPersonality> personalities = _getBotPersonalities(botLevel);
+    players.add(Player(
+      id: 'bot_0',
+      name: _getBotName(BotBehavior.fast, skillLevel),
+      isHuman: false,
+      botBehavior: BotBehavior.fast,
+      botSkillLevel: skillLevel,
+      position: 1
+    ));
 
-    for (int i = 0; i < 3; i++) {
-      players.add(Player(
-          id: 'bot_$i',
-          name: _getBotName(personalities[i], i),
-          isHuman: false,
-          botPersonality: personalities[i],
-          position: i + 1));
-    }
+    players.add(Player(
+      id: 'bot_1',
+      name: _getBotName(BotBehavior.aggressive, skillLevel),
+      isHuman: false,
+      botBehavior: BotBehavior.aggressive,
+      botSkillLevel: skillLevel,
+      position: 2
+    ));
+
+    players.add(Player(
+      id: 'bot_2',
+      name: _getBotName(BotBehavior.balanced, skillLevel),
+      isHuman: false,
+      botBehavior: BotBehavior.balanced,
+      botSkillLevel: skillLevel,
+      position: 3
+    ));
 
     if (!mounted) return;
 
@@ -191,69 +206,48 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         MaterialPageRoute(builder: (context) => const MemorizationScreen()));
   }
 
-  /// 🎭 NOUVEAU : Obtenir les personnalités selon la difficulté
-  List<BotPersonality> _getBotPersonalities(Difficulty level) {
-    switch (level) {
+
+  BotSkillLevel _difficultyToSkillLevel(Difficulty difficulty) {
+    switch (difficulty) {
       case Difficulty.easy:
-        // Bronze : 1 Fast, 2 Équilibrés (comportement simple)
-        return [
-          BotPersonality.aggressive, // Fast
-          BotPersonality.balanced,   // Équilibré
-          BotPersonality.balanced,   // Équilibré
-        ];
-
+        return BotSkillLevel.bronze;
       case Difficulty.medium:
-        // Argent : Mix équilibré (1 Fast, 1 Équilibré, 1 Réfléchi)
-        return [
-          BotPersonality.aggressive, // Fast
-          BotPersonality.balanced,   // Équilibré
-          BotPersonality.cautious,   // Réfléchi
-        ];
-
+        return BotSkillLevel.silver;
       case Difficulty.hard:
-        // Or : Équipe compétitive (1 Fast optimisé, 1 Équilibré, 1 Réfléchi)
-        return [
-          BotPersonality.aggressive, // Fast (très optimisé)
-          BotPersonality.balanced,   // Équilibré adaptatif
-          BotPersonality.cautious,   // Réfléchi (stratège)
-        ];
+        return BotSkillLevel.gold;
     }
   }
 
-  /// 🏷️ NOUVEAU : Noms des bots selon leur personnalité
-  String _getBotName(BotPersonality personality, int index) {
-    List<String> names;
-    
-    switch (personality) {
-      case BotPersonality.aggressive: // 🏃 FAST
-        names = ["Flash", "Speedy", "Bolt"];
-        break;
 
-      case BotPersonality.cautious: // 🧠 RÉFLÉCHI
-        names = ["Sherlock", "Brain", "Prof"];
+  String _getBotName(BotBehavior behavior, BotSkillLevel level) {
+    // Préfixes selon le niveau
+    String prefix;
+    switch (level) {
+      case BotSkillLevel.bronze:
+        prefix = "Novice";
         break;
-
-      case BotPersonality.balanced: // ⚖️ ÉQUILIBRÉ
-        names = ["Jordan", "Casey", "Morgan"];
+      case BotSkillLevel.silver:
+        prefix = "Pro";
         break;
-
-      // Anciens (ne devraient plus être utilisés mais on les garde)
-      case BotPersonality.beginner:
-        names = ["Noob", "Junior", "Bleu"];
+      case BotSkillLevel.gold:
+        prefix = "Expert";
         break;
-
-      case BotPersonality.novice:
-        names = ["Alex", "Sam", "Lou"];
-        break;
-
-      case BotPersonality.legend:
-        names = ["Zeus", "Athena", "Thor"];
-        break;
-
-      default:
-        names = ["Bot1", "Bot2", "Bot3"];
     }
-    
-    return names[index % names.length];
+
+    // Suffixes selon le comportement
+    String suffix;
+    switch (behavior) {
+      case BotBehavior.fast:
+        suffix = "Flash";
+        break;
+      case BotBehavior.aggressive:
+        suffix = "Hunter";
+        break;
+      case BotBehavior.balanced:
+        suffix = "Tactique";
+        break;
+    }
+
+    return "$prefix $suffix";
   }
 }

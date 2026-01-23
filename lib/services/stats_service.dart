@@ -36,17 +36,17 @@ class StatsService {
   }
 
   static Future<void> saveGameResult({
-    required int playerRank, // 🆕 Classement (1, 2, 3, 4)
+    required int playerRank, // ð Classement (1, 2, 3, 4)
     required int score,
     required bool calledDutch,
     required bool wonDutch,
     int slotId = 1,
-    bool isSBMM = false, // 🆕 Flag SBMM
+    bool isSBMM = false, // ð Flag SBMM
   }) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic> stats = await getStats(slotId: slotId);
 
-    // --- MISE À JOUR DES STATISTIQUES GÉNÉRALES ---
+    // --- MISE Ã JOUR DES STATISTIQUES GÃNÃRALES ---
     stats["gamesPlayed"] = (stats["gamesPlayed"] ?? 0) + 1;
 
     // Seul le premier est considéré comme gagnant
@@ -54,7 +54,7 @@ class StatsService {
       stats["gamesWon"] = (stats["gamesWon"] ?? 0) + 1;
     }
 
-    // Mise à jour du meilleur score
+    // Mise Ã  jour du meilleur score
     int? currentBest = stats["bestScore"];
     if (currentBest == null || score < currentBest) {
       stats["bestScore"] = score;
@@ -69,30 +69,30 @@ class StatsService {
       }
     }
 
-    // --- LOGIQUE MMR AMÉLIORÉE (Système de classement) ---
+    // --- LOGIQUE MMR AMÃLIORÃE (Système de classement) ---
     int currentMMR = stats["mmr"] ?? 0;
     int mmrChange = 0;
 
-    // ✅ NOUVEAU : RP = 0 si pas SBMM
+    // â NOUVEAU : RP = 0 si pas SBMM
     if (isSBMM) {
-      // 🏆 Calcul selon le classement
+      // ð Calcul selon le classement
       switch (playerRank) {
-        case 1: // 🥇 Premier
+        case 1: // ð¥ Premier
           mmrChange = 50; // Victoire de base
           if (calledDutch) {
             mmrChange += 30; // Bonus Dutch réussi
           }
           break;
 
-        case 2: // 🥈 Deuxième
+        case 2: // ð¥ Deuxième
           mmrChange = 25; // Récompense pour la 2ème place
           break;
 
-        case 3: // 🥉 Troisième
+        case 3: // ð¥ Troisième
           mmrChange = -15; // Légère pénalité
           break;
 
-        case 4: // 💀 Quatrième
+        case 4: // ð Quatrième
           mmrChange = -30; // Grosse pénalité
           if (calledDutch && !wonDutch) {
             mmrChange -= 30; // Pénalité Dutch raté (-30 supplémentaires)
@@ -105,7 +105,7 @@ class StatsService {
 
       stats["mmr"] = newMMR;
     } else {
-      // ✅ Mode manuel : RP = 0
+      // â Mode manuel : RP = 0
       mmrChange = 0;
       // Le MMR ne change pas
     }
@@ -116,9 +116,9 @@ class StatsService {
     history.insert(0, {
       "date": DateTime.now().toIso8601String(),
       "score": score,
-      "rank": playerRank, // 🆕 Sauvegarder le classement
+      "rank": playerRank, // ð Sauvegarder le classement
       "dutch": calledDutch,
-      "mmrChange": mmrChange, // ✅ 0 si pas SBMM
+      "mmrChange": mmrChange, // â 0 si pas SBMM
     });
 
     if (history.length > 20) history = history.sublist(0, 20);

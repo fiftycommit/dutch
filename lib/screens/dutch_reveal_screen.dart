@@ -17,19 +17,15 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  // ðŸ“ CONSTANTES DE TAILLE (Fixes pour garantir l'alignement)
   static const double CARD_HEIGHT = 64.0;
   static const double CARD_SPACING = 2.0;
   static const double SCROLL_STEP = CARD_HEIGHT + CARD_SPACING;
 
-  int currentRevealIndex = -1; // -1 = rien rÃ©vÃ©lÃ©
+  int currentRevealIndex = -1; // -1 = rien révélé
   Map<String, int> currentScores = {};
-  
-  // ContrÃ´leurs d'animation
+
   late AnimationController _flipController;
   late AnimationController _scorePopController;
-  
-  // ContrÃ´leurs de scroll (un par joueur)
   final Map<String, ScrollController> _scrollControllers = {};
 
   String? winnerId;
@@ -38,7 +34,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   @override
   void initState() {
     super.initState();
-    debugPrint("ðŸŽ¬ [DutchRevealScreen] INIT - Nouvelle logique synchronisÃ©e");
 
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -50,14 +45,12 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       vsync: this,
     );
 
-    // Initialisation des scores Ã  0 et des controllers
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     for (var player in gameProvider.gameState!.players) {
       currentScores[player.id] = 0;
       _scrollControllers[player.id] = ScrollController();
     }
 
-    // DÃ©marrage de la sÃ©quence aprÃ¨s un court dÃ©lai
     Future.delayed(const Duration(milliseconds: 1000), _startRevealSequence);
   }
 
@@ -74,24 +67,13 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   Future<void> _startRevealSequence() async {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final players = gameProvider.gameState!.players;
-    
-    // Trouver le nombre max de cartes Ã  rÃ©vÃ©ler
     int maxCards = players.map((p) => p.hand.length).reduce(math.max);
-    debugPrint("ðŸŒŠ Nombre de vagues Ã  rÃ©vÃ©ler : $maxCards");
 
     for (int waveIndex = 0; waveIndex < maxCards; waveIndex++) {
-      debugPrint("ðŸŒŠ VAGUE #$waveIndex");
-
-      // 1. SCROLL : Faire descendre ceux qui ont encore des cartes (ou qui viennent de finir)
       await _animateScroll(waveIndex, players);
 
-      // 2. RÃ‰VÃ‰LATION : Mettre Ã  jour l'index global pour dÃ©clencher les flips
-      setState(() {
-        currentRevealIndex = waveIndex;
-      });
+      setState(() => currentRevealIndex = waveIndex);
       await _flipController.forward(from: 0.0);
-
-      // 3. SCORE : Calculer et animer les points
       setState(() {
         for (var player in players) {
           if (waveIndex < player.hand.length) {
@@ -100,12 +82,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         }
       });
       await _scorePopController.forward(from: 0.0);
-
-      // Petite pause pour admirer le rÃ©sultat
       await Future.delayed(const Duration(milliseconds: 600));
     }
 
-    // Fin de la sÃ©quence
     _highlightWinner();
   }
 
@@ -135,21 +114,11 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   }
 
   void _highlightWinner() async {
-    debugPrint("ðŸ† Calcul du vainqueur...");
-    
-    // 1. Trouver le score minimum
-    int minScore = 999;
-    for (var score in currentScores.values) {
-      if (score < minScore) minScore = score;
-    }
-
-    // 2. Trouver les gagnants potentiels (cas d'Ã©galitÃ©)
-    List<String> winners = [];
-    currentScores.forEach((id, score) {
-      if (score == minScore) winners.add(id);
-    });
-
-    // 3. Gestion de la prioritÃ© au Dutch Caller
+    int minScore = currentScores.values.reduce((a, b) => a < b ? a : b);
+    List<String> winners = currentScores.entries
+        .where((e) => e.value == minScore)
+        .map((e) => e.key)
+        .toList();
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     String? finalWinnerId;
     
@@ -165,14 +134,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       revealComplete = true;
     });
 
-    // Navigation vers les rÃ©sultats aprÃ¨s dÃ©lai
+    // Navigation vers les résultats après délai
     await Future.delayed(const Duration(milliseconds: 2500));
     if (mounted) {
-      // Reset pour Ã©viter les boucles
-      // ✅ FIX BUG : Ne PAS réinitialiser dutchCallerId ici !
-      // Sinon ResultsScreen ne peut pas détecter qui a appelé Dutch
-      // La réinitialisation se fera dans quitGame() ou au début de la prochaine partie
-      // gameProvider.gameState!.dutchCallerId = null;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const ResultsScreen()),
@@ -188,7 +152,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
           if (!gameProvider.hasActiveGame) return const SizedBox();
 
           final gameState = gameProvider.gameState!;
-          // Ordonner : Bots, Humain, Bots
           final players = _orderPlayers(gameState.players);
 
           return Container(
@@ -203,13 +166,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
               child: Column(
                 children: [
                   const SizedBox(height: 20),
-                  // En-tÃªte
                   const Text("DUTCH !",
                       style: TextStyle(
                           fontFamily: 'Rye', fontSize: 40, color: Colors.amber)),
                   const SizedBox(height: 20),
-
-                  // GRILLE DES JOUEURS
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -243,7 +203,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         ),
         child: Column(
           children: [
-            // AVATAR & INFO
             Text(player.displayAvatar, style: const TextStyle(fontSize: 32)),
             Text(player.name,
                 style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
@@ -257,12 +216,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
               ),
             
             const SizedBox(height: 10),
-
-            // LISTE DÃ‰FILANTE DES CARTES
             Expanded(
               child: Stack(
                 children: [
-                  // Masque pour cacher les cartes non scrollÃ©es
                   Positioned.fill(
                     child: ShaderMask(
                       shaderCallback: (Rect bounds) {
@@ -276,14 +232,11 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                       blendMode: BlendMode.dstIn,
                       child: ListView.builder(
                         controller: _scrollControllers[player.id],
-                        physics: const NeverScrollableScrollPhysics(), // Scroll manuel uniquement
-                        padding: const EdgeInsets.only(top: SCROLL_STEP), // Espace initial
-                        itemCount: player.hand.length + 1, // +1 pour l'espace du trait rouge final
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(top: SCROLL_STEP),
+                        itemCount: player.hand.length + 1,
                         itemBuilder: (context, index) {
-                          // Cas : Trait rouge de fin
                           if (index == player.hand.length) {
-                            // On affiche le trait rouge seulement si on a dÃ©passÃ© la derniÃ¨re carte
-                            // ET que le reveal est assez avancÃ©
                             bool showRedLine = currentRevealIndex >= player.hand.length;
                             return AnimatedOpacity(
                               duration: const Duration(milliseconds: 300),
@@ -307,9 +260,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                             );
                           }
 
-                          // Cas : Carte normale
                           bool shouldReveal = index <= currentRevealIndex;
-                          // On anime le flip uniquement si c'est la vague actuelle
                           double animValue = (index == currentRevealIndex) ? _flipController.value : (shouldReveal ? 1.0 : 0.0);
 
                           return SizedBox(
@@ -331,17 +282,14 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
             ),
 
             const SizedBox(height: 10),
-
-            // SCORE AVEC EFFET RESSORT
             AnimatedBuilder(
               animation: _scorePopController,
               builder: (context, child) {
-                // Effet de scale : grossit puis revient
                 double scale = 1.0;
                 if (_scorePopController.value < 0.5) {
-                  scale = 1.0 + (_scorePopController.value * 0.4); // Max 1.2
+                  scale = 1.0 + (_scorePopController.value * 0.4);
                 } else {
-                  scale = 1.2 - ((_scorePopController.value - 0.5) * 0.4); // Retour Ã  1.0
+                  scale = 1.2 - ((_scorePopController.value - 0.5) * 0.4);
                 }
                 
                 return Transform.scale(
@@ -375,8 +323,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       ),
     );
   }
-  
-  // Utilitaire pour l'ordre d'affichage
+
   List<Player> _orderPlayers(List<Player> allPlayers) {
     Player human = allPlayers.firstWhere((p) => p.isHuman);
     List<Player> bots = allPlayers.where((p) => !p.isHuman).toList();
@@ -389,7 +336,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   }
 }
 
-// Widget simple pour gÃ©rer la rotation 3D
 class _FlipCard extends StatelessWidget {
   final PlayingCard card;
   final bool isRevealed;
@@ -401,14 +347,14 @@ class _FlipCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final angle = animationValue * math.pi;
     final transform = Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(angle);
-    bool showFront = animationValue > 0.5; // On change la face Ã  90 degrÃ©s
+    bool showFront = animationValue > 0.5;
 
     return Transform(
       transform: transform,
       alignment: Alignment.center,
       child: showFront && isRevealed
           ? Transform(
-              transform: Matrix4.rotationY(math.pi), // Miroir pour lire dans le bon sens
+              transform: Matrix4.rotationY(math.pi),
               alignment: Alignment.center,
               child: CardWidget(card: card, size: CardSize.small, isRevealed: true),
             )

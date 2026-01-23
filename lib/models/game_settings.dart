@@ -1,14 +1,19 @@
-// Enum pour la difficulté (Chance/Mélange)
 enum Difficulty { easy, medium, hard }
 
-// Enum pour la personnalité des bots
-enum BotPersonality { beginner, novice, balanced, cautious, aggressive, legend }
+enum BotBehavior { 
+  fast,
+  aggressive,
+  balanced
+}
+
+enum BotSkillLevel {
+  bronze,
+  silver,
+  gold
+}
 
 class GameSettings {
-  // Difficulté liée à la chance (Mélange)
   Difficulty luckDifficulty;
-
-  // Difficulté par défaut des bots (Sauvegardée dans les réglages)
   Difficulty botDifficulty;
 
   int reactionTimeMs;
