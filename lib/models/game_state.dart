@@ -497,9 +497,18 @@ class GameState {
   
   /// Retourne les rangs réels avec gestion des ex-aequo
   /// Retourne une Map<playerId, rang> où le rang tient compte des égalités
+  /// Cas spécial : le Dutch caller gagnant est SEUL #1, les autres avec même score sont #2
   Map<String, int> getFinalRanksWithTies() {
     List<Player> ranking = getFinalRanking();
     Map<String, int> ranks = {};
+    
+    // Vérifier si le Dutch caller a gagné
+    bool dutchCallerWon = dutchCallerId != null && didDutchCallerWin();
+    int? dutchCallerScore;
+    if (dutchCallerWon) {
+      Player caller = players.firstWhere((p) => p.id == dutchCallerId);
+      dutchCallerScore = getFinalScore(caller);
+    }
     
     int currentRank = 1;
     int? previousScore;
@@ -511,6 +520,21 @@ class GameState {
       // Cas spécial : Dutch caller raté est toujours dernier
       if (dutchCallerId != null && !didDutchCallerWin() && player.id == dutchCallerId) {
         ranks[player.id] = ranking.length; // Dernier
+        continue;
+      }
+      
+      // Le Dutch caller gagnant est TOUJOURS seul #1
+      if (dutchCallerWon && player.id == dutchCallerId) {
+        ranks[player.id] = 1;
+        previousScore = score;
+        continue;
+      }
+      
+      // Si Dutch caller a gagné et ce joueur a le même score → #2 (pas ex-aequo avec le Dutch caller)
+      if (dutchCallerWon && score == dutchCallerScore) {
+        currentRank = 2;
+        ranks[player.id] = currentRank;
+        previousScore = score;
         continue;
       }
       

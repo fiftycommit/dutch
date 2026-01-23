@@ -54,7 +54,7 @@ class RPCalculator {
   static int getRankColorValue(String rank) {
     switch (rank) {
       case 'Platine':
-        return 0xFF00CED1; // Cyan/Turquoise
+        return 0xFF00BFFF; // Bleu diamant brillant (Deep Sky Blue)
       case 'Or':
         return 0xFFFFD700; // Gold
       case 'Argent':

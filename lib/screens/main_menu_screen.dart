@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/stats_service.dart';
 import 'game_setup_screen.dart';
 import 'settings_screen.dart';
@@ -21,7 +22,23 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSelectedSlot();
     _loadAllSlots();
+  }
+
+  Future<void> _loadSelectedSlot() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSlot = prefs.getInt('lastSelectedSlot') ?? 1;
+    if (mounted) {
+      setState(() {
+        selectedSlot = savedSlot;
+      });
+    }
+  }
+
+  Future<void> _saveSelectedSlot(int slotId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastSelectedSlot', slotId);
   }
 
   Future<void> _loadAllSlots() async {
@@ -224,6 +241,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   Color _getRankColor(String rank) {
     switch (rank) {
+      case 'Platine':
+        return const Color(0xFF00BFFF); // Bleu diamant brillant
       case 'Or':
         return Colors.amber;
       case 'Argent':
@@ -236,7 +255,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Widget _buildSaveSlotCard(int id, String name, String rank, String rp,
       bool isSelected, Color rankColor) {
     return GestureDetector(
-      onTap: () => setState(() => selectedSlot = id),
+      onTap: () {
+        setState(() => selectedSlot = id);
+        _saveSelectedSlot(id);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 100,

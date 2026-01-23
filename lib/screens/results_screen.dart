@@ -405,12 +405,19 @@ class ResultsScreen extends StatelessWidget {
         // Vérifier si la main est vide (Dutch parfait)
         bool hasEmptyHand = player.hand.isEmpty;
         
+        // Nombre de joueurs et infos tournoi
+        int totalPlayers = gs.players.length;
+        int tournamentRound = gs.gameMode == GameMode.tournament ? gs.tournamentRound : 1;
+        
         RPResult rpResult = RPCalculator.calculateRP(
           playerRank: rank,
           currentMMR: currentMMR,
           calledDutch: isDutchCaller,
           hasEmptyHand: hasEmptyHand,
           isEliminated: isEliminated,
+          totalPlayers: totalPlayers,
+          isTournament: isTournament,
+          tournamentRound: tournamentRound,
         );
         
         pointsChangeText = rpResult.formattedChange;
