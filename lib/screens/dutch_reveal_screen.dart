@@ -146,6 +146,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isCompact = screenHeight < 400;
+    
     return Scaffold(
       body: Consumer<GameProvider>(
         builder: (context, gameProvider, child) {
@@ -165,19 +168,19 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
             child: SafeArea(
               child: Column(
                 children: [
-                  const SizedBox(height: 20),
-                  const Text("DUTCH !",
+                  SizedBox(height: isCompact ? 5 : 20),
+                  Text("DUTCH !",
                       style: TextStyle(
-                          fontFamily: 'Rye', fontSize: 40, color: Colors.amber)),
-                  const SizedBox(height: 20),
+                          fontFamily: 'Rye', fontSize: isCompact ? 24 : 40, color: Colors.amber)),
+                  SizedBox(height: isCompact ? 5 : 20),
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: players.map((p) => _buildPlayerColumn(p, gameState)).toList(),
+                      children: players.map((p) => _buildPlayerColumn(p, gameState, isCompact)).toList(),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: isCompact ? 5 : 20),
                 ],
               ),
             ),
@@ -187,15 +190,15 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 
-  Widget _buildPlayerColumn(Player player, GameState gameState) {
+  Widget _buildPlayerColumn(Player player, GameState gameState, bool isCompact) {
     bool isWinner = winnerId == player.id;
     bool isDutchCaller = gameState.dutchCallerId == player.id;
     int score = currentScores[player.id] ?? 0;
 
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(8),
+        margin: EdgeInsets.symmetric(horizontal: isCompact ? 2 : 4),
+        padding: EdgeInsets.all(isCompact ? 4 : 8),
         decoration: BoxDecoration(
           color: isWinner ? Colors.amber.withValues(alpha: 0.2) : Colors.black12,
           borderRadius: BorderRadius.circular(12),
@@ -203,19 +206,19 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         ),
         child: Column(
           children: [
-            Text(player.displayAvatar, style: const TextStyle(fontSize: 32)),
+            Text(player.displayAvatar, style: TextStyle(fontSize: isCompact ? 20 : 32)),
             Text(player.name,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.white, fontSize: isCompact ? 9 : 12, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis),
             if (isDutchCaller)
               Container(
                 margin: const EdgeInsets.only(top: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(4)),
-                child: const Text("DUTCH", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
+                child: Text("DUTCH", style: TextStyle(fontSize: isCompact ? 6 : 8, fontWeight: FontWeight.bold)),
               ),
             
-            const SizedBox(height: 10),
+            SizedBox(height: isCompact ? 4 : 10),
             Expanded(
               child: Stack(
                 children: [
@@ -234,7 +237,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         controller: _scrollControllers[player.id],
                         physics: const NeverScrollableScrollPhysics(),
                         // ignore: prefer_const_constructors
-                        padding: EdgeInsets.only(top: scrollStep),
+                        padding: EdgeInsets.only(top: isCompact ? scrollStep * 0.6 : scrollStep),
                         itemCount: player.hand.length + 1,
                         itemBuilder: (context, index) {
                           if (index == player.hand.length) {
@@ -243,12 +246,12 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                               duration: const Duration(milliseconds: 300),
                               opacity: showRedLine ? 1.0 : 0.0,
                               child: Container(
-                                height: scrollStep,
+                                height: isCompact ? scrollStep * 0.6 : scrollStep,
                                 alignment: Alignment.topCenter,
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Container(
-                                  width: 40,
-                                  height: 4,
+                                  width: isCompact ? 30 : 40,
+                                  height: isCompact ? 3 : 4,
                                   decoration: BoxDecoration(
                                     color: Colors.redAccent,
                                     borderRadius: BorderRadius.circular(2),
@@ -265,12 +268,13 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                           double animValue = (index == currentRevealIndex) ? _flipController.value : (shouldReveal ? 1.0 : 0.0);
 
                           return SizedBox(
-                            height: scrollStep,
+                            height: isCompact ? scrollStep * 0.6 : scrollStep,
                             child: Center(
                               child: _FlipCard(
                                 card: player.hand[index],
                                 isRevealed: shouldReveal,
                                 animationValue: animValue,
+                                isCompact: isCompact,
                               ),
                             ),
                           );
@@ -282,7 +286,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
               ),
             ),
 
-            const SizedBox(height: 10),
+            SizedBox(height: isCompact ? 4 : 10),
             AnimatedBuilder(
               animation: _scorePopController,
               builder: (context, child) {
@@ -296,15 +300,18 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                 return Transform.scale(
                   scale: scale,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompact ? 10 : 16,
+                      vertical: isCompact ? 4 : 8,
+                    ),
                     decoration: BoxDecoration(
                       color: isWinner ? Colors.amber : Colors.black45,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(isCompact ? 8 : 12),
                     ),
                     child: Text(
                       "$score",
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: isCompact ? 16 : 24,
                         fontWeight: FontWeight.bold,
                         color: isWinner ? Colors.black : Colors.amber,
                       ),
@@ -315,9 +322,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
             ),
             
             if (isWinner && revealComplete)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Icon(Icons.emoji_events, color: Colors.amber),
+              Padding(
+                padding: EdgeInsets.only(top: isCompact ? 4.0 : 8.0),
+                child: Icon(Icons.emoji_events, color: Colors.amber, size: isCompact ? 16 : 24),
               ),
           ],
         ),
@@ -341,14 +348,21 @@ class _FlipCard extends StatelessWidget {
   final PlayingCard card;
   final bool isRevealed;
   final double animationValue;
+  final bool isCompact;
 
-  const _FlipCard({required this.card, required this.isRevealed, required this.animationValue});
+  const _FlipCard({
+    required this.card,
+    required this.isRevealed,
+    required this.animationValue,
+    this.isCompact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final angle = animationValue * math.pi;
     final transform = Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(angle);
     bool showFront = animationValue > 0.5;
+    final cardSize = isCompact ? CardSize.tiny : CardSize.small;
 
     return Transform(
       transform: transform,
@@ -357,9 +371,9 @@ class _FlipCard extends StatelessWidget {
           ? Transform(
               transform: Matrix4.rotationY(math.pi),
               alignment: Alignment.center,
-              child: CardWidget(card: card, size: CardSize.small, isRevealed: true),
+              child: CardWidget(card: card, size: cardSize, isRevealed: true),
             )
-          : const CardWidget(card: null, size: CardSize.small, isRevealed: false),
+          : CardWidget(card: null, size: cardSize, isRevealed: false),
     );
   }
 }

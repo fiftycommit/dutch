@@ -176,6 +176,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white54)),
                 ),
+              if (gameProvider.isPaused)
+                _buildPauseOverlay(gameProvider),
             ],
           );
         },
@@ -244,16 +246,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           child: IconButton(
             icon: Icon(Icons.pause_circle_filled,
                 color: Colors.white54, size: isCompactMode ? 24 : 32),
-            onPressed: () async {
-              final shouldQuit = await _showQuitConfirmation();
-              if (shouldQuit == true && mounted) {
-                if (!context.mounted) return;
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                      builder: (context) => const MainMenuScreen()),
-                  (route) => false,
-                );
-              }
+            onPressed: () {
+              gp.pauseGame();
             },
           ),
         ),
@@ -494,15 +488,36 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           SizedBox(
             width: isCompactMode ? 100 : 150,
             height: isCompactMode ? 5 : 8,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1.0, end: 0.0),
-              duration: const Duration(milliseconds: 2000),
-              builder: (context, value, child) {
-                return LinearProgressIndicator(
-                  value: value,
-                  backgroundColor: Colors.black26,
-                  color: Colors.redAccent,
-                  borderRadius: BorderRadius.circular(4),
+            child: Consumer<GameProvider>(
+              builder: (context, gp, child) {
+                final remaining = gp.gameState?.reactionTimeRemaining ?? 0;
+                final total = gp.currentReactionTimeMs;
+                final progress = (remaining / total).clamp(0.0, 1.0);
+                
+                // Couleur qui change selon le temps restant
+                Color progressColor;
+                if (progress > 0.6) {
+                  // Vert vers orange (60-100%)
+                  progressColor = Color.lerp(Colors.orange, Colors.green, (progress - 0.6) / 0.4)!;
+                } else if (progress > 0.3) {
+                  // Orange vers rouge (30-60%)
+                  progressColor = Color.lerp(Colors.red, Colors.orange, (progress - 0.3) / 0.3)!;
+                } else {
+                  // Rouge clignotant (0-30%)
+                  progressColor = Colors.red;
+                }
+                
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(begin: progress, end: progress),
+                  duration: const Duration(milliseconds: 100),
+                  builder: (context, animatedProgress, child) {
+                    return LinearProgressIndicator(
+                      value: animatedProgress,
+                      backgroundColor: Colors.black26,
+                      color: progressColor,
+                      borderRadius: BorderRadius.circular(4),
+                    );
+                  },
                 );
               },
             ),
@@ -769,6 +784,61 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       child: const Text("Oui",
                           style: TextStyle(color: Colors.redAccent))),
                 ]));
+  }
+
+  Widget _buildPauseOverlay(GameProvider gp) {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.85),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pause_circle_outline, color: Colors.amber, size: 80),
+            const SizedBox(height: 20),
+            const Text(
+              "PAUSE",
+              style: TextStyle(
+                color: Colors.amber,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Rye',
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: () => gp.resumeGame(),
+              icon: const Icon(Icons.play_arrow, size: 28),
+              label: const Text("REPRENDRE", style: TextStyle(fontSize: 18)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () async {
+                gp.resumeGame(); // Resume d'abord pour éviter les problèmes
+                final shouldQuit = await _showQuitConfirmation();
+                if (shouldQuit == true && mounted) {
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+                    (route) => false,
+                  );
+                } else {
+                  // Si l'utilisateur annule, remettre en pause
+                  gp.pauseGame();
+                }
+              },
+              icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+              label: const Text("Quitter la partie", style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildRotateScreenOverlay() {

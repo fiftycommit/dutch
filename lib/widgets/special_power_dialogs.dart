@@ -91,6 +91,9 @@ class SpecialPowerDialogs {
   static void _showCardRevealed(
       BuildContext context, Player player, int index, PlayingCard card) {
     player.knownCards[index] = true;
+    
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isCompact = screenHeight < 400;
 
     showDialog(
       context: context,
@@ -98,41 +101,54 @@ class SpecialPowerDialogs {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black87,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 40),
-              const SizedBox(height: 12),
-              const Text(
-                "CARTE RÉVÉLÉE",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 40 : 40,
+          vertical: isCompact ? 8 : 24,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: screenHeight * 0.85,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(isCompact ? 12 : 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: isCompact ? 28 : 40),
+                  SizedBox(height: isCompact ? 6 : 12),
+                  Text(
+                    "CARTE RÉVÉLÉE",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isCompact ? 14 : 18,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: isCompact ? 10 : 20),
+                  CardWidget(card: card, size: isCompact ? CardSize.medium : CardSize.large, isRevealed: true),
+                  SizedBox(height: isCompact ? 10 : 20),
+                  Text(
+                    "${card.value} (${card.points} pts)",
+                    style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: isCompact ? 12 : 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: isCompact ? 10 : 20),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 20 : 32,
+                        vertical: isCompact ? 8 : 12,
+                      ),
+                    ),
+                    child: Text("OK", style: TextStyle(fontSize: isCompact ? 14 : 16)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              CardWidget(card: card, size: CardSize.large, isRevealed: true),
-              const SizedBox(height: 20),
-              Text(
-                "${card.value} (${card.points} pts)",
-                style: const TextStyle(
-                    color: Colors.amber,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                ),
-                child: const Text("OK", style: TextStyle(fontSize: 16)),
-              ),
-            ],
+            ),
           ),
         ),
       ),

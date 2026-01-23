@@ -17,9 +17,13 @@ class GameProvider with ChangeNotifier {
   bool isProcessing = false;
   String? statusMessage;
   Set<int> shakingCardIndices = {};
+  
+  bool _isPaused = false;
+  bool get isPaused => _isPaused;
 
   Timer? _reactionTimer;
   int _currentReactionTimeMs = 3000;
+  int get currentReactionTimeMs => _currentReactionTimeMs;
   int _currentSlotId = 1;
 
   int? _remainingReactionTimeMs;
@@ -326,19 +330,23 @@ class GameProvider with ChangeNotifier {
 
   void startReactionPhase() {
     if (_gameState == null) return;
+    if (_isPaused) return; // Ne pas démarrer si en pause
 
     _gameState!.phase = GamePhase.reaction;
     _gameState!.reactionTimeRemaining = _currentReactionTimeMs;
 
     _reactionTimer?.cancel();
 
-    _reactionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    _reactionTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (_gameState == null) {
         timer.cancel();
         return;
       }
+      
+      // Ne pas décrémenter si en pause
+      if (_isPaused) return;
 
-      _gameState!.reactionTimeRemaining -= 100;
+      _gameState!.reactionTimeRemaining -= 50;
 
       if (_gameState!.reactionTimeRemaining <= 0) {
         timer.cancel();
@@ -388,6 +396,7 @@ class GameProvider with ChangeNotifier {
 
   void _endReactionPhase() {
     if (_gameState == null) return;
+    if (_isPaused) return; // Ne pas terminer si en pause
 
     _reactionTimer?.cancel();
     _gameState!.phase = GamePhase.playing;
@@ -396,19 +405,21 @@ class GameProvider with ChangeNotifier {
     GameLogic.nextPlayer(_gameState!);
     notifyListeners();
 
-    if (!_gameState!.currentPlayer.isHuman) {
+    if (!_gameState!.currentPlayer.isHuman && !_isPaused) {
       _checkAndPlayBotTurn();
     }
   }
 
   void _simulateBotReaction() async {
     if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
+    if (_isPaused) return; // Ne pas simuler si en pause
 
     PlayingCard? topCard = _gameState!.topDiscardCard;
     if (topCard == null) return;
 
     for (var bot in _gameState!.players.where((p) => !p.isHuman)) {
       if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
+      if (_isPaused) return; // Vérifier à chaque itération
 
       int delay = Random().nextInt(800) + 300;
       await Future.delayed(Duration(milliseconds: delay));
@@ -428,15 +439,39 @@ class GameProvider with ChangeNotifier {
   bool _checkInstantEnd() {
     if (_gameState == null) return false;
     if (_gameState!.deck.isEmpty) {
-      endGame();
-      return true;
+      // Essayer de remplir la pioche avec la défausse
+      _refillDeckFromDiscard();
+      // Si toujours vide après avoir essayé de remplir, terminer le jeu
+      if (_gameState!.deck.isEmpty) {
+        endGame();
+        return true;
+      }
     }
     return false;
+  }
+  
+  /// Remplit la pioche avec les cartes de la défausse (sauf la carte du dessus)
+  /// Utilise smartShuffle avec le mode de mélange des paramètres
+  void _refillDeckFromDiscard() {
+    if (_gameState == null) return;
+    if (_gameState!.discardPile.length > 1) {
+      // Garder la carte du dessus de la défausse
+      PlayingCard topCard = _gameState!.discardPile.removeLast();
+      // Ajouter le reste à la pioche
+      _gameState!.deck.addAll(_gameState!.discardPile);
+      _gameState!.discardPile.clear();
+      _gameState!.discardPile.add(topCard);
+      // Mélanger la nouvelle pioche avec smartShuffle (utilise la difficulté du gameState)
+      _gameState!.smartShuffle();
+      _gameState!.addToHistory("🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
+      notifyListeners();
+    }
   }
 
   Future<void> _checkAndPlayBotTurn() async {
     if (_gameState == null) return;
     if (_gameState!.phase == GamePhase.ended) return;
+    if (_isPaused) return; // Ne pas jouer si en pause
     if (_checkInstantEnd()) return;
 
     if (_gameState!.currentPlayer.isHuman) {
@@ -448,21 +483,30 @@ class GameProvider with ChangeNotifier {
     int loopCount = 0;
     while (_gameState != null &&
         !_gameState!.currentPlayer.isHuman &&
-        _gameState!.phase == GamePhase.playing) {
+        _gameState!.phase == GamePhase.playing &&
+        !_isPaused) { // Arrêter la boucle si en pause
       loopCount++;
 
       if (loopCount > 10) break;
+      if (_isPaused) break; // Arrêter si en pause
       if (_checkInstantEnd()) return;
 
       isProcessing = true;
       notifyListeners();
 
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Attendre mais vérifier la pause régulièrement
+      for (int i = 0; i < 8; i++) {
+        if (_isPaused) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      if (_isPaused) break;
 
       if (_gameState == null) break;
 
       try {
+        if (_isPaused) break;
         await BotAI.playBotTurn(_gameState!, playerMMR: _playerMMR);
+        if (_isPaused) break;
         notifyListeners();
 
         if (_gameState!.phase == GamePhase.dutchCalled) {
@@ -471,8 +515,15 @@ class GameProvider with ChangeNotifier {
         }
 
         if (_gameState!.isWaitingForSpecialPower) {
-          await Future.delayed(const Duration(milliseconds: 800));
+          // Attendre mais vérifier la pause
+          for (int i = 0; i < 8; i++) {
+            if (_isPaused) break;
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          if (_isPaused) break;
+          
           await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
+          if (_isPaused) break;
           notifyListeners();
 
           _gameState!.isWaitingForSpecialPower = false;
@@ -485,6 +536,7 @@ class GameProvider with ChangeNotifier {
         }
       }
 
+      if (_isPaused) break;
       if (_gameState != null && _gameState!.phase == GamePhase.playing) {
         startReactionPhase();
         break;
@@ -495,6 +547,26 @@ class GameProvider with ChangeNotifier {
 
     isProcessing = false;
     notifyListeners();
+  }
+
+  void pauseGame() {
+    _isPaused = true;
+    _pauseReactionTimer();
+    isProcessing = false; // Arrêter le processing
+    notifyListeners();
+  }
+  
+  void resumeGame() {
+    _isPaused = false;
+    // Reprendre le timer de réaction si on était en phase reaction
+    if (_gameState != null && _gameState!.phase == GamePhase.reaction && _remainingReactionTimeMs != null) {
+      _resumeReactionTimer();
+    }
+    notifyListeners();
+    // Relancer le tour des bots si c'est leur tour
+    if (_gameState != null && !_gameState!.currentPlayer.isHuman && _gameState!.phase == GamePhase.playing) {
+      _checkAndPlayBotTurn();
+    }
   }
 
   void endGame() {
@@ -662,7 +734,23 @@ class GameProvider with ChangeNotifier {
   }
 
   void quitGame() {
+    // Enregistrer l'abandon comme une défaite (dernier)
+    if (_gameState != null) {
+      int playerCount = _gameState!.players.length;
+      
+      // Enregistrer dans les stats comme si on avait fini dernier
+      StatsService.saveGameResult(
+        score: 999, // Score élevé = défaite
+        playerRank: playerCount, // Dernier
+        calledDutch: false,
+        wonDutch: false,
+        isSBMM: _playerMMR != null,
+        slotId: _currentSlotId,
+      );
+    }
+    
     _gameState = null;
+    _isPaused = false;
     isProcessing = false;
     shakingCardIndices.clear();
     _reactionTimer?.cancel();

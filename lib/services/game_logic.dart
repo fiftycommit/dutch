@@ -259,8 +259,9 @@ class GameLogic {
       gameState.deck.addAll(gameState.discardPile);
       gameState.discardPile.clear();
       gameState.discardPile.add(top);
-      gameState.deck.shuffle(_random);
-      gameState.addToHistory("La pioche est vide, on mélange la défausse !");
+      // Utiliser smartShuffle avec le mode de mélange des paramètres
+      gameState.smartShuffle();
+      gameState.addToHistory("🔄 Pioche vide ! Défausse mélangée (${gameState.deck.length} cartes)");
     } else {
       if (gameState.dutchCallerId != null) {
         gameState.phase = GamePhase.dutchCalled;
