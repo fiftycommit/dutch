@@ -44,6 +44,9 @@ class StatsService {
     bool hasEmptyHand = false,
     int slotId = 1,
     bool isSBMM = false,
+    int totalPlayers = 4,
+    bool isTournament = false,
+    int tournamentRound = 1,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic> stats = await getStats(slotId: slotId);
@@ -79,6 +82,9 @@ class StatsService {
         calledDutch: calledDutch,
         hasEmptyHand: hasEmptyHand,
         isEliminated: calledDutch && playerRank != 1,
+        totalPlayers: totalPlayers,
+        isTournament: isTournament,
+        tournamentRound: tournamentRound,
       );
       
       mmrChange = rpResult.totalChange;
@@ -113,9 +119,9 @@ class StatsService {
     Map<String, dynamic> stats = await getStats(slotId: slotId);
     int mmr = stats["mmr"] ?? 0;
 
-    if (mmr < 150) {
+    if (mmr < 300) {
       return Difficulty.easy;
-    } else if (mmr < 450) {
+    } else if (mmr < 600) {
       return Difficulty.medium;
     } else {
       return Difficulty.hard;

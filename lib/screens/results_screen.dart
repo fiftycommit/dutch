@@ -165,12 +165,16 @@ class ResultsScreen extends StatelessWidget {
 
     // Sinon, afficher le classement normal de la manche
     final ranking = gameState.getFinalRanking();
+    final ranksWithTies = gameState.getFinalRanksWithTies();
+    
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: ranking.length,
       itemBuilder: (context, index) {
         final player = ranking[index];
-        return _buildPlayerResult(context, player, index + 1, gameState);
+        // Utiliser le rang avec gestion des ex-aequo
+        final displayRank = ranksWithTies[player.id] ?? (index + 1);
+        return _buildPlayerResult(context, player, displayRank, gameState);
       },
     );
   }

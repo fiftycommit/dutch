@@ -33,6 +33,9 @@ class GameProvider with ChangeNotifier {
 
   List<TournamentResult>? _tournamentFinalRanking;
   List<TournamentResult>? get tournamentFinalRanking => _tournamentFinalRanking;
+  
+  /// Scores cumulés du tournoi (persiste entre les manches)
+  Map<String, int> _tournamentCumulativeScores = {};
 
   void createNewGame({
     required List<Player> players,
@@ -45,6 +48,7 @@ class GameProvider with ChangeNotifier {
   }) async {
     if (tournamentRound == 1) {
       _tournamentFinalRanking = null;
+      _tournamentCumulativeScores = {}; // Réinitialiser les scores au début du tournoi
     }
 
     _gameState = GameLogic.initializeGame(
@@ -52,6 +56,10 @@ class GameProvider with ChangeNotifier {
         gameMode: gameMode,
         difficulty: difficulty,
         tournamentRound: tournamentRound);
+    
+    // Propager les scores cumulés au GameState
+    _gameState!.tournamentCumulativeScores = Map.from(_tournamentCumulativeScores);
+    
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
 
@@ -608,6 +616,14 @@ class GameProvider with ChangeNotifier {
       }
     }
 
+    // Calculer le numéro de manche tournoi (1, 2 ou 3)
+    int currentTournamentRound = _gameState!.gameMode == GameMode.tournament 
+        ? _gameState!.tournamentRound 
+        : 1;
+    
+    // Nombre de joueurs dans cette manche
+    int totalPlayersInRound = _gameState!.players.length;
+    
     StatsService.saveGameResult(
       playerRank: playerRank,
       score: _gameState!.getFinalScore(human),
@@ -616,6 +632,9 @@ class GameProvider with ChangeNotifier {
       hasEmptyHand: human.hand.isEmpty,
       slotId: _currentSlotId,
       isSBMM: isSBMM,
+      totalPlayers: totalPlayersInRound,
+      isTournament: _gameState!.gameMode == GameMode.tournament,
+      tournamentRound: currentTournamentRound,
     );
 
     notifyListeners();
@@ -703,6 +722,10 @@ class GameProvider with ChangeNotifier {
 
   void startNextTournamentRound() {
     if (_gameState == null) return;
+
+    // Mettre à jour les scores cumulés avant de changer de manche
+    _gameState!.updateCumulativeScores();
+    _tournamentCumulativeScores = Map.from(_gameState!.tournamentCumulativeScores);
 
     List<Player> ranking = _gameState!.getFinalRanking();
     List<Player> survivors = [];

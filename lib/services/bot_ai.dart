@@ -32,6 +32,15 @@ class BotAI {
     int totalCards = bot.hand.length;
     int estimatedScore = bot.getEstimatedScore();
     
+    // En tournoi, prendre en compte le score cumule pour passer en endgame plus tot
+    if (gameState.gameMode == GameMode.tournament) {
+      int cumulativeScore = gameState.getCumulativeScore(bot);
+      // Si proche de l'elimination (>= 70 points), etre plus agressif
+      if (cumulativeScore >= 70) {
+        return BotGamePhase.endgame;
+      }
+    }
+    
     bool someoneClose = gameState.players.any((p) => p.hand.length <= 2);
     if (estimatedScore <= 8 || someoneClose) {
       return BotGamePhase.endgame;
@@ -84,6 +93,22 @@ class BotAI {
     double audacityBonus = _calculateAudacity(gs, bot, difficulty);
 
     double confidence = _calculateDutchConfidence(bot);
+    
+    // En tournoi, ajuster selon le score cumule
+    double tournamentPressure = 0.0;
+    if (gs.gameMode == GameMode.tournament) {
+      int cumulativeScore = gs.getCumulativeScore(bot);
+      // Si proche de l'elimination, etre plus agressif pour Dutch
+      if (cumulativeScore >= 80) {
+        tournamentPressure = 3.0; // Tres urgent
+      } else if (cumulativeScore >= 60) {
+        tournamentPressure = 2.0;
+      } else if (cumulativeScore >= 40) {
+        tournamentPressure = 1.0;
+      } else if (cumulativeScore <= 20) {
+        tournamentPressure = -1.0; // En bonne position, peut etre plus conservateur
+      }
+    }
 
     int threshold;
 
@@ -168,7 +193,8 @@ class BotAI {
       }
     }
     
-    double adjustedThreshold = threshold + audacityBonus + (confidence * 2);
+    // Ajouter la pression du tournoi au threshold
+    double adjustedThreshold = threshold + audacityBonus + (confidence * 2) + tournamentPressure;
     
     bool shouldDutch = estimatedScore <= adjustedThreshold.round();
     
@@ -361,12 +387,29 @@ class BotAI {
     BotGamePhase phase = _getBotPhase(bot, gameState);
     double matchChance = difficulty.reactionMatchChance;
     
+    // Augmenter la motivation a matcher si le bot a beaucoup de cartes (il veut en avoir moins)
+    if (bot.hand.length >= 5) {
+      matchChance += 0.15; // Plus motive a defausser
+    } else if (bot.hand.length >= 4) {
+      matchChance += 0.10;
+    }
+    
     if (bot.botBehavior == BotBehavior.fast && phase == BotGamePhase.endgame) {
       matchChance = 1.0; // 100% de chance en endgame
     }
     else if (bot.botBehavior == BotBehavior.balanced && phase == BotGamePhase.endgame) {
       matchChance = (matchChance + 1.0) / 2; // Moyenne entre base et 100%
     }
+    
+    // En tournoi, si proche de l'elimination, etre plus agressif pour matcher
+    if (gameState.gameMode == GameMode.tournament) {
+      int cumulativeScore = gameState.getCumulativeScore(bot);
+      if (cumulativeScore >= 70) {
+        matchChance += 0.20; // Plus motive si proche de l'elimination
+      }
+    }
+    
+    matchChance = matchChance.clamp(0.0, 1.0);
 
     if (_random.nextDouble() > matchChance) {
       return false;
@@ -630,7 +673,7 @@ class BotAI {
       // Bronze/Argent : simple weighted
       if (difficulty.name == "Bronze" || difficulty.name == "Argent") {
         if (_random.nextDouble() < 0.70) {
-          return _selectValetTargetWeighted(opponents, difficulty);
+          return _selectValetTargetWeighted(opponents, difficulty, gs);
         }
         return opponents[_random.nextInt(opponents.length)];
       }
@@ -645,7 +688,7 @@ class BotAI {
           return human;
         }
         // Ou cible weighted
-        return _selectValetTargetWeighted(opponents, difficulty);
+        return _selectValetTargetWeighted(opponents, difficulty, gs);
       }
     }
 
@@ -653,7 +696,7 @@ class BotAI {
     return opponents[_random.nextInt(opponents.length)];
   }
 
-  static Player _selectValetTargetWeighted(List<Player> opponents, BotDifficulty difficulty) {
+  static Player _selectValetTargetWeighted(List<Player> opponents, BotDifficulty difficulty, GameState? gameState) {
     Map<Player, double> threatScores = {};
     
     for (var player in opponents) {
@@ -663,6 +706,7 @@ class BotAI {
         score += 25.0;
       }
       
+      // Priorite aux joueurs avec peu de cartes (ils sont proches de Dutch)
       int cardCount = player.hand.length;
       if (cardCount == 1) {
         score += 120.0;
@@ -683,6 +727,19 @@ class BotAI {
         score += 18.0;
       } else if (estimatedScore <= 15) {
         score += 10.0;
+      }
+      
+      // En tournoi, cibler davantage les joueurs avec un bon score cumule
+      if (gameState != null && gameState.gameMode == GameMode.tournament) {
+        int cumulativeScore = gameState.getCumulativeScore(player);
+        // Un joueur avec un faible score cumule est plus dangereux
+        if (cumulativeScore <= 20) {
+          score += 25.0; // Il est en bonne position
+        } else if (cumulativeScore <= 40) {
+          score += 15.0;
+        } else if (cumulativeScore >= 80) {
+          score -= 20.0; // Moins prioritaire, il risque l'elimination
+        }
       }
       
       double randomBonus = _random.nextDouble() * 30.0;
@@ -735,7 +792,7 @@ class BotAI {
       
       if (target == null) {
         if ((difficulty.name == "Or" || difficulty.name == "Platine") && _random.nextDouble() < 0.6) {
-          target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+          target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         } else {
           target = possibleTargets[_random.nextInt(possibleTargets.length)];
         }
@@ -745,7 +802,7 @@ class BotAI {
       // Bronze/Argent : simple weighted
       if (difficulty.name == "Bronze" || difficulty.name == "Argent") {
         if (difficulty.name != "Bronze") {
-          target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+          target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         } else {
           target = possibleTargets[_random.nextInt(possibleTargets.length)];
         }
@@ -760,7 +817,7 @@ class BotAI {
           if (human != null && _random.nextDouble() < 0.60) {
             target = human;
           } else {
-            target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+            target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
           }
         }
       }
@@ -768,7 +825,7 @@ class BotAI {
     // Fallback
     else {
       if (difficulty.name != "Bronze" && _random.nextDouble() < 0.3) {
-        target = _selectJokerTargetWeighted(possibleTargets, difficulty);
+        target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
       } else {
         target = possibleTargets[_random.nextInt(possibleTargets.length)];
       }
@@ -791,7 +848,7 @@ class BotAI {
     }
   }
 
-  static Player _selectJokerTargetWeighted(List<Player> targets, BotDifficulty difficulty) {
+  static Player _selectJokerTargetWeighted(List<Player> targets, BotDifficulty difficulty, GameState? gameState) {
     Map<Player, double> threatScores = {};
     
     for (var player in targets) {
@@ -801,6 +858,7 @@ class BotAI {
         score += 30.0;
       }
       
+      // Priorite aux joueurs avec peu de cartes (Joker detruit leur memoire)
       int cardCount = player.hand.length;
       if (cardCount <= 2) {
         score += 50.0;
@@ -817,6 +875,19 @@ class BotAI {
         score += 10.0;
       } else if (estimatedScore <= 15) {
         score += 5.0;
+      }
+      
+      // En tournoi, cibler davantage les joueurs avec un bon score cumule
+      if (gameState != null && gameState.gameMode == GameMode.tournament) {
+        int cumulativeScore = gameState.getCumulativeScore(player);
+        // Un joueur avec un faible score cumule est plus dangereux
+        if (cumulativeScore <= 20) {
+          score += 20.0; // Il est en bonne position
+        } else if (cumulativeScore <= 40) {
+          score += 10.0;
+        } else if (cumulativeScore >= 80) {
+          score -= 15.0; // Moins prioritaire, il risque l'elimination
+        }
       }
       
       double randomFactor = _random.nextDouble() * 20.0;

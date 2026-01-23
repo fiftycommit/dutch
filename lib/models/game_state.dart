@@ -29,6 +29,9 @@ class GameState {
   int reactionTimeRemaining = 0;
   PlayingCard? lastSpiedCard;
   Map<String, dynamic>? pendingSwap;
+  
+  /// Scores cumulés du tournoi par joueur (id -> score total)
+  Map<String, int> tournamentCumulativeScores;
 
   GameState({
     required this.players,
@@ -49,8 +52,10 @@ class GameState {
     this.reactionTimeRemaining = 0,
     this.lastSpiedCard,
     this.pendingSwap,
+    Map<String, int>? tournamentCumulativeScores,
   })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
-        actionHistory = actionHistory ?? [];
+        actionHistory = actionHistory ?? [],
+        tournamentCumulativeScores = tournamentCumulativeScores ?? {};
 
   Player get currentPlayer => players[currentPlayerIndex];
   PlayingCard? get topDiscardCard =>
@@ -464,13 +469,62 @@ class GameState {
 
   List<Player> getFinalRanking() {
     List<Player> ranking = List.from(players);
-    ranking.sort((a, b) => getFinalScore(a).compareTo(getFinalScore(b)));
+    
+    // Trier par score, mais en cas d'égalité, celui qui a Dutch est devant
+    ranking.sort((a, b) {
+      int scoreA = getFinalScore(a);
+      int scoreB = getFinalScore(b);
+      
+      if (scoreA != scoreB) {
+        return scoreA.compareTo(scoreB);
+      }
+      
+      // En cas d'égalité de score, celui qui a appelé Dutch gagne (il est premier)
+      if (a.id == dutchCallerId) return -1;
+      if (b.id == dutchCallerId) return 1;
+      
+      return 0; // Sinon ordre arbitraire entre ex-aequo
+    });
+    
+    // Si le Dutch caller n'a pas gagné (quelqu'un a un score STRICTEMENT inférieur), il est mis en dernier
     if (dutchCallerId != null && !didDutchCallerWin()) {
       Player failedCaller = ranking.firstWhere((p) => p.id == dutchCallerId);
       ranking.remove(failedCaller);
       ranking.add(failedCaller);
     }
     return ranking;
+  }
+  
+  /// Retourne les rangs réels avec gestion des ex-aequo
+  /// Retourne une Map<playerId, rang> où le rang tient compte des égalités
+  Map<String, int> getFinalRanksWithTies() {
+    List<Player> ranking = getFinalRanking();
+    Map<String, int> ranks = {};
+    
+    int currentRank = 1;
+    int? previousScore;
+    
+    for (int i = 0; i < ranking.length; i++) {
+      Player player = ranking[i];
+      int score = getFinalScore(player);
+      
+      // Cas spécial : Dutch caller raté est toujours dernier
+      if (dutchCallerId != null && !didDutchCallerWin() && player.id == dutchCallerId) {
+        ranks[player.id] = ranking.length; // Dernier
+        continue;
+      }
+      
+      if (previousScore == null || score != previousScore) {
+        // Nouveau score = nouveau rang (on saute les rangs des ex-aequo précédents)
+        currentRank = i + 1;
+      }
+      // Sinon même score = même rang (ex-aequo), on garde currentRank
+      
+      ranks[player.id] = currentRank;
+      previousScore = score;
+    }
+    
+    return ranks;
   }
 
   int getFinalScore(Player player) {
@@ -482,10 +536,39 @@ class GameState {
     Player caller = players.firstWhere((p) => p.id == dutchCallerId);
     int callerScore = getFinalScore(caller);
     for (var p in players) {
-      if (p.id != caller.id && getFinalScore(p) <= callerScore) {
+      // Le Dutch caller gagne s'il a le score MINIMUM ou ÉGAL au minimum
+      // Donc il perd seulement si quelqu'un a un score STRICTEMENT inférieur
+      if (p.id != caller.id && getFinalScore(p) < callerScore) {
         return false;
       }
     }
     return true;
+  }
+
+  /// Récupère le score cumulé d'un joueur dans le tournoi
+  int getCumulativeScore(Player player) {
+    return tournamentCumulativeScores[player.id] ?? 0;
+  }
+
+  /// Met à jour les scores cumulés du tournoi après une manche
+  void updateCumulativeScores() {
+    for (var player in players) {
+      int roundScore = getFinalScore(player);
+      tournamentCumulativeScores[player.id] = 
+          (tournamentCumulativeScores[player.id] ?? 0) + roundScore;
+    }
+  }
+
+  /// Vérifie si un joueur est proche de l'élimination (>= 80 points en mode tournoi)
+  bool isPlayerNearElimination(Player player, {int threshold = 80}) {
+    if (gameMode != GameMode.tournament) return false;
+    return getCumulativeScore(player) >= threshold;
+  }
+  
+  /// Récupère la liste des joueurs triés par score cumulé (meilleur en premier)
+  List<Player> getPlayersByTournamentRank() {
+    List<Player> sorted = List.from(players);
+    sorted.sort((a, b) => getCumulativeScore(a).compareTo(getCumulativeScore(b)));
+    return sorted;
   }
 }

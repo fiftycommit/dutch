@@ -4,9 +4,9 @@ class RPCalculator {
   /// Définition des tiers de rang avec leurs seuils MMR
   static const Map<String, int> rankThresholds = {
     'Bronze': 0,
-    'Argent': 150,
-    'Or': 450,
-    'Platine': 800,
+    'Argent': 300,
+    'Or': 600,
+    'Platine': 900,
   };
 
   /// Points de base par victoire/défaite selon le rang
@@ -65,37 +65,61 @@ class RPCalculator {
   }
 
   /// Calculer le changement de RP pour une partie
-  /// [playerRank] : position du joueur (1-4)
+  /// [playerRank] : position du joueur (1-N)
+  /// [totalPlayers] : nombre total de joueurs dans la manche
   /// [currentMMR] : MMR actuel du joueur
   /// [calledDutch] : si le joueur a appelé Dutch
   /// [hasEmptyHand] : si le joueur a vidé sa main (toutes cartes défaussées)
   /// [isEliminated] : si le joueur est éliminé (Dutch raté en 1er)
+  /// [isTournament] : si c'est une manche de tournoi (bonus/malus ajustés)
+  /// [tournamentRound] : numéro de la manche (1, 2 ou 3)
   static RPResult calculateRP({
     required int playerRank,
     required int currentMMR,
     required bool calledDutch,
     required bool hasEmptyHand,
     bool isEliminated = false,
+    int totalPlayers = 4,
+    bool isTournament = false,
+    int tournamentRound = 1,
   }) {
     String rank = getRankName(currentMMR);
     Map<String, int> points = basePoints[rank]!;
     
     int baseRP = 0;
     
-    // Points de base selon la position
-    switch (playerRank) {
-      case 1:
-        baseRP = points['win']!;
-        break;
-      case 2:
+    // Points de base selon la position RELATIVE au nombre de joueurs
+    // En tournoi avec moins de 4 joueurs, adapter les positions
+    if (playerRank == 1) {
+      // Toujours le gagnant
+      baseRP = points['win']!;
+    } else if (playerRank == totalPlayers) {
+      // Toujours le dernier = éliminé/perdant
+      baseRP = points['last']!;
+    } else if (totalPlayers == 4) {
+      // 4 joueurs : classique
+      if (playerRank == 2) {
         baseRP = points['second']!;
-        break;
-      case 3:
+      } else {
         baseRP = points['third']!;
-        break;
-      case 4:
-        baseRP = points['last']!;
-        break;
+      }
+    } else if (totalPlayers == 3) {
+      // 3 joueurs : 2ème est entre second et third
+      baseRP = ((points['second']! + points['third']!) / 2).round();
+    } else {
+      // 2 joueurs : soit 1er soit dernier (déjà traité)
+      baseRP = points['last']!;
+    }
+    
+    // Bonus tournoi selon la manche (plus on avance, plus c'est important)
+    if (isTournament) {
+      double tournamentMultiplier = 1.0;
+      if (tournamentRound == 2) {
+        tournamentMultiplier = 1.2; // Demi-finale
+      } else if (tournamentRound == 3) {
+        tournamentMultiplier = 1.5; // Finale
+      }
+      baseRP = (baseRP * tournamentMultiplier).round();
     }
 
     int bonusRP = 0;
