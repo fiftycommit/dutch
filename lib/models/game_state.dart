@@ -174,45 +174,64 @@ class GameState {
         }
       }
 
-      _partialShuffle(deck, 0.05);
+      _partialShuffle(deck, 0.0025);
       addToHistory("⚖️ Mélange tactique (Mode Équilibré)");
       
     } else {
-      List<PlayingCard> good = [];
-      List<PlayingCard> medium = [];
-      List<PlayingCard> bad = [];
+      // MODE HARD (CHALLENGER): Pioche TRÈS défavorable
+      // Les bonnes cartes sont enterrées au fond du paquet
+      List<PlayingCard> excellent = [];  // 0-2 points (As, 2)
+      List<PlayingCard> good = [];       // 3-4 points
+      List<PlayingCard> medium = [];     // 5-7 points
+      List<PlayingCard> bad = [];        // 8-10 points
+      List<PlayingCard> terrible = [];   // Figures (V, D, R = 10+ points)
 
       for (var card in deck) {
         int val = card.points;
-        if (val <= 4) {
+        if (val <= 2) {
+          excellent.add(card);
+        } else if (val <= 4) {
           good.add(card);
         } else if (val <= 7) {
           medium.add(card);
-        } else {
+        } else if (val <= 10) {
           bad.add(card);
+        } else {
+          terrible.add(card);
         }
       }
 
+      excellent.shuffle();
       good.shuffle();
       medium.shuffle();
       bad.shuffle();
+      terrible.shuffle();
 
       deck.clear();
 
+      // === FOND DU PAQUET (pioché en dernier) ===
+      // Toutes les excellentes cartes sont cachées au fond
+      while (excellent.isNotEmpty) {
+        deck.add(excellent.removeLast());
+      }
+      
+      // Puis les bonnes cartes
       while (good.isNotEmpty) {
         deck.add(good.removeLast());
       }
       
-      int mediumForBottom = (medium.length * 0.4).round();
+      // 20% des cartes moyennes au fond aussi
+      int mediumForBottom = (medium.length * 0.2).round();
       for (int i = 0; i < mediumForBottom && medium.isNotEmpty; i++) {
         deck.add(medium.removeLast());
       }
       
-
-      while (bad.isNotEmpty || medium.isNotEmpty) {
+      // === MILIEU DU PAQUET ===
+      // Mix de mauvaises et moyennes (70% mauvaises)
+      int middleCount = 12;
+      for (int i = 0; i < middleCount && (bad.isNotEmpty || medium.isNotEmpty); i++) {
         double roll = rnd.nextDouble();
-        
-        if (roll < 0.80 && bad.isNotEmpty) {
+        if (roll < 0.70 && bad.isNotEmpty) {
           deck.add(bad.removeLast());
         } else if (medium.isNotEmpty) {
           deck.add(medium.removeLast());
@@ -221,11 +240,30 @@ class GameState {
         }
       }
 
+      // === HAUT DU PAQUET (pioché en premier) ===
+      // Les figures terribles EN PREMIER, puis le reste des mauvaises
+      while (terrible.isNotEmpty) {
+        deck.add(terrible.removeLast());
+      }
+      
+      // 90% de chances d'avoir une mauvaise carte en haut
+      while (bad.isNotEmpty || medium.isNotEmpty) {
+        double roll = rnd.nextDouble();
+        if (roll < 0.90 && bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        } else if (medium.isNotEmpty) {
+          deck.add(medium.removeLast());
+        } else if (bad.isNotEmpty) {
+          deck.add(bad.removeLast());
+        }
+      }
 
-      _partialShuffle(deck, 0.02);
-      addToHistory("ð¥ Mélange BRUTAL (Mode Challenger)");
+      // Aucun mélange final - structure 100% brutale
+      // _partialShuffle(deck, 0.0);
+      addToHistory("🔥 Mélange BRUTAL (Mode Challenger)");
     }
   }
+
 
   void _partialShuffle(List<PlayingCard> cards, double ratio) {
     Random rnd = Random();
