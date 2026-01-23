@@ -32,24 +32,24 @@ class BotDifficulty {
 
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
-    forgetChancePerTurn: 0.10,
-    confusionOnSwap: 0.15,
-    dutchThreshold: 6,
-    reactionSpeed: 0.70,
-    matchAccuracy: 0.85,
-    reactionMatchChance: 0.50,
-    keepCardThreshold: 6,
+    forgetChancePerTurn: 0.12,
+    confusionOnSwap: 0.20,
+    dutchThreshold: 8,
+    reactionSpeed: 0.60,
+    matchAccuracy: 0.75,
+    reactionMatchChance: 0.40,
+    keepCardThreshold: 7,
   );
 
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
-    forgetChancePerTurn: 0.02,
-    confusionOnSwap: 0.05,
+    forgetChancePerTurn: 0.01,
+    confusionOnSwap: 0.02,
     dutchThreshold: 4,
-    reactionSpeed: 0.95,
+    reactionSpeed: 0.92,
     matchAccuracy: 0.95,
-    reactionMatchChance: 0.80,
-    keepCardThreshold: 5,
+    reactionMatchChance: 0.85,
+    keepCardThreshold: 4,
   );
 
   static const BotDifficulty platinum = BotDifficulty(
@@ -59,8 +59,8 @@ class BotDifficulty {
     dutchThreshold: 2,             // Dutch très agressif à 2 points
     reactionSpeed: 1.0,            // Réaction instantanée
     matchAccuracy: 1.0,            // Précision parfaite
-    reactionMatchChance: 0.95,     // Réagit presque toujours
-    keepCardThreshold: 3,          // Garde seulement les très bonnes cartes
+    reactionMatchChance: 1.0,      // Réagit TOUJOURS s'il peut matcher
+    keepCardThreshold: 2,          // N'accepte que les cartes 0-2 points
   );
 
   static BotDifficulty fromMMR(int mmr) {

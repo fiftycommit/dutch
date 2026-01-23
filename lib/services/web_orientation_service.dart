@@ -6,29 +6,13 @@ class WebOrientationService {
   /// Tente de verrouiller l'écran en mode paysage sur le web
   static void lockLandscape() {
     if (!kIsWeb) return;
-    
-    try {
-      _requestLandscape();
-    } catch (e) {
-      // L'API n'est pas supportée par ce navigateur
-      debugPrint('Screen Orientation API not supported: $e');
-    }
+    _requestLandscape();
   }
   
   /// Déverrouille l'orientation de l'écran
   static void unlock() {
     if (!kIsWeb) return;
-    
-    try {
-      _unlockOrientation();
-    } catch (e) {
-      debugPrint('Screen Orientation unlock failed: $e');
-    }
-  }
-  
-  static void debugPrint(String message) {
-    // ignore: avoid_print
-    print(message);
+    _unlockOrientation();
   }
 }
 
@@ -41,7 +25,11 @@ external void _unlockOrientationJS();
 void _requestLandscape() {
   if (kIsWeb) {
     try {
-      _lockOrientation('landscape'.toJS);
+      // Convertir la JSPromise et capturer l'erreur silencieusement
+      _lockOrientation('landscape'.toJS).toDart.catchError((e) {
+        // Ignorer silencieusement - l'API n'est pas supportée sur tous les appareils
+        return null;
+      });
     } catch (e) {
       // Silently fail - not all browsers support this
     }

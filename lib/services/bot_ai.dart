@@ -117,14 +117,14 @@ class BotAI {
       switch (behavior) {
         case BotBehavior.fast:
           threshold = difficulty.name == "Bronze" ? 9 :
-                     difficulty.name == "Argent" ? 6 : 
-                     difficulty.name == "Or" ? 5 : 4;
+                     difficulty.name == "Argent" ? 7 : 
+                     difficulty.name == "Or" ? 4 : 2;
           break;
 
         case BotBehavior.aggressive:
           threshold = difficulty.name == "Bronze" ? 7 :
-                     difficulty.name == "Argent" ? 5 : 
-                     difficulty.name == "Or" ? 4 : 3;
+                     difficulty.name == "Argent" ? 6 : 
+                     difficulty.name == "Or" ? 3 : 1;
           
           if (_isHumanThreatening(gs)) {
             threshold += 1;
@@ -135,9 +135,10 @@ class BotAI {
           if (difficulty.name == "Bronze") {
             threshold = 7;
           } else if (difficulty.name == "Argent") {
-            threshold = 5;
+            threshold = 6;
           } else if (difficulty.name == "Or") {
-            threshold = 4;
+            threshold = 3;
+            // Or vérifie les adversaires 50% du temps
             if (_random.nextDouble() < 0.50) {
               for (var p in gs.players) {
                 if (p.id != bot.id) {
@@ -149,14 +150,14 @@ class BotAI {
               }
             }
           } else {
-            threshold = 3;
-            if (_random.nextDouble() < 0.70) {
-              for (var p in gs.players) {
-                if (p.id != bot.id) {
-                  int opponentScore = p.getEstimatedScore();
-                  if (opponentScore <= estimatedScore + 1) {
-                    return false;
-                  }
+            // Platine : très agressif mais intelligent
+            threshold = 1;
+            // Platine vérifie TOUJOURS les adversaires avant de Dutch
+            for (var p in gs.players) {
+              if (p.id != bot.id) {
+                int opponentScore = p.getEstimatedScore();
+                if (opponentScore <= estimatedScore) {
+                  return false; // Ne Dutch pas si quelqu'un a un meilleur score
                 }
               }
             }
@@ -171,21 +172,21 @@ class BotAI {
       switch (behavior) {
         case BotBehavior.fast:
           threshold = difficulty.name == "Bronze" ? 7 :
-                     difficulty.name == "Argent" ? 4 : 
-                     difficulty.name == "Or" ? 3 : 2;
+                     difficulty.name == "Argent" ? 5 : 
+                     difficulty.name == "Or" ? 2 : 1;
           break;
 
         case BotBehavior.aggressive:
           threshold = difficulty.name == "Bronze" ? 5 :
-                     difficulty.name == "Argent" ? 3 : 
-                     difficulty.name == "Or" ? 2 : 1;
+                     difficulty.name == "Argent" ? 4 : 
+                     difficulty.name == "Or" ? 2 : 0;
           break;
 
         case BotBehavior.balanced:
-          threshold = difficulty.name == "Bronze" ? 6 :  // Moyenne de 7 (FAST) et 5 (AGGRESSIVE)
-                     difficulty.name == "Argent" ? 4 :   // Moyenne de 4 et 3 = 3.5 Ã¢â â 4
-                     difficulty.name == "Or" ? 2 :       // Moyenne de 3 et 2 = 2.5 Ã¢â â 2
-                                               2;        // Moyenne de 2 et 1 = 1.5 Ã¢â â 2
+          threshold = difficulty.name == "Bronze" ? 6 :
+                     difficulty.name == "Argent" ? 5 :
+                     difficulty.name == "Or" ? 2 :
+                                               0;  // Platine : n'accepte Dutch qu'à 0 en phase optimization
           break;
 
         default:
@@ -444,8 +445,11 @@ class BotAI {
       }
     }
 
+    // Match à l'aveugle : les bots Or/Platine tentent de matcher même des cartes inconnues
     if (difficulty.name == "Or" || difficulty.name == "Platine") {
-      if (_random.nextDouble() < 0.30) {
+      // Or : 50% de chance de tenter, Platine : 80% de chance
+      double blindMatchChance = difficulty.name == "Platine" ? 0.80 : 0.50;
+      if (_random.nextDouble() < blindMatchChance) {
         List<int> unknownIndices = [];
         for (int i = 0; i < bot.hand.length; i++) {
           if (i >= bot.mentalMap.length || bot.mentalMap[i] == null) {
@@ -463,6 +467,12 @@ class BotAI {
             await Future.delayed(Duration(milliseconds: reactionDelay));
             
             bool success = GameLogic.matchCard(gameState, bot, blindIndex);
+            if (success) {
+              // Mise à jour de la mental map après un match réussi
+              if (blindIndex < bot.mentalMap.length) {
+                bot.mentalMap.removeAt(blindIndex);
+              }
+            }
             return success;
           }
         }
