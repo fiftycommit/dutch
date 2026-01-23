@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../providers/game_provider.dart';
+import '../services/rp_calculator.dart';
 import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
 import 'main_menu_screen.dart';
@@ -392,33 +393,29 @@ class ResultsScreen extends StatelessWidget {
         }
       }
     } else {
-      switch (rank) {
-        case 1:
-          if (isDutchCaller) {
-            pointsChangeText = "+80 RP";
-            pointsColor = Colors.amber;
-          } else {
-            pointsChangeText = "+50 RP";
-            pointsColor = Colors.greenAccent;
-          }
-          break;
-        case 2:
-          pointsChangeText = "+25 RP";
-          pointsColor = Colors.lightGreenAccent;
-          break;
-        case 3:
-          pointsChangeText = "-15 RP";
-          pointsColor = Colors.orange;
-          break;
-        case 4:
-          if (isEliminated) {
-            pointsChangeText = "-60 RP";
-            pointsColor = Colors.red;
-          } else {
-            pointsChangeText = "-30 RP";
-            pointsColor = Colors.redAccent;
-          }
-          break;
+      // Utiliser le calculateur centralisé pour les parties classiques
+      int currentMMR = gameProvider.playerMMR ?? 0;
+      
+      // Ne calculer que pour le joueur humain (pas les bots)
+      if (player.isHuman) {
+        // Vérifier si la main est vide (Dutch parfait)
+        bool hasEmptyHand = player.hand.isEmpty;
+        
+        RPResult rpResult = RPCalculator.calculateRP(
+          playerRank: rank,
+          currentMMR: currentMMR,
+          calledDutch: isDutchCaller,
+          hasEmptyHand: hasEmptyHand,
+          isEliminated: isEliminated,
+        );
+        
+        pointsChangeText = rpResult.formattedChange;
+        pointsColor = rpResult.isPositive 
+            ? (rpResult.totalChange >= 50 ? Colors.amber : Colors.greenAccent)
+            : (rpResult.totalChange <= -40 ? Colors.red : Colors.redAccent);
+      } else {
+        // Pour les bots, on n'affiche pas de RP
+        pointsChangeText = "";
       }
     }
 

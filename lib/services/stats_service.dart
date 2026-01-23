@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
+import 'rp_calculator.dart';
 
 class StatsService {
   static const String _statsKeyPrefix = 'game_stats_slot_';
@@ -40,6 +41,7 @@ class StatsService {
     required int score,
     required bool calledDutch,
     required bool wonDutch,
+    bool hasEmptyHand = false,
     int slotId = 1,
     bool isSBMM = false,
   }) async {
@@ -70,26 +72,16 @@ class StatsService {
     int mmrChange = 0;
 
     if (isSBMM) {
-      switch (playerRank) {
-        case 1:
-          mmrChange = 50;
-          if (calledDutch) {
-            mmrChange += 30;
-          }
-          break;
-        case 2:
-          mmrChange = 25;
-          break;
-        case 3:
-          mmrChange = -15;
-          break;
-        case 4:
-          mmrChange = -30;
-          if (calledDutch && !wonDutch) {
-            mmrChange -= 30;
-          }
-          break;
-      }
+      // Utiliser le calculateur centralisé
+      RPResult rpResult = RPCalculator.calculateRP(
+        playerRank: playerRank,
+        currentMMR: currentMMR,
+        calledDutch: calledDutch,
+        hasEmptyHand: hasEmptyHand,
+        isEliminated: calledDutch && playerRank != 1,
+      );
+      
+      mmrChange = rpResult.totalChange;
 
       int newMMR = currentMMR + mmrChange;
       if (newMMR < 0) newMMR = 0;
@@ -130,9 +122,8 @@ class StatsService {
     }
   }
 
+  /// Utilise le calculateur centralisé pour le nom du rang
   static String getRankName(int mmr) {
-    if (mmr < 150) return "Bronze";
-    if (mmr < 450) return "Argent";
-    return "Or";
+    return RPCalculator.getRankName(mmr);
   }
 }

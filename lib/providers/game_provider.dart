@@ -613,6 +613,7 @@ class GameProvider with ChangeNotifier {
       score: _gameState!.getFinalScore(human),
       calledDutch: calledDutch,
       wonDutch: wonDutch,
+      hasEmptyHand: human.hand.isEmpty,
       slotId: _currentSlotId,
       isSBMM: isSBMM,
     );
@@ -744,6 +745,7 @@ class GameProvider with ChangeNotifier {
         playerRank: playerCount, // Dernier
         calledDutch: false,
         wonDutch: false,
+        hasEmptyHand: false, // Abandon = pas de main vide
         isSBMM: _playerMMR != null,
         slotId: _currentSlotId,
       );
