@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
 import 'dutch_reveal_screen.dart';
+import '../services/web_orientation_service.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -24,10 +26,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    
+    if (kIsWeb) {
+      // Sur le web, essayer de forcer le mode paysage via l'API Screen Orientation
+      WebOrientationService.lockLandscape();
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndNavigateIfEnded();
@@ -37,12 +45,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    if (kIsWeb) {
+      WebOrientationService.unlock();
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
     super.dispose();
   }
 
@@ -123,6 +135,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               gameProvider.gameState;
             }
           });
+
+          // Sur le web, afficher une overlay si l'écran est en portrait
+          final size = MediaQuery.of(context).size;
+          final isPortrait = size.height > size.width;
+          
+          if (kIsWeb && isPortrait) {
+            return _buildRotateScreenOverlay();
+          }
 
           return Stack(
             children: [
@@ -612,5 +632,57 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       child: const Text("Oui",
                           style: TextStyle(color: Colors.redAccent))),
                 ]));
+  }
+
+  Widget _buildRotateScreenOverlay() {
+    return Container(
+      color: const Color(0xFF1a472a),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 1500),
+              builder: (context, value, child) {
+                return Transform.rotate(
+                  angle: value * 1.57, // 90 degrés
+                  child: const Icon(
+                    Icons.screen_rotation,
+                    size: 80,
+                    color: Colors.amber,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              '📱 Tournez votre écran',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Le jeu Dutch se joue en mode paysage',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '(ou agrandissez la fenêtre)',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

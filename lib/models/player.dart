@@ -109,8 +109,8 @@ class Player {
     if (isHuman) return;
     if (hand.length < 2) return;
 
-    mentalMap = List.filled(hand.length, null);
-    knownCards = List.filled(hand.length, false);
+    mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
+    knownCards = List<bool>.filled(hand.length, false, growable: true);
 
     mentalMap[0] = hand[0];
     mentalMap[1] = hand[1];
@@ -131,8 +131,8 @@ class Player {
   }
 
   void resetMentalMap() {
-    mentalMap = List.filled(hand.length, null);
-    knownCards = List.filled(hand.length, false);
+    mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
+    knownCards = List<bool>.filled(hand.length, false, growable: true);
   }
 
   void forgetCard(int index) {
