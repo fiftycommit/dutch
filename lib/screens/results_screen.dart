@@ -72,9 +72,9 @@ class ResultsScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.2),
+                        color: Colors.red.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withOpacity(0.5)),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
                       ),
                       child: Text(
                         "Vous avez été éliminé à la manche ${gameProvider.tournamentFinalRanking!.firstWhere((r) => r.player.isHuman).eliminatedAtRound}",
@@ -217,17 +217,17 @@ class ResultsScreen extends StatelessWidget {
     Color? borderColor;
     
     if (isWinner) {
-      backgroundColor = Colors.amber.withOpacity(0.2);
+      backgroundColor = Colors.amber.withValues(alpha: 0.2);
       borderColor = Colors.amber;
     } else if (isHuman && isEliminated) {
 
-      backgroundColor = Colors.red.withOpacity(0.2);
+      backgroundColor = Colors.red.withValues(alpha: 0.2);
       borderColor = Colors.red;
     } else if (isEliminated) {
-      backgroundColor = Colors.white.withOpacity(0.05);
+      backgroundColor = Colors.white.withValues(alpha: 0.05);
       borderColor = null;
     } else {
-      backgroundColor = Colors.white.withOpacity(0.05);
+      backgroundColor = Colors.white.withValues(alpha: 0.05);
       borderColor = null;
     }
 
@@ -427,10 +427,10 @@ class ResultsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isEliminated
-            ? Colors.red.withOpacity(0.2)
+            ? Colors.red.withValues(alpha: 0.2)
             : (isWinner
-                ? Colors.amber.withOpacity(0.2)
-                : Colors.white.withOpacity(0.05)),
+                ? Colors.amber.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.05)),
         borderRadius: BorderRadius.circular(12),
         border: isEliminated ? Border.all(color: Colors.red, width: 2) : null,
       ),

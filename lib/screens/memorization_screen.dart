@@ -16,7 +16,7 @@ class MemorizationScreen extends StatefulWidget {
 
 class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
-  Set<int> _selectedCards = {};
+  final Set<int> _selectedCards = {};
   bool _isRevealing = false;
   late AnimationController _pulseController;
 
@@ -59,13 +59,13 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
             ),
           ),
-          child: Center(
+          child: const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.visibility_off, size: 60, color: Colors.white54),
-                const SizedBox(height: 20),
-                const Text(
+                Icon(Icons.visibility_off, size: 60, color: Colors.white54),
+                SizedBox(height: 20),
+                Text(
                   "VOUS ÊTES ÉLIMINÉ",
                   style: TextStyle(
                     fontFamily: 'Rye',
@@ -74,20 +74,20 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Text(
+                SizedBox(height: 10),
+                Text(
                   "Les bots continuent...",
                   style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
-                const SizedBox(height: 30),
-                const CircularProgressIndicator(color: Colors.amber),
+                SizedBox(height: 30),
+                CircularProgressIndicator(color: Colors.amber),
               ],
             ),
           ),
         ),
       );
     }
-    
+
     final canConfirm = _selectedCards.length == 2;
 
     return Scaffold(
@@ -115,9 +115,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Icon(Icons.visibility, size: 60, color: Colors.white54),
+                    const Icon(Icons.visibility,
+                        size: 60, color: Colors.white54),
                     SizedBox(height: ScreenUtils.spacing(context, 20)),
-
                     Text(
                       "MÉMORISATION",
                       textAlign: TextAlign.center,
@@ -135,9 +135,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ],
                       ),
                     ),
-
                     SizedBox(height: ScreenUtils.spacing(context, 10)),
-
                     Text(
                       "Clique sur 2 cartes pour les mémoriser.",
                       textAlign: TextAlign.center,
@@ -146,9 +144,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         fontSize: ScreenUtils.scaleFont(context, 16),
                       ),
                     ),
-
                     SizedBox(height: ScreenUtils.spacing(context, 30)),
-
                     Center(
                       child: Wrap(
                         alignment: WrapAlignment.center,
@@ -179,19 +175,21 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                         ScreenUtils.borderRadius(context, 8),
                                       ),
                                       border: isSelected
-                                          ? Border.all(color: Colors.amber, width: 3)
+                                          ? Border.all(
+                                              color: Colors.amber, width: 3)
                                           : null,
                                       boxShadow: isSelected
                                           ? [
                                               BoxShadow(
-                                                color: Colors.amber.withOpacity(0.5),
+                                                color: Colors.amber
+                                                    .withValues(alpha: 0.5),
                                                 blurRadius: 15,
                                                 spreadRadius: 3,
                                               )
                                             ]
                                           : null,
                                     ),
-                                    child: CardWidget(
+                                    child: const CardWidget(
                                       card: null,
                                       size: CardSize.large,
                                       isRevealed: false,
@@ -204,15 +202,15 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         }),
                       ),
                     ),
-
                     SizedBox(height: ScreenUtils.spacing(context, 30)),
-
                     Center(
                       child: AnimatedOpacity(
                         opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
                         duration: const Duration(milliseconds: 300),
                         child: ElevatedButton(
-                          onPressed: canConfirm && !_isRevealing ? _confirmAndStart : null,
+                          onPressed: canConfirm && !_isRevealing
+                              ? _confirmAndStart
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.amber,
                             foregroundColor: Colors.black,
@@ -239,7 +237,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ),
                       ),
                     ),
-                    
                     SizedBox(height: ScreenUtils.spacing(context, 20)),
                   ],
                 ),
@@ -272,36 +269,30 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final humanPlayer =
         gameProvider.gameState!.players.firstWhere((p) => p.isHuman);
 
-    // â Révéler TEMPORAIREMENT les cartes sélectionnées
     for (int index in _selectedCards) {
       humanPlayer.knownCards[index] = true;
     }
 
-    // â Afficher un dialogue avec les cartes révélées
     if (!mounted) return;
     await _showRevealedCardsDialog(humanPlayer);
 
-    // â Masquer TOUTES les cartes après mémorisation
     for (var p in gameProvider.gameState!.players) {
       for (int i = 0; i < p.hand.length; i++) {
         p.knownCards[i] = false;
       }
     }
 
-    // â Passer en phase PLAYING
     gameProvider.gameState!.phase = GamePhase.playing;
     gameProvider.gameState!.isWaitingForSpecialPower = false;
     gameProvider.gameState!.specialCardToActivate = null;
 
     if (!mounted) return;
 
-    // â Naviguer vers l'écran de jeu
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const GameScreen()),
     );
 
-    // â CRITIQUE: Vérifier si un bot doit jouer après la navigation
     Future.delayed(const Duration(milliseconds: 300), () {
       gameProvider.checkIfBotShouldPlay();
     });
@@ -314,8 +305,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => WillPopScope(
-        onWillPop: () async => false, // Empêcher la fermeture
+      builder: (ctx) => PopScope(
+        canPop: false,
         child: Dialog(
           backgroundColor: Colors.black87,
           shape:
@@ -336,8 +327,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Afficher les 2 cartes révélées
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: revealedCards.map((card) {
@@ -351,17 +340,13 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                     );
                   }).toList(),
                 ),
-
                 const SizedBox(height: 20),
                 const Text(
                   "Mémorisez bien ces cartes !",
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 20),
-
-                // Indicateur de progression
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
                   duration: const Duration(seconds: 3),

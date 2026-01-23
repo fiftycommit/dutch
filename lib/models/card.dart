@@ -116,7 +116,7 @@ class PlayingCard {
   }
 
   bool matches(PlayingCard other) {
-    return this.matchValue == other.matchValue;
+    return matchValue == other.matchValue;
   }
 
   String get displayName {

@@ -68,8 +68,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                           border: Border.all(color: Colors.amber),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Column(
-                          children: const [
+                        child: const Column(
+                          children: [
                             Icon(Icons.auto_awesome,
                                 color: Colors.amber, size: 40),
                             SizedBox(height: 10),
@@ -112,14 +112,16 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         style: ButtonStyle(
                           backgroundColor:
                               WidgetStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(WidgetState.selected))
+                            if (states.contains(WidgetState.selected)) {
                               return Colors.amber;
+                            }
                             return Colors.white10;
                           }),
                           foregroundColor:
                               WidgetStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(WidgetState.selected))
+                            if (states.contains(WidgetState.selected)) {
                               return Colors.black;
+                            }
                             return Colors.white;
                           }),
                         ),
@@ -148,6 +150,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   void _startGame(BuildContext context, bool useSBMM) async {
     setState(() => _isLoading = true);
 
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final settings = Provider.of<SettingsProvider>(context, listen: false);
+    final navigator = Navigator.of(context);
 
     BotSkillLevel skillLevel;
     if (useSBMM) {
@@ -190,9 +195,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
     if (!mounted) return;
 
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
-
     gameProvider.createNewGame(
       players: players,
       gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
@@ -202,7 +204,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       useSBMM: useSBMM,
     );
 
-    Navigator.pushReplacement(context,
+    if (!mounted) return;
+    navigator.pushReplacement(
         MaterialPageRoute(builder: (context) => const MemorizationScreen()));
   }
 

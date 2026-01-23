@@ -1,35 +1,31 @@
 import 'package:flutter/services.dart';
 
 enum SoundType {
-  cardFlip, // Carte retournée
-  cardDraw, // Carte piochée
-  cardDiscard, // Carte défaussée
-  cardPlace, // Carte placée
-  buttonTap, // Bouton cliqué
-  dutch, // Cri "Dutch!"
-  powerActivate, // Pouvoir activé
-  win, // Victoire
-  lose, // Défaite
-  error, // Erreur
+  cardFlip,
+  cardDraw,
+  cardDiscard,
+  cardPlace,
+  buttonTap,
+  dutch,
+  powerActivate,
+  win,
+  lose,
+  error,
 }
 
 class SoundService {
   static bool _isEnabled = true;
 
-  // Activer/désactiver les sons
   static void setEnabled(bool enabled) {
     _isEnabled = enabled;
   }
 
   static bool get isEnabled => _isEnabled;
 
-  // Jouer un son
   static Future<void> play(SoundType sound) async {
     if (!_isEnabled) return;
 
     try {
-      // Utiliser les sons système de Flutter
-      // Pour l'instant on utilise SystemSound, plus tard on pourra ajouter audioplayers
       switch (sound) {
         case SoundType.cardFlip:
         case SoundType.cardDraw:
@@ -48,7 +44,6 @@ class SoundService {
           break;
 
         case SoundType.win:
-          // Triple son pour succès
           await SystemSound.play(SystemSoundType.click);
           await Future.delayed(const Duration(milliseconds: 100));
           await SystemSound.play(SystemSoundType.click);
@@ -65,11 +60,10 @@ class SoundService {
           break;
       }
     } catch (e) {
-      // Ignorer les erreurs de son
+      // Ignorer silencieusement
     }
   }
 
-  // Raccourcis pour les sons communs
   static Future<void> cardFlip() => play(SoundType.cardFlip);
   static Future<void> cardDraw() => play(SoundType.cardDraw);
   static Future<void> cardDiscard() => play(SoundType.cardDiscard);

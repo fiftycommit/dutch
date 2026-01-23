@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/player.dart';
-import '../models/card.dart';
 import 'card_widget.dart';
 
 class PlayerHandWidget extends StatelessWidget {
@@ -23,21 +22,13 @@ class PlayerHandWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("ð [PlayerHandWidget] BUILD - Joueur: ${player.name}");
-    debugPrint("   - isActive: $isActive");
-    debugPrint("   - onCardTap fourni: ${onCardTap != null}");
-    debugPrint("   - Nombre de cartes: ${player.hand.length}");
-
     return SizedBox(
       height: _getHandHeight(),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: List.generate(
           player.hand.length,
-          (index) {
-            debugPrint("   ð Création carte #$index");
-            return _buildCard(index);
-          },
+          (index) => _buildCard(index),
         ),
       ),
     );
@@ -45,36 +36,20 @@ class PlayerHandWidget extends StatelessWidget {
 
   Widget _buildCard(int index) {
     final isSelected = selectedIndices?.contains(index) ?? false;
-    final bool shouldReveal = false;
+    const bool shouldReveal = false;
 
     return GestureDetector(
       onTap: () {
-        debugPrint("ð¥ð¥ð¥ [PlayerHandWidget._buildCard] ââââââââââââââââââââ");
-        debugPrint("ð TAP DÃTECTÃ sur carte #$index");
-        debugPrint("   - Joueur: ${player.name}");
-        debugPrint("   - isActive: $isActive");
-        debugPrint("   - onCardTap fourni: ${onCardTap != null}");
-
         if (onCardTap != null && isActive) {
-          debugPrint("   â CONDITIONS REMPLIES - Appel onCardTap($index)");
           onCardTap!(index);
-        } else {
-          debugPrint("   â CONDITIONS NON REMPLIES");
-          debugPrint("      - onCardTap null: ${onCardTap == null}");
-          debugPrint("      - isActive false: ${!isActive}");
         }
-
-        debugPrint(
-            "ð¥ð¥ð¥ [PlayerHandWidget._buildCard] FIN âââââââââââââââââââ");
       },
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: _getCardSpacing()),
         child: TweenAnimationBuilder<double>(
-          // â Animation de shake pour les erreurs
           tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
           duration: const Duration(milliseconds: 500),
           builder: (context, shakeValue, child) {
-            // Shake horizontal pour l'erreur
             final offset = isSelected
                 ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20)
                 : 0.0;
@@ -85,14 +60,12 @@ class PlayerHandWidget extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
-                      ? Border.all(
-                          color: Colors.red, width: 3) // â Rouge pour erreur
+                      ? Border.all(color: Colors.red, width: 3)
                       : null,
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.red
-                                .withValues(alpha: 0.5), // â Rouge pour erreur
+                            color: Colors.red.withValues(alpha: 0.5),
                             blurRadius: 10,
                             spreadRadius: 2,
                           )

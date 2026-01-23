@@ -72,22 +72,20 @@ class CardWidget extends StatelessWidget {
   }
 
   Widget _buildCardImage(double w, double h) {
-    // Si la carte est null (pour les bots ou slots vides) OU face cachée
     if (card == null || !isRevealed) {
       return SvgPicture.asset(
         'assets/images/cards/dos-bleu.svg',
         width: w,
         height: h,
-        fit: BoxFit.contain, // â Image entière
+        fit: BoxFit.contain,
       );
     }
 
-    // Sinon, on affiche la face
     return SvgPicture.asset(
-      card!.imagePath, // â Utilise le getter défini dans le fichier précédent
+      card!.imagePath,
       width: w,
       height: h,
-      fit: BoxFit.contain, // â Image entière
+      fit: BoxFit.contain,
       placeholderBuilder: (context) => Container(
         color: Colors.white,
         child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),

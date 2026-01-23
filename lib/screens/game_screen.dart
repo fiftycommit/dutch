@@ -147,10 +147,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               if (gameState.isWaitingForSpecialPower)
                 _buildSpecialPowerOverlay(gameProvider, gameState),
               if (gameProvider.isProcessing)
-                Positioned(
+                const Positioned(
                   top: 20,
                   right: 60,
-                  child: const SizedBox(
+                  child: SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
@@ -337,6 +337,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             onPressed: () async {
               final shouldQuit = await _showQuitConfirmation();
               if (shouldQuit == true && mounted) {
+                if (!context.mounted) return;
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(
                       builder: (context) => const MainMenuScreen()),

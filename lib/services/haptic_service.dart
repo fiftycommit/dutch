@@ -1,24 +1,22 @@
 import 'package:flutter/services.dart';
 
 enum HapticIntensity {
-  light, // Clic léger
-  medium, // Clic moyen
-  heavy, // Clic fort
-  error, // Vibration d'erreur
-  success, // Vibration de succès
+  light,
+  medium,
+  heavy,
+  error,
+  success,
 }
 
 class HapticService {
   static bool _isEnabled = true;
 
-  // Activer/désactiver le feedback haptique
   static void setEnabled(bool enabled) {
     _isEnabled = enabled;
   }
 
   static bool get isEnabled => _isEnabled;
 
-  // Feedback haptique selon l'intensité
   static Future<void> trigger(HapticIntensity intensity) async {
     if (!_isEnabled) return;
 
@@ -37,14 +35,12 @@ class HapticService {
           break;
 
         case HapticIntensity.error:
-          // Double vibration pour erreur
           await HapticFeedback.heavyImpact();
           await Future.delayed(const Duration(milliseconds: 100));
           await HapticFeedback.heavyImpact();
           break;
 
         case HapticIntensity.success:
-          // Triple vibration légère pour succès
           await HapticFeedback.lightImpact();
           await Future.delayed(const Duration(milliseconds: 50));
           await HapticFeedback.lightImpact();
@@ -53,11 +49,10 @@ class HapticService {
           break;
       }
     } catch (e) {
-      // Ignorer les erreurs (certains appareils ne supportent pas le haptique)
+      // Certains appareils ne supportent pas le haptique
     }
   }
 
-  // Raccourcis pour les cas d'usage courants
   static Future<void> cardTap() => trigger(HapticIntensity.light);
   static Future<void> buttonTap() => trigger(HapticIntensity.medium);
   static Future<void> importantAction() => trigger(HapticIntensity.heavy);

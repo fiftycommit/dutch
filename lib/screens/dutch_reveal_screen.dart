@@ -17,9 +17,9 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  static const double CARD_HEIGHT = 64.0;
-  static const double CARD_SPACING = 2.0;
-  static const double SCROLL_STEP = CARD_HEIGHT + CARD_SPACING;
+  static const double cardHeight = 64.0;
+  static const double cardSpacing = 2.0;
+  static const double scrollStep = cardHeight + cardSpacing;
 
   int currentRevealIndex = -1; // -1 = rien révélé
   Map<String, int> currentScores = {};
@@ -90,7 +90,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
   Future<void> _animateScroll(int targetIndex, List<Player> players) async {
     List<Future> scrollAnimations = [];
-    double targetOffset = targetIndex * SCROLL_STEP;
+    double targetOffset = targetIndex * scrollStep;
 
     for (var player in players) {
       // On ne scrolle que si le joueur a encore des cartes ou vient juste de finir (pour afficher le trait rouge)
@@ -197,7 +197,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isWinner ? Colors.amber.withOpacity(0.2) : Colors.black12,
+          color: isWinner ? Colors.amber.withValues(alpha: 0.2) : Colors.black12,
           borderRadius: BorderRadius.circular(12),
           border: isWinner ? Border.all(color: Colors.amber, width: 2) : null,
         ),
@@ -233,7 +233,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                       child: ListView.builder(
                         controller: _scrollControllers[player.id],
                         physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(top: SCROLL_STEP),
+                        // ignore: prefer_const_constructors
+                        padding: EdgeInsets.only(top: scrollStep),
                         itemCount: player.hand.length + 1,
                         itemBuilder: (context, index) {
                           if (index == player.hand.length) {
@@ -242,7 +243,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                               duration: const Duration(milliseconds: 300),
                               opacity: showRedLine ? 1.0 : 0.0,
                               child: Container(
-                                height: SCROLL_STEP,
+                                height: scrollStep,
                                 alignment: Alignment.topCenter,
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Container(
@@ -252,7 +253,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                                     color: Colors.redAccent,
                                     borderRadius: BorderRadius.circular(2),
                                     boxShadow: [
-                                      BoxShadow(color: Colors.red.withOpacity(0.5), blurRadius: 4, spreadRadius: 1)
+                                      BoxShadow(color: Colors.red.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1)
                                     ],
                                   ),
                                 ),
@@ -264,7 +265,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                           double animValue = (index == currentRevealIndex) ? _flipController.value : (shouldReveal ? 1.0 : 0.0);
 
                           return SizedBox(
-                            height: SCROLL_STEP,
+                            height: scrollStep,
                             child: Center(
                               child: _FlipCard(
                                 card: player.hand[index],
