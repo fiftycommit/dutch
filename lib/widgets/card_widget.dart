@@ -3,7 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../models/card.dart';
 import '../utils/screen_utils.dart';
 
-enum CardSize { small, medium, large, drawn }
+enum CardSize { tiny, small, medium, large, drawn }
 
 class CardWidget extends StatelessWidget {
   final PlayingCard? card;
@@ -25,6 +25,10 @@ class CardWidget extends StatelessWidget {
     double height;
 
     switch (size) {
+      case CardSize.tiny:
+        width = 28;
+        height = 42;
+        break;
       case CardSize.small:
         width = 40;
         height = 60;

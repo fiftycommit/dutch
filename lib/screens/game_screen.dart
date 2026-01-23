@@ -192,168 +192,58 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     bool hasDrawn = gs.drawnCard != null;
 
     bool canInteractWithCards = isMyTurn || gs.phase == GamePhase.reaction;
+    
+    // Détecter si on est sur un petit écran (mobile web en paysage)
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isCompactMode = kIsWeb && screenHeight < 400;
 
     return Stack(
       children: [
         Center(
-          child: _buildCenterTable(gs, gp, isMyTurn, hasDrawn),
+          child: _buildCenterTable(gs, gp, isMyTurn, hasDrawn, isCompactMode),
         ),
         if (bots.isNotEmpty)
           Positioned(
-            left: 40,
+            left: isCompactMode ? 10 : 40,
             top: 0,
             bottom: 0,
             child: Center(
                 child: RotatedBox(
                     quarterTurns: 1,
-                    child: _buildBotArea(context, bots[0], gp))),
+                    child: _buildBotArea(context, bots[0], gp, isCompactMode))),
           ),
         if (bots.length > 1)
           Positioned(
-            top: 20,
+            top: isCompactMode ? 5 : 20,
             left: 0,
             right: 0,
             child: Center(
                 child: RotatedBox(
                     quarterTurns: 2,
-                    child: _buildBotArea(context, bots[1], gp))),
+                    child: _buildBotArea(context, bots[1], gp, isCompactMode))),
           ),
         if (bots.length > 2)
           Positioned(
-            right: 40,
+            right: isCompactMode ? 10 : 40,
             top: 0,
             bottom: 0,
             child: Center(
                 child: RotatedBox(
                     quarterTurns: 3,
-                    child: _buildBotArea(context, bots[2], gp))),
+                    child: _buildBotArea(context, bots[2], gp, isCompactMode))),
           ),
         Positioned(
-          bottom: 10,
+          bottom: isCompactMode ? 2 : 10,
           left: 0,
           right: 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isMyTurn && hasDrawn && gs.drawnCard != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber)),
-                    child: Column(
-                      children: [
-                        const Text("CARTE PIOCHÉE",
-                            style: TextStyle(
-                                color: Colors.amber,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        CardWidget(
-                            card: gs.drawnCard,
-                            size: CardSize.small,
-                            isRevealed: true),
-                      ],
-                    ),
-                  ),
-                ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  SizedBox(
-                    width: 90,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isMyTurn)
-                          Container(
-                            height: 50,
-                            margin: const EdgeInsets.only(bottom: 10),
-                            child: hasDrawn
-                                ? _buildActionButton(
-                                    icon: Icons.delete,
-                                    label: "JETER",
-                                    color: Colors.redAccent,
-                                    onTap: gp.discardDrawnCard)
-                                : _buildActionButton(
-                                    icon: Icons.get_app,
-                                    label: "PIOCHER",
-                                    color: Colors.green,
-                                    onTap: gp.drawCard),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Column(
-                    children: [
-                      PlayerAvatar(
-                          player: human,
-                          size: 30,
-                          isActive: isMyTurn,
-                          showName: false),
-                      const SizedBox(height: 5),
-                      PlayerHandWidget(
-                        player: human,
-                        isHuman: true,
-                        isActive: canInteractWithCards,
-                        onCardTap: (index) => _handleCardTap(gp, gs, index),
-                        selectedIndices: gp.shakingCardIndices.toList(),
-                        cardSize: CardSize.medium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 15),
-                  SizedBox(
-                    width: 90,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isMyTurn && !hasDrawn)
-                          Container(
-                            height: 50,
-                            margin: const EdgeInsets.only(bottom: 10),
-                            child: _buildActionButton(
-                                icon: Icons.campaign,
-                                label: "DUTCH",
-                                color: Colors.amber.shade700,
-                                onTap: () => _confirmDutch(gp)),
-                          ),
-                        if (isMyTurn && hasDrawn)
-                          Container(
-                            height: 50,
-                            margin: const EdgeInsets.only(bottom: 10),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.blueAccent)),
-                            child: const Text("GARDER\n(Clique main)",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: _buildPlayerArea(gp, gs, human, isMyTurn, hasDrawn, canInteractWithCards, isCompactMode),
         ),
         Positioned(
-          top: 20,
-          right: 20,
+          top: isCompactMode ? 5 : 20,
+          right: isCompactMode ? 5 : 20,
           child: IconButton(
-            icon: const Icon(Icons.pause_circle_filled,
-                color: Colors.white54, size: 32),
+            icon: Icon(Icons.pause_circle_filled,
+                color: Colors.white54, size: isCompactMode ? 24 : 32),
             onPressed: () async {
               final shouldQuit = await _showQuitConfirmation();
               if (shouldQuit == true && mounted) {
@@ -370,26 +260,240 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ],
     );
   }
+  
+  Widget _buildPlayerArea(GameProvider gp, GameState gs, Player human, bool isMyTurn, bool hasDrawn, bool canInteractWithCards, bool isCompactMode) {
+    if (isCompactMode) {
+      // Layout compact pour mobile web
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Bouton gauche
+          if (isMyTurn)
+            SizedBox(
+              width: 60,
+              height: 36,
+              child: hasDrawn
+                  ? _buildCompactActionButton(
+                      icon: Icons.delete,
+                      label: "JETER",
+                      color: Colors.redAccent,
+                      onTap: gp.discardDrawnCard)
+                  : _buildCompactActionButton(
+                      icon: Icons.get_app,
+                      label: "PIOCHER",
+                      color: Colors.green,
+                      onTap: gp.drawCard),
+            ),
+          if (!isMyTurn) const SizedBox(width: 60),
+          const SizedBox(width: 8),
+          // Carte piochée (si applicable)
+          if (isMyTurn && hasDrawn && gs.drawnCard != null)
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber, width: 1)),
+              child: CardWidget(
+                  card: gs.drawnCard,
+                  size: CardSize.tiny,
+                  isRevealed: true),
+            ),
+          if (isMyTurn && hasDrawn) const SizedBox(width: 8),
+          // Main du joueur
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PlayerAvatar(
+                  player: human,
+                  size: 20,
+                  isActive: isMyTurn,
+                  showName: false),
+              const SizedBox(height: 2),
+              PlayerHandWidget(
+                player: human,
+                isHuman: true,
+                isActive: canInteractWithCards,
+                onCardTap: (index) => _handleCardTap(gp, gs, index),
+                selectedIndices: gp.shakingCardIndices.toList(),
+                cardSize: CardSize.small,
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+          // Bouton droit
+          if (isMyTurn && !hasDrawn)
+            SizedBox(
+              width: 60,
+              height: 36,
+              child: _buildCompactActionButton(
+                  icon: Icons.campaign,
+                  label: "DUTCH",
+                  color: Colors.amber.shade700,
+                  onTap: () => _confirmDutch(gp)),
+            ),
+          if (isMyTurn && hasDrawn)
+            Container(
+              width: 60,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.blueAccent)),
+              child: const Text("GARDER",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold)),
+            ),
+          if (!isMyTurn) const SizedBox(width: 60),
+        ],
+      );
+    }
+    
+    // Layout normal
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isMyTurn && hasDrawn && gs.drawnCard != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber)),
+              child: Column(
+                children: [
+                  const Text("CARTE PIOCHÉE",
+                      style: TextStyle(
+                          color: Colors.amber,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  CardWidget(
+                      card: gs.drawnCard,
+                      size: CardSize.small,
+                      isRevealed: true),
+                ],
+              ),
+            ),
+          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            SizedBox(
+              width: 90,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isMyTurn)
+                    Container(
+                      height: 50,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: hasDrawn
+                          ? _buildActionButton(
+                              icon: Icons.delete,
+                              label: "JETER",
+                              color: Colors.redAccent,
+                              onTap: gp.discardDrawnCard)
+                          : _buildActionButton(
+                              icon: Icons.get_app,
+                              label: "PIOCHER",
+                              color: Colors.green,
+                              onTap: gp.drawCard),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 15),
+            Column(
+              children: [
+                PlayerAvatar(
+                    player: human,
+                    size: 30,
+                    isActive: isMyTurn,
+                    showName: false),
+                const SizedBox(height: 5),
+                PlayerHandWidget(
+                  player: human,
+                  isHuman: true,
+                  isActive: canInteractWithCards,
+                  onCardTap: (index) => _handleCardTap(gp, gs, index),
+                  selectedIndices: gp.shakingCardIndices.toList(),
+                  cardSize: CardSize.medium,
+                ),
+              ],
+            ),
+            const SizedBox(width: 15),
+            SizedBox(
+              width: 90,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isMyTurn && !hasDrawn)
+                    Container(
+                      height: 50,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: _buildActionButton(
+                          icon: Icons.campaign,
+                          label: "DUTCH",
+                          color: Colors.amber.shade700,
+                          onTap: () => _confirmDutch(gp)),
+                    ),
+                  if (isMyTurn && hasDrawn)
+                    Container(
+                      height: 50,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.blueAccent)),
+                      child: const Text("GARDER\n(Clique main)",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
   Widget _buildCenterTable(
-      GameState gs, GameProvider gp, bool isMyTurn, bool hasDrawn) {
+      GameState gs, GameProvider gp, bool isMyTurn, bool hasDrawn, bool isCompactMode) {
     bool isReaction = gs.phase == GamePhase.reaction;
     String topCardValue = gs.topDiscardCard?.displayName ?? "?";
+    
+    final cardSize = isCompactMode ? CardSize.small : CardSize.medium;
+    final padding = isCompactMode ? 8.0 : 15.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (isReaction) ...[
           Text("Vite ! Avez-vous un$topCardValue ?",
-              style: const TextStyle(
+              style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: isCompactMode ? 12 : 16,
                   fontWeight: FontWeight.bold,
-                  shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
-          const SizedBox(height: 5),
+                  shadows: const [Shadow(color: Colors.black, blurRadius: 5)])),
+          SizedBox(height: isCompactMode ? 2 : 5),
           SizedBox(
-            width: 150,
-            height: 8,
+            width: isCompactMode ? 100 : 150,
+            height: isCompactMode ? 5 : 8,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 1.0, end: 0.0),
               duration: const Duration(milliseconds: 2000),
@@ -403,13 +507,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               },
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: isCompactMode ? 4 : 10),
         ],
         Container(
-          padding: const EdgeInsets.all(15),
+          padding: EdgeInsets.all(padding),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(isCompactMode ? 12 : 20),
             border: Border.all(color: Colors.white10, width: 1),
           ),
           child: Row(
@@ -417,15 +521,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             children: [
               Opacity(
                 opacity: (isMyTurn && !hasDrawn) ? 1.0 : 0.6,
-                child: const CardWidget(
-                    card: null, size: CardSize.medium, isRevealed: false),
+                child: CardWidget(
+                    card: null, size: cardSize, isRevealed: false),
               ),
-              const SizedBox(width: 20),
+              SizedBox(width: isCompactMode ? 10 : 20),
               GestureDetector(
                 onTap: () => _showDiscardPile(gs),
                 child: CardWidget(
                     card: gs.topDiscardCard,
-                    size: CardSize.medium,
+                    size: cardSize,
                     isRevealed: true),
               ),
             ],
@@ -435,26 +539,31 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildBotArea(BuildContext context, Player bot, GameProvider gp) {
+  Widget _buildBotArea(BuildContext context, Player bot, GameProvider gp, bool isCompactMode) {
+    final avatarSize = isCompactMode ? 20.0 : 30.0;
+    final cardHeight = isCompactMode ? 25.0 : 40.0;
+    final cardWidth = isCompactMode ? 50.0 : 80.0;
+    final cardSpacing = isCompactMode ? 10.0 : 15.0;
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         PlayerAvatar(
           player: bot,
-          size: 30,
+          size: avatarSize,
           isActive: gp.gameState!.currentPlayer.id == bot.id,
           showName: false,
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: isCompactMode ? 2 : 4),
         SizedBox(
-          height: 40,
-          width: 80,
+          height: cardHeight,
+          width: cardWidth,
           child: Stack(
             children: List.generate(bot.hand.length, (index) {
               return Positioned(
-                left: index * 15.0,
-                child: const CardWidget(
-                    card: null, size: CardSize.small, isRevealed: false),
+                left: index * cardSpacing,
+                child: CardWidget(
+                    card: null, size: isCompactMode ? CardSize.tiny : CardSize.small, isRevealed: false),
               );
             }),
           ),
@@ -484,6 +593,34 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           Text(label,
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildCompactActionButton(
+      {required IconData icon,
+      required String label,
+      required Color color,
+      required VoidCallback onTap}) {
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        elevation: 2,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 2),
+          Text(label,
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
         ],
       ),
     );
