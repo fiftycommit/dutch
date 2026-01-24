@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
@@ -93,13 +95,20 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final screenSize = MediaQuery.of(context).size;
     final isCompact = screenSize.height < 500 || screenSize.width < 600;
     final isMedium = !isCompact && (screenSize.height < 700 || screenSize.width < 900);
+    final profile = ScreenUtils.getDeviceProfile(context);
+    final isIphoneLandscape = profile == DeviceProfile.iPhoneLandscape;
     // Optimisation : moins de padding, cartes plus grandes sur mobile
-    final cardSize = isCompact ? CardSize.medium : (isMedium ? CardSize.large : CardSize.large);
-    final iconSize = isCompact ? 44.0 : 64.0;
-    final titleSize = isCompact ? 28.0 : (isMedium ? 34.0 : 40.0);
-    final subtitleSize = isCompact ? 14.0 : (isMedium ? 16.0 : 18.0);
-    final verticalSpacing = isCompact ? 6.0 : (isMedium ? 12.0 : 18.0);
-    final cardSpacing = isCompact ? 8.0 : 12.0;
+    final iconSize = isIphoneLandscape ? 36.0 : (isCompact ? 44.0 : 64.0);
+    final titleSize = isIphoneLandscape ? 24.0 : (isCompact ? 28.0 : (isMedium ? 34.0 : 40.0));
+    final subtitleSize = isIphoneLandscape ? 12.0 : (isCompact ? 14.0 : (isMedium ? 16.0 : 18.0));
+    final verticalSpacing = isIphoneLandscape ? 4.0 : (isCompact ? 6.0 : (isMedium ? 12.0 : 18.0));
+    final horizontalPadding = isIphoneLandscape ? 8.0 : (isCompact ? 4.0 : 24.0);
+    final verticalPadding = isIphoneLandscape ? 4.0 : (isCompact ? 4.0 : 24.0);
+    final usableHeight = ScreenUtils.usableHeight(context);
+    final isLandscape = ScreenUtils.isLandscape(context);
+    final cardColumns = isLandscape ? 4 : 2;
+    final cardRows = (4 / cardColumns).ceil();
+    final cardAreaHeight = usableHeight * (isLandscape ? 0.5 : 0.38);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0d2818),
@@ -118,8 +127,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
             child: SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isCompact ? 4 : 24,
-                  vertical: isCompact ? 4 : 24,
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -146,7 +155,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ],
                       ),
                     ),
-                    SizedBox(height: isCompact ? 2 : 10),
+                    SizedBox(height: isIphoneLandscape ? 2 : (isCompact ? 2 : 10)),
                     Text(
                       "Clique sur 2 cartes pour les mémoriser.",
                       textAlign: TextAlign.center,
@@ -156,64 +165,98 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                       ),
                     ),
                     SizedBox(height: verticalSpacing),
-                    Center(
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: cardSpacing,
-                        runSpacing: cardSpacing,
-                        children: List.generate(4, (index) {
-                          final isSelected = _selectedCards.contains(index);
+                    SizedBox(
+                      height: cardAreaHeight,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const aspect = 1.5;
+                          final maxWidth = constraints.maxWidth;
+                          final maxHeight = constraints.maxHeight;
+                          final spacing =
+                              (maxWidth * 0.03).clamp(6.0, 12.0);
+                          final widthLimit =
+                              (maxWidth - (cardColumns - 1) * spacing) /
+                                  cardColumns;
+                          final heightLimit =
+                              (maxHeight - (cardRows - 1) * spacing) /
+                                  cardRows;
+                          final cardWidth = math.max(
+                            0.0,
+                            math.min(widthLimit, heightLimit / aspect),
+                          );
+                          final cardHeight = cardWidth * aspect;
+                          final lift = cardHeight * 0.08;
 
-                          return GestureDetector(
-                            onTap: () => _onCardTap(index),
-                            child: AnimatedBuilder(
-                              animation: _pulseController,
-                              builder: (context, child) {
-                                return Transform.scale(
-                                  scale: isSelected
-                                      ? 1.0 + (_pulseController.value * 0.05)
-                                      : 1.0,
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 300),
-                                    transform: Matrix4.translationValues(
-                                      0,
-                                      isSelected ? (isCompact ? -5 : -10) : 0,
-                                      0,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(
-                                        ScreenUtils.borderRadius(context, 8),
-                                      ),
-                                      border: isSelected
-                                          ? Border.all(
-                                              color: Colors.amber, width: isCompact ? 2 : 3)
-                                          : null,
-                                      boxShadow: isSelected
-                                          ? [
-                                              BoxShadow(
-                                                color: Colors.amber
-                                                    .withValues(alpha: 0.5),
-                                                blurRadius: isCompact ? 10 : 15,
-                                                spreadRadius: isCompact ? 2 : 3,
-                                              )
-                                            ]
-                                          : null,
-                                    ),
-                                    child: CardWidget(
-                                      card: null,
-                                      size: cardSize,
-                                      isRevealed: false,
-                                    ),
+                          return Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: List.generate(4, (index) {
+                                final isSelected =
+                                    _selectedCards.contains(index);
+
+                                return GestureDetector(
+                                  onTap: () => _onCardTap(index),
+                                  child: AnimatedBuilder(
+                                    animation: _pulseController,
+                                    builder: (context, child) {
+                                      return Transform.scale(
+                                        scale: isSelected
+                                            ? 1.0 + (_pulseController.value * 0.05)
+                                            : 1.0,
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 300),
+                                          transform: Matrix4.translationValues(
+                                            0,
+                                            isSelected ? -lift : 0,
+                                            0,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              ScreenUtils.borderRadius(context, 8),
+                                            ),
+                                            border: isSelected
+                                                ? Border.all(
+                                                    color: Colors.amber,
+                                                    width: isCompact ? 2 : 3)
+                                                : null,
+                                            boxShadow: isSelected
+                                                ? [
+                                                    BoxShadow(
+                                                      color: Colors.amber
+                                                          .withValues(alpha: 0.5),
+                                                      blurRadius: isCompact ? 10 : 15,
+                                                      spreadRadius: isCompact ? 2 : 3,
+                                                    )
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: SizedBox(
+                                            width: cardWidth,
+                                            height: cardHeight,
+                                            child: FittedBox(
+                                              fit: BoxFit.contain,
+                                              child: CardWidget(
+                                                card: null,
+                                                size: CardSize.large,
+                                                isRevealed: false,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 );
-                              },
+                              }),
                             ),
                           );
-                        }),
+                        },
                       ),
                     ),
-                    SizedBox(height: verticalSpacing * 1.5),
+                    SizedBox(height: verticalSpacing * 1.2),
                     Center(
                       child: AnimatedOpacity(
                         opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
@@ -317,82 +360,182 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        // Responsive pour le dialog aussi
         final screenSize = MediaQuery.of(ctx).size;
-        final isCompact = screenSize.height < 500 || screenSize.width < 600;
-        final dialogCardSize = isCompact ? CardSize.medium : CardSize.large;
-        final dialogIconSize = isCompact ? 35.0 : 50.0;
-        final dialogTitleSize = isCompact ? 18.0 : 24.0;
-        final dialogPadding = isCompact ? 12.0 : 20.0;
-        
+        final profile = ScreenUtils.getDeviceProfile(ctx);
+        final isIphoneLandscape = profile == DeviceProfile.iPhoneLandscape;
+        final dialogInsetPadding = EdgeInsets.symmetric(
+          horizontal: isIphoneLandscape ? 12.0 : 16.0,
+          vertical: isIphoneLandscape ? 8.0 : 16.0,
+        );
+
         return PopScope(
           canPop: false,
           child: Dialog(
             backgroundColor: Colors.black87,
+            insetPadding: dialogInsetPadding,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: EdgeInsets.all(dialogPadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.remove_red_eye, color: Colors.amber, size: dialogIconSize),
-                  SizedBox(height: isCompact ? 10 : 16),
-                  Text(
-                    "VOS CARTES",
-                    style: TextStyle(
-                      color: Colors.amber,
-                      fontSize: dialogTitleSize,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: isCompact ? 12 : 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: revealedCards.map((card) {
-                      return Padding(
-                        padding: EdgeInsets.symmetric(horizontal: isCompact ? 4 : 8),
-                        child: CardWidget(
-                          card: card,
-                          size: dialogCardSize,
-                          isRevealed: true,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: isCompact ? 12 : 20),
-                  Text(
-                    "Mémorisez bien ces cartes !",
-                    style: TextStyle(color: Colors.white70, fontSize: isCompact ? 12 : 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: isCompact ? 12 : 20),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(seconds: 3),
-                    builder: (context, value, child) {
-                      return Column(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isIphoneLandscape
+                    ? screenSize.width * 0.92
+                    : screenSize.width * 0.85,
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const aspect = 1.5;
+                  final maxWidth = constraints.maxWidth;
+                  final maxHeight = constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : screenSize.height * 0.8;
+
+                  final dialogPadding =
+                      (maxHeight * 0.04).clamp(8.0, 16.0);
+                  final contentWidth =
+                      math.max(0.0, maxWidth - (dialogPadding * 2));
+                  final contentHeight =
+                      math.max(0.0, maxHeight - (dialogPadding * 2));
+
+                  final headerHeight = contentHeight * 0.20;
+                  final subtitleHeight = contentHeight * 0.08;
+                  final progressHeight = contentHeight * 0.14;
+                  final cardsAreaHeight = math.max(
+                    0.0,
+                    contentHeight -
+                        headerHeight -
+                        subtitleHeight -
+                        progressHeight,
+                  );
+
+                  final cardSpacing =
+                      (contentWidth * 0.03).clamp(6.0, 12.0);
+                  final cardWidthByWidth =
+                      (contentWidth - cardSpacing) / 2;
+                  final cardWidthByHeight = cardsAreaHeight / aspect;
+                  final cardWidth = math.max(
+                    0.0,
+                    math.min(cardWidthByWidth, cardWidthByHeight),
+                  );
+                  final cardHeight = cardWidth * aspect;
+
+                  return Padding(
+                    padding: EdgeInsets.all(dialogPadding),
+                    child: SizedBox(
+                      width: contentWidth,
+                      height: contentHeight,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
                         children: [
-                          LinearProgressIndicator(
-                            value: value,
-                            backgroundColor: Colors.white24,
-                            color: Colors.amber,
-                            minHeight: 4,
+                          SizedBox(
+                            height: headerHeight,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.remove_red_eye,
+                                  color: Colors.amber,
+                                  size: headerHeight * 0.45,
+                                ),
+                                SizedBox(height: headerHeight * 0.08),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    "VOS CARTES",
+                                    style: TextStyle(
+                                      color: Colors.amber,
+                                      fontSize: headerHeight * 0.25,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "${((1 - value) * 3).ceil()}s",
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 12,
+                          SizedBox(
+                            height: cardsAreaHeight,
+                            child: Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: revealedCards.map((card) {
+                                  return Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: cardSpacing / 2),
+                                    child: SizedBox(
+                                      width: cardWidth,
+                                      height: cardHeight,
+                                      child: FittedBox(
+                                        fit: BoxFit.contain,
+                                        child: CardWidget(
+                                          card: card,
+                                          size: CardSize.large,
+                                          isRevealed: true,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            height: subtitleHeight,
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "Mémorisez bien ces cartes !",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: subtitleHeight * 0.6,
+                                  ),
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            height: progressHeight,
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: SizedBox(
+                                  width: contentWidth,
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 0.0, end: 1.0),
+                                    duration: const Duration(seconds: 3),
+                                    builder: (context, value, child) {
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          LinearProgressIndicator(
+                                            value: value,
+                                            backgroundColor: Colors.white24,
+                                            color: Colors.amber,
+                                            minHeight: 4,
+                                          ),
+                                          SizedBox(height: progressHeight * 0.2),
+                                          Text(
+                                            "${((1 - value) * 3).ceil()}s",
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: progressHeight * 0.3,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

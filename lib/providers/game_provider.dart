@@ -27,6 +27,7 @@ class GameProvider with ChangeNotifier {
   int _currentSlotId = 1;
 
   int? _remainingReactionTimeMs;
+  final ValueNotifier<int> reactionTimeRemaining = ValueNotifier<int>(0);
 
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
@@ -342,6 +343,7 @@ class GameProvider with ChangeNotifier {
 
     _gameState!.phase = GamePhase.reaction;
     _gameState!.reactionTimeRemaining = _currentReactionTimeMs;
+    reactionTimeRemaining.value = _currentReactionTimeMs;
 
     _reactionTimer?.cancel();
 
@@ -355,15 +357,15 @@ class GameProvider with ChangeNotifier {
       if (_isPaused) return;
 
       _gameState!.reactionTimeRemaining -= 50;
+      reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
 
       if (_gameState!.reactionTimeRemaining <= 0) {
         timer.cancel();
         _endReactionPhase();
       }
-
-      notifyListeners();
     });
 
+    notifyListeners();
     _simulateBotReaction();
   }
 
@@ -379,6 +381,7 @@ class GameProvider with ChangeNotifier {
         _remainingReactionTimeMs! > 0 &&
         _gameState != null) {
       _gameState!.reactionTimeRemaining = _remainingReactionTimeMs!;
+      reactionTimeRemaining.value = _remainingReactionTimeMs!;
 
       _reactionTimer?.cancel();
       _reactionTimer =
@@ -389,16 +392,16 @@ class GameProvider with ChangeNotifier {
         }
 
         _gameState!.reactionTimeRemaining -= 100;
+        reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
 
         if (_gameState!.reactionTimeRemaining <= 0) {
           timer.cancel();
           _endReactionPhase();
         }
-
-        notifyListeners();
       });
 
       _remainingReactionTimeMs = null;
+      notifyListeners();
     }
   }
 
@@ -783,6 +786,13 @@ class GameProvider with ChangeNotifier {
     _tournamentFinalRanking = null;
     _remainingReactionTimeMs = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _reactionTimer?.cancel();
+    reactionTimeRemaining.dispose();
+    super.dispose();
   }
 }
 

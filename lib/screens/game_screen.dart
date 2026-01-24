@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +14,7 @@ import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
 import 'dutch_reveal_screen.dart';
 import '../services/web_orientation_service.dart';
+import 'game_screen/center_table.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -26,8 +26,6 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  bool _isDrawnCardExpanded = true;
-  Timer? _autoCollapseTimer;
   @override
   void initState() {
     super.initState();
@@ -57,7 +55,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _autoCollapseTimer?.cancel();
     _pulseController.dispose();
     if (kIsWeb) {
       WebOrientationService.unlock();
@@ -102,7 +99,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         !gameProvider.isProcessing) {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
-          gameProvider.gameState;
+          gameProvider.checkIfBotShouldPlay();
         }
       });
     }
@@ -140,15 +137,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           }
 
           final gameState = gameProvider.gameState!;
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted &&
-                !gameState.currentPlayer.isHuman &&
-                gameState.phase == GamePhase.playing &&
-                !gameProvider.isProcessing) {
-              gameProvider.gameState;
-            }
-          });
 
           final size = MediaQuery.of(context).size;
           final isPortrait = size.height > size.width;
@@ -214,21 +202,27 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final isCompactMode = screenHeight < 400 || screenWidth < 700;
     final isMediumMode = !isCompactMode && (screenHeight < 600 || screenWidth < 1000);
 
+    final safePadding = MediaQuery.of(context).padding;
+    final leftInset = safePadding.left;
+    final rightInset = safePadding.right;
+
     final s = screenWidth < screenHeight ? screenWidth : screenHeight;
     final distanceFromCenter = s * 0.06;
     final topBandHeight = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
     final bottomBandHeight = distanceFromCenter + (isCompactMode ? 102.0 : 128.0);
     final sideBandWidth = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
 
-    final centerWidth = screenWidth - 2 * sideBandWidth;
+    final centerLeft = sideBandWidth + leftInset;
+    final centerRight = sideBandWidth + rightInset;
+    final centerWidth = screenWidth - centerLeft - centerRight;
     final centerHeight = screenHeight - topBandHeight - bottomBandHeight;
     final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
 
     return Stack(
       children: [
         Positioned(
-          left: sideBandWidth,
-          right: sideBandWidth,
+          left: centerLeft,
+          right: centerRight,
           top: topBandHeight,
           bottom: bottomBandHeight,
           child: Center(
@@ -240,7 +234,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.center,
-                child: _buildCenterTable(gs, gp, isMyTurn, hasDrawn, isCompactMode),
+                child: CenterTable(
+                  gameState: gs,
+                  isMyTurn: isMyTurn,
+                  hasDrawn: hasDrawn,
+                  isCompactMode: isCompactMode,
+                  onShowDiscard: () => _showDiscardPile(gs),
+                ),
               ),
             ),
           ),
@@ -260,7 +260,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
         if (bots.isNotEmpty)
           Positioned(
-            left: 0,
+            left: leftInset,
             top: topBandHeight,
             bottom: bottomBandHeight,
             width: sideBandWidth,
@@ -273,7 +273,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
         if (bots.length > 2)
           Positioned(
-            right: 0,
+            right: rightInset,
             top: topBandHeight,
             bottom: bottomBandHeight,
             width: sideBandWidth,
@@ -299,7 +299,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         ),
         Positioned(
           top: buttonMargin,
-          right: sideBandWidth + buttonMargin,
+          right: rightInset + sideBandWidth + buttonMargin,
           child: IconButton(
             icon: Icon(Icons.pause_circle_filled,
                 color: Colors.white54, size: isCompactMode ? 24 : 32),
@@ -477,258 +477,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         );
   }
 
-  Widget _buildCenterTable(
-      GameState gs, GameProvider gp, bool isMyTurn, bool hasDrawn, bool isCompactMode) {
-    bool isReaction = gs.phase == GamePhase.reaction;
-    String topCardValue = gs.topDiscardCard?.displayName ?? "?";
-    
-    final cardSize = isCompactMode ? CardSize.small : CardSize.medium;
-    final padding = isCompactMode ? 8.0 : 15.0;
-    final deckCount = gs.deck.length;
-
-    if (isMyTurn && hasDrawn && gs.drawnCard != null && _isDrawnCardExpanded) {
-      _startAutoCollapseTimer();
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (isReaction) ...[
-          Text("Vite ! Avez-vous un$topCardValue ?",
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isCompactMode ? 12 : 16,
-                  fontWeight: FontWeight.bold,
-                  shadows: const [Shadow(color: Colors.black, blurRadius: 5)])),
-          SizedBox(height: isCompactMode ? 2 : 5),
-          SizedBox(
-            width: isCompactMode ? 100 : 150,
-            height: isCompactMode ? 5 : 8,
-            child: Consumer<GameProvider>(
-              builder: (context, gp, child) {
-                final remaining = gp.gameState?.reactionTimeRemaining ?? 0;
-                final total = gp.currentReactionTimeMs;
-                final progress = (remaining / total).clamp(0.0, 1.0);
-                
-                Color progressColor;
-                if (progress > 0.6) {
-                  progressColor = Color.lerp(Colors.orange, Colors.green, (progress - 0.6) / 0.4)!;
-                } else if (progress > 0.3) {
-                  progressColor = Color.lerp(Colors.red, Colors.orange, (progress - 0.3) / 0.3)!;
-                } else {
-                  progressColor = Colors.red;
-                }
-                
-                return TweenAnimationBuilder<double>(
-                  tween: Tween(begin: progress, end: progress),
-                  duration: const Duration(milliseconds: 100),
-                  builder: (context, animatedProgress, child) {
-                    return LinearProgressIndicator(
-                      value: animatedProgress,
-                      backgroundColor: Colors.black26,
-                      color: progressColor,
-                      borderRadius: BorderRadius.circular(4),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          SizedBox(height: isCompactMode ? 4 : 10),
-        ],
-        if (isMyTurn && hasDrawn && gs.drawnCard != null) ...[
-          _buildDrawnCardDisplay(gs, isCompactMode),
-        ] else ...[
-          _buildDeckAndDiscard(gs, isCompactMode, cardSize, padding, deckCount),
-        ],
-      ],
-    );
-  }
-
-  void _startAutoCollapseTimer() {
-    _autoCollapseTimer?.cancel();
-    
-    _autoCollapseTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (mounted && _isDrawnCardExpanded) {
-        setState(() {
-          _isDrawnCardExpanded = false;
-        });
-      }
-    });
-  }
-
-  Widget _buildDrawnCardDisplay(GameState gs, bool isCompactMode) {
-    return GestureDetector(
-      onTap: () {
-        _autoCollapseTimer?.cancel();
-        
-        setState(() {
-          _isDrawnCardExpanded = !_isDrawnCardExpanded;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        padding: EdgeInsets.all(isCompactMode ? 12 : 20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: _isDrawnCardExpanded
-                ? [
-                    Colors.amber.shade700,
-                    Colors.amber.shade900,
-                  ]
-                : [
-                    Colors.green.shade800,
-                    Colors.green.shade900,
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(isCompactMode ? 16 : 24),
-          border: Border.all(
-            color: _isDrawnCardExpanded ? Colors.amber : Colors.green.shade600,
-            width: 3,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: (_isDrawnCardExpanded ? Colors.amber : Colors.green)
-                  .withValues(alpha: 0.5),
-              blurRadius: 20,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isDrawnCardExpanded ? Icons.visibility : Icons.zoom_out_map,
-                  color: Colors.white,
-                  size: isCompactMode ? 16 : 20,
-                ),
-                SizedBox(width: isCompactMode ? 4 : 8),
-                Text(
-                  _isDrawnCardExpanded ? "CARTE PIOCHÉE" : "TAP POUR AGRANDIR",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isCompactMode ? 11 : 14,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: isCompactMode ? 8 : 12),
-            AnimatedScale(
-              scale: _isDrawnCardExpanded ? 1.0 : 0.7,
-              duration: const Duration(milliseconds: 300),
-              child: CardWidget(
-                card: gs.drawnCard,
-                size: _isDrawnCardExpanded
-                    ? (isCompactMode ? CardSize.medium : CardSize.large)
-                    : (isCompactMode ? CardSize.small : CardSize.medium),
-                isRevealed: true,
-              ),
-            ),
-            SizedBox(height: isCompactMode ? 8 : 12),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompactMode ? 8 : 12,
-                vertical: isCompactMode ? 4 : 6,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                "${gs.drawnCard!.displayName} (${gs.drawnCard!.points} pts)",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isCompactMode ? 11 : 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeckAndDiscard(
-      GameState gs, bool isCompactMode, CardSize cardSize, double padding, int deckCount) {
-    return Container(
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(isCompactMode ? 12 : 20),
-        border: Border.all(color: Colors.white12, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 15,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: Colors.green.shade900.withValues(alpha: 0.3),
-            blurRadius: 20,
-            spreadRadius: -5,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Opacity(
-                opacity: 0.8,
-                child: CardWidget(
-                    card: null, size: cardSize, isRevealed: false),
-              ),
-              Positioned(
-                bottom: -2,
-                right: -2,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isCompactMode ? 4 : 6,
-                    vertical: isCompactMode ? 1 : 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$deckCount',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: isCompactMode ? 9 : 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(width: isCompactMode ? 10 : 20),
-          GestureDetector(
-            onTap: () => _showDiscardPile(gs),
-            child: CardWidget(
-                card: gs.topDiscardCard,
-                size: cardSize,
-                isRevealed: true),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBotArea(BuildContext context, Player bot, GameProvider gp, bool isCompactMode) {
     final badgeSize = isCompactMode ? 18.0 : 24.0;
     final cardHeight = isCompactMode ? 25.0 : 40.0;
@@ -739,12 +487,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PlayerAvatar(
-          player: bot,
-          size: badgeSize,
-          isActive: isActive,
-          showName: true,
-          compactMode: true,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            PlayerAvatar(
+              player: bot,
+              size: badgeSize,
+              isActive: isActive,
+              showName: true,
+              compactMode: true,
+            ),
+            Positioned(
+              right: -6,
+              top: -6,
+              child: _buildBotCardCountBadge(bot.hand.length, isCompactMode),
+            ),
+          ],
         ),
         SizedBox(height: isCompactMode ? 4 : 6),
         SizedBox(
@@ -761,6 +519,29 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
         )
       ],
+    );
+  }
+
+  Widget _buildBotCardCountBadge(int count, bool isCompactMode) {
+    final size = isCompactMode ? 16.0 : 20.0;
+    final fontSize = isCompactMode ? 9.0 : 11.0;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(size / 2),
+        border: Border.all(color: Colors.white30, width: 1),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
