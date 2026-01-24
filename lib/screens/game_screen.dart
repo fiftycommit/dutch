@@ -501,6 +501,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final cardHeight = isCompactMode ? 25.0 : 40.0;
     final cardWidth = isCompactMode ? 50.0 : 80.0;
     final cardSpacing = isCompactMode ? 10.0 : 15.0;
+    final handCount = bot.hand.length;
+    final stackWidth = handCount == 0
+        ? cardWidth
+        : cardWidth + (handCount - 1) * cardSpacing;
     final isActive = gp.gameState!.currentPlayer.id == bot.id;
     
     return Column(
@@ -526,7 +530,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         SizedBox(height: isCompactMode ? 4 : 6),
         SizedBox(
           height: cardHeight,
-          width: cardWidth,
+          width: stackWidth,
           child: Stack(
             children: List.generate(bot.hand.length, (index) {
               return Positioned(
@@ -834,7 +838,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         style: TextStyle(color: Colors.white, fontSize: titleSize)),
                     SizedBox(height: gap),
                     Text(
-                        "Quitter la partie ? (Les données ne seront pas sauvegardées)",
+                        "Quitter la partie ? Elle sera sauvegardée et comptée comme un abandon.",
                         style:
                             TextStyle(color: Colors.white70, fontSize: bodySize),
                         textAlign: TextAlign.center),

@@ -474,9 +474,13 @@ class SpecialPowerDialogs {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple.shade700,
+                    foregroundColor: Colors.white,
                   ),
-                  child: Text("CHOISIR 2 CARTES",
-                      style: TextStyle(fontSize: buttonSize)),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("CHOISIR 2 CARTES",
+                        style: TextStyle(fontSize: buttonSize)),
+                  ),
                 ),
               ),
               SizedBox(height: gapM),

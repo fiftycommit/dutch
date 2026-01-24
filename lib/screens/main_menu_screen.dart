@@ -141,6 +141,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           slotId,
                           "J$slotId",
                           rankName,
+                          "$mmr RP",
                           selectedSlot == slotId,
                           _getRankColor(rankName),
                         ),
@@ -372,7 +373,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
   
   /// Slot compact pour le mode paysage
-  Widget _buildCompactSlotCard(int id, String name, String rank,
+  Widget _buildCompactSlotCard(int id, String name, String rank, String rp,
       bool isSelected, Color rankColor) {
     return GestureDetector(
       onTap: () {
@@ -381,8 +382,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 50,
-        height: 50,
+        width: 78,
+        height: 78,
         decoration: BoxDecoration(
           color: isSelected ? rankColor : Colors.black.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
@@ -398,11 +399,30 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           children: [
             Icon(Icons.person,
                 color: isSelected ? Colors.black : Colors.white70, size: 20),
-            Text(name,
-                style: TextStyle(
-                    color: isSelected ? Colors.black : Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 9)),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(name,
+                  style: TextStyle(
+                      color: isSelected ? Colors.black : Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10)),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(rank,
+                  style: TextStyle(
+                      color: isSelected ? Colors.black87 : rankColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 9)),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(rp,
+                  style: TextStyle(
+                      color: isSelected ? Colors.black54 : Colors.white60,
+                      fontSize: 8)),
+            ),
           ],
         ),
       ),
