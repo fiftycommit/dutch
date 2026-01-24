@@ -218,7 +218,8 @@ class GameLogic {
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
 
     if (!targetPlayer.isHuman) {
-      targetPlayer.mentalMap = List.filled(targetPlayer.hand.length, null);
+      targetPlayer.mentalMap =
+          List<PlayingCard?>.filled(targetPlayer.hand.length, null, growable: true);
     }
 
     gameState.addToHistory(

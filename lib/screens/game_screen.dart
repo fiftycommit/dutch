@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import '../providers/game_provider.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/player_hand.dart';
 import '../widgets/player_avatar.dart';
+import '../widgets/responsive_dialog.dart';
 import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
@@ -265,9 +268,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             bottom: bottomBandHeight,
             width: sideBandWidth,
             child: Center(
-              child: RotatedBox(
-                quarterTurns: 1,
-                child: _buildBotArea(context, bots[0], gp, isCompactMode),
+              child: Transform.translate(
+                offset: Offset(
+                  0,
+                  ((isCompactMode ? 18.0 : 24.0) +
+                          (isCompactMode ? 4.0 : 6.0)) /
+                      2,
+                ),
+                child: RotatedBox(
+                  quarterTurns: 1,
+                  child: _buildBotArea(context, bots[0], gp, isCompactMode),
+                ),
               ),
             ),
           ),
@@ -278,9 +289,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             bottom: bottomBandHeight,
             width: sideBandWidth,
             child: Center(
-              child: RotatedBox(
-                quarterTurns: 3,
-                child: _buildBotArea(context, bots[2], gp, isCompactMode),
+              child: Transform.translate(
+                offset: Offset(
+                  0,
+                  ((isCompactMode ? 18.0 : 24.0) +
+                          (isCompactMode ? 4.0 : 6.0)) /
+                      2,
+                ),
+                child: RotatedBox(
+                  quarterTurns: 3,
+                  child: _buildBotArea(context, bots[2], gp, isCompactMode),
+                ),
               ),
             ),
           ),
@@ -705,75 +724,146 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _confirmDutch(GameProvider gp) {
     showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF1a3a28),
-                title: const Text('Crier DUTCH ?',
-                    style: TextStyle(color: Colors.white)),
-                content: const Text('Êtes-vous sûr ?',
-                    style: TextStyle(color: Colors.white70)),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Non',
-                          style: TextStyle(color: Colors.white54))),
-                  TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        gp.callDutch();
-                      },
-                      style: TextButton.styleFrom(
-                          foregroundColor: Colors.redAccent),
-                      child: const Text('DUTCH !'))
-                ]));
+        builder: (ctx) => ResponsiveDialog(
+              backgroundColor: const Color(0xFF1a3a28),
+              builder: (context, metrics) {
+                final titleSize = metrics.font(18);
+                final bodySize = metrics.font(14);
+                final gap = metrics.space(12);
+                final buttonSize = metrics.font(16);
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Crier DUTCH ?',
+                        style: TextStyle(color: Colors.white, fontSize: titleSize)),
+                    SizedBox(height: gap),
+                    Text('Êtes-vous sûr ?',
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: bodySize)),
+                    SizedBox(height: gap),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text('Non',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: buttonSize))),
+                        TextButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              gp.callDutch();
+                            },
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent),
+                            child: Text('DUTCH !',
+                                style: TextStyle(fontSize: buttonSize)))
+                      ],
+                    )
+                  ],
+                );
+              },
+            ));
   }
 
   void _showDiscardPile(GameState gs) {
     showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF1a3a28),
-            title:
-                const Text('Défausse', style: TextStyle(color: Colors.white)),
-            content: SizedBox(
-                width: 300,
-                height: 300,
-                child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: gs.discardPile.reversed
-                        .map((c) => Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: CardWidget(
-                                card: c,
-                                size: CardSize.medium,
-                                isRevealed: true)))
-                        .toList()))));
+        builder: (ctx) => ResponsiveDialog(
+              backgroundColor: const Color(0xFF1a3a28),
+              builder: (context, metrics) {
+                final titleSize = metrics.font(18);
+                final gap = metrics.space(12);
+                final listHeight = metrics.contentHeight * 0.6;
+                final cardWidth =
+                    math.min(metrics.contentWidth * 0.25, listHeight / 1.5);
+                final cardHeight = cardWidth * 1.5;
+                final cardPadding = metrics.space(6);
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Défausse',
+                        style: TextStyle(color: Colors.white, fontSize: titleSize)),
+                    SizedBox(height: gap),
+                    SizedBox(
+                      width: metrics.contentWidth,
+                      height: listHeight,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: gs.discardPile.reversed
+                            .map((c) => Padding(
+                                  padding: EdgeInsets.all(cardPadding),
+                                  child: SizedBox(
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    child: FittedBox(
+                                      fit: BoxFit.contain,
+                                      child: CardWidget(
+                                          card: c,
+                                          size: CardSize.large,
+                                          isRevealed: true),
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ));
   }
 
   Future<bool?> _showQuitConfirmation() {
     return showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF1a3a28),
-                title: const Text("Quitter ?",
-                    style: TextStyle(color: Colors.white)),
-                content: const Text(
-                    "Quitter la partie ? (Les données ne seront pas sauvegardées)",
-                    style: TextStyle(color: Colors.white70)),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text("Non",
-                          style: TextStyle(color: Colors.white))),
-                  TextButton(
-                      onPressed: () {
-                        final gp =
-                            Provider.of<GameProvider>(context, listen: false);
-                        gp.quitGame();
-                        Navigator.pop(ctx, true);
-                      },
-                      child: const Text("Oui",
-                          style: TextStyle(color: Colors.redAccent))),
-                ]));
+        builder: (ctx) => ResponsiveDialog(
+              backgroundColor: const Color(0xFF1a3a28),
+              builder: (context, metrics) {
+                final titleSize = metrics.font(18);
+                final bodySize = metrics.font(14);
+                final gap = metrics.space(12);
+                final buttonSize = metrics.font(16);
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("Quitter ?",
+                        style: TextStyle(color: Colors.white, fontSize: titleSize)),
+                    SizedBox(height: gap),
+                    Text(
+                        "Quitter la partie ? (Les données ne seront pas sauvegardées)",
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: bodySize),
+                        textAlign: TextAlign.center),
+                    SizedBox(height: gap),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text("Non",
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: buttonSize))),
+                        TextButton(
+                            onPressed: () {
+                              final gp = Provider.of<GameProvider>(context,
+                                  listen: false);
+                              gp.quitGame();
+                              Navigator.pop(ctx, true);
+                            },
+                            child: Text("Oui",
+                                style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: buttonSize))),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ));
   }
 
   Widget _buildPauseOverlay(GameProvider gp) {

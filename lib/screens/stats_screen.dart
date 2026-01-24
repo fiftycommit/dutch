@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/stats_service.dart';
+import '../widgets/responsive_dialog.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -308,25 +309,47 @@ class _StatsScreenState extends State<StatsScreen> {
   void _confirmReset(BuildContext context, int slotId) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => ResponsiveDialog(
         backgroundColor: const Color(0xFF1a3a28),
-        title: Text("Réinitialiser Profil $slotId ?",
-            style: const TextStyle(color: Colors.white)),
-        content: const Text("Tout l'historique sera effacé.",
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Annuler")),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await StatsService.resetStats(slotId: slotId);
-              setState(() {});
-            },
-            child: const Text("Effacer", style: TextStyle(color: Colors.red)),
-          ),
-        ],
+        builder: (context, metrics) {
+          final titleSize = metrics.font(18);
+          final bodySize = metrics.font(14);
+          final gap = metrics.space(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Réinitialiser Profil $slotId ?",
+                  style: TextStyle(color: Colors.white, fontSize: titleSize),
+                  textAlign: TextAlign.center),
+              SizedBox(height: gap),
+              Text("Tout l'historique sera effacé.",
+                  style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                  textAlign: TextAlign.center),
+              SizedBox(height: gap),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text("Annuler",
+                          style: TextStyle(fontSize: buttonSize))),
+                  TextButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await StatsService.resetStats(slotId: slotId);
+                      setState(() {});
+                    },
+                    child: Text("Effacer",
+                        style: TextStyle(
+                            color: Colors.red, fontSize: buttonSize)),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }

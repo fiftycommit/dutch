@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/player.dart';
 import '../providers/game_provider.dart';
 import '../widgets/card_widget.dart';
+import '../widgets/responsive_dialog.dart';
 import '../utils/screen_utils.dart';
 import 'game_screen.dart';
 import '../models/game_state.dart';
@@ -359,188 +360,179 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
-        final screenSize = MediaQuery.of(ctx).size;
-        final profile = ScreenUtils.getDeviceProfile(ctx);
-        final isIphoneLandscape = profile == DeviceProfile.iPhoneLandscape;
-        final dialogInsetPadding = EdgeInsets.symmetric(
-          horizontal: isIphoneLandscape ? 12.0 : 16.0,
-          vertical: isIphoneLandscape ? 8.0 : 16.0,
-        );
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: ResponsiveDialog(
+          backgroundColor: Colors.black87,
+          builder: (context, metrics) {
+            const aspect = 1.5;
 
-        return PopScope(
-          canPop: false,
-          child: Dialog(
-            backgroundColor: Colors.black87,
-            insetPadding: dialogInsetPadding,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: isIphoneLandscape
-                    ? screenSize.width * 0.92
-                    : screenSize.width * 0.85,
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const aspect = 1.5;
-                  final maxWidth = constraints.maxWidth;
-                  final maxHeight = constraints.maxHeight.isFinite
-                      ? constraints.maxHeight
-                      : screenSize.height * 0.8;
+            return SizedBox(
+              width: metrics.contentWidth,
+              height: metrics.contentHeight,
+              child: Column(
+                children: [
+                  Expanded(
+                    flex: 20,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final height = constraints.maxHeight;
+                        final iconSize = height * 0.45;
+                        final titleSize = height * 0.25;
+                        final gap = height * 0.08;
 
-                  final dialogPadding =
-                      (maxHeight * 0.04).clamp(8.0, 16.0);
-                  final contentWidth =
-                      math.max(0.0, maxWidth - (dialogPadding * 2));
-                  final contentHeight =
-                      math.max(0.0, maxHeight - (dialogPadding * 2));
-
-                  final headerHeight = contentHeight * 0.20;
-                  final subtitleHeight = contentHeight * 0.08;
-                  final progressHeight = contentHeight * 0.14;
-                  final cardsAreaHeight = math.max(
-                    0.0,
-                    contentHeight -
-                        headerHeight -
-                        subtitleHeight -
-                        progressHeight,
-                  );
-
-                  final cardSpacing =
-                      (contentWidth * 0.03).clamp(6.0, 12.0);
-                  final cardWidthByWidth =
-                      (contentWidth - cardSpacing) / 2;
-                  final cardWidthByHeight = cardsAreaHeight / aspect;
-                  final cardWidth = math.max(
-                    0.0,
-                    math.min(cardWidthByWidth, cardWidthByHeight),
-                  );
-                  final cardHeight = cardWidth * aspect;
-
-                  return Padding(
-                    padding: EdgeInsets.all(dialogPadding),
-                    child: SizedBox(
-                      width: contentWidth,
-                      height: contentHeight,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          SizedBox(
-                            height: headerHeight,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.remove_red_eye,
-                                  color: Colors.amber,
-                                  size: headerHeight * 0.45,
-                                ),
-                                SizedBox(height: headerHeight * 0.08),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    "VOS CARTES",
-                                    style: TextStyle(
-                                      color: Colors.amber,
-                                      fontSize: headerHeight * 0.25,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            height: cardsAreaHeight,
-                            child: Center(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: revealedCards.map((card) {
-                                  return Padding(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: cardSpacing / 2),
-                                    child: SizedBox(
-                                      width: cardWidth,
-                                      height: cardHeight,
-                                      child: FittedBox(
-                                        fit: BoxFit.contain,
-                                        child: CardWidget(
-                                          card: card,
-                                          size: CardSize.large,
-                                          isRevealed: true,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            height: subtitleHeight,
-                            child: Center(
-                              child: FittedBox(
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.remove_red_eye,
+                                  color: Colors.amber, size: iconSize),
+                              SizedBox(height: gap),
+                              FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Text(
-                                  "Mémorisez bien ces cartes !",
+                                  "VOS CARTES",
                                   style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: subtitleHeight * 0.6,
+                                    color: Colors.amber,
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                   maxLines: 1,
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                          SizedBox(
-                            height: progressHeight,
-                            child: Center(
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    flex: 54,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxWidth = constraints.maxWidth;
+                        final maxHeight = constraints.maxHeight;
+                        final cardSpacing = math.min(
+                          math.max(maxWidth * 0.04, metrics.space(6)),
+                          metrics.space(14),
+                        );
+                        final cardWidthByWidth =
+                            (maxWidth - cardSpacing) / 2;
+                        final cardWidthByHeight = maxHeight / aspect;
+                        final cardWidth = math.max(
+                          0.0,
+                          math.min(cardWidthByWidth, cardWidthByHeight),
+                        );
+                        final cardHeight = cardWidth * aspect;
+                        final cardWidgets = <Widget>[];
+
+                        for (int i = 0; i < revealedCards.length; i++) {
+                          if (i > 0) {
+                            cardWidgets.add(SizedBox(width: cardSpacing));
+                          }
+
+                          final card = revealedCards[i];
+                          cardWidgets.add(
+                            SizedBox(
+                              width: cardWidth,
+                              height: cardHeight,
                               child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: SizedBox(
-                                  width: contentWidth,
-                                  child: TweenAnimationBuilder<double>(
-                                    tween: Tween(begin: 0.0, end: 1.0),
-                                    duration: const Duration(seconds: 3),
-                                    builder: (context, value, child) {
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          LinearProgressIndicator(
-                                            value: value,
-                                            backgroundColor: Colors.white24,
-                                            color: Colors.amber,
-                                            minHeight: 4,
-                                          ),
-                                          SizedBox(height: progressHeight * 0.2),
-                                          Text(
-                                            "${((1 - value) * 3).ceil()}s",
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: progressHeight * 0.3,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                fit: BoxFit.contain,
+                                child: CardWidget(
+                                  card: card,
+                                  size: CardSize.large,
+                                  isRevealed: true,
                                 ),
                               ),
                             ),
+                          );
+                        }
+
+                        return Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: cardWidgets,
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                  Expanded(
+                    flex: 10,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final height = constraints.maxHeight;
+                        final subtitleSize = height * 0.6;
+
+                        return Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "Mémorisez bien ces cartes !",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: subtitleSize,
+                              ),
+                              maxLines: 1,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    flex: 16,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final height = constraints.maxHeight;
+                        final barHeight =
+                            math.max(2.0, math.min(6.0, height * 0.18));
+                        final gap = height * 0.16;
+                        final textSize = height * 0.34;
+
+                        return Center(
+                          child: SizedBox(
+                            width: constraints.maxWidth,
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              duration: const Duration(seconds: 3),
+                              builder: (context, value, child) {
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    LinearProgressIndicator(
+                                      value: value,
+                                      backgroundColor: Colors.white24,
+                                      color: Colors.amber,
+                                      minHeight: barHeight,
+                                    ),
+                                    SizedBox(height: gap),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        "${((1 - value) * 3).ceil()}s",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: textSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
 
     await Future.delayed(const Duration(seconds: 3));
