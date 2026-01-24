@@ -23,9 +23,21 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+  // Animation pour le pulse des boutons
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
   @override
   void initState() {
     super.initState();
+    
+    // Setup pulse animation
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     
     if (kIsWeb) {
       // Sur le web, essayer de forcer le mode paysage via l'API Screen Orientation
@@ -45,6 +57,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _pulseController.dispose();
     if (kIsWeb) {
       WebOrientationService.unlock();
     } else {
@@ -195,60 +208,110 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     bool canInteractWithCards = isMyTurn || gs.phase == GamePhase.reaction;
     
-    // Détecter si on est sur un petit écran (mobile web en paysage)
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isCompactMode = kIsWeb && screenHeight < 400;
+    // Détecter la taille d'écran pour adapter le layout
+    final screenSize = MediaQuery.of(context).size;
+    final screenHeight = screenSize.height;
+    final screenWidth = screenSize.width;
+    final isCompactMode = screenHeight < 400 || screenWidth < 700;
+    final isMediumMode = !isCompactMode && (screenHeight < 600 || screenWidth < 1000);
+
+    // Formule: distance du centre = k × plus petite dimension. Chaque bande = distance + taille joueur.
+    final s = screenWidth < screenHeight ? screenWidth : screenHeight;
+    final distanceFromCenter = s * 0.06; // 6% = marge minimale centre ↔ joueurs
+    final topBandHeight = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
+    final bottomBandHeight = distanceFromCenter + (isCompactMode ? 102.0 : 128.0);
+    final sideBandWidth = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
+
+    final centerWidth = screenWidth - 2 * sideBandWidth;
+    final centerHeight = screenHeight - topBandHeight - bottomBandHeight;
+    final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
 
     return Stack(
       children: [
-        Center(
-          child: _buildCenterTable(gs, gp, isMyTurn, hasDrawn, isCompactMode),
-        ),
-        if (bots.isNotEmpty)
-          Positioned(
-            left: isCompactMode ? 10 : 40,
-            top: 0,
-            bottom: 0,
-            child: Center(
-                child: RotatedBox(
-                    quarterTurns: 1,
-                    child: _buildBotArea(context, bots[0], gp, isCompactMode))),
+        // 1. Région centrale (pile Piocher/Defausse) — au milieu, taille adaptative
+        Positioned(
+          left: sideBandWidth,
+          right: sideBandWidth,
+          top: topBandHeight,
+          bottom: bottomBandHeight,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: centerWidth,
+                maxHeight: centerHeight,
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: _buildCenterTable(gs, gp, isMyTurn, hasDrawn, isCompactMode),
+              ),
+            ),
           ),
+        ),
+        // 2. Bot haut
         if (bots.length > 1)
           Positioned(
-            top: isCompactMode ? 5 : 20,
+            top: 0,
             left: 0,
             right: 0,
+            height: topBandHeight,
             child: Center(
-                child: RotatedBox(
-                    quarterTurns: 2,
-                    child: _buildBotArea(context, bots[1], gp, isCompactMode))),
+              child: RotatedBox(
+                quarterTurns: 2,
+                child: _buildBotArea(context, bots[1], gp, isCompactMode),
+              ),
+            ),
           ),
+        // 3. Bot gauche
+        if (bots.isNotEmpty)
+          Positioned(
+            left: 0,
+            top: topBandHeight,
+            bottom: bottomBandHeight,
+            width: sideBandWidth,
+            child: Center(
+              child: RotatedBox(
+                quarterTurns: 1,
+                child: _buildBotArea(context, bots[0], gp, isCompactMode),
+              ),
+            ),
+          ),
+        // 4. Bot droit
         if (bots.length > 2)
           Positioned(
-            right: isCompactMode ? 10 : 40,
-            top: 0,
-            bottom: 0,
+            right: 0,
+            top: topBandHeight,
+            bottom: bottomBandHeight,
+            width: sideBandWidth,
             child: Center(
-                child: RotatedBox(
-                    quarterTurns: 3,
-                    child: _buildBotArea(context, bots[2], gp, isCompactMode))),
+              child: RotatedBox(
+                quarterTurns: 3,
+                child: _buildBotArea(context, bots[2], gp, isCompactMode),
+              ),
+            ),
           ),
+        // 5. Joueur humain (bas)
         Positioned(
-          bottom: isCompactMode ? 2 : 10,
+          bottom: 0,
           left: 0,
           right: 0,
-          child: _buildPlayerArea(gp, gs, human, isMyTurn, hasDrawn, canInteractWithCards, isCompactMode),
+          height: bottomBandHeight,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isCompactMode ? 4 : 8),
+              child: _buildPlayerArea(gp, gs, human, isMyTurn, hasDrawn, canInteractWithCards, isCompactMode),
+            ),
+          ),
         ),
+        // 6. Pause
         Positioned(
-          top: isCompactMode ? 5 : 20,
-          right: isCompactMode ? 5 : 20,
+          top: buttonMargin,
+          right: sideBandWidth + buttonMargin,
           child: IconButton(
             icon: Icon(Icons.pause_circle_filled,
                 color: Colors.white54, size: isCompactMode ? 24 : 32),
-            onPressed: () {
-              gp.pauseGame();
-            },
+            onPressed: () => gp.pauseGame(),
           ),
         ),
       ],
@@ -272,39 +335,28 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       icon: Icons.delete,
                       label: "JETER",
                       color: Colors.redAccent,
-                      onTap: gp.discardDrawnCard)
+                      onTap: gp.discardDrawnCard,
+                      withPulse: true)
                   : _buildCompactActionButton(
                       icon: Icons.get_app,
                       label: "PIOCHER",
                       color: Colors.green,
-                      onTap: gp.drawCard),
+                      onTap: gp.drawCard,
+                      withPulse: true),
             ),
           if (!isMyTurn) const SizedBox(width: 60),
           const SizedBox(width: 8),
-          // Carte piochée (si applicable)
-          if (isMyTurn && hasDrawn && gs.drawnCard != null)
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber, width: 1)),
-              child: CardWidget(
-                  card: gs.drawnCard,
-                  size: CardSize.tiny,
-                  isRevealed: true),
-            ),
-          if (isMyTurn && hasDrawn) const SizedBox(width: 8),
-          // Main du joueur
+          // Main du joueur avec badge compact au-dessus (carte piochée = au-dessus de la pile centrale)
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               PlayerAvatar(
                   player: human,
-                  size: 20,
+                  size: 24,
                   isActive: isMyTurn,
-                  showName: false),
-              const SizedBox(height: 2),
+                  showName: true,
+                  compactMode: true),
+              const SizedBox(height: 4),
               PlayerHandWidget(
                 player: human,
                 isHuman: true,
@@ -348,37 +400,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       );
     }
     
-    // Layout normal
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (isMyTurn && hasDrawn && gs.drawnCard != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber)),
-              child: Column(
-                children: [
-                  const Text("CARTE PIOCHÉE",
-                      style: TextStyle(
-                          color: Colors.amber,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  CardWidget(
-                      card: gs.drawnCard,
-                      size: CardSize.small,
-                      isRevealed: true),
-                ],
-              ),
-            ),
-          ),
-        Row(
+    // Layout normal (carte piochée = au-dessus de la pile centrale)
+    return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -396,12 +419,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                               icon: Icons.delete,
                               label: "JETER",
                               color: Colors.redAccent,
-                              onTap: gp.discardDrawnCard)
+                              onTap: gp.discardDrawnCard,
+                              withPulse: true)
                           : _buildActionButton(
                               icon: Icons.get_app,
                               label: "PIOCHER",
                               color: Colors.green,
-                              onTap: gp.drawCard),
+                              onTap: gp.drawCard,
+                              withPulse: true),
                     ),
                 ],
               ),
@@ -411,10 +436,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               children: [
                 PlayerAvatar(
                     player: human,
-                    size: 30,
+                    size: 28,
                     isActive: isMyTurn,
-                    showName: false),
-                const SizedBox(height: 5),
+                    showName: true,
+                    compactMode: true),
+                const SizedBox(height: 6),
                 PlayerHandWidget(
                   player: human,
                   isHuman: true,
@@ -461,9 +487,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
             ),
           ],
-        ),
-      ],
-    );
+        );
   }
 
   Widget _buildCenterTable(
@@ -473,6 +497,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     
     final cardSize = isCompactMode ? CardSize.small : CardSize.medium;
     final padding = isCompactMode ? 8.0 : 15.0;
+    final deckCount = gs.deck.length;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -524,22 +549,106 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
           SizedBox(height: isCompactMode ? 4 : 10),
         ],
+        // Carte piochée au-dessus de la pile (pioche/defausse)
+        if (isMyTurn && hasDrawn && gs.drawnCard != null) ...[
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompactMode ? 8 : 12,
+              vertical: isCompactMode ? 6 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(isCompactMode ? 10 : 14),
+              border: Border.all(color: Colors.amber, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "CARTE PIOCHÉE",
+                  style: TextStyle(
+                    color: Colors.amber,
+                    fontSize: isCompactMode ? 10 : 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: isCompactMode ? 4 : 6),
+                CardWidget(
+                  card: gs.drawnCard,
+                  size: isCompactMode ? CardSize.small : CardSize.medium,
+                  isRevealed: true,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: isCompactMode ? 6 : 10),
+        ],
         Container(
           padding: EdgeInsets.all(padding),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: Colors.black.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(isCompactMode ? 12 : 20),
-            border: Border.all(color: Colors.white10, width: 1),
+            border: Border.all(color: Colors.white12, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.green.shade900.withValues(alpha: 0.3),
+                blurRadius: 20,
+                spreadRadius: -5,
+              ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Opacity(
-                opacity: (isMyTurn && !hasDrawn) ? 1.0 : 0.6,
-                child: CardWidget(
-                    card: null, size: cardSize, isRevealed: false),
+              // Pioche : carte + compteur en overlay (même ligne que défausse)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Opacity(
+                    opacity: (isMyTurn && !hasDrawn) ? 1.0 : 0.6,
+                    child: CardWidget(
+                        card: null, size: cardSize, isRevealed: false),
+                  ),
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompactMode ? 4 : 6,
+                        vertical: isCompactMode ? 1 : 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$deckCount',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: isCompactMode ? 9 : 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(width: isCompactMode ? 10 : 20),
+              // Défausse (même ordonnée que pioche)
               GestureDetector(
                 onTap: () => _showDiscardPile(gs),
                 child: CardWidget(
@@ -555,21 +664,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildBotArea(BuildContext context, Player bot, GameProvider gp, bool isCompactMode) {
-    final avatarSize = isCompactMode ? 20.0 : 30.0;
+    final badgeSize = isCompactMode ? 18.0 : 24.0;
     final cardHeight = isCompactMode ? 25.0 : 40.0;
     final cardWidth = isCompactMode ? 50.0 : 80.0;
     final cardSpacing = isCompactMode ? 10.0 : 15.0;
+    final isActive = gp.gameState!.currentPlayer.id == bot.id;
     
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Utiliser le même style de badge compact que le joueur humain
         PlayerAvatar(
           player: bot,
-          size: avatarSize,
-          isActive: gp.gameState!.currentPlayer.id == bot.id,
-          showName: false,
+          size: badgeSize,
+          isActive: isActive,
+          showName: true,
+          compactMode: true,
         ),
-        SizedBox(height: isCompactMode ? 2 : 4),
+        SizedBox(height: isCompactMode ? 4 : 6),
         SizedBox(
           height: cardHeight,
           width: cardWidth,
@@ -591,15 +703,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       {required IconData icon,
       required String label,
       required Color color,
-      required VoidCallback onTap}) {
-    return ElevatedButton(
+      required VoidCallback onTap,
+      bool withPulse = false}) {
+    Widget button = ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,
         padding: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        elevation: 3,
+        elevation: 4,
+        shadowColor: color.withValues(alpha: 0.5),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -611,34 +725,64 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         ],
       ),
     );
+    
+    if (withPulse) {
+      return AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _pulseAnimation.value,
+            child: button,
+          );
+        },
+      );
+    }
+    return button;
   }
   
   Widget _buildCompactActionButton(
       {required IconData icon,
       required String label,
       required Color color,
-      required VoidCallback onTap}) {
-    return ElevatedButton(
+      required VoidCallback onTap,
+      bool withPulse = false}) {
+    Widget button = ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        elevation: 2,
+        elevation: 3,
+        shadowColor: color.withValues(alpha: 0.5),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 2),
-          Text(label,
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
-        ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14),
+            const SizedBox(width: 2),
+            Text(label,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
+          ],
+        ),
       ),
     );
+    
+    if (withPulse) {
+      return AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _pulseAnimation.value,
+            child: button,
+          );
+        },
+      );
+    }
+    return button;
   }
 
   void _handleCardTap(GameProvider gp, GameState gs, int index) {

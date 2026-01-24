@@ -12,6 +12,10 @@ class SpecialPowerDialogs {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
     final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isCompact = screenHeight < 400;
+    final cardSize = isCompact ? CardSize.small : CardSize.medium;
+    final padding = isCompact ? 12.0 : 20.0;
 
     showDialog(
       context: context,
@@ -19,69 +23,80 @@ class SpecialPowerDialogs {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black87,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.visibility, color: Colors.amber, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                ownCard ? "👁️ REGARDER UNE CARTE" : "👁 ESPIONNER",
-                style: const TextStyle(
-                    color: Colors.amber,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                ownCard
-                    ? "Choisissez UNE de vos cartes à regarder"
-                    : "Choisissez un adversaire puis une de ses cartes",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 20),
-              if (ownCard) ...[
-                Wrap(
-                  spacing: 8,
-                  children: List.generate(humanPlayer.hand.length, (index) {
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showCardRevealed(context, humanPlayer, index,
-                            humanPlayer.hand[index]);
-                        gameProvider.executeLookAtCard(humanPlayer, index);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.amber, width: 2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const CardWidget(
-                          card: null,
-                          size: CardSize.medium,
-                          isRevealed: false,
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    gameProvider.skipSpecialPower();
-                  },
-                  child: const Text(
-                    "PASSER",
-                    style: TextStyle(color: Colors.white54, fontSize: 16),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 24 : 40,
+          vertical: isCompact ? 16 : 24,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screenHeight * 0.85),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(padding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.visibility, color: Colors.amber, size: isCompact ? 32 : 40),
+                  SizedBox(height: isCompact ? 8 : 12),
+                  Text(
+                    ownCard ? "👁️ REGARDER UNE CARTE" : "👁 ESPIONNER",
+                    style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: isCompact ? 16 : 20,
+                        fontWeight: FontWeight.bold),
                   ),
-                ),
-              ] else ...[
-                _buildOpponentSelection(context, gameProvider, gameState),
-              ],
-            ],
+                  SizedBox(height: isCompact ? 4 : 8),
+                  Text(
+                    ownCard
+                        ? "Choisissez UNE de vos cartes à regarder"
+                        : "Choisissez un adversaire puis une de ses cartes",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: isCompact ? 12 : 14),
+                  ),
+                  SizedBox(height: isCompact ? 12 : 20),
+                  if (ownCard) ...[
+                    Wrap(
+                      spacing: isCompact ? 6 : 8,
+                      runSpacing: isCompact ? 6 : 8,
+                      alignment: WrapAlignment.center,
+                      children: List.generate(humanPlayer.hand.length, (index) {
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _showCardRevealed(context, humanPlayer, index,
+                                humanPlayer.hand[index]);
+                            gameProvider.executeLookAtCard(humanPlayer, index);
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.amber, width: 2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: CardWidget(
+                              card: null,
+                              size: cardSize,
+                              isRevealed: false,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    SizedBox(height: isCompact ? 12 : 20),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        gameProvider.skipSpecialPower();
+                      },
+                      child: Text(
+                        "PASSER",
+                        style: TextStyle(color: Colors.white54, fontSize: isCompact ? 14 : 16),
+                      ),
+                    ),
+                  ] else ...[
+                    _buildOpponentSelection(context, gameProvider, gameState, isCompact),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -91,9 +106,12 @@ class SpecialPowerDialogs {
   static void _showCardRevealed(
       BuildContext context, Player player, int index, PlayingCard card) {
     player.knownCards[index] = true;
-    
+
     final screenHeight = MediaQuery.of(context).size.height;
     final isCompact = screenHeight < 400;
+    // iPhone: carte plus petite pour tenir sans scroll, pas de bottom overflow
+    final cardSize = isCompact ? CardSize.small : CardSize.large;
+    final padding = isCompact ? 10.0 : 20.0;
 
     showDialog(
       context: context,
@@ -102,49 +120,49 @@ class SpecialPowerDialogs {
         backgroundColor: Colors.black87,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         insetPadding: EdgeInsets.symmetric(
-          horizontal: isCompact ? 40 : 40,
-          vertical: isCompact ? 8 : 24,
+          horizontal: isCompact ? 28 : 40,
+          vertical: isCompact ? 12 : 24,
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: screenHeight * 0.85,
+            maxHeight: screenHeight * (isCompact ? 0.7 : 0.85),
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: EdgeInsets.all(isCompact ? 12 : 20),
+              padding: EdgeInsets.all(padding),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: isCompact ? 28 : 40),
-                  SizedBox(height: isCompact ? 6 : 12),
+                  Icon(Icons.check_circle, color: Colors.green, size: isCompact ? 24 : 40),
+                  SizedBox(height: isCompact ? 4 : 12),
                   Text(
                     "CARTE RÉVÉLÉE",
                     style: TextStyle(
                         color: Colors.white,
-                        fontSize: isCompact ? 14 : 18,
+                        fontSize: isCompact ? 12 : 18,
                         fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: isCompact ? 10 : 20),
-                  CardWidget(card: card, size: isCompact ? CardSize.medium : CardSize.large, isRevealed: true),
-                  SizedBox(height: isCompact ? 10 : 20),
+                  SizedBox(height: isCompact ? 6 : 20),
+                  CardWidget(card: card, size: cardSize, isRevealed: true),
+                  SizedBox(height: isCompact ? 6 : 20),
                   Text(
                     "${card.value} (${card.points} pts)",
                     style: TextStyle(
                         color: Colors.amber,
-                        fontSize: isCompact ? 12 : 16,
+                        fontSize: isCompact ? 11 : 16,
                         fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: isCompact ? 10 : 20),
+                  SizedBox(height: isCompact ? 8 : 20),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 20 : 32,
-                        vertical: isCompact ? 8 : 12,
+                        horizontal: isCompact ? 16 : 32,
+                        vertical: isCompact ? 6 : 12,
                       ),
                     ),
-                    child: Text("OK", style: TextStyle(fontSize: isCompact ? 14 : 16)),
+                    child: Text("OK", style: TextStyle(fontSize: isCompact ? 13 : 16)),
                   ),
                 ],
               ),
@@ -156,25 +174,26 @@ class SpecialPowerDialogs {
   }
 
   static Widget _buildOpponentSelection(
-      BuildContext context, GameProvider gp, gameState) {
+      BuildContext context, GameProvider gp, gameState, [bool isCompact = false]) {
 
     List<Player> opponents =
         gameState.players.where((p) => !p.isHuman && p.hand.isNotEmpty).toList();
 
     if (opponents.isEmpty) {
       return Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Text("Aucun adversaire n'a de cartes !",
-              style: TextStyle(color: Colors.redAccent, fontSize: 14)),
-          const SizedBox(height: 20),
+          Text("Aucun adversaire n'a de cartes !",
+              style: TextStyle(color: Colors.redAccent, fontSize: isCompact ? 12 : 14)),
+          SizedBox(height: isCompact ? 12 : 20),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               gp.skipSpecialPower();
             },
-            child: const Text(
+            child: Text(
               "OK",
-              style: TextStyle(color: Colors.white54, fontSize: 16),
+              style: TextStyle(color: Colors.white54, fontSize: isCompact ? 14 : 16),
             ),
           ),
         ],
@@ -182,37 +201,41 @@ class SpecialPowerDialogs {
     }
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("Choisissez un adversaire :",
-            style: TextStyle(color: Colors.white, fontSize: 14)),
-        const SizedBox(height: 12),
+        Text("Choisissez un adversaire :",
+            style: TextStyle(color: Colors.white, fontSize: isCompact ? 12 : 14)),
+        SizedBox(height: isCompact ? 8 : 12),
         Wrap(
-          spacing: 12,
+          spacing: isCompact ? 8 : 12,
+          runSpacing: isCompact ? 8 : 12,
+          alignment: WrapAlignment.center,
           children: opponents.map((opponent) {
             return ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                _showOpponentCardSelection(context, gp, opponent);
+                _showOpponentCardSelection(context, gp, opponent, isCompact);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade800,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 12 : 16,
+                    vertical: isCompact ? 8 : 12),
               ),
-              child: Text("${opponent.displayAvatar} ${opponent.name}", 
-                  style: const TextStyle(fontSize: 14)),
+              child: Text("${opponent.displayAvatar} ${opponent.name}",
+                  style: TextStyle(fontSize: isCompact ? 12 : 14)),
             );
           }).toList(),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: isCompact ? 12 : 20),
         TextButton(
           onPressed: () {
             Navigator.pop(context);
             gp.skipSpecialPower();
           },
-          child: const Text(
+          child: Text(
             "PASSER",
-            style: TextStyle(color: Colors.white54, fontSize: 16),
+            style: TextStyle(color: Colors.white54, fontSize: isCompact ? 14 : 16),
           ),
         ),
       ],
@@ -220,62 +243,77 @@ class SpecialPowerDialogs {
   }
 
   static void _showOpponentCardSelection(
-      BuildContext context, GameProvider gp, Player opponent) {
+      BuildContext context, GameProvider gp, Player opponent, [bool isCompact = false]) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final cardSize = isCompact ? CardSize.small : CardSize.medium;
+    final padding = isCompact ? 12.0 : 20.0;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black87,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Cartes de ${opponent.name}",
-                style: const TextStyle(
-                    color: Colors.amber,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 8,
-                children: List.generate(opponent.hand.length, (index) {
-                  return GestureDetector(
-                    onTap: () {
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 24 : 40,
+          vertical: isCompact ? 16 : 24,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screenHeight * 0.85),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(padding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Cartes de ${opponent.name}",
+                    style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: isCompact ? 14 : 18,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: isCompact ? 12 : 20),
+                  Wrap(
+                    spacing: isCompact ? 6 : 8,
+                    runSpacing: isCompact ? 6 : 8,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(opponent.hand.length, (index) {
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showCardRevealed(
+                              context, opponent, index, opponent.hand[index]);
+                          gp.executeLookAtCard(opponent, index);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.blue, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: CardWidget(
+                            card: null,
+                            size: cardSize,
+                            isRevealed: false,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  SizedBox(height: isCompact ? 12 : 20),
+                  TextButton(
+                    onPressed: () {
                       Navigator.pop(ctx);
-                      _showCardRevealed(
-                          context, opponent, index, opponent.hand[index]);
-                      gp.executeLookAtCard(opponent, index);
+                      gp.skipSpecialPower();
                     },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blue, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const CardWidget(
-                        card: null,
-                        size: CardSize.medium,
-                        isRevealed: false,
-                      ),
+                    child: Text(
+                      "PASSER",
+                      style: TextStyle(color: Colors.white54, fontSize: isCompact ? 14 : 16),
                     ),
-                  );
-                }),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  gp.skipSpecialPower();
-                },
-                child: const Text(
-                  "PASSER",
-                  style: TextStyle(color: Colors.white54, fontSize: 16),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

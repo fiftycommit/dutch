@@ -7,6 +7,7 @@ class PlayerAvatar extends StatelessWidget {
   final bool isActive; // Si c'est le tour du joueur
   final bool showName;
   final double size;
+  final bool compactMode; // Mode compact: juste le badge avec emoji + nom
 
   const PlayerAvatar({
     super.key,
@@ -14,10 +15,82 @@ class PlayerAvatar extends StatelessWidget {
     this.isActive = false,
     this.showName = true,
     this.size = 60.0,
+    this.compactMode = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Mode compact: juste un badge avec emoji + nom qui s'illumine
+    if (compactMode) {
+      return _buildCompactBadge(context);
+    }
+    
+    // Mode classique avec avatar circulaire (pour les bots)
+    return _buildClassicAvatar(context);
+  }
+  
+  /// Badge compact: emoji + nom dans une seule bande
+  Widget _buildCompactBadge(BuildContext context) {
+    final badgeHeight = ScreenUtils.scale(context, size * 0.6);
+    final fontSize = ScreenUtils.scaleFont(context, size * 0.35);
+    final emojiSize = ScreenUtils.scaleFont(context, size * 0.4);
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: EdgeInsets.symmetric(
+        horizontal: ScreenUtils.spacing(context, 10),
+        vertical: ScreenUtils.spacing(context, 4),
+      ),
+      constraints: BoxConstraints(minHeight: badgeHeight),
+      decoration: BoxDecoration(
+        gradient: isActive
+            ? LinearGradient(
+                colors: [Colors.amber.shade400, Colors.amber.shade600],
+              )
+            : null,
+        color: isActive ? null : Colors.black.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(
+          ScreenUtils.borderRadius(context, 20),
+        ),
+        border: Border.all(
+          color: isActive ? Colors.amber : Colors.white24,
+          width: isActive ? 2 : 1,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: Colors.amber.withValues(alpha: 0.6),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            player.displayAvatar,
+            style: TextStyle(fontSize: emojiSize),
+          ),
+          SizedBox(width: ScreenUtils.spacing(context, 4)),
+          Text(
+            player.displayName,
+            style: TextStyle(
+              color: isActive ? Colors.black : Colors.white,
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// Avatar classique avec cercle (pour les bots sur les côtés)
+  Widget _buildClassicAvatar(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

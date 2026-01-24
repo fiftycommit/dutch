@@ -60,6 +60,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isLandscape = screenSize.width > screenSize.height;
+    final isSmallLandscape = isLandscape && screenSize.height < 500;
+    
     return Scaffold(
       body: Stack(
         children: [
@@ -75,167 +79,282 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ),
           ),
           SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(height: 20),
-                          const Icon(Icons.style,
-                              size: 80, color: Colors.amber),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'DUTCH\' 78',
-                            style: TextStyle(
-                              fontFamily: 'Rye',
-                              fontSize: 60,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                    color: Colors.black45,
-                                    blurRadius: 10,
-                                    offset: Offset(2, 2))
-                              ],
-                            ),
-                          ),
-                          const Text(
-                            'réalisé par Max et EL Roy',
-                            style: TextStyle(
-                              fontSize: 16,
-                              letterSpacing: 4,
-                              color: Colors.amber,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 50),
-
-                          if (isLoading)
-                            const CircularProgressIndicator(color: Colors.amber)
-                          else
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [1, 2, 3].map((slotId) {
-                                final data = slotsData[slotId] ?? {};
-                                final mmr = data['mmr'] ?? 0;
-                                final rankName = StatsService.getRankName(mmr);
-
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0),
-                                  child: _buildSaveSlotCard(
-                                    slotId,
-                                    "Joueur $slotId",
-                                    rankName,
-                                    "$mmr RP",
-                                    selectedSlot == slotId,
-                                    _getRankColor(rankName),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-
-                          const SizedBox(height: 40),
-
-                          _buildMenuButton(
-                            context,
-                            label: 'PARTIE RAPIDE',
-                            icon: Icons.flash_on,
-                            isPrimary: true,
-                            onPressed: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => GameSetupScreen(
-                                    isTournament: false,
-                                    saveSlot: selectedSlot,
-                                  ),
-                                ),
-                              );
-                              _refreshStats();
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          _buildMenuButton(
-                            context,
-                            label: 'TOURNOI',
-                            icon: Icons.emoji_events,
-                            isPrimary: false,
-                            onPressed: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => GameSetupScreen(
-                                    isTournament: true,
-                                    saveSlot: selectedSlot,
-                                  ),
-                                ),
-                              );
-                              _refreshStats();
-                            },
-                          ),
-
-                          const SizedBox(height: 40),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildIconButton(
-                                icon: Icons.settings,
-                                label: 'Réglages',
-                                onPressed: () {
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SettingsScreen()));
-                                },
-                              ),
-                              const SizedBox(width: 20),
-                              _buildIconButton(
-                                icon: Icons.menu_book,
-                                label: 'Règles',
-                                onPressed: () {
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              const RulesScreen()));
-                                },
-                              ),
-                              const SizedBox(width: 20),
-                              _buildIconButton(
-                                icon: Icons.bar_chart,
-                                label: 'Stats',
-                                onPressed: () {
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              const StatsScreen()));
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
+            child: isSmallLandscape 
+              ? _buildLandscapeLayout(context)
+              : _buildPortraitLayout(context),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// Layout paysage optimisé pour iPhone
+  Widget _buildLandscapeLayout(BuildContext context) {
+    // Moins de padding, éléments plus gros, centrage vertical
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Partie gauche: Logo et titre
+          Expanded(
+            flex: 2,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.style, size: 60, color: Colors.amber),
+                const SizedBox(height: 8),
+                const Text(
+                  'DUTCH\' 78',
+                  style: TextStyle(
+                    fontFamily: 'Rye',
+                    fontSize: 44,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))
+                    ],
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'réalisé par Max et EL Roy',
+                  style: TextStyle(
+                    fontSize: 13,
+                    letterSpacing: 2,
+                    color: Colors.amber,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Slots de sauvegarde en ligne
+                if (!isLoading)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [1, 2, 3].map((slotId) {
+                      final data = slotsData[slotId] ?? {};
+                      final mmr = data['mmr'] ?? 0;
+                      final rankName = StatsService.getRankName(mmr);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: _buildCompactSlotCard(
+                          slotId,
+                          "J$slotId",
+                          rankName,
+                          selectedSlot == slotId,
+                          _getRankColor(rankName),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+          // Partie droite: Boutons
+          Expanded(
+            flex: 2,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildCompactMenuButton(
+                  context,
+                  label: 'PARTIE RAPIDE',
+                  icon: Icons.flash_on,
+                  isPrimary: true,
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GameSetupScreen(
+                          isTournament: false,
+                          saveSlot: selectedSlot,
+                        ),
+                      ),
+                    );
+                    _refreshStats();
+                  },
+                ),
+                const SizedBox(height: 18),
+                _buildCompactMenuButton(
+                  context,
+                  label: 'TOURNOI',
+                  icon: Icons.emoji_events,
+                  isPrimary: false,
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GameSetupScreen(
+                          isTournament: true,
+                          saveSlot: selectedSlot,
+                        ),
+                      ),
+                    );
+                    _refreshStats();
+                  },
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildSmallIconButton(
+                      icon: Icons.settings,
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (context) => const SettingsScreen())),
+                    ),
+                    const SizedBox(width: 18),
+                    _buildSmallIconButton(
+                      icon: Icons.menu_book,
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (context) => const RulesScreen())),
+                    ),
+                    const SizedBox(width: 18),
+                    _buildSmallIconButton(
+                      icon: Icons.bar_chart,
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (context) => const StatsScreen())),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+  
+  /// Layout portrait classique
+  Widget _buildPortraitLayout(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight,
+            ),
+            child: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 20),
+                  const Icon(Icons.style, size: 80, color: Colors.amber),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'DUTCH\' 78',
+                    style: TextStyle(
+                      fontFamily: 'Rye',
+                      fontSize: 60,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))
+                      ],
+                    ),
+                  ),
+                  const Text(
+                    'réalisé par Max et EL Roy',
+                    style: TextStyle(
+                      fontSize: 16,
+                      letterSpacing: 4,
+                      color: Colors.amber,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 50),
+                  if (isLoading)
+                    const CircularProgressIndicator(color: Colors.amber)
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [1, 2, 3].map((slotId) {
+                        final data = slotsData[slotId] ?? {};
+                        final mmr = data['mmr'] ?? 0;
+                        final rankName = StatsService.getRankName(mmr);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: _buildSaveSlotCard(
+                            slotId,
+                            "Joueur $slotId",
+                            rankName,
+                            "$mmr RP",
+                            selectedSlot == slotId,
+                            _getRankColor(rankName),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  const SizedBox(height: 40),
+                  _buildMenuButton(
+                    context,
+                    label: 'PARTIE RAPIDE',
+                    icon: Icons.flash_on,
+                    isPrimary: true,
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GameSetupScreen(
+                            isTournament: false,
+                            saveSlot: selectedSlot,
+                          ),
+                        ),
+                      );
+                      _refreshStats();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildMenuButton(
+                    context,
+                    label: 'TOURNOI',
+                    icon: Icons.emoji_events,
+                    isPrimary: false,
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GameSetupScreen(
+                            isTournament: true,
+                            saveSlot: selectedSlot,
+                          ),
+                        ),
+                      );
+                      _refreshStats();
+                    },
+                  ),
+                  const SizedBox(height: 40),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildIconButton(
+                        icon: Icons.settings,
+                        label: 'Réglages',
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (context) => const SettingsScreen())),
+                      ),
+                      const SizedBox(width: 20),
+                      _buildIconButton(
+                        icon: Icons.menu_book,
+                        label: 'Règles',
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (context) => const RulesScreen())),
+                      ),
+                      const SizedBox(width: 20),
+                      _buildIconButton(
+                        icon: Icons.bar_chart,
+                        label: 'Stats',
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (context) => const StatsScreen())),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -250,6 +369,81 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       default:
         return const Color(0xFFCD7F32); // Bronze
     }
+  }
+  
+  /// Slot compact pour le mode paysage
+  Widget _buildCompactSlotCard(int id, String name, String rank,
+      bool isSelected, Color rankColor) {
+    return GestureDetector(
+      onTap: () {
+        setState(() => selectedSlot = id);
+        _saveSelectedSlot(id);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: isSelected ? rankColor : Colors.black.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: isSelected
+              ? Border.all(color: Colors.white, width: 2)
+              : Border.all(color: Colors.transparent, width: 2),
+          boxShadow: isSelected
+              ? [BoxShadow(color: rankColor.withValues(alpha: 0.5), blurRadius: 8)]
+              : [],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person,
+                color: isSelected ? Colors.black : Colors.white70, size: 20),
+            Text(name,
+                style: TextStyle(
+                    color: isSelected ? Colors.black : Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 9)),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  /// Bouton de menu compact pour paysage
+  Widget _buildCompactMenuButton(BuildContext context,
+      {required String label,
+      required IconData icon,
+      required bool isPrimary,
+      required VoidCallback onPressed}) {
+    return SizedBox(
+      width: 160,
+      height: 40,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: isPrimary ? Colors.black : Colors.white, size: 18),
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isPrimary ? Colors.amber : const Color(0xFF2d5f3e),
+          foregroundColor: isPrimary ? Colors.black : Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          elevation: isPrimary ? 6 : 3,
+        ),
+      ),
+    );
+  }
+  
+  /// Petit bouton icône pour paysage
+  Widget _buildSmallIconButton({required IconData icon, required VoidCallback onPressed}) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 22),
+      color: Colors.white70,
+      style: IconButton.styleFrom(
+        backgroundColor: const Color(0xFF1a3a28),
+        padding: const EdgeInsets.all(8),
+      ),
+    );
   }
 
   Widget _buildSaveSlotCard(int id, String name, String rank, String rp,

@@ -89,6 +89,17 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     }
 
     final canConfirm = _selectedCards.length == 2;
+    // Responsive: adapter selon la taille d'écran
+    final screenSize = MediaQuery.of(context).size;
+    final isCompact = screenSize.height < 500 || screenSize.width < 600;
+    final isMedium = !isCompact && (screenSize.height < 700 || screenSize.width < 900);
+    // Optimisation : moins de padding, cartes plus grandes sur mobile
+    final cardSize = isCompact ? CardSize.medium : (isMedium ? CardSize.large : CardSize.large);
+    final iconSize = isCompact ? 44.0 : 64.0;
+    final titleSize = isCompact ? 28.0 : (isMedium ? 34.0 : 40.0);
+    final subtitleSize = isCompact ? 14.0 : (isMedium ? 16.0 : 18.0);
+    final verticalSpacing = isCompact ? 6.0 : (isMedium ? 12.0 : 18.0);
+    final cardSpacing = isCompact ? 8.0 : 12.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0d2818),
@@ -103,27 +114,27 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: SizedBox(
-              width: double.infinity,
+          child: Center(
+            child: SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: ScreenUtils.spacing(context, 16),
-                  vertical: ScreenUtils.spacing(context, 20),
+                  horizontal: isCompact ? 4 : 24,
+                  vertical: isCompact ? 4 : 24,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.visibility,
-                        size: 60, color: Colors.white54),
-                    SizedBox(height: ScreenUtils.spacing(context, 20)),
+                    Icon(Icons.visibility,
+                        size: iconSize, color: Colors.white54),
+                    SizedBox(height: verticalSpacing),
                     Text(
                       "MÉMORISATION",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'Rye',
-                        fontSize: ScreenUtils.scaleFont(context, 36),
+                        fontSize: titleSize,
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         shadows: const [
@@ -135,22 +146,22 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ],
                       ),
                     ),
-                    SizedBox(height: ScreenUtils.spacing(context, 10)),
+                    SizedBox(height: isCompact ? 2 : 10),
                     Text(
                       "Clique sur 2 cartes pour les mémoriser.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white70,
-                        fontSize: ScreenUtils.scaleFont(context, 16),
+                        fontSize: subtitleSize,
                       ),
                     ),
-                    SizedBox(height: ScreenUtils.spacing(context, 30)),
+                    SizedBox(height: verticalSpacing),
                     Center(
                       child: Wrap(
                         alignment: WrapAlignment.center,
                         crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: ScreenUtils.spacing(context, 8),
-                        runSpacing: ScreenUtils.spacing(context, 8),
+                        spacing: cardSpacing,
+                        runSpacing: cardSpacing,
                         children: List.generate(4, (index) {
                           final isSelected = _selectedCards.contains(index);
 
@@ -167,7 +178,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                     duration: const Duration(milliseconds: 300),
                                     transform: Matrix4.translationValues(
                                       0,
-                                      isSelected ? -10 : 0,
+                                      isSelected ? (isCompact ? -5 : -10) : 0,
                                       0,
                                     ),
                                     decoration: BoxDecoration(
@@ -176,22 +187,22 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                       ),
                                       border: isSelected
                                           ? Border.all(
-                                              color: Colors.amber, width: 3)
+                                              color: Colors.amber, width: isCompact ? 2 : 3)
                                           : null,
                                       boxShadow: isSelected
                                           ? [
                                               BoxShadow(
                                                 color: Colors.amber
                                                     .withValues(alpha: 0.5),
-                                                blurRadius: 15,
-                                                spreadRadius: 3,
+                                                blurRadius: isCompact ? 10 : 15,
+                                                spreadRadius: isCompact ? 2 : 3,
                                               )
                                             ]
                                           : null,
                                     ),
-                                    child: const CardWidget(
+                                    child: CardWidget(
                                       card: null,
-                                      size: CardSize.large,
+                                      size: cardSize,
                                       isRevealed: false,
                                     ),
                                   ),
@@ -202,7 +213,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         }),
                       ),
                     ),
-                    SizedBox(height: ScreenUtils.spacing(context, 30)),
+                    SizedBox(height: verticalSpacing * 1.5),
                     Center(
                       child: AnimatedOpacity(
                         opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
@@ -215,11 +226,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             backgroundColor: Colors.amber,
                             foregroundColor: Colors.black,
                             padding: EdgeInsets.symmetric(
-                              horizontal: ScreenUtils.spacing(context, 40),
-                              vertical: ScreenUtils.spacing(context, 20),
+                              horizontal: isCompact ? 20 : 40,
+                              vertical: isCompact ? 12 : 20,
                             ),
                             textStyle: TextStyle(
-                              fontSize: ScreenUtils.scaleFont(context, 18),
+                              fontSize: isCompact ? 14 : 18,
                               fontWeight: FontWeight.bold,
                             ),
                             shape: RoundedRectangleBorder(
@@ -237,7 +248,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ),
                       ),
                     ),
-                    SizedBox(height: ScreenUtils.spacing(context, 20)),
+                    SizedBox(height: isCompact ? 10 : 20),
                   ],
                 ),
               ),
@@ -305,77 +316,88 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: Dialog(
-          backgroundColor: Colors.black87,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.remove_red_eye, color: Colors.amber, size: 50),
-                const SizedBox(height: 16),
-                const Text(
-                  "VOS CARTES",
-                  style: TextStyle(
-                    color: Colors.amber,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        // Responsive pour le dialog aussi
+        final screenSize = MediaQuery.of(ctx).size;
+        final isCompact = screenSize.height < 500 || screenSize.width < 600;
+        final dialogCardSize = isCompact ? CardSize.medium : CardSize.large;
+        final dialogIconSize = isCompact ? 35.0 : 50.0;
+        final dialogTitleSize = isCompact ? 18.0 : 24.0;
+        final dialogPadding = isCompact ? 12.0 : 20.0;
+        
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: Colors.black87,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: EdgeInsets.all(dialogPadding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.remove_red_eye, color: Colors.amber, size: dialogIconSize),
+                  SizedBox(height: isCompact ? 10 : 16),
+                  Text(
+                    "VOS CARTES",
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: dialogTitleSize,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: revealedCards.map((card) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: CardWidget(
-                        card: card,
-                        size: CardSize.large,
-                        isRevealed: true,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  "Mémorisez bien ces cartes !",
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(seconds: 3),
-                  builder: (context, value, child) {
-                    return Column(
-                      children: [
-                        LinearProgressIndicator(
-                          value: value,
-                          backgroundColor: Colors.white24,
-                          color: Colors.amber,
-                          minHeight: 4,
+                  SizedBox(height: isCompact ? 12 : 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: revealedCards.map((card) {
+                      return Padding(
+                        padding: EdgeInsets.symmetric(horizontal: isCompact ? 4 : 8),
+                        child: CardWidget(
+                          card: card,
+                          size: dialogCardSize,
+                          isRevealed: true,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "${((1 - value) * 3).ceil()}s",
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
+                      );
+                    }).toList(),
+                  ),
+                  SizedBox(height: isCompact ? 12 : 20),
+                  Text(
+                    "Mémorisez bien ces cartes !",
+                    style: TextStyle(color: Colors.white70, fontSize: isCompact ? 12 : 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: isCompact ? 12 : 20),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(seconds: 3),
+                    builder: (context, value, child) {
+                      return Column(
+                        children: [
+                          LinearProgressIndicator(
+                            value: value,
+                            backgroundColor: Colors.white24,
+                            color: Colors.amber,
+                            minHeight: 4,
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
+                          const SizedBox(height: 8),
+                          Text(
+                            "${((1 - value) * 3).ceil()}s",
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
     await Future.delayed(const Duration(seconds: 3));
