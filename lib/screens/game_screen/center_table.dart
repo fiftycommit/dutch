@@ -121,7 +121,7 @@ class _CenterTableState extends State<CenterTable> {
   }
 
   Widget _buildDrawnCardDisplay(GameState gs) {
-    final baseScale = 1.0;
+    const baseScale = 1.0;
     final expandedScale = widget.isCompactMode ? 1.6 : 1.4;
     final cardSize =
         widget.isCompactMode ? CardSize.medium : CardSize.large;

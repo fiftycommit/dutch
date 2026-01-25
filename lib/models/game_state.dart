@@ -94,8 +94,8 @@ class GameState {
   void smartShuffle() {
     Random rnd = Random();
     deck.shuffle();
-    if (difficulty == Difficulty.easy) {
-      addToHistory("ð² Mélange aléatoire (Mode Détendu)");
+      if (difficulty == Difficulty.easy) {
+        addToHistory("🎲 Mélange aléatoire (Mode Détendu)");
     } else if (difficulty == Difficulty.medium) {
       // MODE MEDIUM: 50% mauvaises au début
       List<PlayingCard> good = [];
@@ -384,14 +384,14 @@ class GameState {
     List<List<PlayingCard>> hands = List.generate(numPlayers, (_) => []);
     Set<String> globalUsedValues = {};
     
-    // PHASE 1: Donner des mauvaises cartes UNIQUES Ã  chaque joueur
+    // PHASE 1: Donner des mauvaises cartes UNIQUES à chaque joueur
     for (int playerIdx in playerOrder) {
       int cardsGiven = 0;
       
       for (var value in badValues) {
         if (cardsGiven >= badCardsPerPlayer) break;
         
-        // Séparation: éviter les valeurs déjÃ  données
+        // Séparation: éviter les valeurs déjà données
         if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
           continue;
         }

@@ -47,6 +47,8 @@ class StatsService {
     int totalPlayers = 4,
     bool isTournament = false,
     int tournamentRound = 1,
+    String? tournamentId,
+    List<String>? actionHistory,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic> stats = await getStats(slotId: slotId);
@@ -102,6 +104,11 @@ class StatsService {
       "rank": playerRank,
       "dutch": calledDutch,
       "mmrChange": mmrChange,
+      "gameMode": isTournament ? "tournament" : "quick",
+      "tournamentId": isTournament ? tournamentId : null,
+      "tournamentRound": isTournament ? tournamentRound : null,
+      "totalPlayers": totalPlayers,
+      "actionHistory": actionHistory ?? [],
     });
 
     if (history.length > 20) history = history.sublist(0, 20);

@@ -37,6 +37,7 @@ class GameProvider with ChangeNotifier {
   
   /// Scores cumulés du tournoi (persiste entre les manches)
   Map<String, int> _tournamentCumulativeScores = {};
+  String? _activeTournamentId;
 
   void createNewGame({
     required List<Player> players,
@@ -50,6 +51,13 @@ class GameProvider with ChangeNotifier {
     if (tournamentRound == 1) {
       _tournamentFinalRanking = null;
       _tournamentCumulativeScores = {}; // Réinitialiser les scores au début du tournoi
+    }
+    if (gameMode == GameMode.tournament) {
+      if (_activeTournamentId == null || tournamentRound == 1) {
+        _activeTournamentId = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+    } else {
+      _activeTournamentId = null;
     }
 
     _gameState = GameLogic.initializeGame(
@@ -619,6 +627,32 @@ class GameProvider with ChangeNotifier {
       }
     }
 
+    final ranksWithTies = _gameState!.getFinalRanksWithTies();
+    _gameState!.addToHistory("🏁 Classement final");
+    String rankEmoji(int rank) {
+      switch (rank) {
+        case 1:
+          return "🥇";
+        case 2:
+          return "🥈";
+        case 3:
+          return "🥉";
+        default:
+          return "";
+      }
+    }
+    for (int i = 0; i < ranking.length; i++) {
+      final player = ranking[i];
+      final rank = ranksWithTies[player.id] ?? (i + 1);
+      final score = _gameState!.getFinalScore(player);
+      final badge = rankEmoji(rank);
+      final badgePrefix = badge.isEmpty ? "" : "$badge ";
+      final dutchTag =
+          player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
+      _gameState!
+          .addToHistory("${badgePrefix}#$rank ${player.name}$dutchTag — $score pts");
+    }
+
     // Calculer le numéro de manche tournoi (1, 2 ou 3)
     int currentTournamentRound = _gameState!.gameMode == GameMode.tournament 
         ? _gameState!.tournamentRound 
@@ -638,6 +672,8 @@ class GameProvider with ChangeNotifier {
       totalPlayers: totalPlayersInRound,
       isTournament: _gameState!.gameMode == GameMode.tournament,
       tournamentRound: currentTournamentRound,
+      tournamentId: _activeTournamentId,
+      actionHistory: List<String>.from(_gameState!.actionHistory),
     );
 
     notifyListeners();
@@ -774,6 +810,11 @@ class GameProvider with ChangeNotifier {
         hasEmptyHand: false, // Abandon = pas de main vide
         isSBMM: _playerMMR != null,
         slotId: _currentSlotId,
+        totalPlayers: playerCount,
+        isTournament: _gameState!.gameMode == GameMode.tournament,
+        tournamentRound: _gameState!.tournamentRound,
+        tournamentId: _activeTournamentId,
+        actionHistory: List<String>.from(_gameState!.actionHistory),
       );
     }
     
@@ -785,6 +826,7 @@ class GameProvider with ChangeNotifier {
     _playerMMR = null;
     _tournamentFinalRanking = null;
     _remainingReactionTimeMs = null;
+    _activeTournamentId = null;
     notifyListeners();
   }
 

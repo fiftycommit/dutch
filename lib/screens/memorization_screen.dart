@@ -180,7 +180,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                   cardColumns;
                           const liftFactor = 0.08;
                           const maxScale = 1.05;
-                          final extraTopFactor =
+                          const extraTopFactor =
                               liftFactor + ((maxScale - 1.0) / 2);
                           final heightLimit =
                               (maxHeight - (cardRows - 1) * spacing) /
