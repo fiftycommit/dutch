@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 /// Service pour gérer l'orientation de l'écran sur le web
 /// Sur les plateformes natives (iOS, Android), ces fonctions ne font rien
 class WebOrientationService {

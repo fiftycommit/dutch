@@ -91,16 +91,11 @@ class GameState {
     return deck;
   }
 
-  // ============================================================
-  // ð´ SMART SHUFFLE
-  // ============================================================
   void smartShuffle() {
     Random rnd = Random();
-    
+    deck.shuffle();
     if (difficulty == Difficulty.easy) {
-      deck.shuffle();
       addToHistory("ð² Mélange aléatoire (Mode Détendu)");
-      
     } else if (difficulty == Difficulty.medium) {
       // MODE MEDIUM: 50% mauvaises au début
       List<PlayingCard> good = [];

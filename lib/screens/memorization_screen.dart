@@ -237,7 +237,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                           child: SizedBox(
                                             width: cardWidth,
                                             height: cardHeight,
-                                            child: FittedBox(
+                                            child: const FittedBox(
                                               fit: BoxFit.contain,
                                               child: CardWidget(
                                                 card: null,

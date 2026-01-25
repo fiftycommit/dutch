@@ -246,9 +246,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         _compactBadgeHeight(context, human, playerBadgeSize);
     final playerBlockHeight =
         playerBadgeHeight + blockSpacing + playerCardMetrics.height;
-    final actionColumnHeight = isCompactMode ? 36.0 : 60.0;
+    final actionLayout =
+        _actionButtonLayout(context, isCompactMode, playerCardMetrics);
     final playerAreaHeight =
-        math.max(actionColumnHeight, playerBlockHeight);
+        math.max(actionLayout.columnHeight, playerBlockHeight);
 
     final sideBandContentWidth =
         math.max(botBlockHeight, math.max(maxBotBadgeWidth, maxBotHandWidth));
@@ -270,7 +271,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               totalWeight == 0 ? 0.0 : slack * (centerMinHeight / totalWeight);
           final gapSlack = slack - centerExtra;
           final topGap = gapSlack;
-          final bottomGap = 0.0;
+          const bottomGap = 0.0;
           final topBandHeight = botBlockHeight + outerGap + topGap;
           final bottomBandHeight = playerAreaHeight + outerGap + bottomGap;
           final centerWidth =
@@ -279,6 +280,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             0.0,
             constraints.maxHeight - topBandHeight - bottomBandHeight,
           );
+          final isDrawnCardVisible = isMyTurn && hasDrawn && gs.drawnCard != null;
+          final centerShiftY = (botCardMetrics.height -
+                  playerCardMetrics.height -
+                  topBandHeight +
+                  bottomBandHeight) /
+              2.0;
+          final centerShiftFraction = centerHeight == 0
+              ? 0.0
+              : (centerShiftY / (centerHeight / 2)).clamp(-1.0, 1.0);
           final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
 
           return Stack(
@@ -294,15 +304,21 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       maxWidth: centerWidth,
                       maxHeight: centerHeight,
                     ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: CenterTable(
-                        gameState: gs,
-                        isMyTurn: isMyTurn,
-                        hasDrawn: hasDrawn,
-                        isCompactMode: isCompactMode,
-                        onShowDiscard: () => _showDiscardPile(gs),
+                    child: Align(
+                      alignment: Alignment(
+                        0,
+                        isDrawnCardVisible ? centerShiftFraction : 0.0,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: CenterTable(
+                          gameState: gs,
+                          isMyTurn: isMyTurn,
+                          hasDrawn: hasDrawn,
+                          isCompactMode: isCompactMode,
+                          onShowDiscard: () => _showDiscardPile(gs),
+                        ),
                       ),
                     ),
                   ),
@@ -456,9 +472,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final safePadding = MediaQuery.of(context).padding;
     final availableWidth =
         screenWidth - safePadding.left - safePadding.right;
-    final sideButtonWidth = isCompactMode ? 60.0 : 90.0;
-    final sideGap = isCompactMode ? 8.0 : 15.0;
     final cardMetrics = _cardVisualSize(context, cardSize);
+    final actionLayout =
+        _actionButtonLayout(context, isCompactMode, cardMetrics);
+    final sideButtonWidth = actionLayout.width;
+    final sideGap = (cardMetrics.width *
+            (isCompactMode ? 0.08 : 0.12))
+        .clamp(
+          ScreenUtils.spacing(context, 4.0),
+          ScreenUtils.spacing(context, isCompactMode ? 12.0 : 18.0),
+        );
+    final actionButtonHeight = actionLayout.height;
+    final actionButtonMargin = actionLayout.margin;
     final reservedWidth = (sideButtonWidth * 2) + (sideGap * 2);
     final handMaxWidth =
         math.max(cardMetrics.width, availableWidth - reservedWidth);
@@ -493,7 +518,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           if (isMyTurn)
             SizedBox(
               width: sideButtonWidth,
-              height: 36,
+              height: actionButtonHeight,
               child: hasDrawn
                   ? _buildCompactActionButton(
                       icon: Icons.delete,
@@ -515,17 +540,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           if (isMyTurn && !hasDrawn)
             SizedBox(
               width: sideButtonWidth,
-              height: 36,
+              height: actionButtonHeight,
               child: _buildCompactActionButton(
                   icon: Icons.campaign,
                   label: "DUTCH",
                   color: Colors.amber.shade700,
-                  onTap: () => _confirmDutch(gp)),
+                  onTap: () => _confirmDutch(gp),
+                  withPulse: true),
             ),
           if (isMyTurn && hasDrawn)
             Container(
               width: sideButtonWidth,
-              height: 36,
+              height: actionButtonHeight,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                   color: Colors.blue.withValues(alpha: 0.3),
@@ -554,8 +580,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             children: [
               if (isMyTurn)
                 Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(bottom: 10),
+                  height: actionButtonHeight,
+                  margin: EdgeInsets.only(bottom: actionButtonMargin),
                   child: hasDrawn
                       ? _buildActionButton(
                           icon: Icons.delete,
@@ -583,18 +609,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             children: [
               if (isMyTurn && !hasDrawn)
                 Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(bottom: 10),
+                  height: actionButtonHeight,
+                  margin: EdgeInsets.only(bottom: actionButtonMargin),
                   child: _buildActionButton(
                       icon: Icons.campaign,
                       label: "DUTCH",
                       color: Colors.amber.shade700,
-                      onTap: () => _confirmDutch(gp)),
+                      onTap: () => _confirmDutch(gp),
+                      withPulse: true),
                 ),
               if (isMyTurn && hasDrawn)
                 Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(bottom: 10),
+                  height: actionButtonHeight,
+                  margin: EdgeInsets.only(bottom: actionButtonMargin),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                       color: Colors.blue.withValues(alpha: 0.3),
@@ -841,30 +868,56 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  _ActionButtonLayout _actionButtonLayout(
+      BuildContext context, bool isCompactMode, Size cardMetrics) {
+    final heightTarget =
+        cardMetrics.height * (isCompactMode ? 0.7 : 0.85);
+    final widthTarget = cardMetrics.width * (isCompactMode ? 1.6 : 2.4);
+    final height = heightTarget.clamp(
+      isCompactMode ? 34.0 : 56.0,
+      isCompactMode ? 52.0 : 92.0,
+    );
+    final width = widthTarget.clamp(
+      isCompactMode ? 72.0 : 110.0,
+      isCompactMode ? 120.0 : 220.0,
+    );
+    final margin =
+        ScreenUtils.spacing(context, isCompactMode ? 4.0 : 8.0);
+    return _ActionButtonLayout(
+      width: width,
+      height: height,
+      margin: margin,
+    );
+  }
+
   Widget _buildActionButton(
       {required IconData icon,
       required String label,
       required Color color,
       required VoidCallback onTap,
       bool withPulse = false}) {
-    Widget button = ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        elevation: 4,
-        shadowColor: color.withValues(alpha: 0.5),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 20),
-          Text(label,
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-        ],
+    Widget button = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color, width: 1.4),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
     );
     
@@ -872,11 +925,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       return AnimatedBuilder(
         animation: _pulseAnimation,
         builder: (context, child) {
+          final t =
+              ((_pulseAnimation.value - 1.0) / 0.08).clamp(0.0, 1.0);
+          final glow = 8 + (12 * t);
           return Transform.scale(
             scale: _pulseAnimation.value,
-            child: button,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.35 + (0.25 * t)),
+                    blurRadius: glow,
+                    spreadRadius: 1.0 + (1.0 * t),
+                  ),
+                ],
+              ),
+              child: child,
+            ),
           );
         },
+        child: button,
       );
     }
     return button;
@@ -888,27 +956,27 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       required Color color,
       required VoidCallback onTap,
       bool withPulse = false}) {
-    Widget button = ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        elevation: 3,
-        shadowColor: color.withValues(alpha: 0.5),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14),
-            const SizedBox(width: 2),
-            Text(label,
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
-          ],
+    Widget button = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color, width: 1.2),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ),
     );
@@ -917,11 +985,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       return AnimatedBuilder(
         animation: _pulseAnimation,
         builder: (context, child) {
+          final t =
+              ((_pulseAnimation.value - 1.0) / 0.08).clamp(0.0, 1.0);
+          final glow = 6 + (8 * t);
           return Transform.scale(
             scale: _pulseAnimation.value,
-            child: button,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.3 + (0.2 * t)),
+                    blurRadius: glow,
+                    spreadRadius: 0.8 + (0.8 * t),
+                  ),
+                ],
+              ),
+              child: child,
+            ),
           );
         },
+        child: button,
       );
     }
     return button;
@@ -1249,4 +1332,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+class _ActionButtonLayout {
+  final double width;
+  final double height;
+  final double margin;
+
+  const _ActionButtonLayout({
+    required this.width,
+    required this.height,
+    required this.margin,
+  });
+
+  double get columnHeight => height + margin;
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/game_state.dart';
@@ -27,17 +25,13 @@ class CenterTable extends StatefulWidget {
 }
 
 class _CenterTableState extends State<CenterTable> {
-  bool _isDrawnCardExpanded = true;
-  Timer? _autoCollapseTimer;
+  bool _isDrawnCardExpanded = false;
   String? _lastDrawnCardId;
 
   @override
   void initState() {
     super.initState();
     _lastDrawnCardId = widget.gameState.drawnCard?.id;
-    if (_lastDrawnCardId != null && widget.isMyTurn && widget.hasDrawn) {
-      _startAutoCollapseTimer();
-    }
   }
 
   @override
@@ -47,24 +41,10 @@ class _CenterTableState extends State<CenterTable> {
     final newId = widget.gameState.drawnCard?.id;
     if (newId != _lastDrawnCardId) {
       _lastDrawnCardId = newId;
-      _autoCollapseTimer?.cancel();
-
-      if (!_isDrawnCardExpanded) {
-        setState(() {
-          _isDrawnCardExpanded = true;
-        });
-      }
-
-      if (newId != null && widget.isMyTurn && widget.hasDrawn) {
-        _startAutoCollapseTimer();
-      }
+      setState(() {
+        _isDrawnCardExpanded = false;
+      });
     }
-  }
-
-  @override
-  void dispose() {
-    _autoCollapseTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -140,112 +120,108 @@ class _CenterTableState extends State<CenterTable> {
     );
   }
 
-  void _startAutoCollapseTimer() {
-    _autoCollapseTimer?.cancel();
-    _autoCollapseTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (!mounted || !_isDrawnCardExpanded) return;
-      setState(() {
-        _isDrawnCardExpanded = false;
-      });
-    });
-  }
-
   Widget _buildDrawnCardDisplay(GameState gs) {
-    return GestureDetector(
-      onTap: () {
-        _autoCollapseTimer?.cancel();
-        setState(() {
-          _isDrawnCardExpanded = !_isDrawnCardExpanded;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        padding: EdgeInsets.all(widget.isCompactMode ? 12 : 20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: _isDrawnCardExpanded
-                ? [
-                    Colors.amber.shade700,
-                    Colors.amber.shade900,
-                  ]
-                : [
-                    Colors.green.shade800,
-                    Colors.green.shade900,
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(widget.isCompactMode ? 16 : 24),
-          border: Border.all(
-            color: _isDrawnCardExpanded ? Colors.amber : Colors.green.shade600,
-            width: 3,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: (_isDrawnCardExpanded ? Colors.amber : Colors.green)
-                  .withValues(alpha: 0.5),
-              blurRadius: 20,
-              spreadRadius: 5,
-            ),
-          ],
+    final baseScale = 1.0;
+    final expandedScale = widget.isCompactMode ? 1.6 : 1.4;
+    final cardSize =
+        widget.isCompactMode ? CardSize.medium : CardSize.large;
+    final frame = AnimatedContainer(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOutCubic,
+      padding: EdgeInsets.all(widget.isCompactMode ? 12 : 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _isDrawnCardExpanded
+              ? [
+                  Colors.amber.shade700,
+                  Colors.amber.shade900,
+                ]
+              : [
+                  Colors.green.shade800,
+                  Colors.green.shade900,
+                ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isDrawnCardExpanded ? Icons.visibility : Icons.zoom_out_map,
-                  color: Colors.white,
-                  size: widget.isCompactMode ? 16 : 20,
-                ),
-                SizedBox(width: widget.isCompactMode ? 4 : 8),
-                Text(
-                  _isDrawnCardExpanded ? "CARTE PIOCHÉE" : "TAP POUR AGRANDIR",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: widget.isCompactMode ? 11 : 14,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: widget.isCompactMode ? 8 : 12),
-            AnimatedScale(
-              scale: _isDrawnCardExpanded ? 1.0 : 0.7,
-              duration: const Duration(milliseconds: 300),
-              child: CardWidget(
-                card: gs.drawnCard,
-                size: _isDrawnCardExpanded
-                    ? (widget.isCompactMode ? CardSize.medium : CardSize.large)
-                    : (widget.isCompactMode ? CardSize.small : CardSize.medium),
-                isRevealed: true,
+        borderRadius: BorderRadius.circular(widget.isCompactMode ? 16 : 24),
+        border: Border.all(
+          color: _isDrawnCardExpanded ? Colors.amber : Colors.green.shade600,
+          width: 3,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (_isDrawnCardExpanded ? Colors.amber : Colors.green)
+                .withValues(alpha: 0.5),
+            blurRadius: 20,
+            spreadRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _isDrawnCardExpanded ? Icons.visibility : Icons.zoom_out_map,
+                color: Colors.white,
+                size: widget.isCompactMode ? 16 : 20,
               ),
-            ),
-            SizedBox(height: widget.isCompactMode ? 8 : 12),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.isCompactMode ? 8 : 12,
-                vertical: widget.isCompactMode ? 4 : 6,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                "${gs.drawnCard!.displayName} (${gs.drawnCard!.points} pts)",
+              SizedBox(width: widget.isCompactMode ? 4 : 8),
+              Text(
+                _isDrawnCardExpanded ? "CARTE PIOCHÉE" : "TAP POUR AGRANDIR",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: widget.isCompactMode ? 11 : 14,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
               ),
+            ],
+          ),
+          SizedBox(height: widget.isCompactMode ? 8 : 12),
+          CardWidget(
+            card: gs.drawnCard,
+            size: cardSize,
+            isRevealed: true,
+          ),
+          SizedBox(height: widget.isCompactMode ? 8 : 12),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.isCompactMode ? 8 : 12,
+              vertical: widget.isCompactMode ? 4 : 6,
             ),
-          ],
-        ),
+            decoration: BoxDecoration(
+              color: Colors.black45,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              "${gs.drawnCard!.displayName} (${gs.drawnCard!.points} pts)",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: widget.isCompactMode ? 11 : 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final scale = _isDrawnCardExpanded ? expandedScale : baseScale;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isDrawnCardExpanded = !_isDrawnCardExpanded;
+        });
+      },
+      child: AnimatedScale(
+        scale: scale,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.center,
+        child: frame,
       ),
     );
   }
