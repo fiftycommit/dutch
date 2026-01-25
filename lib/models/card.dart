@@ -1,6 +1,6 @@
 class PlayingCard {
   final String suit; // 'hearts', 'diamonds', 'clubs', 'spades', 'joker'
-  final String value; // 'A', '2', ..., '10', 'J', 'Q', 'K', 'JOKER'
+  final String value; // 'A', '2', ..., '10', 'V', 'D', 'R', 'JOKER'
   final int points;
   final bool isSpecial;
   final String id;
@@ -28,12 +28,8 @@ class PlayingCard {
   }
 
   String get matchValue {
-    if (value == 'K') {
-      if (suit == 'hearts' || suit == 'diamonds') {
-        return 'K_RED'; 
-      } else {
-        return 'K_BLACK';
-      }
+    if (value == 'R') {
+      return 'R';
     }
     if (value == 'JOKER') {
       return 'JOKER';
@@ -54,15 +50,12 @@ class PlayingCard {
       case 'A':
         fileValue = '01';
         break;
-      case 'J':
       case 'V':
         fileValue = 'V';
         break;
-      case 'Q':
       case 'D':
         fileValue = 'D';
         break; 
-      case 'K':
       case 'R':
         fileValue = 'R';
         break; 
@@ -102,9 +95,9 @@ class PlayingCard {
 
     if (value == 'R' && (suit == 'clubs' || suit == 'spades')) return 13;
 
-    if (value == 'Q' || value == 'D') return 12;
+    if (value == 'D') return 12;
 
-    if (value == 'J' || value == 'V') return 11;
+    if (value == 'V') return 11;
 
     if (value == 'A') return 1;
 
@@ -120,7 +113,7 @@ class PlayingCard {
   }
 
   String get displayName {
-    if (value == 'K') {
+    if (value == 'R') {
       if (suit == 'hearts' || suit == 'diamonds') {
         return ' Roi Rouge';
       } else {
@@ -130,8 +123,8 @@ class PlayingCard {
 
     if (value == 'JOKER') return ' Joker';
     if (value == 'A') return ' A';
-    if (value == 'V' || value == 'J') return ' Valet';
-    if (value == 'D' || value == 'Q') return 'e Dame';
+    if (value == 'V') return ' Valet';
+    if (value == 'D') return 'e Dame';
 
     return ' $value';
   }

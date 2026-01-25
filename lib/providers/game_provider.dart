@@ -8,6 +8,7 @@ import '../models/game_settings.dart';
 import '../services/game_logic.dart';
 import '../services/bot_ai.dart';
 import '../services/stats_service.dart';
+import '../services/haptic_service.dart';
 
 class GameProvider with ChangeNotifier {
   GameState? _gameState;
@@ -116,6 +117,7 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.drawnCard == null) return;
 
     GameLogic.replaceCard(_gameState!, cardIndex);
+    HapticService.cardTap();
     notifyListeners();
 
     if (_checkInstantEnd()) return;
@@ -138,6 +140,7 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.drawnCard == null) return;
 
     GameLogic.discardDrawnCard(_gameState!);
+    HapticService.cardTap();
     notifyListeners();
 
     if (_checkInstantEnd()) return;
@@ -164,6 +167,14 @@ class GameProvider with ChangeNotifier {
     if (cardIndex < 0 || cardIndex >= player.hand.length) return;
 
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
+
+    if (player.isHuman) {
+      if (success) {
+        HapticService.cardTap();
+      } else {
+        HapticService.error();
+      }
+    }
 
     if (!success) {
       shakingCardIndices.add(cardIndex);
@@ -238,7 +249,7 @@ class GameProvider with ChangeNotifier {
         _gameState!.addToHistory(
             "👁 ${currentPlayer.name} espionne ${targetPlayer.name} (carte #${targetCardIndex + 1})");
       }
-    } else if (specialCard.value == 'J' || specialCard.value == 'Q') {
+    } else if (specialCard.value == 'V') {
       _gameState!.pendingSwap = {
         'targetPlayer': targetPlayerIndex,
         'targetCard': targetCardIndex,
@@ -602,7 +613,6 @@ class GameProvider with ChangeNotifier {
     Player human = _gameState!.players.firstWhere((p) => p.isHuman);
 
     int playerRank = ranking.indexWhere((p) => p.id == human.id) + 1;
-
     bool calledDutch = _gameState!.dutchCallerId == human.id;
     bool wonDutch = calledDutch && playerRank == 1;
     bool isSBMM = _playerMMR != null;

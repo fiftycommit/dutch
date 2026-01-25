@@ -1,4 +1,5 @@
-import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 enum SoundType {
   cardFlip,
@@ -15,6 +16,31 @@ enum SoundType {
 
 class SoundService {
   static bool _isEnabled = true;
+  static final Map<String, AudioPlayer> _players = {};
+  static final Set<String> _initializedAssets = {};
+
+  static const String _uiClickAsset = 'sounds/ui_click.wav';
+  static const String _cardDrawAsset = 'sounds/card_draw.wav';
+  static const String _winAsset = 'sounds/win.wav';
+
+  static const Map<SoundType, String> _soundAssets = {
+    SoundType.cardFlip: _uiClickAsset,
+    SoundType.cardDraw: _cardDrawAsset,
+    SoundType.cardDiscard: _uiClickAsset,
+    SoundType.cardPlace: _uiClickAsset,
+    SoundType.buttonTap: _uiClickAsset,
+    SoundType.dutch: _uiClickAsset,
+    SoundType.powerActivate: _uiClickAsset,
+    SoundType.win: _winAsset,
+    SoundType.lose: _uiClickAsset,
+    SoundType.error: _uiClickAsset,
+  };
+
+  static const Map<SoundType, double> _soundVolumes = {
+    SoundType.cardDraw: 0.6,
+    SoundType.win: 0.9,
+    SoundType.buttonTap: 0.4,
+  };
 
   static void setEnabled(bool enabled) {
     _isEnabled = enabled;
@@ -26,42 +52,24 @@ class SoundService {
     if (!_isEnabled) return;
 
     try {
-      switch (sound) {
-        case SoundType.cardFlip:
-        case SoundType.cardDraw:
-        case SoundType.cardPlace:
-          await SystemSound.play(SystemSoundType.click);
-          break;
-
-        case SoundType.cardDiscard:
-        case SoundType.buttonTap:
-          await SystemSound.play(SystemSoundType.click);
-          break;
-
-        case SoundType.dutch:
-        case SoundType.powerActivate:
-          await SystemSound.play(SystemSoundType.alert);
-          break;
-
-        case SoundType.win:
-          await SystemSound.play(SystemSoundType.click);
-          await Future.delayed(const Duration(milliseconds: 100));
-          await SystemSound.play(SystemSoundType.click);
-          await Future.delayed(const Duration(milliseconds: 100));
-          await SystemSound.play(SystemSoundType.click);
-          break;
-
-        case SoundType.lose:
-          await SystemSound.play(SystemSoundType.alert);
-          break;
-
-        case SoundType.error:
-          await SystemSound.play(SystemSoundType.alert);
-          break;
-      }
+      final asset = _soundAssets[sound] ?? _uiClickAsset;
+      final volume = _soundVolumes[sound] ?? 0.5;
+      final player = await _playerFor(asset);
+      await player.play(AssetSource(asset), volume: volume);
     } catch (e) {
-      // Ignorer silencieusement
+      if (kDebugMode) {
+        debugPrint('SoundService error: $e');
+      }
     }
+  }
+
+  static Future<AudioPlayer> _playerFor(String asset) async {
+    final player = _players.putIfAbsent(asset, () => AudioPlayer());
+    if (!_initializedAssets.contains(asset)) {
+      await player.setReleaseMode(ReleaseMode.stop);
+      _initializedAssets.add(asset);
+    }
+    return player;
   }
 
   static Future<void> cardFlip() => play(SoundType.cardFlip);

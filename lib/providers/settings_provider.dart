@@ -68,6 +68,8 @@ class SettingsProvider with ChangeNotifier {
     final String? settingsJson = prefs.getString(_prefsKey);
     if (settingsJson != null) {
       _settings = GameSettings.fromJson(jsonDecode(settingsJson));
+      SoundService.setEnabled(_settings.soundEnabled);
+      HapticService.setEnabled(_settings.hapticEnabled);
       notifyListeners();
     }
   }

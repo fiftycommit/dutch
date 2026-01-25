@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/haptic_service.dart';
 import '../utils/screen_utils.dart';
 
 class HapticButton extends StatefulWidget {
@@ -67,7 +66,6 @@ class _HapticButtonState extends State<HapticButton>
 
   void _handleTap() {
     if (widget.isEnabled && widget.onPressed != null) {
-      HapticService.buttonTap();
       widget.onPressed!();
     }
   }

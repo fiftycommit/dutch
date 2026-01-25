@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/game_state.dart';
 import '../../providers/game_provider.dart';
+import '../../services/haptic_service.dart';
 import '../../widgets/card_widget.dart';
 
 class CenterTable extends StatefulWidget {
@@ -27,11 +28,24 @@ class CenterTable extends StatefulWidget {
 class _CenterTableState extends State<CenterTable> {
   bool _isDrawnCardExpanded = false;
   String? _lastDrawnCardId;
+  GameProvider? _gameProvider;
+  int? _lastRedZoneHapticAtMs;
 
   @override
   void initState() {
     super.initState();
     _lastDrawnCardId = widget.gameState.drawnCard?.id;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final gp = context.read<GameProvider>();
+    if (_gameProvider != gp) {
+      _gameProvider?.reactionTimeRemaining.removeListener(_handleReactionTick);
+      _gameProvider = gp;
+      _gameProvider!.reactionTimeRemaining.addListener(_handleReactionTick);
+    }
   }
 
   @override
@@ -45,6 +59,47 @@ class _CenterTableState extends State<CenterTable> {
         _isDrawnCardExpanded = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _gameProvider?.reactionTimeRemaining.removeListener(_handleReactionTick);
+    super.dispose();
+  }
+
+  void _handleReactionTick() {
+    final gp = _gameProvider;
+    if (gp == null || !mounted) return;
+
+    if (widget.gameState.phase != GamePhase.reaction) {
+      _lastRedZoneHapticAtMs = null;
+      return;
+    }
+
+    final total = gp.currentReactionTimeMs;
+    if (total <= 0) return;
+
+    final remaining = gp.reactionTimeRemaining.value;
+    final progress = (remaining / total).clamp(0.0, 1.0);
+
+    if (progress > 0.3) {
+      _lastRedZoneHapticAtMs = null;
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final interval = _redZoneIntervalMs(progress);
+    if (_lastRedZoneHapticAtMs == null ||
+        now - _lastRedZoneHapticAtMs! >= interval) {
+      HapticService.cardTap();
+      _lastRedZoneHapticAtMs = now;
+    }
+  }
+
+  int _redZoneIntervalMs(double progress) {
+    final t = (0.3 - progress) / 0.3;
+    final interval = 600 - (480 * t);
+    return interval.round();
   }
 
   @override

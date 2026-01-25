@@ -5,45 +5,45 @@ void main() {
   group('Tests des Rois', () {
     
     test('Roi Rouge (Cœur) = 0 points', () {
-      final kingHearts = PlayingCard.create('hearts', 'K');
+      final kingHearts = PlayingCard.create('hearts', 'R');
       expect(kingHearts.points, equals(0));
-      expect(kingHearts.matchValue, equals('K_RED'));
+      expect(kingHearts.matchValue, equals('R'));
     });
     
     test('Roi Rouge (Carreau) = 0 points', () {
-      final kingDiamonds = PlayingCard.create('diamonds', 'K');
+      final kingDiamonds = PlayingCard.create('diamonds', 'R');
       expect(kingDiamonds.points, equals(0));
-      expect(kingDiamonds.matchValue, equals('K_RED'));
+      expect(kingDiamonds.matchValue, equals('R'));
     });
     
     test('Roi Noir (Pique) = 13 points', () {
-      final kingSpades = PlayingCard.create('spades', 'K');
+      final kingSpades = PlayingCard.create('spades', 'R');
       expect(kingSpades.points, equals(13));
-      expect(kingSpades.matchValue, equals('K_BLACK'));
+      expect(kingSpades.matchValue, equals('R'));
     });
     
     test('Roi Noir (Trèfle) = 13 points', () {
-      final kingClubs = PlayingCard.create('clubs', 'K');
+      final kingClubs = PlayingCard.create('clubs', 'R');
       expect(kingClubs.points, equals(13));
-      expect(kingClubs.matchValue, equals('K_BLACK'));
+      expect(kingClubs.matchValue, equals('R'));
     });
     
     test('Deux Rois Rouges matchent ensemble', () {
-      final kingHearts = PlayingCard.create('hearts', 'K');
-      final kingDiamonds = PlayingCard.create('diamonds', 'K');
+      final kingHearts = PlayingCard.create('hearts', 'R');
+      final kingDiamonds = PlayingCard.create('diamonds', 'R');
       expect(kingHearts.matches(kingDiamonds), isTrue);
     });
     
     test('Deux Rois Noirs matchent ensemble', () {
-      final kingSpades = PlayingCard.create('spades', 'K');
-      final kingClubs = PlayingCard.create('clubs', 'K');
+      final kingSpades = PlayingCard.create('spades', 'R');
+      final kingClubs = PlayingCard.create('clubs', 'R');
       expect(kingSpades.matches(kingClubs), isTrue);
     });
     
-    test('Roi Rouge NE MATCHE PAS Roi Noir', () {
-      final kingHearts = PlayingCard.create('hearts', 'K');
-      final kingSpades = PlayingCard.create('spades', 'K');
-      expect(kingHearts.matches(kingSpades), isFalse);
+    test('Roi Rouge MATCHE Roi Noir', () {
+      final kingHearts = PlayingCard.create('hearts', 'R');
+      final kingSpades = PlayingCard.create('spades', 'R');
+      expect(kingHearts.matches(kingSpades), isTrue);
     });
     
     test('Joker = 0 points', () {
@@ -52,8 +52,8 @@ void main() {
     });
     
     test('Dame = 12 points', () {
-      final queen = PlayingCard.create('hearts', 'Q');
-      expect(queen.points, equals(12));
+      final dame = PlayingCard.create('hearts', 'D');
+      expect(dame.points, equals(12));
     });
     
     test('Valet = 11 points', () {
@@ -93,13 +93,13 @@ void main() {
     });
     
     test('DisplayName pour Roi Rouge', () {
-      final kingHearts = PlayingCard.create('hearts', 'K');
-      expect(kingHearts.displayName, equals('Roi Rouge'));
+      final kingHearts = PlayingCard.create('hearts', 'R');
+      expect(kingHearts.displayName, equals(' Roi Rouge'));
     });
     
     test('DisplayName pour Roi Noir', () {
-      final kingSpades = PlayingCard.create('spades', 'K');
-      expect(kingSpades.displayName, equals('Roi Noir'));
+      final kingSpades = PlayingCard.create('spades', 'R');
+      expect(kingSpades.displayName, equals(' Roi Noir'));
     });
   });
 }
