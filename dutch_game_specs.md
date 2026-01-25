@@ -203,36 +203,21 @@ class GameState {
 }
 ```
 
-#### SaveSlot
+#### ProfileStats
 ```dart
-class SaveSlot {
+class ProfileStats {
   final int slotNumber; // 1, 2, 3
-  String playerName;
-  int totalXP; // Système de progression
-  int currentLevel; // Calculé à partir de l'XP
-  
-  // Stats de tournoi
-  int tournamentsWon; // 🏆
-  int finalistCount; // 🥈
-  int semifinalistCount; // 🥉
-  int quarterfinalistCount;
-  int tournamentsPlayed;
-  
-  // Stats générales
-  int quickGamesPlayed;
-  int quickGamesWon;
+  int mmr; // Classement RP
+
+  int gamesPlayed;
+  int gamesWon;
   int bestScore; // Record de score le plus bas
-  int dutchSuccessCount;
-  
-  DateTime lastPlayed;
-  
-  // Bots débloqués
-  List<String> unlockedBotTiers; // ['beginner', 'intermediate', 'expert', 'master']
-  
-  // Méthodes
-  int calculateLevel(); // XP → Niveau
-  int xpToNextLevel(); // XP restant avant prochain niveau
-  bool isBotTierUnlocked(String tier);
+  int totalScore;
+  int dutchCalls;
+  int dutchWins;
+
+  // 20 dernières parties (date, score, rang, RP, mode, manche)
+  List<Map<String, dynamic>> history;
 }
 ```
 
@@ -335,42 +320,35 @@ class SaveSlot {
 
 ## 6. Intelligence Artificielle des Bots
 
-### 6.1 Bot "Agressif" 😈
+### 6.1 Bot "Flash" (rapide)
 **Comportement :**
-- Crie "Dutch" rapidement (score autour de 12-15)
-- Prend plus de risques avec les cartes spéciales
-- Défausse souvent pour activer des pouvoirs
-- Utilise le Joker agressivement (mélange l'adversaire le mieux placé)
-- Mémorisation moyenne (70% de précision)
+- Joue vite, tempo élevé
+- Dutch plus tôt quand le score estimé est bas
+- Prend des décisions rapides sur les pouvoirs
 
 **Stratégie :**
-- Priorité aux cartes de faible valeur
-- Utilise le 10 pour espionner le leader
-- Échange avec le Valet si opportun
+- Cherche à accélérer la manche
+- Privilégie les cartes à faible valeur
 
-### 6.2 Bot "Prudent" 🤓
+### 6.2 Bot "Hunter" (agressif)
 **Comportement :**
-- Attend d'avoir un score très bas avant "Dutch" (score < 8)
-- Mémorise parfaitement ses cartes et celles des autres (95% de précision)
-- Utilise les cartes spéciales de manière optimale
-- Évite les risques inutiles
+- Pression sur les adversaires
+- Utilise les pouvoirs de manière offensive
+- Dutch dès qu'il pense avoir un avantage
 
 **Stratégie :**
-- Calcule les probabilités de pioche
-- Optimise les échanges avec le Valet
-- Utilise le 7 stratégiquement pour vérifier ses cartes
+- Espionne le leader avec le 10
+- Échange quand il peut affaiblir un adversaire
 
-### 6.3 Bot "Équilibré" 😎
+### 6.3 Bot "Tactique" (équilibré)
 **Comportement :**
-- Mélange entre agressivité et prudence
-- Crie "Dutch" à score moyen (autour de 10)
-- Mémorisation correcte (85% de précision)
-- S'adapte à la situation de jeu
+- Mélange prudence et agressivité
+- Adapte sa prise de risque selon la manche
+- Joue proprement quand son score estimé est bon
 
 **Stratégie :**
-- Joue en fonction du contexte (position dans la partie)
+- Optimise les échanges
 - Utilise les pouvoirs de manière opportuniste
-- Équilibre risque/récompense
 
 ### 6.4 Système de décision (pour tous les bots)
 
@@ -384,152 +362,53 @@ class SaveSlot {
 2. **Décision de pioche/défausse**
    - Si carte piochée < moyenne des cartes connues → Garder
    - Sinon, comparer avec la carte à remplacer (si connue)
-   - Facteur aléatoire selon personnalité
+   - Facteur aléatoire selon comportement et niveau
 
 3. **Utilisation des pouvoirs**
-   - Probabilité d'activation selon personnalité
+   - Probabilité d'activation selon comportement
    - Ciblage intelligent (joueur le plus dangereux)
 
 4. **Décision "Dutch"**
    - Calcul du score estimé
-   - Seuil de décision selon personnalité
+   - Seuil de décision selon comportement et niveau
    - Facteur aléatoire (éviter la prévisibilité)
 
 ---
 
-## 7. Système de progression et déblocage de bots
+## 7. Classement et difficulté adaptative (RP / SBMM)
 
-### 7.1 Système d'XP et niveaux
-- **Gain d'XP** :
-  - Victoire partie rapide : +50 XP
-  - Quart de finaliste (tournoi) : +50 XP
-  - Demi-finaliste (tournoi) : +100 XP
-  - Finaliste (tournoi) : +200 XP
-  - Bonus : Premier "Dutch" réussi : +25 XP
-  - Bonus : Score parfait (0 points) : +100 XP
+### 7.1 RP et rangs
+- RP calculé après chaque partie (classement, Dutch réussi/raté, manche de tournoi).
+- Rangs : Bronze, Argent, Or, Platine.
+- Historique des 20 dernières parties par profil.
 
-- **Paliers de niveaux** (progression exponentielle) :
-  - Niveau 1 : 0 XP (début)
-  - Niveau 2 : 500 XP
-  - Niveau 3 : 1500 XP
-  - Niveau 4 : 3000 XP
-  - Niveau 5 : 5000 XP
-  - Niveau 6 : 7500 XP
-  - Niveau 7 : 10500 XP
-  - Niveau 8 : 14000 XP
-  - Niveau 9 : 18000 XP
-  - Niveau 10 : 23000 XP
-  - Niveau 10+ : +6000 XP par niveau
+### 7.2 Difficulté des bots
+- Mode manuel : Facile / Moyen / Difficile (préfixes Novice / Pro / Expert).
+- Mode SBMM : difficulté calée sur votre RP (peut aller jusqu'à Platine).
+- 3 comportements : Flash / Hunter / Tactique.
 
-### 7.2 Déblocage des tiers de bots
-
-#### Tier 1 : Bots "Débutant" (Niveau 1 - débloqué par défaut)
-- **Bob le Distrait** 🤪
-  - Mémorisation : 40%
-  - Crie Dutch à score élevé (18-25)
-  - Oublie souvent ses cartes
-  - Utilise mal les cartes spéciales
-  
-- **Sophie la Novice** 😅
-  - Mémorisation : 50%
-  - Joue de manière aléatoire
-  - Crie Dutch trop tôt ou trop tard
-  - Utilise parfois les cartes spéciales
-
-#### Tier 2 : Bots "Intermédiaire" (Niveau 3)
-- **Marco l'Agressif** 😈
-  - Mémorisation : 70%
-  - Crie Dutch rapidement (12-15)
-  - Utilise les pouvoirs offensivement
-  - Prend des risques calculés
-
-- **Julie la Prudente** 🤓
-  - Mémorisation : 85%
-  - Attend un score bas (< 8)
-  - Optimise les échanges
-  - Joue la sécurité
-
-#### Tier 3 : Bots "Expert" (Niveau 5)
-- **Alex l'Équilibré** 😎
-  - Mémorisation : 90%
-  - Score cible : ~10
-  - S'adapte à la situation
-  - Stratégie mixte
-
-- **Léa la Calculatrice** 🧠
-  - Mémorisation : 95%
-  - Calcule les probabilités
-  - Timing parfait pour Dutch
-  - Utilisation optimale des pouvoirs
-
-#### Tier 4 : Bots "Maître" (Niveau 10)
-- **Chen le Stratège** 🎯
-  - Mémorisation : 98%
-  - Prédit les actions des autres
-  - Manipulation psychologique (bluff)
-  - Timing parfait, jamais prévisible
-
-- **Nadia la Légende** 👑
-  - Mémorisation : 99%
-  - Joue comme un pro
-  - Adaptation instantanée
-  - Très difficile à battre
-
-### 7.3 Affichage de la progression
-- **Barre d'XP** animée après chaque partie
-- **Level up** : Animation + notification
-- **Déblocage** : Écran spécial "Nouveau bot débloqué !" avec présentation
-- **Tableau de progression** accessible depuis le menu :
-  - Niveau actuel
-  - XP actuel / XP prochain niveau
-  - Tous les bots (verrouillés en grisé avec icône cadenas)
-  - Stats détaillées par bot (victoires contre chacun)
+### 7.3 Affichage
+- Rang + RP visible dans le menu et les stats.
+- Historique détaillé (score, rang, variation RP, mode de jeu, manche).
 
 ---
 
-## 8. Système de Sauvegarde (3 slots style Mario)
+## 8. Système de profils (3 slots)
 
 ### 8.1 Structure des 3 slots
 Chaque slot contient :
-- **Nom du joueur** (personnalisable)
-- **Niveau et XP** (système de progression)
-  - +50 XP par victoire en partie rapide
-  - +200 XP par victoire en tournoi (finaliste)
-  - +100 XP par demi-finaliste
-  - +50 XP par quart de finaliste
-  - Paliers : Niveau 1 = 0 XP, Niveau 2 = 500 XP, Niveau 3 = 1500 XP, etc.
-- **Bots débloqués** :
-  - Niveau 1 : Bots "Débutant" (faibles)
-  - Niveau 3 : Bots "Intermédiaire" débloqués
-  - Niveau 5 : Bots "Expert" débloqués
-  - Niveau 10 : Bots "Maître" débloqués (ultra forts)
-- **Statistiques de tournoi** :
-  - Tournois gagnés (🏆)
-  - Finaliste (🥈)
-  - Demi-finaliste (🥉)
-  - Quart de finaliste
-  - Tournois joués
-- **Statistiques générales** :
-  - Parties jouées (total)
-  - Victoires (partie rapide)
-  - Ratio victoire
-  - Record de score le plus bas (meilleur 0 parfait)
-  - Nombre de "Dutch" réussis
-- **Date de dernière partie**
+- Statistiques globales : parties jouées/gagnées, meilleur score, score total.
+- Stats Dutch : tentatives et réussites.
+- RP + rang.
+- Historique des 20 dernières parties (date, score, rang, variation RP, mode, manche).
 
 ### 8.2 Fonctionnalités
-- **Copier** : Dupliquer un slot vers un slot vide
-- **Effacer** : Réinitialiser un slot (avec confirmation)
-- **Sélectionner** : Charger le slot pour jouer
-- **Déblocage progressif** : 
-  - Affichage visuel des bots verrouillés/débloqués
-  - Indication du niveau requis pour débloquer
-  - Notification lors du déblocage d'un nouveau niveau de bots
+- Sélectionner un slot pour jouer.
+- Réinitialiser un slot depuis l'écran de stats.
 
 ### 8.3 Persistence
-- Stockage local avec Hive ou SharedPreferences
-- Auto-sauvegarde après chaque partie
-- Backup possible (export/import JSON)
+- Stockage local via SharedPreferences.
+- Auto-sauvegarde après chaque partie.
 
 ---
 
@@ -595,14 +474,13 @@ Chaque slot contient :
 - Pack de cartes sous licence libre
 
 ### 10.2 UI/UX
-- Icônes des bots (8 bots au total avec personnalités distinctes)
-- Badges de niveau (1-10+)
-- Indicateur de bots débloqués/verrouillés
+- Icônes des bots (3 comportements distincts)
+- Badges de rang (Bronze/Argent/Or/Platine)
+- Indicateur de RP (variation +/-)
 - Boutons (Piocher, Dutch, Activer pouvoir, etc.)
 - Backgrounds (table de poker réaliste inspirée des images fournies)
-- Animations de particules (victoire, Dutch, level up)
+- Animations de particules (victoire, Dutch)
 - Indicateurs visuels (tour actuel, carte connue/inconnue)
-- Barre d'XP animée
 - Médailles/trophées (🏆 🥈 🥉)
 
 ### 10.3 Sons
@@ -625,8 +503,6 @@ Chaque slot contient :
 - Fade in/out entre écrans
 - Slide pour les modales
 - Bounce pour les popups de victoire
-- **Level up** : Animation spéciale (éclat de lumière + confettis)
-- **Déblocage de bot** : Révélation avec effet dramatique
 
 ### 11.3 Feedback visuel
 - Highlight au survol/tap
@@ -647,7 +523,7 @@ Chaque slot contient :
 ### 12.2 Priorité 2 (nice to have)
 - Multijoueur local (même appareil, écrans séparés)
 - Thèmes de cartes (classique, moderne, néon)
-- Succès/Achievements (débloquer avec XP)
+- Succès/Achievements
 - Personnalisation de l'avatar joueur
 - Leaderboard local (top 10 des meilleurs scores)
 - Stats détaillées par bot (graphiques de progression)
@@ -655,7 +531,7 @@ Chaque slot contient :
 ### 12.3 Priorité 3 (future)
 - Multijoueur en ligne (Firebase/Supabase)
 - Classement mondial
-- Système de niveau (XP avec les parties)
+- Système de classement RP avancé
 - Shop pour acheter skins de cartes avec les pièces
 
 ---
@@ -681,14 +557,14 @@ Chaque slot contient :
 - Calcul des scores
 
 ### Phase 4 : IA des bots (Semaine 6)
-- Implémentation des 3 personnalités
+- Implémentation des 3 comportements
 - Algorithmes de décision
 - Tests et équilibrage
 
-### Phase 5 : Sauvegarde et progression (Semaine 7)
+### Phase 5 : Sauvegarde et stats (Semaine 7)
 - Système de slots (style Mario)
 - Persistence des données
-- Stats et accumulation de pièces
+- Stats et classement RP
 
 ### Phase 6 : Polish (Semaine 8)
 - Animations fluides
@@ -723,8 +599,8 @@ Chaque slot contient :
 - [ ] Toutes les cartes spéciales fonctionnent (7, 10, V, Joker)
 - [ ] "Dutch" fonctionne correctement
 - [ ] Calcul des scores exact
-- [ ] Système d'XP et déblocage de bots fonctionnel
-- [ ] 8 bots au total (4 tiers de difficulté)
+- [ ] Système de RP et SBMM fonctionnel
+- [ ] 3 comportements de bots + niveaux de difficulté
 - [ ] Statistiques de tournoi correctes (🏆 🥈 🥉)
 
 ### 14.2 UI/UX
@@ -778,10 +654,10 @@ Chaque slot contient :
 
 **Must-Have (MVP) :**
 1. Jeu fonctionnel avec règles complètes
-2. 8 bots avec 4 tiers de difficulté distincts
-3. Système d'XP et déblocage progressif
+2. 3 comportements de bots + niveaux de difficulté (SBMM ou manuel)
+3. Système de RP et stats par profil
 4. Mode Partie Rapide + Mode Tournoi
-5. Système de sauvegarde (3 slots) avec stats de tournoi
+5. Système de sauvegarde (3 slots) avec stats
 6. Interface style poker réaliste (inspirée des images)
 7. Sons basiques
 
@@ -792,7 +668,7 @@ Chaque slot contient :
 4. Défausse en chaîne (règle bonus)
 5. Historique des actions
 6. Tutoriel
-7. Animation de level up et déblocage
+7. Animation de variation RP
 
 **Could-Have :**
 1. Intégration Apple Music/Spotify
@@ -812,10 +688,10 @@ Chaque slot contient :
 **Date : 10 Janvier 2026**
 **Auteur : Claude & Utilisateur**
 **Mises à jour :**
-- Ajout du système de progression par XP
-- 8 bots répartis sur 4 tiers de difficulté
+- Ajout du système de classement RP et SBMM
+- 3 comportements de bots (Flash / Hunter / Tactique)
 - Mode tournoi revu (pas d'accumulation entre manches)
-- Statistiques de tournoi détaillées (🏆 🥈 🥉)
+- Statistiques détaillées par profil
 - Design visuel : style poker réaliste
 
 ---

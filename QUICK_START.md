@@ -56,7 +56,7 @@ flutter run -d chrome
 ✅ **Jeu complet**
 - Distribution et révélation des cartes
 - Pioche et défausse
-- 8 personnalités de bots différentes
+- 3 comportements de bots + difficulté adaptative (SBMM ou manuel)
 - Calcul automatique des scores
 - Crier "Dutch!"
 - Classement final
@@ -68,7 +68,7 @@ flutter run -d chrome
 - Écran de résultats
 
 ✅ **Intelligence artificielle**
-- 8 bots avec stratégies distinctes
+- 3 comportements distincts (Flash / Hunter / Tactique)
 - Décisions intelligentes
 - Timing adapté
 
