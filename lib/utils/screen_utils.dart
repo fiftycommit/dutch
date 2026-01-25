@@ -12,6 +12,7 @@ class ScreenUtils {
   // Tailles de référence (iPhone 14 Pro)
   static const double _referenceWidth = 393.0;
   static const double _referenceHeight = 852.0;
+  static const double cardScaleFactor = 0.92;
 
   // Obtenir le MediaQuery context
   static MediaQueryData _getMediaQuery(BuildContext context) {

@@ -5,6 +5,8 @@ import '../utils/screen_utils.dart';
 
 enum CardSize { tiny, small, medium, large, drawn }
 
+const double _cardAspectRatio = 7 / 5;
+
 class CardWidget extends StatelessWidget {
   final PlayingCard? card;
   final CardSize size;
@@ -26,29 +28,25 @@ class CardWidget extends StatelessWidget {
 
     switch (size) {
       case CardSize.tiny:
-        width = 28;
-        height = 42;
+        height = 34;
         break;
       case CardSize.small:
-        width = 40;
-        height = 60;
+        height = 50;
         break;
       case CardSize.medium:
-        width = 60;
-        height = 90;
+        height = 76;
         break;
       case CardSize.large:
-        width = 100;
-        height = 150;
+        height = 128;
         break;
       case CardSize.drawn:
-        width = 80;
-        height = 120;
+        height = 102;
         break;
     }
 
-    width = ScreenUtils.scale(context, width);
-    height = ScreenUtils.scale(context, height);
+    width = height / _cardAspectRatio;
+    width = ScreenUtils.scale(context, width) * ScreenUtils.cardScaleFactor;
+    height = ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
 
     return GestureDetector(
       onTap: onTap,

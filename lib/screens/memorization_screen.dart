@@ -170,7 +170,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                       height: cardAreaHeight,
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          const aspect = 1.5;
+                          const aspect = 7 / 5;
                           final maxWidth = constraints.maxWidth;
                           final maxHeight = constraints.maxHeight;
                           final spacing =
@@ -365,7 +365,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         child: ResponsiveDialog(
           backgroundColor: Colors.black87,
           builder: (context, metrics) {
-            const aspect = 1.5;
+            const aspect = 7 / 5;
 
             return SizedBox(
               width: metrics.contentWidth,

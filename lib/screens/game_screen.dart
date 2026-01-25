@@ -12,6 +12,7 @@ import '../widgets/card_widget.dart';
 import '../widgets/player_hand.dart';
 import '../widgets/player_avatar.dart';
 import '../widgets/responsive_dialog.dart';
+import '../utils/screen_utils.dart';
 import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
@@ -29,6 +30,7 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  static const double _cardAspectRatio = 7 / 5;
   @override
   void initState() {
     super.initState();
@@ -205,131 +207,284 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final isCompactMode = screenHeight < 400 || screenWidth < 700;
     final isMediumMode = !isCompactMode && (screenHeight < 600 || screenWidth < 1000);
 
-    final safePadding = MediaQuery.of(context).padding;
-    final leftInset = safePadding.left;
-    final rightInset = safePadding.right;
+    final botCardType = isCompactMode ? CardSize.tiny : CardSize.small;
+    final playerCardType = isCompactMode ? CardSize.small : CardSize.medium;
+    final botCardMetrics = _cardVisualSize(context, botCardType);
+    final playerCardMetrics = _cardVisualSize(context, playerCardType);
+    final blockSpacing = ScreenUtils.spacing(context, isCompactMode ? 4.0 : 6.0);
+    final botOverlap =
+        botCardMetrics.width * PlayerHandWidget.overlapFactor(botCardType);
+    final outerGapBase =
+        math.min(botCardMetrics.height, playerCardMetrics.height) *
+            (isCompactMode ? 0.05 : 0.035);
+    final outerGap = outerGapBase.clamp(0.0, 6.0);
+    final centerGapX = botCardMetrics.width * (isCompactMode ? 0.3 : 0.22);
+    final botBadgeSize = isCompactMode ? 18.0 : 24.0;
+    final botBadgeHeight = bots.isEmpty
+        ? 0.0
+        : bots
+            .map((bot) => _compactBadgeHeight(context, bot, botBadgeSize))
+            .reduce(math.max);
+    final botBlockHeight =
+        botBadgeHeight + blockSpacing + botCardMetrics.height;
+    final maxBotBadgeWidth = bots.isEmpty
+        ? 0.0
+        : bots
+            .map((bot) => _compactBadgeWidth(context, bot, botBadgeSize))
+            .reduce(math.max);
+    final maxBotHandWidth = bots.isEmpty
+        ? botCardMetrics.width
+        : bots
+            .map((bot) {
+              final count = math.max(1, bot.hand.length);
+              return botCardMetrics.width + (count - 1) * botOverlap;
+            })
+            .reduce(math.max);
 
-    final s = screenWidth < screenHeight ? screenWidth : screenHeight;
-    final distanceFromCenter = s * 0.06;
-    final topBandHeight = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
-    final bottomBandHeight = distanceFromCenter + (isCompactMode ? 102.0 : 128.0);
-    final sideBandWidth = distanceFromCenter + (isCompactMode ? 60.0 : 80.0);
+    final playerBadgeSize = isCompactMode ? 24.0 : 28.0;
+    final playerBadgeHeight =
+        _compactBadgeHeight(context, human, playerBadgeSize);
+    final playerBlockHeight =
+        playerBadgeHeight + blockSpacing + playerCardMetrics.height;
+    final actionColumnHeight = isCompactMode ? 36.0 : 60.0;
+    final playerAreaHeight =
+        math.max(actionColumnHeight, playerBlockHeight);
 
-    final centerLeft = sideBandWidth + leftInset;
-    final centerRight = sideBandWidth + rightInset;
-    final centerWidth = screenWidth - centerLeft - centerRight;
-    final centerHeight = screenHeight - topBandHeight - bottomBandHeight;
-    final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
+    final sideBandContentWidth =
+        math.max(botBlockHeight, math.max(maxBotBadgeWidth, maxBotHandWidth));
+    final sideBandWidth = sideBandContentWidth + outerGap + centerGapX;
+    final centerMinHeight =
+        _estimateCenterMinHeight(context, gs, isCompactMode);
 
-    return Stack(
-      children: [
-        Positioned(
-          left: centerLeft,
-          right: centerRight,
-          top: topBandHeight,
-          bottom: bottomBandHeight,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: centerWidth,
-                maxHeight: centerHeight,
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: CenterTable(
-                  gameState: gs,
-                  isMyTurn: isMyTurn,
-                  hasDrawn: hasDrawn,
-                  isCompactMode: isCompactMode,
-                  onShowDiscard: () => _showDiscardPile(gs),
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final baseHeight = botBlockHeight +
+              playerAreaHeight +
+              centerMinHeight +
+              (outerGap * 2);
+          final slack = math.max(0.0, constraints.maxHeight - baseHeight);
+          final totalWeight =
+              botBlockHeight + playerAreaHeight + centerMinHeight;
+          final centerExtra =
+              totalWeight == 0 ? 0.0 : slack * (centerMinHeight / totalWeight);
+          final gapSlack = slack - centerExtra;
+          final topGap = gapSlack;
+          final bottomGap = 0.0;
+          final topBandHeight = botBlockHeight + outerGap + topGap;
+          final bottomBandHeight = playerAreaHeight + outerGap + bottomGap;
+          final centerWidth =
+              math.max(0.0, constraints.maxWidth - (sideBandWidth * 2));
+          final centerHeight = math.max(
+            0.0,
+            constraints.maxHeight - topBandHeight - bottomBandHeight,
+          );
+          final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
+
+          return Stack(
+            children: [
+              Positioned(
+                left: sideBandWidth,
+                right: sideBandWidth,
+                top: topBandHeight,
+                bottom: bottomBandHeight,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: centerWidth,
+                      maxHeight: centerHeight,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: CenterTable(
+                        gameState: gs,
+                        isMyTurn: isMyTurn,
+                        hasDrawn: hasDrawn,
+                        isCompactMode: isCompactMode,
+                        onShowDiscard: () => _showDiscardPile(gs),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
-        if (bots.length > 1)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: topBandHeight,
-            child: Center(
-              child: RotatedBox(
-                quarterTurns: 2,
-                child: _buildBotArea(context, bots[1], gp, isCompactMode),
+              if (bots.length > 1)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: topBandHeight,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: outerGap),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SizedBox(
+                            height: constraints.maxHeight,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.topCenter,
+                              child: RotatedBox(
+                                quarterTurns: 2,
+                                child: _buildBotArea(
+                                  context,
+                                  bots[1],
+                                  gp,
+                                  isCompactMode,
+                                  cardSize: botCardType,
+                                  badgeSize: botBadgeSize,
+                                  spacing: blockSpacing,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              if (bots.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: sideBandWidth,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: outerGap),
+                      child: RotatedBox(
+                        quarterTurns: 1,
+                        child: _buildBotArea(
+                          context,
+                          bots[0],
+                          gp,
+                          isCompactMode,
+                          cardSize: botCardType,
+                          badgeSize: botBadgeSize,
+                          spacing: blockSpacing,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (bots.length > 2)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: sideBandWidth,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: EdgeInsets.only(right: outerGap),
+                      child: RotatedBox(
+                        quarterTurns: 3,
+                        child: _buildBotArea(
+                          context,
+                          bots[2],
+                          gp,
+                          isCompactMode,
+                          cardSize: botCardType,
+                          badgeSize: botBadgeSize,
+                          spacing: blockSpacing,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: bottomBandHeight,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: outerGap),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return _buildPlayerArea(
+                          gp,
+                          gs,
+                          human,
+                          isMyTurn,
+                          hasDrawn,
+                          canInteractWithCards,
+                          isCompactMode,
+                          cardSize: playerCardType,
+                          badgeSize: playerBadgeSize,
+                          spacing: blockSpacing,
+                          maxHeight: constraints.maxHeight,
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        if (bots.isNotEmpty)
-          Positioned(
-            left: leftInset,
-            top: topBandHeight,
-            bottom: bottomBandHeight,
-            width: sideBandWidth,
-            child: Center(
-              child: Transform.translate(
-                offset: Offset(
-                  0,
-                  ((isCompactMode ? 18.0 : 24.0) +
-                          (isCompactMode ? 4.0 : 6.0)) /
-                      2,
-                ),
-                child: RotatedBox(
-                  quarterTurns: 1,
-                  child: _buildBotArea(context, bots[0], gp, isCompactMode),
+              Positioned(
+                top: outerGap,
+                right: sideBandWidth + buttonMargin,
+                child: IconButton(
+                  icon: Icon(Icons.pause_circle_filled,
+                      color: Colors.white54, size: isCompactMode ? 24 : 32),
+                  onPressed: () => gp.pauseGame(),
                 ),
               ),
-            ),
-          ),
-        if (bots.length > 2)
-          Positioned(
-            right: rightInset,
-            top: topBandHeight,
-            bottom: bottomBandHeight,
-            width: sideBandWidth,
-            child: Center(
-              child: Transform.translate(
-                offset: Offset(
-                  0,
-                  ((isCompactMode ? 18.0 : 24.0) +
-                          (isCompactMode ? 4.0 : 6.0)) /
-                      2,
-                ),
-                child: RotatedBox(
-                  quarterTurns: 3,
-                  child: _buildBotArea(context, bots[2], gp, isCompactMode),
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: bottomBandHeight,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: isCompactMode ? 4 : 8),
-              child: _buildPlayerArea(gp, gs, human, isMyTurn, hasDrawn, canInteractWithCards, isCompactMode),
-            ),
-          ),
-        ),
-        Positioned(
-          top: buttonMargin,
-          right: rightInset + sideBandWidth + buttonMargin,
-          child: IconButton(
-            icon: Icon(Icons.pause_circle_filled,
-                color: Colors.white54, size: isCompactMode ? 24 : 32),
-            onPressed: () => gp.pauseGame(),
-          ),
-        ),
-      ],
+            ],
+          );
+        },
+      ),
     );
   }
   
-  Widget _buildPlayerArea(GameProvider gp, GameState gs, Player human, bool isMyTurn, bool hasDrawn, bool canInteractWithCards, bool isCompactMode) {
+  Widget _buildPlayerArea(
+    GameProvider gp,
+    GameState gs,
+    Player human,
+    bool isMyTurn,
+    bool hasDrawn,
+    bool canInteractWithCards,
+    bool isCompactMode, {
+    required CardSize cardSize,
+    required double badgeSize,
+    required double spacing,
+    required double maxHeight,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final safePadding = MediaQuery.of(context).padding;
+    final availableWidth =
+        screenWidth - safePadding.left - safePadding.right;
+    final sideButtonWidth = isCompactMode ? 60.0 : 90.0;
+    final sideGap = isCompactMode ? 8.0 : 15.0;
+    final cardMetrics = _cardVisualSize(context, cardSize);
+    final reservedWidth = (sideButtonWidth * 2) + (sideGap * 2);
+    final handMaxWidth =
+        math.max(cardMetrics.width, availableWidth - reservedWidth);
+
+    final playerBlock = _buildPlayerBlock(
+      context: context,
+      player: human,
+      isActive: isMyTurn,
+      canInteract: canInteractWithCards,
+      isHuman: true,
+      cardSize: cardSize,
+      badgeSize: badgeSize,
+      spacing: spacing,
+      handWidth: handMaxWidth,
+      selectedIndices: gp.shakingCardIndices.toList(),
+      onCardTap: (index) => _handleCardTap(gp, gs, index),
+    );
+    final fittedPlayerBlock = SizedBox(
+      height: maxHeight,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.bottomCenter,
+        child: playerBlock,
+      ),
+    );
+
     if (isCompactMode) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -337,7 +492,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         children: [
           if (isMyTurn)
             SizedBox(
-              width: 60,
+              width: sideButtonWidth,
               height: 36,
               child: hasDrawn
                   ? _buildCompactActionButton(
@@ -353,32 +508,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       onTap: gp.drawCard,
                       withPulse: true),
             ),
-          if (!isMyTurn) const SizedBox(width: 60),
-          const SizedBox(width: 8),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              PlayerAvatar(
-                  player: human,
-                  size: 24,
-                  isActive: isMyTurn,
-                  showName: true,
-                  compactMode: true),
-              const SizedBox(height: 4),
-              PlayerHandWidget(
-                player: human,
-                isHuman: true,
-                isActive: canInteractWithCards,
-                onCardTap: (index) => _handleCardTap(gp, gs, index),
-                selectedIndices: gp.shakingCardIndices.toList(),
-                cardSize: CardSize.small,
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
+          if (!isMyTurn) SizedBox(width: sideButtonWidth),
+          SizedBox(width: sideGap),
+          fittedPlayerBlock,
+          SizedBox(width: sideGap),
           if (isMyTurn && !hasDrawn)
             SizedBox(
-              width: 60,
+              width: sideButtonWidth,
               height: 36,
               child: _buildCompactActionButton(
                   icon: Icons.campaign,
@@ -388,7 +524,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           if (isMyTurn && hasDrawn)
             Container(
-              width: 60,
+              width: sideButtonWidth,
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
@@ -402,147 +538,284 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       fontSize: 8,
                       fontWeight: FontWeight.bold)),
             ),
-          if (!isMyTurn) const SizedBox(width: 60),
+          if (!isMyTurn) SizedBox(width: sideButtonWidth),
         ],
       );
     }
-    
+
     return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            SizedBox(
-              width: 90,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isMyTurn)
-                    Container(
-                      height: 50,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: hasDrawn
-                          ? _buildActionButton(
-                              icon: Icons.delete,
-                              label: "JETER",
-                              color: Colors.redAccent,
-                              onTap: gp.discardDrawnCard,
-                              withPulse: true)
-                          : _buildActionButton(
-                              icon: Icons.get_app,
-                              label: "PIOCHER",
-                              color: Colors.green,
-                              onTap: gp.drawCard,
-                              withPulse: true),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 15),
-            Column(
-              children: [
-                PlayerAvatar(
-                    player: human,
-                    size: 28,
-                    isActive: isMyTurn,
-                    showName: true,
-                    compactMode: true),
-                const SizedBox(height: 6),
-                PlayerHandWidget(
-                  player: human,
-                  isHuman: true,
-                  isActive: canInteractWithCards,
-                  onCardTap: (index) => _handleCardTap(gp, gs, index),
-                  selectedIndices: gp.shakingCardIndices.toList(),
-                  cardSize: CardSize.medium,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        SizedBox(
+          width: sideButtonWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMyTurn)
+                Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: hasDrawn
+                      ? _buildActionButton(
+                          icon: Icons.delete,
+                          label: "JETER",
+                          color: Colors.redAccent,
+                          onTap: gp.discardDrawnCard,
+                          withPulse: true)
+                      : _buildActionButton(
+                          icon: Icons.get_app,
+                          label: "PIOCHER",
+                          color: Colors.green,
+                          onTap: gp.drawCard,
+                          withPulse: true),
                 ),
-              ],
-            ),
-            const SizedBox(width: 15),
-            SizedBox(
-              width: 90,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isMyTurn && !hasDrawn)
-                    Container(
-                      height: 50,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: _buildActionButton(
-                          icon: Icons.campaign,
-                          label: "DUTCH",
-                          color: Colors.amber.shade700,
-                          onTap: () => _confirmDutch(gp)),
-                    ),
-                  if (isMyTurn && hasDrawn)
-                    Container(
-                      height: 50,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.blueAccent)),
-                      child: const Text("GARDER\n(Clique main)",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        );
+            ],
+          ),
+        ),
+        SizedBox(width: sideGap),
+        fittedPlayerBlock,
+        SizedBox(width: sideGap),
+        SizedBox(
+          width: sideButtonWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMyTurn && !hasDrawn)
+                Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: _buildActionButton(
+                      icon: Icons.campaign,
+                      label: "DUTCH",
+                      color: Colors.amber.shade700,
+                      onTap: () => _confirmDutch(gp)),
+                ),
+              if (isMyTurn && hasDrawn)
+                Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blueAccent)),
+                  child: const Text("GARDER\n(Clique main)",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _buildBotArea(BuildContext context, Player bot, GameProvider gp, bool isCompactMode) {
-    final badgeSize = isCompactMode ? 18.0 : 24.0;
-    final cardHeight = isCompactMode ? 25.0 : 40.0;
-    final cardWidth = isCompactMode ? 50.0 : 80.0;
-    final cardSpacing = isCompactMode ? 10.0 : 15.0;
-    final handCount = bot.hand.length;
-    final stackWidth = handCount == 0
-        ? cardWidth
-        : cardWidth + (handCount - 1) * cardSpacing;
-    final isActive = gp.gameState!.currentPlayer.id == bot.id;
-    
+  Widget _buildPlayerBlock({
+    required BuildContext context,
+    required Player player,
+    required bool isActive,
+    required bool canInteract,
+    required bool isHuman,
+    required CardSize cardSize,
+    required double badgeSize,
+    required double spacing,
+    double? handWidth,
+    List<int>? selectedIndices,
+    Function(int)? onCardTap,
+    bool showCountBadge = false,
+    bool isCompactMode = true,
+  }) {
+    final badge = PlayerAvatar(
+      player: player,
+      size: badgeSize,
+      isActive: isActive,
+      showName: true,
+      compactMode: true,
+    );
+    final nameplate = showCountBadge
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              badge,
+              Positioned(
+                right: -6,
+                top: -6,
+                child: _buildBotCardCountBadge(player.hand.length, isCompactMode),
+              ),
+            ],
+          )
+        : badge;
+    final handWidget = PlayerHandWidget(
+      player: player,
+      isHuman: isHuman,
+      isActive: canInteract,
+      onCardTap: onCardTap,
+      selectedIndices: selectedIndices,
+      cardSize: cardSize,
+      overlapCards: !isHuman,
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            PlayerAvatar(
-              player: bot,
-              size: badgeSize,
-              isActive: isActive,
-              showName: true,
-              compactMode: true,
-            ),
-            Positioned(
-              right: -6,
-              top: -6,
-              child: _buildBotCardCountBadge(bot.hand.length, isCompactMode),
-            ),
-          ],
-        ),
-        SizedBox(height: isCompactMode ? 4 : 6),
-        SizedBox(
-          height: cardHeight,
-          width: stackWidth,
-          child: Stack(
-            children: List.generate(bot.hand.length, (index) {
-              return Positioned(
-                left: index * cardSpacing,
-                child: CardWidget(
-                    card: null, size: isCompactMode ? CardSize.tiny : CardSize.small, isRevealed: false),
-              );
-            }),
-          ),
-        )
+        nameplate,
+        SizedBox(height: spacing),
+        if (handWidth != null)
+          SizedBox(width: handWidth, child: handWidget)
+        else
+          handWidget,
       ],
     );
+  }
+
+  Widget _buildBotArea(
+    BuildContext context,
+    Player bot,
+    GameProvider gp,
+    bool isCompactMode, {
+    required CardSize cardSize,
+    required double badgeSize,
+    required double spacing,
+  }) {
+    final cardMetrics = _cardVisualSize(context, cardSize);
+    final overlap =
+        cardMetrics.width * PlayerHandWidget.overlapFactor(cardSize);
+    final count = math.max(1, bot.hand.length);
+    final handWidth = cardMetrics.width + (count - 1) * overlap;
+    final isActive = gp.gameState!.currentPlayer.id == bot.id;
+
+    return _buildPlayerBlock(
+      context: context,
+      player: bot,
+      isActive: isActive,
+      canInteract: false,
+      isHuman: false,
+      cardSize: cardSize,
+      badgeSize: badgeSize,
+      spacing: spacing,
+      handWidth: handWidth,
+      showCountBadge: true,
+      isCompactMode: isCompactMode,
+    );
+  }
+
+  Size _cardVisualSize(BuildContext context, CardSize size) {
+    double height;
+    switch (size) {
+      case CardSize.tiny:
+        height = 34;
+        break;
+      case CardSize.small:
+        height = 50;
+        break;
+      case CardSize.medium:
+        height = 76;
+        break;
+      case CardSize.large:
+        height = 128;
+        break;
+      case CardSize.drawn:
+        height = 102;
+        break;
+    }
+
+    final scaledHeight =
+        ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
+    final scaledWidth = scaledHeight / _cardAspectRatio;
+    return Size(scaledWidth, scaledHeight);
+  }
+
+  double _compactBadgeHeight(
+      BuildContext context, Player player, double size) {
+    final fontSize = ScreenUtils.scaleFont(context, size * 0.35);
+    final emojiSize = ScreenUtils.scaleFont(context, size * 0.4);
+    final baseStyle = DefaultTextStyle.of(context).style;
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: player.displayName,
+        style: baseStyle.copyWith(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final emojiPainter = TextPainter(
+      text: TextSpan(
+        text: player.displayAvatar,
+        style: baseStyle.copyWith(fontSize: emojiSize),
+      ),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final contentHeight =
+        math.max(textPainter.height, emojiPainter.height);
+    final verticalPadding = ScreenUtils.spacing(context, 4) * 2;
+    final minHeight = ScreenUtils.scale(context, size * 0.6);
+    return math.max(contentHeight + verticalPadding, minHeight);
+  }
+
+  double _compactBadgeWidth(BuildContext context, Player player, double size) {
+    final fontSize = ScreenUtils.scaleFont(context, size * 0.35);
+    final emojiSize = ScreenUtils.scaleFont(context, size * 0.4);
+    final baseStyle = DefaultTextStyle.of(context).style;
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: player.displayName,
+        style: baseStyle.copyWith(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final emojiPainter = TextPainter(
+      text: TextSpan(
+        text: player.displayAvatar,
+        style: baseStyle.copyWith(fontSize: emojiSize),
+      ),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final horizontalPadding = ScreenUtils.spacing(context, 10) * 2;
+    final spacing = ScreenUtils.spacing(context, 4);
+    return textPainter.width + emojiPainter.width + spacing + horizontalPadding;
+  }
+
+  double _estimateCenterMinHeight(
+      BuildContext context, GameState gs, bool isCompactMode) {
+    final cardSize =
+        _cardVisualSize(context, isCompactMode ? CardSize.small : CardSize.medium);
+    final padding = isCompactMode ? 8.0 : 15.0;
+    final baseHeight = cardSize.height + (padding * 2);
+    return baseHeight + _reactionHeaderHeight(context, gs, isCompactMode);
+  }
+
+  double _reactionHeaderHeight(
+      BuildContext context, GameState gs, bool isCompactMode) {
+    if (gs.phase != GamePhase.reaction) return 0.0;
+    final fontSize = isCompactMode ? 12.0 : 16.0;
+    final style = DefaultTextStyle.of(context).style.copyWith(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        );
+    final topCardValue = gs.topDiscardCard?.displayName ?? "?";
+    final textPainter = TextPainter(
+      text: TextSpan(text: "Vite ! Avez-vous un$topCardValue ?", style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final textHeight = textPainter.height;
+    final progressHeight = isCompactMode ? 5.0 : 8.0;
+    final topSpacing = isCompactMode ? 2.0 : 5.0;
+    final bottomSpacing = isCompactMode ? 4.0 : 10.0;
+    return textHeight + topSpacing + progressHeight + bottomSpacing;
   }
 
   Widget _buildBotCardCountBadge(int count, bool isCompactMode) {
@@ -780,9 +1053,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 final titleSize = metrics.font(18);
                 final gap = metrics.space(12);
                 final listHeight = metrics.contentHeight * 0.6;
+                const aspect = 7 / 5;
                 final cardWidth =
-                    math.min(metrics.contentWidth * 0.25, listHeight / 1.5);
-                final cardHeight = cardWidth * 1.5;
+                    math.min(metrics.contentWidth * 0.25, listHeight / aspect);
+                final cardHeight = cardWidth * aspect;
                 final cardPadding = metrics.space(6);
 
                 return Column(

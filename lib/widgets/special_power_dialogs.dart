@@ -9,13 +9,16 @@ import 'card_widget.dart';
 import 'responsive_dialog.dart';
 
 class SpecialPowerDialogs {
+  static const double _cardAspectRatio = 7 / 5;
+
   static double _cardWidthForGrid(DialogMetrics metrics,
       {required int columns, double maxHeightFraction = 0.35}) {
     final spacing = metrics.space(8);
     final widthByCols = columns > 0
         ? (metrics.contentWidth - spacing * (columns - 1)) / columns
         : metrics.contentWidth;
-    final heightByRows = (metrics.contentHeight * maxHeightFraction) / 1.5;
+    final heightByRows =
+        (metrics.contentHeight * maxHeightFraction) / _cardAspectRatio;
     return math.max(0.0, math.min(widthByCols, heightByRows));
   }
 
@@ -23,7 +26,7 @@ class SpecialPowerDialogs {
       {required double width,
       required bool isRevealed,
       PlayingCard? card}) {
-    final height = width * 1.5;
+    final height = width * _cardAspectRatio;
     return SizedBox(
       width: width,
       height: height,
@@ -146,7 +149,7 @@ class SpecialPowerDialogs {
       builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.black87,
         builder: (context, metrics) {
-          const aspect = 1.5;
+          const aspect = _cardAspectRatio;
 
           return SizedBox(
             width: metrics.contentWidth,

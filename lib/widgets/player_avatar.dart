@@ -74,15 +74,18 @@ class PlayerAvatar extends StatelessWidget {
             style: TextStyle(fontSize: emojiSize),
           ),
           SizedBox(width: ScreenUtils.spacing(context, 4)),
-          Text(
-            player.displayName,
-            style: TextStyle(
-              color: isActive ? Colors.black : Colors.white,
-              fontSize: fontSize,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(
+              player.displayName,
+              style: TextStyle(
+                color: isActive ? Colors.black : Colors.white,
+                fontSize: fontSize,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
