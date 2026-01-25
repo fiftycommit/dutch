@@ -178,80 +178,88 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                           final widthLimit =
                               (maxWidth - (cardColumns - 1) * spacing) /
                                   cardColumns;
+                          const liftFactor = 0.08;
+                          const maxScale = 1.05;
+                          final extraTopFactor =
+                              liftFactor + ((maxScale - 1.0) / 2);
                           final heightLimit =
                               (maxHeight - (cardRows - 1) * spacing) /
-                                  cardRows;
+                                  (cardRows + extraTopFactor);
                           final cardWidth = math.max(
                             0.0,
                             math.min(widthLimit, heightLimit / aspect),
                           );
                           final cardHeight = cardWidth * aspect;
-                          final lift = cardHeight * 0.08;
+                          final lift = cardHeight * liftFactor;
+                          final topInset = cardHeight * extraTopFactor;
 
                           return Center(
-                            child: Wrap(
-                              alignment: WrapAlignment.center,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: spacing,
-                              runSpacing: spacing,
-                              children: List.generate(4, (index) {
-                                final isSelected =
-                                    _selectedCards.contains(index);
+                            child: Padding(
+                              padding: EdgeInsets.only(top: topInset),
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: spacing,
+                                runSpacing: spacing,
+                                children: List.generate(4, (index) {
+                                  final isSelected =
+                                      _selectedCards.contains(index);
 
-                                return GestureDetector(
-                                  onTap: () => _onCardTap(index),
-                                  child: AnimatedBuilder(
-                                    animation: _pulseController,
-                                    builder: (context, child) {
-                                      return Transform.scale(
-                                        scale: isSelected
-                                            ? 1.0 + (_pulseController.value * 0.05)
-                                            : 1.0,
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 300),
-                                          transform: Matrix4.translationValues(
-                                            0,
-                                            isSelected ? -lift : 0,
-                                            0,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              ScreenUtils.borderRadius(context, 8),
+                                  return GestureDetector(
+                                    onTap: () => _onCardTap(index),
+                                    child: AnimatedBuilder(
+                                      animation: _pulseController,
+                                      builder: (context, child) {
+                                        return Transform.scale(
+                                          scale: isSelected
+                                              ? 1.0 + (_pulseController.value * 0.05)
+                                              : 1.0,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 300),
+                                            transform: Matrix4.translationValues(
+                                              0,
+                                              isSelected ? -lift : 0,
+                                              0,
                                             ),
-                                            border: isSelected
-                                                ? Border.all(
-                                                    color: Colors.amber,
-                                                    width: isCompact ? 2 : 3)
-                                                : null,
-                                            boxShadow: isSelected
-                                                ? [
-                                                    BoxShadow(
-                                                      color: Colors.amber
-                                                          .withValues(alpha: 0.5),
-                                                      blurRadius: isCompact ? 10 : 15,
-                                                      spreadRadius: isCompact ? 2 : 3,
-                                                    )
-                                                  ]
-                                                : null,
-                                          ),
-                                          child: SizedBox(
-                                            width: cardWidth,
-                                            height: cardHeight,
-                                            child: const FittedBox(
-                                              fit: BoxFit.contain,
-                                              child: CardWidget(
-                                                card: null,
-                                                size: CardSize.large,
-                                                isRevealed: false,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(
+                                                ScreenUtils.borderRadius(context, 8),
+                                              ),
+                                              border: isSelected
+                                                  ? Border.all(
+                                                      color: Colors.amber,
+                                                      width: isCompact ? 2 : 3)
+                                                  : null,
+                                              boxShadow: isSelected
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: Colors.amber
+                                                            .withValues(alpha: 0.5),
+                                                        blurRadius: isCompact ? 10 : 15,
+                                                        spreadRadius: isCompact ? 2 : 3,
+                                                      )
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: SizedBox(
+                                              width: cardWidth,
+                                              height: cardHeight,
+                                              child: const FittedBox(
+                                                fit: BoxFit.contain,
+                                                child: CardWidget(
+                                                  card: null,
+                                                  size: CardSize.large,
+                                                  isRevealed: false,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                );
-                              }),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }),
+                              ),
                             ),
                           );
                         },

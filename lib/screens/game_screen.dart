@@ -473,20 +473,40 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final availableWidth =
         screenWidth - safePadding.left - safePadding.right;
     final cardMetrics = _cardVisualSize(context, cardSize);
+    final cardGap = ScreenUtils.spacing(context, 4.0);
+    final naturalHandWidth = PlayerHandWidget.metrics(
+      context,
+      cardSize,
+      human.hand.length,
+      overlapCards: false,
+      cardGap: cardGap,
+    ).totalWidth;
     final actionLayout =
         _actionButtonLayout(context, isCompactMode, cardMetrics);
     final sideButtonWidth = actionLayout.width;
-    final sideGap = (cardMetrics.width *
+    final baseSideGap = (cardMetrics.width *
             (isCompactMode ? 0.08 : 0.12))
         .clamp(
           ScreenUtils.spacing(context, 4.0),
           ScreenUtils.spacing(context, isCompactMode ? 12.0 : 18.0),
         );
+    double sideGap = baseSideGap;
+    if (!isCompactMode) {
+      final maxGapForHand = math.max(
+        0.0,
+        (availableWidth - (naturalHandWidth + (sideButtonWidth * 2))) / 2,
+      );
+      if (maxGapForHand > baseSideGap) {
+        final desiredGap = baseSideGap + (cardMetrics.width * 0.35);
+        sideGap = desiredGap.clamp(baseSideGap, maxGapForHand);
+      }
+    }
     final actionButtonHeight = actionLayout.height;
     final actionButtonMargin = actionLayout.margin;
     final reservedWidth = (sideButtonWidth * 2) + (sideGap * 2);
-    final handMaxWidth =
+    final maxHandWidth =
         math.max(cardMetrics.width, availableWidth - reservedWidth);
+    final handMaxWidth = math.min(maxHandWidth, naturalHandWidth);
 
     final playerBlock = _buildPlayerBlock(
       context: context,

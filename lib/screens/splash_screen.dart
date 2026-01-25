@@ -96,106 +96,129 @@ class _SplashScreenState extends State<SplashScreen>
           ),
           // Contenu dans SafeArea
           SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: ScreenUtils.spacing(context, 40)),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final content = Padding(
+                  padding: ScreenUtils.adaptivePadding(
+                    context,
+                    horizontal: 24,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: ScreenUtils.spacing(context, 40)),
 
-                    // Logo ou icône du jeu (SVG d'une carte)
-                    SvgPicture.asset(
-                      'assets/images/cards/joker-rouge.svg',
-                      width: ScreenUtils.scale(context, 120),
-                      height: ScreenUtils.scale(context, 168),
-                    ),
-
-                    SizedBox(height: ScreenUtils.spacing(context, 40)),
-
-                    // Titre du jeu
-                    Text(
-                      'DUTCH',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: ScreenUtils.scaleFont(context, 48),
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 8,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            offset: const Offset(0, 4),
-                            blurRadius: 8,
-                          ),
-                        ],
+                      // Logo ou icône du jeu (SVG d'une carte)
+                      SvgPicture.asset(
+                        'assets/images/cards/joker-rouge.svg',
+                        width: ScreenUtils.scale(context, 120),
+                        height: ScreenUtils.scale(context, 168),
                       ),
-                    ),
 
-                    SizedBox(height: ScreenUtils.spacing(context, 8)),
+                      SizedBox(height: ScreenUtils.spacing(context, 40)),
 
-                    // Sous-titre
-                    Text(
-                      'Jeu de Mémoire et Stratégie',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: ScreenUtils.scaleFont(context, 16),
-                        letterSpacing: 2,
+                      // Titre du jeu
+                      Text(
+                        'DUTCH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: ScreenUtils.scaleFont(context, 48),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 8,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              offset: const Offset(0, 4),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
 
-                    SizedBox(height: ScreenUtils.spacing(context, 40)),
+                      SizedBox(height: ScreenUtils.spacing(context, 8)),
 
-                    // Barre de progression
-                    Padding(
-                      padding:
-                          ScreenUtils.adaptivePadding(context, horizontal: 60),
-                      child: Column(
-                        children: [
-                          AnimatedBuilder(
-                            animation: _progressAnimation,
-                            builder: (context, child) {
-                              return Column(
-                                children: [
-                                  // Barre de progression
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(
-                                      ScreenUtils.borderRadius(context, 8),
-                                    ),
-                                    child: LinearProgressIndicator(
-                                      value: _progressAnimation.value,
-                                      minHeight: ScreenUtils.scale(context, 8),
-                                      backgroundColor:
-                                          Colors.white.withValues(alpha: 0.2),
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                        Color(0xFF4CAF50),
+                      // Sous-titre
+                      Text(
+                        'Jeu de Mémoire et Stratégie',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: ScreenUtils.scaleFont(context, 16),
+                          letterSpacing: 2,
+                        ),
+                      ),
+
+                      SizedBox(height: ScreenUtils.spacing(context, 40)),
+
+                      // Barre de progression
+                      Padding(
+                        padding:
+                            ScreenUtils.adaptivePadding(context, horizontal: 60),
+                        child: Column(
+                          children: [
+                            AnimatedBuilder(
+                              animation: _progressAnimation,
+                              builder: (context, child) {
+                                return Column(
+                                  children: [
+                                    // Barre de progression
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        ScreenUtils.borderRadius(context, 8),
+                                      ),
+                                      child: LinearProgressIndicator(
+                                        value: _progressAnimation.value,
+                                        minHeight: ScreenUtils.scale(context, 8),
+                                        backgroundColor:
+                                            Colors.white.withValues(alpha: 0.2),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation<Color>(
+                                          Color(0xFF4CAF50),
+                                        ),
                                       ),
                                     ),
-                                  ),
 
-                                  SizedBox(
-                                      height: ScreenUtils.spacing(context, 16)),
+                                    SizedBox(
+                                        height: ScreenUtils.spacing(context, 16)),
 
-                                  // Texte de chargement
-                                  Text(
-                                    _getLoadingText(_progressAnimation.value),
-                                    style: TextStyle(
-                                      color: Colors.white60,
-                                      fontSize:
-                                          ScreenUtils.scaleFont(context, 14),
+                                    // Texte de chargement
+                                    Text(
+                                      _getLoadingText(_progressAnimation.value),
+                                      style: TextStyle(
+                                        color: Colors.white60,
+                                        fontSize:
+                                            ScreenUtils.scaleFont(context, 14),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: ScreenUtils.spacing(context, 40)),
+                    ],
+                  ),
+                );
+
+                return Center(
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxWidth: constraints.maxWidth),
+                        child: content,
                       ),
                     ),
-                    SizedBox(height: ScreenUtils.spacing(context, 40)),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],
