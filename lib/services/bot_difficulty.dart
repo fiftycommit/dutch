@@ -21,46 +21,46 @@ class BotDifficulty {
 
   static const BotDifficulty bronze = BotDifficulty(
     name: "Bronze",
-    forgetChancePerTurn: 0.25,
-    confusionOnSwap: 0.45,
-    dutchThreshold: 12,
-    reactionSpeed: 0.4,
-    matchAccuracy: 0.65,
-    reactionMatchChance: 0.20,
-    keepCardThreshold: 8,
+    forgetChancePerTurn: 0.18,
+    confusionOnSwap: 0.30,
+    dutchThreshold: 10,
+    reactionSpeed: 0.55,
+    matchAccuracy: 0.75,
+    reactionMatchChance: 0.35,
+    keepCardThreshold: 7,
   );
 
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
-    forgetChancePerTurn: 0.12,
-    confusionOnSwap: 0.20,
-    dutchThreshold: 8,
-    reactionSpeed: 0.60,
-    matchAccuracy: 0.75,
-    reactionMatchChance: 0.40,
-    keepCardThreshold: 7,
+    forgetChancePerTurn: 0.08,
+    confusionOnSwap: 0.12,
+    dutchThreshold: 6,
+    reactionSpeed: 0.75,
+    matchAccuracy: 0.85,
+    reactionMatchChance: 0.55,
+    keepCardThreshold: 6,
   );
 
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
     forgetChancePerTurn: 0.01,
-    confusionOnSwap: 0.02,
-    dutchThreshold: 4,
-    reactionSpeed: 0.92,
-    matchAccuracy: 0.95,
-    reactionMatchChance: 0.85,
-    keepCardThreshold: 4,
+    confusionOnSwap: 0.01,
+    dutchThreshold: 3,
+    reactionSpeed: 0.96,
+    matchAccuracy: 0.97,
+    reactionMatchChance: 0.9,
+    keepCardThreshold: 3,
   );
 
   static const BotDifficulty platinum = BotDifficulty(
     name: "Platine",
     forgetChancePerTurn: 0.0,      // N'oublie JAMAIS
     confusionOnSwap: 0.0,          // Ne se trompe JAMAIS sur les échanges
-    dutchThreshold: 2,             // Dutch très agressif à 2 points
+    dutchThreshold: 1,             // Dutch très agressif à 1 point
     reactionSpeed: 1.0,            // Réaction instantanée
     matchAccuracy: 1.0,            // Précision parfaite
     reactionMatchChance: 1.0,      // Réagit TOUJOURS s'il peut matcher
-    keepCardThreshold: 2,          // N'accepte que les cartes 0-2 points
+    keepCardThreshold: 1,          // N'accepte que les cartes 0-1 points
   );
 
   static BotDifficulty fromMMR(int mmr) {

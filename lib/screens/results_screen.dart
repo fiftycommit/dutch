@@ -23,13 +23,23 @@ class ResultsScreen extends StatelessWidget {
 
           final gameState = gameProvider.gameState!;
           final isTournament = gameState.gameMode == GameMode.tournament;
+          final isFinalRound = isTournament && gameState.tournamentRound >= 3;
 
-          bool isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
-          
-          bool isTournamentOver = isTournament && 
-              (gameState.tournamentRound >= 3 || isHumanEliminated);
+          bool isHumanEliminated =
+              isTournament && gameProvider.isHumanEliminatedInTournament();
 
-          if (isHumanEliminated && gameProvider.tournamentFinalRanking == null) {
+          bool isTournamentOver =
+              isTournament && (isFinalRound || isHumanEliminated);
+
+          final shouldSimulateFinalRanking = isTournament &&
+              isHumanEliminated &&
+              !isFinalRound &&
+              gameProvider.tournamentFinalRanking == null;
+          final useSimulatedRanking = isTournament &&
+              isHumanEliminated &&
+              gameProvider.tournamentFinalRanking != null;
+
+          if (shouldSimulateFinalRanking) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               gameProvider.finishTournamentForHuman();
             });
@@ -68,7 +78,7 @@ class ResultsScreen extends StatelessWidget {
                     ),
                   ),
 
-                  if (isHumanEliminated && gameProvider.tournamentFinalRanking != null) ...[
+                  if (useSimulatedRanking) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -92,7 +102,14 @@ class ResultsScreen extends StatelessWidget {
 
                   // Liste des joueurs (Classement)
                   Expanded(
-                    child: _buildRankingList(context, gameProvider, gameState, isTournament, isTournamentOver),
+                    child: _buildRankingList(
+                      context,
+                      gameProvider,
+                      gameState,
+                      isTournament,
+                      isTournamentOver,
+                      useSimulatedRanking,
+                    ),
                   ),
 
                   // Bouton d'action unique (centré)
@@ -148,11 +165,18 @@ class ResultsScreen extends StatelessWidget {
   }
 
 
-  Widget _buildRankingList(BuildContext context, GameProvider gameProvider, 
-      GameState gameState, bool isTournament, bool isTournamentOver) {
+  Widget _buildRankingList(
+      BuildContext context,
+      GameProvider gameProvider,
+      GameState gameState,
+      bool isTournament,
+      bool isTournamentOver,
+      bool useSimulatedRanking) {
     
     // Si on a un classement final de tournoi (humain éliminé), l'utiliser
-    if (isTournament && isTournamentOver && gameProvider.tournamentFinalRanking != null) {
+    if (useSimulatedRanking &&
+        isTournamentOver &&
+        gameProvider.tournamentFinalRanking != null) {
       return ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: gameProvider.tournamentFinalRanking!.length,
@@ -368,12 +392,16 @@ class ResultsScreen extends StatelessWidget {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     bool isSBMM = gameProvider.playerMMR != null;
     bool isTournament = gs.gameMode == GameMode.tournament;
+    final winStreakAfter = (player.isHuman && isSBMM && rank == 1)
+        ? gameProvider.playerWinStreak + 1
+        : 0;
 
     bool isTournamentEliminated =
         isTournament && rank == gs.players.length && !isWinner;
 
     String pointsChangeText = "";
     Color pointsColor = Colors.grey;
+    String? streakText;
 
     if (!isSBMM) {
       pointsChangeText = "Mode Manuel";
@@ -388,6 +416,17 @@ class ResultsScreen extends StatelessWidget {
           finalPosition = 5 - gs.tournamentRound;
         }
         int rp = gameProvider.getTournamentRP(finalPosition);
+        if (winStreakAfter >= 2 && rp > 0) {
+          final streakMultiplier =
+              RPCalculator.getWinStreakMultiplier(winStreakAfter);
+          final boostedRp = (rp * streakMultiplier).round();
+          final streakBonus = boostedRp - rp;
+          if (streakBonus > 0) {
+            rp = boostedRp;
+            streakText =
+                "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)";
+          }
+        }
         if (rp > 0) {
           pointsChangeText = "+$rp RP";
           pointsColor = rp >= 100 ? Colors.amber : Colors.greenAccent;
@@ -418,12 +457,17 @@ class ResultsScreen extends StatelessWidget {
           totalPlayers: totalPlayers,
           isTournament: isTournament,
           tournamentRound: tournamentRound,
+          winStreak: winStreakAfter,
         );
         
         pointsChangeText = rpResult.formattedChange;
         pointsColor = rpResult.isPositive 
             ? (rpResult.totalChange >= 50 ? Colors.amber : Colors.greenAccent)
             : (rpResult.totalChange <= -40 ? Colors.red : Colors.redAccent);
+        if (rpResult.streakBonus > 0) {
+          streakText =
+              "Combo x${rpResult.streakMultiplier.toStringAsFixed(1)} (+${rpResult.streakBonus} RP)";
+        }
       } else {
         // Pour les bots, on n'affiche pas de RP
         pointsChangeText = "";
@@ -528,6 +572,15 @@ class ResultsScreen extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.bold),
               ),
+              if (streakText != null)
+                Text(
+                  streakText!,
+                  style: const TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
             ],
           ),
         ],

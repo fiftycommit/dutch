@@ -30,6 +30,8 @@ class StatsService {
       "bestScore": null,
       "totalScore": 0,
       "mmr": 0,
+      "winStreak": 0,
+      "bestWinStreak": 0,
       "dutchCalls": 0,
       "dutchWins": 0,
       "history": [],
@@ -59,6 +61,19 @@ class StatsService {
       stats["gamesWon"] = (stats["gamesWon"] ?? 0) + 1;
     }
 
+    int winStreak = stats["winStreak"] ?? 0;
+    if (playerRank == 1) {
+      winStreak += 1;
+    } else {
+      winStreak = 0;
+    }
+    stats["winStreak"] = winStreak;
+
+    int bestWinStreak = stats["bestWinStreak"] ?? 0;
+    if (winStreak > bestWinStreak) {
+      bestWinStreak = winStreak;
+    }
+    stats["bestWinStreak"] = bestWinStreak;
 
     int? currentBest = stats["bestScore"];
     if (currentBest == null || score < currentBest) {
@@ -75,6 +90,8 @@ class StatsService {
 
     int currentMMR = stats["mmr"] ?? 0;
     int mmrChange = 0;
+    int streakBonus = 0;
+    double streakMultiplier = 1.0;
 
     if (isSBMM) {
       // Utiliser le calculateur centralisé
@@ -87,9 +104,12 @@ class StatsService {
         totalPlayers: totalPlayers,
         isTournament: isTournament,
         tournamentRound: tournamentRound,
+        winStreak: winStreak,
       );
       
       mmrChange = rpResult.totalChange;
+      streakBonus = rpResult.streakBonus;
+      streakMultiplier = rpResult.streakMultiplier;
 
       int newMMR = currentMMR + mmrChange;
       if (newMMR < 0) newMMR = 0;
@@ -109,6 +129,9 @@ class StatsService {
       "tournamentRound": isTournament ? tournamentRound : null,
       "totalPlayers": totalPlayers,
       "actionHistory": actionHistory ?? [],
+      "winStreak": winStreak,
+      "streakBonus": streakBonus,
+      "streakMultiplier": streakMultiplier,
     });
 
     if (history.length > 20) history = history.sublist(0, 20);

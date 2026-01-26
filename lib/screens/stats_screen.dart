@@ -109,6 +109,8 @@ class _StatsScreenState extends State<StatsScreen> {
     int won = stats['gamesWon'] ?? 0;
     int best = stats['bestScore'] ?? 999;
     if (best == 999 && stats['bestScore'] == null) best = 0;
+    int winStreak = stats['winStreak'] ?? 0;
+    int bestWinStreak = stats['bestWinStreak'] ?? 0;
 
     double winRate = played > 0 ? (won / played * 100) : 0;
 
@@ -147,6 +149,24 @@ class _StatsScreenState extends State<StatsScreen> {
                     value: "$best",
                     icon: Icons.star,
                     color: Colors.purple)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+                child: _StatCard(
+                    title: "Série",
+                    value: "$winStreak",
+                    icon: Icons.local_fire_department,
+                    color: Colors.deepOrange)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: _StatCard(
+                    title: "Record Série",
+                    value: "$bestWinStreak",
+                    icon: Icons.whatshot,
+                    color: Colors.orange)),
           ],
         ),
       ],
@@ -208,6 +228,11 @@ class _StatsScreenState extends State<StatsScreen> {
     final outcome = _outcomeForRank(rank);
     final score = match['score'] ?? 0;
     final mmrChange = match['mmrChange'] ?? 0;
+    final streakBonus = match['streakBonus'] ?? 0;
+    final streakMultiplierRaw = match['streakMultiplier'] ?? 1.0;
+    final streakMultiplier = streakMultiplierRaw is num
+        ? streakMultiplierRaw.toDouble()
+        : 1.0;
     final date = _parseDate(match);
     final dateStr = subtitleOverride ?? _formatDate(date);
     final rpDisplay = _rpDisplay(mmrChange);
@@ -269,6 +294,15 @@ class _StatsScreenState extends State<StatsScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            if (streakBonus > 0 && streakMultiplier > 1.0)
+              Text(
+                "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)",
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
           ],
         ),
       ),

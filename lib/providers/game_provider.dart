@@ -32,6 +32,8 @@ class GameProvider with ChangeNotifier {
 
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
+  int _playerWinStreak = 0;
+  int get playerWinStreak => _playerWinStreak;
 
   List<TournamentResult>? _tournamentFinalRanking;
   List<TournamentResult>? get tournamentFinalRanking => _tournamentFinalRanking;
@@ -76,8 +78,10 @@ class GameProvider with ChangeNotifier {
     if (useSBMM) {
       final stats = await StatsService.getStats(slotId: saveSlot);
       _playerMMR = stats['mmr'] ?? 0;
+      _playerWinStreak = stats['winStreak'] ?? 0;
     } else {
       _playerMMR = null;
+      _playerWinStreak = 0;
     }
 
     for (var player in _gameState!.players) {
@@ -694,10 +698,16 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.gameMode != GameMode.tournament) return false;
 
     List<Player> ranking = _gameState!.getFinalRanking();
+    final ranksWithTies = _gameState!.getFinalRanksWithTies();
     Player human = _gameState!.players.firstWhere((p) => p.isHuman);
 
-    int humanRank = ranking.indexWhere((p) => p.id == human.id) + 1;
-    return humanRank == ranking.length;
+    int humanRank = ranksWithTies[human.id] ??
+        (ranking.indexWhere((p) => p.id == human.id) + 1);
+    int lastRank = ranking.length;
+    if (ranksWithTies.isNotEmpty) {
+      lastRank = ranksWithTies.values.reduce(max);
+    }
+    return humanRank == lastRank;
   }
 
   void finishTournamentForHuman() {

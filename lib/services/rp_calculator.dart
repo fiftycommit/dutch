@@ -41,6 +41,9 @@ class RPCalculator {
   static const int dutchWinBonus = 20;           // +20 si Dutch + 1er
   static const int dutchPerfectBonus = 30;       // +30 supplémentaire si 0 points (total +50)
   static const int dutchFailPenalty = -30;       // -30 si Dutch sans être 1er
+  static const double winStreakStartMultiplier = 1.2; // À partir de 2 victoires d'affilée
+  static const double winStreakStepMultiplier = 0.1;  // +0.1 par victoire supplémentaire
+  static const double winStreakMaxMultiplier = 2.0;   // Cap du multiplicateur
 
   /// Obtenir le nom du rang à partir du MMR
   static String getRankName(int mmr) {
@@ -73,6 +76,7 @@ class RPCalculator {
   /// [isEliminated] : si le joueur est éliminé (Dutch raté en 1er)
   /// [isTournament] : si c'est une manche de tournoi (bonus/malus ajustés)
   /// [tournamentRound] : numéro de la manche (1, 2 ou 3)
+  /// [winStreak] : série actuelle de victoires (après la partie)
   static RPResult calculateRP({
     required int playerRank,
     required int currentMMR,
@@ -82,6 +86,7 @@ class RPCalculator {
     int totalPlayers = 4,
     bool isTournament = false,
     int tournamentRound = 1,
+    int winStreak = 0,
   }) {
     String rank = getRankName(currentMMR);
     Map<String, int> points = basePoints[rank]!;
@@ -123,6 +128,8 @@ class RPCalculator {
     }
 
     int bonusRP = 0;
+    double streakMultiplier = 1.0;
+    int streakBonus = 0;
     List<String> bonusDescriptions = [];
 
     // Bonus Dutch
@@ -145,14 +152,36 @@ class RPCalculator {
     }
 
     int totalRP = baseRP + bonusRP;
+    if (playerRank == 1 && winStreak >= 2 && totalRP > 0) {
+      streakMultiplier = getWinStreakMultiplier(winStreak);
+      final multiplied = (totalRP * streakMultiplier).round();
+      streakBonus = multiplied - totalRP;
+      totalRP = multiplied;
+      if (streakBonus > 0) {
+        bonusDescriptions
+            .add('x${streakMultiplier.toStringAsFixed(1)} (Combo)');
+      }
+    }
+    final bonusTotal = bonusRP + streakBonus;
 
     return RPResult(
       totalChange: totalRP,
       baseChange: baseRP,
-      bonusChange: bonusRP,
+      bonusChange: bonusTotal,
+      streakBonus: streakBonus,
+      streakMultiplier: streakMultiplier,
+      winStreak: winStreak,
       rank: rank,
       bonusDescriptions: bonusDescriptions,
     );
+  }
+
+  /// Multiplicateur de série de victoires (après la partie)
+  static double getWinStreakMultiplier(int winStreak) {
+    if (winStreak < 2) return 1.0;
+    final multiplier =
+        winStreakStartMultiplier + (winStreak - 2) * winStreakStepMultiplier;
+    return multiplier.clamp(1.0, winStreakMaxMultiplier);
   }
 
   /// Obtenir le prochain rang et les points nécessaires
@@ -188,6 +217,9 @@ class RPResult {
   final int totalChange;
   final int baseChange;
   final int bonusChange;
+  final int streakBonus;
+  final double streakMultiplier;
+  final int winStreak;
   final String rank;
   final List<String> bonusDescriptions;
 
@@ -195,6 +227,9 @@ class RPResult {
     required this.totalChange,
     required this.baseChange,
     required this.bonusChange,
+    required this.streakBonus,
+    required this.streakMultiplier,
+    required this.winStreak,
     required this.rank,
     required this.bonusDescriptions,
   });

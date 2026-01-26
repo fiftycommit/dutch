@@ -116,15 +116,15 @@ class BotAI {
       // En endgame, plus agressif
       switch (behavior) {
         case BotBehavior.fast:
-          threshold = difficulty.name == "Bronze" ? 9 :
-                     difficulty.name == "Argent" ? 7 : 
-                     difficulty.name == "Or" ? 4 : 2;
+          threshold = difficulty.name == "Bronze" ? 7 :
+                     difficulty.name == "Argent" ? 6 : 
+                     difficulty.name == "Or" ? 3 : 2;
           break;
 
         case BotBehavior.aggressive:
-          threshold = difficulty.name == "Bronze" ? 7 :
-                     difficulty.name == "Argent" ? 6 : 
-                     difficulty.name == "Or" ? 3 : 1;
+          threshold = difficulty.name == "Bronze" ? 6 :
+                     difficulty.name == "Argent" ? 5 : 
+                     difficulty.name == "Or" ? 2 : 1;
           
           if (_isHumanThreatening(gs)) {
             threshold += 1;
@@ -133,11 +133,11 @@ class BotAI {
 
         case BotBehavior.balanced:
           if (difficulty.name == "Bronze") {
-            threshold = 7;
-          } else if (difficulty.name == "Argent") {
             threshold = 6;
+          } else if (difficulty.name == "Argent") {
+            threshold = 5;
           } else if (difficulty.name == "Or") {
-            threshold = 3;
+            threshold = 2;
             // Or vérifie les adversaires 50% du temps
             if (_random.nextDouble() < 0.50) {
               for (var p in gs.players) {
@@ -171,21 +171,21 @@ class BotAI {
       // En optimization, plus conservateur
       switch (behavior) {
         case BotBehavior.fast:
-          threshold = difficulty.name == "Bronze" ? 7 :
-                     difficulty.name == "Argent" ? 5 : 
-                     difficulty.name == "Or" ? 2 : 1;
+          threshold = difficulty.name == "Bronze" ? 6 :
+                     difficulty.name == "Argent" ? 4 : 
+                     difficulty.name == "Or" ? 1 : 1;
           break;
 
         case BotBehavior.aggressive:
-          threshold = difficulty.name == "Bronze" ? 5 :
-                     difficulty.name == "Argent" ? 4 : 
-                     difficulty.name == "Or" ? 2 : 0;
+          threshold = difficulty.name == "Bronze" ? 4 :
+                     difficulty.name == "Argent" ? 3 : 
+                     difficulty.name == "Or" ? 1 : 0;
           break;
 
         case BotBehavior.balanced:
-          threshold = difficulty.name == "Bronze" ? 6 :
-                     difficulty.name == "Argent" ? 5 :
-                     difficulty.name == "Or" ? 2 :
+          threshold = difficulty.name == "Bronze" ? 5 :
+                     difficulty.name == "Argent" ? 4 :
+                     difficulty.name == "Or" ? 1 :
                                                0;  // Platine : n'accepte Dutch qu'à 0 en phase optimization
           break;
 
@@ -613,20 +613,7 @@ class BotAI {
     if (target == null || target.hand.isEmpty) return;
 
     int myCardIdx = _chooseBadCard(bot);
-    int targetIdx;
-
-    if ((difficulty.name == "Or" || difficulty.name == "Platine") && 
-        behavior == BotBehavior.balanced) {
-      targetIdx = 0;
-    } else if (difficulty.name != "Bronze" && _random.nextDouble() < 0.6) {
-      if (target.hand.length > 1) {
-        targetIdx = _random.nextInt(target.hand.length - 1);
-      } else {
-        targetIdx = 0;
-      }
-    } else {
-      targetIdx = _random.nextInt(target.hand.length);
-    }
+    int targetIdx = _chooseValetTargetCardIndex(target, difficulty, behavior);
 
     bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
 
@@ -656,6 +643,9 @@ class BotAI {
 
     // Bronze : random
     if (difficulty.name == "Bronze") {
+      if (_random.nextDouble() < 0.25) {
+        return _selectValetTargetWeighted(opponents, difficulty, gs);
+      }
       return opponents[_random.nextInt(opponents.length)];
     }
 
@@ -665,37 +655,50 @@ class BotAI {
     }
 
     if (behavior == BotBehavior.aggressive) {
-      if (difficulty.name == "Or" || difficulty.name == "Platine") {
-        Player? human = opponents.where((p) => p.isHuman).firstOrNull;
-        if (human != null && _random.nextDouble() < 0.65) {
+      Player? human = opponents.where((p) => p.isHuman).firstOrNull;
+      if (human != null) {
+        double humanBias;
+        if (difficulty.name == "Platine") {
+          humanBias = 0.85;
+        } else if (difficulty.name == "Or") {
+          humanBias = 0.75;
+        } else if (difficulty.name == "Argent") {
+          humanBias = 0.55;
+        } else {
+          humanBias = 0.35;
+        }
+        if (_random.nextDouble() < humanBias) {
           return human;
         }
       }
       
       List<Player> lowCardTargets = opponents.where((p) => p.hand.length <= 3).toList();
-      if (lowCardTargets.isNotEmpty && _random.nextDouble() < 0.75) {
+      if (lowCardTargets.isNotEmpty && _random.nextDouble() < 0.80) {
         return lowCardTargets[_random.nextInt(lowCardTargets.length)];
       }
-      return opponents[_random.nextInt(opponents.length)];
+      return _selectValetTargetWeighted(opponents, difficulty, gs);
     }
 
     if (behavior == BotBehavior.balanced) {
       // Bronze/Argent : simple weighted
       if (difficulty.name == "Bronze" || difficulty.name == "Argent") {
-        if (_random.nextDouble() < 0.70) {
+        if (_random.nextDouble() < 0.80) {
           return _selectValetTargetWeighted(opponents, difficulty, gs);
         }
         return opponents[_random.nextInt(opponents.length)];
       }
       
       // Or/Platine : HYBRIDE intelligent
-      if (_random.nextDouble() < 0.50) {
+      if (_random.nextDouble() < 0.35) {
         opponents.sort((a, b) => b.hand.length.compareTo(a.hand.length));
         return opponents.first;
       } else {
         Player? human = opponents.where((p) => p.isHuman).firstOrNull;
-        if (human != null && _random.nextDouble() < 0.50) {
-          return human;
+        if (human != null) {
+          double humanBias = difficulty.name == "Platine" ? 0.75 : 0.65;
+          if (_random.nextDouble() < humanBias) {
+            return human;
+          }
         }
         // Ou cible weighted
         return _selectValetTargetWeighted(opponents, difficulty, gs);
@@ -706,6 +709,52 @@ class BotAI {
     return opponents[_random.nextInt(opponents.length)];
   }
 
+  static int _chooseValetTargetCardIndex(
+      Player target, BotDifficulty difficulty, BotBehavior? behavior) {
+    if (target.hand.isEmpty) return 0;
+    if (target.hand.length == 1) return 0;
+
+    final indices = List<int>.generate(target.hand.length, (i) => i);
+    indices.sort((a, b) => target.hand[a].points.compareTo(target.hand[b].points));
+
+    int bestIdx = indices.first;
+    int secondIdx = indices.length > 1 ? indices[1] : bestIdx;
+
+    double smartChance;
+    if (difficulty.name == "Bronze") {
+      smartChance = 0.25;
+    } else if (difficulty.name == "Argent") {
+      smartChance = 0.50;
+    } else if (difficulty.name == "Or") {
+      smartChance = 0.80;
+    } else {
+      smartChance = 1.0;
+    }
+
+    if (behavior == BotBehavior.aggressive) {
+      smartChance += 0.10;
+    } else if (behavior == BotBehavior.fast) {
+      smartChance -= 0.10;
+    }
+
+    if (target.isHuman) {
+      smartChance += 0.10;
+    }
+
+    smartChance = smartChance.clamp(0.0, 1.0).toDouble();
+
+    if (_random.nextDouble() < smartChance) {
+      return bestIdx;
+    }
+
+    double secondChance = difficulty.name == "Bronze" ? 0.35 : 0.55;
+    if (_random.nextDouble() < secondChance) {
+      return secondIdx;
+    }
+
+    return _random.nextInt(target.hand.length);
+  }
+
   static Player _selectValetTargetWeighted(List<Player> opponents, BotDifficulty difficulty, GameState? gameState) {
     Map<Player, double> threatScores = {};
     
@@ -713,30 +762,49 @@ class BotAI {
       double score = 0.0;
       
       if (player.isHuman) {
-        score += 25.0;
+        if (difficulty.name == "Platine") {
+          score += 60.0;
+        } else if (difficulty.name == "Or") {
+          score += 50.0;
+        } else if (difficulty.name == "Argent") {
+          score += 35.0;
+        } else {
+          score += 20.0;
+        }
       }
       
       // Priorite aux joueurs avec peu de cartes (ils sont proches de Dutch)
       int cardCount = player.hand.length;
       if (cardCount == 1) {
-        score += 120.0;
+        score += 130.0;
       } else if (cardCount == 2) {
-        score += 80.0;
+        score += 90.0;
       } else if (cardCount == 3) {
-        score += 45.0;
+        score += 55.0;
       } else if (cardCount == 4) {
-        score += 20.0;
+        score += 25.0;
       } else {
-        score += 8.0;
+        score += 10.0;
       }
       
       int estimatedScore = player.getEstimatedScore();
       if (estimatedScore <= 5) {
-        score += 30.0;
+        score += 35.0;
       } else if (estimatedScore <= 10) {
-        score += 18.0;
+        score += 22.0;
       } else if (estimatedScore <= 15) {
-        score += 10.0;
+        score += 12.0;
+      }
+
+      int bestPoints = _minPointsInHand(player);
+      if (difficulty.name == "Platine") {
+        score += (13 - bestPoints) * 4.0;
+      } else if (difficulty.name == "Or") {
+        score += (13 - bestPoints) * 3.0;
+      } else if (difficulty.name == "Argent") {
+        score += (13 - bestPoints) * 2.0;
+      } else {
+        score += (13 - bestPoints) * 1.0;
       }
       
       // En tournoi, cibler davantage les joueurs avec un bon score cumule
@@ -794,14 +862,24 @@ class BotAI {
     else if (behavior == BotBehavior.aggressive) {
       Player? human = possibleTargets.where((p) => p.isHuman).firstOrNull;
       
-      if (human != null && (difficulty.name == "Or" || difficulty.name == "Platine")) {
-        if (_random.nextDouble() < 0.70) {
+      if (human != null) {
+        double humanBias;
+        if (difficulty.name == "Platine") {
+          humanBias = 0.85;
+        } else if (difficulty.name == "Or") {
+          humanBias = 0.75;
+        } else if (difficulty.name == "Argent") {
+          humanBias = 0.55;
+        } else {
+          humanBias = 0.35;
+        }
+        if (_random.nextDouble() < humanBias) {
           target = human;
         }
       }
       
       if (target == null) {
-        if ((difficulty.name == "Or" || difficulty.name == "Platine") && _random.nextDouble() < 0.6) {
+        if (difficulty.name != "Bronze" && _random.nextDouble() < 0.75) {
           target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         } else {
           target = possibleTargets[_random.nextInt(possibleTargets.length)];
@@ -811,24 +889,30 @@ class BotAI {
     else if (behavior == BotBehavior.balanced) {
       // Bronze/Argent : simple weighted
       if (difficulty.name == "Bronze" || difficulty.name == "Argent") {
-        if (difficulty.name != "Bronze") {
-          target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
+        if (difficulty.name == "Bronze") {
+          if (_random.nextDouble() < 0.25) {
+            target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
+          } else {
+            target = possibleTargets[_random.nextInt(possibleTargets.length)];
+          }
         } else {
-          target = possibleTargets[_random.nextInt(possibleTargets.length)];
+          target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         }
       }
       // Or/Platine : HYBRIDE intelligent
       else {
-        if (_random.nextDouble() < 0.50) {
+        if (_random.nextDouble() < 0.35) {
           possibleTargets.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
           target = possibleTargets.first;
         } else {
           Player? human = possibleTargets.where((p) => p.isHuman).firstOrNull;
-          if (human != null && _random.nextDouble() < 0.60) {
-            target = human;
-          } else {
-            target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
+          if (human != null) {
+            double humanBias = difficulty.name == "Platine" ? 0.80 : 0.70;
+            if (_random.nextDouble() < humanBias) {
+              target = human;
+            }
           }
+          target ??= _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         }
       }
     }
@@ -865,26 +949,43 @@ class BotAI {
       double score = 0.0;
       
       if (player.isHuman) {
-        score += 30.0;
+        if (difficulty.name == "Platine") {
+          score += 65.0;
+        } else if (difficulty.name == "Or") {
+          score += 55.0;
+        } else if (difficulty.name == "Argent") {
+          score += 40.0;
+        } else {
+          score += 25.0;
+        }
+      }
+
+      int knownCount = _countKnownCards(player);
+      if (knownCount >= 4) {
+        score += 24.0;
+      } else if (knownCount >= 2) {
+        score += 16.0;
+      } else if (knownCount >= 1) {
+        score += 8.0;
       }
       
       // Priorite aux joueurs avec peu de cartes (Joker detruit leur memoire)
       int cardCount = player.hand.length;
       if (cardCount <= 2) {
-        score += 50.0;
+        score += 65.0;
       } else if (cardCount == 3) {
-        score += 30.0;
+        score += 40.0;
       } else if (cardCount == 4) {
-        score += 15.0;
+        score += 20.0;
       }
       
       int estimatedScore = player.getEstimatedScore();
       if (estimatedScore <= 5) {
-        score += 20.0;
+        score += 28.0;
       } else if (estimatedScore <= 10) {
-        score += 10.0;
+        score += 16.0;
       } else if (estimatedScore <= 15) {
-        score += 5.0;
+        score += 8.0;
       }
       
       // En tournoi, cibler davantage les joueurs avec un bon score cumule
@@ -955,6 +1056,26 @@ class BotAI {
     }
 
     return worstIdx;
+  }
+
+  static int _minPointsInHand(Player player) {
+    if (player.hand.isEmpty) return 0;
+    int minPoints = player.hand.first.points;
+    for (int i = 1; i < player.hand.length; i++) {
+      int points = player.hand[i].points;
+      if (points < minPoints) {
+        minPoints = points;
+      }
+    }
+    return minPoints;
+  }
+
+  static int _countKnownCards(Player player) {
+    int count = 0;
+    for (final known in player.knownCards) {
+      if (known) count++;
+    }
+    return count;
   }
 
   static BotDifficulty _getSkillDifficulty(BotSkillLevel? level) {

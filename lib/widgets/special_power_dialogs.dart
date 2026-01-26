@@ -444,59 +444,68 @@ class SpecialPowerDialogs {
           final titleSize = metrics.font(20);
           final bodySize = metrics.font(14);
           final buttonSize = metrics.font(16);
-          final buttonHeight = metrics.space(44);
-          final buttonWidth = metrics.contentWidth * 0.75;
+          final buttonHeight = metrics.space(56);
+          final buttonWidth = metrics.contentWidth;
 
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.swap_horiz, color: Colors.purple, size: iconSize),
-              SizedBox(height: gapS),
-              Text(
-                "🤵 VALET : ÉCHANGE",
-                style: TextStyle(
-                    color: Colors.purple,
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: gapS),
-              Text(
-                "Échangez 2 cartes à l'aveugle",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: bodySize),
-              ),
-              SizedBox(height: gapM),
-              SizedBox(
-                width: buttonWidth,
-                height: buttonHeight,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showUniversalSwap(context, gameProvider, allPlayers);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple.shade700,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text("CHOISIR 2 CARTES",
-                        style: TextStyle(fontSize: buttonSize)),
-                  ),
-                ),
-              ),
-              SizedBox(height: gapM),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  gameProvider.skipSpecialPower();
-                },
-                child: Text("ANNULER",
+          return SingleChildScrollView(
+            child: SizedBox(
+              width: metrics.contentWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.swap_horiz, color: Colors.purple, size: iconSize),
+                  SizedBox(height: gapS),
+                  Text(
+                    "🤵 VALET : ÉCHANGE",
                     style: TextStyle(
-                        color: Colors.white54, fontSize: metrics.font(14))),
+                        color: Colors.purple,
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: gapS),
+                  Text(
+                    "Échangez 2 cartes à l'aveugle",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                  ),
+                  SizedBox(height: gapM),
+                  SizedBox(
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showUniversalSwap(context, gameProvider, allPlayers);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(
+                        "CHOISIR\n2 CARTES",
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: buttonSize,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: gapM),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      gameProvider.skipSpecialPower();
+                    },
+                    child: Text("ANNULER",
+                        style: TextStyle(
+                            color: Colors.white54, fontSize: metrics.font(14))),
+                  ),
+                ],
               ),
-            ],
+            ),
           );
         },
       ),
