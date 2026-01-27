@@ -31,7 +31,9 @@ export interface Room {
   expiresAt: number;
   tournamentRound?: number;
   closingAt?: number; // Timestamp d'expiration pour transfert d'hôte
+
   cumulativeScores?: Map<string, number>; // clientId -> score total (classement permanent)
+  isPaused?: boolean;
 }
 
 export function createRoom(
@@ -52,5 +54,6 @@ export function createRoom(
     lastActivityAt: Date.now(),
     expiresAt,
     tournamentRound: 1,
+    isPaused: false,
   };
 }

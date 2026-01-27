@@ -217,6 +217,36 @@ class RoomManager {
     clearReactionTimer(roomCode) {
         this.timerManager.clearTimer(roomCode);
     }
+    pauseGame(roomCode, pausedByName) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        if (room.isPaused)
+            return;
+        room.isPaused = true;
+        // Arrêter les timers sans les effacer complètement (logic complexe)
+        // Pour simplifier : on clear les timers, et on les relancera au resume.
+        // Il faudrait stocker le temps restant pour être précis, mais pour l'instant on stop.
+        this.clearTurnTimer(roomCode);
+        this.timerManager.pauseTimer(roomCode); // Supposons que TimerManager gère ça, sinon on clear
+        this.broadcastGameState(roomCode, 'GAME_PAUSED', { pausedBy: pausedByName });
+    }
+    resumeGame(roomCode, resumedByName) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        if (!room.isPaused)
+            return;
+        room.isPaused = false;
+        // Relancer les timers
+        if (room.gameState.phase === GameState_1.GamePhase.playing) {
+            this.startTurnTimer(roomCode);
+        }
+        else if (room.gameState.phase === GameState_1.GamePhase.reaction) {
+            this.timerManager.resumeTimer(roomCode);
+        }
+        this.broadcastGameState(roomCode, 'GAME_RESUMED', { resumedBy: resumedByName });
+    }
     async endReactionPhase(roomCode) {
         this.clearReactionTimer(roomCode);
         const room = this.rooms.get(roomCode);
@@ -575,6 +605,9 @@ class RoomManager {
         if (!currentPlayer.isHuman || currentPlayer.isSpectator)
             return;
         this.clearTurnTimer(roomCode);
+        // Si le jeu est en pause, on ne lance pas le timer maintenant
+        if (room.isPaused)
+            return;
         const playerId = currentPlayer.id;
         const timer = setTimeout(() => {
             const currentRoom = this.rooms.get(roomCode);

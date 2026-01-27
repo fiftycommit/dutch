@@ -22,5 +22,6 @@ function createRoom(id, hostPlayerId, settings, expiresAt) {
         lastActivityAt: Date.now(),
         expiresAt,
         tournamentRound: 1,
+        isPaused: false,
     };
 }

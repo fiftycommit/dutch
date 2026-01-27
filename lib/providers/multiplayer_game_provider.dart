@@ -4,9 +4,32 @@ import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../services/multiplayer_service.dart';
 import '../services/haptic_service.dart';
+import '../models/card.dart';
+
+enum GameEventType {
+  playerJoined,
+  playerLeft,
+  error,
+  kicked,
+  gameStarted,
+  info
+}
+
+class GameEvent {
+  final GameEventType type;
+  final String message;
+  final Map<String, dynamic>? data;
+
+  GameEvent(this.type, this.message, {this.data});
+}
 
 class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   final MultiplayerService _multiplayerService;
+
+  // Event Stream for UI feedback (Snackbars, etc.)
+  final StreamController<GameEvent> _eventController =
+      StreamController<GameEvent>.broadcast();
+  Stream<GameEvent> get events => _eventController.stream;
 
   GameState? _gameState;
   GameState? get gameState => _gameState;
@@ -49,6 +72,10 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
 
   bool _isHost = false;
   bool get isHost => _isHost;
+
+  // Processing flag to prevent UI debounce loops (e.g. Special Power dialogs)
+  bool _isProcessingAction = false;
+  bool get isProcessing => _isProcessingAction;
 
   List<Map<String, dynamic>> _playersInLobby = [];
   List<Map<String, dynamic>> get playersInLobby => _playersInLobby;
@@ -98,7 +125,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   bool get isPlaying => _isPlaying;
 
   // Compatibility fields used by game-screen layout logic
-  bool isProcessing = false;
   Set<int> shakingCardIndices = {};
 
   int get currentReactionTimeMs => _reactionTimeMs;
@@ -106,8 +132,16 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isPaused = false;
   bool get isPaused => _isPaused;
 
-  Timer? _pauseTimer;
-  int? _pauseDeadlineMs;
+  String? _pausedByName;
+  String? get pausedByName => _pausedByName;
+
+  // New: Spied Card info
+  PlayingCard? _lastSpiedCard;
+  PlayingCard? get lastSpiedCard => _lastSpiedCard;
+  String? _spiedTargetName;
+  String? get spiedTargetName => _spiedTargetName;
+  bool _showSpiedCardDialog = false;
+  bool get showSpiedCardDialog => _showSpiedCardDialog;
 
   int _reactionTimeMs = 3000;
   int get reactionTimeMs => _reactionTimeMs;
@@ -231,6 +265,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         _playersInLobby.add(player);
       }
       notifyListeners();
+      _eventController.add(GameEvent(
+          GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
     };
 
     _multiplayerService.onGameStarted = (message) {
@@ -607,18 +643,47 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
-    if (_gameState == null) return;
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners(); // Immediate update to lock UI
     _multiplayerService.useSpecialPower(targetPlayerIndex, targetCardIndex);
+    // Auto-clear processing after delay in case of server lag, or rely on game state update?
+    // Let's rely on gamestate update to unlock, or a short timeout.
+    // Safe fallback:
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
   }
 
   void completeSwap(int ownCardIndex) {
-    if (_gameState == null) return;
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
     _multiplayerService.completeSwap(ownCardIndex);
+    // Safe fallback
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
   }
 
   void skipSpecialPower() {
-    if (_gameState == null) return;
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
     _multiplayerService.skipSpecialPower();
+    // Safe fallback
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> leaveRoom() async {
@@ -728,52 +793,20 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.requestFullState();
   }
 
-  /// Pause la partie localement (demande simple côté client).
-  /// `maxSeconds` indique la durée max de la pause avant élimination (client-side fallback).
-  void pauseGame({int maxSeconds = 300}) {
-    _isPaused = true;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    _pauseDeadlineMs = now + (maxSeconds * 1000);
-    _pauseTimer?.cancel();
-    _pauseTimer = Timer.periodic(
-        const Duration(seconds: 1), (_) => _checkPauseDeadline());
-    notifyListeners();
+  /// Pause la partie (demande serveur)
+  void pauseGame() {
+    _multiplayerService.socket?.emit('game:pause', {'roomCode': _roomCode});
   }
 
+  /// Reprend la partie (demande serveur)
   void resumeGame() {
-    _isPaused = false;
-    _pauseTimer?.cancel();
-    _pauseTimer = null;
-    _pauseDeadlineMs = null;
+    _multiplayerService.socket?.emit('game:resume', {'roomCode': _roomCode});
+  }
+
+  void closeSpiedCardDialog() {
+    _showSpiedCardDialog = false;
+    _lastSpiedCard = null;
     notifyListeners();
-    // Inform server that client is focused again
-    _multiplayerService.setFocused(true);
-  }
-
-  int? get pauseRemainingSeconds {
-    if (_pauseDeadlineMs == null) return null;
-    final rem =
-        (_pauseDeadlineMs! - DateTime.now().millisecondsSinceEpoch) ~/ 1000;
-    return rem < 0 ? 0 : rem;
-  }
-
-  void _checkPauseDeadline() {
-    if (_pauseDeadlineMs == null) return;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now >= _pauseDeadlineMs!) {
-      _pauseTimer?.cancel();
-      _pauseTimer = null;
-      _isPaused = false;
-      _pauseDeadlineMs = null;
-      // Fallback behaviour: leave the room and mark game ended locally
-      if (_gameState != null) {
-        _gameState!.phase = GamePhase.ended;
-      }
-      _isPlaying = false;
-      notifyListeners();
-    } else {
-      notifyListeners();
-    }
   }
 
   void _resetRoomState() {
@@ -893,6 +926,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _eventController.close();
     WidgetsBinding.instance.removeObserver(this);
     _multiplayerService.disconnect();
     _stopReactionTicker();

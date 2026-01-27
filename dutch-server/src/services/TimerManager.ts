@@ -10,9 +10,10 @@ export class TimerManager {
   private timers: Map<string, NodeJS.Timeout> = new Map();
   private endTimes: Map<string, number> = new Map();
   private lastBroadcastAt: Map<string, number> = new Map();
+  private pausedRemainingTimes: Map<string, number> = new Map();
   private readonly graceMs = 200;
 
-  constructor(private roomAccess: TimerRoomAccess) {}
+  constructor(private roomAccess: TimerRoomAccess) { }
 
   startReactionTimer(roomCode: string, durationMs: number) {
     this.clearTimer(roomCode);
@@ -69,6 +70,28 @@ export class TimerManager {
     }
     this.endTimes.delete(roomCode);
     this.lastBroadcastAt.delete(roomCode);
+    this.pausedRemainingTimes.delete(roomCode);
+  }
+
+  pauseTimer(roomCode: string) {
+    const end = this.endTimes.get(roomCode);
+    if (end === undefined) return;
+
+    const now = Date.now();
+    const remaining = Math.max(0, end - now);
+    this.pausedRemainingTimes.set(roomCode, remaining);
+
+    this.clearTimer(roomCode);
+    // On garde pausedRemainingTimes car clearTimer le supprime.
+    this.pausedRemainingTimes.set(roomCode, remaining);
+  }
+
+  resumeTimer(roomCode: string) {
+    const remaining = this.pausedRemainingTimes.get(roomCode);
+    if (remaining !== undefined) {
+      this.startReactionTimer(roomCode, remaining);
+      this.pausedRemainingTimes.delete(roomCode);
+    }
   }
 
   private endReaction(roomCode: string) {

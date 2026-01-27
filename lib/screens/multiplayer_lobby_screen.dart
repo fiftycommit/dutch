@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -18,11 +19,85 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
   int _lastChatCount = 0;
+  StreamSubscription? _eventSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider =
+          Provider.of<MultiplayerGameProvider>(context, listen: false);
+      _eventSubscription = provider.events.listen((event) {
+        if (!mounted) return;
+        _handleGameEvent(event);
+      });
+    });
+  }
+
+  void _handleGameEvent(GameEvent event) {
+    String? message;
+    Color color = Colors.black87;
+    IconData icon = Icons.info;
+
+    switch (event.type) {
+      case GameEventType.playerJoined:
+        message = event.message;
+        color = Colors.green.shade800;
+        icon = Icons.person_add;
+        break;
+      case GameEventType.playerLeft:
+        message = event.message;
+        color = Colors.orange.shade800;
+        icon = Icons.person_remove;
+        break;
+      case GameEventType.error:
+        message = event.message;
+        color = Colors.red.shade800;
+        icon = Icons.error;
+        break;
+      case GameEventType.kicked:
+        message = event.message;
+        color = Colors.red.shade900;
+        icon = Icons.block;
+        break;
+      case GameEventType.gameStarted:
+        // Already handled by state change usually, but feedback is nice
+        // message = "La partie commence !";
+        // color = Colors.purple;
+        break;
+      case GameEventType.info:
+        message = event.message;
+        color = Colors.blue.shade800;
+        break;
+    }
+
+    if (message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(12),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
     _chatController.dispose();
+    _chatController.dispose();
     _chatScrollController.dispose();
+    _eventSubscription?.cancel();
     super.dispose();
   }
 
@@ -54,6 +129,24 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             _showRoomClosedDialog(context, provider);
           });
         }
+
+        // Listen to events for feedback
+        // We use a post frame callback to ensure context is valid, but ideally we should listen in initState.
+        // However, Consumer rebuilds might duplicate listeners if not careful.
+        // Better approach: Use a wrapper or side-effect listener.
+        // For simplicity here:
+        // We will add a Listener widget or handle it in initState if possible.
+        // Given structure, let's use a side-effect hook in build if we can ensure single subscription?
+        // No, build is bad for side effects.
+
+        // Let's rely on the fact that Provider listeners are already set up.
+        // We need to access the stream.
+        // Let's stick to the plan: consume stream in initState is best, but we are inside build with Consumer.
+        // We will wrap the body in a StreamListener (custom) or just use logic in build?
+        // Actually, let's assume we can add a listener in initState of the State class if we have access to provider there.
+        // In initState we don't have provider yet (unless listen:false).
+
+        // Let's modify the State class to listen.
 
         _maybeScrollChatToBottom(provider);
 
@@ -337,11 +430,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           const SnackBar(content: Text('Impossible de devenir hôte')),
         );
         provider.acknowledgeRoomClosed();
-        Navigator.pop(context);
+        Navigator.pop(context); // Close dialog
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context); // Leave lobby
+        }
       }
     } else {
       provider.acknowledgeRoomClosed();
-      Navigator.pop(context);
+      Navigator.pop(context); // Close dialog
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context); // Leave lobby
+      }
     }
   }
 
@@ -673,249 +772,256 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-            children: [
-              const Icon(Icons.people, size: 20, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                'Joueurs ($connectedHumans/$maxPlayers)',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              if (hasScores) ...[
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: colors.tertiary.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(12),
+                children: [
+                  const Icon(Icons.people, size: 20, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Joueurs ($connectedHumans/$maxPlayers)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.emoji_events, size: 14, color: Colors.white),
-                      SizedBox(width: 4),
-                      Text(
-                        'Classement',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  if (hasScores) ...[
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colors.tertiary.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: provider.playersInLobby.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: provider.playersInLobby.length,
-                    itemBuilder: (context, index) {
-                      final player = provider.playersInLobby[index];
-                      final isYou = (player['clientId'] != null &&
-                              player['clientId'] == provider.clientId) ||
-                          (player['id'] == provider.playerId);
-                      final isHost = provider.hostPlayerId != null &&
-                          player['id'] == provider.hostPlayerId;
-                      final presence =
-                          provider.presenceByClientId[player['clientId']] ??
-                              provider.presenceById[player['id']];
-                      final isSpectator = presence?['isSpectator'] == true;
-                      final isReady =
-                          presence?['ready'] == true || player['ready'] == true;
-
-                      // Chercher le score cumulé du joueur
-                      final playerClientId = player['clientId']?.toString();
-                      final playerScore =
-                          _getPlayerScore(provider, playerClientId);
-                      final playerRank =
-                          _getPlayerRank(provider, playerClientId);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        color: Colors.white.withValues(alpha: 0.94),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.emoji_events,
+                              size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            'Classement',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              // Avatar avec rang si scores existent
-                              Stack(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: colors.primary,
-                                    foregroundColor: colors.onPrimary,
-                                    child: Text(
-                                      (player['name'] ?? 'J')[0].toUpperCase(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                  if (playerRank != null && playerRank <= 3)
-                                    Positioned(
-                                      right: -2,
-                                      bottom: -2,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: BoxDecoration(
-                                          color: _getRankColor(playerRank),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '$playerRank',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: provider.playersInLobby.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: provider.playersInLobby.length,
+                        itemBuilder: (context, index) {
+                          final player = provider.playersInLobby[index];
+                          final isYou = (player['clientId'] != null &&
+                                  player['clientId'] == provider.clientId) ||
+                              (player['id'] == provider.playerId);
+                          final isHost = provider.hostPlayerId != null &&
+                              player['id'] == provider.hostPlayerId;
+                          final presence =
+                              provider.presenceByClientId[player['clientId']] ??
+                                  provider.presenceById[player['id']];
+                          final isSpectator = presence?['isSpectator'] == true;
+                          final isReady = presence?['ready'] == true ||
+                              player['ready'] == true;
+
+                          // Chercher le score cumulé du joueur
+                          final playerClientId = player['clientId']?.toString();
+                          final playerScore =
+                              _getPlayerScore(provider, playerClientId);
+                          final playerRank =
+                              _getPlayerRank(provider, playerClientId);
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            color: Colors.white.withValues(alpha: 0.94),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            player['name'] ?? 'Joueur',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                              color: Colors.black87,
-                                            ),
+                              child: Row(
+                                children: [
+                                  // Avatar avec rang si scores existent
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: colors.primary,
+                                        foregroundColor: colors.onPrimary,
+                                        child: Text(
+                                          (player['name'] ?? 'J')[0]
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
                                           ),
                                         ),
-                                        if (isYou)
-                                          _buildMiniTag('Vous', colors.primary),
-                                        if (isHost)
-                                          _buildMiniTag(
-                                              'Hote', colors.secondary),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          _presenceLabel(presence),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                        if (playerScore != null) ...[
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 1,
-                                            ),
+                                      ),
+                                      if (playerRank != null && playerRank <= 3)
+                                        Positioned(
+                                          right: -2,
+                                          bottom: -2,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(3),
                                             decoration: BoxDecoration(
-                                              color: colors.primaryContainer,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                              color: _getRankColor(playerRank),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 1.5,
+                                              ),
                                             ),
                                             child: Text(
-                                              '$playerScore pts',
-                                              style: TextStyle(
-                                                fontSize: 10,
+                                              '$playerRank',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
                                                 fontWeight: FontWeight.bold,
-                                                color:
-                                                    colors.onPrimaryContainer,
                                               ),
                                             ),
                                           ),
-                                        ],
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                player['name'] ?? 'Joueur',
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            if (isYou)
+                                              _buildMiniTag(
+                                                  'Vous', colors.primary),
+                                            if (isHost)
+                                              _buildMiniTag(
+                                                  'Hote', colors.secondary),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              _presenceLabel(presence),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            if (playerScore != null) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 1,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      colors.primaryContainer,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  '$playerScore pts',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: colors
+                                                        .onPrimaryContainer,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                              if (isReady && !isSpectator)
-                                Icon(Icons.check_circle,
-                                    color: colors.tertiary, size: 20),
-                              if (isSpectator)
-                                const Icon(Icons.visibility,
-                                    color: Colors.blueGrey, size: 20),
-                              const SizedBox(width: 4),
-                              _presenceDot(presence),
-                              if (provider.isHost && !isYou) ...[
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(Icons.remove_circle_outline,
-                                      color: colors.error, size: 20),
-                                  tooltip: 'Expulser',
-                                  onPressed: () async {
-                                    final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title:
-                                            const Text('Expulser ce joueur ?'),
-                                        content: Text(
-                                            'Voulez-vous vraiment expulser ${player['name']} ?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('Annuler'),
+                                  ),
+                                  if (isReady && !isSpectator)
+                                    Icon(Icons.check_circle,
+                                        color: colors.tertiary, size: 20),
+                                  if (isSpectator)
+                                    const Icon(Icons.visibility,
+                                        color: Colors.blueGrey, size: 20),
+                                  const SizedBox(width: 4),
+                                  _presenceDot(presence),
+                                  if (provider.isHost && !isYou) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: Icon(Icons.remove_circle_outline,
+                                          color: colors.error, size: 20),
+                                      tooltip: 'Expulser',
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text(
+                                                'Expulser ce joueur ?'),
+                                            content: Text(
+                                                'Voulez-vous vraiment expulser ${player['name']} ?'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, false),
+                                                child: const Text('Annuler'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, true),
+                                                style: FilledButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.red),
+                                                child: const Text('Expulser'),
+                                              ),
+                                            ],
                                           ),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            style: FilledButton.styleFrom(
-                                                backgroundColor: Colors.red),
-                                            child: const Text('Expulser'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
+                                        );
 
-                                    if (confirm == true) {
-                                      final clientId =
-                                          player['clientId'] as String?;
-                                      if (clientId != null) {
-                                        await provider.kickPlayer(clientId);
-                                      }
-                                    }
-                                  },
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      );
+                                        if (confirm == true) {
+                                          final clientId =
+                                              player['clientId'] as String?;
+                                          if (clientId != null) {
+                                            await provider.kickPlayer(clientId);
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
         },
       ),
     );

@@ -7,6 +7,7 @@ class TimerManager {
         this.timers = new Map();
         this.endTimes = new Map();
         this.lastBroadcastAt = new Map();
+        this.pausedRemainingTimes = new Map();
         this.graceMs = 200;
     }
     startReactionTimer(roomCode, durationMs) {
@@ -55,6 +56,25 @@ class TimerManager {
         }
         this.endTimes.delete(roomCode);
         this.lastBroadcastAt.delete(roomCode);
+        this.pausedRemainingTimes.delete(roomCode);
+    }
+    pauseTimer(roomCode) {
+        const end = this.endTimes.get(roomCode);
+        if (end === undefined)
+            return;
+        const now = Date.now();
+        const remaining = Math.max(0, end - now);
+        this.pausedRemainingTimes.set(roomCode, remaining);
+        this.clearTimer(roomCode);
+        // On garde pausedRemainingTimes car clearTimer le supprime.
+        this.pausedRemainingTimes.set(roomCode, remaining);
+    }
+    resumeTimer(roomCode) {
+        const remaining = this.pausedRemainingTimes.get(roomCode);
+        if (remaining !== undefined) {
+            this.startReactionTimer(roomCode, remaining);
+            this.pausedRemainingTimes.delete(roomCode);
+        }
     }
     endReaction(roomCode) {
         this.clearTimer(roomCode);

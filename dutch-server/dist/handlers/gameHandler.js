@@ -185,16 +185,32 @@ function setupGameHandler(socket, roomManager) {
             // Déterminer le type de pouvoir basé sur la valeur de la carte
             let powerType = 'unknown';
             if (drawnCard) {
-                if (drawnCard.value === 'V' || drawnCard.value === 'D') {
-                    powerType = 'peek'; // Voir une carte
+                if (drawnCard.value === 'V') {
+                    powerType = 'swap_adjacent'; // Valet : Échanger des cartes adjacentes
                 }
-                else if (drawnCard.value === 'R') {
-                    powerType = 'swap'; // Échanger des cartes
+                else if (drawnCard.value === 'D') {
+                    powerType = 'peek'; // Dame : Regarder une carte (si implémenté ainsi, sinon voir GameLogic)
+                }
+                else if (drawnCard.value === '7') {
+                    powerType = 'spy'; // 7 : Espionner une carte
+                }
+                else if (drawnCard.value === '10' || drawnCard.value === 'R') {
+                    // 10 ou Roi (selon règles, ici R sembait être swap dans le code original, mais 10 est souvent échange)
+                    // Le code original avait R = swap. On garde la compatibilité si c'est ce qui est voulu,
+                    // mais GameLogic.ts dit: 10 (swap), V (exchange), JOKER (shuffle), 7 (spy).
+                    // On va se fier à GameLogic.ts pour la vérité terrain.
+                    if (drawnCard.value === '10')
+                        powerType = 'swap';
+                    if (drawnCard.value === 'R')
+                        powerType = 'swap'; // Si R est aussi swap ?
                 }
                 else if (drawnCard.value === 'JOKER') {
                     powerType = 'joker'; // Pouvoir Joker
                 }
             }
+            // Si c'est un 7 (spy), on doit capturer la carte retournée par GameLogic
+            // GameLogic.useSpecialPower ne retourne rien mais met à jour lastSpiedCard dans room.gameState
+            // On vérifiera après l'appel.
             roomManager.recordPlayerAction(data.roomCode, socket.id);
             GameLogic_1.GameLogic.useSpecialPower(room.gameState, data.targetPlayerIndex, data.targetCardIndex);
             // Notifier le joueur ciblé qu'un pouvoir a été utilisé sur lui
@@ -216,6 +232,14 @@ function setupGameHandler(socket, roomManager) {
                     powerType,
                 },
             });
+            // Si c'est un pouvoir d'espionnage (7), on renvoie l'info au joueur qui a espionné
+            if (powerType === 'spy' && room.gameState.lastSpiedCard) {
+                socket.emit('game:spied_card', {
+                    roomCode: data.roomCode,
+                    card: room.gameState.lastSpiedCard,
+                    targetPlayerName: targetPlayer?.name ?? 'Anonyme'
+                });
+            }
             if (room.gameState.phase === GameState_1.GamePhase.ended) {
                 roomManager.handleGameEnd(data.roomCode);
                 return;
@@ -295,6 +319,40 @@ function setupGameHandler(socket, roomManager) {
         }
         catch (error) {
             console.error('Error skip_special_power:', error);
+        }
+    });
+    socket.on('game:pause', async (data) => {
+        try {
+            if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
+                return;
+            const room = roomManager.getRoom(data.roomCode);
+            if (!room)
+                return;
+            // Allow any player to pause? Or only host? Users usually want anyone to pause in casual games.
+            // Let's allow any non-spectator player.
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.isSpectator)
+                return;
+            roomManager.pauseGame(data.roomCode, player.name);
+        }
+        catch (error) {
+            console.error('Error game:pause:', error);
+        }
+    });
+    socket.on('game:resume', async (data) => {
+        try {
+            if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
+                return;
+            const room = roomManager.getRoom(data.roomCode);
+            if (!room)
+                return;
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.isSpectator)
+                return;
+            roomManager.resumeGame(data.roomCode, player.name);
+        }
+        catch (error) {
+            console.error('Error game:resume:', error);
         }
     });
 }

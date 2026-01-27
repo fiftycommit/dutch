@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../models/player.dart';
 import '../providers/multiplayer_game_provider.dart';
 import 'card_widget.dart';
 import 'responsive_dialog.dart';
+import 'game_action_button.dart';
 
 class MultiplayerSpecialPowerDialogs {
   static const double _cardAspectRatio = 7 / 5;
@@ -441,6 +443,45 @@ class MultiplayerSpecialPowerDialogs {
                 ],
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  static Future<void> showCardRevealDialog(
+      BuildContext context, PlayingCard card, String title) async {
+    await showDialog(
+      context: context,
+      builder: (context) => ResponsiveDialog(
+        backgroundColor: Colors.black87,
+        builder: (context, metrics) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title,
+                  style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: metrics.font(24),
+                      fontWeight: FontWeight.bold)),
+              SizedBox(height: metrics.space(20)),
+              SizedBox(
+                height: metrics.size(200),
+                child: AspectRatio(
+                  aspectRatio: 2.5 / 3.5,
+                  child: CardWidget(
+                    card: card,
+                    size: CardSize.large,
+                    isRevealed: true,
+                  ),
+                ),
+              ),
+              SizedBox(height: metrics.space(20)),
+              GameActionButton(
+                  label: "OK",
+                  onTap: () => Navigator.pop(context),
+                  color: Colors.amber),
+            ],
           );
         },
       ),

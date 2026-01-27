@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -31,6 +32,7 @@ class MultiplayerGameScreen extends StatefulWidget {
 
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   static const double _cardAspectRatio = 7 / 5;
+  StreamSubscription? _eventSubscription;
 
   @override
   void initState() {
@@ -47,6 +49,66 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndNavigateIfEnded();
+      _setupEventListeners();
+    });
+  }
+
+  void _setupEventListeners() {
+    final provider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
+    _eventSubscription = provider.events.listen((event) {
+      if (!mounted) return;
+
+      // In game, we care about Player Left, Errors, Kicked (though kicked handles navigation)
+      // and maybe Info. Joined is less relevant unless spectator?
+
+      String? message;
+      Color color = Colors.black87;
+      IconData icon = Icons.info;
+
+      switch (event.type) {
+        case GameEventType.playerLeft:
+          message = event.message;
+          color = Colors.orange.shade800;
+          icon = Icons.person_remove;
+          break;
+        case GameEventType.error:
+          message = event.message;
+          color = Colors.red.shade800;
+          icon = Icons.error;
+          break;
+        case GameEventType.kicked:
+          message = event.message;
+          color = Colors.red.shade900;
+          icon = Icons.block;
+          break;
+        case GameEventType.info:
+          message = event.message;
+          color = Colors.blue.shade800;
+          break;
+        default:
+          break;
+      }
+
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(icon, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: color,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(12),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     });
   }
 
@@ -62,6 +124,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         DeviceOrientation.portraitDown,
       ]);
     }
+
+    _eventSubscription?.cancel();
     super.dispose();
   }
 
@@ -191,6 +255,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                           )),
                 );
               }
+            }
+          });
+        }
+
+        // Check for Spied Card Dialog
+        if (gameProvider.showSpiedCardDialog &&
+            gameProvider.lastSpiedCard != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              MultiplayerSpecialPowerDialogs.showCardRevealDialog(
+                      context,
+                      gameProvider.lastSpiedCard!,
+                      gameProvider.spiedTargetName ?? 'Joueur')
+                  .then((_) => gameProvider.closeSpiedCardDialog());
             }
           });
         }
@@ -1015,11 +1093,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     final handWidth = cardMetrics.width + (count - 1) * overlap;
     final isActive = gp.gameState!.currentPlayer.id == opponent.id;
 
+    // Allow interaction if waiting for special power (e.g. Spy)
+    final canInteract = gp.gameState!.isWaitingForSpecialPower &&
+        gp.gameState!.currentPlayer.id == gp.playerId;
+
     return _buildPlayerBlock(
       context: context,
       player: opponent,
       isActive: isActive,
-      canInteract: false,
+      canInteract: canInteract,
       isHuman: false,
       cardSize: cardSize,
       badgeSize: badgeSize,
@@ -1027,6 +1109,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       handWidth: handWidth,
       showCountBadge: true,
       isCompactMode: isCompactMode,
+      onCardTap: canInteract
+          ? (index) {
+              gp.useSpecialPower(opponent.position, index);
+            }
+          : null,
     );
   }
 
@@ -1311,16 +1398,25 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       return const SizedBox();
 
     // Check if it's MY turn and I need to act OR if I have a pending swap
-    // Pending Swap: If I am the active player, I need to select my card
     bool isMyTurn = gs.currentPlayer.id == gp.playerId;
     bool isPendSwap = gs.pendingSwap != null && isMyTurn;
 
     if (!isMyTurn && !isPendSwap) return const SizedBox();
 
+    // Prevent re-showing if already processing or dismissed locally
+    if (gp.isProcessing) return const SizedBox();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Check if a dialog is likely already open (not perfect but helpful)
+      // or if we are just waiting for server
       if (ModalRoute.of(context)?.isCurrent == true) {
-        // PRIORITÉ AU PENDING SWAP
+        // Use a local tag to prevent loops if state hasn't updated yet?
+        // Actually, reliable fix is optimistic update in provider.
+        // But let's safe guard here too.
+
         if (gs.pendingSwap != null) {
+          // ... existing logic ...
           MultiplayerSpecialPowerDialogs.showCompleteSwapDialog(context);
           return;
         }
@@ -1329,17 +1425,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           PlayingCard trigger = gs.specialCardToActivate!;
           String val = trigger.value;
 
+          // Ensure we don't spam
+
           if (val == '7' || val == '8') {
             MultiplayerSpecialPowerDialogs.showLookOwnCardDialog(
                 context, trigger);
           } else if (val == '9' || val == '10') {
-            // 9 = Look, 10 = Swap (starts same way: pickup target)
             bool isSwap = (val == '10');
             MultiplayerSpecialPowerDialogs.showOpponentSelectionDialog(
                 context, trigger, isSwap);
           } else if (val == 'V') {
-            // Simplification: V behaves like Swap for now or just generic target
-            // Given server limitation, treated as "Select Opponent Card"
             MultiplayerSpecialPowerDialogs.showOpponentSelectionDialog(
                 context, trigger, true);
           } else if (val == 'JOKER') {
@@ -1374,9 +1469,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            if (gp.pauseRemainingSeconds != null)
-              Text("Reprise auto dans ${gp.pauseRemainingSeconds}s",
-                  style: const TextStyle(color: Colors.white70)),
+            if (gp.pausedByName != null)
+              Text("Mis en pause par ${gp.pausedByName}",
+                  style: const TextStyle(color: Colors.white70, fontSize: 16)),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () => gp.resumeGame(),
@@ -1416,12 +1511,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     } else if (gameState.isWaitingForSpecialPower) {
       // Special powers handling
       // Usually involves choosing a card
-      // If swap pending, complete it
       if (gameState.pendingSwap != null) {
         provider.completeSwap(index);
+      } else {
+        // Generic special power use (e.g. Look at own card)
+        // Assuming 'human' is consistent with index being my own hand index
+        // Wait, we need my position.
+        final me =
+            gameState.players.firstWhere((p) => p.id == provider.playerId);
+        provider.useSpecialPower(me.position, index);
       }
-      // Note: other powers (look at card) usually handled by just tapping
-      // We might need to implement specific power logic if it differs from simple tap
     }
   }
 

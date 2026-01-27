@@ -317,11 +317,47 @@ export class RoomManager {
     this.timerManager.startReactionTimer(roomCode, durationMs);
   }
 
+
+
   clearReactionTimer(roomCode: string) {
     this.timerManager.clearTimer(roomCode);
   }
 
+  pauseGame(roomCode: string, pausedByName: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+    if (room.isPaused) return;
+
+    room.isPaused = true;
+
+    // Arrêter les timers sans les effacer complètement (logic complexe)
+    // Pour simplifier : on clear les timers, et on les relancera au resume.
+    // Il faudrait stocker le temps restant pour être précis, mais pour l'instant on stop.
+    this.clearTurnTimer(roomCode);
+    this.timerManager.pauseTimer(roomCode); // Supposons que TimerManager gère ça, sinon on clear
+
+    this.broadcastGameState(roomCode, 'GAME_PAUSED', { pausedBy: pausedByName });
+  }
+
+  resumeGame(roomCode: string, resumedByName: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+    if (!room.isPaused) return;
+
+    room.isPaused = false;
+
+    // Relancer les timers
+    if (room.gameState.phase === GamePhase.playing) {
+      this.startTurnTimer(roomCode);
+    } else if (room.gameState.phase === GamePhase.reaction) {
+      this.timerManager.resumeTimer(roomCode);
+    }
+
+    this.broadcastGameState(roomCode, 'GAME_RESUMED', { resumedBy: resumedByName });
+  }
+
   async endReactionPhase(roomCode: string) {
+
     this.clearReactionTimer(roomCode);
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameState) return;
@@ -719,9 +755,14 @@ export class RoomManager {
     const currentPlayer = getCurrentPlayer(room.gameState);
     if (!currentPlayer.isHuman || currentPlayer.isSpectator) return;
 
+
     this.clearTurnTimer(roomCode);
 
+    // Si le jeu est en pause, on ne lance pas le timer maintenant
+    if (room.isPaused) return;
+
     const playerId = currentPlayer.id;
+
     const timer = setTimeout(() => {
       const currentRoom = this.rooms.get(roomCode);
       if (!currentRoom || !currentRoom.gameState) return;

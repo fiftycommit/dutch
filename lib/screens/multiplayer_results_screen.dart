@@ -22,7 +22,9 @@ class MultiplayerResultsScreen extends StatelessWidget {
     final provider = context.watch<MultiplayerGameProvider>();
 
     // Si la room a été redémarrée, naviguer vers le lobby
-    if (provider.isInLobby && !provider.isPlaying && provider.roomCode != null) {
+    if (provider.isInLobby &&
+        !provider.isPlaying &&
+        provider.roomCode != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ModalRoute.of(context)?.isCurrent == true) {
           Navigator.pushReplacement(
@@ -146,7 +148,7 @@ class MultiplayerResultsScreen extends StatelessWidget {
                               ),
                             ),
                             child: const Text(
-                              "Rejouer",
+                              "Retour au Lobby",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -161,20 +163,41 @@ class MultiplayerResultsScreen extends StatelessWidget {
                         width: 280,
                         child: ElevatedButton(
                           onPressed: () {
-                            context.read<MultiplayerGameProvider>().leaveRoom();
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
+                            if (context
+                                .read<MultiplayerGameProvider>()
+                                .isHost) {
+                              // Host closes room
+                              context
+                                  .read<MultiplayerGameProvider>()
+                                  .closeRoom();
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
+                            } else {
+                              // Non-host leaves
+                              context
+                                  .read<MultiplayerGameProvider>()
+                                  .leaveRoom();
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
+                            }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber.shade700,
+                            backgroundColor: context
+                                    .watch<MultiplayerGameProvider>()
+                                    .isHost
+                                ? Colors.red
+                                    .shade700 // Explicit "Close" color for host
+                                : Colors.amber.shade700,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
-                            "Retour au menu",
-                            style: TextStyle(
+                          child: Text(
+                            context.watch<MultiplayerGameProvider>().isHost
+                                ? "Fermer la room"
+                                : "Quitter",
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,

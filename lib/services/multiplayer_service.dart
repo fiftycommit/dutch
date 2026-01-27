@@ -59,6 +59,7 @@ class MultiplayerService {
   final List<Map<String, dynamic>> _pendingActions =
       []; // File d'attente d'actions
 
+  io.Socket? get socket => _socket;
   bool get isConnected => _socket?.connected ?? false;
   String? get currentRoomCode => _currentRoomCode;
   String? get playerId => _playerId;
@@ -100,7 +101,8 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onRoomRestarted; // Quand l'hôte relance
   Function(Map<String, dynamic>)? onKicked; // Quand on est kick
   Function(Map<String, dynamic>)? onPlayerLeft; // Quand un joueur quitte
-  Function(Map<String, dynamic>)? onSpecialPowerTargeted; // Pouvoir spécial sur nous
+  Function(Map<String, dynamic>)?
+      onSpecialPowerTargeted; // Pouvoir spécial sur nous
 
   // Connexion au serveur
   Future<void> connect() async {
@@ -358,7 +360,8 @@ class MultiplayerService {
 
     // Quand un pouvoir spécial est utilisé sur nous
     _socket!.on('special_power:targeted', (data) {
-      debugPrint('✨ Pouvoir spécial utilisé sur vous par ${data['byPlayerName']}');
+      debugPrint(
+          '✨ Pouvoir spécial utilisé sur vous par ${data['byPlayerName']}');
       if (data is Map) {
         onSpecialPowerTargeted?.call(data.cast<String, dynamic>());
       }
