@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart';
 import 'card.dart';
 import 'game_settings.dart';
 
@@ -24,6 +25,7 @@ class Player {
   final BotBehavior? botBehavior;
   final BotSkillLevel? botSkillLevel;
   final int position;
+  final bool isSpectator;
 
   List<PlayingCard> hand;
   List<bool> knownCards;
@@ -38,6 +40,7 @@ class Player {
     this.botBehavior,
     this.botSkillLevel,
     this.position = 0,
+    this.isSpectator = false,
     List<PlayingCard>? hand,
     List<bool>? knownCards,
     List<PlayingCard?>? mentalMap,
@@ -55,6 +58,7 @@ class Player {
         botBehavior = other.botBehavior,
         botSkillLevel = other.botSkillLevel,
         position = other.position,
+        isSpectator = other.isSpectator,
         hand = List.from(other.hand),
         knownCards = List.from(other.knownCards),
         mentalMap = List.from(other.mentalMap),
@@ -165,19 +169,44 @@ class Player {
   String get displayName => name;
 
   String get displayAvatar {
-    if (isHuman) return "👩🏾‍💻";
-
-    if (botBehavior != null) {
-      switch (botBehavior!) {
-        case BotBehavior.fast:
-          return "🏃";
-        case BotBehavior.aggressive:
-          return "⚔️";
-        case BotBehavior.balanced:
-          return "🧠";
+    if (!isHuman) {
+      if (botBehavior != null) {
+        switch (botBehavior!) {
+          case BotBehavior.fast:
+            return "🏃";
+          case BotBehavior.aggressive:
+            return "⚔️";
+          case BotBehavior.balanced:
+            return "🧠";
+        }
       }
+      return "🤖";
     }
-    return "🤖";
+
+    // Generate consistent avatar based on ID
+    final avatars = [
+      "👩🏾‍💻",
+      "👨‍💻",
+      "🧑‍🚀",
+      "🦸",
+      "🦹",
+      "🧙",
+      "🧛",
+      "🧞",
+      "🧝",
+      "🧟"
+    ];
+    final hash = id.hashCode.abs();
+    return avatars[hash % avatars.length];
+  }
+
+  Color get avatarColor {
+    if (!isHuman) return const Color(0xFF2d5f3e);
+
+    // Generate consistent color based on ID
+    final hash = id.hashCode.abs();
+    final hue = (hash % 360).toDouble();
+    return HSVColor.fromAHSV(1.0, hue, 0.7, 0.8).toColor();
   }
 
   // Sérialisation JSON pour multijoueur
@@ -193,6 +222,7 @@ class Player {
           ? BotSkillLevel.values[json['botSkillLevel'] as int]
           : null,
       position: json['position'] as int? ?? 0,
+      isSpectator: json['isSpectator'] as bool? ?? false,
       hand: (json['hand'] as List?)
               ?.map((e) => PlayingCard.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -211,6 +241,7 @@ class Player {
       'botBehavior': botBehavior?.index,
       'botSkillLevel': botSkillLevel?.index,
       'position': position,
+      'isSpectator': isSpectator,
       'hand': hand.map((c) => c.toJson()).toList(),
       'knownCards': knownCards,
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas inclus

@@ -4,6 +4,7 @@ class PlayingCard {
   final int points;
   final bool isSpecial;
   final String id;
+  final bool isHidden; // Carte masquée (cartes adversaires en multijoueur)
 
   PlayingCard({
     required this.suit,
@@ -11,7 +12,20 @@ class PlayingCard {
     required this.points,
     required this.isSpecial,
     required this.id,
+    this.isHidden = false,
   });
+
+  /// Carte masquée placeholder pour les cartes adversaires en multijoueur
+  factory PlayingCard.hidden() {
+    return PlayingCard(
+      suit: 'hidden',
+      value: 'hidden',
+      points: 0,
+      isSpecial: false,
+      id: 'hidden_${DateTime.now().microsecondsSinceEpoch}',
+      isHidden: true,
+    );
+  }
 
   factory PlayingCard.create(String suit, String value) {
     int points = _calculatePoints(suit, value);
@@ -38,6 +52,11 @@ class PlayingCard {
   }
 
   String get imagePath {
+    // Carte masquée -> dos de carte
+    if (isHidden) {
+      return 'assets/images/cards/back.svg';
+    }
+
     if (value == 'JOKER') {
       if (suit == 'hearts' || suit == 'diamonds') {
         return 'assets/images/cards/joker-rouge.svg';
@@ -131,16 +150,25 @@ class PlayingCard {
 
   // Sérialisation JSON pour multijoueur
   factory PlayingCard.fromJson(Map<String, dynamic> json) {
+    // Carte masquée envoyée par le serveur pour les cartes adversaires
+    if (json['hidden'] == true) {
+      return PlayingCard.hidden();
+    }
+
     return PlayingCard(
       suit: json['suit'] as String,
       value: json['value'] as String,
       points: json['points'] as int,
       isSpecial: json['isSpecial'] as bool,
       id: json['id'] as String,
+      isHidden: false,
     );
   }
 
   Map<String, dynamic> toJson() {
+    if (isHidden) {
+      return {'hidden': true};
+    }
     return {
       'suit': suit,
       'value': value,

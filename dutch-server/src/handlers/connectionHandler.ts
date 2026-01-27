@@ -5,6 +5,7 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
   socket.on(
     'client:ping',
     (data: any, callback?: (response: { serverTime: number; clientTime?: number }) => void) => {
+      roomManager.touchPlayer(socket.id);
       if (typeof callback === 'function') {
         callback({
           serverTime: Date.now(),

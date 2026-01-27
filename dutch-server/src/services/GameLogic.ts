@@ -86,11 +86,20 @@ export class GameLogic {
     if (!gameState.drawnCard) return;
 
     const card = gameState.drawnCard;
-    gameState.discardPile.push(card);
     gameState.drawnCard = null;
-    addToHistory(gameState, `${getCurrentPlayer(gameState).name} rejette la carte piochée.`);
+    gameState.discardPile.push(card);
+    addToHistory(gameState, `${getCurrentPlayer(gameState).name} défausse sa pioche.`);
 
     this.checkSpecialPower(gameState, card);
+
+    if (!gameState.isWaitingForSpecialPower) {
+      this.startReactionPhase(gameState);
+    }
+  }
+
+  private static startReactionPhase(gameState: GameState): void {
+    gameState.phase = GamePhase.reaction;
+    gameState.reactionStartTime = new Date();
   }
 
   static replaceCard(gameState: GameState, cardIndex: number): void {
@@ -113,6 +122,10 @@ export class GameLogic {
     addToHistory(gameState, `${player.name} échange une carte.`);
 
     this.checkSpecialPower(gameState, oldCard);
+
+    if (!gameState.isWaitingForSpecialPower) {
+      this.startReactionPhase(gameState);
+    }
   }
 
   static matchCard(gameState: GameState, player: Player, cardIndex: number): boolean {
@@ -139,6 +152,9 @@ export class GameLogic {
 
       if (gameState.phase !== GamePhase.reaction) {
         this.checkSpecialPower(gameState, playerCard);
+        // Matching during turn doesn't end turn immediately unless power
+        // But if it was the player's turn, do they still need to discard/swap?
+        // Usually matching is an extra action. The turn phase dictates main action.
       }
 
       return true;
@@ -167,6 +183,7 @@ export class GameLogic {
 
   static lookAtCard(gameState: GameState, target: Player, cardIndex: number): void {
     if (cardIndex >= 0 && cardIndex < target.knownCards.length) {
+      // Note: Logic to show card to requester is handled by client/provider
       addToHistory(
         gameState,
         `${getCurrentPlayer(gameState).name} regarde une carte de ${target.name}.`
@@ -224,6 +241,7 @@ export class GameLogic {
   }
 
   private static checkSpecialPower(gameState: GameState, card: PlayingCard): void {
+    // Only cards with actual implemented powers: 7 (spy), 10 (swap), V (exchange), JOKER (shuffle)
     const powerCards = ['7', '10', 'V', 'JOKER'];
     if (powerCards.includes(card.value)) {
       gameState.isWaitingForSpecialPower = true;
@@ -237,6 +255,9 @@ export class GameLogic {
     gameState.phase = GamePhase.dutchCalled;
     const player = gameState.players.find(p => p.id === gameState.dutchCallerId);
     addToHistory(gameState, `${player?.name || 'Joueur'} crie DUTCH !`);
+
+    // Stop game immediately (as per user request to match Solo mode)
+    this.endGame(gameState);
   }
 
   // Méthodes supplémentaires pour le serveur multijoueur
@@ -315,7 +336,7 @@ export class GameLogic {
     gameState.pendingSwap = null;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    this.nextPlayer(gameState);
+    this.startReactionPhase(gameState);
   }
 
   static skipSpecialPower(gameState: GameState): void {
@@ -323,7 +344,7 @@ export class GameLogic {
     gameState.specialCardToActivate = null;
     gameState.pendingSwap = null;
     addToHistory(gameState, `${getCurrentPlayer(gameState).name} ignore le pouvoir spécial.`);
-    this.nextPlayer(gameState);
+    this.startReactionPhase(gameState);
   }
 
   static endGame(gameState: GameState): void {

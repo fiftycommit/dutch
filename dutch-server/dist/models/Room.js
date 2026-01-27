@@ -7,6 +7,7 @@ var RoomStatus;
     RoomStatus["waiting"] = "waiting";
     RoomStatus["playing"] = "playing";
     RoomStatus["ended"] = "ended";
+    RoomStatus["closing"] = "closing";
 })(RoomStatus || (exports.RoomStatus = RoomStatus = {}));
 function createRoom(id, hostPlayerId, settings, expiresAt) {
     return {

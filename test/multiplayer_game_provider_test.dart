@@ -33,8 +33,9 @@ class FakeMultiplayerService extends MultiplayerService {
     onReactionTimeConfig?.call(ms);
   }
 
-  void emitPresenceUpdate(List<dynamic> players) {
-    onPresenceUpdate?.call(players);
+  void emitPresenceUpdate(List<Map<String, dynamic>> players,
+      {String hostPlayerId = 'p1'}) {
+    onPresenceUpdate?.call({'hostPlayerId': hostPlayerId, 'players': players});
   }
 
   void emitPresenceCheck({String reason = 'AFK', int deadlineMs = 5000}) {
@@ -74,7 +75,7 @@ class FakeMultiplayerService extends MultiplayerService {
       null;
 
   @override
-  Future<bool> startGame() async => true;
+  Future<bool> startGame({bool fillBots = false}) async => true;
 
   @override
   void setFocused(bool focused) {

@@ -18,7 +18,8 @@ class RoomManager {
         this.turnTimeoutMs = options.turnTimeoutMs ?? 25000;
         this.presenceGraceMs = options.presenceGraceMs ?? 5000;
         this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
-        this.cleanupIntervalMs = options.cleanupIntervalMs ?? 60000;
+        this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
+        this.stalePlayerMs = options.stalePlayerMs ?? 15000;
         this.now = options.now ?? (() => Date.now());
         this.timerManager = new TimerManager_1.TimerManager({
             getRoom: (roomCode) => this.getRoom(roomCode),
@@ -36,9 +37,32 @@ class RoomManager {
     listRooms() {
         return Array.from(this.rooms.values()).map((room) => ({
             id: room.id,
-            playerCount: room.players.length,
+            playerCount: this.activePlayerCount(room),
             status: room.status,
             gameMode: GameState_1.GameMode[room.gameMode],
+        }));
+    }
+    listRoomsDebug() {
+        const now = this.now();
+        return Array.from(this.rooms.values()).map((room) => ({
+            id: room.id,
+            status: room.status,
+            hostPlayerId: room.hostPlayerId,
+            expiresAt: room.expiresAt,
+            lastActivityAt: room.lastActivityAt,
+            players: room.players.map((p) => ({
+                id: p.id,
+                clientId: p.clientId,
+                name: p.name,
+                isHuman: p.isHuman,
+                connected: p.connected,
+                focused: p.focused,
+                lastSeenAt: p.lastSeenAt,
+                stale: p.isHuman ? now - (p.lastSeenAt ?? 0) > this.stalePlayerMs : false,
+                staleSince: p.lastSeenAt ? now - p.lastSeenAt : null,
+                ready: p.ready,
+                isSpectator: p.isSpectator,
+            })),
         }));
     }
     dispose() {
@@ -84,6 +108,8 @@ class RoomManager {
         if (room.status !== Room_1.RoomStatus.waiting) {
             return { error: 'La partie a déjà commencé' };
         }
+        this.pruneWaitingRoom(room);
+        this.ensureHost(room);
         if (clientId) {
             const existing = room.players.find((p) => p.clientId === clientId);
             if (existing) {
@@ -106,14 +132,16 @@ class RoomManager {
         const maxPlayers = typeof room.settings?.maxPlayers === 'number'
             ? room.settings.maxPlayers
             : 4;
-        if (room.players.length >= maxPlayers) {
+        if (this.activePlayerCount(room) >= maxPlayers) {
             return { error: 'Room pleine' };
         }
         const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, clientId);
         player.connected = true;
         player.focused = true;
         player.lastSeenAt = this.now();
+        player.ready = false;
         room.players.push(player);
+        this.reindexPlayers(room);
         this.touchRoom(room);
         return { room, player };
     }
@@ -124,24 +152,33 @@ class RoomManager {
         this.io.to(roomCode).emit('room:player_joined', {
             roomCode,
             player,
-            playerCount: room.players.length,
+            playerCount: this.activePlayerCount(room),
         });
     }
-    startGame(roomCode) {
+    startGame(roomCode, options = {}) {
         const room = this.rooms.get(roomCode);
         if (!room)
             return false;
+        this.pruneWaitingRoom(room);
+        room.players = room.players.filter((p) => !p.isHuman || p.connected !== false);
+        this.reindexPlayers(room);
+        this.ensureHost(room);
         const minPlayers = typeof room.settings?.minPlayers === 'number'
             ? room.settings.minPlayers
             : 2;
         const maxPlayers = typeof room.settings?.maxPlayers === 'number'
             ? room.settings.maxPlayers
             : 4;
-        const fillBots = room.settings?.fillBots !== false;
-        const humanCount = room.players.filter((p) => p.isHuman).length;
-        if (humanCount < minPlayers)
+        const fillBots = options.fillBots ?? (room.settings?.fillBots !== false);
+        const host = room.players.find((p) => p.id === room.hostPlayerId);
+        if (!host || host.connected === false)
             return false;
-        if (room.players.length > maxPlayers)
+        if (!host.ready)
+            return false;
+        const readyHumans = room.players.filter((p) => p.isHuman && p.connected !== false && p.ready).length;
+        if (readyHumans < minPlayers)
+            return false;
+        if (this.activePlayerCount(room) > maxPlayers)
             return false;
         const difficulty = this.getBotDifficulty(room.settings);
         if (fillBots) {
@@ -226,11 +263,179 @@ class RoomManager {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
             return;
+        // Calculer les scores de cette manche pour chaque joueur
+        const roundScores = room.gameState.players.map((player) => ({
+            playerId: player.id,
+            clientId: player.clientId,
+            name: player.name,
+            score: (0, Player_1.calculateScore)(player),
+            hand: player.hand, // Inclure les cartes pour affichage
+        }));
+        // Calculer et stocker les scores cumulés
+        this.updateCumulativeScores(room);
         room.status = Room_1.RoomStatus.ended;
         this.clearTurnTimer(roomCode);
         this.broadcastGameState(roomCode, 'GAME_ENDED', {
             message: 'Partie terminée !',
+            roundScores, // Scores de cette manche
+            cumulativeScores: this.getCumulativeScoresArray(room),
         });
+        this.broadcastPresence(roomCode);
+    }
+    /**
+     * Redémarre une partie (rematch) - garde les joueurs et scores cumulés
+     */
+    restartGame(roomCode, requesterId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        // Seul l'hôte peut relancer
+        if (room.hostPlayerId !== requesterId)
+            return false;
+        // La partie doit être terminée
+        if (room.status !== Room_1.RoomStatus.ended)
+            return false;
+        // Retirer les bots de la partie précédente
+        room.players = room.players.filter((p) => p.isHuman);
+        // Réinitialiser les joueurs humains
+        for (const player of room.players) {
+            player.ready = false;
+            player.hand = [];
+            player.knownCards = [];
+            player.isSpectator = false;
+        }
+        // Réindexer les positions
+        this.reindexPlayers(room);
+        // Remettre la room en attente
+        room.status = Room_1.RoomStatus.waiting;
+        room.gameState = null;
+        // Incrémenter le round si mode tournoi
+        if (room.gameMode === GameState_1.GameMode.tournament) {
+            room.tournamentRound = (room.tournamentRound || 1) + 1;
+        }
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+        // Notifier tous les joueurs du redémarrage
+        this.io.to(roomCode).emit('room:restarted', {
+            roomCode,
+            message: 'Nouvelle partie !',
+            cumulativeScores: this.getCumulativeScoresArray(room),
+        });
+        return true;
+    }
+    /**
+     * Kick un joueur (hôte uniquement)
+     */
+    kickPlayer(roomCode, hostId, targetClientId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        // Seul l'hôte peut kick
+        if (room.hostPlayerId !== hostId)
+            return false;
+        // Trouver le joueur à kick par clientId
+        const targetIndex = room.players.findIndex((p) => p.clientId === targetClientId);
+        if (targetIndex < 0)
+            return false;
+        const target = room.players[targetIndex];
+        // On ne peut pas se kick soi-même
+        if (target.id === hostId)
+            return false;
+        // Notifier le joueur qu'il est kicked
+        this.io.to(target.id).emit('room:kicked', {
+            roomCode,
+            message: "Vous avez été exclu de la room par l'hôte",
+        });
+        // Retirer le joueur
+        room.players.splice(targetIndex, 1);
+        this.reindexPlayers(room);
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+        return true;
+    }
+    /**
+     * Met à jour les scores cumulés pour tous les joueurs de la room
+     */
+    updateCumulativeScores(room) {
+        if (!room.gameState)
+            return;
+        // Initialiser si nécessaire
+        if (!room.cumulativeScores) {
+            room.cumulativeScores = new Map();
+        }
+        // Ajouter les scores de cette manche
+        for (const player of room.gameState.players) {
+            const scoreKey = player.clientId || player.id;
+            const currentScore = room.cumulativeScores.get(scoreKey) || 0;
+            const roundScore = (0, Player_1.calculateScore)(player);
+            room.cumulativeScores.set(scoreKey, currentScore + roundScore);
+        }
+    }
+    /**
+     * Retourne les scores cumulés sous forme de tableau
+     */
+    getCumulativeScoresArray(room) {
+        if (!room.cumulativeScores)
+            return [];
+        const result = [];
+        room.cumulativeScores.forEach((score, clientId) => {
+            const player = room.players.find((p) => p.clientId === clientId || p.id === clientId);
+            result.push({
+                clientId,
+                score,
+                name: player?.name || 'Joueur',
+            });
+        });
+        // Trier par score croissant (le plus bas est le meilleur au Dutch)
+        result.sort((a, b) => a.score - b.score);
+        return result;
+    }
+    setReady(roomCode, socketId, ready) {
+        const room = this.rooms.get(roomCode);
+        if (!room || room.status !== Room_1.RoomStatus.waiting)
+            return false;
+        const player = room.players.find((p) => p.id === socketId);
+        if (!player || !player.isHuman)
+            return false;
+        player.ready = ready;
+        player.connected = true;
+        player.lastSeenAt = this.now();
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+        return true;
+    }
+    sendChat(roomCode, socketId, rawMessage) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        const player = room.players.find((p) => p.id === socketId);
+        if (!player || player.isSpectator)
+            return false;
+        const message = rawMessage?.toString().trim();
+        if (!message)
+            return false;
+        const payload = {
+            roomCode,
+            playerId: player.id,
+            clientId: player.clientId,
+            name: player.name,
+            message: message.slice(0, 240),
+            timestamp: this.now(),
+        };
+        this.touchPlayer(socketId);
+        this.io.to(roomCode).emit('chat:message', payload);
+        return true;
+    }
+    touchPlayer(socketId) {
+        const now = this.now();
+        for (const room of this.rooms.values()) {
+            const player = room.players.find((p) => p.id === socketId);
+            if (!player)
+                continue;
+            player.lastSeenAt = now;
+            player.connected = true;
+            this.touchRoom(room);
+        }
     }
     recordPlayerAction(roomCode, playerId) {
         const room = this.rooms.get(roomCode);
@@ -288,15 +493,23 @@ class RoomManager {
             return;
         const leaving = room.players[index];
         this.clearPresenceCheck(roomCode, socketId);
+        // Notifier les autres joueurs que ce joueur quitte
+        this.io.to(roomCode).emit('player:left', {
+            playerId: leaving.id,
+            playerName: leaving.name,
+            roomCode,
+        });
         if (room.status === Room_1.RoomStatus.waiting) {
             room.players.splice(index, 1);
             if (room.players.length === 0) {
                 this.removeRoom(roomCode);
                 return;
             }
+            this.reindexPlayers(room);
             if (room.hostPlayerId === socketId && room.players.length > 0) {
                 room.hostPlayerId = room.players[0].id;
             }
+            this.ensureHost(room);
         }
         else {
             leaving.connected = false;
@@ -327,17 +540,28 @@ class RoomManager {
         const room = this.rooms.get(roomCode);
         if (!room)
             return;
+        const now = this.now();
         const players = room.players.map((player) => ({
             id: player.id,
             clientId: player.clientId,
             name: player.name,
             isHuman: player.isHuman,
             position: player.position,
-            connected: player.connected ?? false,
+            connected: player.isHuman
+                ? (player.connected ?? false) && !this.isPlayerStale(player, now)
+                : true,
             focused: player.focused ?? false,
             isSpectator: player.isSpectator ?? false,
+            ready: player.ready ?? false,
         }));
-        this.io.to(roomCode).emit('presence:update', { roomCode, players });
+        this.io.to(roomCode).emit('presence:update', {
+            roomCode,
+            hostPlayerId: room.hostPlayerId,
+            players,
+            gameMode: room.gameMode,
+            status: room.status,
+            cumulativeScores: this.getCumulativeScoresArray(room),
+        });
     }
     startTurnTimer(roomCode) {
         const room = this.rooms.get(roomCode);
@@ -463,6 +687,54 @@ class RoomManager {
         }
         void this.checkAndPlayBotTurn(roomCode);
     }
+    activePlayerCount(room) {
+        const now = this.now();
+        return room.players.filter((player) => {
+            if (!player.isHuman)
+                return true;
+            if (!player.connected)
+                return false;
+            return !this.isPlayerStale(player, now);
+        }).length;
+    }
+    isPlayerStale(player, now) {
+        if (!player.isHuman)
+            return false;
+        const lastSeen = player.lastSeenAt ?? 0;
+        return now - lastSeen > this.stalePlayerMs;
+    }
+    reindexPlayers(room) {
+        room.players.forEach((player, index) => {
+            player.position = index;
+        });
+    }
+    ensureHost(room) {
+        const now = this.now();
+        const host = room.players.find((p) => p.id === room.hostPlayerId && p.isHuman && p.connected && !this.isPlayerStale(p, now));
+        if (host)
+            return;
+        const nextHost = room.players.find((p) => p.isHuman && p.connected && !this.isPlayerStale(p, now));
+        if (nextHost) {
+            room.hostPlayerId = nextHost.id;
+        }
+    }
+    pruneWaitingRoom(room) {
+        if (room.status !== Room_1.RoomStatus.waiting)
+            return;
+        const now = this.now();
+        const before = room.players.length;
+        room.players = room.players.filter((player) => {
+            if (!player.isHuman)
+                return true;
+            if (player.connected !== false)
+                return true;
+            const lastSeen = player.lastSeenAt ?? 0;
+            return now - lastSeen <= this.stalePlayerMs * 2;
+        });
+        if (room.players.length !== before) {
+            this.reindexPlayers(room);
+        }
+    }
     touchRoom(room) {
         room.lastActivityAt = this.now();
     }
@@ -474,12 +746,150 @@ class RoomManager {
     cleanupRooms() {
         const now = this.now();
         for (const room of this.rooms.values()) {
-            const humans = room.players.filter((p) => p.isHuman);
-            const anyConnected = humans.some((p) => p.connected);
+            // Supprimer les rooms en cours de fermeture expirées
+            if (room.status === Room_1.RoomStatus.closing) {
+                if (room.closingAt && now >= room.closingAt) {
+                    this.removeRoom(room.id);
+                    continue;
+                }
+                // Room en fermeture mais pas encore expirée, on continue
+                continue;
+            }
+            if (room.status === Room_1.RoomStatus.waiting) {
+                this.pruneWaitingRoom(room);
+                this.ensureHost(room);
+            }
+            let staleChanged = false;
+            for (const player of room.players) {
+                if (!player.isHuman)
+                    continue;
+                const lastSeen = player.lastSeenAt ?? 0;
+                const isStale = now - lastSeen > this.stalePlayerMs;
+                if ((player.connected ?? false) && isStale) {
+                    player.connected = false;
+                    player.focused = false;
+                    staleChanged = true;
+                }
+            }
+            const anyConnected = room.players.some((player) => {
+                if (!player.isHuman)
+                    return true;
+                if (!player.connected)
+                    return false;
+                const lastSeen = player.lastSeenAt ?? 0;
+                return now - lastSeen <= this.stalePlayerMs;
+            });
             if (!anyConnected || now >= room.expiresAt) {
                 this.removeRoom(room.id);
+                continue;
+            }
+            if (staleChanged) {
+                this.broadcastPresence(room.id);
             }
         }
+    }
+    // ============ Gestion fermeture/transfert de room ============
+    /**
+     * Ferme une room (hôte uniquement)
+     * La room reste disponible 5 minutes pour permettre le transfert d'hôte
+     */
+    closeRoom(roomCode, socketId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return { success: false, reason: 'Room not found' };
+        if (room.hostPlayerId !== socketId)
+            return { success: false, reason: 'Not host' };
+        // Notifier tous les joueurs sauf l'hôte
+        room.players.forEach((player) => {
+            if (player.id !== socketId && player.isHuman && player.connected) {
+                this.io.to(player.id).emit('room:closed', {
+                    roomCode,
+                    hostLeft: true,
+                    canBecomeHost: true,
+                });
+            }
+        });
+        // Marquer la room comme en cours de fermeture
+        room.status = Room_1.RoomStatus.closing;
+        room.closingAt = this.now() + 5 * 60 * 1000; // 5 minutes
+        // Retirer l'ancien hôte de la room
+        const hostIndex = room.players.findIndex((p) => p.id === socketId);
+        if (hostIndex !== -1) {
+            room.players.splice(hostIndex, 1);
+        }
+        this.broadcastPresence(roomCode);
+        return { success: true };
+    }
+    /**
+     * Transfert d'hôte - un joueur demande à devenir hôte d'une room fermée
+     */
+    transferHost(roomCode, requesterId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        // Vérifier que la room est en cours de fermeture ou que l'hôte actuel n'est plus connecté
+        const currentHost = room.players.find((p) => p.id === room.hostPlayerId);
+        const isClosing = room.status === Room_1.RoomStatus.closing;
+        const hostDisconnected = !currentHost || !currentHost.connected;
+        if (!isClosing && !hostDisconnected)
+            return false;
+        const requester = room.players.find((p) => p.id === requesterId);
+        if (!requester || !requester.isHuman || !requester.connected)
+            return false;
+        // Transférer l'hôte
+        room.hostPlayerId = requesterId;
+        room.status = Room_1.RoomStatus.waiting;
+        room.closingAt = undefined;
+        this.broadcastPresence(roomCode);
+        // Notifier le nouveau hôte
+        this.io.to(requesterId).emit('room:host_transferred', {
+            roomCode,
+            message: 'Vous êtes maintenant l\'hôte',
+        });
+        return true;
+    }
+    /**
+     * Vérifie quelles rooms sont encore actives
+     */
+    checkActiveRooms(roomCodes) {
+        const result = [];
+        for (const code of roomCodes) {
+            const room = this.rooms.get(code.toUpperCase());
+            if (room) {
+                result.push({
+                    roomCode: room.id,
+                    status: room.status,
+                    playerCount: this.activePlayerCount(room),
+                });
+            }
+        }
+        return result;
+    }
+    /**
+     * Change le mode de jeu (hôte uniquement, en lobby)
+     */
+    setGameMode(roomCode, socketId, mode) {
+        const room = this.rooms.get(roomCode);
+        if (!room || room.status !== Room_1.RoomStatus.waiting)
+            return false;
+        if (room.hostPlayerId !== socketId)
+            return false;
+        room.gameMode = mode;
+        this.broadcastPresence(roomCode);
+        return true;
+    }
+    /**
+     * Envoie l'état complet du jeu à un joueur spécifique
+     */
+    sendFullStateToPlayer(roomCode, playerId) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        const personalizedState = this.getPersonalizedState(room.gameState, playerId);
+        this.io.to(playerId).emit('game:full_state', {
+            type: 'FULL_STATE',
+            gameState: personalizedState,
+        });
     }
     removeRoom(roomCode) {
         this.clearTurnTimer(roomCode);
@@ -500,7 +910,19 @@ class RoomManager {
     }
     getPersonalizedState(gameState, playerId) {
         const state = { ...gameState };
+        const isGameEnded = gameState.phase === GameState_1.GamePhase.ended;
         state.players = state.players.map((player) => {
+            // Si la partie est terminée, révéler toutes les cartes à tous les joueurs
+            if (isGameEnded) {
+                return {
+                    ...player,
+                    // S'assurer que les cartes sont visibles
+                    hand: player.hand.map((card) => ({
+                        ...card,
+                        hidden: false,
+                    })),
+                };
+            }
             if (player.id === playerId) {
                 return player;
             }

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupConnectionHandler = setupConnectionHandler;
 function setupConnectionHandler(socket, roomManager) {
     socket.on('client:ping', (data, callback) => {
+        roomManager.touchPlayer(socket.id);
         if (typeof callback === 'function') {
             callback({
                 serverTime: Date.now(),

@@ -6,6 +6,7 @@ import { RoomManager } from './services/RoomManager';
 import { setupConnectionHandler } from './handlers/connectionHandler';
 import { setupRoomHandler } from './handlers/roomHandler';
 import { setupGameHandler } from './handlers/gameHandler';
+import { SecurityService } from './services/SecurityService';
 
 function renderHomePage(roomCount: number) {
   return `
@@ -102,6 +103,7 @@ export function startServer() {
 
   app.use(cors());
   app.use(express.json());
+  app.use(SecurityService.apiLimiter); // API Rate Limiting
 
   const io = new Server(httpServer, {
     cors: {
@@ -110,6 +112,17 @@ export function startServer() {
     },
     pingTimeout: 60000,
     pingInterval: 25000,
+  });
+
+  // Socket Connection Rate Limiting
+  io.use(async (socket, next) => {
+    try {
+      const ip = socket.handshake.address;
+      await SecurityService.checkConnectionLimit(ip);
+      next();
+    } catch (e) {
+      next(new Error('Rate limit exceeded'));
+    }
   });
 
   const roomManager = new RoomManager(io);
@@ -131,6 +144,10 @@ export function startServer() {
 
   app.get('/rooms', (req, res) => {
     res.json(roomManager.listRooms());
+  });
+
+  app.get('/rooms/debug', (req, res) => {
+    res.json(roomManager.listRoomsDebug());
   });
 
   const PORT = process.env.PORT || 3000;

@@ -26,6 +26,7 @@ function createPlayer(id, name, isHuman, position, botBehavior, botSkillLevel, c
         focused: isHuman ? true : undefined,
         isSpectator: false,
         lastSeenAt: isHuman ? Date.now() : undefined,
+        ready: isHuman ? false : true,
         botBehavior,
         botSkillLevel,
         position,

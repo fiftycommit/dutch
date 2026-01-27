@@ -15,6 +15,7 @@ export enum RoomStatus {
   waiting = 'waiting',
   playing = 'playing',
   ended = 'ended',
+  closing = 'closing', // Room en cours de fermeture, en attente de transfert d'hôte
 }
 
 export interface Room {
@@ -29,6 +30,8 @@ export interface Room {
   lastActivityAt: number;
   expiresAt: number;
   tournamentRound?: number;
+  closingAt?: number; // Timestamp d'expiration pour transfert d'hôte
+  cumulativeScores?: Map<string, number>; // clientId -> score total (classement permanent)
 }
 
 export function createRoom(

@@ -45,88 +45,110 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}📦 Installation des dépendances${NC}"
+echo -e "${GREEN}📦 Vérification des dépendances${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# Mise à jour du système
-echo -e "\n${YELLOW}⬆️  Mise à jour du système...${NC}"
-apt update && apt upgrade -y
+SHOULD_UPDATE=false
 
-# Installer curl
-echo -e "\n${YELLOW}📥 Installation de curl...${NC}"
-apt install -y curl
+# Vérifier Node.js
+if ! command -v node >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}📥 Installation de Node.js...${NC}"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt install -y nodejs
+    SHOULD_UPDATE=true
+else
+    echo -e "✅ Node.js déjà installé ($(node -v))"
+fi
 
-# Installer Node.js 20.x
-echo -e "\n${YELLOW}📦 Installation de Node.js 20.x...${NC}"
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
+# Vérifier Git
+if ! command -v git >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}📥 Installation de Git...${NC}"
+    apt install -y git
+else
+    echo -e "✅ Git déjà installé"
+fi
 
-node --version
-npm --version
+# Vérifier PM2
+if ! command -v pm2 >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}📥 Installation de PM2...${NC}"
+    npm install -g pm2
+else
+    echo -e "✅ PM2 déjà installé"
+fi
 
-# Installer Git
-echo -e "\n${YELLOW}📦 Installation de Git...${NC}"
-apt install -y git
+# Vérifier Nginx
+if ! command -v nginx >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}📥 Installation de Nginx...${NC}"
+    apt install -y nginx
+else
+    echo -e "✅ Nginx déjà installé"
+fi
 
-# Installer PM2
-echo -e "\n${YELLOW}📦 Installation de PM2...${NC}"
-npm install -g pm2
+# Vérifier Certbot
+if ! command -v certbot >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}📥 Installation de Certbot...${NC}"
+    apt install -y certbot python3-certbot-nginx
+else
+    echo -e "✅ Certbot déjà installé"
+fi
 
-# Installer Nginx
-echo -e "\n${YELLOW}📦 Installation de Nginx...${NC}"
-apt install -y nginx
-
-# Installer Certbot
-echo -e "\n${YELLOW}📦 Installation de Certbot...${NC}"
-apt install -y certbot python3-certbot-nginx
-
-# Créer l'utilisateur dutch
-echo -e "\n${YELLOW}👤 Création de l'utilisateur dutch...${NC}"
+# Créer l'utilisateur dutch si inexistant
 if ! id -u dutch > /dev/null 2>&1; then
+    echo -e "\n${YELLOW}👤 Création de l'utilisateur dutch...${NC}"
     useradd -m -s /bin/bash dutch
     usermod -aG sudo dutch
     echo "dutch ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/dutch
+else
+    echo -e "✅ Utilisateur dutch existant"
 fi
 
 # Créer le répertoire de l'application
-echo -e "\n${YELLOW}📁 Création du répertoire de l'application...${NC}"
-mkdir -p /home/dutch/apps
-chown -R dutch:dutch /home/dutch/apps
+mkdir -p /var/www/dutch-server
+chown -R root:root /var/www/dutch-server
 
-echo -e "\n${GREEN}✓ Installation des dépendances terminée!${NC}"
+echo -e "\n${GREEN}✓ Vérification des dépendances terminée!${NC}"
 REMOTE_SCRIPT
 
 # Uploader et exécuter le script d'installation
-echo -e "${YELLOW}📤 Upload du script d'installation...${NC}"
+echo -e "${YELLOW}📤 Upload du script de vérification...${NC}"
 scp -o StrictHostKeyChecking=no /tmp/setup-server.sh root@$SERVER_IP:/tmp/
 
-echo -e "${YELLOW}⚙️  Exécution de l'installation (cela peut prendre 3-5 minutes)...${NC}"
+echo -e "${YELLOW}⚙️  Vérification de l'environnement...${NC}"
 ssh -o StrictHostKeyChecking=no root@$SERVER_IP 'bash /tmp/setup-server.sh'
 
 # Créer l'archive du serveur
 echo -e "\n${YELLOW}📦 Création de l'archive du serveur...${NC}"
 cd /Users/maxmbey/projets/dutch
-tar -czf /tmp/dutch-server.tar.gz dutch-server/
+COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -czf /tmp/dutch-server.tar.gz dutch-server/
 
 # Uploader le code (en tant que root, puis on change les permissions)
 echo -e "${YELLOW}📤 Upload du code serveur...${NC}"
-scp /tmp/dutch-server.tar.gz root@$SERVER_IP:/home/dutch/apps/
-ssh root@$SERVER_IP "chown dutch:dutch /home/dutch/apps/dutch-server.tar.gz"
+scp /tmp/dutch-server.tar.gz root@$SERVER_IP:/var/www/
 
 # Décompresser et installer sur le serveur
 echo -e "${YELLOW}📦 Installation du code serveur...${NC}"
 ssh root@$SERVER_IP << 'INSTALL_CODE'
-su - dutch << 'EOF_DUTCH'
 set -e
-cd ~/apps
+cd /var/www
+rm -rf dutch-server
 tar -xzf dutch-server.tar.gz
 cd dutch-server
 
-# Installer les dépendances
-npm install --production
+# Installer TOUTES les dépendances (y compris typescript)
+echo "📦 Installation des paquets NPM..."
+npm install
 
 # Compiler TypeScript
+echo "🔨 Compilation..."
 npm run build
+
+# Nettoyer les dépendances de développement pour la prod
+echo "🧹 Nettoyage..."
+npm prune --production
+
+# Installer les dépendances de production manquantes
+echo "📦 Installation des dépendances de production..."
+npm install express-rate-limit rate-limiter-flexible
 
 # Créer le fichier .env
 cat > .env << ENV
@@ -138,7 +160,6 @@ ENV
 mkdir -p logs
 
 echo "✓ Code installé et compilé"
-EOF_DUTCH
 INSTALL_CODE
 
 # Configurer Nginx
@@ -203,8 +224,7 @@ NGINX_SETUP
 # Démarrer l'application avec PM2
 echo -e "\n${YELLOW}🚀 Démarrage de l'application...${NC}"
 ssh root@$SERVER_IP << 'START_APP'
-su - dutch << 'EOF_DUTCH'
-cd ~/apps/dutch-server
+cd /var/www/dutch-server
 
 # Créer ecosystem.config.js
 cat > ecosystem.config.js << 'PM2_CONFIG'
@@ -212,8 +232,8 @@ module.exports = {
   apps: [{
     name: 'dutch-server',
     script: './dist/index.js',
-    instances: 'max',
-    exec_mode: 'cluster',
+    instances: 1,
+    exec_mode: 'fork',
     env: {
       NODE_ENV: 'production',
       PORT: 3000
@@ -227,12 +247,11 @@ module.exports = {
 };
 PM2_CONFIG
 
-# Démarrer avec PM2
+# Arrêter puis redémarrer avec PM2 pour prendre en compte les changements de config
+pm2 delete dutch-server 2>/dev/null || true
 pm2 start ecosystem.config.js
 pm2 save
-pm2 startup | tail -1 | bash
 echo "✓ Application démarrée"
-EOF_DUTCH
 START_APP
 
 # Vérifier que le serveur répond

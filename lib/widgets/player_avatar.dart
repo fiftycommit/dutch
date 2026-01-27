@@ -24,17 +24,17 @@ class PlayerAvatar extends StatelessWidget {
     if (compactMode) {
       return _buildCompactBadge(context);
     }
-    
+
     // Mode classique avec avatar circulaire (pour les bots)
     return _buildClassicAvatar(context);
   }
-  
+
   /// Badge compact: emoji + nom dans une seule bande
   Widget _buildCompactBadge(BuildContext context) {
     final badgeHeight = ScreenUtils.scale(context, size * 0.6);
     final fontSize = ScreenUtils.scaleFont(context, size * 0.35);
     final emojiSize = ScreenUtils.scaleFont(context, size * 0.4);
-    
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: EdgeInsets.symmetric(
@@ -91,7 +91,7 @@ class PlayerAvatar extends StatelessWidget {
       ),
     );
   }
-  
+
   /// Avatar classique avec cercle (pour les bots sur les côtés)
   Widget _buildClassicAvatar(BuildContext context) {
     return Column(
@@ -112,8 +112,8 @@ class PlayerAvatar extends StatelessWidget {
                       Colors.amber.shade700,
                     ]
                   : [
-                      const Color(0xFF2d5f3e),
-                      const Color(0xFF1a472a),
+                      player.avatarColor,
+                      Color.lerp(player.avatarColor, Colors.black, 0.4)!,
                     ],
             ),
             border: Border.all(

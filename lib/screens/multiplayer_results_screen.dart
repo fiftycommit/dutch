@@ -5,6 +5,7 @@ import '../models/player.dart';
 import '../providers/multiplayer_game_provider.dart';
 import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
+import 'multiplayer_lobby_screen.dart';
 
 class MultiplayerResultsScreen extends StatelessWidget {
   final GameState gameState;
@@ -18,6 +19,20 @@ class MultiplayerResultsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<MultiplayerGameProvider>();
+
+    // Si la room a été redémarrée, naviguer vers le lobby
+    if (provider.isInLobby && !provider.isPlaying && provider.roomCode != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MultiplayerLobbyScreen()),
+          );
+        }
+      });
+    }
+
     final ranking = gameState.getFinalRanking();
     final ranks = gameState.getFinalRanksWithTies();
     final callerId = gameState.dutchCallerId;
@@ -112,27 +127,62 @@ class MultiplayerResultsScreen extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
                 child: SizedBox(
-                  width: 280,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      context.read<MultiplayerGameProvider>().leaveRoom();
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    children: [
+                      if (context.watch<MultiplayerGameProvider>().isHost) ...[
+                        SizedBox(
+                          width: 280,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              context
+                                  .read<MultiplayerGameProvider>()
+                                  .restartGame();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade700,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              "Rejouer",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: ScreenUtils.spacing(context, 12)),
+                      ],
+                      SizedBox(
+                        width: 280,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            context.read<MultiplayerGameProvider>().leaveRoom();
+                            Navigator.of(context)
+                                .popUntil((route) => route.isFirst);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            "Retour au menu",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: const Text(
-                      "Retour au menu",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),

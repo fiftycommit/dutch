@@ -22,6 +22,7 @@ export interface Player {
   focused?: boolean;
   isSpectator?: boolean;
   lastSeenAt?: number;
+  ready?: boolean;
   botBehavior?: BotBehavior;
   botSkillLevel?: BotSkillLevel;
   position: number;
@@ -49,6 +50,7 @@ export function createPlayer(
     focused: isHuman ? true : undefined,
     isSpectator: false,
     lastSeenAt: isHuman ? Date.now() : undefined,
+    ready: isHuman ? false : true,
     botBehavior,
     botSkillLevel,
     position,
