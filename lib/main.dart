@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'providers/game_provider.dart';
+import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 
@@ -48,6 +49,7 @@ class DutchGameApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => GameProvider()),
+        ChangeNotifierProvider(create: (_) => MultiplayerGameProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: MaterialApp(

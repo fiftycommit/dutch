@@ -664,7 +664,7 @@ class GameProvider with ChangeNotifier {
       final dutchTag =
           player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
       _gameState!
-          .addToHistory("${badgePrefix}#$rank ${player.name}$dutchTag — $score pts");
+          .addToHistory("$badgePrefix#$rank ${player.name}$dutchTag — $score pts");
     }
 
     // Calculer le numéro de manche tournoi (1, 2 ou 3)

@@ -128,4 +128,25 @@ class PlayingCard {
 
     return ' $value';
   }
+
+  // Sérialisation JSON pour multijoueur
+  factory PlayingCard.fromJson(Map<String, dynamic> json) {
+    return PlayingCard(
+      suit: json['suit'] as String,
+      value: json['value'] as String,
+      points: json['points'] as int,
+      isSpecial: json['isSpecial'] as bool,
+      id: json['id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'suit': suit,
+      'value': value,
+      'points': points,
+      'isSpecial': isSpecial,
+      'id': id,
+    };
+  }
 }

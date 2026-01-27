@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/stats_service.dart';
 import 'game_setup_screen.dart';
+import 'multiplayer_menu_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'rules_screen.dart';
@@ -194,6 +195,21 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     _refreshStats();
                   },
                 ),
+                const SizedBox(height: 18),
+                _buildCompactMenuButton(
+                  context,
+                  label: 'MULTIJOUEUR',
+                  icon: Icons.groups,
+                  isPrimary: false,
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MultiplayerMenuScreen(),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -321,6 +337,21 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                       );
                       _refreshStats();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildMenuButton(
+                    context,
+                    label: 'MULTIJOUEUR',
+                    icon: Icons.groups,
+                    isPrimary: false,
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MultiplayerMenuScreen(),
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 40),

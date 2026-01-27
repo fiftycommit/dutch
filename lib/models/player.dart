@@ -179,4 +179,41 @@ class Player {
     }
     return "🤖";
   }
+
+  // Sérialisation JSON pour multijoueur
+  factory Player.fromJson(Map<String, dynamic> json) {
+    return Player(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      isHuman: json['isHuman'] as bool,
+      botBehavior: json['botBehavior'] != null
+          ? BotBehavior.values[json['botBehavior'] as int]
+          : null,
+      botSkillLevel: json['botSkillLevel'] != null
+          ? BotSkillLevel.values[json['botSkillLevel'] as int]
+          : null,
+      position: json['position'] as int? ?? 0,
+      hand: (json['hand'] as List?)
+              ?.map((e) => PlayingCard.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      knownCards: (json['knownCards'] as List?)?.cast<bool>() ?? [],
+      // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas sérialisés
+      // car ils sont gérés côté serveur pour les bots
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'isHuman': isHuman,
+      'botBehavior': botBehavior?.index,
+      'botSkillLevel': botSkillLevel?.index,
+      'position': position,
+      'hand': hand.map((c) => c.toJson()).toList(),
+      'knownCards': knownCards,
+      // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas inclus
+    };
+  }
 }

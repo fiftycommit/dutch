@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(chmod:*)",
+      "Bash(curl -s http://164.92.234.245/health)",
+      "Bash(ssh:*)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(node dist/services/test-imports.js:*)"
     ]
   }
 }

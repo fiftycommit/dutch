@@ -574,7 +574,7 @@ class ResultsScreen extends StatelessWidget {
               ),
               if (streakText != null)
                 Text(
-                  streakText!,
+                  streakText,
                   style: const TextStyle(
                     color: Colors.orangeAccent,
                     fontSize: 11,

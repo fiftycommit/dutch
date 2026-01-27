@@ -1,0 +1,18 @@
+Droplet Dutch Game - Informations
+==================================
+
+Droplet ID: 547369076
+Adresse IP: 164.92.234.245
+Région: Frankfurt (fra1)
+Taille: 1GB RAM / 1 vCPU
+Créé le: lun. 26 janv. 2026 18:35:46 CET
+
+Connexion SSH:
+  ssh root@164.92.234.245
+  Mot de passe: Voir email de DigitalOcean
+
+Configuration DNS (Namecheap):
+  A Record: @ -> 164.92.234.245
+  A Record: www -> 164.92.234.245
+
+URL finale: https://dutchgame.me

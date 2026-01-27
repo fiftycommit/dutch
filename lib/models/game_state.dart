@@ -628,4 +628,70 @@ class GameState {
     sorted.sort((a, b) => getCumulativeScore(a).compareTo(getCumulativeScore(b)));
     return sorted;
   }
+
+  // Sérialisation JSON pour multijoueur
+  factory GameState.fromJson(Map<String, dynamic> json) {
+    return GameState(
+      players: (json['players'] as List)
+          .map((e) => Player.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      deck: (json['deck'] as List)
+          .map((e) => PlayingCard.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      discardPile: (json['discardPile'] as List)
+          .map((e) => PlayingCard.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      currentPlayerIndex: json['currentPlayerIndex'] as int,
+      gameMode: GameMode.values[json['gameMode'] as int],
+      phase: GamePhase.values[json['phase'] as int],
+      difficulty: Difficulty.values[json['difficulty'] as int],
+      tournamentRound: json['tournamentRound'] as int? ?? 1,
+      eliminatedPlayerIds: (json['eliminatedPlayerIds'] as List?)?.cast<String>() ?? [],
+      drawnCard: json['drawnCard'] != null
+          ? PlayingCard.fromJson(json['drawnCard'] as Map<String, dynamic>)
+          : null,
+      isWaitingForSpecialPower: json['isWaitingForSpecialPower'] as bool? ?? false,
+      specialCardToActivate: json['specialCardToActivate'] != null
+          ? PlayingCard.fromJson(json['specialCardToActivate'] as Map<String, dynamic>)
+          : null,
+      dutchCallerId: json['dutchCallerId'] as String?,
+      reactionStartTime: json['reactionStartTime'] != null
+          ? DateTime.parse(json['reactionStartTime'] as String)
+          : null,
+      actionHistory: (json['actionHistory'] as List?)?.cast<String>() ?? [],
+      reactionTimeRemaining: json['reactionTimeRemaining'] as int? ?? 0,
+      lastSpiedCard: json['lastSpiedCard'] != null
+          ? PlayingCard.fromJson(json['lastSpiedCard'] as Map<String, dynamic>)
+          : null,
+      pendingSwap: json['pendingSwap'] != null
+          ? Map<String, dynamic>.from(json['pendingSwap'] as Map)
+          : null,
+      tournamentCumulativeScores:
+          (json['tournamentCumulativeScores'] as Map?)?.cast<String, int>() ?? {},
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'players': players.map((p) => p.toJson()).toList(),
+      'deck': deck.map((c) => c.toJson()).toList(),
+      'discardPile': discardPile.map((c) => c.toJson()).toList(),
+      'currentPlayerIndex': currentPlayerIndex,
+      'gameMode': gameMode.index,
+      'phase': phase.index,
+      'difficulty': difficulty.index,
+      'tournamentRound': tournamentRound,
+      'eliminatedPlayerIds': eliminatedPlayerIds,
+      'drawnCard': drawnCard?.toJson(),
+      'isWaitingForSpecialPower': isWaitingForSpecialPower,
+      'specialCardToActivate': specialCardToActivate?.toJson(),
+      'dutchCallerId': dutchCallerId,
+      'reactionStartTime': reactionStartTime?.toIso8601String(),
+      'actionHistory': actionHistory,
+      'reactionTimeRemaining': reactionTimeRemaining,
+      'lastSpiedCard': lastSpiedCard?.toJson(),
+      'pendingSwap': pendingSwap,
+      'tournamentCumulativeScores': tournamentCumulativeScores,
+    };
+  }
 }

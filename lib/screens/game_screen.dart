@@ -13,12 +13,13 @@ import '../widgets/player_hand.dart';
 import '../widgets/player_avatar.dart';
 import '../widgets/responsive_dialog.dart';
 import '../utils/screen_utils.dart';
+import '../widgets/game_action_button.dart';
 import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
 import 'dutch_reveal_screen.dart';
 import '../services/web_orientation_service.dart';
-import 'game_screen/center_table.dart';
+import '../widgets/center_table.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -27,22 +28,12 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+class _GameScreenState extends State<GameScreen> {
   static const double _cardAspectRatio = 7 / 5;
   @override
   void initState() {
     super.initState();
-    
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    
+
     if (kIsWeb) {
       WebOrientationService.lockLandscape();
     } else {
@@ -60,7 +51,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _pulseController.dispose();
     if (kIsWeb) {
       WebOrientationService.unlock();
     } else {
@@ -318,6 +308,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                           hasDrawn: hasDrawn,
                           isCompactMode: isCompactMode,
                           onShowDiscard: () => _showDiscardPile(gs),
+                          reactionTimeTotalMs: gp.currentReactionTimeMs,
+                          enableHaptics: true,
                         ),
                       ),
                     ),
@@ -540,18 +532,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               width: sideButtonWidth,
               height: actionButtonHeight,
               child: hasDrawn
-                  ? _buildCompactActionButton(
-                      icon: Icons.delete,
+                  ? GameActionButton(
                       label: "JETER",
                       color: Colors.redAccent,
                       onTap: gp.discardDrawnCard,
-                      withPulse: true)
-                  : _buildCompactActionButton(
-                      icon: Icons.get_app,
+                      withPulse: true,
+                      compact: true,
+                    )
+                  : GameActionButton(
                       label: "PIOCHER",
                       color: Colors.green,
                       onTap: gp.drawCard,
-                      withPulse: true),
+                      withPulse: true,
+                      compact: true,
+                    ),
             ),
           if (!isMyTurn) SizedBox(width: sideButtonWidth),
           SizedBox(width: sideGap),
@@ -561,12 +555,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             SizedBox(
               width: sideButtonWidth,
               height: actionButtonHeight,
-              child: _buildCompactActionButton(
-                  icon: Icons.campaign,
-                  label: "DUTCH",
-                  color: Colors.amber.shade700,
-                  onTap: () => _confirmDutch(gp),
-                  withPulse: true),
+              child: GameActionButton(
+                label: "DUTCH",
+                color: Colors.amber.shade700,
+                onTap: () => _confirmDutch(gp),
+                withPulse: true,
+                compact: true,
+              ),
             ),
           if (isMyTurn && hasDrawn)
             Container(
@@ -603,18 +598,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   height: actionButtonHeight,
                   margin: EdgeInsets.only(bottom: actionButtonMargin),
                   child: hasDrawn
-                      ? _buildActionButton(
-                          icon: Icons.delete,
+                      ? GameActionButton(
                           label: "JETER",
                           color: Colors.redAccent,
                           onTap: gp.discardDrawnCard,
-                          withPulse: true)
-                      : _buildActionButton(
-                          icon: Icons.get_app,
+                          withPulse: true,
+                        )
+                      : GameActionButton(
                           label: "PIOCHER",
                           color: Colors.green,
                           onTap: gp.drawCard,
-                          withPulse: true),
+                          withPulse: true,
+                        ),
                 ),
             ],
           ),
@@ -631,12 +626,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Container(
                   height: actionButtonHeight,
                   margin: EdgeInsets.only(bottom: actionButtonMargin),
-                  child: _buildActionButton(
-                      icon: Icons.campaign,
-                      label: "DUTCH",
-                      color: Colors.amber.shade700,
-                      onTap: () => _confirmDutch(gp),
-                      withPulse: true),
+                  child: GameActionButton(
+                    label: "DUTCH",
+                    color: Colors.amber.shade700,
+                    onTap: () => _confirmDutch(gp),
+                    withPulse: true,
+                  ),
                 ),
               if (isMyTurn && hasDrawn)
                 Container(
@@ -908,126 +903,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       height: height,
       margin: margin,
     );
-  }
-
-  Widget _buildActionButton(
-      {required IconData icon,
-      required String label,
-      required Color color,
-      required VoidCallback onTap,
-      bool withPulse = false}) {
-    Widget button = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color, width: 1.4),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-    );
-    
-    if (withPulse) {
-      return AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          final t =
-              ((_pulseAnimation.value - 1.0) / 0.08).clamp(0.0, 1.0);
-          final glow = 8 + (12 * t);
-          return Transform.scale(
-            scale: _pulseAnimation.value,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.35 + (0.25 * t)),
-                    blurRadius: glow,
-                    spreadRadius: 1.0 + (1.0 * t),
-                  ),
-                ],
-              ),
-              child: child,
-            ),
-          );
-        },
-        child: button,
-      );
-    }
-    return button;
-  }
-  
-  Widget _buildCompactActionButton(
-      {required IconData icon,
-      required String label,
-      required Color color,
-      required VoidCallback onTap,
-      bool withPulse = false}) {
-    Widget button = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color, width: 1.2),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-    );
-    
-    if (withPulse) {
-      return AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          final t =
-              ((_pulseAnimation.value - 1.0) / 0.08).clamp(0.0, 1.0);
-          final glow = 6 + (8 * t);
-          return Transform.scale(
-            scale: _pulseAnimation.value,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3 + (0.2 * t)),
-                    blurRadius: glow,
-                    spreadRadius: 0.8 + (0.8 * t),
-                  ),
-                ],
-              ),
-              child: child,
-            ),
-          );
-        },
-        child: button,
-      );
-    }
-    return button;
   }
 
   void _handleCardTap(GameProvider gp, GameState gs, int index) {
