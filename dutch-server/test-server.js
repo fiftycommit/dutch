@@ -4,6 +4,8 @@
  * Tests: connection, room creation, game flow, reaction phase, AFK kick
  */
 
+// max
+
 const { io } = require('socket.io-client');
 
 const SERVER_URL = process.env.SERVER_URL || 'https://dutch-game.me';
