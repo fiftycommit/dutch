@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/stats_service.dart';
+import '../services/multiplayer_service.dart';
 import 'game_setup_screen.dart';
 import 'multiplayer_menu_screen.dart';
 import 'settings_screen.dart';
@@ -59,12 +60,80 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _loadAllSlots();
   }
 
+  /// Vérifie la connectivité avant d'aller au multijoueur
+  Future<void> _checkConnectivityAndNavigate() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: Colors.amber),
+      ),
+    );
+
+    try {
+      // Try to ping the server
+      final service = MultiplayerService();
+      await service.connect();
+      final isConnected = service.isConnected;
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+
+      if (isConnected) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MultiplayerMenuScreen(),
+          ),
+        );
+      } else {
+        _showNoInternetDialog();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+      _showNoInternetDialog();
+    }
+  }
+
+  void _showNoInternetDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D44),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_off, color: Colors.redAccent, size: 28),
+            SizedBox(width: 12),
+            Text(
+              'Pas de connexion',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Impossible de se connecter au serveur. Vérifiez votre connexion internet.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(color: Colors.amber)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final isLandscape = screenSize.width > screenSize.height;
     final isSmallLandscape = isLandscape && screenSize.height < 500;
-    
+
     return Scaffold(
       body: Stack(
         children: [
@@ -80,15 +149,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ),
           ),
           SafeArea(
-            child: isSmallLandscape 
-              ? _buildLandscapeLayout(context)
-              : _buildPortraitLayout(context),
+            child: isSmallLandscape
+                ? _buildLandscapeLayout(context)
+                : _buildPortraitLayout(context),
           ),
         ],
       ),
     );
   }
-  
+
   /// Layout paysage optimisé pour iPhone
   Widget _buildLandscapeLayout(BuildContext context) {
     // Moins de padding, éléments plus gros, centrage vertical
@@ -113,7 +182,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     shadows: [
-                      Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))
+                      Shadow(
+                          color: Colors.black45,
+                          blurRadius: 10,
+                          offset: Offset(2, 2))
                     ],
                   ),
                 ),
@@ -201,14 +273,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'MULTIJOUEUR',
                   icon: Icons.groups,
                   isPrimary: false,
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MultiplayerMenuScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: _checkConnectivityAndNavigate,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -216,20 +281,26 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   children: [
                     _buildSmallIconButton(
                       icon: Icons.settings,
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (context) => const SettingsScreen())),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const SettingsScreen())),
                     ),
                     const SizedBox(width: 18),
                     _buildSmallIconButton(
                       icon: Icons.menu_book,
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (context) => const RulesScreen())),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const RulesScreen())),
                     ),
                     const SizedBox(width: 18),
                     _buildSmallIconButton(
                       icon: Icons.bar_chart,
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (context) => const StatsScreen())),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const StatsScreen())),
                     ),
                   ],
                 ),
@@ -240,7 +311,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       ),
     );
   }
-  
+
   /// Layout portrait classique
   Widget _buildPortraitLayout(BuildContext context) {
     return LayoutBuilder(
@@ -265,7 +336,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       shadows: [
-                        Shadow(color: Colors.black45, blurRadius: 10, offset: Offset(2, 2))
+                        Shadow(
+                            color: Colors.black45,
+                            blurRadius: 10,
+                            offset: Offset(2, 2))
                       ],
                     ),
                   ),
@@ -345,14 +419,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'MULTIJOUEUR',
                     icon: Icons.groups,
                     isPrimary: false,
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MultiplayerMenuScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: _checkConnectivityAndNavigate,
                   ),
                   const SizedBox(height: 40),
                   Row(
@@ -361,22 +428,28 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       _buildIconButton(
                         icon: Icons.settings,
                         label: 'Réglages',
-                        onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (context) => const SettingsScreen())),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const SettingsScreen())),
                       ),
                       const SizedBox(width: 20),
                       _buildIconButton(
                         icon: Icons.menu_book,
                         label: 'Règles',
-                        onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (context) => const RulesScreen())),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const RulesScreen())),
                       ),
                       const SizedBox(width: 20),
                       _buildIconButton(
                         icon: Icons.bar_chart,
                         label: 'Stats',
-                        onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (context) => const StatsScreen())),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const StatsScreen())),
                       ),
                     ],
                   ),
@@ -402,7 +475,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         return const Color(0xFFCD7F32); // Bronze
     }
   }
-  
+
   /// Slot compact pour le mode paysage
   Widget _buildCompactSlotCard(int id, String name, String rank, String rp,
       bool isSelected, Color rankColor) {
@@ -422,7 +495,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               ? Border.all(color: Colors.white, width: 2)
               : Border.all(color: Colors.transparent, width: 2),
           boxShadow: isSelected
-              ? [BoxShadow(color: rankColor.withValues(alpha: 0.5), blurRadius: 8)]
+              ? [
+                  BoxShadow(
+                      color: rankColor.withValues(alpha: 0.5), blurRadius: 8)
+                ]
               : [],
         ),
         child: Column(
@@ -459,7 +535,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       ),
     );
   }
-  
+
   /// Bouton de menu compact pour paysage
   Widget _buildCompactMenuButton(BuildContext context,
       {required String label,
@@ -471,21 +547,24 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       height: 40,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, color: isPrimary ? Colors.black : Colors.white, size: 18),
+        icon: Icon(icon,
+            color: isPrimary ? Colors.black : Colors.white, size: 18),
         label: Text(label, style: const TextStyle(fontSize: 12)),
         style: ElevatedButton.styleFrom(
           backgroundColor: isPrimary ? Colors.amber : const Color(0xFF2d5f3e),
           foregroundColor: isPrimary ? Colors.black : Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           elevation: isPrimary ? 6 : 3,
         ),
       ),
     );
   }
-  
+
   /// Petit bouton icône pour paysage
-  Widget _buildSmallIconButton({required IconData icon, required VoidCallback onPressed}) {
+  Widget _buildSmallIconButton(
+      {required IconData icon, required VoidCallback onPressed}) {
     return IconButton(
       onPressed: onPressed,
       icon: Icon(icon, size: 22),
