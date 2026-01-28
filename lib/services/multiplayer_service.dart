@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -103,6 +104,21 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onPlayerLeft; // Quand un joueur quitte
   Function(Map<String, dynamic>)?
       onSpecialPowerTargeted; // Pouvoir spécial sur nous
+
+  /// Check if server is reachable via HTTP (without establishing socket connection)
+  Future<bool> checkServerHealth() async {
+    try {
+      final uri = Uri.parse('$_serverUrl/health');
+      final request =
+          await HttpClient().getUrl(uri).timeout(const Duration(seconds: 5));
+      final response =
+          await request.close().timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('⚠️ Server health check failed: $e');
+      return false;
+    }
+  }
 
   // Connexion au serveur
   Future<void> connect() async {

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../services/stats_service.dart';
-import '../services/multiplayer_service.dart';
+import '../providers/multiplayer_game_provider.dart';
 import 'game_setup_screen.dart';
 import 'multiplayer_menu_screen.dart';
 import 'settings_screen.dart';
@@ -72,15 +73,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
 
     try {
-      // Try to ping the server
-      final service = MultiplayerService();
-      await service.connect();
-      final isConnected = service.isConnected;
+      // Just try to reach the server health endpoint - don't create a socket connection here
+      // The MultiplayerMenuScreen will handle the actual socket connection
+      final provider = context.read<MultiplayerGameProvider>();
+      final canConnect = await provider.checkServerReachable();
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading
 
-      if (isConnected) {
+      if (canConnect) {
         await Navigator.push(
           context,
           MaterialPageRoute(

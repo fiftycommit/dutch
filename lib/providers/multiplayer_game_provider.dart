@@ -751,6 +751,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Check if server is reachable (HTTP check only, no socket connection)
+  Future<bool> checkServerReachable() async {
+    return await _multiplayerService.checkServerHealth();
+  }
+
   /// Ferme la room (hôte uniquement)
   Future<bool> closeRoom() async {
     if (!_isHost) return false;
