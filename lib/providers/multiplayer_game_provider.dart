@@ -417,6 +417,24 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         notifyListeners();
       });
     };
+
+    _multiplayerService.onSpiedCard = (card, targetName) {
+      debugPrint('👁️ Revealed card from $targetName: ${card.toString()}');
+      _lastSpiedCard = card;
+      notifyListeners();
+    };
+
+    _multiplayerService.onGamePaused = (pausedBy) {
+      debugPrint('⏸️ Game paused by $pausedBy');
+      _isPaused = true;
+      notifyListeners();
+    };
+
+    _multiplayerService.onGameResumed = (resumedBy) {
+      debugPrint('▶️ Game resumed by $resumedBy');
+      _isPaused = false;
+      notifyListeners();
+    };
   }
 
   int _adjustForLatency(int remaining) {

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
+import '../models/card.dart';
 
 /// État de la connexion Socket.IO
 enum SocketConnectionState {
@@ -104,6 +105,9 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onPlayerLeft; // Quand un joueur quitte
   Function(Map<String, dynamic>)?
       onSpecialPowerTargeted; // Pouvoir spécial sur nous
+  Function(PlayingCard, String)? onSpiedCard; // Carte espionnée (pouvoir 7)
+  Function(String)? onGamePaused; // Jeu mis en pause (par qui)
+  Function(String)? onGameResumed; // Jeu repris (par qui)
 
   /// Check if server is reachable via HTTP (without establishing socket connection)
   Future<bool> checkServerHealth() async {
@@ -284,6 +288,12 @@ class MultiplayerService {
         if (message != null) {
           onGameStarted?.call(message);
         }
+      } else if (updateType == 'GAME_PAUSED') {
+        final pausedBy = data['pausedBy'] as String? ?? 'Inconnu';
+        onGamePaused?.call(pausedBy);
+      } else if (updateType == 'GAME_RESUMED') {
+        final resumedBy = data['resumedBy'] as String? ?? 'Inconnu';
+        onGameResumed?.call(resumedBy);
       }
 
       final reactionTimeMs = data['reactionTimeMs'];
@@ -392,6 +402,23 @@ class MultiplayerService {
           } catch (e) {
             debugPrint('❌ Erreur parsing GameState (full_state): $e');
           }
+        }
+      }
+    });
+
+    // Carte espionnée (pouvoir 7)
+    _socket!.on('game:spied_card', (data) {
+      debugPrint('👁️ Carte espionnée reçue');
+      if (data is Map) {
+        try {
+          final cardJson = data['card'] as Map<String, dynamic>?;
+          final targetName = data['targetPlayerName'] as String? ?? 'Inconnu';
+          if (cardJson != null) {
+            final card = PlayingCard.fromJson(cardJson);
+            onSpiedCard?.call(card, targetName);
+          }
+        } catch (e) {
+          debugPrint('❌ Erreur parsing spied card: $e');
         }
       }
     });
