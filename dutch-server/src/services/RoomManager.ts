@@ -720,6 +720,9 @@ export class RoomManager {
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
     this.broadcastGameState(roomCode, 'PLAYER_LEFT');
+
+    // Check if game should end due to lack of players
+    this.checkGameEndCondition(roomCode);
   }
 
   handleDisconnect(socketId: string) {
@@ -731,8 +734,54 @@ export class RoomManager {
       player.lastSeenAt = this.now();
       this.touchRoom(room);
       this.broadcastPresence(room.id);
+      this.checkGameEndCondition(room.id);
     }
     this.cleanupRooms();
+  }
+
+  checkGameEndCondition(roomCode: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+    if (room.gameState.phase === GamePhase.ended) return;
+    if (room.gameState.phase === GamePhase.setup) return; // Don't end during setup
+
+    // Count active (connected and not spectator) human players
+    const activeHumans = room.players.filter(
+      (p) => p.isHuman && p.connected && !p.isSpectator
+    );
+
+    // If less than 2 active humans remain (and we are in a multiplayer game)
+    // Note: If playing with bots, we might want to keep playing?
+    // User requirement: "When opponent leaves, game ends".
+    // Assuming 1v1 human or multi-human.
+
+    // If only 1 or 0 active humans left, end the game.
+    // (Should we allow playing against bots if humans leave? 
+    // The user issue is specifically about "opponent leaves -> game stuck".
+    // So enforcing "min 2 humans" or "min 1 human if bots present"?)
+
+    // Let's stick to: if only 1 active player (human or bot) left ? 
+    // No, bots don't disconnect.
+    // If 2 humans playing, one leaves -> 1 active human. Game should end.
+
+    // Let's count *active players* (including bots if they count as players)
+    // But bots are always "connected".
+    // If the game was initialized with bots, `room.players` has bots.
+
+    // Valid termination condition:
+    // If it's a multiplayer game (started with >1 human), and now <2 humans are connected.
+
+    // Let's use a simpler heuristic:
+    // If only 1 "alive" player remains.
+    // "Alive" means connected and not spectator.
+
+    const activePlayers = room.players.filter(
+      p => (p.isHuman ? (p.connected && !p.isSpectator) : true)
+    );
+
+    if (activePlayers.length < 2) {
+      this.handleGameEnd(roomCode);
+    }
   }
 
   broadcastPresence(roomCode: string) {

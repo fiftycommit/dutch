@@ -169,12 +169,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   bool get isReady => _localPresence?['ready'] == true;
   int get serverTimeOffsetMs => _multiplayerService.serverTimeOffsetMs;
 
-  // AFK Protection
-  Timer? _turnTimer;
-  int? _turnStartTime;
-  bool _showAfkWarning = false;
-  bool get showAfkWarning => _showAfkWarning;
-
   // Joueurs marqués comme AFK (timeout atteint)
   final Set<String> _afkPlayerIds = {};
   Set<String> get afkPlayerIds => Set.unmodifiable(_afkPlayerIds);
@@ -239,16 +233,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
       _isInLobby = false;
       _syncReactionPhase();
 
-      // AFK Monitoring
-      if (_gameState != null &&
-          _gameState!.phase == GamePhase.playing &&
-          _gameState!.currentPlayer.id == playerId &&
-          _gameState!.currentPlayer.isHuman) {
-        _startTurnTimer();
-      } else {
-        _stopTurnTimer();
-      }
-
       // If only one non-eliminated player remains, end the game locally
       try {
         final alive = _gameState!.players
@@ -257,7 +241,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         if (alive.length <= 1 && _gameState!.phase != GamePhase.ended) {
           _gameState!.phase = GamePhase.ended;
           _isPlaying = false;
-          _stopTurnTimer();
         }
       } catch (_) {}
     };
@@ -678,37 +661,36 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   // Actions de jeu - déléguer au service
   void drawCard() {
     if (_gameState == null) return;
-    _resetAfkStatus();
     _multiplayerService.drawCard();
   }
 
   void replaceCard(int cardIndex) {
     if (_gameState == null) return;
-    _resetAfkStatus();
+
     _multiplayerService.replaceCard(cardIndex);
   }
 
   void discardDrawnCard() {
     if (_gameState == null) return;
-    _resetAfkStatus();
+
     _multiplayerService.discardDrawnCard();
   }
 
   void takeFromDiscard() {
     if (_gameState == null) return;
-    _resetAfkStatus();
+
     _multiplayerService.takeFromDiscard();
   }
 
   void callDutch() {
     if (_gameState == null) return;
-    _resetAfkStatus();
+
     _multiplayerService.callDutch();
   }
 
   void attemptMatch(int cardIndex) {
     if (_gameState == null) return;
-    _resetAfkStatus();
+
     _multiplayerService.attemptMatch(cardIndex);
   }
 
@@ -1055,63 +1037,13 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.setFocused(state == AppLifecycleState.resumed);
   }
 
-  // clearError is defined in reconnect method section above
-
-  void _startTurnTimer() {
-    if (_turnTimer != null) return; // Already running
-    _turnStartTime = DateTime.now().millisecondsSinceEpoch;
-    _showAfkWarning = false;
-    _turnTimer =
-        Timer.periodic(const Duration(seconds: 1), (_) => _checkTurnTimeout());
-  }
-
-  void _stopTurnTimer() {
-    _turnTimer?.cancel();
-    _turnTimer = null;
-    _turnStartTime = null;
-    if (_showAfkWarning) {
-      _showAfkWarning = false;
-      notifyListeners();
-    }
-  }
-
-  void _checkTurnTimeout() {
-    if (_turnStartTime == null) return;
-    final elapsed = DateTime.now().millisecondsSinceEpoch - _turnStartTime!;
-
-    // Warning at 15s (5s remaining)
-    if (elapsed > 15000 && !_showAfkWarning) {
-      _showAfkWarning = true;
-      notifyListeners();
-    }
-  }
-
-  /// Réinitialise le statut AFK si le joueur effectue une action
-  void _resetAfkStatus() {
-    if (_gameState != null && _afkPlayerIds.contains(playerId)) {
-      _afkPlayerIds.remove(playerId);
-      notifyListeners();
-    }
-  }
-
-  void resetAfkTimer() {
-    if (_turnTimer != null) {
-      _turnTimer?.cancel();
-      _startTurnTimer();
-    }
-    if (_showAfkWarning) {
-      _showAfkWarning = false;
-      notifyListeners();
-    }
-  }
-
   @override
   void dispose() {
     _eventController.close();
     WidgetsBinding.instance.removeObserver(this);
     _multiplayerService.disconnect();
     _stopReactionTicker();
-    _stopTurnTimer();
+
     super.dispose();
   }
 }

@@ -67,13 +67,12 @@ class _CenterTableState extends State<CenterTable> {
   Widget _buildReactionProgress() {
     final total = widget.reactionTimeTotalMs;
     final remaining = widget.gameState.reactionTimeRemaining;
-    final progress =
-        total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
+    final progress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
 
     Color progressColor;
     if (progress > 0.6) {
-      progressColor = Color.lerp(
-          Colors.orange, Colors.green, (progress - 0.6) / 0.4)!;
+      progressColor =
+          Color.lerp(Colors.orange, Colors.green, (progress - 0.6) / 0.4)!;
     } else if (progress > 0.3) {
       progressColor =
           Color.lerp(Colors.red, Colors.orange, (progress - 0.3) / 0.3)!;
@@ -168,8 +167,7 @@ class _CenterTableState extends State<CenterTable> {
   Widget _buildDrawnCardDisplay(GameState gs) {
     const baseScale = 1.0;
     final expandedScale = widget.isCompactMode ? 1.6 : 1.4;
-    final cardSize =
-        widget.isCompactMode ? CardSize.medium : CardSize.large;
+    final cardSize = widget.isCompactMode ? CardSize.medium : CardSize.large;
     final frame = AnimatedContainer(
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOutCubic,
@@ -290,8 +288,8 @@ class _CenterTableState extends State<CenterTable> {
     final deckWidget = canDraw
         ? GestureDetector(onTap: widget.onDrawCard, child: deckCard)
         : deckCard;
-    final discardCard = CardWidget(
-        card: gs.topDiscardCard, size: cardSize, isRevealed: true);
+    final discardCard =
+        CardWidget(card: gs.topDiscardCard, size: cardSize, isRevealed: true);
     final discardWidget = canTakeDiscard
         ? GestureDetector(onTap: widget.onTakeFromDiscard, child: discardCard)
         : (widget.onShowDiscard != null

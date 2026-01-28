@@ -529,68 +529,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
                 if (gameProvider.isPaused) _buildPauseOverlay(gameProvider),
 
-                if (gameProvider.showAfkWarning)
-                  Container(
-                    color: Colors.black54,
-                    alignment: Alignment.center,
-                    child: Container(
-                      width: 300,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade900,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.amber, width: 2),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: Colors.amber, size: 48),
-                          const SizedBox(height: 16),
-                          const Text(
-                            "Êtes-vous toujours là ?",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "Expulsion imminente...",
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                          const SizedBox(height: 16),
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 1.0, end: 0.0),
-                            duration: const Duration(
-                                seconds: 15), // Durée estimée avant kick
-                            builder: (context, value, _) =>
-                                LinearProgressIndicator(
-                              value: value,
-                              backgroundColor: Colors.black26,
-                              color: Colors.amber,
-                              minHeight: 8,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed: () => gameProvider.resetAfkTimer(),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 32, vertical: 12),
-                            ),
-                            child: const Text("OUI, JE SUIS LÀ",
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
                 PresenceCheckOverlay(
                   active: gameProvider.presenceCheckActive,
                   deadlineMs: gameProvider.presenceCheckDeadlineMs,
