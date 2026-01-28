@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:provider/provider.dart';
 import '../services/stats_service.dart';
-import '../providers/multiplayer_game_provider.dart';
 import 'game_setup_screen.dart';
 import 'multiplayer_menu_screen.dart';
 import 'settings_screen.dart';
@@ -61,70 +59,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _loadAllSlots();
   }
 
-  /// Vérifie la connectivité avant d'aller au multijoueur
-  Future<void> _checkConnectivityAndNavigate() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: CircularProgressIndicator(color: Colors.amber),
-      ),
-    );
-
-    try {
-      // Just try to reach the server health endpoint - don't create a socket connection here
-      // The MultiplayerMenuScreen will handle the actual socket connection
-      final provider = context.read<MultiplayerGameProvider>();
-      final canConnect = await provider.checkServerReachable();
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading
-
-      if (canConnect) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const MultiplayerMenuScreen(),
-          ),
-        );
-      } else {
-        _showNoInternetDialog();
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading
-      _showNoInternetDialog();
-    }
-  }
-
-  void _showNoInternetDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.wifi_off, color: Colors.redAccent, size: 28),
-            SizedBox(width: 12),
-            Text(
-              'Pas de connexion',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Impossible de se connecter au serveur. Vérifiez votre connexion internet.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK', style: TextStyle(color: Colors.amber)),
-          ),
-        ],
+  /// Naviguer vers le menu multijoueur
+  void _goToMultiplayer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MultiplayerMenuScreen(),
       ),
     );
   }
@@ -274,7 +214,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'MULTIJOUEUR',
                   icon: Icons.groups,
                   isPrimary: false,
-                  onPressed: _checkConnectivityAndNavigate,
+                  onPressed: _goToMultiplayer,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -420,7 +360,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'MULTIJOUEUR',
                     icon: Icons.groups,
                     isPrimary: false,
-                    onPressed: _checkConnectivityAndNavigate,
+                    onPressed: _goToMultiplayer,
                   ),
                   const SizedBox(height: 40),
                   Row(
