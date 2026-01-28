@@ -4,6 +4,7 @@ import '../providers/multiplayer_game_provider.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../services/multiplayer_service.dart';
+import '../widgets/connection_error_dialog.dart';
 import 'multiplayer_lobby_screen.dart';
 
 enum _MenuFlow { choose, create, join }
@@ -25,6 +26,44 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   List<SavedRoom> _myRooms = [];
   List<Map<String, dynamic>> _activeRooms = [];
   bool _loadingRooms = false;
+
+  // Connection error dialog flag
+  bool _connectionErrorDialogShown = false;
+
+  Future<void> _showConnectionErrorDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) async {
+    if (_connectionErrorDialogShown) return;
+    _connectionErrorDialogShown = true;
+
+    await ConnectionErrorDialog.show(
+      context,
+      message:
+          provider.errorMessage ?? 'Impossible de se connecter au serveur.',
+      onRetry: () async {
+        provider.clearError();
+        final success = await provider.reconnect();
+        if (!mounted) return;
+        if (!success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Échec de la reconnexion'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onReturnToMenu: () {
+        provider.clearError();
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      },
+    );
+
+    _connectionErrorDialogShown = false;
+  }
 
   @override
   void initState() {
@@ -74,66 +113,82 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colors.primary.withValues(alpha: 0.94),
-              colors.secondary.withValues(alpha: 0.94),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () {
-                        if (_flow == _MenuFlow.choose) {
-                          Navigator.pop(context);
-                        } else {
-                          setState(() => _flow = _MenuFlow.choose);
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Multijoueur en ligne',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
+    return Consumer<MultiplayerGameProvider>(
+      builder: (context, provider, child) {
+        // Show connection error dialog if disconnected with error
+        if (provider.connectionState == SocketConnectionState.disconnected &&
+            provider.errorMessage != null &&
+            provider.errorMessage!.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+              _showConnectionErrorDialog(context, provider);
+            }
+          });
+        }
+
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colors.primary.withValues(alpha: 0.94),
+                  colors.secondary.withValues(alpha: 0.94),
+                ],
               ),
-              Expanded(
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: SizedBox(
-                      key: ValueKey(_flow),
-                      width: 520,
-                      child: _buildFlow(context),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () {
+                            if (_flow == _MenuFlow.choose) {
+                              Navigator.pop(context);
+                            } else {
+                              setState(() => _flow = _MenuFlow.choose);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Multijoueur en ligne',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: SizedBox(
+                          key: ValueKey(_flow),
+                          width: 520,
+                          child: _buildFlow(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -185,8 +240,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
       return const SizedBox.shrink();
     }
 
-    final activeRoomCodes = _activeRooms.map((r) => r['roomCode'] as String).toSet();
-    final activeMyRooms = _myRooms.where((r) => activeRoomCodes.contains(r.roomCode)).toList();
+    final activeRoomCodes =
+        _activeRooms.map((r) => r['roomCode'] as String).toSet();
+    final activeMyRooms =
+        _myRooms.where((r) => activeRoomCodes.contains(r.roomCode)).toList();
 
     if (activeMyRooms.isEmpty && !_loadingRooms) {
       return const SizedBox.shrink();
@@ -228,7 +285,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                   )
                 else
                   IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.white70, size: 20),
+                    icon: const Icon(Icons.refresh,
+                        color: Colors.white70, size: 20),
                     onPressed: _loadMyRooms,
                     tooltip: 'Actualiser',
                     padding: EdgeInsets.zero,
