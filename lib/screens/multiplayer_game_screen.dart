@@ -1478,15 +1478,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           // Ensure we don't spam
 
           if (val == '7' || val == '8') {
-            MultiplayerSpecialPowerDialogs.showLookOwnCardDialog(
-                context, trigger);
-          } else if (val == '9' || val == '10') {
-            bool isSwap = (val == '10');
-            MultiplayerSpecialPowerDialogs.showOpponentSelectionDialog(
-                context, trigger, isSwap);
-          } else if (val == 'V') {
-            MultiplayerSpecialPowerDialogs.showOpponentSelectionDialog(
+            MultiplayerSpecialPowerDialogs.showLookCardDialog(
                 context, trigger, true);
+          } else if (val == '9' || val == '10') {
+            // 9 & 10 treated as "Spy" (Look at opponent) in unified UI for now
+            // If 10 is intended as Swap, it should be V.
+            MultiplayerSpecialPowerDialogs.showLookCardDialog(
+                context, trigger, false);
+          } else if (val == 'V') {
+            MultiplayerSpecialPowerDialogs.showValetSwapDialog(
+                context, trigger);
           } else if (val == 'JOKER') {
             MultiplayerSpecialPowerDialogs.showJokerDialog(context, trigger);
           } else {
