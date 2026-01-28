@@ -361,5 +361,15 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       console.error('Error game:resume:', error);
     }
   });
+
+  socket.on('game:forfeit', async (data) => {
+    try {
+      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      // data: { roomCode }
+      roomManager.forfeitGame(data.roomCode, socket.id);
+    } catch (error) {
+      console.error('Error game:forfeit:', error);
+    }
+  });
 }
 

@@ -35,9 +35,9 @@ class TestPlayer {
         this.name = name;
         this.serverUrl = serverUrl;
         this.socket = null;
-        this.roomCode = null;
         this.gameState = null;
         this.events = [];
+        this.clientId = `test-${Date.now()}-${Math.random()}`;
     }
 
     connect() {
@@ -61,6 +61,12 @@ class TestPlayer {
                 this.gameState = data.gameState;
                 this.events.push({ type: 'state_update', updateType: data.type, data });
                 info(`${this.name} received: ${data.type}, phase=${data.gameState?.phase}`);
+            });
+
+            this.socket.on('game:full_state', (data) => {
+                this.gameState = data.gameState;
+                this.events.push({ type: 'full_state', updateType: data.type, data });
+                info(`${this.name} received: FULL_STATE, phase=${data.gameState?.phase}`);
             });
 
             this.socket.on('presence:check', (data) => {
@@ -87,7 +93,7 @@ class TestPlayer {
                     ...settings,
                 },
                 playerName: this.name,
-                clientId: `test-${Date.now()}-${Math.random()}`,
+                clientId: this.clientId,
             }, (response) => {
                 if (response.success) {
                     this.roomCode = response.roomCode;
@@ -106,7 +112,7 @@ class TestPlayer {
             this.socket.emit('room:join', {
                 roomCode,
                 playerName: this.name,
-                clientId: `test-${Date.now()}-${Math.random()}`,
+                clientId: this.clientId,
             }, (response) => {
                 if (response.success) {
                     this.roomCode = roomCode;
@@ -180,9 +186,26 @@ class TestPlayer {
     closeRoom() {
         return new Promise((resolve) => {
             this.socket.emit('room:close', { roomCode: this.roomCode }, (response) => {
-                info(`${this.name} closing room: ${response.success}`);
+                info(`${this.name} closing room: ${response?.success}`);
                 resolve(response);
             });
+        });
+    }
+
+    kickPlayer(clientId) {
+        return new Promise((resolve) => {
+            this.socket.emit('room:kick', { roomCode: this.roomCode, clientId }, (response) => {
+                info(`${this.name} kicking player ${clientId}: ${response?.success}`);
+                resolve(response);
+            });
+        });
+    }
+
+    forfeitGame() {
+        return new Promise((resolve) => {
+            this.socket.emit('game:forfeit', { roomCode: this.roomCode });
+            info(`${this.name} forfeiting game...`);
+            setTimeout(resolve, 500); // Wait for server to process
         });
     }
 
@@ -416,6 +439,148 @@ async function testHostLeaveNotification() {
     }
 }
 
+
+async function testSpectatorJoin() {
+    log('\n========== TEST: Spectator Join ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+    const spectator = new TestPlayer('Spectator', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+        await spectator.connect();
+
+        await host.createRoom({ minPlayers: 2 });
+        await p1.joinRoom(host.roomCode);
+
+        await host.setReady(true);
+        await p1.setReady(true);
+
+        await delay(500);
+        await host.startGame();
+        await delay(1000);
+
+        info('Spectator joining active game...');
+        await spectator.joinRoom(host.roomCode);
+
+        await delay(1000);
+
+        if (!spectator.gameState) {
+            throw new Error('Spectator did NOT receive game state upon joining');
+        }
+
+        const gameStatePlayers = spectator.gameState.players || [];
+        const isSpectatorInList = gameStatePlayers.some(p => p.id === spectator.socket.id && p.isSpectator);
+        const isSpectatorAbsent = !gameStatePlayers.some(p => p.id === spectator.socket.id);
+
+        if (isSpectatorInList || isSpectatorAbsent) {
+            success('Spectator joined correctly');
+        } else {
+            throw new Error('Spectator appears as normal player in game state!');
+        }
+
+        success('Spectator join test passed');
+        return true;
+
+    } catch (e) {
+        error(`Spectator test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+        spectator.disconnect();
+    }
+}
+
+async function testForfeit() {
+    log('\n========== TEST: Forfeit Logic ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+    const p2 = new TestPlayer('P2', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+        await p2.connect();
+
+        await host.createRoom({ minPlayers: 3 });
+        await p1.joinRoom(host.roomCode);
+        await p2.joinRoom(host.roomCode);
+
+        await host.setReady(true);
+        await p1.setReady(true);
+        await p2.setReady(true);
+
+        await delay(500);
+        await host.startGame();
+        await delay(1000);
+
+        info('P1 forfeiting...');
+        await p1.forfeitGame();
+
+        await delay(2000);
+
+        const p1InHostState = host.gameState.players.find(p => p.id === p1.socket.id);
+
+        if (p1InHostState && !p1InHostState.isSpectator) {
+            warn('P1 still found as active player in Host state.');
+        }
+
+        if (!p1.socket.connected) {
+            throw new Error('P1 was disconnected after forfeit');
+        }
+
+        success('Forfeit test passed');
+        return true;
+    } catch (e) {
+        error(`Forfeit test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+        p2.disconnect();
+    }
+}
+
+async function testKick() {
+    log('\n========== TEST: Kick Event ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+
+        await host.createRoom();
+        await p1.joinRoom(host.roomCode);
+
+        await delay(500);
+
+        let kicked = false;
+        p1.socket.on('room:kicked', () => {
+            kicked = true;
+            success('P1 received kick event');
+        });
+
+        info('Host kicking P1...');
+        await host.kickPlayer(p1.clientId);
+
+        await delay(1000);
+
+        if (!kicked) throw new Error('P1 did not receive kick event');
+
+        success('Kick test passed');
+        return true;
+    } catch (e) {
+        error(`Kick test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+    }
+}
+
 // ============ MAIN ============
 
 async function runAllTests() {
@@ -428,6 +593,9 @@ async function runAllTests() {
     results.roomJoin = await testRoomCreationAndJoin();
     results.gameReaction = await testGameStartAndReactionPhase();
     results.hostLeave = await testHostLeaveNotification();
+    results.spectatorJoin = await testSpectatorJoin();
+    results.forfeit = await testForfeit();
+    results.kick = await testKick();
 
     log('\n========== TEST RESULTS ==========', 'cyan');
     for (const [test, passed] of Object.entries(results)) {

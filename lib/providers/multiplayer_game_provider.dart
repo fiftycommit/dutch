@@ -5,6 +5,7 @@ import '../models/game_settings.dart';
 import '../services/multiplayer_service.dart';
 import '../services/haptic_service.dart';
 import '../models/card.dart';
+import '../models/player.dart';
 
 enum GameEventType {
   playerJoined,
@@ -186,6 +187,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
       : _multiplayerService = multiplayerService ?? MultiplayerService() {
     WidgetsBinding.instance.addObserver(this);
     _setupListeners();
+    // Nettoyer les rooms inactives au démarrage
+    _multiplayerService.cleanupInactiveRooms();
   }
 
   Map<String, dynamic>? get _localPresence {
@@ -216,21 +219,28 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         // Note: Sound could be played here if AudioService is accessible
       }
 
-      // Update local player state
-      final me = gameState.players.firstWhere((p) => p.id == playerId,
-          orElse: () => gameState.players.first); // Fallback
+      _gameState = gameState;
 
-      // Check if we were kicked (became spectator mid-game)
-      if (me.id == playerId && me.isSpectator && _isPlaying && !_wasKicked) {
-        _wasKicked = true;
-        _kickedMessage = "Vous avez été exclu pour inactivité (AFK).";
-        notifyListeners();
-        return;
+      // Update local player state
+      Player? me;
+      try {
+        me = gameState.players.firstWhere((p) => p.id == playerId);
+      } catch (e) {
+        me = null;
       }
 
-      _gameState = gameState;
-      _isPlaying = true;
-      _isInLobby = false;
+      // Auto-switch to game view ONLY if we are an active player in the game
+      if (me != null && !me.isSpectator) {
+        _isPlaying = true;
+        _isInLobby = false;
+      }
+      // If we are spectator (or not in player list), only switch if we were already watching
+      // or if we are not in lobby (e.g. connection lost/restored while watching)
+      else if (!_isInLobby && !_isPlaying) {
+        // Auto-resume watching
+        _isPlaying = true;
+      }
+
       _syncReactionPhase();
 
       // If only one non-eliminated player remains, end the game locally
@@ -946,11 +956,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     return success;
   }
 
-  /// Récupère la liste des rooms sauvegardées
-  Future<List<SavedRoom>> getMyRooms() async {
-    return await _multiplayerService.getMyRooms();
-  }
-
   /// Vérifie quelles rooms sont actives
   Future<List<Map<String, dynamic>>> checkActiveRooms(
       List<String> roomCodes) async {
@@ -1036,6 +1041,26 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     if (!isConnected || _roomCode == null) return;
     _multiplayerService.setFocused(state == AppLifecycleState.resumed);
   }
+
+  Future<void> forfeitGame() async {
+    _multiplayerService.forfeitGame();
+    _isPlaying = false;
+    _isInLobby = true;
+    notifyListeners();
+  }
+
+  void watchGame() {
+    if (_gameState != null) {
+      _isPlaying = true;
+      _isInLobby = false;
+      notifyListeners();
+    }
+  }
+
+  // Gestion des rooms sauvegardées
+  Future<List<SavedRoom>> getMyRooms() => _multiplayerService.getMyRooms();
+  Future<void> removeRoom(String roomCode) =>
+      _multiplayerService.removeSavedRoom(roomCode);
 
   @override
   void dispose() {

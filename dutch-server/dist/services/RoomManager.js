@@ -15,8 +15,8 @@ class RoomManager {
         this.presenceTimers = new Map();
         this.presenceChecks = new Map();
         this.cleanupTimer = null;
-        this.turnTimeoutMs = options.turnTimeoutMs ?? 25000;
-        this.presenceGraceMs = options.presenceGraceMs ?? 5000;
+        this.turnTimeoutMs = options.turnTimeoutMs ?? 20000;
+        this.presenceGraceMs = options.presenceGraceMs ?? 3000;
         this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
         this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
         this.stalePlayerMs = options.stalePlayerMs ?? 15000;
@@ -105,14 +105,12 @@ class RoomManager {
         if (!room) {
             return { error: 'Room introuvable' };
         }
-        if (room.status !== Room_1.RoomStatus.waiting) {
-            return { error: 'La partie a déjà commencé' };
-        }
         this.pruneWaitingRoom(room);
         this.ensureHost(room);
         if (clientId) {
             const existing = room.players.find((p) => p.clientId === clientId);
             if (existing) {
+                // Allow rejoining even if playing
                 const previousId = existing.id;
                 existing.id = socketId;
                 if (playerName) {
@@ -122,6 +120,11 @@ class RoomManager {
                 existing.connected = true;
                 existing.focused = true;
                 existing.lastSeenAt = this.now();
+                // Clear any pending presence check for this player
+                const pendingCheck = this.presenceChecks.get(roomCode);
+                if (pendingCheck && pendingCheck.playerId === previousId) {
+                    this.clearPresenceCheck(roomCode, previousId);
+                }
                 if (room.hostPlayerId === previousId) {
                     room.hostPlayerId = socketId;
                 }
@@ -129,10 +132,13 @@ class RoomManager {
                 return { room, player: existing };
             }
         }
+        // Si la partie est en cours, on rejoint comme SPECTATEUR
+        const isSpectator = (room.status !== Room_1.RoomStatus.waiting && room.status !== Room_1.RoomStatus.ended);
         const maxPlayers = typeof room.settings?.maxPlayers === 'number'
             ? room.settings.maxPlayers
             : 4;
-        if (this.activePlayerCount(room) >= maxPlayers) {
+        // Si on n'est pas spectateur et que c'est plein -> Erreur
+        if (!isSpectator && this.activePlayerCount(room) >= maxPlayers) {
             return { error: 'Room pleine' };
         }
         const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, clientId);
@@ -140,9 +146,14 @@ class RoomManager {
         player.focused = true;
         player.lastSeenAt = this.now();
         player.ready = false;
+        player.isSpectator = isSpectator;
         room.players.push(player);
         this.reindexPlayers(room);
         this.touchRoom(room);
+        // Si une partie est en cours, envoyer l'état complet au nouveau joueur
+        if (room.gameState) {
+            this.sendFullStateToPlayer(roomCode, socketId);
+        }
         return { room, player };
     }
     notifyPlayerJoined(roomCode, player) {
@@ -154,6 +165,50 @@ class RoomManager {
             player,
             playerCount: this.activePlayerCount(room),
         });
+    }
+    /**
+     * Abandonner la partie en cours (sans quitter la room)
+     */
+    forfeitGame(roomCode, playerId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        // Trouver le joueur
+        const player = room.players.find(p => p.id === playerId);
+        if (!player)
+            return false;
+        // Si partie en cours, on le marque comme "Folded"
+        if (room.status === Room_1.RoomStatus.playing && room.gameState) {
+            const gamePlayer = room.gameState.players.find(p => p.id === playerId);
+            if (gamePlayer) {
+                // Logique de jeu: abandon
+                // On pourrait appeler GameLogic.fold() mais fold() c'est pour le tour.
+                // Ici c'est un abandon total.
+                // On va simuler qu'il devient spectateur mais RESTE connecté
+                player.isSpectator = true;
+                player.ready = false;
+                this.clearPresenceCheck(roomCode, playerId);
+                this.clearTurnTimer(roomCode);
+                // Check if only one active player remains ("Last Man Standing")
+                const activeCount = this.activePlayerCount(room);
+                if (activeCount <= 1) {
+                    this.handleGameEnd(roomCode); // Utiliser handleGameEnd directement
+                }
+                else if ((0, GameState_1.getCurrentPlayer)(room.gameState).id === playerId) {
+                    this.forceEndTurn(roomCode, `${player.name} a abandonné.`);
+                }
+            }
+            // Notifier tout le monde que le joueur abandonne
+            this.io.to(roomCode).emit('player:forfeit', {
+                roomCode,
+                playerId,
+                playerName: player.name,
+                message: `${player.name} a abandonné la partie et rejoint le lobby.`
+            });
+        }
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode); // Mise à jour UI Lobby
+        return true;
     }
     startGame(roomCode, options = {}) {
         const room = this.rooms.get(roomCode);
@@ -304,6 +359,7 @@ class RoomManager {
         // Calculer et stocker les scores cumulés
         this.updateCumulativeScores(room);
         room.status = Room_1.RoomStatus.ended;
+        room.gameState.phase = GameState_1.GamePhase.ended;
         this.clearTurnTimer(roomCode);
         this.broadcastGameState(roomCode, 'GAME_ENDED', {
             message: 'Partie terminée !',
@@ -325,27 +381,25 @@ class RoomManager {
         // La partie doit être terminée
         if (room.status !== Room_1.RoomStatus.ended)
             return false;
-        // Retirer les bots de la partie précédente
+        // Reset room state for new game
+        // Remove bots so we can refill them or play just humans
         room.players = room.players.filter((p) => p.isHuman);
-        // Réinitialiser les joueurs humains
-        for (const player of room.players) {
-            player.ready = false;
-            player.hand = [];
-            player.knownCards = [];
-            player.isSpectator = false;
-        }
-        // Réindexer les positions
-        this.reindexPlayers(room);
-        // Remettre la room en attente
         room.status = Room_1.RoomStatus.waiting;
         room.gameState = null;
+        room.players.forEach(p => {
+            p.ready = false;
+            p.hand = [];
+            p.hasFolded = false;
+            p.knownCards = [];
+            p.isSpectator = false;
+        });
+        this.reindexPlayers(room);
         // Incrémenter le round si mode tournoi
         if (room.gameMode === GameState_1.GameMode.tournament) {
             room.tournamentRound = (room.tournamentRound || 1) + 1;
         }
         this.touchRoom(room);
         this.broadcastPresence(roomCode);
-        // Notifier tous les joueurs du redémarrage
         this.io.to(roomCode).emit('room:restarted', {
             roomCode,
             message: 'Nouvelle partie !',
@@ -417,7 +471,21 @@ class RoomManager {
             });
         });
         // Trier par score croissant (le plus bas est le meilleur au Dutch)
-        result.sort((a, b) => a.score - b.score);
+        result.sort((a, b) => {
+            const diff = a.score - b.score;
+            if (diff !== 0)
+                return diff;
+            // En cas d'égalité, le joueur encore en ligne/actif gagne (est considéré meilleur = premier)
+            const pA = room.players.find(p => p.clientId === a.clientId || p.id === a.clientId);
+            const pB = room.players.find(p => p.clientId === b.clientId || p.id === b.clientId);
+            const aActive = pA && pA.connected && !pA.isSpectator;
+            const bActive = pB && pB.connected && !pB.isSpectator;
+            if (aActive && !bActive)
+                return -1; // a gagne
+            if (!aActive && bActive)
+                return 1; // b gagne
+            return 0;
+        });
         return result;
     }
     setReady(roomCode, socketId, ready) {
@@ -552,6 +620,9 @@ class RoomManager {
         }
         this.touchRoom(room);
         this.broadcastPresence(roomCode);
+        this.broadcastGameState(roomCode, 'PLAYER_LEFT');
+        // Check if game should end due to lack of players
+        this.checkGameEndCondition(roomCode);
     }
     handleDisconnect(socketId) {
         for (const room of this.rooms.values()) {
@@ -563,8 +634,43 @@ class RoomManager {
             player.lastSeenAt = this.now();
             this.touchRoom(room);
             this.broadcastPresence(room.id);
+            this.checkGameEndCondition(room.id);
         }
         this.cleanupRooms();
+    }
+    checkGameEndCondition(roomCode) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        if (room.gameState.phase === GameState_1.GamePhase.ended)
+            return;
+        if (room.gameState.phase === GameState_1.GamePhase.setup)
+            return; // Don't end during setup
+        // Count active (connected and not spectator) human players
+        const activeHumans = room.players.filter((p) => p.isHuman && p.connected && !p.isSpectator);
+        // If less than 2 active humans remain (and we are in a multiplayer game)
+        // Note: If playing with bots, we might want to keep playing?
+        // User requirement: "When opponent leaves, game ends".
+        // Assuming 1v1 human or multi-human.
+        // If only 1 or 0 active humans left, end the game.
+        // (Should we allow playing against bots if humans leave? 
+        // The user issue is specifically about "opponent leaves -> game stuck".
+        // So enforcing "min 2 humans" or "min 1 human if bots present"?)
+        // Let's stick to: if only 1 active player (human or bot) left ? 
+        // No, bots don't disconnect.
+        // If 2 humans playing, one leaves -> 1 active human. Game should end.
+        // Let's count *active players* (including bots if they count as players)
+        // But bots are always "connected".
+        // If the game was initialized with bots, `room.players` has bots.
+        // Valid termination condition:
+        // If it's a multiplayer game (started with >1 human), and now <2 humans are connected.
+        // Let's use a simpler heuristic:
+        // If only 1 "alive" player remains.
+        // "Alive" means connected and not spectator.
+        const activePlayers = room.players.filter(p => (p.isHuman ? (p.connected && !p.isSpectator) : true));
+        if (activePlayers.length < 2) {
+            this.handleGameEnd(roomCode);
+        }
     }
     broadcastPresence(roomCode) {
         const room = this.rooms.get(roomCode);
@@ -683,11 +789,19 @@ class RoomManager {
         if (!player || player.isSpectator)
             return;
         player.isSpectator = true;
-        player.connected = player.connected ?? false;
+        player.connected = false; // Mark disconnected effectively
         player.focused = false;
         player.lastSeenAt = this.now();
         this.clearPresenceCheck(roomCode, playerId);
         this.clearTurnTimer(roomCode);
+        // Check if only one active player remains ("Last Man Standing")
+        const activeCount = this.activePlayerCount(room);
+        if (activeCount <= 1) {
+            this.touchRoom(room);
+            this.broadcastPresence(roomCode);
+            this.handleGameEnd(roomCode);
+            return;
+        }
         if (room.gameState && (0, GameState_1.getCurrentPlayer)(room.gameState).id === playerId) {
             this.forceEndTurn(roomCode, `${player.name} est passé spectateur.`);
         }

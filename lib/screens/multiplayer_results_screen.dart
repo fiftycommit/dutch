@@ -148,6 +148,32 @@ class MultiplayerResultsScreen extends StatelessWidget {
                               ),
                             ),
                             child: const Text(
+                              "Retour au Lobby (Host)",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: ScreenUtils.spacing(context, 12)),
+                      ] else ...[
+                        SizedBox(
+                          width: 280,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              // Just go back to lobby, keep room connection
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
                               "Retour au Lobby",
                               style: TextStyle(
                                 color: Colors.white,

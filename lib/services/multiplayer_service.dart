@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,8 +59,92 @@ class MultiplayerService {
   SocketConnectionState _connectionState = SocketConnectionState.disconnected;
   String? _lastRoomCode; // Pour rejoindre automatiquement après reconnexion
   String? _lastPlayerName; // Nom du joueur pour rejoindre
-  final List<Map<String, dynamic>> _pendingActions =
-      []; // File d'attente d'actions
+  final List<Map<String, dynamic>> _pendingActions = [];
+
+  // Gestion des rooms sauvegardées
+  Future<List<SavedRoom>> getMyRooms() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = prefs.getStringList(_myRoomsKey) ?? [];
+    return jsonList
+        .map((jsonStr) => SavedRoom.fromJson(json.decode(jsonStr)))
+        .toList();
+  }
+
+  Future<void> _saveMyRoom(String roomCode, {required bool isHost}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rooms = await getMyRooms();
+
+    // Mettre à jour si existe déjà, sinon ajouter
+    rooms.removeWhere((r) => r.roomCode == roomCode);
+    rooms.insert(
+        0,
+        SavedRoom(
+          roomCode: roomCode,
+          isHost: isHost,
+          joinedAt: DateTime.now(),
+        ));
+
+    // Garder seulement les 5 dernières
+    if (rooms.length > 5) {
+      rooms.removeLast();
+    }
+
+    final jsonList = rooms.map((r) => json.encode(r.toJson())).toList();
+
+    await prefs.setStringList(_myRoomsKey, jsonList);
+  }
+
+  Future<void> removeSavedRoom(String roomCode) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rooms = await getMyRooms();
+
+    rooms.removeWhere((r) => r.roomCode == roomCode);
+
+    final jsonList = rooms.map((r) => json.encode(r.toJson())).toList();
+
+    await prefs.setStringList(_myRoomsKey, jsonList);
+  }
+
+  /// Vérifier quelles rooms sont encore actives sur le serveur
+  Future<List<Map<String, dynamic>>> checkActiveRooms(
+      List<String> roomCodes) async {
+    if (!isConnected || roomCodes.isEmpty) return [];
+
+    final completer = Completer<List<Map<String, dynamic>>>();
+
+    _socket?.emitWithAck('room:check_active', {
+      'roomCodes': roomCodes,
+    }, ack: (response) {
+      if (response == null || response['rooms'] == null) {
+        completer.complete([]);
+        return;
+      }
+
+      final rooms = (response['rooms'] as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      completer.complete(rooms);
+    });
+
+    return completer.future;
+  }
+
+  /// Nettoyer les rooms inactives des préférences
+  Future<void> cleanupInactiveRooms() async {
+    final myRooms = await getMyRooms();
+    if (myRooms.isEmpty) return;
+
+    final roomCodes = myRooms.map((r) => r.roomCode).toList();
+    final activeRooms = await checkActiveRooms(roomCodes);
+    final activeCodes = activeRooms.map((r) => r['roomCode'] as String).toSet();
+
+    // Supprimer les rooms inactives
+    for (final room in myRooms) {
+      if (!activeCodes.contains(room.roomCode)) {
+        await removeSavedRoom(room.roomCode);
+      }
+    }
+  }
 
   io.Socket? get socket => _socket;
   bool get isConnected => _socket?.connected ?? false;
@@ -372,6 +457,9 @@ class MultiplayerService {
     // Quand on est kick
     _socket!.on('room:kicked', (data) {
       debugPrint('👢 Vous avez été exclu');
+      if (_currentRoomCode != null) {
+        removeSavedRoom(_currentRoomCode!);
+      }
       _currentRoomCode = null;
       _lastRoomCode = null;
       if (data is Map) {
@@ -767,7 +855,7 @@ class MultiplayerService {
       final success = response['success'] == true;
       if (success) {
         debugPrint('✅ Room fermée');
-        _removeMyRoom(_currentRoomCode!);
+        removeSavedRoom(_currentRoomCode!);
         _lastRoomCode = null;
         _currentRoomCode = null;
       } else {
@@ -831,6 +919,13 @@ class MultiplayerService {
     return completer.future;
   }
 
+  /// Abandonner la partie en cours (sans quitter la room)
+  void forfeitGame() {
+    if (_currentRoomCode == null) return;
+    debugPrint('🏳️ Abandon de la partie...');
+    _socket?.emit('game:forfeit', {'roomCode': _currentRoomCode});
+  }
+
   /// Kick un joueur (hôte uniquement)
   Future<bool> kickPlayer(String clientId) async {
     if (_currentRoomCode == null) return false;
@@ -879,159 +974,7 @@ class MultiplayerService {
     _socket?.emit('game:request_state', {'roomCode': _currentRoomCode});
   }
 
-  // ============ Gestion des rooms sauvegardées ============
-
-  /// Sauvegarder une room dans les préférences
-  Future<void> _saveMyRoom(String roomCode, {required bool isHost}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final roomsJson = prefs.getStringList(_myRoomsKey) ?? [];
-
-    // Supprimer si déjà existant
-    roomsJson.removeWhere((json) {
-      try {
-        final data = Map<String, dynamic>.from(
-            (json as dynamic) is String ? _parseJson(json) : {});
-        return data['roomCode'] == roomCode;
-      } catch (_) {
-        return false;
-      }
-    });
-
-    // Ajouter la nouvelle entrée
-    final room = SavedRoom(
-      roomCode: roomCode,
-      isHost: isHost,
-      joinedAt: DateTime.now(),
-    );
-    roomsJson.add(_encodeJson(room.toJson()));
-
-    // Limiter à 10 rooms max
-    while (roomsJson.length > 10) {
-      roomsJson.removeAt(0);
-    }
-
-    await prefs.setStringList(_myRoomsKey, roomsJson);
-  }
-
-  /// Supprimer une room des préférences
-  Future<void> _removeMyRoom(String roomCode) async {
-    final prefs = await SharedPreferences.getInstance();
-    final roomsJson = prefs.getStringList(_myRoomsKey) ?? [];
-
-    roomsJson.removeWhere((json) {
-      try {
-        final data = _parseJson(json);
-        return data['roomCode'] == roomCode;
-      } catch (_) {
-        return false;
-      }
-    });
-
-    await prefs.setStringList(_myRoomsKey, roomsJson);
-  }
-
-  /// Récupérer la liste des rooms sauvegardées
-  Future<List<SavedRoom>> getMyRooms() async {
-    final prefs = await SharedPreferences.getInstance();
-    final roomsJson = prefs.getStringList(_myRoomsKey) ?? [];
-
-    final rooms = <SavedRoom>[];
-    for (final json in roomsJson) {
-      try {
-        final data = _parseJson(json);
-        rooms.add(SavedRoom.fromJson(data));
-      } catch (_) {
-        // Ignorer les entrées invalides
-      }
-    }
-
-    return rooms;
-  }
-
-  /// Vérifier quelles rooms sont encore actives sur le serveur
-  Future<List<Map<String, dynamic>>> checkActiveRooms(
-      List<String> roomCodes) async {
-    if (!isConnected || roomCodes.isEmpty) return [];
-
-    final completer = Completer<List<Map<String, dynamic>>>();
-
-    _socket?.emitWithAck('room:check_active', {
-      'roomCodes': roomCodes,
-    }, ack: (response) {
-      if (response == null || response['rooms'] == null) {
-        completer.complete([]);
-        return;
-      }
-
-      final rooms = (response['rooms'] as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
-      completer.complete(rooms);
-    });
-
-    return completer.future;
-  }
-
-  /// Nettoyer les rooms inactives des préférences
-  Future<void> cleanupInactiveRooms() async {
-    final myRooms = await getMyRooms();
-    if (myRooms.isEmpty) return;
-
-    final roomCodes = myRooms.map((r) => r.roomCode).toList();
-    final activeRooms = await checkActiveRooms(roomCodes);
-    final activeCodes = activeRooms.map((r) => r['roomCode'] as String).toSet();
-
-    // Supprimer les rooms inactives
-    for (final room in myRooms) {
-      if (!activeCodes.contains(room.roomCode)) {
-        await _removeMyRoom(room.roomCode);
-      }
-    }
-  }
-
-  // Helpers JSON (simple encoding sans import dart:convert)
-  Map<String, dynamic> _parseJson(String json) {
-    // Simple JSON parser pour notre format
-    final map = <String, dynamic>{};
-    final content = json.trim();
-    if (!content.startsWith('{') || !content.endsWith('}')) return map;
-
-    final inner = content.substring(1, content.length - 1);
-    final parts = inner.split(',');
-
-    for (final part in parts) {
-      final kv = part.split(':');
-      if (kv.length >= 2) {
-        final key = kv[0].trim().replaceAll('"', '');
-        var value = kv.sublist(1).join(':').trim();
-
-        if (value.startsWith('"') && value.endsWith('"')) {
-          map[key] = value.substring(1, value.length - 1);
-        } else if (value == 'true') {
-          map[key] = true;
-        } else if (value == 'false') {
-          map[key] = false;
-        } else {
-          map[key] = value;
-        }
-      }
-    }
-    return map;
-  }
-
-  String _encodeJson(Map<String, dynamic> map) {
-    final pairs = map.entries.map((e) {
-      final value = e.value;
-      if (value is String) {
-        return '"${e.key}":"$value"';
-      } else if (value is bool) {
-        return '"${e.key}":$value';
-      } else {
-        return '"${e.key}":"$value"';
-      }
-    });
-    return '{${pairs.join(',')}}';
-  }
+  // Déconnexion
 
   // Déconnexion
   void disconnect() {

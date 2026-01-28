@@ -28,6 +28,7 @@ export interface Player {
   position: number;
   hand: PlayingCard[];
   knownCards: boolean[];
+  hasFolded?: boolean;
   // Note: mentalMap, dutchHistory et consecutiveBadDraws
   // sont gérés séparément côté serveur pour les bots
 }

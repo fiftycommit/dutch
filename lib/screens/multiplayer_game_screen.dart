@@ -547,14 +547,26 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       BuildContext context, MultiplayerGameProvider gp, GameState gs) {
     // Identify participants
     final myId = gp.playerId;
-    Player human = gs.players
-        .firstWhere((p) => p.id == myId, orElse: () => gs.players.first);
-    // If spectator or eliminated, we might need fallback? For now assume player exists.
+    // Check if I am a player in the game or spectator
+    final bool isSpectator = !gs.players.any((p) => p.id == myId);
+
+    // If spectator, we don't have a 'human' object representing us in the game state
+    // We can pick the first player just for some layout references if needed, but we shouldn't display their hand as ours.
+    Player? human;
+    if (!isSpectator) {
+      human = gs.players
+          .firstWhere((p) => p.id == myId, orElse: () => gs.players.first);
+    }
 
     // Get opponents (exclude me)
-    // Get opponents (exclude me AND spectators)
-    List<Player> opponents =
-        gs.players.where((p) => p.id != myId && !p.isSpectator).toList();
+    // If spectator, everyone is an opponent (or rather, a player to watch)
+    List<Player> opponents;
+    if (isSpectator) {
+      opponents = gs.players.where((p) => !p.isSpectator).toList();
+    } else {
+      opponents =
+          gs.players.where((p) => p.id != myId && !p.isSpectator).toList();
+    }
     // Reorder opponents based on position relative to me?
     // MultiplayerService usually returns list. If we want constant relative position:
     // (opponent_pos - my_pos + total) % total
@@ -563,11 +575,14 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // Sort logic to keep them stable if needed?
     // Opponents are usually stable in the list from server.
 
-    bool isMyTurn =
-        gs.currentPlayer.id == human.id && gs.phase == GamePhase.playing;
-    bool hasDrawn = gs.drawnCard != null;
+    bool isMyTurn = !isSpectator &&
+        human != null &&
+        gs.currentPlayer.id == human.id &&
+        gs.phase == GamePhase.playing;
+    bool hasDrawn = isMyTurn && gs.drawnCard != null;
 
-    bool canInteractWithCards = isMyTurn || gs.phase == GamePhase.reaction;
+    bool canInteractWithCards =
+        isMyTurn || (!isSpectator && gs.phase == GamePhase.reaction);
 
     final screenSize = MediaQuery.of(context).size;
     final screenHeight = screenSize.height;
@@ -612,14 +627,21 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           }).fold(0.0, math.max);
 
     final playerBadgeSize = isCompactMode ? 24.0 : 28.0;
-    final playerBadgeHeight =
-        _compactBadgeHeight(context, human, playerBadgeSize);
-    final playerBlockHeight =
-        playerBadgeHeight + blockSpacing + playerCardMetrics.height;
+
+    // Si spectateur, la zone joueur est réduite (juste un bandeau)
+    final playerBadgeHeight = isSpectator
+        ? 40.0
+        : _compactBadgeHeight(context, human!, playerBadgeSize);
+
+    final playerBlockHeight = isSpectator
+        ? 60.0
+        : playerBadgeHeight + blockSpacing + playerCardMetrics.height;
+
     final actionLayout =
         _actionButtonLayout(context, isCompactMode, playerCardMetrics);
-    final playerAreaHeight =
-        math.max(actionLayout.columnHeight, playerBlockHeight);
+    final playerAreaHeight = isSpectator
+        ? 60.0
+        : math.max(actionLayout.columnHeight, playerBlockHeight);
 
     final sideBandContentWidth =
         math.max(botBlockHeight, math.max(maxBotBadgeWidth, maxBotHandWidth));
@@ -797,10 +819,33 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                     padding: EdgeInsets.only(bottom: outerGap),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
+                        if (isSpectator) {
+                          return Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: Colors.amber.withOpacity(0.5)),
+                              ),
+                              child: const Text(
+                                "MODE SPECTATEUR",
+                                style: TextStyle(
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                         return _buildPlayerArea(
                           gp,
                           gs,
-                          human,
+                          human!,
                           isMyTurn,
                           hasDrawn,
                           canInteractWithCards,
@@ -1393,8 +1438,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
             ));
 
     if (leave == true && mounted) {
-      gp.leaveRoom();
-      Navigator.of(context).popUntil((r) => r.isFirst);
+      gp.forfeitGame();
+      // On retourne au lobby (qui est l'écran précédent dans la stack)
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
     }
   }
 

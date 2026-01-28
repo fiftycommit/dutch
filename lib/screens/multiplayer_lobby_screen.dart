@@ -651,6 +651,24 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int maxPlayers,
     int minPlayers,
   ) {
+    // Si la partie est en cours, afficher le bouton "Regarder"
+    if (provider.roomStatus == 'playing') {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: () => provider.watchGame(),
+          icon: const Icon(Icons.visibility),
+          label: const Text('REGARDER LA PARTIE'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: colors.tertiary,
+            foregroundColor: Colors.white,
+            elevation: 4,
+          ),
+        ),
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -975,7 +993,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                         Row(
                                           children: [
                                             Text(
-                                              _presenceLabel(presence),
+                                              _presenceLabel(presence,
+                                                  provider.roomStatus),
                                               style: TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey[600],
@@ -1384,11 +1403,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     );
   }
 
-  String _presenceLabel(Map<String, dynamic>? presence) {
+  String _presenceLabel(Map<String, dynamic>? presence, String roomStatus) {
     if (presence == null) return 'Statut inconnu';
     if (presence['isSpectator'] == true) return 'Spectateur';
     if (presence['connected'] != true) return 'Deconnecte';
     if (presence['focused'] != true) return 'En arriere-plan';
+
+    if (roomStatus == 'playing') return 'En jeu';
+
     return presence['ready'] == true ? 'Pret' : 'En ligne';
   }
 
