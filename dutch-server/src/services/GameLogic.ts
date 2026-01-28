@@ -277,72 +277,134 @@ export class GameLogic {
     return this.matchCard(gameState, player, cardIndex);
   }
 
-  static useSpecialPower(gameState: GameState, targetPlayerIndex: number, targetCardIndex: number): void {
-    if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) return;
+  /**
+   * Utilise un pouvoir spécial - Aligné sur le mode solo
+   *
+   * @param data Les paramètres dépendent de la carte:
+   *   - Carte 7: { cardIndex } - Regarder sa propre carte
+   *   - Carte 10: { targetPlayerIndex, targetCardIndex } - Espionner un adversaire
+   *   - Carte V: { player1Index, card1Index, player2Index, card2Index } - Échange universel
+   *   - JOKER: { targetPlayerIndex } - Mélanger n'importe qui (y compris soi)
+   *
+   * @returns Informations sur les joueurs affectés pour les notifications
+   */
+  static useSpecialPower(
+    gameState: GameState,
+    data: {
+      // Pour carte 7 : regarder sa propre carte
+      cardIndex?: number;
+      // Pour carte 10 : espionner un adversaire
+      targetPlayerIndex?: number;
+      targetCardIndex?: number;
+      // Pour carte V : échange universel
+      player1Index?: number;
+      card1Index?: number;
+      player2Index?: number;
+      card2Index?: number;
+    }
+  ): {
+    spiedCard?: PlayingCard;
+    affectedPlayers?: Array<{ playerId: string; playerName: string; cardIndex: number }>;
+    shuffledPlayer?: { playerId: string; playerName: string };
+  } {
+    if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) {
+      return {};
+    }
 
     const currentPlayer = getCurrentPlayer(gameState);
     const card = gameState.specialCardToActivate;
-
-    if (targetPlayerIndex < 0 || targetPlayerIndex >= gameState.players.length) return;
-    const targetPlayer = gameState.players[targetPlayerIndex];
+    let result: ReturnType<typeof GameLogic.useSpecialPower> = {};
 
     if (card.value === '7') {
-      // Espionner une carte
-      if (targetCardIndex >= 0 && targetCardIndex < targetPlayer.hand.length) {
-        gameState.lastSpiedCard = targetPlayer.hand[targetCardIndex];
-        this.lookAtCard(gameState, targetPlayer, targetCardIndex);
+      // Carte 7 : Regarder SA PROPRE carte (comme en solo)
+      const cardIndex = data.cardIndex ?? 0;
+      if (cardIndex >= 0 && cardIndex < currentPlayer.hand.length) {
+        gameState.lastSpiedCard = currentPlayer.hand[cardIndex];
+        currentPlayer.knownCards[cardIndex] = true;
+        addToHistory(gameState, `${currentPlayer.name} regarde une de ses cartes.`);
+        result.spiedCard = currentPlayer.hand[cardIndex];
       }
     } else if (card.value === '10') {
-      // Échanger avec un adversaire
-      if (targetCardIndex >= 0 && targetCardIndex < targetPlayer.hand.length) {
-        gameState.pendingSwap = {
-          targetPlayer: targetPlayerIndex,
-          targetCard: targetCardIndex,
-          ownCard: null,
-        };
-        return; // Attendre que le joueur choisisse sa propre carte
+      // Carte 10 : Espionner une carte adversaire (pas d'échange)
+      const targetPlayerIndex = data.targetPlayerIndex ?? 0;
+      const targetCardIndex = data.targetCardIndex ?? 0;
+
+      if (targetPlayerIndex >= 0 && targetPlayerIndex < gameState.players.length) {
+        const targetPlayer = gameState.players[targetPlayerIndex];
+        if (targetCardIndex >= 0 && targetCardIndex < targetPlayer.hand.length) {
+          gameState.lastSpiedCard = targetPlayer.hand[targetCardIndex];
+          addToHistory(
+            gameState,
+            `${currentPlayer.name} espionne une carte de ${targetPlayer.name}.`
+          );
+          result.spiedCard = targetPlayer.hand[targetCardIndex];
+        }
       }
     } else if (card.value === 'V') {
-      // Échanger deux cartes chez un adversaire
-      if (targetCardIndex >= 0 && targetCardIndex < targetPlayer.hand.length - 1) {
-        this.swapCards(gameState, targetPlayer, targetCardIndex, targetPlayer, targetCardIndex + 1);
+      // Carte V (Valet) : Échange universel entre 2 joueurs quelconques
+      const { player1Index, card1Index, player2Index, card2Index } = data;
+
+      if (
+        player1Index !== undefined && card1Index !== undefined &&
+        player2Index !== undefined && card2Index !== undefined &&
+        player1Index >= 0 && player1Index < gameState.players.length &&
+        player2Index >= 0 && player2Index < gameState.players.length
+      ) {
+        const p1 = gameState.players[player1Index];
+        const p2 = gameState.players[player2Index];
+
+        if (
+          card1Index >= 0 && card1Index < p1.hand.length &&
+          card2Index >= 0 && card2Index < p2.hand.length
+        ) {
+          this.swapCards(gameState, p1, card1Index, p2, card2Index);
+
+          // Retourner les joueurs affectés (sauf celui qui utilise le pouvoir)
+          result.affectedPlayers = [];
+          if (p1.id !== currentPlayer.id) {
+            result.affectedPlayers.push({
+              playerId: p1.id,
+              playerName: p1.name,
+              cardIndex: card1Index
+            });
+          }
+          if (p2.id !== currentPlayer.id) {
+            result.affectedPlayers.push({
+              playerId: p2.id,
+              playerName: p2.name,
+              cardIndex: card2Index
+            });
+          }
+        }
       }
     } else if (card.value === 'JOKER') {
-      // Mélanger la main d'un adversaire
-      this.jokerEffect(gameState, targetPlayer);
+      // JOKER : Mélanger n'importe qui (y compris soi-même)
+      const targetPlayerIndex = data.targetPlayerIndex ?? 0;
+
+      if (targetPlayerIndex >= 0 && targetPlayerIndex < gameState.players.length) {
+        const targetPlayer = gameState.players[targetPlayerIndex];
+        this.jokerEffect(gameState, targetPlayer);
+
+        // Retourner le joueur affecté (sauf si c'est soi-même)
+        if (targetPlayer.id !== currentPlayer.id) {
+          result.shuffledPlayer = {
+            playerId: targetPlayer.id,
+            playerName: targetPlayer.name
+          };
+        }
+      }
     }
 
-    gameState.isWaitingForSpecialPower = false;
-    gameState.specialCardToActivate = null;
-    this.nextPlayer(gameState);
-  }
-
-  static completeSwap(gameState: GameState, ownCardIndex: number): void {
-    if (!gameState.pendingSwap) return;
-
-    const currentPlayer = getCurrentPlayer(gameState);
-    const targetPlayer = gameState.players[gameState.pendingSwap.targetPlayer];
-
-    if (ownCardIndex >= 0 && ownCardIndex < currentPlayer.hand.length) {
-      this.swapCards(
-        gameState,
-        currentPlayer,
-        ownCardIndex,
-        targetPlayer,
-        gameState.pendingSwap.targetCard
-      );
-    }
-
-    gameState.pendingSwap = null;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     this.startReactionPhase(gameState);
+
+    return result;
   }
 
   static skipSpecialPower(gameState: GameState): void {
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    gameState.pendingSwap = null;
     addToHistory(gameState, `${getCurrentPlayer(gameState).name} ignore le pouvoir spécial.`);
     this.startReactionPhase(gameState);
   }

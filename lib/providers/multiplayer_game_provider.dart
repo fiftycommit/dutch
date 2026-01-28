@@ -59,13 +59,26 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   String? _lastPlayerLeftName;
   String? get lastPlayerLeftName => _lastPlayerLeftName;
 
-  // Notification: pouvoir spécial utilisé sur nous
+  // Notification: pouvoir spécial utilisé sur nous (ancien générique)
   bool _specialPowerNotification = false;
   bool get specialPowerNotification => _specialPowerNotification;
   String? _specialPowerByName;
   String? get specialPowerByName => _specialPowerByName;
   String? _specialPowerType;
   String? get specialPowerType => _specialPowerType;
+
+  // Notification Valet : notre carte a été échangée
+  Map<String, dynamic>? _pendingSwapNotification;
+  Map<String, dynamic>? get pendingSwapNotification => _pendingSwapNotification;
+
+  // Notification Joker : nos cartes ont été mélangées
+  Map<String, dynamic>? _pendingJokerNotification;
+  Map<String, dynamic>? get pendingJokerNotification =>
+      _pendingJokerNotification;
+
+  // Notification Espionnage : quelqu'un regarde notre carte
+  Map<String, dynamic>? _pendingSpyNotification;
+  Map<String, dynamic>? get pendingSpyNotification => _pendingSpyNotification;
 
   String? _hostPlayerId;
   String? get hostPlayerId => _hostPlayerId;
@@ -154,12 +167,19 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   String? get clientId => _multiplayerService.clientId;
   bool get isConnected => _multiplayerService.isConnected;
   bool get isReady => _localPresence?['ready'] == true;
+  int get serverTimeOffsetMs => _multiplayerService.serverTimeOffsetMs;
 
   // AFK Protection
   Timer? _turnTimer;
   int? _turnStartTime;
   bool _showAfkWarning = false;
   bool get showAfkWarning => _showAfkWarning;
+
+  // Joueurs marqués comme AFK (timeout atteint)
+  final Set<String> _afkPlayerIds = {};
+  Set<String> get afkPlayerIds => Set.unmodifiable(_afkPlayerIds);
+
+  bool isPlayerAfk(String playerId) => _afkPlayerIds.contains(playerId);
 
   int get readyHumanCount => _playersInLobby.where((p) {
         if (p['isHuman'] != true) return false;
@@ -421,6 +441,32 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.onSpiedCard = (card, targetName) {
       debugPrint('👁️ Revealed card from $targetName: ${card.toString()}');
       _lastSpiedCard = card;
+      _spiedTargetName = targetName;
+      _showSpiedCardDialog = true;
+      notifyListeners();
+    };
+
+    // Notification Valet : notre carte a été échangée par un autre joueur
+    _multiplayerService.onSwapNotification = (data) {
+      debugPrint(
+          '🔄 Swap notification: ${data['byPlayerName']} échangé carte #${data['cardIndex']}');
+      _pendingSwapNotification = data;
+      notifyListeners();
+    };
+
+    // Notification Joker : nos cartes ont été mélangées par un autre joueur
+    _multiplayerService.onJokerNotification = (data) {
+      debugPrint(
+          '🃏 Joker notification: ${data['byPlayerName']} a mélangé nos cartes');
+      _pendingJokerNotification = data;
+      notifyListeners();
+    };
+
+    // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
+    _multiplayerService.onSpyNotification = (data) {
+      debugPrint(
+          '👁️ Spy notification: ${data['byPlayerName']} espionne notre carte #${data['cardIndex']}');
+      _pendingSpyNotification = data;
       notifyListeners();
     };
 
@@ -632,31 +678,37 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   // Actions de jeu - déléguer au service
   void drawCard() {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.drawCard();
   }
 
   void replaceCard(int cardIndex) {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.replaceCard(cardIndex);
   }
 
   void discardDrawnCard() {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.discardDrawnCard();
   }
 
   void takeFromDiscard() {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.takeFromDiscard();
   }
 
   void callDutch() {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.callDutch();
   }
 
   void attemptMatch(int cardIndex) {
     if (_gameState == null) return;
+    _resetAfkStatus();
     _multiplayerService.attemptMatch(cardIndex);
   }
 
@@ -668,20 +720,6 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     // Auto-clear processing after delay in case of server lag, or rely on game state update?
     // Let's rely on gamestate update to unlock, or a short timeout.
     // Safe fallback:
-    Future.delayed(const Duration(seconds: 2), () {
-      if (_isProcessingAction) {
-        _isProcessingAction = false;
-        notifyListeners();
-      }
-    });
-  }
-
-  void completeSwap(int ownCardIndex) {
-    if (_gameState == null || _isProcessingAction) return;
-    _isProcessingAction = true;
-    notifyListeners();
-    _multiplayerService.completeSwap(ownCardIndex);
-    // Safe fallback
     Future.delayed(const Duration(seconds: 2), () {
       if (_isProcessingAction) {
         _isProcessingAction = false;
@@ -702,6 +740,83 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         notifyListeners();
       }
     });
+  }
+
+  /// Carte 7 : Regarder sa propre carte
+  void usePower7LookOwnCard(int cardIndex) {
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
+    _multiplayerService.usePower7LookOwnCard(cardIndex);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Carte 10 : Espionner une carte adversaire
+  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) {
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
+    _multiplayerService.usePower10SpyOpponent(
+        targetPlayerIndex, targetCardIndex);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Carte V (Valet) : Échange universel entre 2 joueurs
+  void usePowerValetSwap(
+      int player1Index, int card1Index, int player2Index, int card2Index) {
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
+    _multiplayerService.usePowerValetSwap(
+        player1Index, card1Index, player2Index, card2Index);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// JOKER : Mélanger la main d'un joueur (y compris soi-même)
+  void usePowerJokerShuffle(int targetPlayerIndex) {
+    if (_gameState == null || _isProcessingAction) return;
+    _isProcessingAction = true;
+    notifyListeners();
+    _multiplayerService.usePowerJokerShuffle(targetPlayerIndex);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Effacer la notification Valet après affichage du dialog
+  void clearSwapNotification() {
+    _pendingSwapNotification = null;
+    notifyListeners();
+  }
+
+  /// Effacer la notification Joker après affichage du dialog
+  void clearJokerNotification() {
+    _pendingJokerNotification = null;
+    notifyListeners();
+  }
+
+  /// Effacer la notification Espionnage après affichage du dialog
+  void clearSpyNotification() {
+    _pendingSpyNotification = null;
+    notifyListeners();
   }
 
   Future<void> leaveRoom() async {
@@ -964,26 +1079,18 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     if (_turnStartTime == null) return;
     final elapsed = DateTime.now().millisecondsSinceEpoch - _turnStartTime!;
 
-    // Warning at 25s
-    if (elapsed > 25000 && !_showAfkWarning) {
+    // Warning at 15s (5s remaining)
+    if (elapsed > 15000 && !_showAfkWarning) {
       _showAfkWarning = true;
       notifyListeners();
     }
+  }
 
-    // Action at 40s (Auto-Play / Kick)
-    if (elapsed > 40000) {
-      _stopTurnTimer();
-      // Auto-play action to avoiding stalling: Draw then Discard
-      if (_gameState?.drawnCard == null) {
-        drawCard();
-        // Give a bit of time then discard
-        Future.delayed(const Duration(seconds: 2), () => discardDrawnCard());
-      } else {
-        discardDrawnCard();
-      }
-
-      // Optionally kick self if desired:
-      // leaveRoom();
+  /// Réinitialise le statut AFK si le joueur effectue une action
+  void _resetAfkStatus() {
+    if (_gameState != null && _afkPlayerIds.contains(playerId)) {
+      _afkPlayerIds.remove(playerId);
+      notifyListeners();
     }
   }
 

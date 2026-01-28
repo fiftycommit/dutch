@@ -104,8 +104,14 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onKicked; // Quand on est kick
   Function(Map<String, dynamic>)? onPlayerLeft; // Quand un joueur quitte
   Function(Map<String, dynamic>)?
-      onSpecialPowerTargeted; // Pouvoir spécial sur nous
-  Function(PlayingCard, String)? onSpiedCard; // Carte espionnée (pouvoir 7)
+      onSpecialPowerTargeted; // Pouvoir spécial sur nous (ancien)
+  Function(PlayingCard, String)? onSpiedCard; // Carte espionnée (pouvoir 7/10)
+  Function(Map<String, dynamic>)?
+      onSwapNotification; // Notification Valet : notre carte a été échangée
+  Function(Map<String, dynamic>)?
+      onJokerNotification; // Notification Joker : nos cartes ont été mélangées
+  Function(Map<String, dynamic>)?
+      onSpyNotification; // Notification Espionnage : quelqu'un regarde notre carte
   Function(String)? onGamePaused; // Jeu mis en pause (par qui)
   Function(String)? onGameResumed; // Jeu repris (par qui)
 
@@ -381,12 +387,38 @@ class MultiplayerService {
       }
     });
 
-    // Quand un pouvoir spécial est utilisé sur nous
+    // Quand un pouvoir spécial est utilisé sur nous (ancien événement générique)
     _socket!.on('special_power:targeted', (data) {
       debugPrint(
           '✨ Pouvoir spécial utilisé sur vous par ${data['byPlayerName']}');
       if (data is Map) {
         onSpecialPowerTargeted?.call(data.cast<String, dynamic>());
+      }
+    });
+
+    // Notification Valet : notre carte a été échangée
+    _socket!.on('special_power:swap_notification', (data) {
+      debugPrint(
+          '🔄 Valet ! ${data['byPlayerName']} a échangé votre carte #${(data['cardIndex'] ?? 0) + 1}');
+      if (data is Map) {
+        onSwapNotification?.call(data.cast<String, dynamic>());
+      }
+    });
+
+    // Notification Joker : nos cartes ont été mélangées
+    _socket!.on('special_power:joker_notification', (data) {
+      debugPrint('🃏 Joker ! ${data['byPlayerName']} a mélangé vos cartes');
+      if (data is Map) {
+        onJokerNotification?.call(data.cast<String, dynamic>());
+      }
+    });
+
+    // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
+    _socket!.on('special_power:spy_notification', (data) {
+      debugPrint(
+          '👁️ Espionnage ! ${data['byPlayerName']} regarde votre carte #${(data['cardIndex'] ?? 0) + 1}');
+      if (data is Map) {
+        onSpyNotification?.call(data.cast<String, dynamic>());
       }
     });
 
@@ -614,8 +646,19 @@ class MultiplayerService {
     });
   }
 
-  void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
-    debugPrint('✨ Utilise pouvoir spécial');
+  /// Carte 7 : Regarder sa propre carte
+  void usePower7LookOwnCard(int cardIndex) {
+    debugPrint('👁️ Pouvoir 7 : Regarde sa carte #${cardIndex + 1}');
+    _socket!.emit('game:use_special_power', {
+      'roomCode': _currentRoomCode,
+      'cardIndex': cardIndex,
+    });
+  }
+
+  /// Carte 10 : Espionner une carte adversaire
+  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) {
+    debugPrint(
+        '🔍 Pouvoir 10 : Espionne joueur $targetPlayerIndex carte #${targetCardIndex + 1}');
     _socket!.emit('game:use_special_power', {
       'roomCode': _currentRoomCode,
       'targetPlayerIndex': targetPlayerIndex,
@@ -623,11 +666,37 @@ class MultiplayerService {
     });
   }
 
-  void completeSwap(int ownCardIndex) {
-    debugPrint('🔁 Complete l\'échange');
-    _socket!.emit('game:complete_swap', {
+  /// Carte V (Valet) : Échange universel entre 2 joueurs
+  void usePowerValetSwap(
+      int player1Index, int card1Index, int player2Index, int card2Index) {
+    debugPrint(
+        '🔄 Pouvoir Valet : Échange joueur $player1Index carte #${card1Index + 1} ↔ joueur $player2Index carte #${card2Index + 1}');
+    _socket!.emit('game:use_special_power', {
       'roomCode': _currentRoomCode,
-      'ownCardIndex': ownCardIndex,
+      'player1Index': player1Index,
+      'card1Index': card1Index,
+      'player2Index': player2Index,
+      'card2Index': card2Index,
+    });
+  }
+
+  /// JOKER : Mélanger la main d'un joueur (y compris soi-même)
+  void usePowerJokerShuffle(int targetPlayerIndex) {
+    debugPrint('🃏 Pouvoir Joker : Mélange joueur $targetPlayerIndex');
+    _socket!.emit('game:use_special_power', {
+      'roomCode': _currentRoomCode,
+      'targetPlayerIndex': targetPlayerIndex,
+    });
+  }
+
+  /// Méthode générique pour compatibilité (utilisée par l'ancien code)
+  @Deprecated('Utiliser les méthodes spécifiques usePower7/10/Valet/Joker')
+  void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
+    debugPrint('✨ Utilise pouvoir spécial (ancienne méthode)');
+    _socket!.emit('game:use_special_power', {
+      'roomCode': _currentRoomCode,
+      'targetPlayerIndex': targetPlayerIndex,
+      'targetCardIndex': targetCardIndex,
     });
   }
 

@@ -183,6 +183,15 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
+  /**
+   * Handler pour les pouvoirs spéciaux - Aligné sur le mode solo
+   *
+   * Format des données attendues selon la carte :
+   * - Carte 7 : { roomCode, cardIndex } - Regarder sa propre carte
+   * - Carte 10 : { roomCode, targetPlayerIndex, targetCardIndex } - Espionner un adversaire
+   * - Carte V : { roomCode, player1Index, card1Index, player2Index, card2Index } - Échange universel
+   * - JOKER : { roomCode, targetPlayerIndex } - Mélanger n'importe qui
+   */
   socket.on('game:use_special_power', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
@@ -193,73 +202,77 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       if (currentPlayer.id !== socket.id) return;
       if (currentPlayer.isSpectator) return;
 
-      // Récupérer le joueur ciblé avant d'utiliser le pouvoir
-      const targetPlayer = room.gameState.players[data.targetPlayerIndex];
-      const drawnCard = room.gameState.drawnCard;
-      // Déterminer le type de pouvoir basé sur la valeur de la carte
-      let powerType = 'unknown';
-      if (drawnCard) {
-        if (drawnCard.value === 'V') {
-          powerType = 'swap_adjacent'; // Valet : Échanger des cartes adjacentes
-        } else if (drawnCard.value === 'D') {
-          powerType = 'peek'; // Dame : Regarder une carte (si implémenté ainsi, sinon voir GameLogic)
-        } else if (drawnCard.value === '7') {
-          powerType = 'spy'; // 7 : Espionner une carte
-        } else if (drawnCard.value === '10' || drawnCard.value === 'R') {
-          // 10 ou Roi (selon règles, ici R sembait être swap dans le code original, mais 10 est souvent échange)
-          // Le code original avait R = swap. On garde la compatibilité si c'est ce qui est voulu,
-          // mais GameLogic.ts dit: 10 (swap), V (exchange), JOKER (shuffle), 7 (spy).
-          // On va se fier à GameLogic.ts pour la vérité terrain.
-          if (drawnCard.value === '10') powerType = 'swap';
-          if (drawnCard.value === 'R') powerType = 'swap'; // Si R est aussi swap ?
-        } else if (drawnCard.value === 'JOKER') {
-          powerType = 'joker'; // Pouvoir Joker
-        }
-      }
-
-      // Si c'est un 7 (spy), on doit capturer la carte retournée par GameLogic
-      // GameLogic.useSpecialPower ne retourne rien mais met à jour lastSpiedCard dans room.gameState
-      // On vérifiera après l'appel.
-
+      const specialCard = room.gameState.specialCardToActivate;
+      if (!specialCard) return;
 
       roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.useSpecialPower(
-        room.gameState,
-        data.targetPlayerIndex,
-        data.targetCardIndex
-      );
+      // Appeler useSpecialPower avec les données appropriées
+      const result = GameLogic.useSpecialPower(room.gameState, {
+        cardIndex: data.cardIndex,
+        targetPlayerIndex: data.targetPlayerIndex,
+        targetCardIndex: data.targetCardIndex,
+        player1Index: data.player1Index,
+        card1Index: data.card1Index,
+        player2Index: data.player2Index,
+        card2Index: data.card2Index,
+      });
 
-      // Notifier le joueur ciblé qu'un pouvoir a été utilisé sur lui
-      if (targetPlayer && targetPlayer.isHuman && targetPlayer.id !== currentPlayer.id) {
-        socket.to(targetPlayer.id).emit('special_power:targeted', {
-          byPlayerId: currentPlayer.id,
-          byPlayerName: currentPlayer.name,
-          powerType,
-          targetCardIndex: data.targetCardIndex,
+      // Envoyer la carte espionnée au joueur (pour 7 et 10)
+      if (result.spiedCard) {
+        socket.emit('game:spied_card', {
           roomCode: data.roomCode,
+          card: result.spiedCard,
+          targetPlayerName: specialCard.value === '7' ? 'vous' :
+            (data.targetPlayerIndex !== undefined ?
+              room.gameState.players[data.targetPlayerIndex]?.name : 'Anonyme')
         });
+
+        // Notification au joueur espionné (pouvoir 10 uniquement)
+        if (specialCard.value === '10' && data.targetPlayerIndex !== undefined) {
+          const spiedPlayer = room.gameState.players[data.targetPlayerIndex];
+          if (spiedPlayer && spiedPlayer.isHuman && spiedPlayer.id !== currentPlayer.id) {
+            socket.to(spiedPlayer.id).emit('special_power:spy_notification', {
+              byPlayerName: currentPlayer.name,
+              cardIndex: data.targetCardIndex,
+              roomCode: data.roomCode,
+            });
+          }
+        }
+      }
+
+      // Notifications Valet : prévenir les joueurs affectés
+      if (result.affectedPlayers && result.affectedPlayers.length > 0) {
+        for (const affected of result.affectedPlayers) {
+          const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
+          if (affectedPlayer && affectedPlayer.isHuman) {
+            socket.to(affected.playerId).emit('special_power:swap_notification', {
+              byPlayerName: currentPlayer.name,
+              cardIndex: affected.cardIndex,
+              roomCode: data.roomCode,
+            });
+          }
+        }
+      }
+
+      // Notification Joker : prévenir le joueur mélangé
+      if (result.shuffledPlayer) {
+        const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer!.playerId);
+        if (shuffledPlayer && shuffledPlayer.isHuman) {
+          socket.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
+            byPlayerName: currentPlayer.name,
+            roomCode: data.roomCode,
+          });
+        }
       }
 
       roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
         specialPowerUsed: {
           byPlayerId: currentPlayer.id,
           byPlayerName: currentPlayer.name,
-          targetPlayerId: targetPlayer?.id,
-          targetPlayerName: targetPlayer?.name,
-          powerType,
+          powerType: specialCard.value,
         },
       });
-
-      // Si c'est un pouvoir d'espionnage (7), on renvoie l'info au joueur qui a espionné
-      if (powerType === 'spy' && room.gameState.lastSpiedCard) {
-        socket.emit('game:spied_card', {
-          roomCode: data.roomCode,
-          card: room.gameState.lastSpiedCard,
-          targetPlayerName: targetPlayer?.name ?? 'Anonyme'
-        });
-      }
-
 
       if (room.gameState.phase === GamePhase.ended) {
         roomManager.handleGameEnd(data.roomCode);
@@ -278,41 +291,6 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       await roomManager.checkAndPlayBotTurn(data.roomCode);
     } catch (error) {
       console.error('Error use_special_power:', error);
-    }
-  });
-
-  socket.on('game:complete_swap', async (data) => {
-    try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
-
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
-
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
-
-      GameLogic.completeSwap(room.gameState, data.ownCardIndex);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
-
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-        return;
-      }
-
-      if (room.gameState.phase === GamePhase.reaction) {
-        const reactionTime =
-          typeof room.settings?.reactionTimeMs === 'number'
-            ? room.settings.reactionTimeMs
-            : 3000;
-        roomManager.startReactionTimer(data.roomCode, reactionTime);
-        return;
-      }
-
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
-    } catch (error) {
-      console.error('Error complete_swap:', error);
     }
   });
 

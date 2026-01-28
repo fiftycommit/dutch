@@ -309,16 +309,61 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           });
         }
 
-        // Check for Spied Card Dialog
+        // Check for Spied Card Dialog (pouvoir 7 ou 10)
         if (gameProvider.showSpiedCardDialog &&
             gameProvider.lastSpiedCard != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              final targetName = gameProvider.spiedTargetName ?? 'Joueur';
+              final title =
+                  targetName == 'vous' ? 'VOTRE CARTE' : 'CARTE REVELEE';
               MultiplayerSpecialPowerDialogs.showCardRevealDialog(
-                      context,
-                      gameProvider.lastSpiedCard!,
-                      gameProvider.spiedTargetName ?? 'Joueur')
+                      context, gameProvider.lastSpiedCard!, title)
                   .then((_) => gameProvider.closeSpiedCardDialog());
+            }
+          });
+        }
+
+        // Notification Valet : notre carte a ete echangee par un autre joueur
+        if (gameProvider.pendingSwapNotification != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              final data = gameProvider.pendingSwapNotification!;
+              MultiplayerSpecialPowerDialogs.showSwapNotificationDialog(
+                context,
+                data['byPlayerName'] ?? 'Un joueur',
+                data['cardIndex'] ?? 0,
+              );
+              gameProvider.clearSwapNotification();
+            }
+          });
+        }
+
+        // Notification Joker : nos cartes ont ete melangees par un autre joueur
+        if (gameProvider.pendingJokerNotification != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              final data = gameProvider.pendingJokerNotification!;
+              MultiplayerSpecialPowerDialogs.showJokerNotificationDialog(
+                context,
+                data['byPlayerName'] ?? 'Un joueur',
+              );
+              gameProvider.clearJokerNotification();
+            }
+          });
+        }
+
+        // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
+        if (gameProvider.pendingSpyNotification != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              final data = gameProvider.pendingSpyNotification!;
+              MultiplayerSpecialPowerDialogs.showSpyNotificationDialog(
+                context,
+                data['byPlayerName'] ?? 'Un joueur',
+                data['cardIndex'] ?? 0,
+              );
+              gameProvider.clearSpyNotification();
             }
           });
         }
@@ -569,7 +614,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // If spectator or eliminated, we might need fallback? For now assume player exists.
 
     // Get opponents (exclude me)
-    List<Player> opponents = gs.players.where((p) => p.id != myId).toList();
+    // Get opponents (exclude me AND spectators)
+    List<Player> opponents =
+        gs.players.where((p) => p.id != myId && !p.isSpectator).toList();
     // Reorder opponents based on position relative to me?
     // MultiplayerService usually returns list. If we want constant relative position:
     // (opponent_pos - my_pos + total) % total
@@ -1064,28 +1111,49 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     final presence = gp.presenceById[player.id];
     final isConnected = presence == null || presence['connected'] == true;
 
-    final badge = Stack(
+    // Calcul du temps restant pour le timer visuel
+    final gs = gp.gameState;
+    int? turnStartTime;
+    int? turnDuration;
+
+    if (isActive &&
+        gs != null &&
+        gs.turnStartTime != null &&
+        gs.phase == GamePhase.playing) {
+      turnStartTime = gs.turnStartTime! - gp.serverTimeOffsetMs;
+      turnDuration = gs.turnTimeoutMs;
+    }
+
+    final badge = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        PlayerAvatar(
-          player: player,
-          size: badgeSize,
-          isActive: isActive,
-          showName: true,
-          compactMode: true,
-        ),
-        // Indicateur de connexion (toujours visible)
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: isConnected ? Colors.green : Colors.red,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 1.5),
+        Stack(
+          children: [
+            PlayerAvatar(
+              player: player,
+              size: badgeSize,
+              isActive: isActive,
+              showName: true,
+              compactMode: true,
+              turnStartTime: turnStartTime,
+              turnDuration: turnDuration,
+              isAfk: isHuman && gp.isPlayerAfk(player.id),
             ),
-          ),
+            // Indicateur de connexion (toujours visible)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: isConnected ? Colors.green : Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1442,53 +1510,36 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   Widget _buildSpecialPowerOverlay(MultiplayerGameProvider gp, GameState gs) {
-    if (gs.specialCardToActivate == null && gs.pendingSwap == null)
-      return const SizedBox();
-    if (!gs.currentPlayer.isHuman && gs.pendingSwap == null)
-      return const SizedBox();
+    // Vérifier si c'est à nous de jouer et si on attend un pouvoir spécial
+    if (gs.specialCardToActivate == null) return const SizedBox();
+    if (!gs.currentPlayer.isHuman) return const SizedBox();
 
-    // Check if it's MY turn and I need to act OR if I have a pending swap
     bool isMyTurn = gs.currentPlayer.id == gp.playerId;
-    bool isPendSwap = gs.pendingSwap != null && isMyTurn;
+    if (!isMyTurn) return const SizedBox();
 
-    if (!isMyTurn && !isPendSwap) return const SizedBox();
-
-    // Prevent re-showing if already processing or dismissed locally
+    // Prevent re-showing if already processing
     if (gp.isProcessing) return const SizedBox();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Check if a dialog is likely already open (not perfect but helpful)
-      // or if we are just waiting for server
       if (ModalRoute.of(context)?.isCurrent == true) {
-        // Use a local tag to prevent loops if state hasn't updated yet?
-        // Actually, reliable fix is optimistic update in provider.
-        // But let's safe guard here too.
-
-        if (gs.pendingSwap != null) {
-          // ... existing logic ...
-          MultiplayerSpecialPowerDialogs.showCompleteSwapDialog(context);
-          return;
-        }
-
         if (gs.isWaitingForSpecialPower && gs.specialCardToActivate != null) {
           PlayingCard trigger = gs.specialCardToActivate!;
           String val = trigger.value;
 
-          // Ensure we don't spam
-
-          if (val == '7' || val == '8') {
-            MultiplayerSpecialPowerDialogs.showLookCardDialog(
-                context, trigger, true);
-          } else if (val == '9' || val == '10') {
-            // 9 & 10 treated as "Spy" (Look at opponent) in unified UI for now
-            // If 10 is intended as Swap, it should be V.
-            MultiplayerSpecialPowerDialogs.showLookCardDialog(
-                context, trigger, false);
+          // Nouveaux dialogs alignés sur le mode solo
+          if (val == '7') {
+            // Carte 7 : Regarder SA PROPRE carte
+            MultiplayerSpecialPowerDialogs.showPower7Dialog(context, trigger);
+          } else if (val == '10') {
+            // Carte 10 : Espionner une carte adversaire
+            MultiplayerSpecialPowerDialogs.showPower10Dialog(context, trigger);
           } else if (val == 'V') {
+            // Valet : Echange universel entre 2 joueurs
             MultiplayerSpecialPowerDialogs.showValetSwapDialog(
                 context, trigger);
           } else if (val == 'JOKER') {
+            // Joker : Melanger la main de n'importe qui
             MultiplayerSpecialPowerDialogs.showJokerDialog(context, trigger);
           } else {
             gp.skipSpecialPower();
@@ -1559,20 +1610,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         gameState.drawnCard != null &&
         gameState.currentPlayer.id == provider.playerId) {
       provider.replaceCard(index);
-    } else if (gameState.isWaitingForSpecialPower) {
-      // Special powers handling
-      // Usually involves choosing a card
-      if (gameState.pendingSwap != null) {
-        provider.completeSwap(index);
-      } else {
-        // Generic special power use (e.g. Look at own card)
-        // Assuming 'human' is consistent with index being my own hand index
-        // Wait, we need my position.
-        final me =
-            gameState.players.firstWhere((p) => p.id == provider.playerId);
-        provider.useSpecialPower(me.position, index);
-      }
     }
+    // Note: Les pouvoirs speciaux sont maintenant geres par les dialogs
+    // (showPower7Dialog, showPower10Dialog, showValetSwapDialog, showJokerDialog)
   }
 
   Widget _buildBotCardCountBadge(int count, bool isCompact) {

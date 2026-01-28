@@ -172,7 +172,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         final connectedHumans = _connectedHumans(provider);
         final canStart = provider.isHost &&
             provider.isReady &&
-            provider.readyHumanCount >= 1;
+            provider.readyHumanCount >= minPlayers;
 
         return PopScope(
           onPopInvokedWithResult: (didPop, _) {

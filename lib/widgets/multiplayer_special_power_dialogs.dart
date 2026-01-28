@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,8 +7,9 @@ import '../models/player.dart';
 import '../providers/multiplayer_game_provider.dart';
 import 'card_widget.dart';
 import 'responsive_dialog.dart';
-import 'game_action_button.dart';
 
+/// Dialogs pour les pouvoirs spéciaux en mode multijoueur
+/// Alignés sur le comportement du mode solo
 class MultiplayerSpecialPowerDialogs {
   static const double _cardAspectRatio = 7 / 5;
 
@@ -41,17 +41,15 @@ class MultiplayerSpecialPowerDialogs {
     );
   }
 
-  // 7 & 8: Look at one of YOUR OWN cards
-  // Unified 7/8/9/10: Look at Card (Own or Opponent)
-  static void showLookCardDialog(
-      BuildContext context, PlayingCard trigger, bool ownCard) {
+  // ============================================================
+  // CARTE 7 : Regarder UNE de ses propres cartes
+  // ============================================================
+  static void showPower7Dialog(BuildContext context, PlayingCard trigger) {
     final gameProvider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
-    // Find "me"
     final me =
         gameState.players.firstWhere((p) => p.id == gameProvider.playerId);
-    final myIndex = gameState.players.indexOf(me);
 
     showDialog(
       context: context,
@@ -79,7 +77,7 @@ class MultiplayerSpecialPowerDialogs {
                   Icon(Icons.visibility, color: Colors.amber, size: iconSize),
                   SizedBox(height: smallSpacing),
                   Text(
-                    ownCard ? "👁️ REGARDER UNE CARTE" : "👁 ESPIONNER",
+                    "7 REGARDER UNE CARTE",
                     style: TextStyle(
                         color: Colors.amber,
                         fontSize: titleSize,
@@ -88,55 +86,102 @@ class MultiplayerSpecialPowerDialogs {
                   ),
                   SizedBox(height: smallSpacing),
                   Text(
-                    ownCard
-                        ? "Choisissez UNE de vos cartes à regarder"
-                        : "Choisissez un adversaire puis une de ses cartes",
+                    "Choisissez UNE de vos cartes a regarder",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white70, fontSize: bodySize),
                   ),
                   SizedBox(height: spacing),
-                  if (ownCard) ...[
-                    Wrap(
-                      spacing: smallSpacing,
-                      runSpacing: smallSpacing,
-                      alignment: WrapAlignment.center,
-                      children: List.generate(me.hand.length, (index) {
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            // In multiplayer, looking at own card is a "Special Power" action targeting self
-                            gameProvider.useSpecialPower(myIndex, index);
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                  color: Colors.amber, width: borderWidth),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: _scaledCard(
-                              width: cardWidth,
-                              isRevealed: false, // Hidden until server confirms
-                            ),
+                  Wrap(
+                    spacing: smallSpacing,
+                    runSpacing: smallSpacing,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(me.hand.length, (index) {
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          // Envoyer au serveur - la carte sera revelee via onSpiedCard
+                          gameProvider.usePower7LookOwnCard(index);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                                color: Colors.amber, width: borderWidth),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        );
-                      }),
+                          child: _scaledCard(
+                            width: cardWidth,
+                            isRevealed: false,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  SizedBox(height: spacing),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      gameProvider.skipSpecialPower();
+                    },
+                    child: Text(
+                      "PASSER",
+                      style: TextStyle(
+                          color: Colors.white54, fontSize: buttonSize),
                     ),
-                    SizedBox(height: spacing),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        gameProvider.skipSpecialPower();
-                      },
-                      child: Text(
-                        "PASSER",
-                        style: TextStyle(
-                            color: Colors.white54, fontSize: buttonSize),
-                      ),
-                    ),
-                  ] else ...[
-                    _buildOpponentSelection(
-                        context, gameProvider, gameState, metrics, false),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // CARTE 10 : Espionner une carte adversaire
+  // ============================================================
+  static void showPower10Dialog(BuildContext context, PlayingCard trigger) {
+    final gameProvider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
+    final gameState = gameProvider.gameState!;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.black87,
+        builder: (context, metrics) {
+          final spacing = metrics.space(12);
+          final smallSpacing = metrics.space(8);
+          final iconSize = metrics.size(40);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+
+          return SingleChildScrollView(
+            child: SizedBox(
+              width: metrics.contentWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.visibility, color: Colors.blue, size: iconSize),
+                  SizedBox(height: smallSpacing),
+                  Text(
+                    "10 ESPIONNER",
+                    style: TextStyle(
+                        color: Colors.blue,
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: smallSpacing),
+                  Text(
+                    "Choisissez un adversaire puis une de ses cartes",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                  ),
+                  SizedBox(height: spacing),
+                  _buildOpponentSelection(
+                      context, gameProvider, gameState, metrics),
                 ],
               ),
             ),
@@ -147,23 +192,33 @@ class MultiplayerSpecialPowerDialogs {
   }
 
   static Widget _buildOpponentSelection(BuildContext context,
-      MultiplayerGameProvider gp, state, DialogMetrics metrics, bool isSwap) {
+      MultiplayerGameProvider gp, gameState, DialogMetrics metrics) {
     final meId = gp.playerId;
-    List<Player> opponents = state.players
+    List<Player> opponents = gameState.players
         .where((p) => p.id != meId && p.hand.isNotEmpty)
         .toList()
         .cast<Player>();
 
     if (opponents.isEmpty) {
-      return Column(children: [
-        Text("Personne à cibler !", style: TextStyle(color: Colors.white)),
-        TextButton(
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text("Aucun adversaire n'a de cartes !",
+              style:
+                  TextStyle(color: Colors.redAccent, fontSize: metrics.font(14))),
+          SizedBox(height: metrics.space(16)),
+          TextButton(
             onPressed: () {
               Navigator.pop(context);
               gp.skipSpecialPower();
             },
-            child: Text("Passer"))
-      ]);
+            child: Text(
+              "OK",
+              style: TextStyle(color: Colors.white54, fontSize: metrics.font(16)),
+            ),
+          ),
+        ],
+      );
     }
 
     return Column(
@@ -180,8 +235,7 @@ class MultiplayerSpecialPowerDialogs {
             return ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                _showOpponentCardSelection(
-                    context, gp, opponent, metrics, isSwap);
+                _showOpponentCardSelection(context, gp, opponent, metrics);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade800,
@@ -208,12 +262,11 @@ class MultiplayerSpecialPowerDialogs {
     );
   }
 
-  static void _showOpponentCardSelection(
-      BuildContext context,
-      MultiplayerGameProvider gp,
-      Player opponent,
-      DialogMetrics metrics,
-      bool isSwap) {
+  static void _showOpponentCardSelection(BuildContext context,
+      MultiplayerGameProvider gp, Player opponent, DialogMetrics metrics) {
+    final gameState = gp.gameState!;
+    final targetIndex = gameState.players.indexOf(opponent);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -237,7 +290,7 @@ class MultiplayerSpecialPowerDialogs {
                   Text(
                     "Cartes de ${opponent.name}",
                     style: TextStyle(
-                        color: Colors.amber,
+                        color: Colors.blue,
                         fontSize: titleSize,
                         fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
@@ -251,16 +304,13 @@ class MultiplayerSpecialPowerDialogs {
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(ctx);
-                          // Execute action (Look or Swap-Step-1)
-                          // Mapping opponent back to global index
-                          final targetIndex =
-                              gp.gameState!.players.indexOf(opponent);
-                          gp.useSpecialPower(targetIndex, index);
+                          // Envoyer au serveur - la carte sera revelee via onSpiedCard
+                          gp.usePower10SpyOpponent(targetIndex, index);
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(
-                                color: Colors.blue, width: borderWidth),
+                            border:
+                                Border.all(color: Colors.blue, width: borderWidth),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: _scaledCard(
@@ -292,59 +342,9 @@ class MultiplayerSpecialPowerDialogs {
     );
   }
 
-  // JOKER: Shuffle opponent
-  static void showJokerDialog(BuildContext context, PlayingCard trigger) {
-    final gameProvider =
-        Provider.of<MultiplayerGameProvider>(context, listen: false);
-    final gameState = gameProvider.gameState!;
-    final meId = gameProvider.playerId;
-
-    // Find opponents
-    List<Player> opponents =
-        gameState.players.where((p) => p.id != meId).toList();
-
-    showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => ResponsiveDialog(
-            backgroundColor: Colors.black87,
-            builder: (context, metrics) {
-              return SingleChildScrollView(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.shuffle,
-                    color: Colors.orange, size: metrics.size(40)),
-                Text("JOKER : MÉLANGE",
-                    style: TextStyle(
-                        color: Colors.orange, fontSize: metrics.font(20))),
-                SizedBox(height: metrics.space(10)),
-                Text("Choisissez un adversaire à mélanger",
-                    style: TextStyle(color: Colors.white)),
-                SizedBox(height: metrics.space(10)),
-                Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: opponents
-                        .map((opp) => ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange),
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              final idx = gameState.players.indexOf(opp);
-                              gameProvider.useSpecialPower(
-                                  idx, 0); // Card index 0 is dummy
-                            },
-                            child: Text(opp.name)))
-                        .toList()),
-                TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      gameProvider.skipSpecialPower();
-                    },
-                    child: Text("PASSER"))
-              ]));
-            }));
-  }
-
+  // ============================================================
+  // CARTE V (VALET) : Echange universel entre 2 joueurs
+  // ============================================================
   static void showValetSwapDialog(BuildContext context, PlayingCard trigger) {
     final gameProvider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
@@ -375,7 +375,7 @@ class MultiplayerSpecialPowerDialogs {
                   Icon(Icons.swap_horiz, color: Colors.purple, size: iconSize),
                   SizedBox(height: gapS),
                   Text(
-                    "🤵 VALET : ÉCHANGE",
+                    "VALET : ECHANGE",
                     style: TextStyle(
                         color: Colors.purple,
                         fontSize: titleSize,
@@ -384,7 +384,7 @@ class MultiplayerSpecialPowerDialogs {
                   ),
                   SizedBox(height: gapS),
                   Text(
-                    "Échangez 2 cartes à l'aveugle",
+                    "Echangez 2 cartes a l'aveugle",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white70, fontSize: bodySize),
                   ),
@@ -433,19 +433,8 @@ class MultiplayerSpecialPowerDialogs {
 
   static void _showUniversalSwap(BuildContext context,
       MultiplayerGameProvider gp, List<Player> allPlayers) {
-    // In Multiplayer, one player must be ME (the initiator) typically?
-    // Rules say Valet swaps ANY two cards.
-    // However, server API likely expects `useSpecialPower(targetIndex, targetCardIndex)`.
-    // Does this API support swapping A and B if neither are ME?
-    // Checking server logic is hard from here.
-    // Assumption: Valet allows swapping MY card with OTHER card.
-    // To match SOLO generic UI, we let them pick, but we might have to restrict.
-    // Given the previous code just did "Select Opponent", it was likely Me <-> Opponent.
-    // Let's pre-select Player 1 as ME to guide them, but keep the UI structure.
-
-    final me = gp.gameState!.players.firstWhere((p) => p.id == gp.playerId);
-
-    Player? player1 = me; // Locked to me for now to ensure server compatibility
+    final meId = gp.playerId;
+    Player? player1;
     int? card1;
     Player? player2;
     int? card2;
@@ -473,70 +462,81 @@ class MultiplayerSpecialPowerDialogs {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text("1️⃣ VOS CARTES :", // Label changed to imply ME
+                      Text("1 Joueur A :",
                           style: TextStyle(
                               color: Colors.white, fontSize: titleSize)),
                       SizedBox(height: spacing),
-                      // Only show ME here
                       Wrap(
                         spacing: spacing,
                         runSpacing: spacing,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              // No-op, locked to me
-                            },
+                        children: allPlayers.map((p) {
+                          final isSelected = player1?.id == p.id;
+                          final isMe = p.id == meId;
+                          return GestureDetector(
+                            onTap: () => setState(() {
+                              player1 = p;
+                              card1 = null;
+                            }),
                             child: Container(
                               padding: EdgeInsets.symmetric(
                                   horizontal: metrics.space(12),
                                   vertical: metrics.space(8)),
                               decoration: BoxDecoration(
-                                color: Colors.blue.shade700,
-                                border: Border.all(color: Colors.amber),
+                                color: isSelected
+                                    ? Colors.blue.shade700
+                                    : Colors.blue.shade900,
+                                border: Border.all(
+                                    color: isSelected
+                                        ? Colors.amber
+                                        : Colors.white30),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text("Vous",
+                              child: Text(isMe ? "Vous" : p.name,
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontSize: metrics.font(12))),
                             ),
-                          )
-                        ],
-                      ),
-                      SizedBox(height: sectionSpacing),
-                      Text("Carte de votre main :",
-                          style: TextStyle(
-                              color: Colors.white, fontSize: titleSize)),
-                      SizedBox(height: spacing),
-                      Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: List.generate(player1.hand.length, (index) {
-                          final isSelected = card1 == index;
-                          return GestureDetector(
-                            onTap: () => setState(() => card1 = index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.amber
-                                      : Colors.white30,
-                                  width: isSelected
-                                      ? cardBorderWidth * 2
-                                      : cardBorderWidth,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: _scaledCard(
-                                width: cardWidth,
-                                isRevealed: false,
-                              ),
-                            ),
                           );
-                        }),
+                        }).toList(),
                       ),
+                      if (player1 != null) ...[
+                        SizedBox(height: sectionSpacing),
+                        Text(
+                            "2 Carte de ${player1!.id == meId ? 'votre main' : player1!.name} :",
+                            style: TextStyle(
+                                color: Colors.white, fontSize: titleSize)),
+                        SizedBox(height: spacing),
+                        Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children:
+                              List.generate(player1!.hand.length, (index) {
+                            final isSelected = card1 == index;
+                            return GestureDetector(
+                              onTap: () => setState(() => card1 = index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? Colors.amber
+                                        : Colors.white30,
+                                    width: isSelected
+                                        ? cardBorderWidth * 2
+                                        : cardBorderWidth,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: _scaledCard(
+                                  width: cardWidth,
+                                  isRevealed: false,
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
                       SizedBox(height: sectionSpacing),
-                      Text("3️⃣ CIBLE (Adversaire) :",
+                      Text("3 Joueur B :",
                           style: TextStyle(
                               color: Colors.white, fontSize: titleSize)),
                       SizedBox(height: spacing),
@@ -544,8 +544,9 @@ class MultiplayerSpecialPowerDialogs {
                         spacing: spacing,
                         runSpacing: spacing,
                         children:
-                            allPlayers.where((p) => p.id != me.id).map((p) {
+                            allPlayers.where((p) => p.id != player1?.id).map((p) {
                           final isSelected = player2?.id == p.id;
+                          final isMe = p.id == meId;
                           return GestureDetector(
                             onTap: () => setState(() {
                               player2 = p;
@@ -565,7 +566,7 @@ class MultiplayerSpecialPowerDialogs {
                                         : Colors.white30),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(p.name,
+                              child: Text(isMe ? "Vous" : p.name,
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontSize: metrics.font(12))),
@@ -575,7 +576,8 @@ class MultiplayerSpecialPowerDialogs {
                       ),
                       if (player2 != null) ...[
                         SizedBox(height: sectionSpacing),
-                        Text("4️⃣ Carte de ${player2!.name} :",
+                        Text(
+                            "4 Carte de ${player2!.id == meId ? 'votre main' : player2!.name} :",
                             style: TextStyle(
                                 color: Colors.white, fontSize: titleSize)),
                         SizedBox(height: spacing),
@@ -623,78 +625,32 @@ class MultiplayerSpecialPowerDialogs {
                                     fontSize: metrics.font(14))),
                           ),
                           ElevatedButton(
-                            onPressed: (card1 != null &&
+                            onPressed: (player1 != null &&
+                                    card1 != null &&
                                     player2 != null &&
                                     card2 != null)
                                 ? () {
                                     Navigator.pop(ctx);
-                                    // Map selection to step-based execution if possible, or single call
-                                    // Server API: useSpecialPower(targetPlayerIndex, targetCardIndex)
-                                    // But swap needs MY card index too.
-                                    // Usually swap is: 1. Pick Opponent 2. Pick Card 3. Pick My Card
-                                    // OR: 1. Pick My Card 2. Pick Opponent Card
-                                    // Check if we can do full swap in one go or need the sequence.
-                                    // If strict port of Solo UI, we just did the selection.
-                                    // To support "MyCardIndex", we might need a separate "completeSwap" call?
-                                    // Previous code: separate Dialogs for Step 1 and Step 2.
-                                    // HERE we have both info.
-                                    // Let's assume we call `useSpecialPower(targetIndex, targetCard)`
-                                    // AND we might need to tell provider which of my cards to swap?
-                                    // MultiplayerGameProvider.completeSwap(myCardIndex) ?
-                                    // Wait, flow is: Select Target -> Server returns "Swap Pending"? -> Select Own.
-                                    // If we want to do it all client side then send:
-                                    // We likely can't because server enforces steps.
-                                    // Workaround: Send Step 1 (Target), then immediately Step 2 (Own) if possible?
-                                    // Or use this UI to collect data, then execute Step 1, wait for callback?
-                                    // Let's try executing Step 1 (Trigger Swap on Target).
-                                    // BUT we need to persist "My Card Choice".
-                                    // Provider doesn't seem to have "pre-selected my card for swap".
-                                    // We will store it in provider or just do Step 1 first.
-                                    // Actually, standard flow: useSpecialPower(target) -> Server sets state -> Client selects own -> completeSwap.
-                                    // So we can send Step 1 here.
-                                    // And we need to ensure Step 2 uses `card1` automatically?
-                                    // That requires modifying provider/logic.
-                                    // Safe bet: Do Step 1. Then when Server asks for Step 2, we show valid UI or auto-complete?
-                                    // Let's just do Step 1 (Target) and let the game flow handle Step 2 (Selection of own card).
-                                    // BUT the user just selected their own card `card1`!
-                                    // It would be annoying to select it again.
-                                    // We can store it in `gp.preSelectedSwapCardIndex = card1` ?
-                                    // Ideally yes.
-                                    // For now: Call useSpecialPower with target.
-                                    // The server will then likely send an update or event expecting `completeSwap`.
-                                    // If we listen to that we can auto-send `completeSwap(card1)`.
-                                    // That is complex async logic.
-                                    // SIMPLIFICATION:
-                                    // Just use this UI to select TARGET (Player 2 + Card 2).
-                                    // Ignore Player 1 / Card 1 selection visually or make it "Coming Soon"?
-                                    // No, the user wants "EXACT COPY".
-                                    // So we let them select both.
-                                    // Then we invoke Step 1.
-                                    // Then we need to handle Step 2.
-                                    // Let's hacking it: save `card1` in a static/global or provider field?
-                                    // Better: `gp.setPreSelectedSwapCard(card1)`.
-                                    // Let's check provider if we can add that easily.
-                                    // For now, let's just trigger Step 1.
-                                    // And when the "Choose your card" dialog would appear (handled in GameScreen),
-                                    // we can make it auto-check if pre-selection exists.
-                                    // Warning: server might not agree immediately.
-                                    // Let's just Trigger Step 1 (Target)
-                                    // And maybe show a Toast "Choisissez VOTRE carte maintenant" if we can't automate.
-                                    // Or: `showCompleteSwapDialog` is called by GameScreen when server says so.
-                                    // If we can pass data there...
-                                    // Let's start with just triggering Step 1.
 
-                                    final targetIndex =
+                                    // Trouver les index des joueurs
+                                    final p1Index =
+                                        gp.gameState!.players.indexOf(player1!);
+                                    final p2Index =
                                         gp.gameState!.players.indexOf(player2!);
-                                    gp.useSpecialPower(targetIndex, card2!);
 
-                                    // IMPORTANT: We ignore card1 (my card) for actual transmission
-                                    // because the server flow is split.
-                                    // Unless we modify provider to store "pendingSwapMyCard".
-                                    // Let's leave it as "Select Target" effectively,
-                                    // but UI *looks* like full swap.
-                                    // User will have to pick their card again in Step 2.
-                                    // That's a UX compromise for safety unless we patch provider.
+                                    // Afficher la notification de l'echange
+                                    String name1 = player1!.id == meId
+                                        ? "Vous"
+                                        : player1!.name;
+                                    String name2 = player2!.id == meId
+                                        ? "Vous"
+                                        : player2!.name;
+                                    _showSwapNotification(
+                                        context, name1, card1!, name2, card2!);
+
+                                    // Envoyer au serveur
+                                    gp.usePowerValetSwap(
+                                        p1Index, card1!, p2Index, card2!);
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(
@@ -703,7 +659,7 @@ class MultiplayerSpecialPowerDialogs {
                                   horizontal: metrics.space(20),
                                   vertical: buttonPad),
                             ),
-                            child: Text("ÉCHANGER",
+                            child: Text("ECHANGER",
                                 style: TextStyle(fontSize: buttonSize)),
                           ),
                         ],
@@ -719,13 +675,69 @@ class MultiplayerSpecialPowerDialogs {
     );
   }
 
-  static void showCompleteSwapDialog(BuildContext context) {
+  static void _showSwapNotification(BuildContext context, String player1,
+      int card1, String player2, int card2) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.purple.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_horiz, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "ECHANGE EFFECTUE",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: gapS),
+              Text(
+                "$player1 carte #${card1 + 1} <-> $player2 carte #${card2 + 1}",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.purple.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28), vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style: TextStyle(
+                        fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // JOKER : Melanger la main d'un joueur (y compris soi-meme)
+  // ============================================================
+  static void showJokerDialog(BuildContext context, PlayingCard trigger) {
     final gameProvider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gameState = gameProvider.gameState!;
-    // Find "me"
-    final me =
-        gameState.players.firstWhere((p) => p.id == gameProvider.playerId);
+    final allPlayers = gameState.players;
+    final meId = gameProvider.playerId;
 
     showDialog(
       context: context,
@@ -733,92 +745,465 @@ class MultiplayerSpecialPowerDialogs {
       builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.black87,
         builder: (context, metrics) {
-          final spacing = metrics.space(12);
-          final titleSize = metrics.font(18);
-          final columns = math.min(me.hand.length, 4);
-          final cardWidth = _cardWidthForGrid(metrics,
-              columns: columns, maxHeightFraction: 0.35);
+          final gapS = metrics.space(8);
+          final gapM = metrics.space(16);
+          final iconSize = metrics.size(40);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final buttonSize = metrics.font(14);
 
-          return SingleChildScrollView(
-            child: SizedBox(
-              width: metrics.contentWidth,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "Choisissez VOTRE carte à donner",
-                    style: TextStyle(
-                        color: Colors.purple,
-                        fontSize: titleSize,
-                        fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: spacing),
-                  Wrap(
-                    spacing: metrics.space(8),
-                    runSpacing: metrics.space(8),
-                    alignment: WrapAlignment.center,
-                    children: List.generate(me.hand.length, (index) {
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          gameProvider.completeSwap(index);
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.amber, width: 2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: _scaledCard(
-                            width: cardWidth,
-                            isRevealed: false, // My cards
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shuffle, color: Colors.red, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "JOKER : CHAOS",
+                style: TextStyle(
+                    color: Colors.red,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
-            ),
+              SizedBox(height: gapS),
+              Text(
+                "Choisissez un joueur pour melanger sa main",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: gapM),
+              Wrap(
+                spacing: metrics.space(12),
+                runSpacing: metrics.space(8),
+                alignment: WrapAlignment.center,
+                children: allPlayers.map((player) {
+                  final isMe = player.id == meId;
+                  final targetIndex = gameState.players.indexOf(player);
+                  return ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showShuffleNotification(context, player, isMe);
+                      gameProvider.usePowerJokerShuffle(targetIndex);
+                    },
+                    icon: Icon(isMe ? Icons.person : Icons.smart_toy,
+                        size: metrics.size(20)),
+                    label: Text(isMe ? "Vous" : player.name,
+                        style: TextStyle(fontSize: buttonSize)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          isMe ? Colors.amber.shade700 : Colors.blue.shade800,
+                      padding: EdgeInsets.symmetric(
+                          horizontal: metrics.space(14),
+                          vertical: metrics.space(10)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              SizedBox(height: gapM),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  gameProvider.skipSpecialPower();
+                },
+                child: Text("ANNULER",
+                    style: TextStyle(
+                        color: Colors.white54, fontSize: metrics.font(14))),
+              ),
+            ],
           );
         },
       ),
     );
   }
 
+  static void _showShuffleNotification(
+      BuildContext context, Player target, bool isMe) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.red.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shuffle, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                isMe
+                    ? "VOS CARTES ONT ETE MELANGEES !"
+                    : "CARTES DE ${target.name.toUpperCase()} MELANGEES !",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapS),
+              Text(
+                isMe
+                    ? "Vous ne savez plus ou sont vos cartes !"
+                    : "${target.name} ne sait plus ou sont ses cartes !",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.red.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28), vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style: TextStyle(
+                        fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // NOTIFICATIONS reçues d'autres joueurs
+  // ============================================================
+
+  /// Notification quand un autre joueur utilise le Valet sur nous
+  static void showSwapNotificationDialog(
+      BuildContext context, String byPlayerName, int cardIndex) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.purple.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final alertSize = metrics.font(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_horiz, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "VALET !",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapS),
+              Text(
+                "$byPlayerName a echange une carte avec vous !",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: metrics.space(8)),
+              Text(
+                "Votre carte #${cardIndex + 1} a ete echangee",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.amber,
+                    fontSize: alertSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.purple.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28), vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style: TextStyle(
+                        fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Notification quand un autre joueur nous espionne (pouvoir 10)
+  static void showSpyNotificationDialog(
+      BuildContext context, String byPlayerName, int cardIndex) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.blue.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final alertSize = metrics.font(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.visibility, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "ESPIONNAGE !",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapS),
+              Text(
+                "$byPlayerName a regarde une de vos cartes !",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: metrics.space(8)),
+              Text(
+                "Votre carte #${cardIndex + 1} a ete espionnee",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.amber,
+                    fontSize: alertSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28), vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style: TextStyle(
+                        fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Notification quand un autre joueur utilise le Joker sur nous
+  static void showJokerNotificationDialog(
+      BuildContext context, String byPlayerName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.red.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final alertSize = metrics.font(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shuffle, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "VOS CARTES ONT ETE MELANGEES !",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapS),
+              Text(
+                "$byPlayerName a utilise le Joker !",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              SizedBox(height: metrics.space(8)),
+              Text(
+                "Vous ne savez plus ou sont vos cartes !",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.amber,
+                    fontSize: alertSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.red.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28), vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style: TextStyle(
+                        fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Dialog de revelation de carte (pour pouvoir 7 et 10)
   static Future<void> showCardRevealDialog(
       BuildContext context, PlayingCard card, String title) async {
     await showDialog(
       context: context,
-      builder: (context) => ResponsiveDialog(
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.black87,
         builder: (context, metrics) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title,
-                  style: TextStyle(
-                      color: Colors.amber,
-                      fontSize: metrics.font(24),
-                      fontWeight: FontWeight.bold)),
-              SizedBox(height: metrics.space(20)),
-              SizedBox(
-                height: metrics.size(200),
-                child: AspectRatio(
-                  aspectRatio: 2.5 / 3.5,
-                  child: CardWidget(
-                    card: card,
-                    size: CardSize.large,
-                    isRevealed: true,
+          const aspect = _cardAspectRatio;
+
+          return SizedBox(
+            width: metrics.contentWidth,
+            height: metrics.contentHeight,
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 22,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final height = constraints.maxHeight;
+                      final iconSize = height * 0.45;
+                      final titleSize = height * 0.22;
+                      final gap = height * 0.08;
+
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: Colors.green, size: iconSize),
+                            SizedBox(height: gap),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                title,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ),
-              SizedBox(height: metrics.space(20)),
-              GameActionButton(
-                  label: "OK",
-                  onTap: () => Navigator.pop(context),
-                  color: Colors.amber),
-            ],
+                Expanded(
+                  flex: 56,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxWidth = constraints.maxWidth;
+                      final maxHeight = constraints.maxHeight;
+                      final cardWidth = math.max(
+                        0.0,
+                        math.min(maxWidth * 0.8, maxHeight / aspect),
+                      );
+                      final cardHeight = cardWidth * aspect;
+
+                      return Center(
+                        child: SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: CardWidget(
+                              card: card,
+                              size: CardSize.large,
+                              isRevealed: true,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Expanded(
+                  flex: 22,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final height = constraints.maxHeight;
+                      final valueSize = height * 0.22;
+                      final gap = height * 0.12;
+                      final buttonHeight = height * 0.48;
+                      final buttonWidth = constraints.maxWidth * 0.6;
+
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "${card.value} (${card.points} pts)",
+                              style: TextStyle(
+                                color: Colors.amber,
+                                fontSize: valueSize,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                            ),
+                          ),
+                          SizedBox(height: gap),
+                          SizedBox(
+                            width: buttonWidth,
+                            height: buttonHeight,
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "OK",
+                                  style: TextStyle(fontSize: valueSize),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

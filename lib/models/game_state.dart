@@ -29,9 +29,13 @@ class GameState {
   int reactionTimeRemaining = 0;
   PlayingCard? lastSpiedCard;
   Map<String, dynamic>? pendingSwap;
-  
+
   /// Scores cumulés du tournoi par joueur (id -> score total)
   Map<String, int> tournamentCumulativeScores;
+
+  /// Timer de tour pour l'affichage visuel
+  int? turnStartTime; // Timestamp en ms
+  int turnTimeoutMs; // Durée max du tour en ms (25s par défaut)
 
   GameState({
     required this.players,
@@ -53,6 +57,8 @@ class GameState {
     this.lastSpiedCard,
     this.pendingSwap,
     Map<String, int>? tournamentCumulativeScores,
+    this.turnStartTime,
+    this.turnTimeoutMs = 25000,
   })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
         actionHistory = actionHistory ?? [],
         tournamentCumulativeScores = tournamentCumulativeScores ?? {};
@@ -668,6 +674,8 @@ class GameState {
           : null,
       tournamentCumulativeScores:
           (json['tournamentCumulativeScores'] as Map?)?.cast<String, int>() ?? {},
+      turnStartTime: json['turnStartTime'] as int?,
+      turnTimeoutMs: json['turnTimeoutMs'] as int? ?? 25000,
     );
   }
 
@@ -692,6 +700,8 @@ class GameState {
       'lastSpiedCard': lastSpiedCard?.toJson(),
       'pendingSwap': pendingSwap,
       'tournamentCumulativeScores': tournamentCumulativeScores,
+      'turnStartTime': turnStartTime,
+      'turnTimeoutMs': turnTimeoutMs,
     };
   }
 }

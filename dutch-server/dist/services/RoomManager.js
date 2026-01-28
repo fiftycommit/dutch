@@ -608,6 +608,9 @@ class RoomManager {
         // Si le jeu est en pause, on ne lance pas le timer maintenant
         if (room.isPaused)
             return;
+        // Mettre à jour les infos de timer dans le gameState pour l'affichage client
+        room.gameState.turnStartTime = this.now();
+        room.gameState.turnTimeoutMs = this.turnTimeoutMs;
         const playerId = currentPlayer.id;
         const timer = setTimeout(() => {
             const currentRoom = this.rooms.get(roomCode);
@@ -626,6 +629,11 @@ class RoomManager {
         if (timer) {
             clearTimeout(timer);
             this.actionTimers.delete(roomCode);
+        }
+        // Réinitialiser le timestamp de tour
+        const room = this.rooms.get(roomCode);
+        if (room?.gameState) {
+            room.gameState.turnStartTime = null;
         }
     }
     triggerPresenceCheck(roomCode, playerId, reason) {

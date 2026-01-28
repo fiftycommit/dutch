@@ -47,8 +47,8 @@ export class RoomManager {
   private now: () => number;
 
   constructor(private io: Server, options: Partial<RoomManagerOptions> = {}) {
-    this.turnTimeoutMs = options.turnTimeoutMs ?? 25000;
-    this.presenceGraceMs = options.presenceGraceMs ?? 5000;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? 20000;
+    this.presenceGraceMs = options.presenceGraceMs ?? 3000;
     this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
     this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
     this.stalePlayerMs = options.stalePlayerMs ?? 15000;
@@ -564,7 +564,22 @@ export class RoomManager {
     });
 
     // Trier par score croissant (le plus bas est le meilleur au Dutch)
-    result.sort((a, b) => a.score - b.score);
+    result.sort((a, b) => {
+      const diff = a.score - b.score;
+      if (diff !== 0) return diff;
+
+      // En cas d'égalité, le joueur encore en ligne/actif gagne (est considéré meilleur = premier)
+      const pA = room.players.find(p => p.clientId === a.clientId || p.id === a.clientId);
+      const pB = room.players.find(p => p.clientId === b.clientId || p.id === b.clientId);
+
+      const aActive = pA && pA.connected && !pA.isSpectator;
+      const bActive = pB && pB.connected && !pB.isSpectator;
+
+      if (aActive && !bActive) return -1; // a gagne
+      if (!aActive && bActive) return 1;  // b gagne
+
+      return 0;
+    });
     return result;
   }
 
@@ -704,6 +719,7 @@ export class RoomManager {
 
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
+    this.broadcastGameState(roomCode, 'PLAYER_LEFT');
   }
 
   handleDisconnect(socketId: string) {
@@ -755,11 +771,14 @@ export class RoomManager {
     const currentPlayer = getCurrentPlayer(room.gameState);
     if (!currentPlayer.isHuman || currentPlayer.isSpectator) return;
 
-
     this.clearTurnTimer(roomCode);
 
     // Si le jeu est en pause, on ne lance pas le timer maintenant
     if (room.isPaused) return;
+
+    // Mettre à jour les infos de timer dans le gameState pour l'affichage client
+    room.gameState.turnStartTime = this.now();
+    room.gameState.turnTimeoutMs = this.turnTimeoutMs;
 
     const playerId = currentPlayer.id;
 
@@ -780,6 +799,11 @@ export class RoomManager {
     if (timer) {
       clearTimeout(timer);
       this.actionTimers.delete(roomCode);
+    }
+    // Réinitialiser le timestamp de tour
+    const room = this.rooms.get(roomCode);
+    if (room?.gameState) {
+      room.gameState.turnStartTime = null;
     }
   }
 
@@ -831,11 +855,20 @@ export class RoomManager {
     const player = room.players.find((p) => p.id === playerId);
     if (!player || player.isSpectator) return;
     player.isSpectator = true;
-    player.connected = player.connected ?? false;
+    player.connected = false; // Mark disconnected effectively
     player.focused = false;
     player.lastSeenAt = this.now();
     this.clearPresenceCheck(roomCode, playerId);
     this.clearTurnTimer(roomCode);
+
+    // Check if only one active player remains ("Last Man Standing")
+    const activeCount = this.activePlayerCount(room);
+    if (activeCount <= 1) {
+      this.touchRoom(room);
+      this.broadcastPresence(roomCode);
+      this.handleGameEnd(roomCode);
+      return;
+    }
 
     if (room.gameState && getCurrentPlayer(room.gameState).id === playerId) {
       this.forceEndTurn(roomCode, `${player.name} est passé spectateur.`);

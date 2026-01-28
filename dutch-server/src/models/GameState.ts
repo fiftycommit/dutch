@@ -44,6 +44,9 @@ export interface GameState {
     ownCard: number | null;
   } | null;
   tournamentCumulativeScores: { [playerId: string]: number };
+  // Timer de tour pour l'affichage visuel
+  turnStartTime: number | null; // Timestamp en ms
+  turnTimeoutMs: number; // Durée max du tour en ms
 }
 
 export function createGameState(
@@ -71,6 +74,8 @@ export function createGameState(
     lastSpiedCard: null,
     pendingSwap: null,
     tournamentCumulativeScores: {},
+    turnStartTime: null,
+    turnTimeoutMs: 20000, // 20 secondes par défaut
   };
 }
 
