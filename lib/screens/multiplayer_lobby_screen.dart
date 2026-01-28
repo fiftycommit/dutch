@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/multiplayer_game_provider.dart';
 import '../services/multiplayer_service.dart';
 import '../models/game_state.dart';
+import '../widgets/connection_error_dialog.dart';
 
 import 'multiplayer_memorization_screen.dart';
 
@@ -127,6 +128,16 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             _showRoomClosedDialog(context, provider);
+          });
+        }
+
+        // Afficher dialog si déconnecté avec erreur
+        if (provider.connectionState == SocketConnectionState.disconnected &&
+            provider.errorMessage != null &&
+            provider.errorMessage!.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _showConnectionErrorDialog(context, provider);
           });
         }
 
@@ -442,6 +453,43 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         Navigator.pop(context); // Leave lobby
       }
     }
+  }
+
+  bool _connectionErrorDialogShown = false;
+
+  Future<void> _showConnectionErrorDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) async {
+    // Éviter d'afficher plusieurs fois
+    if (_connectionErrorDialogShown) return;
+    _connectionErrorDialogShown = true;
+
+    await ConnectionErrorDialog.show(
+      context,
+      message: provider.errorMessage ?? 'Connexion perdue avec le serveur.',
+      onRetry: () async {
+        provider.clearError();
+        final success = await provider.reconnect();
+        if (!mounted) return;
+        if (!success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Échec de la reconnexion'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onReturnToMenu: () {
+        provider.clearError();
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      },
+    );
+
+    _connectionErrorDialogShown = false;
   }
 
   Widget _buildSettingsRow(

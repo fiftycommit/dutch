@@ -20,8 +20,10 @@ import 'multiplayer_results_screen.dart';
 
 import 'multiplayer_dutch_reveal_screen.dart';
 import '../services/web_orientation_service.dart';
+import '../services/multiplayer_service.dart';
 import '../widgets/center_table.dart';
 import '../widgets/presence_check_overlay.dart';
+import '../widgets/connection_error_dialog.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});
@@ -133,6 +135,42 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // Handling navigation in build/listener is usually safer for Provider updates
   }
 
+  bool _connectionErrorDialogShown = false;
+
+  Future<void> _showConnectionErrorDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) async {
+    if (_connectionErrorDialogShown) return;
+    _connectionErrorDialogShown = true;
+
+    await ConnectionErrorDialog.show(
+      context,
+      message: provider.errorMessage ?? 'Connexion perdue avec le serveur.',
+      onRetry: () async {
+        provider.clearError();
+        final success = await provider.reconnect();
+        if (!mounted) return;
+        if (!success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Échec de la reconnexion'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onReturnToMenu: () {
+        provider.clearError();
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      },
+    );
+
+    _connectionErrorDialogShown = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Consume MultiplayerGameProvider
@@ -188,6 +226,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
             }
           });
           return const Scaffold(backgroundColor: Color(0xFF1a472a));
+        }
+
+        // Handle Disconnection
+        if (gameProvider.connectionState ==
+                SocketConnectionState.disconnected &&
+            gameProvider.errorMessage != null &&
+            gameProvider.errorMessage!.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              _showConnectionErrorDialog(context, gameProvider);
+            }
+          });
         }
 
         // Handle Kicked (AFK or manually)

@@ -697,6 +697,60 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _resetRoomState();
   }
 
+  /// Tente de reconnecter au serveur.
+  /// Si un roomCode était en cours, tente de rejoindre automatiquement.
+  Future<bool> reconnect() async {
+    _errorMessage = null;
+    _isConnecting = true;
+    notifyListeners();
+
+    try {
+      // Disconnect cleanly first
+      _multiplayerService.disconnect();
+
+      // Small delay to allow cleanup
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Reconnect
+      await _multiplayerService.connect();
+
+      // If we had a room, try to rejoin
+      if (_roomCode != null && _roomCode!.isNotEmpty) {
+        final savedPlayerName = _playersInLobby.firstWhere(
+              (p) => p['id'] == playerId,
+              orElse: () => {'name': 'Joueur'},
+            )['name'] as String? ??
+            'Joueur';
+
+        final rejoined = await _multiplayerService.joinRoom(
+          roomCode: _roomCode!,
+          playerName: savedPlayerName,
+        );
+        if (rejoined != null) {
+          _isInLobby = true;
+          _isConnecting = false;
+          notifyListeners();
+          return true;
+        }
+      }
+
+      _isConnecting = false;
+      notifyListeners();
+      return _multiplayerService.isConnected;
+    } catch (e) {
+      _errorMessage = 'Échec de la reconnexion: $e';
+      _isConnecting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Clear error message after user acknowledges
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   /// Ferme la room (hôte uniquement)
   Future<bool> closeRoom() async {
     if (!_isHost) return false;
@@ -863,10 +917,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.setFocused(state == AppLifecycleState.resumed);
   }
 
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
-  }
+  // clearError is defined in reconnect method section above
 
   void _startTurnTimer() {
     if (_turnTimer != null) return; // Already running
