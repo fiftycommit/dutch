@@ -503,41 +503,38 @@ class MultiplayerSpecialPowerDialogs {
                           )
                         ],
                       ),
-                      if (player1 != null) ...[
-                        SizedBox(height: sectionSpacing),
-                        Text("Carte de votre main :",
-                            style: TextStyle(
-                                color: Colors.white, fontSize: titleSize)),
-                        SizedBox(height: spacing),
-                        Wrap(
-                          spacing: spacing,
-                          runSpacing: spacing,
-                          children:
-                              List.generate(player1!.hand.length, (index) {
-                            final isSelected = card1 == index;
-                            return GestureDetector(
-                              onTap: () => setState(() => card1 = index),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Colors.amber
-                                        : Colors.white30,
-                                    width: isSelected
-                                        ? cardBorderWidth * 2
-                                        : cardBorderWidth,
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
+                      SizedBox(height: sectionSpacing),
+                      Text("Carte de votre main :",
+                          style: TextStyle(
+                              color: Colors.white, fontSize: titleSize)),
+                      SizedBox(height: spacing),
+                      Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        children: List.generate(player1.hand.length, (index) {
+                          final isSelected = card1 == index;
+                          return GestureDetector(
+                            onTap: () => setState(() => card1 = index),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: isSelected
+                                      ? Colors.amber
+                                      : Colors.white30,
+                                  width: isSelected
+                                      ? cardBorderWidth * 2
+                                      : cardBorderWidth,
                                 ),
-                                child: _scaledCard(
-                                  width: cardWidth,
-                                  isRevealed: false,
-                                ),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            );
-                          }),
-                        ),
-                      ],
+                              child: _scaledCard(
+                                width: cardWidth,
+                                isRevealed: false,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
                       SizedBox(height: sectionSpacing),
                       Text("3️⃣ CIBLE (Adversaire) :",
                           style: TextStyle(
@@ -626,8 +623,7 @@ class MultiplayerSpecialPowerDialogs {
                                     fontSize: metrics.font(14))),
                           ),
                           ElevatedButton(
-                            onPressed: (player1 != null &&
-                                    card1 != null &&
+                            onPressed: (card1 != null &&
                                     player2 != null &&
                                     card2 != null)
                                 ? () {
