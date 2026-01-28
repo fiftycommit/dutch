@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../models/game_state.dart';
@@ -109,10 +109,7 @@ class MultiplayerService {
   Future<bool> checkServerHealth() async {
     try {
       final uri = Uri.parse('$_serverUrl/health');
-      final request =
-          await HttpClient().getUrl(uri).timeout(const Duration(seconds: 5));
-      final response =
-          await request.close().timeout(const Duration(seconds: 5));
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('⚠️ Server health check failed: $e');
