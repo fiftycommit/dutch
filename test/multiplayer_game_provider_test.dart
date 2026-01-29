@@ -10,8 +10,7 @@ class FakeMultiplayerService extends MultiplayerService {
     this.fakeClientId = 'c1',
     this.fakeLatencyMs = 0,
     int? fakeServerNowMs,
-  }) : _serverNowMs =
-            fakeServerNowMs ?? DateTime.now().millisecondsSinceEpoch;
+  }) : _serverNowMs = fakeServerNowMs ?? DateTime.now().millisecondsSinceEpoch;
 
   final String fakePlayerId;
   final String fakeClientId;
@@ -86,6 +85,9 @@ class FakeMultiplayerService extends MultiplayerService {
   void confirmPresence() {
     presenceAcked = true;
   }
+
+  @override
+  Future<void> cleanupInactiveRooms() async {}
 }
 
 GameState _reactionState({
@@ -110,7 +112,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('MultiplayerGameProvider', () {
-    test('maps presence by id/clientId and clears presence check on confirm', () {
+    test('maps presence by id/clientId and clears presence check on confirm',
+        () {
       final fakeService = FakeMultiplayerService();
       final provider = MultiplayerGameProvider(multiplayerService: fakeService);
 
@@ -132,7 +135,8 @@ void main() {
       expect(provider.presenceById['p1']?['connected'], isTrue);
       expect(provider.presenceByClientId['c2']?['focused'], isFalse);
 
-      fakeService.emitPresenceCheck(reason: 'Temps de jeu écoulé', deadlineMs: 4000);
+      fakeService.emitPresenceCheck(
+          reason: 'Temps de jeu écoulé', deadlineMs: 4000);
       expect(provider.presenceCheckActive, isTrue);
       expect(provider.presenceCheckReason, contains('Temps de jeu'));
       expect(provider.presenceCheckDeadlineMs, 4000);
@@ -144,7 +148,8 @@ void main() {
       provider.dispose();
     });
 
-    test('syncs reaction timer from server time and latency compensation', () async {
+    test('syncs reaction timer from server time and latency compensation',
+        () async {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final fakeService = FakeMultiplayerService(
         fakeLatencyMs: 200,
@@ -164,6 +169,37 @@ void main() {
       final remaining = provider.gameState?.reactionTimeRemaining ?? 0;
       // 3000 - 1000 elapsed - ~100ms latency compensation ~= 1900ms
       expect(remaining, inInclusiveRange(1700, 2100));
+
+      provider.dispose();
+    });
+
+    test('correctly parses readyPlayerIds from GameState', () {
+      final fakeService = FakeMultiplayerService();
+      final provider = MultiplayerGameProvider(multiplayerService: fakeService);
+
+      final state = GameState(
+        players: [
+          Player(id: 'p1', name: 'Me', isHuman: true, position: 0),
+          Player(id: 'p2', name: 'You', isHuman: true, position: 1),
+          Player(id: 'bot1', name: 'Bot', isHuman: false, position: 2),
+        ],
+        deck: [],
+        discardPile: [],
+        readyPlayerIds: ['p1'],
+        turnTimeoutMs: 20000, // Durée max du tour en ms
+      );
+
+      fakeService.emitGameState(state);
+
+      expect(provider.gameState, isNotNull);
+      expect(provider.gameState!.readyPlayerIds, equals(['p1']));
+
+      // readyHumanCount checks logic: isHuman && !isSpectator && connected && ready
+      // Our fake provider logic for readyHumanCount relies on logic inside provider that matches _playersInLobby
+      // But _playersInLobby is updated via onPlayerJoined or room state, not directly GameState for this specific counter
+      // However, we can check basic property access
+      expect(provider.gameState!.readyPlayerIds.contains('p1'), isTrue);
+      expect(provider.gameState!.readyPlayerIds.contains('p2'), isFalse);
 
       provider.dispose();
     });

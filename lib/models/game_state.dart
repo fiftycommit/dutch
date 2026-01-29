@@ -713,7 +713,7 @@ class GameState {
               {},
       turnStartTime: json['turnStartTime'] as int?,
       turnTimeoutMs: json['turnTimeoutMs'] as int? ?? 25000,
-      readyPlayerIds: (json['readyPlayerIds'] as List?)?.cast<String>() ?? [],
+      readyPlayerIds: List<String>.from(json['readyPlayerIds'] as List? ?? []),
     );
   }
 

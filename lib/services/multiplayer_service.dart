@@ -397,6 +397,11 @@ class MultiplayerService {
             '👤 Player ready: ${data['readyPlayerId']} (${data['readyCount']}/${data['totalHumans']})');
       }
 
+      if (gameStateJson != null) {
+        final readyIds = gameStateJson['readyPlayerIds'];
+        debugPrint('📋 Raw readyPlayerIds from server: $readyIds');
+      }
+
       final reactionTimeMs = data['reactionTimeMs'];
       if (reactionTimeMs is int) {
         onReactionTimeConfig?.call(reactionTimeMs);
