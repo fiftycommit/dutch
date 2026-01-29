@@ -106,17 +106,17 @@ class MultiplayerService {
   }
 
   /// Vérifier quelles rooms sont encore actives sur le serveur
-  Future<List<Map<String, dynamic>>> checkActiveRooms(
+  Future<List<Map<String, dynamic>>?> checkActiveRooms(
       List<String> roomCodes) async {
-    if (!isConnected || roomCodes.isEmpty) return [];
+    if (!isConnected || roomCodes.isEmpty) return null;
 
-    final completer = Completer<List<Map<String, dynamic>>>();
+    final completer = Completer<List<Map<String, dynamic>>?>();
 
     _socket?.emitWithAck('room:check_active', {
       'roomCodes': roomCodes,
     }, ack: (response) {
       if (response == null || response['rooms'] == null) {
-        completer.complete([]);
+        completer.complete(null);
         return;
       }
 
@@ -136,6 +136,10 @@ class MultiplayerService {
 
     final roomCodes = myRooms.map((r) => r.roomCode).toList();
     final activeRooms = await checkActiveRooms(roomCodes);
+
+    // Si offline ou erreur, ne rien supprimer !
+    if (activeRooms == null) return;
+
     final activeCodes = activeRooms.map((r) => r['roomCode'] as String).toSet();
 
     // Supprimer les rooms inactives

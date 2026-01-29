@@ -261,10 +261,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     };
 
     _multiplayerService.onGameAllReady = (data) {
-      if (data is Map) {
-        _eventController.add(GameEvent(
-            GameEventType.gameStarted, data['message'] ?? 'Le jeu commence !'));
-      }
+      _eventController.add(GameEvent(
+          GameEventType.gameStarted, data['message'] ?? 'Le jeu commence !'));
     };
 
     _multiplayerService.onPlayerJoined = (data) {
@@ -964,7 +962,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// Vérifie quelles rooms sont actives
-  Future<List<Map<String, dynamic>>> checkActiveRooms(
+  Future<List<Map<String, dynamic>>?> checkActiveRooms(
       List<String> roomCodes) async {
     return await _multiplayerService.checkActiveRooms(roomCodes);
   }

@@ -51,10 +51,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     }
   }
 
-  void _refreshStats() {
-    _loadAllSlots();
-  }
-
   /// Naviguer vers le menu multijoueur
   void _goToMultiplayer() {
     context.go('/multiplayer');

@@ -63,7 +63,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
 
     setState(() {
       _myRooms = savedRooms;
-      _activeRooms = active;
+      _activeRooms = active ?? [];
       _loadingRooms = false;
     });
 
