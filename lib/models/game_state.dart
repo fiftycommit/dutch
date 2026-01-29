@@ -37,6 +37,9 @@ class GameState {
   int? turnStartTime; // Timestamp en ms
   int turnTimeoutMs; // Durée max du tour en ms (25s par défaut)
 
+  /// Joueurs prêts (phase de mémorisation)
+  List<String> readyPlayerIds;
+
   GameState({
     required this.players,
     required this.deck,
@@ -59,9 +62,11 @@ class GameState {
     Map<String, int>? tournamentCumulativeScores,
     this.turnStartTime,
     this.turnTimeoutMs = 25000,
+    List<String>? readyPlayerIds,
   })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
         actionHistory = actionHistory ?? [],
-        tournamentCumulativeScores = tournamentCumulativeScores ?? {};
+        tournamentCumulativeScores = tournamentCumulativeScores ?? {},
+        readyPlayerIds = readyPlayerIds ?? [];
 
   Player get currentPlayer => players[currentPlayerIndex];
   PlayingCard? get topDiscardCard =>
@@ -85,7 +90,19 @@ class GameState {
     List<PlayingCard> deck = [];
     List<String> suits = ['hearts', 'diamonds', 'clubs', 'spades'];
     List<String> values = [
-      'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R'
+      'A',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      'V',
+      'D',
+      'R'
     ];
     for (var suit in suits) {
       for (var value in values) {
@@ -100,8 +117,8 @@ class GameState {
   void smartShuffle() {
     Random rnd = Random();
     deck.shuffle();
-      if (difficulty == Difficulty.easy) {
-        addToHistory("🎲 Mélange aléatoire (Mode Détendu)");
+    if (difficulty == Difficulty.easy) {
+      addToHistory("🎲 Mélange aléatoire (Mode Détendu)");
     } else if (difficulty == Difficulty.medium) {
       // MODE MEDIUM: 50% mauvaises au début
       List<PlayingCard> good = [];
@@ -124,7 +141,7 @@ class GameState {
       bad.shuffle();
 
       deck.clear();
-      
+
       // Fond: bonnes cartes
       int phase1Count = 20;
       for (int i = 0; i < phase1Count; i++) {
@@ -141,7 +158,7 @@ class GameState {
           deck.add(medium.removeLast());
         }
       }
-      
+
       // Milieu: mix
       int phase2Count = 17;
       for (int i = 0; i < phase2Count; i++) {
@@ -158,7 +175,7 @@ class GameState {
           deck.add(medium.removeLast());
         }
       }
-      
+
       // Haut (pioché en premier): 50% mauvaises
       while (good.isNotEmpty || medium.isNotEmpty || bad.isNotEmpty) {
         double roll = rnd.nextDouble();
@@ -177,15 +194,14 @@ class GameState {
 
       _partialShuffle(deck, 0.0025);
       addToHistory("⚖️ Mélange tactique (Mode Équilibré)");
-      
     } else {
       // MODE HARD (CHALLENGER): Pioche TRÈS défavorable
       // Les bonnes cartes sont enterrées au fond du paquet
-      List<PlayingCard> excellent = [];  // 0-2 points (As, 2)
-      List<PlayingCard> good = [];       // 3-4 points
-      List<PlayingCard> medium = [];     // 5-7 points
-      List<PlayingCard> bad = [];        // 8-10 points
-      List<PlayingCard> terrible = [];   // Figures (V, D, R = 10+ points)
+      List<PlayingCard> excellent = []; // 0-2 points (As, 2)
+      List<PlayingCard> good = []; // 3-4 points
+      List<PlayingCard> medium = []; // 5-7 points
+      List<PlayingCard> bad = []; // 8-10 points
+      List<PlayingCard> terrible = []; // Figures (V, D, R = 10+ points)
 
       for (var card in deck) {
         int val = card.points;
@@ -215,22 +231,24 @@ class GameState {
       while (excellent.isNotEmpty) {
         deck.add(excellent.removeLast());
       }
-      
+
       // Puis les bonnes cartes
       while (good.isNotEmpty) {
         deck.add(good.removeLast());
       }
-      
+
       // 20% des cartes moyennes au fond aussi
       int mediumForBottom = (medium.length * 0.2).round();
       for (int i = 0; i < mediumForBottom && medium.isNotEmpty; i++) {
         deck.add(medium.removeLast());
       }
-      
+
       // === MILIEU DU PAQUET ===
       // Mix de mauvaises et moyennes (70% mauvaises)
       int middleCount = 12;
-      for (int i = 0; i < middleCount && (bad.isNotEmpty || medium.isNotEmpty); i++) {
+      for (int i = 0;
+          i < middleCount && (bad.isNotEmpty || medium.isNotEmpty);
+          i++) {
         double roll = rnd.nextDouble();
         if (roll < 0.70 && bad.isNotEmpty) {
           deck.add(bad.removeLast());
@@ -246,7 +264,7 @@ class GameState {
       while (terrible.isNotEmpty) {
         deck.add(terrible.removeLast());
       }
-      
+
       // 90% de chances d'avoir une mauvaise carte en haut
       while (bad.isNotEmpty || medium.isNotEmpty) {
         double roll = rnd.nextDouble();
@@ -265,7 +283,6 @@ class GameState {
     }
   }
 
-
   void _partialShuffle(List<PlayingCard> cards, double ratio) {
     Random rnd = Random();
     int swaps = (cards.length * ratio).round();
@@ -278,10 +295,9 @@ class GameState {
     }
   }
 
-
   void dealCards() {
     Random rnd = Random();
-    
+
     if (difficulty == Difficulty.easy) {
       _dealCardsEasy(rnd);
     } else if (difficulty == Difficulty.medium) {
@@ -293,11 +309,12 @@ class GameState {
 
   void _dealCardsEasy(Random rnd) {
     // Séparer les Jokers
-    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> normalCards =
+        deck.where((c) => c.value != 'JOKER').toList();
     List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-    
+
     normalCards.shuffle(rnd);
-    
+
     for (var player in players) {
       player.hand = [];
       player.knownCards = [];
@@ -313,14 +330,15 @@ class GameState {
     deck.addAll(normalCards);
     deck.addAll(jokers);
     deck.shuffle(rnd);
-    
+
     _logDealResults();
   }
 
   void _dealCardsMedium(Random rnd) {
-    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> normalCards =
+        deck.where((c) => c.value != 'JOKER').toList();
     List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-    
+
     Map<String, List<PlayingCard>> cardsByValue = {};
     for (var card in normalCards) {
       cardsByValue.putIfAbsent(card.value, () => []);
@@ -329,22 +347,28 @@ class GameState {
     for (var cards in cardsByValue.values) {
       cards.shuffle(rnd);
     }
-    
+
     List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
     List<String> mediumValues = ['7', '6', '5'];
     List<String> goodValues = ['4', '3', '2', 'A'];
-    
+
     _distributeWithSeparation(
-      cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
+      cardsByValue,
+      badValues,
+      mediumValues,
+      goodValues,
+      jokers,
+      rnd,
       badCardsPerPlayer: 2,
       separationStrength: 0.7,
     );
   }
 
   void _dealCardsHard(Random rnd) {
-    List<PlayingCard> normalCards = deck.where((c) => c.value != 'JOKER').toList();
+    List<PlayingCard> normalCards =
+        deck.where((c) => c.value != 'JOKER').toList();
     List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-    
+
     Map<String, List<PlayingCard>> cardsByValue = {};
     for (var card in normalCards) {
       cardsByValue.putIfAbsent(card.value, () => []);
@@ -353,14 +377,18 @@ class GameState {
     for (var cards in cardsByValue.values) {
       cards.shuffle(rnd);
     }
-    
+
     List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
     List<String> mediumValues = ['7', '6', '5'];
     List<String> goodValues = ['4', '3', '2', 'A'];
-    
 
     _distributeWithSeparation(
-      cardsByValue, badValues, mediumValues, goodValues, jokers, rnd,
+      cardsByValue,
+      badValues,
+      mediumValues,
+      goodValues,
+      jokers,
+      rnd,
       badCardsPerPlayer: 3,
       separationStrength: 1.0,
     );
@@ -377,31 +405,32 @@ class GameState {
     required double separationStrength,
   }) {
     int numPlayers = players.length;
-    
+
     // Mélanger l'ordre des joueurs
     List<int> playerOrder = List.generate(numPlayers, (i) => i);
     playerOrder.shuffle(rnd);
-    
+
     // Mélanger les valeurs
     badValues = List.from(badValues)..shuffle(rnd);
     mediumValues = List.from(mediumValues)..shuffle(rnd);
     goodValues = List.from(goodValues)..shuffle(rnd);
-    
+
     List<List<PlayingCard>> hands = List.generate(numPlayers, (_) => []);
     Set<String> globalUsedValues = {};
-    
+
     // PHASE 1: Donner des mauvaises cartes UNIQUES à chaque joueur
     for (int playerIdx in playerOrder) {
       int cardsGiven = 0;
-      
+
       for (var value in badValues) {
         if (cardsGiven >= badCardsPerPlayer) break;
-        
+
         // Séparation: éviter les valeurs déjà données
-        if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
+        if (rnd.nextDouble() < separationStrength &&
+            globalUsedValues.contains(value)) {
           continue;
         }
-        
+
         if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
           hands[playerIdx].add(cardsByValue[value]!.removeLast());
           globalUsedValues.add(value);
@@ -409,22 +438,23 @@ class GameState {
         }
       }
     }
-    
+
     List<String> remaining = [...badValues, ...mediumValues];
     remaining.shuffle(rnd);
-    
+
     for (int playerIdx in playerOrder) {
       Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
-      
+
       for (var value in remaining) {
         if (hands[playerIdx].length >= 3) break;
-        
+
         if (playerValues.contains(value)) continue;
-        
-        if (rnd.nextDouble() < separationStrength && globalUsedValues.contains(value)) {
+
+        if (rnd.nextDouble() < separationStrength &&
+            globalUsedValues.contains(value)) {
           continue;
         }
-        
+
         if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
           hands[playerIdx].add(cardsByValue[value]!.removeLast());
           globalUsedValues.add(value);
@@ -432,19 +462,19 @@ class GameState {
         }
       }
     }
-    
+
     List<String> allValues = [...badValues, ...mediumValues, ...goodValues];
-    
+
     for (int playerIdx in playerOrder) {
       Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
-      
+
       while (hands[playerIdx].length < 4) {
         bool cardAdded = false;
-        
+
         allValues.shuffle(rnd);
         for (var value in allValues) {
           if (playerValues.contains(value)) continue;
-          
+
           if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
             hands[playerIdx].add(cardsByValue[value]!.removeLast());
             playerValues.add(value);
@@ -452,28 +482,29 @@ class GameState {
             break;
           }
         }
-        
+
         if (!cardAdded) {
           for (var value in allValues) {
-            if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
+            if (cardsByValue[value] != null &&
+                cardsByValue[value]!.isNotEmpty) {
               hands[playerIdx].add(cardsByValue[value]!.removeLast());
               cardAdded = true;
               break;
             }
           }
         }
-        
+
         if (!cardAdded) break;
       }
     }
-    
+
     for (int i = 0; i < numPlayers; i++) {
       players[i].hand = hands[i];
       players[i].knownCards = List.filled(hands[i].length, false);
     }
-    
+
     deck.clear();
-    
+
     for (var value in goodValues) {
       if (cardsByValue[value] != null) {
         deck.addAll(cardsByValue[value]!);
@@ -489,10 +520,10 @@ class GameState {
         deck.addAll(cardsByValue[value]!);
       }
     }
-    
+
     deck.addAll(jokers);
     deck.shuffle(rnd);
-    
+
     _logDealResults();
   }
 
@@ -501,30 +532,29 @@ class GameState {
     addToHistory("🃏 Distribution terminée ($jokers Jokers dans le deck)");
   }
 
-
   void shuffleDeckRandomly() {
     deck.shuffle(Random());
   }
 
   List<Player> getFinalRanking() {
     List<Player> ranking = List.from(players);
-    
+
     // Trier par score, mais en cas d'égalité, celui qui a Dutch est devant
     ranking.sort((a, b) {
       int scoreA = getFinalScore(a);
       int scoreB = getFinalScore(b);
-      
+
       if (scoreA != scoreB) {
         return scoreA.compareTo(scoreB);
       }
-      
+
       // En cas d'égalité de score, celui qui a appelé Dutch gagne (il est premier)
       if (a.id == dutchCallerId) return -1;
       if (b.id == dutchCallerId) return 1;
-      
+
       return 0; // Sinon ordre arbitraire entre ex-aequo
     });
-    
+
     // Si le Dutch caller n'a pas gagné (quelqu'un a un score STRICTEMENT inférieur), il est mis en dernier
     if (dutchCallerId != null && !didDutchCallerWin()) {
       Player failedCaller = ranking.firstWhere((p) => p.id == dutchCallerId);
@@ -533,14 +563,14 @@ class GameState {
     }
     return ranking;
   }
-  
+
   /// Retourne les rangs réels avec gestion des ex-aequo
   /// Retourne une Map<playerId, rang> où le rang tient compte des égalités
   /// Cas spécial : le Dutch caller gagnant est SEUL #1, les autres avec même score sont #2
   Map<String, int> getFinalRanksWithTies() {
     List<Player> ranking = getFinalRanking();
     Map<String, int> ranks = {};
-    
+
     // Vérifier si le Dutch caller a gagné
     bool dutchCallerWon = dutchCallerId != null && didDutchCallerWin();
     int? dutchCallerScore;
@@ -548,27 +578,29 @@ class GameState {
       Player caller = players.firstWhere((p) => p.id == dutchCallerId);
       dutchCallerScore = getFinalScore(caller);
     }
-    
+
     int currentRank = 1;
     int? previousScore;
-    
+
     for (int i = 0; i < ranking.length; i++) {
       Player player = ranking[i];
       int score = getFinalScore(player);
-      
+
       // Cas spécial : Dutch caller raté est toujours dernier
-      if (dutchCallerId != null && !didDutchCallerWin() && player.id == dutchCallerId) {
+      if (dutchCallerId != null &&
+          !didDutchCallerWin() &&
+          player.id == dutchCallerId) {
         ranks[player.id] = ranking.length; // Dernier
         continue;
       }
-      
+
       // Le Dutch caller gagnant est TOUJOURS seul #1
       if (dutchCallerWon && player.id == dutchCallerId) {
         ranks[player.id] = 1;
         previousScore = score;
         continue;
       }
-      
+
       // Si Dutch caller a gagné et ce joueur a le même score → #2 (pas ex-aequo avec le Dutch caller)
       if (dutchCallerWon && score == dutchCallerScore) {
         currentRank = 2;
@@ -576,17 +608,17 @@ class GameState {
         previousScore = score;
         continue;
       }
-      
+
       if (previousScore == null || score != previousScore) {
         // Nouveau score = nouveau rang (on saute les rangs des ex-aequo précédents)
         currentRank = i + 1;
       }
       // Sinon même score = même rang (ex-aequo), on garde currentRank
-      
+
       ranks[player.id] = currentRank;
       previousScore = score;
     }
-    
+
     return ranks;
   }
 
@@ -617,7 +649,7 @@ class GameState {
   void updateCumulativeScores() {
     for (var player in players) {
       int roundScore = getFinalScore(player);
-      tournamentCumulativeScores[player.id] = 
+      tournamentCumulativeScores[player.id] =
           (tournamentCumulativeScores[player.id] ?? 0) + roundScore;
     }
   }
@@ -627,11 +659,12 @@ class GameState {
     if (gameMode != GameMode.tournament) return false;
     return getCumulativeScore(player) >= threshold;
   }
-  
+
   /// Récupère la liste des joueurs triés par score cumulé (meilleur en premier)
   List<Player> getPlayersByTournamentRank() {
     List<Player> sorted = List.from(players);
-    sorted.sort((a, b) => getCumulativeScore(a).compareTo(getCumulativeScore(b)));
+    sorted
+        .sort((a, b) => getCumulativeScore(a).compareTo(getCumulativeScore(b)));
     return sorted;
   }
 
@@ -652,13 +685,16 @@ class GameState {
       phase: GamePhase.values[json['phase'] as int],
       difficulty: Difficulty.values[json['difficulty'] as int],
       tournamentRound: json['tournamentRound'] as int? ?? 1,
-      eliminatedPlayerIds: (json['eliminatedPlayerIds'] as List?)?.cast<String>() ?? [],
+      eliminatedPlayerIds:
+          (json['eliminatedPlayerIds'] as List?)?.cast<String>() ?? [],
       drawnCard: json['drawnCard'] != null
           ? PlayingCard.fromJson(json['drawnCard'] as Map<String, dynamic>)
           : null,
-      isWaitingForSpecialPower: json['isWaitingForSpecialPower'] as bool? ?? false,
+      isWaitingForSpecialPower:
+          json['isWaitingForSpecialPower'] as bool? ?? false,
       specialCardToActivate: json['specialCardToActivate'] != null
-          ? PlayingCard.fromJson(json['specialCardToActivate'] as Map<String, dynamic>)
+          ? PlayingCard.fromJson(
+              json['specialCardToActivate'] as Map<String, dynamic>)
           : null,
       dutchCallerId: json['dutchCallerId'] as String?,
       reactionStartTime: json['reactionStartTime'] != null
@@ -673,9 +709,11 @@ class GameState {
           ? Map<String, dynamic>.from(json['pendingSwap'] as Map)
           : null,
       tournamentCumulativeScores:
-          (json['tournamentCumulativeScores'] as Map?)?.cast<String, int>() ?? {},
+          (json['tournamentCumulativeScores'] as Map?)?.cast<String, int>() ??
+              {},
       turnStartTime: json['turnStartTime'] as int?,
       turnTimeoutMs: json['turnTimeoutMs'] as int? ?? 25000,
+      readyPlayerIds: (json['readyPlayerIds'] as List?)?.cast<String>() ?? [],
     );
   }
 
@@ -702,6 +740,7 @@ class GameState {
       'tournamentCumulativeScores': tournamentCumulativeScores,
       'turnStartTime': turnStartTime,
       'turnTimeoutMs': turnTimeoutMs,
+      'readyPlayerIds': readyPlayerIds,
     };
   }
 }

@@ -23,6 +23,8 @@ class _MultiplayerMemorizationScreenState
     extends State<MultiplayerMemorizationScreen> with TickerProviderStateMixin {
   final Set<int> _selectedCards = {};
   bool _isRevealing = false;
+  bool _isWaiting = false;
+  StreamSubscription? _eventSubscription;
   late AnimationController _pulseController;
 
   Timer? _countdownTimer;
@@ -36,11 +38,29 @@ class _MultiplayerMemorizationScreenState
       vsync: this,
     )..repeat(reverse: true);
 
+    // Listen for game start event
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider =
+          Provider.of<MultiplayerGameProvider>(context, listen: false);
+      _eventSubscription = provider.events.listen((event) {
+        if (event.type == GameEventType.gameStarted) {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const MultiplayerGameScreen()),
+            );
+          }
+        }
+      });
+    });
+
     _startCountdown();
   }
 
   @override
   void dispose() {
+    _eventSubscription?.cancel();
     _pulseController.dispose();
     _countdownTimer?.cancel();
     super.dispose();
@@ -103,6 +123,44 @@ class _MultiplayerMemorizationScreenState
     final provider = context.read<MultiplayerGameProvider>();
     final humanPlayer =
         gameState.players.where((p) => p.id == provider.playerId).firstOrNull;
+
+    if (_isWaiting) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF1E1E1E),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Colors.amber),
+              const SizedBox(height: 20),
+              const Text(
+                'En attente des autres joueurs...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Consumer<MultiplayerGameProvider>(
+                builder: (context, provider, child) {
+                  final state = provider.gameState;
+                  if (state == null) return const SizedBox();
+                  final readyCount = state.readyPlayerIds.length;
+                  final totalHumans = state.players
+                      .where((p) => p.isHuman && !p.isSpectator)
+                      .length;
+                  return Text(
+                    '$readyCount / $totalHumans prêts',
+                    style: const TextStyle(color: Colors.white70),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (humanPlayer == null) {
       return Scaffold(
@@ -406,7 +464,7 @@ class _MultiplayerMemorizationScreenState
   }
 
   void _confirmAndStart() async {
-    if (_selectedCards.length != 2 || _isRevealing) return;
+    if (_selectedCards.length != 2 || _isRevealing || _isWaiting) return;
 
     setState(() => _isRevealing = true);
 
@@ -425,11 +483,13 @@ class _MultiplayerMemorizationScreenState
 
     if (!mounted) return;
 
-    // Navigate to game screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const MultiplayerGameScreen()),
-    );
+    // Mark ready and show waiting screen
+    setState(() {
+      _isWaiting = true;
+    });
+
+    provider.markReady();
+    // Navigation will happen via event listener
   }
 
   Future<void> _showRevealedCardsDialog(Player humanPlayer) async {

@@ -347,13 +347,59 @@ export class RoomManager {
 
     const gameState = createGameState(room.players, room.gameMode, difficulty);
     GameLogic.initializeGame(gameState);
-    gameState.phase = GamePhase.playing;
+    // Stay in setup phase until all humans complete memorization
+    gameState.phase = GamePhase.setup;
+    gameState.readyPlayerIds = [];
 
     room.gameState = gameState;
     room.status = RoomStatus.playing;
-    this.clearTurnTimer(roomCode);
-    this.startTurnTimer(roomCode);
+    // Don't start turn timer yet - wait for all players to be ready
     this.touchRoom(room);
+    return true;
+  }
+
+  /**
+   * Mark a player as ready after memorization.
+   * When all human players are ready, transition to playing phase.
+   */
+  markPlayerReady(roomCode: string, playerId: string): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return false;
+
+    const gameState = room.gameState;
+
+    // Only works during setup phase
+    if (gameState.phase !== GamePhase.setup) return false;
+
+    // Don't add duplicates
+    if (gameState.readyPlayerIds.includes(playerId)) return true;
+
+    gameState.readyPlayerIds.push(playerId);
+
+    // Check if all human players are ready
+    const humanPlayers = gameState.players.filter(p => p.isHuman && !p.isSpectator);
+    const allReady = humanPlayers.every(p => gameState.readyPlayerIds.includes(p.id));
+
+    if (allReady) {
+      // Transition to playing phase
+      gameState.phase = GamePhase.playing;
+      this.clearTurnTimer(roomCode);
+      this.startTurnTimer(roomCode);
+
+      // Notify all players that game is starting
+      this.io.to(roomCode).emit('game:all_ready', {
+        message: 'Tous les joueurs sont prêts !',
+      });
+    }
+
+    this.touchRoom(room);
+    this.broadcastGameState(roomCode, 'PLAYER_READY', {
+      readyPlayerId: playerId,
+      readyCount: gameState.readyPlayerIds.length,
+      totalHumans: humanPlayers.length,
+      allReady,
+    });
+
     return true;
   }
 

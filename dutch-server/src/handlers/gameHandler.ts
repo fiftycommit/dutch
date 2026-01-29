@@ -371,5 +371,25 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       console.error('Error game:forfeit:', error);
     }
   });
+
+  // Handle player ready after memorization phase
+  socket.on('player:ready', async (data) => {
+    try {
+      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room || !room.gameState) return;
+
+      const player = room.players.find(p => p.id === socket.id);
+      if (!player) return;
+      if (player.isSpectator) return;
+
+      const success = roomManager.markPlayerReady(data.roomCode, socket.id);
+      if (success) {
+        console.log(`[READY] Player ${player.name} marked ready in room ${data.roomCode}`);
+      }
+    } catch (error) {
+      console.error('Error player:ready:', error);
+    }
+  });
 }
 

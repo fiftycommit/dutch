@@ -260,6 +260,13 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
       _applyReactionServerUpdate(remaining);
     };
 
+    _multiplayerService.onGameAllReady = (data) {
+      if (data is Map) {
+        _eventController.add(GameEvent(
+            GameEventType.gameStarted, data['message'] ?? 'Le jeu commence !'));
+      }
+    };
+
     _multiplayerService.onPlayerJoined = (data) {
       debugPrint('👥 Player joined: ${data['player']}');
       // Mettre à jour la liste des joueurs dans le lobby
@@ -1043,10 +1050,14 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   Future<void> forfeitGame() async {
-    _multiplayerService.forfeitGame();
+    _multiplayerService.cancelGame();
     _isPlaying = false;
     _isInLobby = true;
     notifyListeners();
+  }
+
+  void markReady() {
+    _multiplayerService.markReady();
   }
 
   void watchGame() {

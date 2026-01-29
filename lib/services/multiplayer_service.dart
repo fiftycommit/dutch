@@ -199,6 +199,7 @@ class MultiplayerService {
       onSpyNotification; // Notification Espionnage : quelqu'un regarde notre carte
   Function(String)? onGamePaused; // Jeu mis en pause (par qui)
   Function(String)? onGameResumed; // Jeu repris (par qui)
+  Function(Map<String, dynamic>)? onGameAllReady; // Tous les joueurs sont prêts
 
   /// Check if server is reachable via HTTP (without establishing socket connection)
   Future<bool> checkServerHealth() async {
@@ -385,6 +386,11 @@ class MultiplayerService {
       } else if (updateType == 'GAME_RESUMED') {
         final resumedBy = data['resumedBy'] as String? ?? 'Inconnu';
         onGameResumed?.call(resumedBy);
+      } else if (updateType == 'PLAYER_READY') {
+        // Just a state update, handled by game state update usually
+        // But we might want to log it
+        debugPrint(
+            '👤 Player ready: ${data['readyPlayerId']} (${data['readyCount']}/${data['totalHumans']})');
       }
 
       final reactionTimeMs = data['reactionTimeMs'];
@@ -447,6 +453,13 @@ class MultiplayerService {
     });
 
     // Quand l'hôte relance la partie
+    _socket!.on('game:all_ready', (data) {
+      debugPrint('🚀 Tous les joueurs sont prêts !');
+      if (data is Map) {
+        onGameAllReady?.call(data.cast<String, dynamic>());
+      }
+    });
+
     _socket!.on('room:restarted', (data) {
       debugPrint('🔄 Partie relancée');
       if (data is Map) {
@@ -919,8 +932,16 @@ class MultiplayerService {
     return completer.future;
   }
 
+  void markReady() {
+    if (_socket != null &&
+        _connectionState == SocketConnectionState.connected &&
+        _currentRoomCode != null) {
+      _socket!.emit('player:ready', {'roomCode': _currentRoomCode});
+    }
+  }
+
   /// Abandonner la partie en cours (sans quitter la room)
-  void forfeitGame() {
+  void cancelGame() {
     if (_currentRoomCode == null) return;
     debugPrint('🏳️ Abandon de la partie...');
     _socket?.emit('game:forfeit', {'roomCode': _currentRoomCode});
