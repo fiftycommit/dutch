@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/stats_service.dart';
-import 'game_setup_screen.dart';
-import 'multiplayer_menu_screen.dart';
-import 'settings_screen.dart';
-import 'stats_screen.dart';
-import 'rules_screen.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -61,12 +57,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   /// Naviguer vers le menu multijoueur
   void _goToMultiplayer() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const MultiplayerMenuScreen(),
-      ),
-    );
+    context.go('/multiplayer');
   }
 
   @override
@@ -176,17 +167,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'PARTIE RAPIDE',
                   icon: Icons.flash_on,
                   isPrimary: true,
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GameSetupScreen(
-                          isTournament: false,
-                          saveSlot: selectedSlot,
-                        ),
-                      ),
-                    );
-                    _refreshStats();
+                  onPressed: () {
+                    context
+                        .go('/solo/setup?tournament=false&slot=$selectedSlot');
                   },
                 ),
                 const SizedBox(height: 18),
@@ -195,17 +178,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'TOURNOI',
                   icon: Icons.emoji_events,
                   isPrimary: false,
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GameSetupScreen(
-                          isTournament: true,
-                          saveSlot: selectedSlot,
-                        ),
-                      ),
-                    );
-                    _refreshStats();
+                  onPressed: () {
+                    context
+                        .go('/solo/setup?tournament=true&slot=$selectedSlot');
                   },
                 ),
                 const SizedBox(height: 18),
@@ -222,26 +197,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   children: [
                     _buildSmallIconButton(
                       icon: Icons.settings,
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const SettingsScreen())),
+                      onPressed: () => context.go('/settings'),
                     ),
                     const SizedBox(width: 18),
                     _buildSmallIconButton(
                       icon: Icons.menu_book,
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const RulesScreen())),
+                      onPressed: () => context.go('/rules'),
                     ),
                     const SizedBox(width: 18),
                     _buildSmallIconButton(
                       icon: Icons.bar_chart,
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const StatsScreen())),
+                      onPressed: () => context.go('/stats'),
                     ),
                   ],
                 ),
@@ -322,17 +288,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'PARTIE RAPIDE',
                     icon: Icons.flash_on,
                     isPrimary: true,
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GameSetupScreen(
-                            isTournament: false,
-                            saveSlot: selectedSlot,
-                          ),
-                        ),
-                      );
-                      _refreshStats();
+                    onPressed: () {
+                      context.go(
+                          '/solo/setup?tournament=false&slot=$selectedSlot');
                     },
                   ),
                   const SizedBox(height: 16),
@@ -341,17 +299,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'TOURNOI',
                     icon: Icons.emoji_events,
                     isPrimary: false,
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GameSetupScreen(
-                            isTournament: true,
-                            saveSlot: selectedSlot,
-                          ),
-                        ),
-                      );
-                      _refreshStats();
+                    onPressed: () {
+                      context
+                          .go('/solo/setup?tournament=true&slot=$selectedSlot');
                     },
                   ),
                   const SizedBox(height: 16),
@@ -369,28 +319,19 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       _buildIconButton(
                         icon: Icons.settings,
                         label: 'Réglages',
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const SettingsScreen())),
+                        onPressed: () => context.go('/settings'),
                       ),
                       const SizedBox(width: 20),
                       _buildIconButton(
                         icon: Icons.menu_book,
                         label: 'Règles',
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const RulesScreen())),
+                        onPressed: () => context.go('/rules'),
                       ),
                       const SizedBox(width: 20),
                       _buildIconButton(
                         icon: Icons.bar_chart,
                         label: 'Stats',
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const StatsScreen())),
+                        onPressed: () => context.go('/stats'),
                       ),
                     ],
                   ),
