@@ -35,6 +35,7 @@ export interface Room {
   cumulativeScores?: Map<string, number>; // clientId -> score total (classement permanent)
   isPaused?: boolean;
   emptyAt?: number; // Timestamp quand la room est devenue vide
+  kickedClientIds?: Set<string>; // clientIds des joueurs kickés (ne peuvent pas rejoindre)
 }
 
 export function createRoom(

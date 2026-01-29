@@ -468,6 +468,9 @@ class GameProvider with ChangeNotifier {
         return;
       }
     }
+    
+    // Notify listeners even if no bot matched to ensure UI updates
+    notifyListeners();
   }
 
   bool _checkInstantEnd() {

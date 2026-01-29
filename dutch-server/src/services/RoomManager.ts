@@ -180,6 +180,11 @@ export class RoomManager {
     this.pruneWaitingRoom(room);
     this.ensureHost(room);
 
+    // Vérifier si le joueur a été kické
+    if (clientId && room.kickedClientIds?.has(clientId)) {
+      return { error: 'Vous avez été exclu de cette room' };
+    }
+
     if (clientId) {
       const existing = room.players.find((p) => p.clientId === clientId);
       if (existing) {
@@ -628,6 +633,14 @@ export class RoomManager {
       roomCode,
       message: "Vous avez été exclu de la room par l'hôte",
     });
+
+    // Ajouter le clientId à la liste des kickés pour empêcher le rejoin
+    if (target.clientId) {
+      if (!room.kickedClientIds) {
+        room.kickedClientIds = new Set();
+      }
+      room.kickedClientIds.add(target.clientId);
+    }
 
     // Retirer le joueur
     room.players.splice(targetIndex, 1);

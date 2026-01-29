@@ -1443,10 +1443,14 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
     if (leave == true && mounted) {
       gp.forfeitGame();
-      // On retourne au lobby (qui est l'écran précédent dans la stack)
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
+      // On retourne au lobby - pop jusqu'à ce qu'on atteigne le lobby
+      // Le forfeitGame() met isInLobby à true, ce qui permet au lobby de s'afficher
+      Navigator.of(context).popUntil((route) {
+        // Pop jusqu'à atteindre le lobby (MultiplayerLobbyScreen)
+        // On vérifie le nom de la route ou on pop jusqu'à l'avant-dernier écran
+        return route.settings.name == 'lobby' || 
+               !Navigator.of(context).canPop();
+      });
     }
   }
 
