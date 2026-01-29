@@ -1121,7 +1121,11 @@ export class RoomManager {
       if (!player.isHuman) return true;
       if (player.connected !== false) return true;
       const lastSeen = player.lastSeenAt ?? 0;
-      return now - lastSeen <= this.stalePlayerMs * 2;
+
+      // Keep registered players (with clientId) much longer (5 minutes)
+      // to allow app restart/rejoin
+      const timeout = player.clientId ? 300000 : this.stalePlayerMs * 2;
+      return now - lastSeen <= timeout;
     });
     if (room.players.length !== before) {
       this.reindexPlayers(room);
