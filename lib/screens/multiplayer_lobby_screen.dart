@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/multiplayer_game_provider.dart';
 import '../services/multiplayer_service.dart';
 import '../models/game_state.dart';
+import '../models/game_settings.dart';
 import '../widgets/connection_error_dialog.dart';
 
 import 'multiplayer_memorization_screen.dart';
@@ -281,6 +282,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               ),
             ),
           ),
+          // Bouton paramètres (hôte uniquement)
+          if (provider.isHost)
+            IconButton(
+              icon: const Icon(Icons.settings, color: Colors.white),
+              tooltip: 'Paramètres',
+              onPressed: () => _showSettingsDialog(context, provider),
+            ),
           _buildConnectionIndicator(provider, colors),
         ],
       ),
@@ -340,6 +348,104 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showSettingsDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) async {
+    if (!provider.isHost) return;
+
+    final settings = provider.roomSettings;
+    if (settings == null) return;
+
+    // Valeurs par défaut
+    int botDifficulty = settings.botDifficulty.index;
+    int luckDifficulty = settings.luckDifficulty.index;
+
+    final result = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.settings),
+              SizedBox(width: 8),
+              Text('Paramètres de la partie'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Niveau des bots',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('Facile')),
+                  ButtonSegment(value: 1, label: Text('Moyen')),
+                  ButtonSegment(value: 2, label: Text('Difficile')),
+                ],
+                selected: {botDifficulty},
+                onSelectionChanged: (selection) {
+                  setState(() => botDifficulty = selection.first);
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Tri des cartes',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('Aléatoire')),
+                  ButtonSegment(value: 1, label: Text('Moyen')),
+                  ButtonSegment(value: 2, label: Text('Trié')),
+                ],
+                selected: {luckDifficulty},
+                onSelectionChanged: (selection) {
+                  setState(() => luckDifficulty = selection.first);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, {
+                'botDifficulty': botDifficulty,
+                'luckDifficulty': luckDifficulty,
+              }),
+              child: const Text('Appliquer'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      final success = await provider.updateRoomSettings(
+        botDifficulty: Difficulty.values[result['botDifficulty']!],
+        luckDifficulty: Difficulty.values[result['luckDifficulty']!],
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success
+                ? 'Paramètres mis à jour'
+                : 'Erreur lors de la mise à jour'),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleLeaveOrClose(

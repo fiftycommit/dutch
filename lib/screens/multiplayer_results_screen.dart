@@ -163,8 +163,13 @@ class MultiplayerResultsScreen extends StatelessWidget {
                           width: 280,
                           child: ElevatedButton(
                             onPressed: () {
-                              // Just go back to lobby, keep room connection
-                              Navigator.pop(context);
+                              // Retourner au lobby en remplaçant la pile de navigation
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const MultiplayerLobbyScreen(),
+                                ),
+                                (route) => route.isFirst,
+                              );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue.shade700,

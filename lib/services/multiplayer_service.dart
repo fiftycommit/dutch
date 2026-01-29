@@ -192,6 +192,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onRoomRestarted; // Quand l'hôte relance
   Function(Map<String, dynamic>)? onKicked; // Quand on est kick
   Function(Map<String, dynamic>)? onPlayerLeft; // Quand un joueur quitte
+  Function(Map<String, dynamic>)? onPlayerAfk; // Quand un joueur devient AFK/spectateur
   Function(Map<String, dynamic>)?
       onSpecialPowerTargeted; // Pouvoir spécial sur nous (ancien)
   Function(PlayingCard, String)? onSpiedCard; // Carte espionnée (pouvoir 7/10)
@@ -495,6 +496,14 @@ class MultiplayerService {
       debugPrint('👋 Un joueur a quitté: ${data['playerName']}');
       if (data is Map) {
         onPlayerLeft?.call(data.cast<String, dynamic>());
+      }
+    });
+
+    // Quand un joueur devient AFK/spectateur
+    _socket!.on('player:afk', (data) {
+      debugPrint('💤 Un joueur est AFK: ${data['playerName']} (${data['reason']})');
+      if (data is Map) {
+        onPlayerAfk?.call(data.cast<String, dynamic>());
       }
     });
 
@@ -992,6 +1001,34 @@ class MultiplayerService {
       'gameMode': gameMode,
     }, ack: (response) {
       final success = response?['success'] == true;
+      completer.complete(success);
+    });
+
+    return completer.future;
+  }
+
+  /// Mettre à jour les paramètres de la room (hôte uniquement, en lobby)
+  Future<bool> updateRoomSettings({
+    int? botDifficulty,
+    int? luckDifficulty,
+  }) async {
+    if (_currentRoomCode == null) return false;
+
+    final completer = Completer<bool>();
+
+    debugPrint('⚙️ Mise à jour des paramètres...');
+
+    _socket?.emitWithAck('room:update_settings', {
+      'roomCode': _currentRoomCode,
+      if (botDifficulty != null) 'botDifficulty': botDifficulty,
+      if (luckDifficulty != null) 'luckDifficulty': luckDifficulty,
+    }, ack: (response) {
+      final success = response?['success'] == true;
+      if (success) {
+        debugPrint('✅ Paramètres mis à jour');
+      } else {
+        debugPrint('❌ Échec de la mise à jour');
+      }
       completer.complete(success);
     });
 

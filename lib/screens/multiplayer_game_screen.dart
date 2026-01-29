@@ -19,11 +19,14 @@ import '../widgets/game_action_button.dart';
 import 'multiplayer_results_screen.dart';
 
 import 'multiplayer_dutch_reveal_screen.dart';
+import 'multiplayer_lobby_screen.dart';
 import '../services/web_orientation_service.dart';
 import '../services/multiplayer_service.dart';
 import '../widgets/center_table.dart';
 import '../widgets/presence_check_overlay.dart';
 import '../widgets/connection_error_dialog.dart';
+import '../widgets/emote_overlay.dart';
+import '../services/emote_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});
@@ -35,6 +38,9 @@ class MultiplayerGameScreen extends StatefulWidget {
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   static const double _cardAspectRatio = 7 / 5;
   StreamSubscription? _eventSubscription;
+  StreamSubscription? _emoteSubscription;
+  final List<Widget> _floatingEmotes = [];
+  bool _showEmoteOverlay = false;
 
   @override
   void initState() {
@@ -52,6 +58,43 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndNavigateIfEnded();
       _setupEventListeners();
+      _setupEmoteListener();
+    });
+  }
+
+  void _setupEmoteListener() {
+    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    _emoteSubscription = provider.emoteStream.listen((emote) {
+      if (!mounted) return;
+      _showFloatingEmote(emote);
+    });
+  }
+
+  void _showFloatingEmote(EmoteEvent emote) {
+    final screenSize = MediaQuery.of(context).size;
+    final randomX = 100 + (screenSize.width - 300) * (DateTime.now().millisecond % 100) / 100;
+    final randomY = 100 + (screenSize.height - 300) * (DateTime.now().second % 100) / 100;
+
+    final floatingEmote = FloatingEmote(
+      emoji: emote.emoji,
+      playerName: emote.playerName,
+      position: Offset(randomX, randomY),
+      onComplete: () {
+        if (mounted) {
+          setState(() {
+            _floatingEmotes.removeWhere((w) {
+              if (w is FloatingEmote) {
+                return w.emoji == emote.emoji && w.playerName == emote.playerName;
+              }
+              return false;
+            });
+          });
+        }
+      },
+    );
+
+    setState(() {
+      _floatingEmotes.add(floatingEmote);
     });
   }
 
@@ -128,6 +171,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
 
     _eventSubscription?.cancel();
+    _emoteSubscription?.cancel();
     super.dispose();
   }
 
@@ -376,10 +420,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         }
 
         return PopScope(
-          canPop: false,
           onPopInvokedWithResult: (didPop, _) async {
-            if (didPop) return;
-            _showQuitConfirmation(context, gameProvider);
+            if (!didPop) {
+              _showQuitConfirmation(context, gameProvider);
+            }
           },
           child: Scaffold(
             backgroundColor: const Color(0xFF1a472a),
@@ -505,13 +549,23 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                     ),
                   ),
 
-                // Pause Button
+                // Boutons en haut à droite
                 Positioned(
                   top: 10,
                   right: 10,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Bouton Émotes
+                      IconButton(
+                        icon: const Icon(Icons.emoji_emotions,
+                            color: Colors.amber, size: 32),
+                        onPressed: () {
+                          setState(() {
+                            _showEmoteOverlay = true;
+                          });
+                        },
+                      ),
                       IconButton(
                         icon: const Icon(Icons.pause_circle_filled,
                             color: Colors.white54, size: 32),
@@ -527,6 +581,50 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                   ),
                 ),
 
+                // Indicateur de reconnexion silencieuse
+                if (gameProvider.isSilentReconnecting)
+                  Positioned(
+                    top: 60,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade800.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black38,
+                                blurRadius: 8,
+                                offset: Offset(0, 3))
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Reconnexion en cours...',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
                 if (gameProvider.isPaused) _buildPauseOverlay(gameProvider),
 
                 PresenceCheckOverlay(
@@ -535,6 +633,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                   reason: gameProvider.presenceCheckReason,
                   onConfirm: gameProvider.confirmPresence,
                 ),
+
+                // Émotes flottantes
+                ..._floatingEmotes,
+
+                // Overlay d'émotes
+                if (_showEmoteOverlay)
+                  EmoteOverlay(
+                    onClose: () {
+                      setState(() {
+                        _showEmoteOverlay = false;
+                      });
+                    },
+                    onEmoteSent: (emoji) {
+                      gameProvider.sendEmote(emoji);
+                    },
+                  ),
               ],
             ),
           ),
@@ -1443,14 +1557,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
     if (leave == true && mounted) {
       gp.forfeitGame();
-      // On retourne au lobby - pop jusqu'à ce qu'on atteigne le lobby
-      // Le forfeitGame() met isInLobby à true, ce qui permet au lobby de s'afficher
-      Navigator.of(context).popUntil((route) {
-        // Pop jusqu'à atteindre le lobby (MultiplayerLobbyScreen)
-        // On vérifie le nom de la route ou on pop jusqu'à l'avant-dernier écran
-        return route.settings.name == 'lobby' || 
-               !Navigator.of(context).canPop();
-      });
+      // Retourner au lobby en remplaçant toute la pile de navigation
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const MultiplayerLobbyScreen(),
+        ),
+        (route) => route.isFirst, // Garder uniquement le menu principal
+      );
     }
   }
 

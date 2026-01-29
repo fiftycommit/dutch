@@ -4,6 +4,7 @@ import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../services/multiplayer_service.dart';
 import '../services/haptic_service.dart';
+import '../services/emote_service.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 
@@ -131,6 +132,18 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
 
   bool _isConnecting = false;
   bool get isConnecting => _isConnecting;
+
+  // Reconnexion silencieuse
+  Timer? _reconnectionTimer;
+  DateTime? _disconnectionTime;
+  bool _isSilentReconnecting = false;
+  bool get isSilentReconnecting => _isSilentReconnecting;
+
+  // Émotes
+  final EmoteService _emoteService = EmoteService();
+  Stream<EmoteEvent> get emoteStream => _emoteService.emoteStream;
+  final List<EmoteEvent> _recentEmotes = [];
+  List<EmoteEvent> get recentEmotes => List.unmodifiable(_recentEmotes);
 
   bool _isInLobby = false;
   bool get isInLobby => _isInLobby;
@@ -385,7 +398,23 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _multiplayerService.onSocketConnectionStateChanged = (state) {
       debugPrint('🔌 Connection state: $state');
+      final previousState = _connectionState;
       _connectionState = state;
+      
+      // Gestion de la reconnexion silencieuse
+      if (state == SocketConnectionState.disconnected && 
+          previousState == SocketConnectionState.connected) {
+        _disconnectionTime = DateTime.now();
+        _startSilentReconnection();
+      } else if (state == SocketConnectionState.connected && 
+                 previousState == SocketConnectionState.disconnected) {
+        _cancelSilentReconnection();
+        if (_isSilentReconnecting) {
+          debugPrint('✅ Reconnexion silencieuse réussie');
+          _isSilentReconnecting = false;
+        }
+      }
+      
       notifyListeners();
     };
 
@@ -419,6 +448,24 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.onPlayerLeft = (data) {
       debugPrint('👋 Player left: ${data['playerName']}');
       _lastPlayerLeftName = data['playerName']?.toString();
+      _playerLeftNotification = true;
+      notifyListeners();
+      // Auto-clear après 3 secondes
+      Future.delayed(const Duration(seconds: 3), () {
+        _playerLeftNotification = false;
+        notifyListeners();
+      });
+    };
+
+    _multiplayerService.onPlayerAfk = (data) {
+      debugPrint('💤 Player AFK: ${data['playerName']} (${data['reason']})');
+      final playerId = data['playerId']?.toString();
+      final playerName = data['playerName']?.toString();
+      if (playerId != null) {
+        _afkPlayerIds.add(playerId);
+      }
+      // Réutiliser la notification de départ pour l'AFK
+      _lastPlayerLeftName = playerName != null ? '$playerName (AFK)' : 'Joueur AFK';
       _playerLeftNotification = true;
       notifyListeners();
       // Auto-clear après 3 secondes
@@ -968,6 +1015,32 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     return success;
   }
 
+  /// Met à jour les paramètres de la room (hôte uniquement)
+  Future<bool> updateRoomSettings({
+    Difficulty? botDifficulty,
+    Difficulty? luckDifficulty,
+  }) async {
+    if (!_isHost) return false;
+
+    final success = await _multiplayerService.updateRoomSettings(
+      botDifficulty: botDifficulty?.index,
+      luckDifficulty: luckDifficulty?.index,
+    );
+
+    if (success && _roomSettings != null) {
+      _roomSettings = GameSettings(
+        gameMode: _roomSettings!.gameMode,
+        botDifficulty: botDifficulty ?? _roomSettings!.botDifficulty,
+        luckDifficulty: luckDifficulty ?? _roomSettings!.luckDifficulty,
+        reactionTimeMs: _roomSettings!.reactionTimeMs,
+        minPlayers: _roomSettings!.minPlayers,
+        maxPlayers: _roomSettings!.maxPlayers,
+      );
+      notifyListeners();
+    }
+    return success;
+  }
+
   /// Vérifie quelles rooms sont actives
   Future<List<Map<String, dynamic>>?> checkActiveRooms(
       List<String> roomCodes) async {
@@ -1048,6 +1121,98 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.sendChatMessage(message);
   }
 
+  void sendEmote(String emoji) {
+    final playerName = _playersInLobby
+        .firstWhere(
+          (p) => p['id'] == playerId,
+          orElse: () => {'name': 'Joueur'},
+        )['name'] as String? ?? 'Joueur';
+    
+    // Envoyer via le service multiplayer
+    _multiplayerService.socket?.emit('game:emote', {
+      'roomCode': _roomCode,
+      'emoji': emoji,
+      'playerName': playerName,
+    });
+    
+    // Ajouter localement
+    final emote = EmoteEvent(
+      emoji: emoji,
+      playerName: playerName,
+      playerId: playerId ?? '',
+      timestamp: DateTime.now(),
+    );
+    _emoteService.sendEmote(emoji, playerName, playerId ?? '');
+    _recentEmotes.add(emote);
+    if (_recentEmotes.length > 10) {
+      _recentEmotes.removeAt(0);
+    }
+    notifyListeners();
+  }
+
+  void _startSilentReconnection() {
+    if (_isSilentReconnecting) return;
+    
+    debugPrint('🔄 Démarrage de la reconnexion silencieuse...');
+    _isSilentReconnecting = true;
+    
+    // Annuler après 3 secondes si pas reconnecté
+    _reconnectionTimer = Timer(const Duration(seconds: 3), () {
+      if (_connectionState != SocketConnectionState.connected) {
+        debugPrint('❌ Reconnexion silencieuse échouée après 3s');
+        _isSilentReconnecting = false;
+        // Afficher l'erreur normale
+        if (_disconnectionTime != null) {
+          final elapsed = DateTime.now().difference(_disconnectionTime!);
+          if (elapsed.inSeconds >= 3) {
+            _errorMessage = 'Connexion perdue avec le serveur';
+          }
+        }
+        notifyListeners();
+      }
+    });
+    
+    // Tenter de reconnecter immédiatement
+    _attemptSilentReconnect();
+  }
+
+  void _cancelSilentReconnection() {
+    _reconnectionTimer?.cancel();
+    _reconnectionTimer = null;
+    _disconnectionTime = null;
+  }
+
+  Future<void> _attemptSilentReconnect() async {
+    if (_roomCode == null || _roomCode!.isEmpty) return;
+    
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (_connectionState == SocketConnectionState.connected) {
+        // Déjà reconnecté
+        return;
+      }
+      
+      // Tenter de reconnecter
+      await _multiplayerService.connect();
+      
+      // Si on avait une room, tenter de rejoindre
+      if (_connectionState == SocketConnectionState.connected) {
+        final savedPlayerName = _playersInLobby.firstWhere(
+              (p) => p['id'] == playerId,
+              orElse: () => {'name': 'Joueur'},
+            )['name'] as String? ?? 'Joueur';
+
+        await _multiplayerService.joinRoom(
+          roomCode: _roomCode!,
+          playerName: savedPlayerName,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur lors de la reconnexion silencieuse: $e');
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!isConnected || _roomCode == null) return;
@@ -1081,6 +1246,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   @override
   void dispose() {
     _eventController.close();
+    _reconnectionTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _multiplayerService.disconnect();
     _stopReactionTicker();
