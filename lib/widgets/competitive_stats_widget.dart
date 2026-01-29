@@ -321,7 +321,7 @@ class CompetitiveMatchResult extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Classement: ${playerRank}/${totalPlayers}',
+            'Classement: $playerRank/$totalPlayers',
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 14,

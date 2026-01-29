@@ -29,6 +29,9 @@ class GameSettings {
   bool soundEnabled;
   bool hapticEnabled;
   String playerName;
+  
+  bool isPublic;
+  int numberOfPlayers;
 
   GameSettings({
     this.gameMode = GameMode.quick,
@@ -43,6 +46,8 @@ class GameSettings {
     this.soundEnabled = true,
     this.hapticEnabled = true,
     this.playerName = "Vous",
+    this.isPublic = false,
+    this.numberOfPlayers = 4,
   });
 
   GameSettings copyWith({
@@ -58,6 +63,8 @@ class GameSettings {
     bool? soundEnabled,
     bool? hapticEnabled,
     String? playerName,
+    bool? isPublic,
+    int? numberOfPlayers,
   }) {
     return GameSettings(
       gameMode: gameMode ?? this.gameMode,
@@ -72,6 +79,8 @@ class GameSettings {
       soundEnabled: soundEnabled ?? this.soundEnabled,
       hapticEnabled: hapticEnabled ?? this.hapticEnabled,
       playerName: playerName ?? this.playerName,
+      isPublic: isPublic ?? this.isPublic,
+      numberOfPlayers: numberOfPlayers ?? this.numberOfPlayers,
     );
   }
 
@@ -89,6 +98,8 @@ class GameSettings {
       soundEnabled: json['soundEnabled'] ?? true,
       hapticEnabled: json['hapticEnabled'] ?? true,
       playerName: json['playerName'] ?? "Vous",
+      isPublic: json['isPublic'] ?? false,
+      numberOfPlayers: json['numberOfPlayers'] ?? 4,
     );
   }
 
@@ -106,6 +117,8 @@ class GameSettings {
       'soundEnabled': soundEnabled,
       'hapticEnabled': hapticEnabled,
       'playerName': playerName,
+      'isPublic': isPublic,
+      'numberOfPlayers': numberOfPlayers,
     };
   }
 }

@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
+import { onPublicRoomCreated, onPublicRoomPlayerJoined, onPublicRoomPlayerLeft } from './publicRoomHandlers';
 
 export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('room:create', (data, callback) => {
@@ -14,6 +15,17 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
       roomManager.broadcastPresence(room.id);
 
       console.log(`Room created: ${room.id} by ${socket.id}`);
+      
+      // Si c'est une room publique, l'ajouter au service
+      if (data.settings?.isPublic === true) {
+        onPublicRoomCreated(
+          room.id,
+          data.playerName || 'Joueur',
+          data.settings.gameMode || 'quick',
+          data.settings.numberOfPlayers || 4
+        );
+      }
+      
       callback({ success: true, roomCode: room.id, room });
     } catch (error: any) {
       console.error('Error creating room:', error);
@@ -42,6 +54,11 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
       }
 
       roomManager.broadcastPresence(roomCode);
+      
+      // Mettre à jour le compteur pour les rooms publiques
+      if (result.room) {
+        onPublicRoomPlayerJoined(roomCode, result.room.players.length);
+      }
 
       console.log(`Player ${socket.id} joined room ${roomCode}`);
       callback({ success: true, room: result.room });

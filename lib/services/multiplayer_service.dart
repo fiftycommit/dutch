@@ -650,6 +650,41 @@ class MultiplayerService {
     return completer.future;
   }
 
+  // Récupérer les rooms publiques disponibles
+  Future<List<Map<String, dynamic>>?> getPublicRooms() async {
+    if (!isConnected) await connect();
+
+    final completer = Completer<List<Map<String, dynamic>>?>();
+
+    debugPrint('🔍 Récupération des rooms publiques...');
+
+    _socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
+      if (response == null) {
+        debugPrint('❌ Pas de réponse du serveur');
+        completer.complete([]);
+        return;
+      }
+
+      if (response['success'] == true) {
+        final rooms = response['rooms'] as List<dynamic>?;
+        if (rooms != null) {
+          final publicRooms = rooms
+              .map((r) => r as Map<String, dynamic>)
+              .toList();
+          debugPrint('✅ ${publicRooms.length} rooms publiques trouvées');
+          completer.complete(publicRooms);
+        } else {
+          completer.complete([]);
+        }
+      } else {
+        debugPrint('❌ Erreur récupération rooms: ${response['error']}');
+        completer.complete([]);
+      }
+    });
+
+    return completer.future;
+  }
+
   // Rejoindre une room
   Future<Map<String, dynamic>?> joinRoom({
     required String roomCode,

@@ -30,5 +30,7 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
     roomManager.handleDisconnect(socket.id);
+    // Note: Les rooms publiques vides sont nettoyées automatiquement
+    // par le publicRoomService toutes les minutes
   });
 }

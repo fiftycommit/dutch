@@ -641,6 +641,53 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  Future<void> joinPublicRoom() async {
+    try {
+      _isConnecting = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      // Chercher une room publique disponible ou en créer une
+      final publicRooms = await _multiplayerService.getPublicRooms();
+      
+      if (publicRooms != null && publicRooms.isNotEmpty) {
+        // Rejoindre la première room disponible
+        final room = publicRooms.first;
+        await joinRoom(
+          roomCode: room['code'] as String,
+          playerName: 'Joueur',
+        );
+      } else {
+        // Créer une nouvelle room publique
+        await createRoom(
+          settings: GameSettings(
+            gameMode: GameMode.quick,
+            numberOfPlayers: 4,
+            isPublic: true,
+          ),
+          playerName: 'Joueur',
+        );
+      }
+
+      _isConnecting = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isConnecting = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> getPublicRooms() async {
+    try {
+      return await _multiplayerService.getPublicRooms();
+    } catch (e) {
+      debugPrint('Error getting public rooms: $e');
+      return null;
+    }
+  }
+
   Future<void> joinRoom({
     required String roomCode,
     required String playerName,

@@ -7,6 +7,8 @@ import { setupConnectionHandler } from './handlers/connectionHandler';
 import { setupRoomHandler } from './handlers/roomHandler';
 import { setupGameHandler } from './handlers/gameHandler';
 import { SecurityService } from './services/SecurityService';
+import { setupPublicRoomHandlers } from './handlers/publicRoomHandlers';
+import { publicRoomService } from './services/publicRoomService';
 
 function renderHomePage(roomCount: number) {
   return `
@@ -132,6 +134,8 @@ export function startServer() {
     setupConnectionHandler(socket, roomManager);
     setupRoomHandler(socket, roomManager);
     setupGameHandler(socket, roomManager);
+    // Les handlers publics gèrent leur propre état via publicRoomService
+    setupPublicRoomHandlers(socket, new Map());
   });
 
   app.get('/', (req, res) => {
@@ -148,6 +152,16 @@ export function startServer() {
 
   app.get('/rooms/debug', (req, res) => {
     res.json(roomManager.listRoomsDebug());
+  });
+
+  app.get('/rooms/public', (req, res) => {
+    const publicRooms = publicRoomService.getAvailableRooms();
+    res.json({ success: true, rooms: publicRooms });
+  });
+
+  app.get('/rooms/stats', (req, res) => {
+    const stats = publicRoomService.getStats();
+    res.json({ success: true, stats });
   });
 
   const PORT = process.env.PORT || 3000;
