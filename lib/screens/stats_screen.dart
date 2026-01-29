@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../services/stats_service.dart';
 import '../widgets/responsive_dialog.dart';
 
@@ -25,6 +26,10 @@ class _StatsScreenState extends State<StatsScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => context.go('/'),
+          ),
           bottom: const TabBar(
             indicatorColor: Colors.amber,
             labelColor: Colors.amber,
@@ -230,9 +235,8 @@ class _StatsScreenState extends State<StatsScreen> {
     final mmrChange = match['mmrChange'] ?? 0;
     final streakBonus = match['streakBonus'] ?? 0;
     final streakMultiplierRaw = match['streakMultiplier'] ?? 1.0;
-    final streakMultiplier = streakMultiplierRaw is num
-        ? streakMultiplierRaw.toDouble()
-        : 1.0;
+    final streakMultiplier =
+        streakMultiplierRaw is num ? streakMultiplierRaw.toDouble() : 1.0;
     final date = _parseDate(match);
     final dateStr = subtitleOverride ?? _formatDate(date);
     final rpDisplay = _rpDisplay(mmrChange);
@@ -354,8 +358,7 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ],
         ),
-        subtitle:
-            Text(subtitle, style: const TextStyle(color: Colors.white54)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
         trailing: const Icon(Icons.chevron_right, color: Colors.white54),
       ),
     );
@@ -367,9 +370,8 @@ class _StatsScreenState extends State<StatsScreen> {
         (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
 
     final finalPosition = _tournamentFinalPosition(matches);
-    final title = finalPosition > 0
-        ? "Tournoi • Classement #$finalPosition"
-        : "Tournoi";
+    final title =
+        finalPosition > 0 ? "Tournoi • Classement #$finalPosition" : "Tournoi";
 
     showDialog(
       context: context,
@@ -505,9 +507,8 @@ class _StatsScreenState extends State<StatsScreen> {
       final groupMatches = List<Map<String, dynamic>>.from(entry.value);
       groupMatches.sort((a, b) =>
           (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
-      final date = groupMatches
-          .map(_parseDate)
-          .reduce((a, b) => a.isAfter(b) ? a : b);
+      final date =
+          groupMatches.map(_parseDate).reduce((a, b) => a.isAfter(b) ? a : b);
       groups.add(_HistoryGroup(
         isTournament: true,
         tournamentId: entry.key,
@@ -562,8 +563,7 @@ class _StatsScreenState extends State<StatsScreen> {
       return const _RpDisplay(text: "Mode Manuel", color: Colors.white54);
     }
     final text = mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP";
-    final color =
-        mmrChange > 0 ? Colors.greenAccent : Colors.redAccent;
+    final color = mmrChange > 0 ? Colors.greenAccent : Colors.redAccent;
     return _RpDisplay(text: text, color: color);
   }
 
@@ -573,8 +573,7 @@ class _StatsScreenState extends State<StatsScreen> {
       ..sort((a, b) =>
           (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
     final maxRoundRaw = sorted.last['tournamentRound'] ?? 1;
-    final maxRound =
-        maxRoundRaw is num ? maxRoundRaw.toInt() : 1;
+    final maxRound = maxRoundRaw is num ? maxRoundRaw.toInt() : 1;
     final playerCounts = sorted
         .map((m) => m['totalPlayers'])
         .whereType<num>()
@@ -585,8 +584,7 @@ class _StatsScreenState extends State<StatsScreen> {
         : 4;
     final basePosition = (initialPlayers + 1) - maxRound;
     final lastRankRaw = sorted.last['rank'] ?? 0;
-    final lastRank =
-        lastRankRaw is num ? lastRankRaw.toInt() : 0;
+    final lastRank = lastRankRaw is num ? lastRankRaw.toInt() : 0;
     final isFinalRound = maxRound >= initialPlayers - 1;
     if (isFinalRound && lastRank == 1) return 1;
     if (isFinalRound && lastRank == 2) return 2;
@@ -631,8 +629,8 @@ class _StatsScreenState extends State<StatsScreen> {
                       setState(() {});
                     },
                     child: Text("Effacer",
-                        style: TextStyle(
-                            color: Colors.red, fontSize: buttonSize)),
+                        style:
+                            TextStyle(color: Colors.red, fontSize: buttonSize)),
                   ),
                 ],
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/multiplayer_game_provider.dart';
 import '../models/game_state.dart';
@@ -99,7 +100,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () {
                         if (_flow == _MenuFlow.choose) {
-                          Navigator.pop(context);
+                          context.go('/');
                         } else {
                           setState(() => _flow = _MenuFlow.choose);
                         }

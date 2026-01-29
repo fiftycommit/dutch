@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/game_settings.dart';
@@ -16,6 +17,10 @@ class SettingsScreen extends StatelessWidget {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1a3a28),
         iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go('/'),
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -29,7 +34,6 @@ class SettingsScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _buildSectionHeader("MÉCANIQUE DE JEU"),
-
             Container(
               padding: const EdgeInsets.all(16),
               margin: const EdgeInsets.only(bottom: 20),
@@ -71,9 +75,7 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-
             _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
-
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.1),
@@ -104,7 +106,6 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 30),
             _buildSectionHeader("AUDIO & IMMERSION"),
             _buildSwitchTile(
@@ -119,7 +120,6 @@ class SettingsScreen extends StatelessWidget {
               settings.hapticEnabled,
               (val) => settings.toggleHaptic(val),
             ),
-
             const SizedBox(height: 10),
             _buildSwitchTile(
               "SBMM (Adaptatif)",

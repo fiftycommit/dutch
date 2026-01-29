@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../utils/screen_utils.dart';
 
 class RulesScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class RulesScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF1a3a28),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.go('/'),
         ),
         titleTextStyle: const TextStyle(
           color: Colors.white,
@@ -355,8 +356,11 @@ class RulesScreen extends StatelessWidget {
       children: rpData.asMap().entries.map((entry) {
         final isHeader = entry.key == 0;
         return TableRow(
-          decoration: isHeader ? const BoxDecoration(color: Colors.white12) : null,
-          children: entry.value.map((cell) => _tableCell(context, cell, isHeader)).toList(),
+          decoration:
+              isHeader ? const BoxDecoration(color: Colors.white12) : null,
+          children: entry.value
+              .map((cell) => _tableCell(context, cell, isHeader))
+              .toList(),
         );
       }).toList(),
     );
@@ -482,23 +486,27 @@ class RulesScreen extends StatelessWidget {
           ),
           SizedBox(height: ScreenUtils.spacing(context, 8)),
           ...features.map((f) => Padding(
-            padding: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 4)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('• ', style: TextStyle(color: accentColor, fontSize: ScreenUtils.scaleFont(context, 14))),
-                Expanded(
-                  child: Text(
-                    f,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: ScreenUtils.scaleFont(context, 14),
+                padding:
+                    EdgeInsets.only(bottom: ScreenUtils.spacing(context, 4)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• ',
+                        style: TextStyle(
+                            color: accentColor,
+                            fontSize: ScreenUtils.scaleFont(context, 14))),
+                    Expanded(
+                      child: Text(
+                        f,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: ScreenUtils.scaleFont(context, 14),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          )),
+              )),
         ],
       ),
     );
