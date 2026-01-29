@@ -35,5 +35,9 @@ function createPlayer(id, name, isHuman, position, botBehavior, botSkillLevel, c
     };
 }
 function calculateScore(player) {
+    // Si le joueur a abandonné ou est spectateur (mais avec des cartes), pénalité max
+    if (player.isSpectator || player.hasFolded) {
+        return 100; // Score maximum arbitraire pour être dernier
+    }
     return player.hand.reduce((sum, card) => sum + card.points, 0);
 }

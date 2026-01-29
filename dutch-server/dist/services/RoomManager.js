@@ -19,7 +19,7 @@ class RoomManager {
         this.presenceGraceMs = options.presenceGraceMs ?? 3000;
         this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
         this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
-        this.stalePlayerMs = options.stalePlayerMs ?? 15000;
+        this.stalePlayerMs = options.stalePlayerMs ?? 60000;
         this.now = options.now ?? (() => Date.now());
         this.timerManager = new TimerManager_1.TimerManager({
             getRoom: (roomCode) => this.getRoom(roomCode),
@@ -246,12 +246,53 @@ class RoomManager {
         }
         const gameState = (0, GameState_1.createGameState)(room.players, room.gameMode, difficulty);
         GameLogic_1.GameLogic.initializeGame(gameState);
-        gameState.phase = GameState_1.GamePhase.playing;
+        // Stay in setup phase until all humans complete memorization
+        gameState.phase = GameState_1.GamePhase.setup;
+        gameState.readyPlayerIds = [];
         room.gameState = gameState;
         room.status = Room_1.RoomStatus.playing;
-        this.clearTurnTimer(roomCode);
-        this.startTurnTimer(roomCode);
+        // Don't start turn timer yet - wait for all players to be ready
         this.touchRoom(room);
+        return true;
+    }
+    /**
+     * Mark a player as ready after memorization.
+     * When all human players are ready, transition to playing phase.
+     */
+    markPlayerReady(roomCode, playerId) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return false;
+        const gameState = room.gameState;
+        // Only works during setup phase
+        if (gameState.phase !== GameState_1.GamePhase.setup)
+            return false;
+        // Don't add duplicates
+        if (gameState.readyPlayerIds.includes(playerId))
+            return true;
+        gameState.readyPlayerIds.push(playerId);
+        // Check if all human players are ready
+        const humanPlayers = gameState.players.filter(p => p.isHuman && !p.isSpectator);
+        const allReady = humanPlayers.every(p => gameState.readyPlayerIds.includes(p.id));
+        if (allReady) {
+            // Transition to playing phase
+            gameState.phase = GameState_1.GamePhase.playing;
+            this.clearTurnTimer(roomCode);
+            this.startTurnTimer(roomCode);
+            // Notify all players that game is starting
+            this.io.to(roomCode).emit('game:all_ready', {
+                message: 'Tous les joueurs sont prêts !',
+            });
+        }
+        this.touchRoom(room);
+        this.broadcastGameState(roomCode, 'PLAYER_READY', {
+            readyPlayerId: playerId,
+            readyCount: gameState.readyPlayerIds.length,
+            totalHumans: humanPlayers.length,
+            allReady,
+        });
+        // Éviter que le joueur ne soit marqué comme inactif juste après avoir envoyé "Prêt"
+        this.touchPlayer(playerId);
         return true;
     }
     broadcastGameState(roomCode, updateType, additionalData = {}) {
@@ -889,7 +930,10 @@ class RoomManager {
             if (player.connected !== false)
                 return true;
             const lastSeen = player.lastSeenAt ?? 0;
-            return now - lastSeen <= this.stalePlayerMs * 2;
+            // Keep registered players (with clientId) much longer (5 minutes)
+            // to allow app restart/rejoin
+            const timeout = player.clientId ? 300000 : this.stalePlayerMs * 2;
+            return now - lastSeen <= timeout;
         });
         if (room.players.length !== before) {
             this.reindexPlayers(room);

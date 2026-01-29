@@ -236,12 +236,13 @@ class MultiplayerService {
     final completer = Completer<void>();
 
     // Listeners temporaires pour l'initialisation
-    final connectHandler = (_) {
+    void connectHandler(_) {
       if (!completer.isCompleted) completer.complete();
-    };
-    final errorHandler = (err) {
+    }
+
+    void errorHandler(err) {
       if (!completer.isCompleted) completer.completeError(err);
-    };
+    }
 
     _socket!.on('connect', connectHandler);
     _socket!.on('connect_error', errorHandler);

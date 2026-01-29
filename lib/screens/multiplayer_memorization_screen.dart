@@ -162,7 +162,7 @@ class _MultiplayerMemorizationScreenState
       );
     }
 
-    if (humanPlayer == null) {
+    if (humanPlayer == null || humanPlayer.isSpectator) {
       return Scaffold(
         backgroundColor: const Color(0xFF0d2818),
         body: Container(
@@ -674,9 +674,8 @@ class _MultiplayerMemorizationScreenState
     );
 
     await Future.delayed(const Duration(seconds: 3));
-
-    if (!mounted) return;
-
-    Navigator.of(context, rootNavigator: true).pop();
+    try {
+      Navigator.of(context, rootNavigator: true).pop();
+    } catch (_) {}
   }
 }

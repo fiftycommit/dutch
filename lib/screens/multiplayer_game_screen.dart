@@ -442,11 +442,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                         decoration: BoxDecoration(
                           color: Colors.orange.shade800.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                                 color: Colors.black38,
                                 blurRadius: 8,
-                                offset: const Offset(0, 3))
+                                offset: Offset(0, 3))
                           ],
                         ),
                         child: Row(
@@ -480,11 +480,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                         decoration: BoxDecoration(
                           color: Colors.purple.shade700.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                                 color: Colors.black38,
                                 blurRadius: 8,
-                                offset: const Offset(0, 3))
+                                offset: Offset(0, 3))
                           ],
                         ),
                         child: Row(
@@ -832,7 +832,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                    color: Colors.amber.withOpacity(0.5)),
+                                    color: Colors.amber.withValues(alpha: 0.5)),
                               ),
                               child: const Text(
                                 "MODE SPECTATEUR",
@@ -1216,7 +1216,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       isCompactMode: isCompactMode,
       onCardTap: canInteract
           ? (index) {
-              gp.useSpecialPower(opponent.position, index);
+              gp.usePower10SpyOpponent(opponent.position, index);
             }
           : null,
     );
@@ -1482,17 +1482,17 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           borderRadius: BorderRadius.circular(15),
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
         ),
-        child: Column(
+        child: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("DUTCH !",
+            Text("DUTCH !",
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
                     fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text("Dernier tour pour tout le monde !",
-                style: const TextStyle(color: Colors.white, fontSize: 16)),
+                style: TextStyle(color: Colors.white, fontSize: 16)),
           ],
         ),
       ),

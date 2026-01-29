@@ -96,7 +96,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   @override
   void dispose() {
     _chatController.dispose();
-    _chatController.dispose();
     _chatScrollController.dispose();
     _eventSubscription?.cancel();
     super.dispose();
@@ -114,12 +113,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         if (provider.isPlaying && provider.gameState != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const MultiplayerMemorizationScreen(),
-              ),
-            );
+            // Only push if we are the current route to avoid multiple pushes
+            if (ModalRoute.of(context)?.isCurrent == true) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MultiplayerMemorizationScreen(),
+                ),
+              );
+            }
           });
         }
 

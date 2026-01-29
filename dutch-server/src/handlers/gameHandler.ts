@@ -383,6 +383,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       if (!player) return;
       if (player.isSpectator) return;
 
+      roomManager.recordPlayerAction(data.roomCode, socket.id);
       const success = roomManager.markPlayerReady(data.roomCode, socket.id);
       if (success) {
         console.log(`[READY] Player ${player.name} marked ready in room ${data.roomCode}`);

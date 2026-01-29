@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -87,6 +86,10 @@ class MockMultiplayerService extends MultiplayerService {
   // Method to manually emit state from test
   void emitGameState(GameState state) {
     onGameStateUpdate?.call(state);
+  }
+
+  void emitGameAllReady(Map<String, dynamic> data) {
+    onGameAllReady?.call(data);
   }
 
   @override
@@ -229,17 +232,28 @@ void main() {
     // Update: Wait 4 seconds for revealed cards dialog + navigation
     await tester.pump(const Duration(seconds: 4));
     // Settle navigation (safe now as old screen is gone)
-    await tester.pumpAndSettle();
+    // We avoid pumpAndSettle() because of infinite animations in some screens
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
-    // 4. Game Screen
     // Emit 'playing' phase manually
     final playingState = mockService._createInitialState();
     playingState.phase = GamePhase.playing;
     mockService.emitGameState(playingState);
 
-    // Wait for state update to reflect
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    // Wait for Memorization screen to be pushed
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    // Also emit GameAllReady event which triggers navigation in Memorization screen
+    mockService.emitGameAllReady({'message': 'Game Started!'});
+
+    // Wait for transition to MultiplayerGameScreen
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // Verify Game Screen
     expect(find.byType(MultiplayerGameScreen), findsOneWidget);
@@ -270,21 +284,30 @@ void main() {
     // It says "TAP POUR AGRANDIR" by default
     expect(find.text("TAP POUR AGRANDIR"), findsOneWidget);
 
+    // Wait for the memorization dialog to clear (it lasts 3 seconds)
+    // Plus any other transitions.
+    for (int i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
     // 6. End Game
     final endedState = mockService._createInitialState();
     endedState.phase = GamePhase.ended;
     mockService.emitGameState(endedState);
 
-    // Use pumpAndSettle to allow full navigation from Game to Results
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
+    // Use manual pump to allow full navigation from Game to Results
+    // without timing out on infinite animations.
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // 7. Results Screen
     expect(find.text("RÉSULTATS"), findsOneWidget);
-    expect(find.text("Rejouer"), findsOneWidget); // Host should see this
+    expect(find.text("Retour au Lobby (Host)"),
+        findsOneWidget); // Host should see this
 
     // 8. Rematch
-    await tester.tap(find.text("Rejouer"));
+    await tester.tap(find.text("Retour au Lobby (Host)"));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 

@@ -10,7 +10,9 @@
       "Bash(ssh:*)",
       "Bash(find:*)",
       "Bash(tree:*)",
-      "Bash(node dist/services/test-imports.js:*)"
+      "Bash(node dist/services/test-imports.js:*)",
+      "Bash(npm test)",
+      "Bash(flutter test:*)"
     ]
   }
 }

@@ -44,11 +44,11 @@ class ConnectionErrorDialog extends StatelessWidget {
     return AlertDialog(
       backgroundColor: const Color(0xFF2D2D44),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
+      title: const Row(
         children: [
-          const Icon(Icons.wifi_off, color: Colors.redAccent, size: 28),
-          const SizedBox(width: 12),
-          const Expanded(
+          Icon(Icons.wifi_off, color: Colors.redAccent, size: 28),
+          SizedBox(width: 12),
+          Expanded(
             child: Text(
               'Connexion perdue',
               style: TextStyle(

@@ -41,7 +41,7 @@ void main() {
         'cleanupInactiveRooms DOES NOT delete rooms if checkActiveRooms returns null (offline)',
         () async {
       // 1. Setup saved rooms
-      final roomCode = 'ROOM1';
+      const roomCode = 'ROOM1';
       // Manual save simulation
       final prefs = await SharedPreferences.getInstance();
       final savedRoom = SavedRoom(
@@ -69,7 +69,7 @@ void main() {
         'cleanupInactiveRooms DELETES rooms if checkActiveRooms returns empty list (online but room gone)',
         () async {
       // 1. Setup saved rooms
-      final roomCode = 'ROOM1';
+      const roomCode = 'ROOM1';
       final prefs = await SharedPreferences.getInstance();
       final savedRoom = SavedRoom(
         roomCode: roomCode,
@@ -94,7 +94,7 @@ void main() {
     test('cleanupInactiveRooms KEEPS rooms that are returned as active',
         () async {
       // 1. Setup saved rooms
-      final roomCode = 'ROOM1';
+      const roomCode = 'ROOM1';
       final prefs = await SharedPreferences.getInstance();
       final savedRoom = SavedRoom(
         roomCode: roomCode,

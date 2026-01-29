@@ -244,6 +244,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
       _syncReactionPhase();
 
       // If only one non-eliminated player remains, end the game locally
+      // Local end-game detection disabled to rely on server authority
+      // and avoid race conditions during phase transitions (like memorization)
+      /*
       try {
         final alive = _gameState!.players
             .where((p) => !_gameState!.eliminatedPlayerIds.contains(p.id))
@@ -253,6 +256,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
           _isPlaying = false;
         }
       } catch (_) {}
+      */
+      notifyListeners();
     };
 
     _multiplayerService.onTimerUpdate = (remaining) {
@@ -709,11 +714,13 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     _multiplayerService.attemptMatch(cardIndex);
   }
 
+  @Deprecated('Utiliser les méthodes spécifiques usePower7/10/Valet/Joker')
   void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
     if (_gameState == null || _isProcessingAction) return;
     _isProcessingAction = true;
     notifyListeners(); // Immediate update to lock UI
-    _multiplayerService.useSpecialPower(targetPlayerIndex, targetCardIndex);
+    _multiplayerService.usePower10SpyOpponent(
+        targetPlayerIndex, targetCardIndex);
     // Auto-clear processing after delay in case of server lag, or rely on game state update?
     // Let's rely on gamestate update to unlock, or a short timeout.
     // Safe fallback:

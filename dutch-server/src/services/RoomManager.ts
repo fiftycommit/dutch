@@ -400,6 +400,9 @@ export class RoomManager {
       allReady,
     });
 
+    // Éviter que le joueur ne soit marqué comme inactif juste après avoir envoyé "Prêt"
+    this.touchPlayer(playerId);
+
     return true;
   }
 

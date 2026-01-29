@@ -61,5 +61,9 @@ export function createPlayer(
 }
 
 export function calculateScore(player: Player): number {
+  // Si le joueur a abandonné ou est spectateur (mais avec des cartes), pénalité max
+  if (player.isSpectator || player.hasFolded) {
+    return 100; // Score maximum arbitraire pour être dernier
+  }
   return player.hand.reduce((sum, card) => sum + card.points, 0);
 }

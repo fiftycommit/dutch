@@ -47,6 +47,7 @@ function createGameState(players, gameMode, difficulty) {
         tournamentCumulativeScores: {},
         turnStartTime: null,
         turnTimeoutMs: 20000, // 20 secondes par défaut
+        readyPlayerIds: [],
     };
 }
 function getCurrentPlayer(gameState) {
