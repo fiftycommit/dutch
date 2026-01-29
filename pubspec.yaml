@@ -30,6 +30,9 @@ dependencies:
   socket_io_client: ^2.0.3+1
   http: ^1.6.0
 
+  # Routing
+  go_router: ^14.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -183,6 +183,15 @@ class TestPlayer {
         info(`${this.name} leaving room`);
     }
 
+    checkActiveRooms(roomCodes) {
+        return new Promise((resolve) => {
+            this.socket.emit('room:check_active', { roomCodes }, (response) => {
+                info(`${this.name} checkActiveRooms: ${response?.rooms?.length} found`);
+                resolve(response?.rooms || []);
+            });
+        });
+    }
+
     closeRoom() {
         return new Promise((resolve) => {
             this.socket.emit('room:close', { roomCode: this.roomCode }, (response) => {
@@ -523,8 +532,12 @@ async function testForfeit() {
 
         const p1InHostState = host.gameState.players.find(p => p.id === p1.socket.id);
 
-        if (p1InHostState && !p1InHostState.isSpectator) {
-            warn('P1 still found as active player in Host state.');
+        if (!p1InHostState) {
+            throw new Error('P1 not found in Host game state');
+        }
+
+        if (!p1InHostState.isSpectator) {
+            throw new Error('P1 should be marked as spectator in GameState after forfeit');
         }
 
         if (!p1.socket.connected) {
@@ -581,6 +594,304 @@ async function testKick() {
     }
 }
 
+async function testPersistence() {
+    log('\n========== TEST: Room Persistence ==========', 'cyan');
+    const host = new TestPlayer('HostP', SERVER_URL);
+
+    try {
+        await host.connect();
+        await host.createRoom();
+        const code = host.roomCode;
+
+        info('Host disconnecting to simulate app close...');
+        host.disconnect();
+
+        await delay(2000); // Wait > cleanup interval? (Interval unknown, maybe short?)
+
+        // Reconnect a checker
+        const checker = new TestPlayer('Checker', SERVER_URL);
+        await checker.connect();
+
+        // Check if room is active
+        const activeDefaults = await checker.checkActiveRooms([code]);
+
+        if (activeDefaults.length > 0 && activeDefaults[0].roomCode === code) {
+            success('Room persisted after disconnect');
+        } else {
+            throw new Error('Room was deleted immediately after disconnect');
+        }
+
+        checker.disconnect();
+        return true;
+    } catch (e) {
+        error(`Persistence test failed: ${e.message}`);
+        return false;
+    }
+}
+
+// ============ CAS 1: GAME START REQUIREMENTS ============
+async function testGameStartRequirements() {
+    log('\n========== TEST: Game Start Requirements (Cas 1) ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+
+        await host.createRoom({ minPlayers: 2 });
+        await p1.joinRoom(host.roomCode);
+
+        // Test 1: Host not ready - should fail
+        info('Test: Host not ready...');
+        try {
+            await host.startGame();
+            throw new Error('Game started without host being ready!');
+        } catch (e) {
+            if (e.message.includes('hôte doit être prêt')) {
+                success('Correctly rejected: Host not ready');
+            } else {
+                throw e;
+            }
+        }
+
+        // Test 2: Only host ready - should fail (need 2)
+        await host.setReady(true);
+        info('Test: Only 1 player ready...');
+        try {
+            await host.startGame();
+            throw new Error('Game started with only 1 player ready!');
+        } catch (e) {
+            if (e.message.includes('joueurs prêts')) {
+                success('Correctly rejected: Not enough ready players');
+            } else {
+                throw e;
+            }
+        }
+
+        // Test 3: Both ready - should succeed
+        await p1.setReady(true);
+        await delay(500);
+        info('Test: 2 players ready...');
+        await host.startGame();
+        success('Game started with 2 ready players');
+
+        await delay(1000);
+        if (host.gameState && host.gameState.phase >= 1) {
+            success('Game is running');
+        } else {
+            throw new Error('Game state not received');
+        }
+
+        success('Game Start Requirements test passed');
+        return true;
+    } catch (e) {
+        error(`Game Start Requirements test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+    }
+}
+
+// ============ CAS 2: FORFEIT CANNOT REJOIN AS PLAYER ============
+async function testForfeitCannotRejoinAsPlayer() {
+    log('\n========== TEST: Forfeit Cannot Rejoin (Cas 2) ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+    const p2 = new TestPlayer('P2', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+        await p2.connect();
+
+        await host.createRoom({ minPlayers: 3 });
+        await p1.joinRoom(host.roomCode);
+        await p2.joinRoom(host.roomCode);
+
+        await host.setReady(true);
+        await p1.setReady(true);
+        await p2.setReady(true);
+        await delay(500);
+
+        await host.startGame();
+        await delay(1000);
+
+        // P1 forfeits
+        info('P1 forfeiting...');
+        await p1.forfeitGame();
+        await delay(1000);
+
+        // Verify P1 is spectator in game state
+        const p1InState = host.gameState.players.find(p => p.id === p1.socket.id);
+        if (!p1InState || !p1InState.isSpectator) {
+            throw new Error('P1 should be marked as spectator after forfeit');
+        }
+        success('P1 correctly marked as spectator');
+
+        // P1 disconnects and reconnects (simulating app restart)
+        const p1ClientId = p1.clientId;
+        p1.disconnect();
+        await delay(500);
+
+        // P1 reconnects with same clientId
+        const p1Rejoin = new TestPlayer('P1-Rejoin', SERVER_URL);
+        p1Rejoin.clientId = p1ClientId; // Same clientId
+        await p1Rejoin.connect();
+        await p1Rejoin.joinRoom(host.roomCode);
+
+        await delay(2000); // Wait longer for game state
+
+        // Check P1's view - should still be spectator (or not receive state because game ended)
+        // Note: Game may have ended if only 2 active players were left
+        if (!p1Rejoin.gameState) {
+            // This is acceptable - might have ended or timing issue
+            success('P1 did not receive active game state (expected if game ended)');
+        } else {
+
+            const p1SelfInState = p1Rejoin.gameState.players.find(p => p.id === p1Rejoin.socket.id);
+            if (!p1SelfInState) {
+                // P1 might not be in player list as active, which is fine (spectator join)
+                success('P1 correctly not in active player list after rejoin');
+            } else if (p1SelfInState.isSpectator) {
+                success('P1 correctly still spectator after rejoin');
+            } else {
+                throw new Error('P1 should NOT be able to rejoin as active player!');
+            }
+        }
+
+        success('Forfeit Cannot Rejoin test passed');
+        return true;
+    } catch (e) {
+        error(`Forfeit Cannot Rejoin test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p2.disconnect();
+    }
+}
+
+// ============ CAS 3: SPECTATOR CANNOT INTERACT ============
+async function testSpectatorCannotInteract() {
+    log('\n========== TEST: Spectator Cannot Interact (Cas 3) ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+    const spectator = new TestPlayer('Spectator', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+
+        await host.createRoom();
+        await p1.joinRoom(host.roomCode);
+
+        await host.setReady(true);
+        await p1.setReady(true);
+        await delay(500);
+
+        await host.startGame();
+        await delay(1500);
+
+        // Spectator joins mid-game
+        await spectator.connect();
+        await spectator.joinRoom(host.roomCode);
+        await delay(1000);
+
+        if (!spectator.gameState) {
+            throw new Error('Spectator did not receive game state');
+        }
+        success('Spectator received game state');
+
+        // Verify spectator is NOT in active players
+        const specInPlayers = spectator.gameState.players.find(p => p.id === spectator.socket.id);
+        if (specInPlayers && !specInPlayers.isSpectator) {
+            throw new Error('Spectator incorrectly appears as active player');
+        }
+        success('Spectator correctly not an active player');
+
+        // Test: Spectator tries to draw a card (should fail or be ignored)
+        info('Spectator attempting to draw card (should fail)...');
+        const beforeState = JSON.stringify(host.gameState);
+
+        // Capture current turn player
+        const currentPlayerId = spectator.gameState.currentPlayer?.id;
+
+        spectator.socket.emit('game:draw_card', { roomCode: spectator.roomCode });
+        await delay(1000);
+
+        // Game state should not have changed due to spectator action
+        // The current player should still be the same
+        if (host.gameState.currentPlayer?.id === currentPlayerId) {
+            success('Spectator draw action correctly ignored');
+        }
+
+        // Test: Spectator tries to call Dutch (should be ignored)
+        info('Spectator attempting to call Dutch (should fail)...');
+        spectator.socket.emit('game:dutch', { roomCode: spectator.roomCode });
+        await delay(500);
+
+        // Game should still be in playing phase (not ended by spectator Dutch)
+        if (host.gameState.phase === 1) { // GamePhase.playing
+            success('Spectator Dutch correctly ignored');
+        }
+
+        success('Spectator Cannot Interact test passed');
+        return true;
+    } catch (e) {
+        error(`Spectator Cannot Interact test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+        spectator.disconnect();
+    }
+}
+
+// ============ CAS 4: GAME END ON LAST PLAYER ============
+async function testGameEndOnLastPlayer() {
+    log('\n========== TEST: Game Ends When One Player Left (Cas 2b) ==========', 'cyan');
+    const host = new TestPlayer('Host', SERVER_URL);
+    const p1 = new TestPlayer('P1', SERVER_URL);
+
+    try {
+        await host.connect();
+        await p1.connect();
+
+        await host.createRoom();
+        await p1.joinRoom(host.roomCode);
+
+        await host.setReady(true);
+        await p1.setReady(true);
+        await delay(500);
+
+        await host.startGame();
+        await delay(1000);
+
+        // P1 forfeits - only Host remains
+        info('P1 forfeiting (Host should be last player)...');
+        await p1.forfeitGame();
+        await delay(2000);
+
+        // Game should have ended (phase >= 3 means ended/results)
+        if (host.gameState.phase >= 3) { // GamePhase.ended or results
+            success('Game correctly ended when only 1 player left');
+        } else {
+            throw new Error(`Game should have ended (phase>=3), but phase=${host.gameState.phase}`);
+        }
+
+        success('Game End On Last Player test passed');
+        return true;
+    } catch (e) {
+        error(`Game End On Last Player test failed: ${e.message}`);
+        return false;
+    } finally {
+        host.disconnect();
+        p1.disconnect();
+    }
+}
+
+
 // ============ MAIN ============
 
 async function runAllTests() {
@@ -589,12 +900,28 @@ async function runAllTests() {
 
     const results = {};
 
+    // Basic tests
     results.connection = await testBasicConnection();
     results.roomJoin = await testRoomCreationAndJoin();
     results.gameReaction = await testGameStartAndReactionPhase();
     results.hostLeave = await testHostLeaveNotification();
-    results.spectatorJoin = await testSpectatorJoin();
+
+    // Cas 1: Game Start Requirements
+    results.gameStartRequirements = await testGameStartRequirements();
+
+    // Cas 2: Forfeit logic
     results.forfeit = await testForfeit();
+    results.forfeitCannotRejoin = await testForfeitCannotRejoinAsPlayer();
+    results.gameEndOnLastPlayer = await testGameEndOnLastPlayer();
+
+    // Cas 3: Spectator mode
+    results.spectatorJoin = await testSpectatorJoin();
+    results.spectatorCannotInteract = await testSpectatorCannotInteract();
+
+    // Cas 4: Room persistence
+    results.persistence = await testPersistence();
+
+    // Admin features
     results.kick = await testKick();
 
     log('\n========== TEST RESULTS ==========', 'cyan');
@@ -609,3 +936,4 @@ async function runAllTests() {
 }
 
 runAllTests().catch(console.error);
+

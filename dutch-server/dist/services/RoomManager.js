@@ -187,6 +187,8 @@ class RoomManager {
                 // On va simuler qu'il devient spectateur mais RESTE connecté
                 player.isSpectator = true;
                 player.ready = false;
+                gamePlayer.isSpectator = true; // Sync with GameState
+                gamePlayer.hasFolded = true; // Also mark as folded for round logic
                 this.clearPresenceCheck(roomCode, playerId);
                 this.clearTurnTimer(roomCode);
                 // Check if only one active player remains ("Last Man Standing")
@@ -207,6 +209,7 @@ class RoomManager {
             });
         }
         this.touchRoom(room);
+        this.broadcastGameState(roomCode, 'PLAYER_FORFEIT', { playerId });
         this.broadcastPresence(roomCode); // Mise à jour UI Lobby
         return true;
     }
@@ -845,6 +848,8 @@ class RoomManager {
     activePlayerCount(room) {
         const now = this.now();
         return room.players.filter((player) => {
+            if (player.isSpectator)
+                return false;
             if (!player.isHuman)
                 return true;
             if (!player.connected)
@@ -934,9 +939,24 @@ class RoomManager {
                 const lastSeen = player.lastSeenAt ?? 0;
                 return now - lastSeen <= this.stalePlayerMs;
             });
-            if (!anyConnected || now >= room.expiresAt) {
-                this.removeRoom(room.id);
-                continue;
+            if (!anyConnected) {
+                // Init grace period
+                if (!room.emptyAt) {
+                    room.emptyAt = now;
+                }
+                // 10 minutes de grace period ou expiration normale
+                if (now - room.emptyAt > 600000 || now >= room.expiresAt) {
+                    this.removeRoom(room.id);
+                    continue;
+                }
+            }
+            else {
+                // Activity detected, clear grace period
+                room.emptyAt = undefined;
+                if (now >= room.expiresAt) {
+                    this.removeRoom(room.id);
+                    continue;
+                }
             }
             if (staleChanged) {
                 this.broadcastPresence(room.id);

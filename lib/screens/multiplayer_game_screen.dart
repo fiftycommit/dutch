@@ -548,7 +548,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // Identify participants
     final myId = gp.playerId;
     // Check if I am a player in the game or spectator
-    final bool isSpectator = !gs.players.any((p) => p.id == myId);
+    // Check if I am a player in the game or spectator
+    final me = gs.players
+        .cast<Player?>()
+        .firstWhere((p) => p?.id == myId, orElse: () => null);
+    final bool isSpectator = me == null || me.isSpectator;
 
     // If spectator, we don't have a 'human' object representing us in the game state
     // We can pick the first player just for some layout references if needed, but we shouldn't display their hand as ours.

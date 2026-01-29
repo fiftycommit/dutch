@@ -5,8 +5,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'providers/game_provider.dart';
 import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
-import 'screens/splash_screen.dart';
+import 'router/app_router.dart';
 
+/// Global navigator key for legacy code compatibility (bot_ai.dart)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -41,9 +42,14 @@ Future<void> initializeApp() async {
   await Future.delayed(const Duration(milliseconds: 800));
 }
 
-class DutchGameApp extends StatelessWidget {
+class DutchGameApp extends StatefulWidget {
   const DutchGameApp({super.key});
 
+  @override
+  State<DutchGameApp> createState() => _DutchGameAppState();
+}
+
+class _DutchGameAppState extends State<DutchGameApp> {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -52,41 +58,49 @@ class DutchGameApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MultiplayerGameProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        title: 'Dutch Card Game',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.green,
-          scaffoldBackgroundColor: const Color(0xFF1a472a), // Vert foncé poker
-          fontFamily: 'Roboto',
-          textTheme: const TextTheme(
-            headlineLarge: TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-            ),
-            bodyLarge: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2d5f3e),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              textStyle: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+      child: Builder(
+        builder: (context) {
+          // Créer le router après que les providers soient disponibles
+          final router = AppRouter.createRouter(context);
+
+          return MaterialApp.router(
+            routerConfig: router,
+            title: 'Dutch Card Game',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              primarySwatch: Colors.green,
+              scaffoldBackgroundColor:
+                  const Color(0xFF1a472a), // Vert foncé poker
+              fontFamily: 'Roboto',
+              textTheme: const TextTheme(
+                headlineLarge: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+                bodyLarge: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2d5f3e),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

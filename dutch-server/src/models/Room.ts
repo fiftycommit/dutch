@@ -34,6 +34,7 @@ export interface Room {
 
   cumulativeScores?: Map<string, number>; // clientId -> score total (classement permanent)
   isPaused?: boolean;
+  emptyAt?: number; // Timestamp quand la room est devenue vide
 }
 
 export function createRoom(

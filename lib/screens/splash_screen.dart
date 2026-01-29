@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import '../main.dart';
 import '../utils/screen_utils.dart';
-import 'main_menu_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -49,21 +49,9 @@ class _SplashScreenState extends State<SplashScreen>
     // Petit délai supplémentaire
     await Future.delayed(const Duration(milliseconds: 300));
 
-    // Naviguer vers le menu principal
+    // Naviguer vers le menu principal avec go_router
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const MainMenuScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
-      );
+      context.go('/');
     }
   }
 
@@ -153,8 +141,8 @@ class _SplashScreenState extends State<SplashScreen>
 
                       // Barre de progression
                       Padding(
-                        padding:
-                            ScreenUtils.adaptivePadding(context, horizontal: 60),
+                        padding: ScreenUtils.adaptivePadding(context,
+                            horizontal: 60),
                         child: Column(
                           children: [
                             AnimatedBuilder(
@@ -169,7 +157,8 @@ class _SplashScreenState extends State<SplashScreen>
                                       ),
                                       child: LinearProgressIndicator(
                                         value: _progressAnimation.value,
-                                        minHeight: ScreenUtils.scale(context, 8),
+                                        minHeight:
+                                            ScreenUtils.scale(context, 8),
                                         backgroundColor:
                                             Colors.white.withValues(alpha: 0.2),
                                         valueColor:
@@ -180,7 +169,8 @@ class _SplashScreenState extends State<SplashScreen>
                                     ),
 
                                     SizedBox(
-                                        height: ScreenUtils.spacing(context, 16)),
+                                        height:
+                                            ScreenUtils.spacing(context, 16)),
 
                                     // Texte de chargement
                                     Text(

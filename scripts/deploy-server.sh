@@ -166,7 +166,7 @@ INSTALL_CODE
 echo -e "\n${YELLOW}🔧 Configuration de Nginx...${NC}"
 
 cat > /tmp/nginx-dutch << NGINX_CONFIG
-# Configuration optimisée pour Socket.IO
+# Configuration optimisée pour Socket.IO + Flutter Web SPA
 map \$http_upgrade \$connection_upgrade {
     default upgrade;
     '' close;
@@ -182,7 +182,12 @@ server {
     listen [::]:80;
     server_name $DOMAIN www.$DOMAIN;
 
-    location / {
+    # Racine pour le frontend Flutter (SPA)
+    root /var/www/dutch/web;
+    index index.html;
+
+    # API et WebSocket -> Backend Node.js
+    location /socket.io/ {
         proxy_pass http://dutch_backend;
         proxy_http_version 1.1;
 
@@ -208,6 +213,29 @@ server {
     location /health {
         proxy_pass http://dutch_backend/health;
         access_log off;
+    }
+
+    # Routes API -> Backend (si tu en as)
+    location /api/ {
+        proxy_pass http://dutch_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Tout le reste -> Flutter SPA (URL routing)
+    location / {
+        # Essaie de servir le fichier, sinon renvoie index.html
+        # C'est ça qui fait marcher le routing URL!
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Cache pour les assets statiques
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
 NGINX_CONFIG
