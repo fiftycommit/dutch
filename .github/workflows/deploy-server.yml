@@ -115,6 +115,8 @@ jobs:
               nginx -t && systemctl reload nginx
             fi
             
-            pm2 restart dutch-server || pm2 start dist/index.js --name dutch-server
+            export GIT_SHA="${{ github.sha }}"
+            export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            pm2 restart dutch-server --update-env || pm2 start dist/index.js --name dutch-server --update-env
             echo "✅ Backend deployed successfully!"
             echo "🤖 ML Dashboard: https://dutch-game.me/bot-stats"

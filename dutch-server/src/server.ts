@@ -12,6 +12,8 @@ import { publicRoomService } from './services/publicRoomService';
 import botLearningRoutes from './routes/botLearningRoutes';
 import playerLearningRoutes from './routes/playerLearningRoutes';
 
+const startedAt = new Date().toISOString();
+
 function renderHomePage(roomCount: number) {
   return `
     <!DOCTYPE html>
@@ -162,6 +164,15 @@ export function startServer() {
 
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
+  });
+
+  app.get('/version', (req, res) => {
+    res.json({
+      sha: process.env.GIT_SHA || null,
+      buildTime: process.env.BUILD_TIME || null,
+      startedAt,
+      nodeEnv: process.env.NODE_ENV || null,
+    });
   });
 
   app.get('/rooms', (req, res) => {
