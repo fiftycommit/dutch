@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -36,7 +37,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.go('/'),
         ),
         title: Text(
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie'),
