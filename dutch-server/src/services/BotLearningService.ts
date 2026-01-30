@@ -223,7 +223,7 @@ export class BotLearningService {
   }
 
   /**
-   * Ajuste les paramètres appris en fonction des performances (Gradient Descent)
+   * Ajuste les paramètres appris en fonction des performances (Gradient Descent + Imitation)
    */
   private adjustParameters(profile: BotProfile, record: BotGameRecord): Record<string, any> {
     const params = { ...profile.learnedParameters };
@@ -237,6 +237,25 @@ export class BotLearningService {
     
     // Calculer le gradient pour chaque paramètre
     const gradients = this.calculateParameterGradients(profile, record);
+    
+    // APPRENTISSAGE PAR IMITATION : Si le bot a mal performé, imiter les meilleurs
+    if (record.finalRank >= 3 && record.opponents.length > 0) {
+      const bestOpponent = record.opponents
+        .filter(opp => opp.rank === 1) // Le gagnant
+        .find(opp => opp.mmr && opp.mmr > profile.mmr + 100); // Significativement meilleur
+      
+      if (bestOpponent && bestOpponent.learnedParams) {
+        // Imiter partiellement les paramètres du meilleur bot
+        const imitationRate = 0.15; // 15% d'imitation
+        for (const [param, value] of Object.entries(bestOpponent.learnedParams)) {
+          if (typeof params[param] === 'number' && typeof value === 'number') {
+            // Interpoler vers les paramètres du meilleur
+            params[param] = params[param] * (1 - imitationRate) + value * imitationRate;
+          }
+        }
+        console.log(`🎓 ${profile.botId} apprend de ${bestOpponent.botId} (MMR: ${bestOpponent.mmr})`);
+      }
+    }
     
     // Appliquer le gradient descent avec momentum
     for (const [param, gradient] of Object.entries(gradients)) {
@@ -309,6 +328,11 @@ export class BotLearningService {
     const powerEfficiency = record.powerUsesCount > 0 ? 
       (record.goodDecisions / Math.max(1, record.powerUsesCount)) : 0.5;
     gradients.powerUsageRate = (powerEfficiency - 0.5) * error * 2;
+    
+    // Pénalité supplémentaire pour mauvaises décisions (ex: Joker sur 1 carte)
+    if (record.badDecisions > 0) {
+      gradients.powerUsageRate += 0.3 * record.badDecisions; // Réduire l'utilisation des pouvoirs
+    }
     
     // Gradient pour la tolérance au risque - PLUS RAPIDE
     if (record.badDecisions > record.goodDecisions) {
