@@ -317,7 +317,7 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
               // Gauche - 1 ou 2 bots selon le nombre total
-              if (bots.length >= 1)
+              if (bots.isNotEmpty)
                 Positioned(
                   left: 0,
                   top: 0,

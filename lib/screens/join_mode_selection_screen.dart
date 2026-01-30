@@ -133,7 +133,7 @@ class _ModeCard extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: [
                 color,
-                color.withOpacity(0.8),
+                color.withValues(alpha: 0.8),
               ],
             ),
             borderRadius: BorderRadius.circular(20),
@@ -143,7 +143,7 @@ class _ModeCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
@@ -175,7 +175,7 @@ class _ModeCard extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -195,7 +195,7 @@ class _ModeCard extends StatelessWidget {
                       description,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                       ),
                     ),
                   ],

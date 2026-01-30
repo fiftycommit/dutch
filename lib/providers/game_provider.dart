@@ -23,7 +23,6 @@ class GameProvider with ChangeNotifier {
   // Service d'apprentissage des bots
   final BotLearningService _botLearningService = BotLearningService();
   String? _currentGameId;
-  int _turnCounter = 0;
   
   bool _isPaused = false;
   bool get isPaused => _isPaused;
@@ -98,7 +97,6 @@ class GameProvider with ChangeNotifier {
 
     // Initialiser l'enregistrement pour les bots
     _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
-    _turnCounter = 0;
     for (var player in _gameState!.players) {
       if (!player.isHuman) {
         _botLearningService.startGameRecording(
@@ -887,33 +885,6 @@ class GameProvider with ChangeNotifier {
   }
 
   /// Enregistre une action de bot
-  void _recordBotAction({
-    required String botPlayerId,
-    required String actionType,
-    required Map<String, dynamic> actionDetails,
-  }) {
-    if (_gameState == null || _currentGameId == null) return;
-    
-    _turnCounter++;
-    _botLearningService.recordAction(
-      botPlayerId: botPlayerId,
-      actionType: actionType,
-      turnNumber: _turnCounter,
-      gameState: _gameState!,
-      actionDetails: actionDetails,
-    );
-  }
-
-  /// Met à jour le résultat de la dernière action
-  void _updateBotActionResult({
-    required String botPlayerId,
-    required Map<String, dynamic> result,
-  }) {
-    _botLearningService.updateLastActionResult(
-      botPlayerId: botPlayerId,
-      result: result,
-    );
-  }
 
   /// Termine l'enregistrement des bots en fin de partie
   Future<void> _finalizeBotRecordings() async {
