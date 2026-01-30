@@ -122,9 +122,14 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
 
     final aggressiveness = _clamp01(_num(params, 'aggressiveness', 0.5));
     final caution = _clamp01(_num(params, 'caution', 0.5));
-    final powerUsageRate = _clamp01(_num(params, 'powerUsageRate', 0.5));
+    final dutchQuality = _clamp01(_num(params, 'dutchQuality', 0.5));
+    final powerDefensive = _clamp01(_num(params, 'powerDefensiveRate', 0.5));
+    final powerOffensive = _clamp01(_num(params, 'powerOffensiveRate', 0.5));
     final memoryAccuracy = _clamp01(_num(params, 'memoryAccuracy', 0.7));
-    final riskTolerance = _clamp01(_num(params, 'riskTolerance', 0.5));
+    final memoryRetention = _clamp01(_num(params, 'memoryRetention', 0.7));
+    final adaptability = _clamp01(_num(params, 'adaptability', 0.5));
+    final decisionSpeed = _num(params, 'decisionSpeed', 2000.0);
+    final targetingStrategy = params['targetingStrategy'] ?? 'balanced';
 
     final last10 = _history.take(10).toList().reversed.toList();
 
@@ -149,22 +154,43 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
           ),
           const SizedBox(height: 12),
           _BarsCard(
-            title: 'Paramètres actuels',
+            title: 'Style de jeu',
             values: {
-              'Mémoire': memoryAccuracy,
-              'Pouvoirs (quand dispo)': powerUsageRate,
-              'Risque': riskTolerance,
               'Agressif': aggressiveness,
               'Prudent': caution,
+              'Adaptabilité': adaptability,
             },
+          ),
+          const SizedBox(height: 12),
+          _BarsCard(
+            title: 'Mémoire & Précision',
+            values: {
+              'Mémoire (match)': memoryAccuracy,
+              'Rétention': memoryRetention,
+              'Dutch (précision)': dutchQuality,
+            },
+          ),
+          const SizedBox(height: 12),
+          _BarsCard(
+            title: 'Pouvoirs (usage quand dispo)',
+            values: {
+              'Défensif (7/8)': powerDefensive,
+              'Offensif (9/10/V/J)': powerOffensive,
+            },
+          ),
+          const SizedBox(height: 12),
+          _InfoCard(
+            title: 'Ciblage',
+            value: targetingStrategy == 'leader' ? '🎯 Leader' : targetingStrategy == 'weak' ? '🎯 Faible' : '🎯 Équilibré',
+            subtitle: 'Vitesse: ${(decisionSpeed / 1000).toStringAsFixed(1)}s',
           ),
           const SizedBox(height: 12),
           _LineChartCard(
             title: 'Évolution (10 dernières parties)',
             series: {
+              'Agressif': series('aggressiveness', 0.5),
               'Mémoire': series('memoryAccuracy', 0.7),
-              'Pouvoirs': series('powerUsageRate', 0.5),
-              'Risque': series('riskTolerance', 0.5),
+              'Adaptabilité': series('adaptability', 0.5),
             },
           ),
           const SizedBox(height: 12),

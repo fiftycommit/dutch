@@ -376,6 +376,7 @@ class GameProvider with ChangeNotifier {
     final human = _gameState!.currentPlayer;
     final specialCard = _gameState!.specialCardToActivate;
     if (human.isHuman && _currentGameId != null && specialCard != null) {
+      final powerType = _getPowerType(specialCard);
       _playerLearningService.recordAction(
         gameId: _currentGameId!,
         actionType: 'power_skip',
@@ -384,7 +385,9 @@ class GameProvider with ChangeNotifier {
         human: human,
         actionDetails: {
           'specialCard': specialCard.toJson(),
+          'powerType': powerType,
         },
+        powerType: powerType,
       );
     }
 
@@ -411,6 +414,8 @@ class GameProvider with ChangeNotifier {
 
     final beforeScore = currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
     if (currentPlayer.isHuman && _currentGameId != null) {
+      final powerType = _getPowerType(specialCard);
+      final targetStrategy = _getTargetStrategy(targetPlayer);
       _playerLearningService.recordAction(
         gameId: _currentGameId!,
         actionType: 'power',
@@ -421,7 +426,11 @@ class GameProvider with ChangeNotifier {
           'specialCard': specialCard.toJson(),
           'targetPlayerIndex': targetPlayerIndex,
           'targetCardIndex': targetCardIndex,
+          'powerType': powerType,
+          'targetPlayerId': targetPlayer.id,
         },
+        powerType: powerType,
+        targetStrategy: targetStrategy,
       );
     }
 
@@ -1227,6 +1236,24 @@ class GameProvider with ChangeNotifier {
         botFinalHandSize: player.hand.length,
       );
     }
+  }
+
+  String _getPowerType(PlayingCard card) {
+    if (card.value == '7' || card.value == '8') return card.value;
+    if (card.value == '9' || card.value == '10') return card.value;
+    if (card.value == 'V') return 'jack';
+    if (card.value == 'JOKER') return 'joker';
+    return 'unknown';
+  }
+
+  String _getTargetStrategy(Player target) {
+    if (_gameState == null) return 'random';
+    final players = List<Player>.from(_gameState!.players);
+    players.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+    final targetRank = players.indexOf(target) + 1;
+    if (targetRank == 1) return 'leader';
+    if (targetRank == players.length) return 'weak';
+    return 'balanced';
   }
 
   @override
