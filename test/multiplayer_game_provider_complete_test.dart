@@ -581,7 +581,7 @@ void main() {
 
         mockService.clearCalls();
         await provider.startGame(fillBots: true);
-        expect(mockService.calls, contains('startGame:true'));
+        expect(mockService.calls, contains('startGame:true:null:null:null'));
       });
 
       test('kickPlayer calls service with clientId', () async {
