@@ -93,6 +93,11 @@ class RPCalculator {
     
     int baseRP = 0;
     
+    // Multiplicateur selon le nombre de joueurs (2-6 joueurs)
+    // Plus il y a de joueurs, plus c'est difficile et plus les gains/pertes sont importants
+    // 2 joueurs: x1.0, 3: x1.2, 4: x1.4, 5: x1.6, 6: x1.8
+    final double playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
+    
     // Points de base selon la position RELATIVE au nombre de joueurs
     // En tournoi avec moins de 4 joueurs, adapter les positions
     if (playerRank == 1) {
@@ -111,10 +116,33 @@ class RPCalculator {
     } else if (totalPlayers == 3) {
       // 3 joueurs : 2ème est entre second et third
       baseRP = ((points['second']! + points['third']!) / 2).round();
+    } else if (totalPlayers == 5) {
+      // 5 joueurs : adapter les positions intermédiaires
+      if (playerRank == 2) {
+        baseRP = points['second']!;
+      } else if (playerRank == 3) {
+        baseRP = points['third']!;
+      } else {
+        baseRP = (points['third']! + points['last']!) ~/ 2;
+      }
+    } else if (totalPlayers == 6) {
+      // 6 joueurs : adapter les positions intermédiaires
+      if (playerRank == 2) {
+        baseRP = points['second']!;
+      } else if (playerRank == 3) {
+        baseRP = points['third']!;
+      } else if (playerRank == 4) {
+        baseRP = (points['third']! + points['last']!) ~/ 2;
+      } else {
+        baseRP = (points['third']! + points['last']! * 2) ~/ 3;
+      }
     } else {
       // 2 joueurs : soit 1er soit dernier (déjà traité)
       baseRP = points['last']!;
     }
+    
+    // Appliquer le multiplicateur selon le nombre de joueurs
+    baseRP = (baseRP * playerMultiplier).round();
     
     // Bonus tournoi selon la manche (plus on avance, plus c'est important)
     if (isTournament) {
