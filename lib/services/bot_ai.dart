@@ -118,85 +118,43 @@ class BotAI {
 
     int threshold;
 
+    // NOUVELLE LOGIQUE : Bronze=peureux, Platine=stratégique
+    // Platine/Or analysent leur avantage relatif, Bronze attend d'avoir quasi rien
+    
+    if (difficulty.name == "Platine" || difficulty.name == "Or") {
+      // STRATEGIE INTELLIGENTE : Dutch si on a l'avantage
+      return _shouldSmartDutch(gs, bot, difficulty, phase, estimatedScore, audacityBonus, confidence, tournamentPressure);
+    }
+    
+    // Bronze/Argent : logique basée sur seuils (Bronze = très peureux)
     if (phase == BotGamePhase.endgame) {
-      // En endgame, plus agressif
       switch (behavior) {
         case BotBehavior.fast:
-          threshold = difficulty.name == "Bronze" ? 7 :
-                     difficulty.name == "Argent" ? 6 : 
-                     difficulty.name == "Or" ? 3 : 2;
+          threshold = difficulty.name == "Bronze" ? 3 : 5;  // Bronze très peureux
           break;
-
         case BotBehavior.aggressive:
-          threshold = difficulty.name == "Bronze" ? 6 :
-                     difficulty.name == "Argent" ? 5 : 
-                     difficulty.name == "Or" ? 2 : 1;
-          
-          if (_isHumanThreatening(gs)) {
-            threshold += 1;
-          }
+          threshold = difficulty.name == "Bronze" ? 2 : 4;
           break;
-
         case BotBehavior.balanced:
-          if (difficulty.name == "Bronze") {
-            threshold = 6;
-          } else if (difficulty.name == "Argent") {
-            threshold = 5;
-          } else if (difficulty.name == "Or") {
-            threshold = 2;
-            // Or vérifie les adversaires 50% du temps
-            if (_random.nextDouble() < 0.50) {
-              for (var p in gs.players) {
-                if (p.id != bot.id) {
-                  int opponentScore = p.getEstimatedScore();
-                  if (opponentScore <= estimatedScore + 1) {
-                    return false;
-                  }
-                }
-              }
-            }
-          } else {
-            // Platine : très agressif mais intelligent
-            threshold = 1;
-            // Platine vérifie TOUJOURS les adversaires avant de Dutch
-            for (var p in gs.players) {
-              if (p.id != bot.id) {
-                int opponentScore = p.getEstimatedScore();
-                if (opponentScore <= estimatedScore) {
-                  return false; // Ne Dutch pas si quelqu'un a un meilleur score
-                }
-              }
-            }
-          }
+          threshold = difficulty.name == "Bronze" ? 2 : 4;
           break;
-
         default:
-          threshold = difficulty.dutchThreshold + 1;
+          threshold = difficulty.name == "Bronze" ? 2 : 4;
       }
     } else {
-      // En optimization, plus conservateur
+      // En optimization, Bronze encore plus peureux
       switch (behavior) {
         case BotBehavior.fast:
-          threshold = difficulty.name == "Bronze" ? 6 :
-                     difficulty.name == "Argent" ? 4 : 
-                     difficulty.name == "Or" ? 1 : 1;
+          threshold = difficulty.name == "Bronze" ? 2 : 4;
           break;
-
         case BotBehavior.aggressive:
-          threshold = difficulty.name == "Bronze" ? 4 :
-                     difficulty.name == "Argent" ? 3 : 
-                     difficulty.name == "Or" ? 1 : 0;
+          threshold = difficulty.name == "Bronze" ? 1 : 3;
           break;
-
         case BotBehavior.balanced:
-          threshold = difficulty.name == "Bronze" ? 5 :
-                     difficulty.name == "Argent" ? 4 :
-                     difficulty.name == "Or" ? 1 :
-                                               0;  // Platine : n'accepte Dutch qu'à 0 en phase optimization
+          threshold = difficulty.name == "Bronze" ? 1 : 3;
           break;
-
         default:
-          threshold = difficulty.dutchThreshold;
+          threshold = difficulty.name == "Bronze" ? 1 : 3;
       }
     }
     
@@ -209,6 +167,94 @@ class BotAI {
     }
     
     return shouldDutch;
+  }
+  
+  /// Stratégie intelligente de Dutch pour Or/Platine
+  /// Analyse : nombre de cartes, score estimé vs adversaires, défausses récentes
+  static bool _shouldSmartDutch(GameState gs, Player bot, BotDifficulty difficulty, 
+      BotGamePhase phase, int estimatedScore, double audacityBonus, double confidence, double tournamentPressure) {
+    
+    // BLUFF : Platine peut faire semblant de ne pas vouloir Dutch
+    if (_isBluffingDutch(bot, difficulty, phase)) {
+      return false; // Ne Dutch pas même si c'est avantageux (bluff)
+    }
+    
+    int myCardCount = bot.hand.length;
+    
+    // 1. Analyser l'avantage en nombre de cartes
+    int minOpponentCards = 99;
+    int maxOpponentCards = 0;
+    double avgOpponentScore = 0;
+    int opponentCount = 0;
+    
+    for (var p in gs.players) {
+      if (p.id != bot.id) {
+        minOpponentCards = min(minOpponentCards, p.hand.length);
+        maxOpponentCards = max(maxOpponentCards, p.hand.length);
+        avgOpponentScore += p.getEstimatedScore();
+        opponentCount++;
+      }
+    }
+    avgOpponentScore = opponentCount > 0 ? avgOpponentScore / opponentCount : 0;
+    
+    // 2. Avantage en cartes : si j'ai moins de cartes que tout le monde
+    bool hasCardAdvantage = myCardCount < minOpponentCards;
+    bool hasSignificantCardAdvantage = myCardCount <= minOpponentCards - 2;
+    
+    // 3. Avantage en score estimé
+    bool hasScoreAdvantage = estimatedScore < avgOpponentScore;
+    
+    // 4. Platine : Dutch agressif si avantage clair
+    if (difficulty.name == "Platine") {
+      // Avec 1-2 cartes et un bon score, Dutch !
+      if (myCardCount <= 2 && estimatedScore <= 6) {
+        return true;
+      }
+      // Avantage significatif en cartes ET bon score
+      if (hasSignificantCardAdvantage && estimatedScore <= 10) {
+        return true;
+      }
+      // Avantage en cartes + avantage en score
+      if (hasCardAdvantage && hasScoreAdvantage && estimatedScore <= 8) {
+        return true;
+      }
+      // Score très bas, même sans avantage en cartes
+      if (estimatedScore <= 4 && myCardCount <= 3) {
+        return true;
+      }
+      // Phase endgame : plus agressif
+      if (phase == BotGamePhase.endgame && estimatedScore <= 6) {
+        return true;
+      }
+    }
+    
+    // 5. Or : un peu moins agressif mais toujours stratégique
+    if (difficulty.name == "Or") {
+      // Avec 1-2 cartes et un bon score
+      if (myCardCount <= 2 && estimatedScore <= 5) {
+        return true;
+      }
+      // Avantage significatif
+      if (hasSignificantCardAdvantage && hasScoreAdvantage && estimatedScore <= 8) {
+        return true;
+      }
+      // Score très bas
+      if (estimatedScore <= 3 && myCardCount <= 3) {
+        return true;
+      }
+      // Phase endgame
+      if (phase == BotGamePhase.endgame && estimatedScore <= 5 && hasCardAdvantage) {
+        return true;
+      }
+    }
+    
+    // Bonus de pression (tournoi, audace, confiance)
+    double totalBonus = audacityBonus + confidence * 2 + tournamentPressure;
+    if (totalBonus >= 3 && estimatedScore <= 8) {
+      return true;
+    }
+    
+    return false;
   }
   
   static double _calculateAudacity(GameState gs, Player bot, BotDifficulty difficulty) {
@@ -286,29 +332,35 @@ class BotAI {
     
     bool isBadDraw = false;
 
-    if (phase == BotGamePhase.exploration) {
-      
-      List<int> unknownIndices = [];
-      for (int i = 0; i < bot.hand.length; i++) {
-        if (i >= bot.mentalMap.length || bot.mentalMap[i] == null) {
-          unknownIndices.add(i);
-        }
-      }
-
-      if (unknownIndices.isNotEmpty) {
-        replaceIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
-        
-        bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
-        if (!confused) {
-          bot.updateMentalMap(replaceIdx, drawn);
-        }
-        
-        GameLogic.replaceCard(gs, replaceIdx);
-        return;
-      } else {
-        // Tomber sur la logique d'optimization
+    // EXPLORATION : Tous les bots (surtout Or/Platine) veulent connaître toutes leurs cartes
+    // Ils remplacent une carte inconnue même par une grosse carte pour la découvrir
+    // Car grâce à la défausse collective, ils pourront s'en débarrasser ensuite
+    List<int> unknownIndices = [];
+    for (int i = 0; i < bot.hand.length; i++) {
+      if (i >= bot.mentalMap.length || bot.mentalMap[i] == null) {
+        unknownIndices.add(i);
       }
     }
+    
+    // Or/Platine : TOUJOURS remplacer une carte inconnue pour la découvrir
+    // Argent : 80% de chance, Bronze : 50% de chance
+    double exploreChance = difficulty.name == "Platine" ? 1.0 :
+                          difficulty.name == "Or" ? 1.0 :
+                          difficulty.name == "Argent" ? 0.80 : 0.50;
+    
+    if (unknownIndices.isNotEmpty && _random.nextDouble() < exploreChance) {
+      replaceIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
+      
+      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+      if (!confused) {
+        bot.updateMentalMap(replaceIdx, drawn);
+      }
+      
+      GameLogic.replaceCard(gs, replaceIdx);
+      return;
+    }
+    
+    // Si on n'explore pas, continuer avec la logique d'optimization
 
     
     int keepThreshold = difficulty.keepCardThreshold;
@@ -317,10 +369,14 @@ class BotAI {
     BotBehavior? behavior = bot.botBehavior;
     switch (behavior) {
       case BotBehavior.fast:
-        keepThreshold = 5;
+        // FAST veut réduire ses cartes rapidement : accepte des cartes jusqu'à 8-10 points
+        // pour remplacer plus souvent et avoir plus de chances de matcher
+        keepThreshold = difficulty.name == "Platine" ? 8 :
+                       difficulty.name == "Or" ? 9 :
+                       difficulty.name == "Argent" ? 10 : 10;
         break;
       case BotBehavior.aggressive:
-        keepThreshold += 1;
+        keepThreshold += 2; // Plus agressif aussi
         break;
       case BotBehavior.balanced:
         if (phase == BotGamePhase.endgame) {
@@ -401,8 +457,9 @@ class BotAI {
       matchChance += 0.10;
     }
     
-    if (bot.botBehavior == BotBehavior.fast && phase == BotGamePhase.endgame) {
-      matchChance = 1.0; // 100% de chance en endgame
+    // FAST veut toujours matcher pour réduire ses cartes
+    if (bot.botBehavior == BotBehavior.fast) {
+      matchChance = 1.0; // 100% de chance de tenter un match
     }
     else if (bot.botBehavior == BotBehavior.balanced && phase == BotGamePhase.endgame) {
       matchChance = (matchChance + 1.0) / 2; // Moyenne entre base et 100%
@@ -662,6 +719,12 @@ class BotAI {
 
     BotBehavior? behavior = bot.botBehavior;
 
+    // CONTRE-ATTAQUE : Si quelqu'un est proche de gagner, le cibler en priorité
+    Player? counterTarget = _getCounterAttackTarget(gs, bot, difficulty);
+    if (counterTarget != null) {
+      return counterTarget;
+    }
+
     // Bronze : random
     if (difficulty.name == "Bronze") {
       if (_random.nextDouble() < 0.25) {
@@ -678,13 +741,14 @@ class BotAI {
     if (behavior == BotBehavior.aggressive) {
       Player? human = opponents.where((p) => p.isHuman).firstOrNull;
       if (human != null) {
+        // Ciblage stratégique mais pas systématique pour éviter la frustration
         double humanBias;
         if (difficulty.name == "Platine") {
-          humanBias = 0.85;
+          humanBias = 0.75; // Cible souvent l'humain mais pas toujours
         } else if (difficulty.name == "Or") {
-          humanBias = 0.75;
+          humanBias = 0.65;
         } else if (difficulty.name == "Argent") {
-          humanBias = 0.55;
+          humanBias = 0.50;
         } else {
           humanBias = 0.35;
         }
@@ -694,7 +758,7 @@ class BotAI {
       }
       
       List<Player> lowCardTargets = opponents.where((p) => p.hand.length <= 3).toList();
-      if (lowCardTargets.isNotEmpty && _random.nextDouble() < 0.80) {
+      if (lowCardTargets.isNotEmpty && _random.nextDouble() < 0.70) {
         return lowCardTargets[_random.nextInt(lowCardTargets.length)];
       }
       return _selectValetTargetWeighted(opponents, difficulty, gs);
@@ -709,21 +773,16 @@ class BotAI {
         return opponents[_random.nextInt(opponents.length)];
       }
       
-      // Or/Platine : HYBRIDE intelligent
-      if (_random.nextDouble() < 0.35) {
-        opponents.sort((a, b) => b.hand.length.compareTo(a.hand.length));
-        return opponents.first;
-      } else {
-        Player? human = opponents.where((p) => p.isHuman).firstOrNull;
-        if (human != null) {
-          double humanBias = difficulty.name == "Platine" ? 0.75 : 0.65;
-          if (_random.nextDouble() < humanBias) {
-            return human;
-          }
+      // Or/Platine : Ciblage stratégique de l'humain mais avec variabilité
+      Player? human = opponents.where((p) => p.isHuman).firstOrNull;
+      if (human != null) {
+        double humanBias = difficulty.name == "Platine" ? 0.70 : 0.60;
+        if (_random.nextDouble() < humanBias) {
+          return human;
         }
-        // Ou cible weighted
-        return _selectValetTargetWeighted(opponents, difficulty, gs);
       }
+      // Sinon cible weighted (peut cibler un autre bot dangereux)
+      return _selectValetTargetWeighted(opponents, difficulty, gs);
     }
 
     // Fallback
@@ -779,8 +838,20 @@ class BotAI {
   static Player _selectValetTargetWeighted(List<Player> opponents, BotDifficulty difficulty, GameState? gameState) {
     Map<Player, double> threatScores = {};
     
+    // ANALYSE DES DÉFAUSSES : Or/Platine utilisent l'analyse avancée
+    Map<String, double> discardAnalysis = {};
+    if (gameState != null && (difficulty.name == "Or" || difficulty.name == "Platine")) {
+      // Créer un bot fictif pour l'analyse (on utilise le premier opponent comme référence)
+      discardAnalysis = _analyzeDiscardPatterns(gameState, opponents.first, difficulty);
+    }
+    
     for (var player in opponents) {
       double score = 0.0;
+      
+      // Ajouter le score d'analyse des défausses si disponible
+      if (discardAnalysis.containsKey(player.id)) {
+        score += discardAnalysis[player.id]!;
+      }
       
       if (player.isHuman) {
         if (difficulty.name == "Platine") {
@@ -884,15 +955,16 @@ class BotAI {
       Player? human = possibleTargets.where((p) => p.isHuman).firstOrNull;
       
       if (human != null) {
+        // Ciblage stratégique mais pas systématique
         double humanBias;
         if (difficulty.name == "Platine") {
-          humanBias = 0.85;
+          humanBias = 0.80; // Cible souvent l'humain mais le laisse respirer
         } else if (difficulty.name == "Or") {
-          humanBias = 0.75;
+          humanBias = 0.70;
         } else if (difficulty.name == "Argent") {
           humanBias = 0.55;
         } else {
-          humanBias = 0.35;
+          humanBias = 0.40;
         }
         if (_random.nextDouble() < humanBias) {
           target = human;
@@ -920,21 +992,16 @@ class BotAI {
           target = _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         }
       }
-      // Or/Platine : HYBRIDE intelligent
+      // Or/Platine : Ciblage stratégique mais avec variabilité
       else {
-        if (_random.nextDouble() < 0.35) {
-          possibleTargets.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
-          target = possibleTargets.first;
-        } else {
-          Player? human = possibleTargets.where((p) => p.isHuman).firstOrNull;
-          if (human != null) {
-            double humanBias = difficulty.name == "Platine" ? 0.80 : 0.70;
-            if (_random.nextDouble() < humanBias) {
-              target = human;
-            }
+        Player? human = possibleTargets.where((p) => p.isHuman).firstOrNull;
+        if (human != null) {
+          double humanBias = difficulty.name == "Platine" ? 0.75 : 0.65;
+          if (_random.nextDouble() < humanBias) {
+            target = human;
           }
-          target ??= _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
         }
+        target ??= _selectJokerTargetWeighted(possibleTargets, difficulty, gs);
       }
     }
     // Fallback
@@ -1114,12 +1181,163 @@ class BotAI {
     }
   }
 
-  static bool _isHumanThreatening(GameState gs) {
+  // ========== NOUVELLES FONCTIONNALITÉS AVANCÉES ==========
+
+  /// Détecte le joueur le plus menaçant (proche de gagner)
+  static Player? _getMostThreateningPlayer(GameState gs, Player bot) {
+    Player? mostThreatening;
+    int lowestCards = 99;
+    int lowestScore = 999;
+    
+    for (var p in gs.players) {
+      if (p.id == bot.id) continue;
+      
+      // Priorité : moins de cartes = plus menaçant
+      if (p.hand.length < lowestCards || 
+          (p.hand.length == lowestCards && p.getEstimatedScore() < lowestScore)) {
+        lowestCards = p.hand.length;
+        lowestScore = p.getEstimatedScore();
+        mostThreatening = p;
+      }
+    }
+    
+    // Retourner seulement si vraiment menaçant (3 cartes ou moins)
+    if (mostThreatening != null && lowestCards <= 3) {
+      return mostThreatening;
+    }
+    return null;
+  }
+
+  /// Vérifie si le bot devrait contre-attaquer (cibler le joueur menaçant)
+  static bool _shouldCounterAttack(GameState gs, Player bot, BotDifficulty difficulty) {
+    Player? threat = _getMostThreateningPlayer(gs, bot);
+    if (threat == null) return false;
+    
+    // Plus le bot est intelligent, plus il contre-attaque
+    double counterChance = difficulty.name == "Platine" ? 0.90 :
+                          difficulty.name == "Or" ? 0.80 :
+                          difficulty.name == "Argent" ? 0.60 : 0.30;
+    
+    // Si l'humain est menaçant, augmenter la chance
+    if (threat.isHuman) {
+      counterChance += 0.10;
+    }
+    
+    return _random.nextDouble() < counterChance;
+  }
+
+  /// Analyse les défausses récentes pour estimer les mains adverses
+  /// Retourne un score de "danger" pour chaque joueur
+  static Map<String, double> _analyzeDiscardPatterns(GameState gs, Player bot, BotDifficulty difficulty) {
+    Map<String, double> dangerScores = {};
+    
+    // Seulement Or/Platine font cette analyse
+    if (difficulty.name != "Or" && difficulty.name != "Platine") {
+      return dangerScores;
+    }
+    
+    // Analyser les dernières cartes défaussées (si disponible dans l'historique)
+    // Plus un joueur défausse des grosses cartes, plus sa main est probablement bonne
+    for (var p in gs.players) {
+      if (p.id == bot.id) continue;
+      
+      double danger = 0.0;
+      
+      // Moins de cartes = plus dangereux
+      danger += (5 - p.hand.length) * 15.0;
+      
+      // Score estimé bas = dangereux
+      int estimatedScore = p.getEstimatedScore();
+      if (estimatedScore <= 5) {
+        danger += 40.0;
+      } else if (estimatedScore <= 10) {
+        danger += 25.0;
+      } else if (estimatedScore <= 15) {
+        danger += 10.0;
+      }
+      
+      // Humain = toujours un peu plus dangereux (imprévisible)
+      if (p.isHuman) {
+        danger += 20.0;
+      }
+      
+      dangerScores[p.id] = danger;
+    }
+    
+    return dangerScores;
+  }
+
+  /// Détermine si les bots devraient coordonner une attaque contre l'humain
+  static bool _shouldCoordinateAttack(GameState gs, Player bot, BotDifficulty difficulty) {
+    // Seulement Or/Platine coordonnent
+    if (difficulty.name != "Or" && difficulty.name != "Platine") {
+      return false;
+    }
+    
+    // Trouver l'humain
+    Player? human;
     try {
-      Player human = gs.players.firstWhere((p) => p.isHuman);
-      return human.hand.length <= 3;
+      human = gs.players.firstWhere((p) => p.isHuman);
     } catch (e) {
       return false;
     }
+    
+    // Si l'humain est proche de gagner, coordonner
+    if (human.hand.length <= 3) {
+      double coordChance = difficulty.name == "Platine" ? 0.85 : 0.70;
+      return _random.nextDouble() < coordChance;
+    }
+    
+    // Si l'humain a un bon score estimé
+    if (human.getEstimatedScore() <= 8) {
+      double coordChance = difficulty.name == "Platine" ? 0.70 : 0.55;
+      return _random.nextDouble() < coordChance;
+    }
+    
+    return false;
   }
+
+  /// Simule un "bluff" : le bot fait semblant de vouloir Dutch
+  /// En réduisant rapidement ses cartes puis en changeant de stratégie
+  static bool _isBluffingDutch(Player bot, BotDifficulty difficulty, BotGamePhase phase) {
+    // Seulement Platine bluffe, et seulement en phase optimization
+    if (difficulty.name != "Platine" || phase != BotGamePhase.optimization) {
+      return false;
+    }
+    
+    // 20% de chance de bluffer si le bot a 3-4 cartes
+    if (bot.hand.length >= 3 && bot.hand.length <= 4) {
+      return _random.nextDouble() < 0.20;
+    }
+    
+    return false;
+  }
+
+  /// Cible prioritaire pour contre-attaque avec Valet
+  static Player? _getCounterAttackTarget(GameState gs, Player bot, BotDifficulty difficulty) {
+    if (!_shouldCounterAttack(gs, bot, difficulty)) {
+      return null;
+    }
+    
+    Player? threat = _getMostThreateningPlayer(gs, bot);
+    
+    // Si coordination activée et l'humain n'est pas la menace principale,
+    // cibler quand même l'humain parfois
+    if (_shouldCoordinateAttack(gs, bot, difficulty)) {
+      try {
+        Player human = gs.players.firstWhere((p) => p.isHuman);
+        if (threat == null || !threat.isHuman) {
+          // 60% de chance de cibler l'humain même s'il n'est pas la menace principale
+          if (_random.nextDouble() < 0.60) {
+            return human;
+          }
+        }
+      } catch (e) {
+        // Pas d'humain
+      }
+    }
+    
+    return threat;
+  }
+
 }

@@ -21,46 +21,46 @@ class BotDifficulty {
 
   static const BotDifficulty bronze = BotDifficulty(
     name: "Bronze",
-    forgetChancePerTurn: 0.18,
-    confusionOnSwap: 0.30,
-    dutchThreshold: 10,
-    reactionSpeed: 0.55,
-    matchAccuracy: 0.75,
-    reactionMatchChance: 0.35,
-    keepCardThreshold: 7,
+    forgetChancePerTurn: 0.08,      // Oublie moins souvent
+    confusionOnSwap: 0.15,          // Se trompe moins
+    dutchThreshold: 6,              // Dutch plus agressif
+    reactionSpeed: 0.75,            // Réaction correcte
+    matchAccuracy: 0.88,            // Bonne précision
+    reactionMatchChance: 0.60,      // Réagit souvent
+    keepCardThreshold: 5,           // Garde les bonnes cartes
   );
 
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
-    forgetChancePerTurn: 0.08,
-    confusionOnSwap: 0.12,
-    dutchThreshold: 6,
-    reactionSpeed: 0.75,
-    matchAccuracy: 0.85,
-    reactionMatchChance: 0.55,
-    keepCardThreshold: 6,
+    forgetChancePerTurn: 0.02,     // Oublie très rarement
+    confusionOnSwap: 0.03,         // Se trompe très rarement
+    dutchThreshold: 3,             // Dutch agressif
+    reactionSpeed: 0.95,           // Réaction très rapide
+    matchAccuracy: 0.98,           // Excellente précision
+    reactionMatchChance: 0.90,     // Réagit presque toujours
+    keepCardThreshold: 3,          // N'accepte que les bonnes cartes
   );
 
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
-    forgetChancePerTurn: 0.01,
-    confusionOnSwap: 0.01,
-    dutchThreshold: 3,
-    reactionSpeed: 0.96,
-    matchAccuracy: 0.97,
-    reactionMatchChance: 0.9,
-    keepCardThreshold: 3,
+    forgetChancePerTurn: 0.0,       // N'oublie jamais
+    confusionOnSwap: 0.0,           // Ne se trompe jamais
+    dutchThreshold: 2,              // Dutch plus agressif
+    reactionSpeed: 1.0,             // Réaction instantanée
+    matchAccuracy: 1.0,             // Précision parfaite
+    reactionMatchChance: 1.0,       // Réagit TOUJOURS
+    keepCardThreshold: 2,           // N'accepte que les très bonnes cartes
   );
 
   static const BotDifficulty platinum = BotDifficulty(
     name: "Platine",
     forgetChancePerTurn: 0.0,      // N'oublie JAMAIS
     confusionOnSwap: 0.0,          // Ne se trompe JAMAIS sur les échanges
-    dutchThreshold: 1,             // Dutch très agressif à 1 point
+    dutchThreshold: 0,             // Dutch ultra agressif à 0 point seulement
     reactionSpeed: 1.0,            // Réaction instantanée
     matchAccuracy: 1.0,            // Précision parfaite
     reactionMatchChance: 1.0,      // Réagit TOUJOURS s'il peut matcher
-    keepCardThreshold: 1,          // N'accepte que les cartes 0-1 points
+    keepCardThreshold: 0,          // N'accepte que les cartes 0 points (Roi)
   );
 
   static BotDifficulty fromMMR(int mmr) {

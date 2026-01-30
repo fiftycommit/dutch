@@ -227,10 +227,13 @@ export class BotLearningService {
    */
   private adjustParameters(profile: BotProfile, record: BotGameRecord): Record<string, any> {
     const params = { ...profile.learnedParameters };
-    const baseLearningRate = 0.05;
+    // Learning rate plus agressif pour adaptation rapide (toutes les 1-2 parties)
+    const baseLearningRate = 0.15;
     
-    // Taux d'apprentissage adaptatif basé sur le nombre de parties
-    const adaptiveLR = baseLearningRate / Math.sqrt(1 + profile.totalGames / 100);
+    // Taux d'apprentissage adaptatif - reste élevé plus longtemps
+    // Après 10 parties: 0.15 / sqrt(1.5) = 0.12
+    // Après 50 parties: 0.15 / sqrt(2) = 0.10
+    const adaptiveLR = baseLearningRate / Math.sqrt(1 + profile.totalGames / 20);
     
     // Calculer le gradient pour chaque paramètre
     const gradients = this.calculateParameterGradients(profile, record);
@@ -253,11 +256,11 @@ export class BotLearningService {
       }
     }
     
-    // Ajustements spécifiques basés sur les résultats
+    // Ajustements spécifiques basés sur les résultats - plus agressifs
     if (record.calledDutch && record.wonDutch) {
-      params.dutchThreshold = Math.max(5, params.dutchThreshold - 0.5);
+      params.dutchThreshold = Math.max(5, params.dutchThreshold - 1.5); // Plus rapide
     } else if (record.calledDutch && !record.wonDutch) {
-      params.dutchThreshold = Math.min(30, params.dutchThreshold + 1);
+      params.dutchThreshold = Math.min(30, params.dutchThreshold + 2.5); // Plus rapide
     }
     
     return params;
@@ -281,41 +284,41 @@ export class BotLearningService {
     const targetScore = 0.7; // Objectif de performance
     const error = performanceScore - targetScore;
     
-    // Gradient pour l'agressivité
+    // Gradient pour l'agressivité - PLUS AGRESSIF (x2)
     if (record.finalScore > 20) {
-      gradients.aggressiveness = error * 0.5; // Trop agressif si score élevé
+      gradients.aggressiveness = error * 1.0; // Trop agressif si score élevé
     } else {
-      gradients.aggressiveness = -error * 0.5; // Pas assez agressif si bon score
+      gradients.aggressiveness = -error * 1.0; // Pas assez agressif si bon score
     }
     
     // Gradient pour la prudence (inverse de l'agressivité)
     gradients.caution = -gradients.aggressiveness;
     
-    // Gradient pour le seuil Dutch
+    // Gradient pour le seuil Dutch - PLUS RAPIDE (x2)
     if (record.calledDutch) {
       if (record.wonDutch) {
-        gradients.dutchThreshold = -1; // Réduire le seuil si Dutch réussi
+        gradients.dutchThreshold = -2; // Réduire le seuil si Dutch réussi
       } else {
-        gradients.dutchThreshold = 2; // Augmenter si Dutch raté
+        gradients.dutchThreshold = 4; // Augmenter si Dutch raté
       }
     } else if (record.finalRank > 2) {
-      gradients.dutchThreshold = -0.5; // Aurait dû appeler Dutch plus tôt
+      gradients.dutchThreshold = -1; // Aurait dû appeler Dutch plus tôt
     }
     
-    // Gradient pour l'utilisation des pouvoirs
+    // Gradient pour l'utilisation des pouvoirs - PLUS AGRESSIF
     const powerEfficiency = record.powerUsesCount > 0 ? 
       (record.goodDecisions / Math.max(1, record.powerUsesCount)) : 0.5;
-    gradients.powerUsageRate = (powerEfficiency - 0.5) * error;
+    gradients.powerUsageRate = (powerEfficiency - 0.5) * error * 2;
     
-    // Gradient pour la tolérance au risque
+    // Gradient pour la tolérance au risque - PLUS RAPIDE
     if (record.badDecisions > record.goodDecisions) {
-      gradients.riskTolerance = 0.3; // Réduire la prise de risque
+      gradients.riskTolerance = 0.6; // Réduire la prise de risque
     } else {
-      gradients.riskTolerance = -0.2; // Augmenter légèrement
+      gradients.riskTolerance = -0.4; // Augmenter
     }
     
     // Gradient pour la précision de mémorisation (toujours améliorer)
-    gradients.memoryAccuracy = -0.1 * error;
+    gradients.memoryAccuracy = -0.2 * error;
     
     return gradients;
   }
