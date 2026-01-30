@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
 import { RoomManager } from './services/RoomManager';
 import { setupConnectionHandler } from './handlers/connectionHandler';
 import { setupRoomHandler } from './handlers/roomHandler';
@@ -201,7 +202,11 @@ export function startServer() {
 
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
-    res.sendFile('bot-dashboard.html', { root: './public' });
+    res.sendFile(path.join(__dirname, '../public/bot-stats.html'));
+  });
+
+  app.get('/shuffle-analysis', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/shuffle-analysis.html'));
   });
 
   // Dashboard profil joueur (SBMM)

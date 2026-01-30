@@ -520,4 +520,15 @@ router.get('/adaptive/recommend/:playerId', async (req: Request, res: Response) 
   }
 });
 
+// Route pour analyser les patterns de mélange
+router.get('/shuffle-stats', async (req, res) => {
+  try {
+    const stats = await botLearningService.getShuffleStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('❌ Erreur récupération stats mélange:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 export default router;

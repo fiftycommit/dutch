@@ -8,6 +8,7 @@ const express_1 = __importDefault(require("express"));
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
+const path_1 = __importDefault(require("path"));
 const RoomManager_1 = require("./services/RoomManager");
 const connectionHandler_1 = require("./handlers/connectionHandler");
 const roomHandler_1 = require("./handlers/roomHandler");
@@ -190,7 +191,10 @@ function startServer() {
     app.use('/api/player-learning', playerLearningRoutes_1.default);
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
-        res.sendFile('bot-dashboard.html', { root: './public' });
+        res.sendFile(path_1.default.join(__dirname, '../public/bot-stats.html'));
+    });
+    app.get('/shuffle-analysis', (req, res) => {
+        res.sendFile(path_1.default.join(__dirname, '../public/shuffle-analysis.html'));
     });
     // Dashboard profil joueur (SBMM)
     app.get('/player-profile', (req, res) => {

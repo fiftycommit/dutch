@@ -548,6 +548,122 @@ export class BotLearningService {
   }
 
   /**
+   * Analyse les patterns de mélange pour identifier parties faciles vs coriaces
+   */
+  async getShuffleStats(): Promise<any> {
+    try {
+      const gamesDir = path.join(this.dataDir, 'games');
+      const files = await fs.readdir(gamesDir);
+      
+      const gamesWithShuffle = [];
+      
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        
+        try {
+          const filepath = path.join(gamesDir, file);
+          const data = await fs.readFile(filepath, 'utf-8');
+          const game: BotGameRecord = JSON.parse(data);
+          
+          // Ne garder que les parties avec données de mélange
+          if (game.initialDeck && game.turnsBeforeDutch !== undefined) {
+            gamesWithShuffle.push(game);
+          }
+        } catch (error) {
+          // Ignorer les fichiers corrompus
+        }
+      }
+      
+      if (gamesWithShuffle.length === 0) {
+        return {
+          totalGames: 0,
+          avgTurnsBeforeDutch: 0,
+          avgDiscardsPerTurn: 0,
+          fastGamesPercent: 0,
+          durationDistribution: [0, 0, 0, 0, 0, 0],
+          correlationData: [],
+          deckDistribution: [0, 0, 0, 0, 0],
+          recentGames: [],
+        };
+      }
+      
+      // Calculer les stats
+      let totalTurns = 0;
+      let totalDiscards = 0;
+      let fastGames = 0;
+      const durationDistribution = [0, 0, 0, 0, 0, 0]; // <10, 10-15, 15-20, 20-25, 25-30, >30
+      const correlationData: Array<{x: number, y: number}> = [];
+      const deckDistribution = [0, 0, 0, 0, 0]; // 0-2, 3-5, 6-8, 9-10, >10
+      
+      for (const game of gamesWithShuffle) {
+        const turns = game.turnsBeforeDutch || 0;
+        totalTurns += turns;
+        
+        // Distribution durée
+        if (turns < 10) durationDistribution[0]++;
+        else if (turns < 15) durationDistribution[1]++;
+        else if (turns < 20) durationDistribution[2]++;
+        else if (turns < 25) durationDistribution[3]++;
+        else if (turns < 30) durationDistribution[4]++;
+        else durationDistribution[5]++;
+        
+        if (turns < 15) fastGames++;
+        
+        // Défausses
+        const discards = (game.discardsPerRound || []).reduce((a: number, b: number) => a + b, 0);
+        totalDiscards += discards;
+        const discardsPerTurn = turns > 0 ? discards / turns : 0;
+        
+        // Corrélation
+        correlationData.push({ x: discardsPerTurn, y: turns });
+        
+        // Distribution deck
+        if (game.initialDeck) {
+          for (const card of game.initialDeck) {
+            const points = card.points || 0;
+            if (points <= 2) deckDistribution[0]++;
+            else if (points <= 5) deckDistribution[1]++;
+            else if (points <= 8) deckDistribution[2]++;
+            else if (points <= 10) deckDistribution[3]++;
+            else deckDistribution[4]++;
+          }
+        }
+      }
+      
+      // Normaliser distribution deck (moyenne par partie)
+      for (let i = 0; i < deckDistribution.length; i++) {
+        deckDistribution[i] = deckDistribution[i] / gamesWithShuffle.length;
+      }
+      
+      // Parties récentes (10 dernières)
+      const recentGames = gamesWithShuffle
+        .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+        .slice(0, 10)
+        .map(g => ({
+          botName: g.botName,
+          turnsBeforeDutch: g.turnsBeforeDutch,
+          totalDiscards: (g.discardsPerRound || []).reduce((a: number, b: number) => a + b, 0),
+          finalRank: g.finalRank,
+          startTime: g.startTime,
+        }));
+      
+      return {
+        totalGames: gamesWithShuffle.length,
+        avgTurnsBeforeDutch: totalTurns / gamesWithShuffle.length,
+        avgDiscardsPerTurn: totalDiscards / totalTurns,
+        fastGamesPercent: fastGames / gamesWithShuffle.length,
+        durationDistribution,
+        correlationData,
+        deckDistribution,
+        recentGames,
+      };
+    } catch (error) {
+      console.error('❌ Erreur analyse shuffle stats:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Met à jour le leaderboard après une partie
    */
   async updateLeaderboardAfterGame(record: BotGameRecord, profile: BotProfile) {

@@ -22,6 +22,10 @@ export interface BotGameRecord {
   humanFinalHandSize?: number;
   botFinalHandSize?: number;
   pBeatHuman?: number;
+  initialDeck?: Array<{suit: string; value: string; points: number; playerId?: string; location?: string}>;
+  turnsBeforeDutch?: number;
+  discardsPerRound?: number[];
+  triageDecisions?: Array<Record<string, any>>;
   actions: BotAction[];
   initialHandSize: number;
   finalScore: number;
