@@ -234,6 +234,10 @@
                   <div class="bot-stat-label">Victoires</div>
                 </div>
                 <div class="bot-stat">
+                  <div class="bot-stat-value">${(((typeof bot.avgPBeatHuman === 'number' ? bot.avgPBeatHuman : 0.5)) * 100).toFixed(0)}%</div>
+                  <div class="bot-stat-label">Vs humain</div>
+                </div>
+                <div class="bot-stat">
                   <div class="bot-stat-value">${bot.avgScore.toFixed(1)}</div>
                   <div class="bot-stat-label">Score Moy.</div>
                 </div>
@@ -256,12 +260,12 @@
               <div class="bot-info">
                 <div class="bot-details">
                   <div class="bot-name">${game.botName}</div>
-                  <div class="bot-meta">${date} • ${game.gameMode} • ${game.numberOfPlayers} joueurs</div>
+                  <div class="bot-meta">${date} • ${game.gameMode} • ${game.numberOfPlayers} joueurs${typeof game.pBeatHuman === 'number' ? ` • Vs humain ${(game.pBeatHuman * 100).toFixed(0)}%` : ''}</div>
                 </div>
               </div>
               <div class="bot-stats">
                 <div class="bot-stat">
-                  <div class="bot-stat-value">${game.finalRank}/${game.numberOfPlayers}</div>
+                  <div class="bot-stat-value">#${game.finalRank}</div>
                   <div class="bot-stat-label">Rang</div>
                 </div>
                 <div class="bot-stat">

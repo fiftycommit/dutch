@@ -46,6 +46,12 @@ class BotGameRecord {
   final int numberOfPlayers;
   final String gameMode; // 'quick', 'tournament'
   final bool usedSBMM;
+
+  // Contexte humain (pour estimer la "chance de battre l'humain")
+  final int? humanFinalScore;
+  final int? humanFinalHandSize;
+  final int? botFinalHandSize;
+  final double? pBeatHuman;
   
   // Données de la partie
   final List<BotAction> actions;
@@ -78,6 +84,10 @@ class BotGameRecord {
     required this.numberOfPlayers,
     required this.gameMode,
     required this.usedSBMM,
+    this.humanFinalScore,
+    this.humanFinalHandSize,
+    this.botFinalHandSize,
+    this.pBeatHuman,
     required this.actions,
     required this.initialHandSize,
     required this.finalScore,
@@ -105,6 +115,10 @@ class BotGameRecord {
         'numberOfPlayers': numberOfPlayers,
         'gameMode': gameMode,
         'usedSBMM': usedSBMM,
+        'humanFinalScore': humanFinalScore,
+        'humanFinalHandSize': humanFinalHandSize,
+        'botFinalHandSize': botFinalHandSize,
+        'pBeatHuman': pBeatHuman,
         'actions': actions.map((a) => a.toJson()).toList(),
         'initialHandSize': initialHandSize,
         'finalScore': finalScore,
@@ -132,6 +146,10 @@ class BotGameRecord {
         numberOfPlayers: json['numberOfPlayers'],
         gameMode: json['gameMode'],
         usedSBMM: json['usedSBMM'],
+        humanFinalScore: json['humanFinalScore'],
+        humanFinalHandSize: json['humanFinalHandSize'],
+        botFinalHandSize: json['botFinalHandSize'],
+        pBeatHuman: (json['pBeatHuman'] is num) ? (json['pBeatHuman'] as num).toDouble() : null,
         actions: (json['actions'] as List).map((a) => BotAction.fromJson(a)).toList(),
         initialHandSize: json['initialHandSize'],
         finalScore: json['finalScore'],

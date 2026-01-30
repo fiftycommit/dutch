@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/bot_learning_data.dart';
@@ -112,6 +113,9 @@ class BotLearningService {
     required bool wonDutch,
     required int cardsAtDutch,
     required int scoreAtDutch,
+    required int humanFinalScore,
+    required int humanFinalHandSize,
+    required int botFinalHandSize,
   }) async {
     if (!_activeGames.containsKey(botPlayerId)) return;
     
@@ -146,6 +150,14 @@ class BotLearningService {
         }
       }
     }
+
+    double sigmoid(double x) => 1.0 / (1.0 + exp(-x));
+
+    // Heuristique simple (fin de partie): avantage score + avantage "moins de cartes"
+    final scoreAdv = (humanFinalScore - finalScore).toDouble();
+    final cardsAdv = (humanFinalHandSize - botFinalHandSize).toDouble();
+    final raw = 0.35 * scoreAdv + 0.25 * cardsAdv;
+    final pBeatHuman = sigmoid(raw).clamp(0.01, 0.99);
     
     final completedRecord = BotGameRecord(
       gameId: record.gameId,
@@ -158,6 +170,10 @@ class BotLearningService {
       numberOfPlayers: record.numberOfPlayers,
       gameMode: record.gameMode,
       usedSBMM: record.usedSBMM,
+      humanFinalScore: humanFinalScore,
+      humanFinalHandSize: humanFinalHandSize,
+      botFinalHandSize: botFinalHandSize,
+      pBeatHuman: pBeatHuman,
       actions: actions,
       initialHandSize: record.initialHandSize,
       finalScore: finalScore,

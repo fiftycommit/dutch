@@ -18,6 +18,10 @@ export interface BotGameRecord {
   numberOfPlayers: number;
   gameMode: string;
   usedSBMM: boolean;
+  humanFinalScore?: number;
+  humanFinalHandSize?: number;
+  botFinalHandSize?: number;
+  pBeatHuman?: number;
   actions: BotAction[];
   initialHandSize: number;
   finalScore: number;
@@ -47,6 +51,7 @@ export interface BotProfile {
   winRate: number;
   avgScore: number;
   avgRank: number;
+  avgPBeatHuman?: number;
   totalDutchCalls: number;
   successfulDutchCalls: number;
   mmr: number;

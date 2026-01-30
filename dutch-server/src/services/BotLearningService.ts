@@ -90,6 +90,7 @@ export class BotLearningService {
           winRate: 0,
           avgScore: 0,
           avgRank: 0,
+          avgPBeatHuman: 0.5,
           totalDutchCalls: 0,
           successfulDutchCalls: 0,
           mmr: this.getInitialMMR(record.botSkillLevel),
@@ -116,6 +117,11 @@ export class BotLearningService {
       profile.winRate = profile.wins / profile.totalGames;
       profile.avgScore = (profile.avgScore * (profile.totalGames - 1) + record.finalScore) / profile.totalGames;
       profile.avgRank = (profile.avgRank * (profile.totalGames - 1) + record.finalRank) / profile.totalGames;
+
+      if (typeof record.pBeatHuman === 'number') {
+        const prev = typeof profile.avgPBeatHuman === 'number' ? profile.avgPBeatHuman : 0.5;
+        profile.avgPBeatHuman = (prev * (profile.totalGames - 1) + record.pBeatHuman) / profile.totalGames;
+      }
       
       if (record.calledDutch) {
         profile.totalDutchCalls++;

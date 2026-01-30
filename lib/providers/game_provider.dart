@@ -1203,6 +1203,10 @@ class GameProvider with ChangeNotifier {
     final players = List<Player>.from(_gameState!.players);
     players.sort((a, b) => a.calculateScore().compareTo(b.calculateScore()));
     
+    final human = _gameState!.players.firstWhere((p) => p.isHuman);
+    final humanFinalScore = _gameState!.getFinalScore(human);
+    final humanFinalHandSize = human.hand.length;
+
     for (var player in _gameState!.players) {
       if (player.isHuman) continue;
       
@@ -1218,6 +1222,9 @@ class GameProvider with ChangeNotifier {
         wonDutch: wonDutch,
         cardsAtDutch: calledDutch ? player.hand.length : 0,
         scoreAtDutch: calledDutch ? player.calculateScore() : 0,
+        humanFinalScore: humanFinalScore,
+        humanFinalHandSize: humanFinalHandSize,
+        botFinalHandSize: player.hand.length,
       );
     }
   }
