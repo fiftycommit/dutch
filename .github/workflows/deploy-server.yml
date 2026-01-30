@@ -79,8 +79,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/apps/dutch-server
-            npm install --production
+            npm install
             npm run build
+            npm prune --production
 
             # Sync runtime artifacts to the directory used by PM2 (/var/www/dutch-server)
             mkdir -p /var/www/dutch-server
