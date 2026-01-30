@@ -13,7 +13,7 @@ export function setupPublicRoomHandlers(socket: Socket, rooms: Map<string, any>)
   /**
    * Récupérer la liste des rooms publiques disponibles
    */
-  socket.on('rooms:getPublic', (callback) => {
+  socket.on('rooms:getPublic', (data, callback) => {
     try {
       const availableRooms = publicRoomService.getAvailableRooms();
       

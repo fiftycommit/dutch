@@ -658,33 +658,44 @@ class MultiplayerService {
 
     debugPrint('🔍 Récupération des rooms publiques...');
 
-    _socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
-      if (completer.isCompleted) return;
-      
-      debugPrint('📦 Réponse reçue: $response');
-      
-      if (response == null) {
-        debugPrint('❌ Pas de réponse du serveur');
-        completer.complete([]);
-        return;
-      }
+    try {
+      _socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
+        debugPrint('📦 Callback appelé avec: $response');
+        
+        if (completer.isCompleted) {
+          debugPrint('⚠️ Completer déjà complété');
+          return;
+        }
+        
+        if (response == null) {
+          debugPrint('❌ Pas de réponse du serveur');
+          completer.complete([]);
+          return;
+        }
 
-      if (response is Map && response['success'] == true) {
-        final rooms = response['rooms'] as List<dynamic>?;
-        if (rooms != null) {
-          final publicRooms = rooms
-              .map((r) => r as Map<String, dynamic>)
-              .toList();
-          debugPrint('✅ ${publicRooms.length} rooms publiques trouvées');
-          completer.complete(publicRooms);
+        debugPrint('🔍 Type de réponse: ${response.runtimeType}');
+        
+        if (response is Map && response['success'] == true) {
+          final rooms = response['rooms'] as List<dynamic>?;
+          if (rooms != null) {
+            final publicRooms = rooms
+                .map((r) => r as Map<String, dynamic>)
+                .toList();
+            debugPrint('✅ ${publicRooms.length} rooms publiques trouvées');
+            completer.complete(publicRooms);
+          } else {
+            debugPrint('⚠️ Pas de rooms dans la réponse');
+            completer.complete([]);
+          }
         } else {
+          debugPrint('❌ Erreur récupération rooms: ${response is Map ? response['error'] : 'Format invalide'}');
           completer.complete([]);
         }
-      } else {
-        debugPrint('❌ Erreur récupération rooms: ${response is Map ? response['error'] : 'Format invalide'}');
-        completer.complete([]);
-      }
-    });
+      });
+    } catch (e) {
+      debugPrint('❌ Exception lors de emitWithAck: $e');
+      completer.complete([]);
+    }
 
     // Timeout de 5 secondes
     return completer.future.timeout(

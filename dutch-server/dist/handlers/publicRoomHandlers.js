@@ -17,7 +17,7 @@ function setupPublicRoomHandlers(socket, rooms) {
     /**
      * Récupérer la liste des rooms publiques disponibles
      */
-    socket.on('rooms:getPublic', (callback) => {
+    socket.on('rooms:getPublic', (data, callback) => {
         try {
             const availableRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
             // Formater les rooms pour le client
