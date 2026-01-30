@@ -1,13 +1,19 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
+import { QLearningService } from './QLearningService';
+import { NeuralNetworkService } from './NeuralNetworkService';
 
 export class BotLearningService {
   private dataDir: string;
+  private qLearning: QLearningService;
+  private neuralNet: NeuralNetworkService;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning');
     this.ensureDataDirectory();
+    this.qLearning = new QLearningService();
+    this.neuralNet = new NeuralNetworkService();
   }
 
   private async ensureDataDirectory() {
@@ -32,6 +38,11 @@ export class BotLearningService {
       
       // Mettre à jour le profil du bot
       await this.updateBotProfile(record);
+      
+      // Entraîner les modèles ML
+      await this.qLearning.trainFromGame(record);
+      await this.neuralNet.trainFromGame(record);
+      this.qLearning.decayEpsilon();
       
       console.log(`✅ Partie bot enregistrée: ${filename}`);
     } catch (error) {
@@ -97,7 +108,8 @@ export class BotLearningService {
 
       // Mettre à jour le MMR
       const oldMMR = profile.mmr;
-      profile.mmr = this.calculateNewMMR(profile.mmr, record.finalRank, record.numberOfPlayers);
+      const opponentMMRs = record.opponents.map(opp => opp.mmr).filter(mmr => mmr !== undefined);
+      profile.mmr = this.calculateNewMMR(profile.mmr, record.finalRank, record.numberOfPlayers, opponentMMRs);
       profile.mmrHistory.push(profile.mmr);
       
       // Limiter l'historique MMR à 100 parties
@@ -129,14 +141,23 @@ export class BotLearningService {
   }
 
   /**
-   * Calcule le nouveau MMR après une partie
+   * Calcule le nouveau MMR après une partie (Elo avancé)
    */
-  private calculateNewMMR(currentMMR: number, rank: number, totalPlayers: number): number {
+  private calculateNewMMR(currentMMR: number, rank: number, totalPlayers: number, opponentMMRs: number[] = []): number {
     const K = 32; // Facteur K d'Elo
-    const expectedRank = (totalPlayers + 1) / 2; // Rang attendu (milieu)
-    const performance = (totalPlayers - rank + 1) / totalPlayers; // 1.0 = victoire, 0.0 = dernier
-    const expected = 0.5; // Attendu = 50%
     
+    // Si on a les MMR des adversaires, utiliser le calcul Elo avancé
+    if (opponentMMRs.length > 0) {
+      const avgOpponentMMR = opponentMMRs.reduce((sum, mmr) => sum + mmr, 0) / opponentMMRs.length;
+      const expectedScore = 1 / (1 + Math.pow(10, (avgOpponentMMR - currentMMR) / 400));
+      const actualScore = (totalPlayers - rank) / (totalPlayers - 1); // 1.0 = 1er, 0.0 = dernier
+      const change = K * (actualScore - expectedScore);
+      return Math.round(currentMMR + change);
+    }
+    
+    // Sinon, utiliser le calcul simple
+    const performance = (totalPlayers - rank + 1) / totalPlayers;
+    const expected = 0.5;
     const change = K * (performance - expected);
     return Math.round(currentMMR + change);
   }
@@ -190,41 +211,101 @@ export class BotLearningService {
   }
 
   /**
-   * Ajuste les paramètres appris en fonction des performances
+   * Ajuste les paramètres appris en fonction des performances (Gradient Descent)
    */
   private adjustParameters(profile: BotProfile, record: BotGameRecord): Record<string, any> {
     const params = { ...profile.learnedParameters };
-    const learningRate = 0.05; // Taux d'apprentissage
-
-    // Si victoire, renforcer les paramètres actuels
-    if (record.finalRank === 1) {
-      // Légère augmentation de tous les paramètres qui ont bien fonctionné
-      if (record.calledDutch && record.wonDutch) {
-        // Dutch réussi = bon timing
-        params.dutchThreshold = Math.max(10, params.dutchThreshold - 1);
-      }
-      
-      if (record.powerUsesCount > 0) {
-        // Bonne utilisation des pouvoirs
-        params.powerUsageRate = Math.min(1.0, params.powerUsageRate + learningRate);
-      }
-    } else {
-      // Défaite = ajuster
-      if (record.calledDutch && !record.wonDutch) {
-        // Dutch raté = trop tôt ou trop tard
-        if (record.scoreAtDutch > 20) {
-          params.dutchThreshold = Math.min(25, params.dutchThreshold + 2);
+    const baseLearningRate = 0.05;
+    
+    // Taux d'apprentissage adaptatif basé sur le nombre de parties
+    const adaptiveLR = baseLearningRate / Math.sqrt(1 + profile.totalGames / 100);
+    
+    // Calculer le gradient pour chaque paramètre
+    const gradients = this.calculateParameterGradients(profile, record);
+    
+    // Appliquer le gradient descent avec momentum
+    for (const [param, gradient] of Object.entries(gradients)) {
+      if (typeof params[param] === 'number') {
+        const momentum = 0.9;
+        const previousValue = params[param];
+        
+        // Mise à jour avec gradient descent
+        params[param] = params[param] - adaptiveLR * gradient;
+        
+        // Appliquer les contraintes (0-1 pour la plupart des paramètres)
+        if (param !== 'dutchThreshold') {
+          params[param] = Math.max(0, Math.min(1, params[param]));
+        } else {
+          params[param] = Math.max(5, Math.min(30, params[param]));
         }
       }
-      
-      if (record.badDecisions > record.goodDecisions) {
-        // Trop de mauvaises décisions = être plus prudent
-        params.caution = Math.min(1.0, params.caution + learningRate);
-        params.aggressiveness = Math.max(0.0, params.aggressiveness - learningRate);
-      }
     }
-
+    
+    // Ajustements spécifiques basés sur les résultats
+    if (record.calledDutch && record.wonDutch) {
+      params.dutchThreshold = Math.max(5, params.dutchThreshold - 0.5);
+    } else if (record.calledDutch && !record.wonDutch) {
+      params.dutchThreshold = Math.min(30, params.dutchThreshold + 1);
+    }
+    
     return params;
+  }
+  
+  /**
+   * Calcule les gradients pour chaque paramètre
+   */
+  private calculateParameterGradients(profile: BotProfile, record: BotGameRecord): Record<string, number> {
+    const gradients: Record<string, number> = {
+      aggressiveness: 0,
+      caution: 0,
+      dutchThreshold: 0,
+      powerUsageRate: 0,
+      memoryAccuracy: 0,
+      riskTolerance: 0,
+    };
+    
+    // Performance score: 1.0 = victoire, 0.0 = dernier
+    const performanceScore = (record.numberOfPlayers - record.finalRank) / (record.numberOfPlayers - 1);
+    const targetScore = 0.7; // Objectif de performance
+    const error = performanceScore - targetScore;
+    
+    // Gradient pour l'agressivité
+    if (record.finalScore > 20) {
+      gradients.aggressiveness = error * 0.5; // Trop agressif si score élevé
+    } else {
+      gradients.aggressiveness = -error * 0.5; // Pas assez agressif si bon score
+    }
+    
+    // Gradient pour la prudence (inverse de l'agressivité)
+    gradients.caution = -gradients.aggressiveness;
+    
+    // Gradient pour le seuil Dutch
+    if (record.calledDutch) {
+      if (record.wonDutch) {
+        gradients.dutchThreshold = -1; // Réduire le seuil si Dutch réussi
+      } else {
+        gradients.dutchThreshold = 2; // Augmenter si Dutch raté
+      }
+    } else if (record.finalRank > 2) {
+      gradients.dutchThreshold = -0.5; // Aurait dû appeler Dutch plus tôt
+    }
+    
+    // Gradient pour l'utilisation des pouvoirs
+    const powerEfficiency = record.powerUsesCount > 0 ? 
+      (record.goodDecisions / Math.max(1, record.powerUsesCount)) : 0.5;
+    gradients.powerUsageRate = (powerEfficiency - 0.5) * error;
+    
+    // Gradient pour la tolérance au risque
+    if (record.badDecisions > record.goodDecisions) {
+      gradients.riskTolerance = 0.3; // Réduire la prise de risque
+    } else {
+      gradients.riskTolerance = -0.2; // Augmenter légèrement
+    }
+    
+    // Gradient pour la précision de mémorisation (toujours améliorer)
+    gradients.memoryAccuracy = -0.1 * error;
+    
+    return gradients;
   }
 
   /**
@@ -335,5 +416,29 @@ export class BotLearningService {
         recentGames: [],
       };
     }
+  }
+
+  /**
+   * Obtient les statistiques des modèles ML
+   */
+  getMLStats() {
+    return {
+      qLearning: this.qLearning.getStats(),
+      neuralNetwork: this.neuralNet.getStats(),
+    };
+  }
+
+  /**
+   * Prédit la meilleure action avec le réseau de neurones
+   */
+  predictAction(gameState: any, action: any): string {
+    return this.neuralNet.predictBestAction(gameState, action);
+  }
+
+  /**
+   * Sélectionne une action avec Q-Learning
+   */
+  selectQLearningAction(state: any, availableActions: any[]): any {
+    return this.qLearning.selectAction(state, availableActions);
   }
 }
