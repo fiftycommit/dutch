@@ -96,6 +96,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('0:00'), findsOneWidget);
     });
@@ -109,6 +110,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.textContaining('/4 joueurs'), findsOneWidget);
     });
@@ -122,6 +124,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('ANNULER'), findsOneWidget);
       expect(find.byIcon(Icons.close), findsOneWidget);
@@ -136,6 +139,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.people), findsOneWidget);
     });
@@ -164,6 +168,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('0:00'), findsOneWidget);
     });
