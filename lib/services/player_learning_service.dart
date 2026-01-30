@@ -226,14 +226,17 @@ class PlayerLearningService {
     final memoryAccuracy = getNum('memoryAccuracy', 0.7);
     final riskTolerance = getNum('riskTolerance', 0.5);
 
-    final powerActions = record.actions.where((a) => a.actionType == 'power');
-    final usedPowers = powerActions.length;
-    final badPower = powerActions
+    final powerOpportunityActions =
+        record.actions.where((a) => a.actionType == 'power' || a.actionType == 'power_skip');
+    final usedPowers =
+        powerOpportunityActions.where((a) => a.actionType == 'power').length;
+    final badPower = powerOpportunityActions
+        .where((a) => a.actionType == 'power')
         .where((a) => (a.result['isBadDecision'] ?? false) == true)
         .length;
 
-    final totalActions = record.actions.length;
-    final powerRateObserved = totalActions == 0 ? 0.0 : usedPowers / totalActions;
+    final opportunities = powerOpportunityActions.length;
+    final powerRateObserved = opportunities == 0 ? powerUsageRate : usedPowers / opportunities;
 
     final matchActions = record.actions.where((a) => a.actionType == 'match');
     final matchAttempts = matchActions.length;
@@ -294,6 +297,7 @@ class PlayerLearningService {
 
   Map<String, dynamic> _captureGameState(GameState gameState, Player human) {
     final topDiscard = gameState.topDiscardCard;
+    final special = gameState.specialCardToActivate;
 
     return {
       'phase': gameState.phase.toString().split('.').last,
@@ -301,6 +305,8 @@ class PlayerLearningService {
       'deckSize': gameState.deck.length,
       'discardPileSize': gameState.discardPile.length,
       'topDiscardCard': topDiscard?.toJson(),
+      'isWaitingForSpecialPower': gameState.isWaitingForSpecialPower,
+      'specialCardToActivate': special?.toJson(),
       'humanHandSize': human.hand.length,
       'humanKnownCards': human.knownCards.where((k) => k).length,
       'humanEstimatedScore': human.getEstimatedScore(),

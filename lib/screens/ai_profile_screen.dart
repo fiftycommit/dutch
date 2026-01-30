@@ -152,7 +152,7 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
             title: 'Paramètres actuels',
             values: {
               'Mémoire': memoryAccuracy,
-              'Pouvoirs': powerUsageRate,
+              'Pouvoirs (quand dispo)': powerUsageRate,
               'Risque': riskTolerance,
               'Agressif': aggressiveness,
               'Prudent': caution,
