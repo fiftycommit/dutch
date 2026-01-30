@@ -178,6 +178,12 @@ class GameProvider with ChangeNotifier {
     final drawnCard = _gameState!.drawnCard;
     GameLogic.replaceCard(_gameState!, cardIndex);
     final afterScore = human.getEstimatedScore();
+    
+    // Tracker: incrémenter tours et enregistrer défausse pour tous les bots
+    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
+      _botLearningService.incrementTurn(player.id);
+      _botLearningService.recordDiscard(player.id);
+    }
 
     if (_currentGameId != null) {
       _playerLearningService.recordAction(
@@ -225,6 +231,12 @@ class GameProvider with ChangeNotifier {
     final drawnCard = _gameState!.drawnCard;
     GameLogic.discardDrawnCard(_gameState!);
     final afterScore = human.getEstimatedScore();
+    
+    // Tracker: incrémenter tours et enregistrer défausse pour tous les bots
+    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
+      _botLearningService.incrementTurn(player.id);
+      _botLearningService.recordDiscard(player.id);
+    }
 
     if (_currentGameId != null) {
       _playerLearningService.recordAction(
