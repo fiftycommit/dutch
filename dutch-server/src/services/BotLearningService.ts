@@ -79,6 +79,7 @@ export class BotLearningService {
         // Nouveau bot
         profile = {
           botId: record.botId,
+          botName: record.botName,
           behavior: record.botBehavior,
           skillLevel: record.botSkillLevel,
           createdAt: new Date().toISOString(),
@@ -95,6 +96,11 @@ export class BotLearningService {
           mmrHistory: [],
           learnedParameters: this.getDefaultParameters(record.botBehavior, record.botSkillLevel),
         };
+      }
+
+      // Backfill botName si absent (anciennes données)
+      if (!profile.botName) {
+        profile.botName = record.botName;
       }
 
       // Mettre à jour les statistiques

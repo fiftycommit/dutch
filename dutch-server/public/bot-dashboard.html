@@ -34,6 +34,7 @@
         h1 {
             font-size: 2.5rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
@@ -75,6 +76,7 @@
             font-size: 2.5rem;
             font-weight: bold;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -310,6 +312,11 @@
         </div>
 
         <div class="section">
+            <h2 class="section-title">📈 Progression des Bots (MMR)</h2>
+            <canvas id="mmrChart" style="max-height: 400px;"></canvas>
+        </div>
+
+        <div class="section">
             <h2 class="section-title">🏆 Top 10 Bots par MMR</h2>
             <div id="topBots" class="bot-list">
                 <div class="loading">Chargement...</div>
@@ -333,8 +340,10 @@
         <button class="refresh-btn" onclick="loadAllData()">🔄 Actualiser</button>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         const API_BASE = window.location.origin;
+        let mmrChart = null;
 
         async function fetchAPI(endpoint) {
             try {
@@ -359,6 +368,78 @@
                 stats.avgMMR ? Math.round(stats.avgMMR) : '-';
         }
 
+        async function loadMMRChart() {
+            const bots = await fetchAPI('/top-bots?limit=10');
+            if (!bots || bots.length === 0) return;
+
+            const ctx = document.getElementById('mmrChart');
+            if (!ctx) return;
+
+            // Détruire le graphique existant
+            if (mmrChart) {
+                mmrChart.destroy();
+            }
+
+            // Créer le graphique de progression MMR
+            const datasets = bots
+                .filter(bot => bot.mmrHistory && bot.mmrHistory.length > 1)
+                .slice(0, 5) // Top 5 pour la lisibilité
+                .map((bot, index) => {
+                    const colors = [
+                        'rgb(102, 126, 234)',
+                        'rgb(118, 75, 162)',
+                        'rgb(40, 167, 69)',
+                        'rgb(255, 193, 7)',
+                        'rgb(220, 53, 69)'
+                    ];
+                    return {
+                        label: bot.botName || `Bot ${index + 1}`,
+                        data: bot.mmrHistory,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        tension: 0.4,
+                        fill: false
+                    };
+                });
+
+            mmrChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: Math.max(...datasets.map(d => d.data.length))}, (_, i) => i + 1),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Évolution du MMR sur les dernières parties'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'MMR'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Parties jouées'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         async function loadTopBots() {
             const bots = await fetchAPI('/top-bots?limit=10');
             const container = document.getElementById('topBots');
@@ -368,18 +449,24 @@
                 return;
             }
 
-            container.innerHTML = bots.map((bot, index) => `
+            container.innerHTML = bots.map((bot, index) => {
+                const mmrChange = bot.mmrHistory && bot.mmrHistory.length > 1 
+                    ? bot.mmrHistory[bot.mmrHistory.length - 1] - bot.mmrHistory[0]
+                    : 0;
+                const mmrTrend = mmrChange > 0 ? '📈' : mmrChange < 0 ? '📉' : '➡️';
+                
+                return `
                 <div class="bot-item">
                     <div class="bot-rank">#${index + 1}</div>
                     <div class="bot-info">
-                        <div class="bot-name">${bot.botName || 'Bot inconnu'}</div>
-                        <div class="bot-behavior">${bot.behavior || 'balanced'} • ${bot.skillLevel || 'silver'}</div>
+                        <div class="bot-name">${bot.botName || 'Bot inconnu'} ${mmrTrend}</div>
+                        <div class="bot-behavior">${bot.behavior || 'balanced'} • ${bot.skillLevel || 'silver'} • ${mmrChange > 0 ? '+' : ''}${mmrChange.toFixed(0)} MMR</div>
                     </div>
                     <div class="bot-mmr">${Math.round(bot.mmr || 1500)} MMR</div>
                     <div class="bot-winrate">${((bot.wins / bot.totalGames) * 100).toFixed(1)}% WR</div>
                     <div class="bot-games">${bot.totalGames} parties</div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         async function loadMLStats() {
@@ -476,6 +563,7 @@
         async function loadAllData() {
             await Promise.all([
                 loadGlobalStats(),
+                loadMMRChart(),
                 loadTopBots(),
                 loadMLStats(),
                 loadPersonalities()

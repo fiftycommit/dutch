@@ -36,6 +36,7 @@ export interface BotGameRecord {
 
 export interface BotProfile {
   botId: string;
+  botName?: string;
   behavior: string;
   skillLevel: string;
   createdAt: string;
