@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../providers/game_provider.dart';
 import '../services/rp_calculator.dart';
 import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
-import 'main_menu_screen.dart';
 import 'memorization_screen.dart';
 
 class ResultsScreen extends StatelessWidget {
@@ -130,12 +130,7 @@ class ResultsScreen extends StatelessWidget {
                                         const MemorizationScreen()),
                               );
                             } else {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        const MainMenuScreen()),
-                                (route) => false,
-                              );
+                              context.go('/');
                             }
                           },
                           style: ElevatedButton.styleFrom(
