@@ -1,0 +1,286 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import '../models/bot_learning_data.dart';
+import '../models/game_state.dart';
+import '../models/player.dart';
+
+/// Service pour enregistrer et envoyer les données d'apprentissage des bots
+class BotLearningService {
+  static const String _serverUrl = 'https://dutch-game.me/api/bot-learning';
+  
+  // Enregistrement de la partie en cours
+  final Map<String, BotGameRecord> _activeGames = {};
+  final Map<String, List<BotAction>> _pendingActions = {};
+  final Map<String, DateTime> _actionTimestamps = {};
+  
+  /// Démarre l'enregistrement d'une partie pour un bot
+  void startGameRecording({
+    required String gameId,
+    required Player bot,
+    required GameState gameState,
+    required bool usedSBMM,
+  }) {
+    if (bot.isHuman) return;
+    
+    final botId = '${bot.botBehavior}_${bot.botSkillLevel}';
+    
+    _activeGames[bot.id] = BotGameRecord(
+      gameId: gameId,
+      botId: botId,
+      botName: bot.name,
+      botBehavior: bot.botBehavior.toString().split('.').last,
+      botSkillLevel: bot.botSkillLevel.toString().split('.').last,
+      startTime: DateTime.now(),
+      numberOfPlayers: gameState.players.length,
+      gameMode: gameState.gameMode.toString().split('.').last,
+      usedSBMM: usedSBMM,
+      actions: [],
+      initialHandSize: bot.hand.length,
+      finalScore: 0,
+      finalRank: 0,
+      calledDutch: false,
+      wonDutch: false,
+      cardsAtDutch: 0,
+      scoreAtDutch: 0,
+      totalTurns: 0,
+      avgDecisionTime: 0,
+      powerUsesCount: 0,
+      goodDecisions: 0,
+      badDecisions: 0,
+      opponents: _getOpponentsInfo(gameState, bot.id),
+    );
+    
+    _pendingActions[bot.id] = [];
+    
+    debugPrint('🤖 Démarrage enregistrement pour bot ${bot.name} (ID: $botId)');
+  }
+  
+  /// Enregistre une action d'un bot
+  void recordAction({
+    required String botPlayerId,
+    required String actionType,
+    required int turnNumber,
+    required GameState gameState,
+    required Map<String, dynamic> actionDetails,
+  }) {
+    if (!_activeGames.containsKey(botPlayerId)) return;
+    
+    _actionTimestamps[botPlayerId] = DateTime.now();
+    
+    final action = BotAction(
+      actionType: actionType,
+      turnNumber: turnNumber,
+      timestamp: DateTime.now(),
+      gameState: _captureGameState(gameState, botPlayerId),
+      actionDetails: actionDetails,
+      result: {}, // Sera rempli après l'action
+    );
+    
+    _pendingActions[botPlayerId]?.add(action);
+  }
+  
+  /// Met à jour le résultat de la dernière action
+  void updateLastActionResult({
+    required String botPlayerId,
+    required Map<String, dynamic> result,
+  }) {
+    if (!_pendingActions.containsKey(botPlayerId)) return;
+    
+    final actions = _pendingActions[botPlayerId]!;
+    if (actions.isEmpty) return;
+    
+    final lastAction = actions.last;
+    final updatedAction = BotAction(
+      actionType: lastAction.actionType,
+      turnNumber: lastAction.turnNumber,
+      timestamp: lastAction.timestamp,
+      gameState: lastAction.gameState,
+      actionDetails: lastAction.actionDetails,
+      result: result,
+    );
+    
+    actions[actions.length - 1] = updatedAction;
+  }
+  
+  /// Termine l'enregistrement d'une partie et envoie les données au serveur
+  Future<void> endGameRecording({
+    required String botPlayerId,
+    required int finalScore,
+    required int finalRank,
+    required bool calledDutch,
+    required bool wonDutch,
+    required int cardsAtDutch,
+    required int scoreAtDutch,
+  }) async {
+    if (!_activeGames.containsKey(botPlayerId)) return;
+    
+    final record = _activeGames[botPlayerId]!;
+    final actions = _pendingActions[botPlayerId] ?? [];
+    
+    // Calculer les métriques
+    final decisionTimes = <int>[];
+    DateTime? lastTimestamp;
+    for (var action in actions) {
+      if (lastTimestamp != null) {
+        decisionTimes.add(action.timestamp.difference(lastTimestamp).inMilliseconds);
+      }
+      lastTimestamp = action.timestamp;
+    }
+    
+    final avgDecisionTime = decisionTimes.isEmpty 
+        ? 0.0 
+        : decisionTimes.reduce((a, b) => a + b) / decisionTimes.length;
+    
+    final powerUsesCount = actions.where((a) => a.actionType == 'power').length;
+    
+    // Analyser les bonnes/mauvaises décisions
+    int goodDecisions = 0;
+    int badDecisions = 0;
+    for (var action in actions) {
+      if (action.result['scoreChange'] != null) {
+        if (action.result['scoreChange'] < 0) {
+          goodDecisions++;
+        } else if (action.result['scoreChange'] > 0) {
+          badDecisions++;
+        }
+      }
+    }
+    
+    final completedRecord = BotGameRecord(
+      gameId: record.gameId,
+      botId: record.botId,
+      botName: record.botName,
+      botBehavior: record.botBehavior,
+      botSkillLevel: record.botSkillLevel,
+      startTime: record.startTime,
+      endTime: DateTime.now(),
+      numberOfPlayers: record.numberOfPlayers,
+      gameMode: record.gameMode,
+      usedSBMM: record.usedSBMM,
+      actions: actions,
+      initialHandSize: record.initialHandSize,
+      finalScore: finalScore,
+      finalRank: finalRank,
+      calledDutch: calledDutch,
+      wonDutch: wonDutch,
+      cardsAtDutch: cardsAtDutch,
+      scoreAtDutch: scoreAtDutch,
+      totalTurns: actions.length,
+      avgDecisionTime: avgDecisionTime,
+      powerUsesCount: powerUsesCount,
+      goodDecisions: goodDecisions,
+      badDecisions: badDecisions,
+      opponents: record.opponents,
+    );
+    
+    // Envoyer au serveur
+    await _sendToServer(completedRecord);
+    
+    // Nettoyer
+    _activeGames.remove(botPlayerId);
+    _pendingActions.remove(botPlayerId);
+    _actionTimestamps.remove(botPlayerId);
+    
+    debugPrint('🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
+  }
+  
+  /// Capture l'état du jeu pour analyse
+  Map<String, dynamic> _captureGameState(GameState gameState, String botPlayerId) {
+    final bot = gameState.players.firstWhere((p) => p.id == botPlayerId);
+    
+    return {
+      'phase': gameState.phase.toString().split('.').last,
+      'currentPlayerIndex': gameState.currentPlayerIndex,
+      'deckSize': gameState.deck.length,
+      'discardPileSize': gameState.discardPile.length,
+      'topDiscardCard': gameState.topDiscardCard?.toJson(),
+      'botHandSize': bot.hand.length,
+      'botKnownCards': bot.knownCards.where((k) => k).length,
+      'botEstimatedScore': bot.getEstimatedScore(),
+      'opponentsHandSizes': gameState.players
+          .where((p) => p.id != botPlayerId)
+          .map((p) => p.hand.length)
+          .toList(),
+    };
+  }
+  
+  /// Récupère les informations des adversaires
+  List<Map<String, dynamic>> _getOpponentsInfo(GameState gameState, String botPlayerId) {
+    return gameState.players
+        .where((p) => p.id != botPlayerId)
+        .map((p) => {
+              'id': p.id,
+              'name': p.name,
+              'isHuman': p.isHuman,
+              'behavior': p.botBehavior?.toString().split('.').last,
+              'skillLevel': p.botSkillLevel?.toString().split('.').last,
+            })
+        .toList();
+  }
+  
+  /// Envoie les données au serveur
+  Future<void> _sendToServer(BotGameRecord record) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverUrl/record'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(record.toJson()),
+      );
+      
+      if (response.statusCode == 200) {
+        debugPrint('✅ Données bot envoyées au serveur');
+      } else {
+        debugPrint('❌ Erreur envoi données bot: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('❌ Exception envoi données bot: $e');
+    }
+  }
+  
+  /// Récupère les meilleurs bots depuis le serveur
+  Future<List<BotProfile>> fetchTopBots({
+    String? behavior,
+    String? skillLevel,
+    int limit = 10,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'limit': limit.toString(),
+        if (behavior != null) 'behavior': behavior,
+        if (skillLevel != null) 'skillLevel': skillLevel,
+      };
+      
+      final uri = Uri.parse('$_serverUrl/top-bots').replace(queryParameters: queryParams);
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => BotProfile.fromJson(json)).toList();
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur récupération top bots: $e');
+    }
+    
+    return [];
+  }
+  
+  /// Récupère les paramètres appris d'un bot spécifique
+  Future<Map<String, dynamic>?> fetchBotParameters({
+    required String behavior,
+    required String skillLevel,
+  }) async {
+    try {
+      final uri = Uri.parse('$_serverUrl/parameters/$behavior/$skillLevel');
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur récupération paramètres bot: $e');
+    }
+    
+    return null;
+  }
+}

@@ -9,6 +9,7 @@ import '../services/game_logic.dart';
 import '../services/bot_ai.dart';
 import '../services/stats_service.dart';
 import '../services/haptic_service.dart';
+import '../services/bot_learning_service.dart';
 
 class GameProvider with ChangeNotifier {
   GameState? _gameState;
@@ -18,6 +19,11 @@ class GameProvider with ChangeNotifier {
   bool isProcessing = false;
   String? statusMessage;
   Set<int> shakingCardIndices = {};
+  
+  // Service d'apprentissage des bots
+  final BotLearningService _botLearningService = BotLearningService();
+  String? _currentGameId;
+  int _turnCounter = 0;
   
   bool _isPaused = false;
   bool get isPaused => _isPaused;
@@ -87,6 +93,20 @@ class GameProvider with ChangeNotifier {
     for (var player in _gameState!.players) {
       if (!player.isHuman) {
         player.initializeBotMemory();
+      }
+    }
+
+    // Initialiser l'enregistrement pour les bots
+    _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
+    _turnCounter = 0;
+    for (var player in _gameState!.players) {
+      if (!player.isHuman) {
+        _botLearningService.startGameRecording(
+          gameId: _currentGameId!,
+          bot: player,
+          gameState: _gameState!,
+          usedSBMM: useSBMM,
+        );
       }
     }
 
@@ -370,7 +390,7 @@ class GameProvider with ChangeNotifier {
 
     _reactionTimer?.cancel();
 
-    _reactionTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    _reactionTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
       if (_gameState == null) {
         timer.cancel();
         return;
@@ -379,13 +399,16 @@ class GameProvider with ChangeNotifier {
       // Ne pas décrémenter si en pause
       if (_isPaused) return;
 
-      _gameState!.reactionTimeRemaining -= 50;
+      _gameState!.reactionTimeRemaining -= 30;
       reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
 
       if (_gameState!.reactionTimeRemaining <= 0) {
         timer.cancel();
         _endReactionPhase();
+        return;
       }
+      
+      notifyListeners();
     });
 
     notifyListeners();
@@ -408,19 +431,26 @@ class GameProvider with ChangeNotifier {
 
       _reactionTimer?.cancel();
       _reactionTimer =
-          Timer.periodic(const Duration(milliseconds: 100), (timer) {
+          Timer.periodic(const Duration(milliseconds: 30), (timer) {
         if (_gameState == null) {
           timer.cancel();
           return;
         }
 
-        _gameState!.reactionTimeRemaining -= 100;
+        if (_isPaused) {
+          timer.cancel();
+          return;
+        }
+
+        _gameState!.reactionTimeRemaining -= 30;
         reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
 
         if (_gameState!.reactionTimeRemaining <= 0) {
           timer.cancel();
           _endReactionPhase();
         }
+
+        notifyListeners();
       });
 
       _remainingReactionTimeMs = null;
@@ -615,6 +645,9 @@ class GameProvider with ChangeNotifier {
         p.knownCards[i] = true;
       }
     }
+
+    // Finaliser l'enregistrement des bots
+    _finalizeBotRecordings();
 
     List<Player> ranking = _gameState!.getFinalRanking();
     Player human = _gameState!.players.firstWhere((p) => p.isHuman);
@@ -851,6 +884,62 @@ class GameProvider with ChangeNotifier {
     _remainingReactionTimeMs = null;
     _activeTournamentId = null;
     notifyListeners();
+  }
+
+  /// Enregistre une action de bot
+  void _recordBotAction({
+    required String botPlayerId,
+    required String actionType,
+    required Map<String, dynamic> actionDetails,
+  }) {
+    if (_gameState == null || _currentGameId == null) return;
+    
+    _turnCounter++;
+    _botLearningService.recordAction(
+      botPlayerId: botPlayerId,
+      actionType: actionType,
+      turnNumber: _turnCounter,
+      gameState: _gameState!,
+      actionDetails: actionDetails,
+    );
+  }
+
+  /// Met à jour le résultat de la dernière action
+  void _updateBotActionResult({
+    required String botPlayerId,
+    required Map<String, dynamic> result,
+  }) {
+    _botLearningService.updateLastActionResult(
+      botPlayerId: botPlayerId,
+      result: result,
+    );
+  }
+
+  /// Termine l'enregistrement des bots en fin de partie
+  Future<void> _finalizeBotRecordings() async {
+    if (_gameState == null || _currentGameId == null) return;
+    
+    // Calculer les rangs finaux
+    final players = List<Player>.from(_gameState!.players);
+    players.sort((a, b) => a.calculateScore().compareTo(b.calculateScore()));
+    
+    for (var player in _gameState!.players) {
+      if (player.isHuman) continue;
+      
+      final rank = players.indexOf(player) + 1;
+      final calledDutch = _gameState!.dutchCallerId == player.id;
+      final wonDutch = calledDutch && rank == 1;
+      
+      await _botLearningService.endGameRecording(
+        botPlayerId: player.id,
+        finalScore: player.calculateScore(),
+        finalRank: rank,
+        calledDutch: calledDutch,
+        wonDutch: wonDutch,
+        cardsAtDutch: calledDutch ? player.hand.length : 0,
+        scoreAtDutch: calledDutch ? player.calculateScore() : 0,
+      );
+    }
   }
 
   @override

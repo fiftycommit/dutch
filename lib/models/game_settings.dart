@@ -1,6 +1,6 @@
 import 'game_state.dart';
 
-enum Difficulty { easy, medium, hard }
+enum Difficulty { easy, medium, hard, mix }
 
 enum BotBehavior { 
   fast,
@@ -32,6 +32,7 @@ class GameSettings {
   
   bool isPublic;
   int numberOfPlayers;
+  String? roomName;
 
   GameSettings({
     this.gameMode = GameMode.quick,
@@ -48,6 +49,7 @@ class GameSettings {
     this.playerName = "Vous",
     this.isPublic = false,
     this.numberOfPlayers = 4,
+    this.roomName,
   });
 
   GameSettings copyWith({
@@ -65,6 +67,7 @@ class GameSettings {
     String? playerName,
     bool? isPublic,
     int? numberOfPlayers,
+    String? roomName,
   }) {
     return GameSettings(
       gameMode: gameMode ?? this.gameMode,
@@ -81,6 +84,7 @@ class GameSettings {
       playerName: playerName ?? this.playerName,
       isPublic: isPublic ?? this.isPublic,
       numberOfPlayers: numberOfPlayers ?? this.numberOfPlayers,
+      roomName: roomName ?? this.roomName,
     );
   }
 
@@ -100,6 +104,7 @@ class GameSettings {
       playerName: json['playerName'] ?? "Vous",
       isPublic: json['isPublic'] ?? false,
       numberOfPlayers: json['numberOfPlayers'] ?? 4,
+      roomName: json['roomName'],
     );
   }
 
@@ -119,6 +124,7 @@ class GameSettings {
       'playerName': playerName,
       'isPublic': isPublic,
       'numberOfPlayers': numberOfPlayers,
+      if (roomName != null) 'roomName': roomName,
     };
   }
 }

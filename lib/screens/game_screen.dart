@@ -316,16 +316,94 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
               ),
-              if (bots.length > 1)
+              // Gauche - 1 ou 2 bots selon le nombre total
+              if (bots.length >= 1)
                 Positioned(
+                  left: 0,
                   top: 0,
+                  bottom: 0,
+                  width: sideBandWidth,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (bots.length >= 2) ...[
+                        // 2 bots à gauche pour 3+ joueurs
+                        // Position 2 : bot gauche haut
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: outerGap),
+                              child: RotatedBox(
+                                quarterTurns: 1,
+                                child: _buildBotArea(
+                                  context,
+                                  bots[1], // Position 2
+                                  gp,
+                                  isCompactMode,
+                                  cardSize: botCardType,
+                                  badgeSize: botBadgeSize,
+                                  spacing: blockSpacing,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Position 1 : bot gauche bas
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: outerGap),
+                              child: RotatedBox(
+                                quarterTurns: 1,
+                                child: _buildBotArea(
+                                  context,
+                                  bots[0], // Position 1
+                                  gp,
+                                  isCompactMode,
+                                  cardSize: botCardType,
+                                  badgeSize: botBadgeSize,
+                                  spacing: blockSpacing,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else
+                        // 1 bot à gauche pour 2 joueurs (position 1 : gauche bas)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: EdgeInsets.only(left: outerGap),
+                            child: RotatedBox(
+                              quarterTurns: 1,
+                              child: _buildBotArea(
+                                context,
+                                bots[0], // Position 1
+                                gp,
+                                isCompactMode,
+                                cardSize: botCardType,
+                                badgeSize: botBadgeSize,
+                                spacing: blockSpacing,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              // Haut - bot position 3
+              if (bots.length >= 3)
+                Positioned(
                   left: 0,
                   right: 0,
+                  top: 0,
                   height: topBandHeight,
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: Padding(
-                      padding: EdgeInsets.only(top: outerGap),
+                      padding: EdgeInsets.only(top: outerGap + topGap),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return SizedBox(
@@ -337,7 +415,7 @@ class _GameScreenState extends State<GameScreen> {
                                 quarterTurns: 2,
                                 child: _buildBotArea(
                                   context,
-                                  bots[1],
+                                  bots[2], // Position 3 : bot du haut
                                   gp,
                                   isCompactMode,
                                   cardSize: botCardType,
@@ -352,54 +430,81 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   ),
                 ),
-              if (bots.isNotEmpty)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: sideBandWidth,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.only(left: outerGap),
-                      child: RotatedBox(
-                        quarterTurns: 1,
-                        child: _buildBotArea(
-                          context,
-                          bots[0],
-                          gp,
-                          isCompactMode,
-                          cardSize: botCardType,
-                          badgeSize: botBadgeSize,
-                          spacing: blockSpacing,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              if (bots.length > 2)
+              // Droite - 1 ou 2 bots selon le nombre total
+              if (bots.length >= 4)
                 Positioned(
                   right: 0,
                   top: 0,
                   bottom: 0,
                   width: sideBandWidth,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: EdgeInsets.only(right: outerGap),
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: _buildBotArea(
-                          context,
-                          bots[2],
-                          gp,
-                          isCompactMode,
-                          cardSize: botCardType,
-                          badgeSize: botBadgeSize,
-                          spacing: blockSpacing,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (bots.length >= 5) ...[
+                        // 2 bots à droite pour 6 joueurs
+                        // Position 4 : bot droite haut
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding: EdgeInsets.only(right: outerGap),
+                              child: RotatedBox(
+                                quarterTurns: 3,
+                                child: _buildBotArea(
+                                  context,
+                                  bots[3], // Position 4
+                                  gp,
+                                  isCompactMode,
+                                  cardSize: botCardType,
+                                  badgeSize: botBadgeSize,
+                                  spacing: blockSpacing,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                        // Position 5 : bot droite bas
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding: EdgeInsets.only(right: outerGap),
+                              child: RotatedBox(
+                                quarterTurns: 3,
+                                child: _buildBotArea(
+                                  context,
+                                  bots[4], // Position 5
+                                  gp,
+                                  isCompactMode,
+                                  cardSize: botCardType,
+                                  badgeSize: botBadgeSize,
+                                  spacing: blockSpacing,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else
+                        // 1 bot à droite pour 5 joueurs (position 4 : droite haut)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: EdgeInsets.only(right: outerGap),
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: _buildBotArea(
+                                context,
+                                bots[3], // Position 4
+                                gp,
+                                isCompactMode,
+                                cardSize: botCardType,
+                                badgeSize: botBadgeSize,
+                                spacing: blockSpacing,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               Positioned(

@@ -235,6 +235,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
           itemBuilder: (context, index) {
             final room = _publicRooms![index];
             final roomCode = room['code'] as String;
+            final roomName = room['roomName'] as String?;
             final players = room['players'] as int;
             final maxPlayers = room['maxPlayers'] as int;
             final host = room['host'] as String;
@@ -275,18 +276,37 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (roomName != null && roomName.isNotEmpty) ...[
+                              Text(
+                                roomName,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 16 : 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Code: $roomCode',
+                                style: TextStyle(
+                                  fontSize: isMobile ? 12 : 14,
+                                  color: Colors.black54,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ] else
+                              Text(
+                                roomCode,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 16 : 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            const SizedBox(height: 8),
                             Row(
                               children: [
-                                Text(
-                                  roomCode,
-                                  style: TextStyle(
-                                    fontSize: isMobile ? 16 : 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
                                 Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: isMobile ? 6 : 8,

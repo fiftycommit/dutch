@@ -9,6 +9,7 @@ import { setupGameHandler } from './handlers/gameHandler';
 import { SecurityService } from './services/SecurityService';
 import { setupPublicRoomHandlers } from './handlers/publicRoomHandlers';
 import { publicRoomService } from './services/publicRoomService';
+import botLearningRoutes from './routes/botLearningRoutes';
 
 function renderHomePage(roomCount: number) {
   return `
@@ -168,6 +169,14 @@ export function startServer() {
   app.get('/rooms/stats', (req, res) => {
     const stats = publicRoomService.getStats();
     res.json({ success: true, stats });
+  });
+
+  // Routes pour l'apprentissage des bots
+  app.use('/api/bot-learning', botLearningRoutes);
+
+  // Dashboard des stats des bots
+  app.get('/bot-stats', (req, res) => {
+    res.sendFile('bot-stats.html', { root: './public' });
   });
 
   const PORT = process.env.PORT || 3000;

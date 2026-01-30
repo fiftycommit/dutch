@@ -336,10 +336,21 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     Player human = allPlayers.firstWhere((p) => p.isHuman);
     List<Player> bots = allPlayers.where((p) => !p.isHuman).toList();
     List<Player> ordered = [];
-    if (bots.isNotEmpty) ordered.add(bots[0]);
-    if (bots.length > 1) ordered.add(bots[1]);
+    
+    // Ajouter la moitié des bots à gauche
+    int halfBots = (bots.length / 2).ceil();
+    for (int i = 0; i < halfBots && i < bots.length; i++) {
+      ordered.add(bots[i]);
+    }
+    
+    // Ajouter le joueur humain au milieu
     ordered.add(human);
-    if (bots.length > 2) ordered.add(bots[2]);
+    
+    // Ajouter l'autre moitié des bots à droite
+    for (int i = halfBots; i < bots.length; i++) {
+      ordered.add(bots[i]);
+    }
+    
     return ordered;
   }
 }

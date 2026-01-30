@@ -25,6 +25,7 @@ class GameSetupScreen extends StatefulWidget {
 class _GameSetupScreenState extends State<GameSetupScreen> {
   Difficulty selectedBotDifficulty = Difficulty.medium;
   bool _isLoading = false;
+  int selectedNumberOfPlayers = 4; // Par défaut 4 joueurs
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +103,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                               value: Difficulty.hard,
                               label: Text("Difficile"),
                               icon: Icon(Icons.sentiment_very_dissatisfied)),
+                          ButtonSegment(
+                              value: Difficulty.mix,
+                              label: Text("Mix"),
+                              icon: Icon(Icons.shuffle)),
                         ],
                         selected: {selectedBotDifficulty},
                         onSelectionChanged: (Set<Difficulty> newSelection) {
@@ -127,6 +132,51 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 30),
+                    const Text(
+                      "Nombre de joueurs",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    SegmentedButton<int>(
+                      segments: widget.isTournament 
+                        ? const [
+                            ButtonSegment(value: 4, label: Text("4")),
+                            ButtonSegment(value: 6, label: Text("6")),
+                          ]
+                        : const [
+                            ButtonSegment(value: 2, label: Text("2")),
+                            ButtonSegment(value: 3, label: Text("3")),
+                            ButtonSegment(value: 4, label: Text("4")),
+                            ButtonSegment(value: 5, label: Text("5")),
+                            ButtonSegment(value: 6, label: Text("6")),
+                          ],
+                      selected: {selectedNumberOfPlayers},
+                      onSelectionChanged: (Set<int> newSelection) {
+                        setState(() {
+                          selectedNumberOfPlayers = newSelection.first;
+                        });
+                      },
+                      style: ButtonStyle(
+                        backgroundColor:
+                            WidgetStateProperty.resolveWith<Color>((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return Colors.green;
+                          }
+                          return Colors.white10;
+                        }),
+                        foregroundColor:
+                            WidgetStateProperty.resolveWith<Color>((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return Colors.white;
+                          }
+                          return Colors.white70;
+                        }),
+                      ),
+                    ),
                     const SizedBox(height: 50),
                     ElevatedButton(
                       onPressed: () => _startGame(context, useSBMM),
@@ -166,32 +216,40 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
     ];
 
-    players.add(Player(
-      id: 'bot_0',
-      name: _getBotName(BotBehavior.fast, skillLevel),
-      isHuman: false,
-      botBehavior: BotBehavior.fast,
-      botSkillLevel: skillLevel,
-      position: 1
-    ));
-
-    players.add(Player(
-      id: 'bot_1',
-      name: _getBotName(BotBehavior.aggressive, skillLevel),
-      isHuman: false,
-      botBehavior: BotBehavior.aggressive,
-      botSkillLevel: skillLevel,
-      position: 2
-    ));
-
-    players.add(Player(
-      id: 'bot_2',
-      name: _getBotName(BotBehavior.balanced, skillLevel),
-      isHuman: false,
-      botBehavior: BotBehavior.balanced,
-      botSkillLevel: skillLevel,
-      position: 3
-    ));
+    // Nombre de bots à créer (nombre de joueurs - 1 pour le joueur humain)
+    final int numberOfBots = selectedNumberOfPlayers - 1;
+    
+    // Comportements des bots (on cycle à travers eux)
+    final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
+    
+    // Si mode mix, créer un mélange de difficultés
+    final bool isMixMode = selectedBotDifficulty == Difficulty.mix;
+    final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
+    
+    // Mélanger les comportements et niveaux pour plus de variété
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final shuffledBehaviors = List<BotBehavior>.from(botBehaviors);
+    final shuffledSkills = List<BotSkillLevel>.from(mixSkillLevels);
+    
+    for (int i = 0; i < numberOfBots; i++) {
+      // Ajouter un peu d'aléatoire dans le choix du comportement
+      final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
+      final behavior = shuffledBehaviors[behaviorIndex];
+      
+      // En mode mix, varier les niveaux de manière plus aléatoire
+      final botSkill = isMixMode 
+          ? shuffledSkills[(i + (random >> (i + 3))) % mixSkillLevels.length]
+          : skillLevel;
+      
+      players.add(Player(
+        id: 'bot_$i',
+        name: _getBotName(behavior, botSkill),
+        isHuman: false,
+        botBehavior: behavior,
+        botSkillLevel: botSkill,
+        position: i + 1
+      ));
+    }
 
     if (!mounted) return;
 
@@ -218,39 +276,36 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         return BotSkillLevel.silver;
       case Difficulty.hard:
         return BotSkillLevel.gold;
+      case Difficulty.mix:
+        return BotSkillLevel.silver; // Valeur par défaut, sera mélangé lors de la création
     }
   }
 
 
+  // Liste de prénoms pour les bots
+  static final List<String> _botNames = [
+    'Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'Felix',
+    'Grace', 'Hugo', 'Iris', 'Jack', 'Luna', 'Max',
+    'Nina', 'Oscar', 'Paul', 'Rose', 'Sam', 'Tom',
+    'Victor', 'Zoe', 'Arthur', 'Clara', 'David', 'Eva'
+  ];
+  
+  static final Set<String> _usedNames = {};
+
   String _getBotName(BotBehavior behavior, BotSkillLevel level) {
-    // Préfixes selon le niveau
-    String prefix;
-    switch (level) {
-      case BotSkillLevel.bronze:
-        prefix = "Novice";
-        break;
-      case BotSkillLevel.silver:
-        prefix = "Pro";
-        break;
-      case BotSkillLevel.gold:
-        prefix = "Expert";
-        break;
+    // Réinitialiser les noms utilisés si on a tout utilisé
+    if (_usedNames.length >= _botNames.length) {
+      _usedNames.clear();
     }
-
-    // Suffixes selon le comportement
-    String suffix;
-    switch (behavior) {
-      case BotBehavior.fast:
-        suffix = "Flash";
-        break;
-      case BotBehavior.aggressive:
-        suffix = "Hunter";
-        break;
-      case BotBehavior.balanced:
-        suffix = "Tactique";
-        break;
-    }
-
-    return "$prefix $suffix";
+    
+    // Trouver un nom non utilisé
+    String name;
+    do {
+      final randomIndex = DateTime.now().millisecondsSinceEpoch % _botNames.length;
+      name = _botNames[randomIndex];
+    } while (_usedNames.contains(name));
+    
+    _usedNames.add(name);
+    return name;
   }
 }

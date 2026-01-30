@@ -646,7 +646,10 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   // Créer une room publique et aller au lobby
-  Future<void> createPublicRoom({String playerName = 'Joueur'}) async {
+  Future<void> createPublicRoom({
+    String playerName = 'Joueur',
+    String? roomName,
+  }) async {
     try {
       _isConnecting = true;
       _errorMessage = null;
@@ -659,6 +662,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
           isPublic: true,
           minPlayers: 2,
           maxPlayers: 4,
+          roomName: roomName,
         ),
         playerName: playerName,
       );

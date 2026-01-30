@@ -12,11 +12,13 @@ class CreatePublicRoomScreen extends StatefulWidget {
 
 class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
   final _nameController = TextEditingController(text: 'Joueur');
+  final _roomNameController = TextEditingController();
   bool _isCreating = false;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _roomNameController.dispose();
     super.dispose();
   }
 
@@ -31,7 +33,11 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
 
     try {
       final provider = context.read<MultiplayerGameProvider>();
-      await provider.createPublicRoom(playerName: name);
+      final roomName = _roomNameController.text.trim();
+      await provider.createPublicRoom(
+        playerName: name,
+        roomName: roomName.isEmpty ? null : roomName,
+      );
 
       if (!mounted) return;
       context.go('/lobby');
@@ -156,6 +162,33 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
                                         prefixIcon: const Icon(Icons.person, color: Colors.blue),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: isMobile ? 16 : 20),
+                                    TextField(
+                                      controller: _roomNameController,
+                                      enabled: !_isCreating,
+                                      textCapitalization: TextCapitalization.words,
+                                      maxLength: 30,
+                                      style: const TextStyle(
+                                        color: Colors.black87,
+                                        fontSize: 16,
+                                      ),
+                                      decoration: InputDecoration(
+                                        labelText: 'Nom du salon (optionnel)',
+                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        hintText: 'Ex: Partie entre amis',
+                                        hintStyle: const TextStyle(color: Colors.black54),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade100,
+                                        prefixIcon: const Icon(Icons.label, color: Colors.blue),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(14),
                                         ),
