@@ -215,7 +215,8 @@ function setupGameHandler(socket, roomManager) {
                 if (specialCard.value === '10' && data.targetPlayerIndex !== undefined) {
                     const spiedPlayer = room.gameState.players[data.targetPlayerIndex];
                     if (spiedPlayer && spiedPlayer.isHuman && spiedPlayer.id !== currentPlayer.id) {
-                        socket.to(spiedPlayer.id).emit('special_power:spy_notification', {
+                        const io = roomManager.getIO();
+                        io.to(spiedPlayer.id).emit('special_power:spy_notification', {
                             byPlayerName: currentPlayer.name,
                             cardIndex: data.targetCardIndex,
                             roomCode: data.roomCode,
@@ -225,10 +226,11 @@ function setupGameHandler(socket, roomManager) {
             }
             // Notifications Valet : prévenir les joueurs affectés
             if (result.affectedPlayers && result.affectedPlayers.length > 0) {
+                const io = roomManager.getIO();
                 for (const affected of result.affectedPlayers) {
                     const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
                     if (affectedPlayer && affectedPlayer.isHuman) {
-                        socket.to(affected.playerId).emit('special_power:swap_notification', {
+                        io.to(affected.playerId).emit('special_power:swap_notification', {
                             byPlayerName: currentPlayer.name,
                             cardIndex: affected.cardIndex,
                             roomCode: data.roomCode,
@@ -238,9 +240,10 @@ function setupGameHandler(socket, roomManager) {
             }
             // Notification Joker : prévenir le joueur mélangé
             if (result.shuffledPlayer) {
+                const io = roomManager.getIO();
                 const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer.playerId);
                 if (shuffledPlayer && shuffledPlayer.isHuman) {
-                    socket.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
+                    io.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
                         byPlayerName: currentPlayer.name,
                         roomCode: data.roomCode,
                     });

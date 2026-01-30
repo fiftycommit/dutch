@@ -16,6 +16,8 @@ const SecurityService_1 = require("./services/SecurityService");
 const publicRoomHandlers_1 = require("./handlers/publicRoomHandlers");
 const publicRoomService_1 = require("./services/publicRoomService");
 const botLearningRoutes_1 = __importDefault(require("./routes/botLearningRoutes"));
+const playerLearningRoutes_1 = __importDefault(require("./routes/playerLearningRoutes"));
+const startedAt = new Date().toISOString();
 function renderHomePage(roomCount) {
     return `
     <!DOCTYPE html>
@@ -160,6 +162,14 @@ function startServer() {
     app.get('/health', (req, res) => {
         res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
     });
+    app.get('/version', (req, res) => {
+        res.json({
+            sha: process.env.GIT_SHA || null,
+            buildTime: process.env.BUILD_TIME || null,
+            startedAt,
+            nodeEnv: process.env.NODE_ENV || null,
+        });
+    });
     app.get('/rooms', (req, res) => {
         res.json(roomManager.listRooms());
     });
@@ -176,9 +186,15 @@ function startServer() {
     });
     // Routes pour l'apprentissage des bots
     app.use('/api/bot-learning', botLearningRoutes_1.default);
+    // Routes pour l'apprentissage des joueurs (profil SBMM)
+    app.use('/api/player-learning', playerLearningRoutes_1.default);
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
         res.sendFile('bot-dashboard.html', { root: './public' });
+    });
+    // Dashboard profil joueur (SBMM)
+    app.get('/player-profile', (req, res) => {
+        res.sendFile('player-profile.html', { root: './public' });
     });
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {
