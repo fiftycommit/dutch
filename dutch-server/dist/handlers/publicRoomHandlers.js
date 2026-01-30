@@ -19,10 +19,12 @@ function setupPublicRoomHandlers(socket, rooms) {
      */
     socket.on('rooms:getPublic', (data, callback) => {
         try {
+            console.log(`🔍 ${socket.id} demande les rooms publiques - data:`, data, 'callback type:', typeof callback);
             const availableRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
             // Formater les rooms pour le client
             const formattedRooms = availableRooms.map(room => ({
                 code: room.code,
+                roomName: room.roomName,
                 players: room.players,
                 maxPlayers: room.maxPlayers,
                 gameMode: room.gameMode,
@@ -30,12 +32,17 @@ function setupPublicRoomHandlers(socket, rooms) {
                 hostMMR: room.hostMMR,
                 isPublic: true,
             }));
-            console.log(`🔍 ${socket.id} demande les rooms publiques: ${formattedRooms.length} trouvées`);
+            console.log(`✅ ${formattedRooms.length} rooms trouvées, callback est ${typeof callback}`);
             if (typeof callback === 'function') {
+                console.log(`📤 Envoi de la réponse au client ${socket.id}`);
                 callback({
                     success: true,
                     rooms: formattedRooms,
                 });
+                console.log(`✅ Réponse envoyée`);
+            }
+            else {
+                console.log(`❌ Callback n'est pas une fonction: ${typeof callback}`);
             }
         }
         catch (error) {
@@ -76,8 +83,8 @@ function setupPublicRoomHandlers(socket, rooms) {
 /**
  * Notifie le service qu'une room publique a été créée
  */
-function onPublicRoomCreated(roomCode, hostName, gameMode, maxPlayers, hostMMR) {
-    publicRoomService_1.publicRoomService.addPublicRoom(roomCode, hostName, gameMode, maxPlayers, hostMMR);
+function onPublicRoomCreated(roomCode, hostName, gameMode, maxPlayers, hostMMR, roomName) {
+    publicRoomService_1.publicRoomService.addPublicRoom(roomCode, hostName, gameMode, maxPlayers, hostMMR, roomName);
 }
 /**
  * Notifie le service qu'un joueur a rejoint une room publique

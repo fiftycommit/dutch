@@ -11,7 +11,7 @@ function setupRoomHandler(socket, roomManager) {
             console.log(`Room created: ${room.id} by ${socket.id}`);
             // Si c'est une room publique, l'ajouter au service
             if (data.settings?.isPublic === true) {
-                (0, publicRoomHandlers_1.onPublicRoomCreated)(room.id, data.playerName || 'Joueur', data.settings.gameMode || 'quick', data.settings.numberOfPlayers || 4);
+                (0, publicRoomHandlers_1.onPublicRoomCreated)(room.id, data.playerName || 'Joueur', data.settings.gameMode || 'quick', data.settings.numberOfPlayers || 4, undefined, data.settings.roomName);
             }
             callback({ success: true, roomCode: room.id, room });
         }

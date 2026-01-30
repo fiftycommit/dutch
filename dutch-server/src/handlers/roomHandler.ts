@@ -22,7 +22,9 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
           room.id,
           data.playerName || 'Joueur',
           data.settings.gameMode || 'quick',
-          data.settings.numberOfPlayers || 4
+          data.settings.numberOfPlayers || 4,
+          undefined,
+          data.settings.roomName
         );
       }
       

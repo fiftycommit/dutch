@@ -13,9 +13,10 @@ class PublicRoomService {
     /**
      * Ajoute une room à la liste des rooms publiques
      */
-    addPublicRoom(code, host, gameMode, maxPlayers = 4, hostMMR) {
+    addPublicRoom(code, host, gameMode, maxPlayers = 4, hostMMR, roomName) {
         this.publicRooms.set(code, {
             code,
+            roomName,
             players: 1,
             maxPlayers,
             gameMode,
@@ -24,7 +25,7 @@ class PublicRoomService {
             createdAt: new Date(),
             isPublic: true,
         });
-        console.log(`📢 Room publique créée: ${code} (${gameMode}) - MMR: ${hostMMR || 'N/A'}`);
+        console.log(`📢 Room publique créée: ${code}${roomName ? ` "${roomName}"` : ''} (${gameMode}) - MMR: ${hostMMR || 'N/A'}`);
     }
     /**
      * Retire une room de la liste des rooms publiques
