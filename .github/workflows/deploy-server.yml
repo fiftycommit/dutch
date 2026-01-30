@@ -94,6 +94,20 @@ jobs:
               sed -i '/location \/health {/i\    location /bot-stats {\n        proxy_pass http://dutch_backend/bot-stats;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /player-profile {\n        proxy_pass http://dutch_backend/player-profile;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/bot-learning {\n        proxy_pass http://dutch_backend/api/bot-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/player-learning {\n        proxy_pass http://dutch_backend/api/player-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
               nginx -t && systemctl reload nginx
             fi
+
+            # Ensure player profile dashboard is routed to backend even if /bot-stats already exists
+            if ! grep -q "location /player-profile" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for player profile dashboard..."
+              sed -i '/location \/health {/i\    location /player-profile {\n        proxy_pass http://dutch_backend/player-profile;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
+
+            # Ensure player learning API is routed to backend
+            if ! grep -q "location /api/player-learning" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for player learning API..."
+              sed -i '/location \/health {/i\    location /api/player-learning {\n        proxy_pass http://dutch_backend/api/player-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
             
             if ! grep -q "location /status" /etc/nginx/sites-available/dutch-server; then
               echo "Updating Nginx configuration..."
