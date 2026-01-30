@@ -3,17 +3,29 @@ import * as path from 'path';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
 import { QLearningService } from './QLearningService';
 import { NeuralNetworkService } from './NeuralNetworkService';
+import { TournamentService } from './TournamentService';
+import { GeneticAlgorithmService } from './GeneticAlgorithmService';
+import { AdaptiveDifficultyService } from './AdaptiveDifficultyService';
+import { LeaderboardService } from './LeaderboardService';
 
 export class BotLearningService {
   private dataDir: string;
   private qLearning: QLearningService;
   private neuralNet: NeuralNetworkService;
+  private tournament: TournamentService;
+  private genetic: GeneticAlgorithmService;
+  private adaptive: AdaptiveDifficultyService;
+  private leaderboard: LeaderboardService;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning');
     this.ensureDataDirectory();
     this.qLearning = new QLearningService();
     this.neuralNet = new NeuralNetworkService();
+    this.tournament = new TournamentService();
+    this.genetic = new GeneticAlgorithmService();
+    this.adaptive = new AdaptiveDifficultyService();
+    this.leaderboard = new LeaderboardService();
   }
 
   private async ensureDataDirectory() {
@@ -425,6 +437,8 @@ export class BotLearningService {
     return {
       qLearning: this.qLearning.getStats(),
       neuralNetwork: this.neuralNet.getStats(),
+      genetic: this.genetic.getStats(),
+      leaderboard: this.leaderboard.getStats(),
     };
   }
 
@@ -433,6 +447,54 @@ export class BotLearningService {
    */
   predictAction(gameState: any, action: any): string {
     return this.neuralNet.predictBestAction(gameState, action);
+  }
+
+  // ========== Phase 4: Services de Compétition ==========
+
+  /**
+   * Accès au service de tournois
+   */
+  getTournamentService() {
+    return this.tournament;
+  }
+
+  /**
+   * Accès au service génétique
+   */
+  getGeneticService() {
+    return this.genetic;
+  }
+
+  /**
+   * Accès au service d'adaptation de difficulté
+   */
+  getAdaptiveService() {
+    return this.adaptive;
+  }
+
+  /**
+   * Accès au service de leaderboard
+   */
+  getLeaderboardService() {
+    return this.leaderboard;
+  }
+
+  /**
+   * Met à jour le leaderboard après une partie
+   */
+  async updateLeaderboardAfterGame(record: BotGameRecord, profile: BotProfile) {
+    await this.leaderboard.updateLeaderboard({
+      botId: record.botId,
+      botName: record.botName,
+      mmr: profile.mmr,
+      wins: profile.wins,
+      losses: profile.losses,
+      totalGames: profile.totalGames,
+      avgScore: profile.avgScore,
+      skillLevel: record.botSkillLevel,
+      personality: profile.behavior || 'balanced',
+      lastPlayed: record.endTime || new Date().toISOString(),
+    });
   }
 
   /**

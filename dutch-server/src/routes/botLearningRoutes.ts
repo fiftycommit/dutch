@@ -304,4 +304,220 @@ router.post('/personality', async (req: Request, res: Response) => {
   }
 });
 
+// ========== Phase 4: Routes de Compétition ==========
+
+/**
+ * GET /api/bot-learning/leaderboard
+ * Récupère le classement mondial
+ */
+router.get('/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 100;
+    const leaderboard = botLearningService.getLeaderboardService().getTopBots(limit);
+    res.json(leaderboard);
+  } catch (error) {
+    console.error('Erreur récupération leaderboard:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/leaderboard/stats
+ * Récupère les stats du leaderboard
+ */
+router.get('/leaderboard/stats', async (req: Request, res: Response) => {
+  try {
+    const stats = botLearningService.getLeaderboardService().getStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Erreur récupération stats leaderboard:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/tournament/create
+ * Crée un nouveau tournoi
+ */
+router.post('/tournament/create', async (req: Request, res: Response) => {
+  try {
+    const { name, type, participants } = req.body;
+    
+    if (!name || !type || !participants || !Array.isArray(participants)) {
+      return res.status(400).json({ error: 'Données de tournoi invalides' });
+    }
+    
+    const tournament = await botLearningService.getTournamentService().createTournament(name, type, participants);
+    res.json(tournament);
+  } catch (error: any) {
+    console.error('Erreur création tournoi:', error);
+    res.status(500).json({ error: error.message || 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/tournament/:id/run
+ * Lance un tournoi
+ */
+router.post('/tournament/:id/run', async (req: Request, res: Response) => {
+  try {
+    const tournamentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const tournament = await botLearningService.getTournamentService().runTournament(tournamentId);
+    res.json(tournament);
+  } catch (error: any) {
+    console.error('Erreur lancement tournoi:', error);
+    res.status(500).json({ error: error.message || 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/tournament/:id
+ * Récupère un tournoi
+ */
+router.get('/tournament/:id', async (req: Request, res: Response) => {
+  try {
+    const tournamentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const tournament = botLearningService.getTournamentService().getTournament(tournamentId);
+    
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+    
+    res.json(tournament);
+  } catch (error) {
+    console.error('Erreur récupération tournoi:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/tournaments
+ * Liste tous les tournois
+ */
+router.get('/tournaments', async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as 'pending' | 'in_progress' | 'completed' | undefined;
+    const tournaments = await botLearningService.getTournamentService().listTournaments(status);
+    res.json(tournaments);
+  } catch (error) {
+    console.error('Erreur liste tournois:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/genetic/initialize
+ * Initialise la population génétique
+ */
+router.post('/genetic/initialize', async (req: Request, res: Response) => {
+  try {
+    const generation = await botLearningService.getGeneticService().initializePopulation();
+    res.json(generation);
+  } catch (error) {
+    console.error('Erreur initialisation génétique:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/genetic/evolve
+ * Évolue vers la prochaine génération
+ */
+router.post('/genetic/evolve', async (req: Request, res: Response) => {
+  try {
+    const generation = await botLearningService.getGeneticService().evolveGeneration();
+    res.json(generation);
+  } catch (error: any) {
+    console.error('Erreur évolution génétique:', error);
+    res.status(500).json({ error: error.message || 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/genetic/population
+ * Récupère la population actuelle
+ */
+router.get('/genetic/population', async (req: Request, res: Response) => {
+  try {
+    const population = botLearningService.getGeneticService().getPopulation();
+    res.json(population);
+  } catch (error) {
+    console.error('Erreur récupération population:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/genetic/best
+ * Récupère le meilleur bot de la génération
+ */
+router.get('/genetic/best', async (req: Request, res: Response) => {
+  try {
+    const bestBot = botLearningService.getGeneticService().getBestBot();
+    res.json(bestBot || { message: 'Aucun bot disponible' });
+  } catch (error) {
+    console.error('Erreur récupération meilleur bot:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/adaptive/analyze
+ * Analyse un joueur pour adapter la difficulté
+ */
+router.post('/adaptive/analyze', async (req: Request, res: Response) => {
+  try {
+    const { playerId, games } = req.body;
+    
+    if (!playerId || !games || !Array.isArray(games)) {
+      return res.status(400).json({ error: 'Données invalides' });
+    }
+    
+    const stats = await botLearningService.getAdaptiveService().analyzePlayer(playerId, games);
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Erreur analyse joueur:', error);
+    res.status(500).json({ error: error.message || 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/adaptive/adjust
+ * Ajuste la difficulté d'un bot pour un joueur
+ */
+router.post('/adaptive/adjust', async (req: Request, res: Response) => {
+  try {
+    const { botBaseMMR, playerId, targetSkillLevel } = req.body;
+    
+    if (!botBaseMMR || !playerId || !targetSkillLevel) {
+      return res.status(400).json({ error: 'Données invalides' });
+    }
+    
+    const adjustment = await botLearningService.getAdaptiveService().adjustBotDifficulty(
+      botBaseMMR,
+      playerId,
+      targetSkillLevel
+    );
+    res.json(adjustment);
+  } catch (error) {
+    console.error('Erreur ajustement difficulté:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/adaptive/recommend/:playerId
+ * Recommande un niveau de difficulté pour un joueur
+ */
+router.get('/adaptive/recommend/:playerId', async (req: Request, res: Response) => {
+  try {
+    const playerId = Array.isArray(req.params.playerId) ? req.params.playerId[0] : req.params.playerId;
+    const difficulty = botLearningService.getAdaptiveService().recommendDifficulty(playerId);
+    res.json({ playerId, recommendedDifficulty: difficulty });
+  } catch (error) {
+    console.error('Erreur recommandation difficulté:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 export default router;

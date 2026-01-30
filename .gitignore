@@ -61,6 +61,10 @@ dutch-server/data/bot-learning/qlearning/*.json
 dutch-server/data/bot-learning/neural/*.json
 dutch-server/data/bot-learning/clones/*.json
 dutch-server/data/bot-learning/personalities/*.json
+dutch-server/data/bot-learning/tournaments/*.json
+dutch-server/data/bot-learning/genetic/*.json
+dutch-server/data/bot-learning/adaptive/*.json
+dutch-server/data/bot-learning/leaderboard/*.json
 
 # Keep directory structure but ignore content
 !dutch-server/data/bot-learning/games/.gitkeep
@@ -69,3 +73,7 @@ dutch-server/data/bot-learning/personalities/*.json
 !dutch-server/data/bot-learning/neural/.gitkeep
 !dutch-server/data/bot-learning/clones/.gitkeep
 !dutch-server/data/bot-learning/personalities/.gitkeep
+!dutch-server/data/bot-learning/tournaments/.gitkeep
+!dutch-server/data/bot-learning/genetic/.gitkeep
+!dutch-server/data/bot-learning/adaptive/.gitkeep
+!dutch-server/data/bot-learning/leaderboard/.gitkeep

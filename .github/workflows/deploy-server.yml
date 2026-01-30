@@ -82,7 +82,7 @@ jobs:
             
             # Create ML data directories
             echo "Creating ML data directories..."
-            mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities}
+            mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
             chmod -R 755 data/
             
             # Update Nginx config if needed

@@ -1088,6 +1088,8 @@ class BotAI {
         return BotDifficulty.silver;
       case BotSkillLevel.gold:
         return BotDifficulty.gold;
+      case BotSkillLevel.platinum:
+        return BotDifficulty.platinum;
     }
   }
 

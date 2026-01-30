@@ -11,7 +11,8 @@ enum BotBehavior {
 enum BotSkillLevel {
   bronze,
   silver,
-  gold
+  gold,
+  platinum
 }
 
 class GameSettings {
@@ -39,7 +40,7 @@ class GameSettings {
     this.luckDifficulty = Difficulty.medium,
     this.botDifficulty = Difficulty.medium,
     this.minPlayers = 2,
-    this.maxPlayers = 4,
+    this.maxPlayers = 6,
     this.fillBots = true,
     this.reactionTimeMs = 3000,
     this.useSBMM = true,
