@@ -225,6 +225,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Widget _buildPortraitLayout(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Adapter les espacements selon la hauteur disponible
+        final screenHeight = constraints.maxHeight;
+        final isLargeScreen = screenHeight > 700;
+        final spacing1 = isLargeScreen ? 20.0 : 10.0;
+        final spacing2 = isLargeScreen ? 50.0 : 25.0;
+        final spacing3 = isLargeScreen ? 40.0 : 20.0;
+        final spacing4 = isLargeScreen ? 16.0 : 12.0;
+        final iconSize = isLargeScreen ? 80.0 : 60.0;
+        final titleSize = isLargeScreen ? 60.0 : 48.0;
+        
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -234,17 +244,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 20),
-                  const Icon(Icons.style, size: 80, color: Colors.amber),
+                  SizedBox(height: spacing1),
+                  Icon(Icons.style, size: iconSize, color: Colors.amber),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'DUTCH\' 78',
                     style: TextStyle(
                       fontFamily: 'Rye',
-                      fontSize: 60,
+                      fontSize: titleSize,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
-                      shadows: [
+                      shadows: const [
                         Shadow(
                             color: Colors.black45,
                             blurRadius: 10,
@@ -252,16 +262,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ],
                     ),
                   ),
-                  const Text(
+                  Text(
                     'réalisé par Max et EL Roy',
                     style: TextStyle(
-                      fontSize: 16,
-                      letterSpacing: 4,
+                      fontSize: isLargeScreen ? 16 : 14,
+                      letterSpacing: isLargeScreen ? 4 : 2,
                       color: Colors.amber,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 50),
+                  SizedBox(height: spacing2),
                   if (isLoading)
                     const CircularProgressIndicator(color: Colors.amber)
                   else
@@ -284,7 +294,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         );
                       }).toList(),
                     ),
-                  const SizedBox(height: 40),
+                  SizedBox(height: spacing3),
                   _buildMenuButton(
                     context,
                     label: 'PARTIE RAPIDE',
@@ -295,7 +305,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           '/solo/setup?tournament=false&slot=$selectedSlot');
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: spacing4),
                   _buildMenuButton(
                     context,
                     label: 'TOURNOI',
@@ -306,7 +316,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           .go('/solo/setup?tournament=true&slot=$selectedSlot');
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: spacing4),
                   _buildMenuButton(
                     context,
                     label: 'MULTIJOUEUR',
@@ -314,7 +324,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     isPrimary: false,
                     onPressed: _goToMultiplayer,
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(height: spacing3),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -344,7 +354,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: spacing1),
                 ],
               ),
             ),
