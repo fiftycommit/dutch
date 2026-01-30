@@ -1,4 +1,6 @@
 import { Server } from 'socket.io';
+import * as fs from 'fs';
+import * as path from 'path';
 import { GameLogic } from './GameLogic';
 import { BotAI } from './BotAI';
 import {
@@ -45,6 +47,17 @@ export class RoomManager {
   private cleanupIntervalMs: number;
   private stalePlayerMs: number;
   private now: () => number;
+
+  private botCastingCache:
+    | Array<{
+        botId: string;
+        botName?: string;
+        behavior?: string;
+        skillLevel?: string;
+        mmr?: number;
+      }>
+    | null = null;
+  private botCastingCacheLoadedAtMs = 0;
 
   public getIO(): Server {
     return this.io;
@@ -1551,6 +1564,26 @@ export class RoomManager {
   }
 
   private createBot(position: number, difficulty: Difficulty): Player {
+    const desiredSkill = this.getDesiredSkillLevel(difficulty);
+    const selected = this.selectCastingBot(position, desiredSkill);
+
+    if (selected) {
+      return {
+        id: selected.botId,
+        name: selected.botName || selected.botId,
+        isHuman: false,
+        connected: true,
+        focused: true,
+        isSpectator: false,
+        botBehavior: selected.botBehavior,
+        botSkillLevel: selected.botSkillLevel,
+        position,
+        hand: [],
+        knownCards: [],
+      };
+    }
+
+    // Fallback : ancien comportement
     const botNames = ['Alice', 'Bob', 'Charlie', 'Diana'];
     const behaviors = [
       BotBehavior.balanced,
@@ -1558,18 +1591,6 @@ export class RoomManager {
       BotBehavior.fast,
     ];
     const behavior = behaviors[position % behaviors.length];
-
-    let skillLevel: BotSkillLevel;
-    switch (difficulty) {
-      case Difficulty.easy:
-        skillLevel = BotSkillLevel.bronze;
-        break;
-      case Difficulty.hard:
-        skillLevel = BotSkillLevel.platinum;
-        break;
-      default:
-        skillLevel = BotSkillLevel.silver;
-    }
 
     return {
       id: `bot_${position}`,
@@ -1579,10 +1600,118 @@ export class RoomManager {
       focused: true,
       isSpectator: false,
       botBehavior: behavior,
-      botSkillLevel: skillLevel,
+      botSkillLevel: desiredSkill,
       position,
       hand: [],
       knownCards: [],
+    };
+  }
+
+  private getDesiredSkillLevel(difficulty: Difficulty): BotSkillLevel {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return BotSkillLevel.bronze;
+      case Difficulty.hard:
+        return BotSkillLevel.platinum;
+      default:
+        return BotSkillLevel.silver;
+    }
+  }
+
+  private loadBotCastingCacheIfNeeded(): void {
+    const now = this.now();
+    if (this.botCastingCache && now - this.botCastingCacheLoadedAtMs < 15000) {
+      return;
+    }
+
+    try {
+      // Même convention de chemin que BotLearningService (services -> ../../data/bot-learning)
+      const profilesDir = path.join(__dirname, '../../data/bot-learning/profiles');
+      if (!fs.existsSync(profilesDir)) {
+        this.botCastingCache = [];
+        this.botCastingCacheLoadedAtMs = now;
+        return;
+      }
+
+      const files = fs
+        .readdirSync(profilesDir)
+        .filter((f) => f.endsWith('.json'));
+
+      const profiles: Array<{
+        botId: string;
+        botName?: string;
+        behavior?: string;
+        skillLevel?: string;
+        mmr?: number;
+      }> = [];
+
+      for (const file of files) {
+        try {
+          const raw = fs.readFileSync(path.join(profilesDir, file), 'utf-8');
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed.botId !== 'string') continue;
+          profiles.push({
+            botId: parsed.botId,
+            botName: parsed.botName,
+            behavior: parsed.behavior,
+            skillLevel: parsed.skillLevel,
+            mmr: typeof parsed.mmr === 'number' ? parsed.mmr : undefined,
+          });
+        } catch {
+          // Ignorer un fichier corrompu
+        }
+      }
+
+      // Trier par MMR décroissant (bots forts en premier)
+      profiles.sort((a, b) => (b.mmr ?? 0) - (a.mmr ?? 0));
+
+      this.botCastingCache = profiles;
+      this.botCastingCacheLoadedAtMs = now;
+    } catch {
+      this.botCastingCache = [];
+      this.botCastingCacheLoadedAtMs = now;
+    }
+  }
+
+  private selectCastingBot(
+    position: number,
+    desiredSkill: BotSkillLevel
+  ): { botId: string; botName?: string; botBehavior: BotBehavior; botSkillLevel: BotSkillLevel } | null {
+    this.loadBotCastingCacheIfNeeded();
+    if (!this.botCastingCache || this.botCastingCache.length === 0) return null;
+
+    // Casting persistant: on privilégie les bots déjà forts (MMR élevé),
+    // indépendamment du skillLevel "déclaratif".
+    // Ainsi, si Oscar/Jack deviennent forts, ils reviennent naturellement.
+    const pool = this.botCastingCache;
+    const picked = pool[position % pool.length];
+    if (!picked) return null;
+
+    // Convert behavior/skillLevel strings en enums serveur
+    const behavior =
+      picked.behavior === 'fast'
+        ? BotBehavior.fast
+        : picked.behavior === 'aggressive'
+          ? BotBehavior.aggressive
+          : BotBehavior.balanced;
+
+    const skillLevel =
+      picked.skillLevel === 'platinum'
+        ? BotSkillLevel.platinum
+        : picked.skillLevel === 'gold'
+          ? BotSkillLevel.gold
+          : picked.skillLevel === 'silver'
+            ? BotSkillLevel.silver
+            : BotSkillLevel.bronze;
+
+    // Si le profil n'a pas de skillLevel, on retombe sur celui attendu par la difficulté
+    const resolvedSkillLevel = picked.skillLevel ? skillLevel : desiredSkill;
+
+    return {
+      botId: picked.botId,
+      botName: picked.botName,
+      botBehavior: behavior,
+      botSkillLevel: resolvedSkillLevel,
     };
   }
 
