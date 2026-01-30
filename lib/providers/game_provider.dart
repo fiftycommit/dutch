@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -10,6 +9,7 @@ import '../services/bot_ai.dart';
 import '../services/stats_service.dart';
 import '../services/haptic_service.dart';
 import '../services/bot_learning_service.dart';
+import '../services/player_learning_service.dart';
 import 'package:flutter/widgets.dart';
 
 class GameProvider with ChangeNotifier {
@@ -25,7 +25,10 @@ class GameProvider with ChangeNotifier {
   
   // Service d'apprentissage des bots
   final BotLearningService _botLearningService = BotLearningService();
+  final PlayerLearningService _playerLearningService = PlayerLearningService();
   String? _currentGameId;
+
+  int _humanActionCounter = 0;
   
   bool _isPaused = false;
   bool get isPaused => _isPaused;
@@ -100,6 +103,8 @@ class GameProvider with ChangeNotifier {
 
     // Initialiser l'enregistrement pour les bots
     _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
+    _humanActionCounter = 0;
+    _playerLearningService.startGame(gameId: _currentGameId!);
     for (var player in _gameState!.players) {
       if (!player.isHuman) {
         _botLearningService.startGameRecording(
@@ -136,7 +141,30 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.drawnCard != null) return;
 
     shakingCardIndices.clear();
+    final human = _gameState!.currentPlayer;
+    final beforeScore = human.getEstimatedScore();
     GameLogic.drawCard(_gameState!);
+    final afterScore = human.getEstimatedScore();
+
+    if (_currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'draw',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'source': 'deck',
+          'drawnCard': _gameState!.drawnCard?.toJson(),
+        },
+      );
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+        },
+      );
+    }
     notifyListeners();
   }
 
@@ -145,7 +173,31 @@ class GameProvider with ChangeNotifier {
     if (!_gameState!.currentPlayer.isHuman) return;
     if (_gameState!.drawnCard == null) return;
 
+    final human = _gameState!.currentPlayer;
+    final beforeScore = human.getEstimatedScore();
+    final drawnCard = _gameState!.drawnCard;
     GameLogic.replaceCard(_gameState!, cardIndex);
+    final afterScore = human.getEstimatedScore();
+
+    if (_currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'replace',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'cardIndex': cardIndex,
+          'drawnCard': drawnCard?.toJson(),
+        },
+      );
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+        },
+      );
+    }
     HapticService.cardTap();
     notifyListeners();
 
@@ -168,7 +220,31 @@ class GameProvider with ChangeNotifier {
     if (!_gameState!.currentPlayer.isHuman) return;
     if (_gameState!.drawnCard == null) return;
 
+    final human = _gameState!.currentPlayer;
+    final beforeScore = human.getEstimatedScore();
+    final drawnCard = _gameState!.drawnCard;
     GameLogic.discardDrawnCard(_gameState!);
+    final afterScore = human.getEstimatedScore();
+
+    if (_currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'discard',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'source': 'drawn',
+          'card': drawnCard?.toJson(),
+        },
+      );
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+        },
+      );
+    }
     HapticService.cardTap();
     notifyListeners();
 
@@ -197,6 +273,25 @@ class GameProvider with ChangeNotifier {
 
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
 
+    if (player.isHuman && _currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'match',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: player,
+        actionDetails: {
+          'cardIndex': cardIndex,
+        },
+      );
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'success': success,
+        },
+      );
+    }
+
     if (player.isHuman) {
       if (success) {
         HapticService.cardTap();
@@ -223,9 +318,32 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.drawnCard != null) return;
     if (_gameState!.discardPile.isEmpty) return;
 
+    final human = _gameState!.currentPlayer;
+    final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
     _gameState!.addToHistory(
         "${_gameState!.currentPlayer.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
+
+    final afterScore = human.getEstimatedScore();
+    if (_currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'draw',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'source': 'discard',
+          'drawnCard': _gameState!.drawnCard?.toJson(),
+        },
+      );
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+        },
+      );
+    }
     notifyListeners();
   }
 
@@ -236,6 +354,16 @@ class GameProvider with ChangeNotifier {
     if (_gameState!.drawnCard != null) return;
 
     final human = _gameState!.currentPlayer;
+    if (_currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'dutch',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {},
+      );
+    }
     _gameState!.phase = GamePhase.dutchCalled;
     _gameState!.dutchCallerId = human.id;
     _gameState!.addToHistory("📢 ${human.name} crie DUTCH !");
@@ -244,6 +372,21 @@ class GameProvider with ChangeNotifier {
 
   void skipSpecialPower() {
     if (_gameState == null) return;
+
+    final human = _gameState!.currentPlayer;
+    final specialCard = _gameState!.specialCardToActivate;
+    if (human.isHuman && _currentGameId != null && specialCard != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'power_skip',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'specialCard': specialCard.toJson(),
+        },
+      );
+    }
 
     _gameState!.isWaitingForSpecialPower = false;
     _gameState!.specialCardToActivate = null;
@@ -265,6 +408,22 @@ class GameProvider with ChangeNotifier {
 
     Player currentPlayer = _gameState!.currentPlayer;
     Player targetPlayer = _gameState!.players[targetPlayerIndex];
+
+    final beforeScore = currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
+    if (currentPlayer.isHuman && _currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'power',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: currentPlayer,
+        actionDetails: {
+          'specialCard': specialCard.toJson(),
+          'targetPlayerIndex': targetPlayerIndex,
+          'targetCardIndex': targetCardIndex,
+        },
+      );
+    }
 
     if (specialCard.value == '7' || specialCard.value == '8') {
       if (targetCardIndex < currentPlayer.hand.length) {
@@ -292,6 +451,20 @@ class GameProvider with ChangeNotifier {
     _gameState!.specialCardToActivate = null;
     notifyListeners();
 
+    if (currentPlayer.isHuman && _currentGameId != null && beforeScore != null) {
+      final afterScore = currentPlayer.getEstimatedScore();
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+          'isBadDecision': PlayerLearningService.isBadPowerDecision(
+            specialCard: specialCard,
+            target: targetPlayer,
+          ),
+        },
+      );
+    }
+
     _resumeReactionTimer();
 
     if (_gameState!.phase == GamePhase.playing) {
@@ -307,6 +480,24 @@ class GameProvider with ChangeNotifier {
 
     Player currentPlayer = _gameState!.currentPlayer;
     Player targetPlayer = _gameState!.players[targetPlayerIndex];
+
+    final beforeScore =
+        currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
+    if (currentPlayer.isHuman && _currentGameId != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'power',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: currentPlayer,
+        actionDetails: {
+          'specialCard': {'value': 'V'},
+          'targetPlayerIndex': targetPlayerIndex,
+          'targetCardIndex': targetCardIndex,
+          'ownCardIndex': ownCardIndex,
+        },
+      );
+    }
 
     PlayingCard? myCard = currentPlayer.hand[ownCardIndex];
     PlayingCard? theirCard = targetPlayer.hand[targetCardIndex];
@@ -326,6 +517,16 @@ class GameProvider with ChangeNotifier {
 
     notifyListeners();
 
+    if (currentPlayer.isHuman && _currentGameId != null && beforeScore != null) {
+      final afterScore = currentPlayer.getEstimatedScore();
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+        },
+      );
+    }
+
     _resumeReactionTimer();
 
     if (_gameState!.phase == GamePhase.playing) {
@@ -335,6 +536,24 @@ class GameProvider with ChangeNotifier {
 
   void executeLookAtCard(Player target, int cardIndex) {
     if (_gameState == null) return;
+
+    final human = _gameState!.currentPlayer;
+    final specialCard = _gameState!.specialCardToActivate;
+    final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
+    if (human.isHuman && _currentGameId != null && specialCard != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'power',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'specialCard': specialCard.toJson(),
+          'targetPlayerId': target.id,
+          'targetCardIndex': cardIndex,
+        },
+      );
+    }
 
     if (cardIndex >= 0 && cardIndex < target.hand.length) {
       if (target.isHuman) {
@@ -348,6 +567,23 @@ class GameProvider with ChangeNotifier {
     _gameState!.specialCardToActivate = null;
     notifyListeners();
 
+    if (human.isHuman &&
+        _currentGameId != null &&
+        beforeScore != null &&
+        specialCard != null) {
+      final afterScore = human.getEstimatedScore();
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+          'isBadDecision': PlayerLearningService.isBadPowerDecision(
+            specialCard: specialCard,
+            target: target,
+          ),
+        },
+      );
+    }
+
     _resumeReactionTimer();
 
     if (_gameState!.phase == GamePhase.playing) {
@@ -357,6 +593,23 @@ class GameProvider with ChangeNotifier {
 
   void executeJokerEffect(Player target) {
     if (_gameState == null) return;
+
+    final human = _gameState!.currentPlayer;
+    final specialCard = _gameState!.specialCardToActivate;
+    final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
+    if (human.isHuman && _currentGameId != null && specialCard != null) {
+      _playerLearningService.recordAction(
+        gameId: _currentGameId!,
+        actionType: 'power',
+        turnNumber: ++_humanActionCounter,
+        gameState: _gameState!,
+        human: human,
+        actionDetails: {
+          'specialCard': specialCard.toJson(),
+          'targetPlayerId': target.id,
+        },
+      );
+    }
 
     GameLogic.jokerEffect(_gameState!, target);
 
@@ -369,6 +622,23 @@ class GameProvider with ChangeNotifier {
     _gameState!.isWaitingForSpecialPower = false;
     _gameState!.specialCardToActivate = null;
     notifyListeners();
+
+    if (human.isHuman &&
+        _currentGameId != null &&
+        beforeScore != null &&
+        specialCard != null) {
+      final afterScore = human.getEstimatedScore();
+      _playerLearningService.updateLastActionResult(
+        gameId: _currentGameId!,
+        result: {
+          'scoreChange': afterScore - beforeScore,
+          'isBadDecision': PlayerLearningService.isBadPowerDecision(
+            specialCard: specialCard,
+            target: target,
+          ),
+        },
+      );
+    }
 
     _resumeReactionTimer();
 
@@ -661,6 +931,23 @@ class GameProvider with ChangeNotifier {
     bool calledDutch = _gameState!.dutchCallerId == human.id;
     bool wonDutch = calledDutch && playerRank == 1;
     bool isSBMM = _playerMMR != null;
+
+    final gameId = _currentGameId;
+    if (gameId != null) {
+      _playerLearningService
+          .endGame(
+            gameId: gameId,
+            slotId: _currentSlotId,
+            usedSBMM: isSBMM,
+            gameState: _gameState!,
+            human: human,
+            finalRank: playerRank,
+            finalScore: _gameState!.getFinalScore(human),
+            calledDutch: calledDutch,
+            wonDutch: wonDutch,
+          )
+          .then((_) {});
+    }
 
     if (_gameState!.dutchCallerId != null) {
       Player dutchCaller = _gameState!.players

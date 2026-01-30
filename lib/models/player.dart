@@ -24,6 +24,7 @@ class Player {
   final bool isHuman;
   final BotBehavior? botBehavior;
   final BotSkillLevel? botSkillLevel;
+  final Map<String, double>? aiParameters;
   final int position;
   final bool isSpectator;
 
@@ -39,6 +40,7 @@ class Player {
     required this.isHuman,
     this.botBehavior,
     this.botSkillLevel,
+    this.aiParameters,
     this.position = 0,
     this.isSpectator = false,
     List<PlayingCard>? hand,
@@ -57,6 +59,9 @@ class Player {
         isHuman = other.isHuman,
         botBehavior = other.botBehavior,
         botSkillLevel = other.botSkillLevel,
+        aiParameters = other.aiParameters == null
+            ? null
+            : Map<String, double>.from(other.aiParameters!),
         position = other.position,
         isSpectator = other.isSpectator,
         hand = List.from(other.hand),

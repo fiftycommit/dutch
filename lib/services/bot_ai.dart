@@ -29,6 +29,47 @@ class BotAI {
     return _currentContext ?? navigatorKey.currentContext;
   }
 
+  static BotDifficulty _difficultyFromParameters(Map<String, double> params) {
+    double numParam(String key, double fallback) {
+      final v = params[key];
+      if (v == null) return fallback;
+      return v;
+    }
+
+    double clamp01(double v) {
+      if (v < 0) return 0;
+      if (v > 1) return 1;
+      return v;
+    }
+
+    final memoryAccuracy = clamp01(numParam('memoryAccuracy', 0.7));
+    final riskTolerance = clamp01(numParam('riskTolerance', 0.5));
+    final powerUsageRate = clamp01(numParam('powerUsageRate', 0.5));
+    final caution = clamp01(numParam('caution', 0.5));
+    final dutchThreshold = numParam('dutchThreshold', 6.0).round().clamp(0, 30);
+
+    // Mappings (heuristiques) -> BotDifficulty
+    final forgetChancePerTurn = (1.0 - memoryAccuracy) * 0.25;
+    final confusionOnSwap = (1.0 - memoryAccuracy) * 0.20;
+    final reactionSpeed = (0.6 + memoryAccuracy * 0.4).clamp(0.0, 1.0);
+    final matchAccuracy = (0.75 + memoryAccuracy * 0.25).clamp(0.0, 1.0);
+    final reactionMatchChance = (0.35 + (riskTolerance + powerUsageRate) * 0.3).clamp(0.0, 1.0);
+
+    // keepCardThreshold: plus le bot est prudent, plus il est exigeant
+    final keepCardThreshold = (7 - (caution * 6)).round().clamp(0, 7);
+
+    return BotDifficulty(
+      name: 'SBMM',
+      forgetChancePerTurn: forgetChancePerTurn,
+      confusionOnSwap: confusionOnSwap,
+      dutchThreshold: dutchThreshold,
+      reactionSpeed: reactionSpeed,
+      matchAccuracy: matchAccuracy,
+      reactionMatchChance: reactionMatchChance,
+      keepCardThreshold: keepCardThreshold,
+    );
+  }
+
   static BotGamePhase _getBotPhase(Player bot, GameState gameState) {
     int knownCount = bot.knownCardCount;
     int totalCards = bot.hand.length;
@@ -64,9 +105,11 @@ class BotAI {
       return;
     }
 
-    BotDifficulty difficulty = playerMMR != null
-        ? BotDifficulty.fromMMR(playerMMR)
-        : _getSkillDifficulty(bot.botSkillLevel);
+    BotDifficulty difficulty = bot.aiParameters != null
+        ? _difficultyFromParameters(bot.aiParameters!)
+        : (playerMMR != null
+            ? BotDifficulty.fromMMR(playerMMR)
+            : _getSkillDifficulty(bot.botSkillLevel));
 
     BotGamePhase phase = _getBotPhase(bot, gameState);
 

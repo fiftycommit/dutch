@@ -6,7 +6,7 @@ import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
-import '../services/stats_service.dart';
+import '../services/player_learning_service.dart';
 import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {
@@ -210,9 +210,46 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final navigator = Navigator.of(context);
 
     BotSkillLevel skillLevel;
+    BotBehavior? sbmmBehavior;
+    BotSkillLevel? sbmmSkillLevel;
+
     if (useSBMM) {
-      Difficulty recommendedDifficulty = await StatsService.getRecommendedDifficulty(slotId: widget.saveSlot);
-      skillLevel = _difficultyToSkillLevel(recommendedDifficulty);
+      // SBMM solo: on utilise le profil joueur local (actions détaillées) pour matcher des bots similaires.
+      final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
+      final params = profile.learnedParameters;
+
+      double numParam(String key, double fallback) {
+        final v = params[key];
+        if (v is num) return v.toDouble();
+        return fallback;
+      }
+
+      final aggressiveness = numParam('aggressiveness', 0.5);
+      final caution = numParam('caution', 0.5);
+      final memoryAccuracy = numParam('memoryAccuracy', 0.7);
+      final riskTolerance = numParam('riskTolerance', 0.5);
+
+      // Skill level: principalement basé sur la qualité (mémoire / réaction / précision)
+      if (memoryAccuracy >= 0.86) {
+        sbmmSkillLevel = BotSkillLevel.platinum;
+      } else if (memoryAccuracy >= 0.76) {
+        sbmmSkillLevel = BotSkillLevel.gold;
+      } else if (memoryAccuracy >= 0.60) {
+        sbmmSkillLevel = BotSkillLevel.silver;
+      } else {
+        sbmmSkillLevel = BotSkillLevel.bronze;
+      }
+
+      // Behavior: basé sur le style (agressif / prudent / équilibré)
+      if (aggressiveness >= 0.65 || riskTolerance >= 0.65) {
+        sbmmBehavior = BotBehavior.aggressive;
+      } else if (caution >= 0.65 && riskTolerance <= 0.45) {
+        sbmmBehavior = BotBehavior.fast;
+      } else {
+        sbmmBehavior = BotBehavior.balanced;
+      }
+
+      skillLevel = sbmmSkillLevel;
     } else {
       skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
     }
@@ -224,8 +261,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     // Nombre de bots à créer (nombre de joueurs - 1 pour le joueur humain)
     final int numberOfBots = selectedNumberOfPlayers - 1;
     
-    // Comportements des bots (on cycle à travers eux)
-    final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
+    // Comportements des bots
+    final botBehaviors = sbmmBehavior != null
+        ? [sbmmBehavior, BotBehavior.balanced, BotBehavior.aggressive]
+        : [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
     
     // Si mode mix, créer un mélange de difficultés
     final bool isMixMode = selectedBotDifficulty == Difficulty.mix;
@@ -245,6 +284,41 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       final botSkill = isMixMode 
           ? shuffledSkills[(i + (random >> (i + 3))) % mixSkillLevels.length]
           : skillLevel;
+
+      Map<String, double>? aiParameters;
+      if (useSBMM) {
+        final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
+        final base = profile.learnedParameters;
+
+        double baseNum(String key, double fallback) {
+          final v = base[key];
+          if (v is num) return v.toDouble();
+          return fallback;
+        }
+
+        double clamp01(double v) {
+          if (v < 0) return 0;
+          if (v > 1) return 1;
+          return v;
+        }
+
+        // Bruit léger autour du profil pour créer une équipe variée mais similaire
+        final noise = ((random >> (i + 2)) % 100) / 1000.0; // 0.0..0.099
+        final sign = ((random >> (i + 5)) % 2) == 0 ? -1.0 : 1.0;
+        final delta = sign * noise;
+
+        // 1er bot = un peu au-dessus pour challenge
+        final boost = i == 0 ? 0.10 : 0.0;
+
+        aiParameters = {
+          'aggressiveness': clamp01(baseNum('aggressiveness', 0.5) + delta + boost * 0.2),
+          'caution': clamp01(baseNum('caution', 0.5) - delta),
+          'dutchThreshold': (baseNum('dutchThreshold', 15.0) - boost * 2.0).clamp(5.0, 30.0),
+          'powerUsageRate': clamp01(baseNum('powerUsageRate', 0.5) + delta + boost * 0.1),
+          'memoryAccuracy': clamp01(baseNum('memoryAccuracy', 0.7) + boost + delta),
+          'riskTolerance': clamp01(baseNum('riskTolerance', 0.5) + delta + boost * 0.15),
+        };
+      }
       
       players.add(Player(
         id: 'bot_$i',
@@ -252,6 +326,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         isHuman: false,
         botBehavior: behavior,
         botSkillLevel: botSkill,
+        aiParameters: aiParameters,
         position: i + 1
       ));
     }
