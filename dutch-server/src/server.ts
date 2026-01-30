@@ -138,7 +138,7 @@ export function startServer() {
     setupPublicRoomHandlers(socket, new Map());
   });
 
-  app.get('/', (req, res) => {
+  app.get('/status', (req, res) => {
     res.send(renderHomePage(roomManager.getRoomCount()));
   });
 
