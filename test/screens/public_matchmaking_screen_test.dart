@@ -82,7 +82,7 @@ void main() {
       await tester.pumpWidget(createTestApp(provider));
       await tester.pumpAndSettle();
 
-      expect(find.text('RECHERCHE DE PARTIE'), findsOneWidget);
+      expect(find.text('SALONS PUBLICS'), findsOneWidget);
     });
 
     testWidgets('should display back button', (WidgetTester tester) async {
@@ -92,63 +92,26 @@ void main() {
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
     });
 
-    testWidgets('should display search icon', (WidgetTester tester) async {
+    testWidgets('should display refresh icon', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(provider));
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.search), findsOneWidget);
+      expect(find.byIcon(Icons.refresh), findsOneWidget);
     });
 
-    testWidgets('should display searching message', (WidgetTester tester) async {
+    testWidgets('should display empty state when no rooms', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(provider));
       await tester.pumpAndSettle();
 
-      expect(find.text('Recherche de joueurs...'), findsOneWidget);
+      // Le mock retourne une liste vide, donc on devrait voir l'état vide
+      expect(find.text('Aucun salon disponible'), findsOneWidget);
     });
 
-    testWidgets('should display timer starting at 0:00', (WidgetTester tester) async {
+    testWidgets('should display empty state icon', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(provider));
       await tester.pumpAndSettle();
 
-      expect(find.text('0:00'), findsOneWidget);
-    });
-
-    testWidgets('should display player count', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('/4 joueurs'), findsOneWidget);
-    });
-
-    testWidgets('should display cancel button', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      expect(find.text('ANNULER'), findsOneWidget);
-      expect(find.byIcon(Icons.close), findsOneWidget);
-    });
-
-    testWidgets('should display people icon', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      expect(find.byIcon(Icons.people), findsOneWidget);
-    });
-
-    testWidgets('should have animations', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      // Vérifier la présence des animations
-      expect(find.byType(ScaleTransition), findsWidgets);
-      expect(find.byType(RotationTransition), findsWidgets);
-    });
-
-    testWidgets('timer should start at 0:00', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      expect(find.text('0:00'), findsOneWidget);
+      expect(find.byIcon(Icons.search_off), findsOneWidget);
     });
 
     testWidgets('should have gradient background', (WidgetTester tester) async {
@@ -165,18 +128,6 @@ void main() {
       expect(container.decoration, isA<BoxDecoration>());
       final decoration = container.decoration as BoxDecoration;
       expect(decoration.gradient, isA<LinearGradient>());
-    });
-
-    testWidgets('cancel button should be red', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(provider));
-      await tester.pumpAndSettle();
-
-      final button = tester.widget<ElevatedButton>(
-        find.widgetWithText(ElevatedButton, 'ANNULER'),
-      );
-
-      final style = button.style;
-      expect(style, isNotNull);
     });
   });
 }

@@ -43,49 +43,35 @@ void main() {
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
     });
 
-    testWidgets('should display public mode card', (WidgetTester tester) async {
+    testWidgets('should display create section', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('PARTIE PUBLIQUE'), findsOneWidget);
-      expect(
-        find.text('Rejoignez une partie rapide avec des joueurs aléatoires'),
-        findsOneWidget,
-      );
-      expect(find.text('RAPIDE'), findsOneWidget);
+      expect(find.text('CRÉER UN SALON'), findsOneWidget);
     });
 
-    testWidgets('should display private mode card', (WidgetTester tester) async {
+    testWidgets('should display join section', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('PARTIE PRIVÉE'), findsOneWidget);
-      expect(
-        find.text('Créez ou rejoignez une partie avec vos amis'),
-        findsOneWidget,
-      );
-      expect(find.text('AMIS'), findsOneWidget);
+      expect(find.text('REJOINDRE UN SALON'), findsOneWidget);
     });
 
-    testWidgets('should display public icon', (WidgetTester tester) async {
+    testWidgets('should display section icons', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp());
       await tester.pumpAndSettle();
 
+      expect(find.byIcon(Icons.add_circle_outline), findsOneWidget);
+      expect(find.byIcon(Icons.login), findsOneWidget);
+    });
+
+    testWidgets('should display card icons', (WidgetTester tester) async {
+      await tester.pumpWidget(createTestApp());
+      await tester.pumpAndSettle();
+
+      // Icons: lock_outline, public, vpn_key, list_alt
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
       expect(find.byIcon(Icons.public), findsOneWidget);
-    });
-
-    testWidgets('should display private icon', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp());
-      await tester.pumpAndSettle();
-
-      expect(find.byIcon(Icons.lock), findsOneWidget);
-    });
-
-    testWidgets('should display arrow icons on cards', (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp());
-      await tester.pumpAndSettle();
-
-      expect(find.byIcon(Icons.arrow_forward_ios), findsNWidgets(2));
     });
 
     testWidgets('should have gradient background', (WidgetTester tester) async {
@@ -115,14 +101,5 @@ void main() {
       expect(find.byType(GestureDetector), findsAtLeastNWidgets(2));
     });
 
-    testWidgets('should display selection prompt', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: MultiplayerModeSelectionScreen(),
-        ),
-      );
-
-      expect(find.text('Choisissez votre mode de jeu'), findsOneWidget);
-    });
   });
 }
