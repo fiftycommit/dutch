@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/player_learning_data.dart';
 import '../services/player_learning_service.dart';
@@ -23,6 +25,7 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
 
   PlayerProfile? _profile;
   List<PlayerGameRecord> _history = const [];
+  String? _clientId;
 
   Timer? _refreshTimer;
   bool _loading = true;
@@ -42,10 +45,13 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
 
   Future<void> _load() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final clientId = prefs.getString('multiplayer_client_id');
       final profile = await _service.getProfile(slotId: widget.slotId);
       final history = await _service.getHistory(slotId: widget.slotId);
       if (!mounted) return;
       setState(() {
+        _clientId = clientId;
         _profile = profile;
         _history = history;
         _loading = false;
@@ -134,6 +140,8 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _ClientIdCard(clientId: _clientId),
+          const SizedBox(height: 12),
           _InfoCard(
             title: 'Slot',
             value: 'J${widget.slotId}',
@@ -208,6 +216,66 @@ class _InfoCard extends StatelessWidget {
                   style: const TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientIdCard extends StatelessWidget {
+  final String? clientId;
+
+  const _ClientIdCard({
+    required this.clientId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = clientId;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.perm_identity, color: Colors.amber),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'clientId',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value ?? 'Non initialisé (joue une partie multi ou relance l’app)',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          IconButton(
+            tooltip: 'Copier',
+            onPressed: value == null
+                ? null
+                : () async {
+                    await Clipboard.setData(ClipboardData(text: value));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('clientId copié')),
+                    );
+                  },
+            icon: Icon(
+              Icons.copy,
+              color: value == null ? Colors.white30 : Colors.white,
             ),
           ),
         ],
