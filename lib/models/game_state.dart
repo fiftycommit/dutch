@@ -564,9 +564,9 @@ class GameState {
     return ranking;
   }
 
-  /// Retourne les rangs réels avec gestion des ex-aequo
-  /// Retourne une Map<playerId, rang> où le rang tient compte des égalités
-  /// Cas spécial : le Dutch caller gagnant est SEUL #1, les autres avec même score sont #2
+  /// Retourne les rangs réels avec gestion des ex-aequo.
+  /// Retourne une Map (playerId -> rang) où le rang tient compte des égalités.
+  /// Cas spécial : le Dutch caller gagnant est SEUL #1, les autres avec même score sont #2.
   Map<String, int> getFinalRanksWithTies() {
     List<Player> ranking = getFinalRanking();
     Map<String, int> ranks = {};

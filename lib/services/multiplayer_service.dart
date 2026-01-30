@@ -43,7 +43,7 @@ class SavedRoom {
 }
 
 class MultiplayerService {
-  static const String _serverUrl = 'http://164.92.234.245';
+  static const String _serverUrl = 'https://dutch-game.me';
   static const int _maxReconnectAttempts = 5;
   static const String _myRoomsKey = 'my_multiplayer_rooms';
 
