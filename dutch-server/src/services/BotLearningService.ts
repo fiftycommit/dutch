@@ -194,9 +194,18 @@ export class BotLearningService {
       aggressiveness: 0.5,
       caution: 0.5,
       dutchThreshold: 15,
-      powerUsageRate: 0.5,
+      dutchQuality: 0.5,
+      powerDefensiveRate: 0.5,
+      powerOffensiveRate: 0.5,
       memoryAccuracy: 0.7,
-      riskTolerance: 0.5,
+      memoryRetention: 0.7,
+      targetingStrategy: 'balanced',
+      adaptability: 0.5,
+      decisionSpeed: 2000,
+      aggressiveness_winning: 0.5,
+      aggressiveness_losing: 0.5,
+      caution_winning: 0.5,
+      caution_losing: 0.5,
     };
 
     // Ajuster selon le comportement
@@ -204,11 +213,14 @@ export class BotLearningService {
       case 'fast':
         baseParams.aggressiveness = 0.7;
         baseParams.caution = 0.3;
+        baseParams.decisionSpeed = 1200;
         break;
       case 'aggressive':
         baseParams.aggressiveness = 0.8;
-        baseParams.riskTolerance = 0.7;
+        baseParams.caution = 0.2;
         baseParams.dutchThreshold = 18;
+        baseParams.powerOffensiveRate = 0.7;
+        baseParams.targetingStrategy = 'leader';
         break;
       case 'balanced':
         // Garder les valeurs par défaut
@@ -219,15 +231,24 @@ export class BotLearningService {
     switch (skillLevel) {
       case 'bronze':
         baseParams.memoryAccuracy = 0.5;
-        baseParams.powerUsageRate = 0.3;
+        baseParams.memoryRetention = 0.4;
+        baseParams.powerDefensiveRate = 0.3;
+        baseParams.powerOffensiveRate = 0.2;
+        baseParams.adaptability = 0.3;
         break;
       case 'silver':
         baseParams.memoryAccuracy = 0.7;
-        baseParams.powerUsageRate = 0.5;
+        baseParams.memoryRetention = 0.7;
+        baseParams.powerDefensiveRate = 0.5;
+        baseParams.powerOffensiveRate = 0.4;
+        baseParams.adaptability = 0.5;
         break;
       case 'gold':
         baseParams.memoryAccuracy = 0.9;
-        baseParams.powerUsageRate = 0.7;
+        baseParams.memoryRetention = 0.85;
+        baseParams.powerDefensiveRate = 0.7;
+        baseParams.powerOffensiveRate = 0.6;
+        baseParams.adaptability = 0.7;
         break;
     }
 
@@ -305,9 +326,17 @@ export class BotLearningService {
       aggressiveness: 0,
       caution: 0,
       dutchThreshold: 0,
-      powerUsageRate: 0,
+      dutchQuality: 0,
+      powerDefensiveRate: 0,
+      powerOffensiveRate: 0,
       memoryAccuracy: 0,
-      riskTolerance: 0,
+      memoryRetention: 0,
+      adaptability: 0,
+      decisionSpeed: 0,
+      aggressiveness_winning: 0,
+      aggressiveness_losing: 0,
+      caution_winning: 0,
+      caution_losing: 0,
     };
     
     // Performance score: 1.0 = victoire, 0.0 = dernier

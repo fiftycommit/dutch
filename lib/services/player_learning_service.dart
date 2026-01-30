@@ -13,6 +13,7 @@ class PlayerLearningService {
 
   final Map<String, DateTime> _gameStart = {};
   final Map<String, List<PlayerAction>> _pendingActions = {};
+  final Map<String, DateTime> _lastActionTimestamp = {};
 
   String _profileKey(int slotId) => '$_profileKeyPrefix$slotId';
   String _historyKey(int slotId) => '$_historyKeyPrefix$slotId';
@@ -70,17 +71,32 @@ class PlayerLearningService {
     required GameState gameState,
     required Player human,
     required Map<String, dynamic> actionDetails,
+    String? powerType,
+    String? targetStrategy,
   }) {
     final list = _pendingActions[gameId];
     if (list == null) return;
 
+    final now = DateTime.now();
+    final lastActionTime = _lastActionTimestamp[gameId];
+    final decisionTimeMs = lastActionTime != null ? now.difference(lastActionTime).inMilliseconds : null;
+    _lastActionTimestamp[gameId] = now;
+
+    final currentRank = _calculateCurrentRank(gameState, human);
+    final isRiskyAction = _isRiskyAction(actionType, actionDetails, gameState, human);
+
     list.add(PlayerAction(
       actionType: actionType,
       turnNumber: turnNumber,
-      timestamp: DateTime.now(),
+      timestamp: now,
       gameState: _captureGameState(gameState, human),
       actionDetails: actionDetails,
       result: {},
+      currentRank: currentRank,
+      isRiskyAction: isRiskyAction,
+      powerType: powerType,
+      targetStrategy: targetStrategy,
+      decisionTimeMs: decisionTimeMs,
     ));
   }
 
@@ -99,6 +115,11 @@ class PlayerLearningService {
       gameState: last.gameState,
       actionDetails: last.actionDetails,
       result: result,
+      currentRank: last.currentRank,
+      isRiskyAction: last.isRiskyAction,
+      powerType: last.powerType,
+      targetStrategy: last.targetStrategy,
+      decisionTimeMs: last.decisionTimeMs,
     );
   }
 
@@ -210,6 +231,31 @@ class PlayerLearningService {
     }
   }
 
+  int _calculateCurrentRank(GameState gameState, Player human) {
+    final players = List<Player>.from(gameState.players);
+    players.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+    return players.indexOf(human) + 1;
+  }
+
+  bool _isRiskyAction(String actionType, Map<String, dynamic> actionDetails, GameState gameState, Player human) {
+    if (actionType == 'replace') {
+      final cardIndex = actionDetails['cardIndex'] as int?;
+      if (cardIndex != null && cardIndex < human.hand.length && cardIndex < human.knownCards.length) {
+        final isKnown = human.knownCards[cardIndex];
+        if (isKnown) {
+          final card = human.hand[cardIndex];
+          if (card.points <= 3) {
+            return true;
+          }
+        }
+      }
+    }
+    if (actionType == 'power' && actionDetails['powerType'] == 'joker') {
+      return true;
+    }
+    return false;
+  }
+
   PlayerProfile _updateProfile(PlayerProfile profile, PlayerGameRecord record) {
     final params = Map<String, dynamic>.from(profile.learnedParameters);
 
@@ -222,21 +268,37 @@ class PlayerLearningService {
     final aggressiveness = getNum('aggressiveness', 0.5);
     final caution = getNum('caution', 0.5);
     final dutchThreshold = getNum('dutchThreshold', 15.0);
-    final powerUsageRate = getNum('powerUsageRate', 0.5);
+    final dutchQuality = getNum('dutchQuality', 0.5);
+    final powerDefensiveRate = getNum('powerDefensiveRate', 0.5);
+    final powerOffensiveRate = getNum('powerOffensiveRate', 0.5);
     final memoryAccuracy = getNum('memoryAccuracy', 0.7);
-    final riskTolerance = getNum('riskTolerance', 0.5);
+    final memoryRetention = getNum('memoryRetention', 0.7);
+    final adaptability = getNum('adaptability', 0.5);
+    final decisionSpeed = getNum('decisionSpeed', 2000.0);
+    final aggressivenessWinning = getNum('aggressiveness_winning', 0.5);
+    final aggressivenessLosing = getNum('aggressiveness_losing', 0.5);
+    final cautionWinning = getNum('caution_winning', 0.5);
+    final cautionLosing = getNum('caution_losing', 0.5);
 
-    final powerOpportunityActions =
-        record.actions.where((a) => a.actionType == 'power' || a.actionType == 'power_skip');
-    final usedPowers =
-        powerOpportunityActions.where((a) => a.actionType == 'power').length;
-    final badPower = powerOpportunityActions
+    final defensivePowerActions = record.actions.where((a) => 
+        (a.actionType == 'power' || a.actionType == 'power_skip') && 
+        (a.powerType == '7' || a.powerType == '8'));
+    final offensivePowerActions = record.actions.where((a) => 
+        (a.actionType == 'power' || a.actionType == 'power_skip') && 
+        (a.powerType == '9' || a.powerType == '10' || a.powerType == 'jack' || a.powerType == 'joker'));
+    
+    final usedDefensive = defensivePowerActions.where((a) => a.actionType == 'power').length;
+    final usedOffensive = offensivePowerActions.where((a) => a.actionType == 'power').length;
+    final defensiveOpps = defensivePowerActions.length;
+    final offensiveOpps = offensivePowerActions.length;
+    
+    final defensiveRateObserved = defensiveOpps == 0 ? powerDefensiveRate : usedDefensive / defensiveOpps;
+    final offensiveRateObserved = offensiveOpps == 0 ? powerOffensiveRate : usedOffensive / offensiveOpps;
+    
+    final badPower = record.actions
         .where((a) => a.actionType == 'power')
         .where((a) => (a.result['isBadDecision'] ?? false) == true)
         .length;
-
-    final opportunities = powerOpportunityActions.length;
-    final powerRateObserved = opportunities == 0 ? powerUsageRate : usedPowers / opportunities;
 
     final matchActions = record.actions.where((a) => a.actionType == 'match');
     final matchAttempts = matchActions.length;
@@ -249,26 +311,71 @@ class PlayerLearningService {
     final dutchSucceeded = record.calledDutch && record.wonDutch;
     final dutchFailed = record.calledDutch && !record.wonDutch;
 
-    final performance = record.numberOfPlayers <= 1
-        ? 0.5
-        : (record.numberOfPlayers - record.finalRank) /
-            (record.numberOfPlayers - 1);
+    final riskyActions = record.actions.where((a) => a.isRiskyAction == true).length;
+    final totalActions = record.actions.length;
+    final riskyRateObserved = totalActions == 0 ? 0.5 : riskyActions / totalActions;
+
+    final targetingCounts = <String, int>{'leader': 0, 'weak': 0, 'random': 0};
+    for (final action in record.actions.where((a) => a.targetStrategy != null)) {
+      final strat = action.targetStrategy!;
+      targetingCounts[strat] = (targetingCounts[strat] ?? 0) + 1;
+    }
+    final dominantStrategy = targetingCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+
+    final winningActions = record.actions.where((a) => (a.currentRank ?? 99) <= 2);
+    final losingActions = record.actions.where((a) => (a.currentRank ?? 1) >= 3);
+    final winningRiskyRate = winningActions.isEmpty ? 0.5 : winningActions.where((a) => a.isRiskyAction == true).length / winningActions.length;
+    final losingRiskyRate = losingActions.isEmpty ? 0.5 : losingActions.where((a) => a.isRiskyAction == true).length / losingActions.length;
+    final adaptabilityObserved = (winningRiskyRate - losingRiskyRate).abs();
+
+    final decisionTimes = record.actions.where((a) => a.decisionTimeMs != null).map((a) => a.decisionTimeMs!.toDouble()).toList();
+    final avgDecisionTime = decisionTimes.isEmpty ? decisionSpeed : decisionTimes.reduce((a, b) => a + b) / decisionTimes.length;
+
+    final seenCards = <String>{};
+    int memoryTests = 0;
+    int memoryCorrect = 0;
+    for (final action in record.actions) {
+      if (action.actionType == 'power' && action.powerType == '7') {
+        final cardSeen = action.result['cardSeen'];
+        if (cardSeen != null) seenCards.add('${action.actionDetails['targetPlayerId']}_${action.actionDetails['cardIndex']}');
+      }
+      if (action.actionType == 'power' && action.powerType == '9') {
+        memoryTests++;
+        if (action.result['wasOptimal'] == true) memoryCorrect++;
+      }
+    }
+    final memoryRetentionObserved = memoryTests == 0 ? memoryRetention : memoryCorrect / memoryTests;
+
+    double newDutchQuality = dutchQuality;
+    if (record.calledDutch) {
+      final estimatedScore = record.actions.lastWhere((a) => a.actionType == 'dutch', orElse: () => record.actions.last).gameState['estimatedScore'] ?? record.finalScore;
+      final error = (estimatedScore - record.finalScore).abs() / 30.0;
+      newDutchQuality = dutchQuality * 0.9 + (1.0 - error) * 0.1;
+    }
 
     final lr = 0.08;
-
     double clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
 
-    double newAgg = aggressiveness + lr * (performance - 0.5);
-    double newCaution = caution + lr * ((0.5 - performance));
+    double newAgg = aggressiveness + lr * (riskyRateObserved - aggressiveness);
+    double newCaution = caution + lr * ((1.0 - riskyRateObserved) - caution);
 
-    double newPowerUsage = powerUsageRate + lr * (powerRateObserved - powerUsageRate);
+    double newPowerDefensive = powerDefensiveRate + lr * (defensiveRateObserved - powerDefensiveRate);
+    double newPowerOffensive = powerOffensiveRate + lr * (offensiveRateObserved - powerOffensiveRate);
     if (badPower > 0) {
-      newPowerUsage -= lr * 0.4 * badPower;
+      newPowerDefensive -= lr * 0.2 * badPower;
+      newPowerOffensive -= lr * 0.2 * badPower;
     }
 
     double newMemory = memoryAccuracy + lr * (matchAccuracyObserved - memoryAccuracy);
+    double newMemoryRetention = memoryRetention + lr * (memoryRetentionObserved - memoryRetention);
 
-    double newRisk = riskTolerance + lr * (performance - 0.5);
+    double newAdaptability = adaptability + lr * (adaptabilityObserved - adaptability);
+    double newDecisionSpeed = decisionSpeed * 0.9 + avgDecisionTime * 0.1;
+
+    double newAggWinning = aggressivenessWinning + lr * (winningRiskyRate - aggressivenessWinning);
+    double newAggLosing = aggressivenessLosing + lr * (losingRiskyRate - aggressivenessLosing);
+    double newCautionWinning = cautionWinning + lr * ((1.0 - winningRiskyRate) - cautionWinning);
+    double newCautionLosing = cautionLosing + lr * ((1.0 - losingRiskyRate) - cautionLosing);
 
     double newDutchThreshold = dutchThreshold;
     if (dutchSucceeded) {
@@ -281,10 +388,19 @@ class PlayerLearningService {
 
     params['aggressiveness'] = clamp01(newAgg);
     params['caution'] = clamp01(newCaution);
-    params['powerUsageRate'] = clamp01(newPowerUsage);
-    params['memoryAccuracy'] = clamp01(newMemory);
-    params['riskTolerance'] = clamp01(newRisk);
     params['dutchThreshold'] = newDutchThreshold;
+    params['dutchQuality'] = clamp01(newDutchQuality);
+    params['powerDefensiveRate'] = clamp01(newPowerDefensive);
+    params['powerOffensiveRate'] = clamp01(newPowerOffensive);
+    params['memoryAccuracy'] = clamp01(newMemory);
+    params['memoryRetention'] = clamp01(newMemoryRetention);
+    params['targetingStrategy'] = dominantStrategy;
+    params['adaptability'] = clamp01(newAdaptability);
+    params['decisionSpeed'] = newDecisionSpeed.clamp(500.0, 10000.0);
+    params['aggressiveness_winning'] = clamp01(newAggWinning);
+    params['aggressiveness_losing'] = clamp01(newAggLosing);
+    params['caution_winning'] = clamp01(newCautionWinning);
+    params['caution_losing'] = clamp01(newCautionLosing);
 
     return PlayerProfile(
       profileId: profile.profileId,

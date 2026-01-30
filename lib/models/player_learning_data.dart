@@ -7,6 +7,11 @@ class PlayerAction {
   final Map<String, dynamic> gameState;
   final Map<String, dynamic> actionDetails;
   final Map<String, dynamic> result;
+  final int? currentRank;
+  final bool? isRiskyAction;
+  final String? powerType;
+  final String? targetStrategy;
+  final int? decisionTimeMs;
 
   PlayerAction({
     required this.actionType,
@@ -15,6 +20,11 @@ class PlayerAction {
     required this.gameState,
     required this.actionDetails,
     required this.result,
+    this.currentRank,
+    this.isRiskyAction,
+    this.powerType,
+    this.targetStrategy,
+    this.decisionTimeMs,
   });
 
   Map<String, dynamic> toJson() => {
@@ -24,6 +34,11 @@ class PlayerAction {
         'gameState': gameState,
         'actionDetails': actionDetails,
         'result': result,
+        'currentRank': currentRank,
+        'isRiskyAction': isRiskyAction,
+        'powerType': powerType,
+        'targetStrategy': targetStrategy,
+        'decisionTimeMs': decisionTimeMs,
       };
 
   factory PlayerAction.fromJson(Map<String, dynamic> json) => PlayerAction(
@@ -33,6 +48,11 @@ class PlayerAction {
         gameState: Map<String, dynamic>.from(json['gameState'] ?? {}),
         actionDetails: Map<String, dynamic>.from(json['actionDetails'] ?? {}),
         result: Map<String, dynamic>.from(json['result'] ?? {}),
+        currentRank: json['currentRank'],
+        isRiskyAction: json['isRiskyAction'],
+        powerType: json['powerType'],
+        targetStrategy: json['targetStrategy'],
+        decisionTimeMs: json['decisionTimeMs'],
       );
 }
 
@@ -61,9 +81,18 @@ class PlayerProfile {
         'aggressiveness': 0.5,
         'caution': 0.5,
         'dutchThreshold': 15.0,
-        'powerUsageRate': 0.5,
+        'dutchQuality': 0.5,
+        'powerDefensiveRate': 0.5,
+        'powerOffensiveRate': 0.5,
         'memoryAccuracy': 0.7,
-        'riskTolerance': 0.5,
+        'memoryRetention': 0.7,
+        'targetingStrategy': 'balanced',
+        'adaptability': 0.5,
+        'decisionSpeed': 2000.0,
+        'aggressiveness_winning': 0.5,
+        'aggressiveness_losing': 0.5,
+        'caution_winning': 0.5,
+        'caution_losing': 0.5,
       },
     );
   }
