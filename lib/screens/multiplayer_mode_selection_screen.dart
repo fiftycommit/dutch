@@ -61,17 +61,17 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // Section CRÉER UN LOBBY
+                                // Section CRÉER UN SALON
                                 _SectionHeader(
                                   icon: Icons.add_circle_outline,
-                                  title: 'CRÉER UN LOBBY',
+                                  title: 'CRÉER UN SALON',
                                   isMobile: isMobile,
                                 ),
                                 SizedBox(height: isMobile ? 12 : 16),
                                 _ModeCard(
                                   icon: Icons.lock_outline,
-                                  title: 'Lobby Privé',
-                                  description: 'Crée un lobby et partage le code à tes amis',
+                                  title: 'Salon Privé',
+                                  description: 'Crée un salon et partage le code à tes amis',
                                   color: Colors.blue.shade700,
                                   onTap: () => context.go('/multiplayer/create-private'),
                                   badge: 'CODE',
@@ -79,8 +79,8 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                                 SizedBox(height: isMobile ? 10 : 12),
                                 _ModeCard(
                                   icon: Icons.public,
-                                  title: 'Lobby Public',
-                                  description: 'Crée un lobby visible par tous les joueurs',
+                                  title: 'Salon Public',
+                                  description: 'Crée un salon visible par tous les joueurs',
                                   color: Colors.green.shade700,
                                   onTap: () => context.go('/multiplayer/create-public'),
                                   badge: 'OUVERT',
@@ -88,16 +88,16 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                                 
                                 SizedBox(height: isMobile ? 28 : 40),
                                 
-                                // Section REJOINDRE UN LOBBY
+                                // Section REJOINDRE UN SALON
                                 _SectionHeader(
                                   icon: Icons.login,
-                                  title: 'REJOINDRE UN LOBBY',
+                                  title: 'REJOINDRE UN SALON',
                                   isMobile: isMobile,
                                 ),
                                 SizedBox(height: isMobile ? 12 : 16),
                                 _ModeCard(
                                   icon: Icons.vpn_key,
-                                  title: 'Lobby Privé',
+                                  title: 'Salon Privé',
                                   description: 'Entre le code à 6 caractères pour rejoindre',
                                   color: Colors.orange.shade700,
                                   onTap: () => context.go('/multiplayer/join-private'),
@@ -106,8 +106,8 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                                 SizedBox(height: isMobile ? 10 : 12),
                                 _ModeCard(
                                   icon: Icons.list_alt,
-                                  title: 'Lobby Public',
-                                  description: 'Parcours la liste des lobbies ouverts',
+                                  title: 'Salon Public',
+                                  description: 'Parcours la liste des salons ouverts',
                                   color: Colors.purple.shade700,
                                   onTap: () => context.go('/multiplayer/matchmaking'),
                                   badge: 'LISTE',

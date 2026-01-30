@@ -15,6 +15,8 @@ import '../screens/settings_screen.dart';
 import '../screens/stats_screen.dart';
 import '../screens/multiplayer_menu_screen.dart';
 import '../screens/multiplayer_mode_selection_screen.dart';
+import '../screens/create_mode_selection_screen.dart';
+import '../screens/join_mode_selection_screen.dart';
 import '../screens/create_private_room_screen.dart';
 import '../screens/create_public_room_screen.dart';
 import '../screens/join_private_room_screen.dart';
@@ -112,42 +114,56 @@ class AppRouter {
           builder: (context, state) => const MultiplayerMenuScreen(),
         ),
 
-        // Sélection du mode (public/privé)
+        // Sélection du mode (public/privé) - ancien écran gardé pour compatibilité
         GoRoute(
           path: '/multiplayer/mode-selection',
           name: 'multiplayerModeSelection',
           builder: (context, state) => const MultiplayerModeSelectionScreen(),
         ),
 
-        // Créer un lobby privé
+        // Sélection pour créer un salon
+        GoRoute(
+          path: '/multiplayer/create-selection',
+          name: 'createModeSelection',
+          builder: (context, state) => const CreateModeSelectionScreen(),
+        ),
+
+        // Sélection pour rejoindre un salon
+        GoRoute(
+          path: '/multiplayer/join-selection',
+          name: 'joinModeSelection',
+          builder: (context, state) => const JoinModeSelectionScreen(),
+        ),
+
+        // Créer un salon privé
         GoRoute(
           path: '/multiplayer/create-private',
           name: 'createPrivateRoom',
           builder: (context, state) => const CreatePrivateRoomScreen(),
         ),
 
-        // Créer un lobby public
+        // Créer un salon public
         GoRoute(
           path: '/multiplayer/create-public',
           name: 'createPublicRoom',
           builder: (context, state) => const CreatePublicRoomScreen(),
         ),
 
-        // Rejoindre un lobby privé (avec code)
+        // Rejoindre un salon privé (avec code)
         GoRoute(
           path: '/multiplayer/join-private',
           name: 'joinPrivateRoom',
           builder: (context, state) => const JoinPrivateRoomScreen(),
         ),
 
-        // Liste des lobbies publics
+        // Liste des salons publics
         GoRoute(
           path: '/multiplayer/matchmaking',
           name: 'publicMatchmaking',
           builder: (context, state) => const PublicMatchmakingScreen(),
         ),
 
-        // Route pour le lobby (le roomCode est géré par le provider)
+        // Route pour le salon (le roomCode est géré par le provider)
         GoRoute(
           path: '/lobby',
           name: 'lobby',

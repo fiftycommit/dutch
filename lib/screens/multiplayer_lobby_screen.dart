@@ -879,7 +879,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           ),
           const SizedBox(width: 12),
           Text(
-            'Lobby Public',
+            'Salon Public',
             style: TextStyle(
               color: Colors.green.shade300,
               fontSize: 18,

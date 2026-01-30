@@ -659,6 +659,8 @@ class MultiplayerService {
     debugPrint('🔍 Récupération des rooms publiques...');
 
     _socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
+      if (completer.isCompleted) return;
+      
       if (response == null) {
         debugPrint('❌ Pas de réponse du serveur');
         completer.complete([]);
@@ -682,7 +684,14 @@ class MultiplayerService {
       }
     });
 
-    return completer.future;
+    // Timeout de 5 secondes pour éviter d'attendre indéfiniment
+    return completer.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        debugPrint('⏱️ Timeout lors de la récupération des rooms publiques');
+        return [];
+      },
+    );
   }
 
   // Rejoindre une room

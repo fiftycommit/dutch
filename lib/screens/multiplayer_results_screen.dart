@@ -148,7 +148,7 @@ class MultiplayerResultsScreen extends StatelessWidget {
                               ),
                             ),
                             child: const Text(
-                              "Retour au Lobby (Host)",
+                              "Retour au Salon (Host)",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -179,7 +179,7 @@ class MultiplayerResultsScreen extends StatelessWidget {
                               ),
                             ),
                             child: const Text(
-                              "Retour au Lobby",
+                              "Retour au Salon",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,

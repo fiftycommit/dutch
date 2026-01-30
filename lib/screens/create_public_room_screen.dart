@@ -196,7 +196,7 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                                   const Icon(Icons.add_circle),
                                                   const SizedBox(width: 8),
                                                   Text(
-                                                    'CRÉER ET OUVRIR LE LOBBY',
+                                                    'CRÉER ET OUVRIR LE SALON',
                                                     style: TextStyle(
                                                       fontSize: isMobile ? 14 : 16,
                                                       fontWeight: FontWeight.bold,

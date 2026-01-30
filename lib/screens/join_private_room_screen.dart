@@ -92,7 +92,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'REJOINDRE UN LOBBY PRIVÉ',
+                      'REJOINDRE UN SALON PRIVÉ',
                       style: TextStyle(
                         color: Colors.amber,
                         fontSize: 18,
@@ -135,7 +135,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                     ),
                                     SizedBox(height: isMobile ? 16 : 24),
                                     Text(
-                                      'Rejoindre un Lobby',
+                                      'Rejoindre un Salon',
                                       style: TextStyle(
                                         fontSize: isMobile ? 24 : 28,
                                         fontWeight: FontWeight.bold,
@@ -169,7 +169,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                         UpperCaseTextFormatter(),
                                       ],
                                       decoration: InputDecoration(
-                                        labelText: 'Code du lobby',
+                                        labelText: 'Code du salon',
                                         labelStyle: const TextStyle(color: Colors.black87),
                                         hintText: 'ABC123',
                                         hintStyle: TextStyle(

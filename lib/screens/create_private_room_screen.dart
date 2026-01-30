@@ -91,7 +91,7 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'CRÉER UN LOBBY PRIVÉ',
+                      'CRÉER UN SALON PRIVÉ',
                       style: TextStyle(
                         color: Colors.amber,
                         fontSize: 18,
@@ -134,7 +134,7 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                     ),
                                     SizedBox(height: isMobile ? 16 : 24),
                                     Text(
-                                      'Lobby Privé',
+                                      'Salon Privé',
                                       style: TextStyle(
                                         fontSize: isMobile ? 24 : 28,
                                         fontWeight: FontWeight.bold,
@@ -236,7 +236,7 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                                   const Icon(Icons.add_circle),
                                                   const SizedBox(width: 8),
                                                   Text(
-                                                    'CRÉER LE LOBBY',
+                                                    'CRÉER LE SALON',
                                                     style: TextStyle(
                                                       fontSize: isMobile ? 14 : 16,
                                                       fontWeight: FontWeight.bold,

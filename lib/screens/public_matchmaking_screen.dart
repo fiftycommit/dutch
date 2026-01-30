@@ -144,7 +144,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'PARTIES PUBLIQUES',
+                      'SALONS PUBLICS',
                       style: TextStyle(
                         color: Colors.amber,
                         fontSize: 20,
@@ -197,7 +197,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                     ),
                     SizedBox(height: isMobile ? 16 : 24),
                     Text(
-                      'Aucune partie disponible',
+                      'Aucun salon disponible',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: isMobile ? 20 : 24,
@@ -207,7 +207,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                     ),
                     SizedBox(height: isMobile ? 8 : 12),
                     Text(
-                      'Créez une partie ou réessayez plus tard',
+                      'Créez un salon ou réessayez plus tard',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: isMobile ? 14 : 16,
@@ -370,7 +370,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rejoindre la partie'),
+        title: const Text('Rejoindre le salon'),
         content: TextField(
           controller: nameController,
           decoration: const InputDecoration(
