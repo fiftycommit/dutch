@@ -50,8 +50,10 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "build/web/*"
-          target: "/var/www/dutch/"
+          target: "/var/www/dutch/web/"
           strip_components: 2
+          overwrite: true
+          rm: true
 
   deploy-backend:
     runs-on: ubuntu-latest
