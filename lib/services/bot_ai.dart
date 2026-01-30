@@ -23,8 +23,10 @@ enum BotGamePhase {
 class BotAI {
   static final Random _random = Random();
 
+  static BuildContext? _currentContext;
+  
   static BuildContext? get _context {
-    return navigatorKey.currentContext;
+    return _currentContext ?? navigatorKey.currentContext;
   }
 
   static BotGamePhase _getBotPhase(Player bot, GameState gameState) {
@@ -53,10 +55,12 @@ class BotAI {
     return BotGamePhase.optimization;
   }
 
-  static Future<void> playBotTurn(GameState gameState, {int? playerMMR}) async {
+  static Future<void> playBotTurn(GameState gameState, {int? playerMMR, BuildContext? context}) async {
+    _currentContext = context;
 
     Player bot = gameState.currentPlayer;
     if (bot.isHuman) {
+      _currentContext = null;
       return;
     }
 
@@ -73,13 +77,15 @@ class BotAI {
 
     if (_shouldCallDutch(gameState, bot, difficulty, phase)) {
       GameLogic.callDutch(gameState);
+      _currentContext = null;
       return;
     }
     GameLogic.drawCard(gameState);
 
     await Future.delayed(const Duration(milliseconds: 1000));
     await _decideCardAction(gameState, bot, difficulty, phase);
-
+    
+    _currentContext = null;
   }
 
   static bool _shouldCallDutch(GameState gs, Player bot, BotDifficulty difficulty, BotGamePhase phase) {
@@ -483,8 +489,10 @@ class BotAI {
   }
 
   
-  static Future<void> useBotSpecialPower(GameState gameState, {int? playerMMR}) async {
+  static Future<void> useBotSpecialPower(GameState gameState, {int? playerMMR, BuildContext? context}) async {
     if (!gameState.isWaitingForSpecialPower || gameState.specialCardToActivate == null) return;
+    
+    _currentContext = context;
 
     Player bot = gameState.currentPlayer;
     PlayingCard card = gameState.specialCardToActivate!;
@@ -532,6 +540,8 @@ class BotAI {
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     gameState.addToHistory("${bot.name} a utilisÃÂ© son pouvoir.");
+    
+    _currentContext = null;
   }
 
   static void _applyMemoryDecay(Player bot, BotDifficulty difficulty) {

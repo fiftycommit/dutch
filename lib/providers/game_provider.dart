@@ -10,11 +10,14 @@ import '../services/bot_ai.dart';
 import '../services/stats_service.dart';
 import '../services/haptic_service.dart';
 import '../services/bot_learning_service.dart';
+import 'package:flutter/widgets.dart';
 
 class GameProvider with ChangeNotifier {
   GameState? _gameState;
   GameState? get gameState => _gameState;
   bool get hasActiveGame => _gameState != null;
+  
+  BuildContext? _currentContext;
 
   bool isProcessing = false;
   String? statusMessage;
@@ -111,6 +114,10 @@ class GameProvider with ChangeNotifier {
     shakingCardIndices.clear();
     isProcessing = false;
     notifyListeners();
+  }
+
+  void setContext(BuildContext context) {
+    _currentContext = context;
   }
 
   void checkIfBotShouldPlay() {
@@ -570,7 +577,7 @@ class GameProvider with ChangeNotifier {
 
       try {
         if (_isPaused) break;
-        await BotAI.playBotTurn(_gameState!, playerMMR: _playerMMR);
+        await BotAI.playBotTurn(_gameState!, playerMMR: _playerMMR, context: _currentContext);
         if (_isPaused) break;
         notifyListeners();
 
@@ -587,7 +594,7 @@ class GameProvider with ChangeNotifier {
           }
           if (_isPaused) break;
           
-          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR);
+          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR, context: _currentContext);
           if (_isPaused) break;
           notifyListeners();
 

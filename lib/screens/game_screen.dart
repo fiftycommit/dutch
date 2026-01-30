@@ -44,6 +44,8 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      gameProvider.setContext(context);
       _checkAndNavigateIfEnded();
       _checkAndStartBotTurn();
     });
