@@ -14,6 +14,10 @@ class BotLearningService {
   final Map<String, BotGameRecord> _activeGames = {};
   final Map<String, List<BotAction>> _pendingActions = {};
   final Map<String, DateTime> _actionTimestamps = {};
+  final Map<String, List<Map<String, dynamic>>> _initialDecks = {};
+  final Map<String, int> _turnCounters = {};
+  final Map<String, List<int>> _discardsPerRound = {};
+  final Map<String, List<Map<String, dynamic>>> _triageDecisions = {};
   
   /// Démarre l'enregistrement d'une partie pour un bot
   void startGameRecording({
@@ -53,6 +57,10 @@ class BotLearningService {
     );
     
     _pendingActions[bot.id] = [];
+    _initialDecks[bot.id] = _captureDeck(gameState);
+    _turnCounters[bot.id] = 0;
+    _discardsPerRound[bot.id] = [];
+    _triageDecisions[bot.id] = [];
     
     debugPrint('🤖 Démarrage enregistrement pour bot ${bot.name} (ID: $botId)');
   }
@@ -174,6 +182,10 @@ class BotLearningService {
       humanFinalHandSize: humanFinalHandSize,
       botFinalHandSize: botFinalHandSize,
       pBeatHuman: pBeatHuman,
+      initialDeck: _initialDecks[botPlayerId],
+      turnsBeforeDutch: calledDutch ? _turnCounters[botPlayerId] : null,
+      discardsPerRound: _discardsPerRound[botPlayerId],
+      triageDecisions: _triageDecisions[botPlayerId],
       actions: actions,
       initialHandSize: record.initialHandSize,
       finalScore: finalScore,
@@ -197,6 +209,10 @@ class BotLearningService {
     _activeGames.remove(botPlayerId);
     _pendingActions.remove(botPlayerId);
     _actionTimestamps.remove(botPlayerId);
+    _initialDecks.remove(botPlayerId);
+    _turnCounters.remove(botPlayerId);
+    _discardsPerRound.remove(botPlayerId);
+    _triageDecisions.remove(botPlayerId);
     
     debugPrint('🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
   }
@@ -233,6 +249,69 @@ class BotLearningService {
               'skillLevel': p.botSkillLevel?.toString().split('.').last,
             })
         .toList();
+  }
+
+  /// Capture le deck initial pour analyse
+  List<Map<String, dynamic>> _captureDeck(GameState gameState) {
+    final allCards = <Map<String, dynamic>>[];
+    for (final player in gameState.players) {
+      for (final card in player.hand) {
+        allCards.add({
+          'suit': card.suit,
+          'value': card.value,
+          'points': card.points,
+          'playerId': player.id,
+        });
+      }
+    }
+    for (final card in gameState.deck) {
+      allCards.add({
+        'suit': card.suit,
+        'value': card.value,
+        'points': card.points,
+        'location': 'deck',
+      });
+    }
+    return allCards;
+  }
+
+  /// Enregistre une décision de triage (garder vs défausser)
+  void recordTriageDecision({
+    required String botPlayerId,
+    required Map<String, dynamic> decision,
+  }) {
+    final decisions = _triageDecisions[botPlayerId];
+    if (decisions != null) {
+      decisions.add(decision);
+    }
+  }
+
+  /// Incrémente le compteur de tours
+  void incrementTurn(String botPlayerId) {
+    final counter = _turnCounters[botPlayerId];
+    if (counter != null) {
+      _turnCounters[botPlayerId] = counter + 1;
+    }
+  }
+
+  /// Enregistre une défausse pour le round actuel
+  void recordDiscard(String botPlayerId) {
+    final discards = _discardsPerRound[botPlayerId];
+    if (discards != null) {
+      if (discards.isEmpty) {
+        discards.add(1);
+      } else {
+        discards[discards.length - 1]++;
+      }
+    }
+  }
+
+  /// Démarre un nouveau round
+  void startNewRound(String botPlayerId) {
+    final discards = _discardsPerRound[botPlayerId];
+    if (discards != null) {
+      discards.add(0);
+    }
   }
   
   /// Envoie les données au serveur

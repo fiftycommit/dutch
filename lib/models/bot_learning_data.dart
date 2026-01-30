@@ -53,6 +53,12 @@ class BotGameRecord {
   final int? botFinalHandSize;
   final double? pBeatHuman;
   
+  // Tracking expérimental pour analyse de triage
+  final List<Map<String, dynamic>>? initialDeck;
+  final int? turnsBeforeDutch;
+  final List<int>? discardsPerRound;
+  final List<Map<String, dynamic>>? triageDecisions;
+  
   // Données de la partie
   final List<BotAction> actions;
   final int initialHandSize;
@@ -88,6 +94,10 @@ class BotGameRecord {
     this.humanFinalHandSize,
     this.botFinalHandSize,
     this.pBeatHuman,
+    this.initialDeck,
+    this.turnsBeforeDutch,
+    this.discardsPerRound,
+    this.triageDecisions,
     required this.actions,
     required this.initialHandSize,
     required this.finalScore,
@@ -119,6 +129,10 @@ class BotGameRecord {
         'humanFinalHandSize': humanFinalHandSize,
         'botFinalHandSize': botFinalHandSize,
         'pBeatHuman': pBeatHuman,
+        'initialDeck': initialDeck,
+        'turnsBeforeDutch': turnsBeforeDutch,
+        'discardsPerRound': discardsPerRound,
+        'triageDecisions': triageDecisions,
         'actions': actions.map((a) => a.toJson()).toList(),
         'initialHandSize': initialHandSize,
         'finalScore': finalScore,
@@ -150,6 +164,10 @@ class BotGameRecord {
         humanFinalHandSize: json['humanFinalHandSize'],
         botFinalHandSize: json['botFinalHandSize'],
         pBeatHuman: (json['pBeatHuman'] is num) ? (json['pBeatHuman'] as num).toDouble() : null,
+        initialDeck: json['initialDeck'] != null ? List<Map<String, dynamic>>.from(json['initialDeck']) : null,
+        turnsBeforeDutch: json['turnsBeforeDutch'],
+        discardsPerRound: json['discardsPerRound'] != null ? List<int>.from(json['discardsPerRound']) : null,
+        triageDecisions: json['triageDecisions'] != null ? List<Map<String, dynamic>>.from(json['triageDecisions']) : null,
         actions: (json['actions'] as List).map((a) => BotAction.fromJson(a)).toList(),
         initialHandSize: json['initialHandSize'],
         finalScore: json['finalScore'],
