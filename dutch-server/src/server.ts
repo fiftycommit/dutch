@@ -83,10 +83,19 @@ function renderHomePage(roomCount: number) {
           </div>
         </div>
 
+        <h2>🤖 Intelligence Artificielle</h2>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="/bot-stats" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: transform 0.2s;">
+            📊 Voir l'évolution des bots
+          </a>
+        </div>
+        <p style="text-align: center; opacity: 0.8; margin-top: 10px;">
+          Suis en temps réel l'apprentissage automatique des bots, leurs statistiques et leurs personnalités !
+        </p>
+
         <h2>📡 Endpoints</h2>
         <div class="endpoint">GET <a href="/health">/health</a> - Health check</div>
         <div class="endpoint">GET <a href="/rooms">/rooms</a> - Liste des rooms</div>
-        <div class="endpoint">GET <a href="/bot-stats">🤖 /bot-stats</a> - Dashboard des bots</div>
         <div class="endpoint">WebSocket /socket.io - Connexion multijoueur</div>
 
         <h2>🎯 Comment jouer ?</h2>
