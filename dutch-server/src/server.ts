@@ -10,6 +10,7 @@ import { SecurityService } from './services/SecurityService';
 import { setupPublicRoomHandlers } from './handlers/publicRoomHandlers';
 import { publicRoomService } from './services/publicRoomService';
 import botLearningRoutes from './routes/botLearningRoutes';
+import playerLearningRoutes from './routes/playerLearningRoutes';
 
 function renderHomePage(roomCount: number) {
   return `
@@ -184,9 +185,17 @@ export function startServer() {
   // Routes pour l'apprentissage des bots
   app.use('/api/bot-learning', botLearningRoutes);
 
+  // Routes pour l'apprentissage des joueurs (profil SBMM)
+  app.use('/api/player-learning', playerLearningRoutes);
+
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
     res.sendFile('bot-dashboard.html', { root: './public' });
+  });
+
+  // Dashboard profil joueur (SBMM)
+  app.get('/player-profile', (req, res) => {
+    res.sendFile('player-profile.html', { root: './public' });
   });
 
   const PORT = process.env.PORT || 3000;

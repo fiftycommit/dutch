@@ -106,6 +106,8 @@ class PlayerGameRecord {
   final bool calledDutch;
   final bool wonDutch;
   final List<PlayerAction> actions;
+  final Map<String, dynamic>? profileBefore;
+  final Map<String, dynamic>? profileAfter;
 
   PlayerGameRecord({
     required this.gameId,
@@ -118,6 +120,8 @@ class PlayerGameRecord {
     required this.calledDutch,
     required this.wonDutch,
     required this.actions,
+    this.profileBefore,
+    this.profileAfter,
   });
 
   Map<String, dynamic> toJson() => {
@@ -131,6 +135,8 @@ class PlayerGameRecord {
         'calledDutch': calledDutch,
         'wonDutch': wonDutch,
         'actions': actions.map((a) => a.toJson()).toList(),
+        'profileBefore': profileBefore,
+        'profileAfter': profileAfter,
       };
 
   factory PlayerGameRecord.fromJson(Map<String, dynamic> json) {
@@ -147,6 +153,12 @@ class PlayerGameRecord {
       actions: (json['actions'] as List? ?? [])
           .map((a) => PlayerAction.fromJson(Map<String, dynamic>.from(a)))
           .toList(),
+      profileBefore: json['profileBefore'] == null
+          ? null
+          : Map<String, dynamic>.from(json['profileBefore']),
+      profileAfter: json['profileAfter'] == null
+          ? null
+          : Map<String, dynamic>.from(json['profileAfter']),
     );
   }
 }

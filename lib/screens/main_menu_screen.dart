@@ -205,6 +205,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       icon: Icons.bar_chart,
                       onPressed: () => context.go('/stats'),
                     ),
+                    const SizedBox(width: 18),
+                    _buildSmallIconButton(
+                      icon: Icons.psychology,
+                      onPressed: () =>
+                          context.go('/ai-profile?slot=$selectedSlot'),
+                    ),
                   ],
                 ),
               ],
@@ -328,6 +334,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         icon: Icons.bar_chart,
                         label: 'Stats',
                         onPressed: () => context.go('/stats'),
+                      ),
+                      const SizedBox(width: 20),
+                      _buildIconButton(
+                        icon: Icons.psychology,
+                        label: 'Profil IA',
+                        onPressed: () =>
+                            context.go('/ai-profile?slot=$selectedSlot'),
                       ),
                     ],
                   ),

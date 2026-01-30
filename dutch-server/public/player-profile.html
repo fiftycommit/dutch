@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Player Profile • Dutch</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      color: white;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .sub {
+      opacity: 0.8;
+      font-size: 13px;
+    }
+    .card {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+      backdrop-filter: blur(10px);
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    label { font-size: 12px; opacity: 0.85; display: block; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.25);
+      color: white;
+      outline: none;
+    }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 900px) {
+      .row {
+        grid-template-columns: 2fr 1fr 180px;
+        align-items: end;
+      }
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .kpi {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .kpi .v { font-size: 18px; font-weight: 800; }
+    .kpi .l { font-size: 12px; opacity: 0.8; }
+    .hint { opacity: 0.7; font-size: 12px; }
+    canvas { width: 100% !important; height: 320px !important; }
+    pre { white-space: pre-wrap; word-break: break-word; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="title">🧠 Player Profile Debug</div>
+        <div class="sub">Snapshots uploadés depuis l'app • SBMM local + monitoring serveur</div>
+      </div>
+      <div class="sub"><a href="/status" style="color:#90cdf4;">/status</a> • <a href="/bot-stats" style="color:#90cdf4;">/bot-stats</a></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>clientId (SharedPreferences: multiplayer_client_id)</label>
+          <input id="clientId" placeholder="ex: 170665...-123456" />
+        </div>
+        <div>
+          <label>slotId</label>
+          <input id="slotId" type="number" value="1" min="1" max="3" />
+        </div>
+        <div>
+          <button onclick="loadProfile()">Charger</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        Si tu ne vois rien: joue une partie, puis l'app upload le profil au serveur.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="gamesAnalyzed">0</div><div class="l">Parties analysées</div></div>
+        <div class="kpi"><div class="v" id="lastUpdated">-</div><div class="l">Dernière MAJ</div></div>
+        <div class="kpi"><div class="v" id="profileId">-</div><div class="l">ProfileId</div></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div style="font-weight:800; margin-bottom:8px;">Paramètres (radar)</div>
+        <canvas id="radar"></canvas>
+      </div>
+      <div class="card">
+        <div style="font-weight:800; margin-bottom:8px;">Évolution (10 dernières parties)</div>
+        <canvas id="lines"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">JSON brut</div>
+      <pre id="raw">-</pre>
+    </div>
+  </div>
+
+<script>
+  let radarChart;
+  let lineChart;
+
+  function clamp01(v) {
+    if (v < 0) return 0;
+    if (v > 1) return 1;
+    return v;
+  }
+
+  function getNum(obj, key, fallback) {
+    const v = obj?.[key];
+    if (typeof v === 'number') return v;
+    return fallback;
+  }
+
+  function renderCharts(profile, history) {
+    const p = profile.learnedParameters || {};
+
+    const labels = ['aggressiveness','caution','powerUsageRate','memoryAccuracy','riskTolerance'];
+    const values = labels.map(k => clamp01(getNum(p, k, 0.5)));
+
+    const radarData = {
+      labels,
+      datasets: [{
+        label: 'Profil',
+        data: values,
+        borderColor: 'rgba(72,187,120,1)',
+        backgroundColor: 'rgba(72,187,120,0.2)',
+        pointBackgroundColor: 'rgba(72,187,120,1)',
+        borderWidth: 2,
+      }]
+    };
+
+    if (radarChart) radarChart.destroy();
+    radarChart = new Chart(document.getElementById('radar'), {
+      type: 'radar',
+      data: radarData,
+      options: {
+        responsive: true,
+        scales: { r: { min: 0, max: 1, ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.12)' }, angleLines: { color: 'rgba(255,255,255,0.12)' }, pointLabels: { color: 'rgba(255,255,255,0.85)' } } },
+        plugins: { legend: { labels: { color: 'white' } } }
+      }
+    });
+
+    const last = (history || []).slice(0, 10).reverse();
+    const x = last.map((g, idx) => `G${idx+1}`);
+
+    function series(key, fallback) {
+      return last.map(g => clamp01(getNum(g.profileAfter || {}, key, fallback)));
+    }
+
+    const lineData = {
+      labels: x,
+      datasets: [
+        { label: 'memoryAccuracy', data: series('memoryAccuracy', 0.7), borderColor: '#63b3ed', tension: 0.35 },
+        { label: 'powerUsageRate', data: series('powerUsageRate', 0.5), borderColor: '#f6ad55', tension: 0.35 },
+        { label: 'riskTolerance', data: series('riskTolerance', 0.5), borderColor: '#fc8181', tension: 0.35 },
+      ]
+    };
+
+    if (lineChart) lineChart.destroy();
+    lineChart = new Chart(document.getElementById('lines'), {
+      type: 'line',
+      data: lineData,
+      options: {
+        responsive: true,
+        scales: {
+          x: { ticks: { color: 'rgba(255,255,255,0.85)' }, grid: { color: 'rgba(255,255,255,0.08)' } },
+          y: { min: 0, max: 1, ticks: { color: 'rgba(255,255,255,0.85)' }, grid: { color: 'rgba(255,255,255,0.08)' } },
+        },
+        plugins: { legend: { labels: { color: 'white' } } }
+      }
+    });
+  }
+
+  async function loadProfile() {
+    const clientId = document.getElementById('clientId').value.trim();
+    const slotId = document.getElementById('slotId').value;
+
+    if (!clientId) {
+      alert('clientId requis');
+      return;
+    }
+
+    const res = await fetch(`/api/player-learning/profile?clientId=${encodeURIComponent(clientId)}&slotId=${encodeURIComponent(slotId)}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+      throw new Error(data?.error || 'Erreur');
+    }
+
+    document.getElementById('gamesAnalyzed').textContent = data.profile.gamesAnalyzed ?? 0;
+    document.getElementById('lastUpdated').textContent = new Date(data.profile.updatedAt || data.profile.lastUpdatedAt).toLocaleString('fr-FR');
+    document.getElementById('profileId').textContent = data.profile.profileId || '-';
+
+    document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+
+    renderCharts(data.profile, data.history);
+  }
+</script>
+</body>
+</html>

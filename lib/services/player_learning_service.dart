@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/card.dart';
@@ -8,6 +9,7 @@ import '../models/player_learning_data.dart';
 class PlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
   static const String _historyKeyPrefix = 'player_action_history_slot_';
+  static const String _serverUrl = 'https://dutch-game.me/api/player-learning';
 
   final Map<String, DateTime> _gameStart = {};
   final Map<String, List<PlayerAction>> _pendingActions = {};
@@ -35,6 +37,23 @@ class PlayerLearningService {
   Future<void> _saveProfile(PlayerProfile profile, {required int slotId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_profileKey(slotId), profile.toJsonString());
+  }
+
+  Future<List<PlayerGameRecord>> getHistory({required int slotId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_historyKey(slotId)) ?? [];
+    final records = <PlayerGameRecord>[];
+
+    for (final item in raw) {
+      try {
+        final decoded = jsonDecode(item);
+        records.add(PlayerGameRecord.fromJson(Map<String, dynamic>.from(decoded)));
+      } catch (_) {
+        // ignore malformed history item
+      }
+    }
+
+    return records;
   }
 
   void startGame({
@@ -97,6 +116,8 @@ class PlayerLearningService {
     final start = _gameStart[gameId] ?? DateTime.now();
     final actions = _pendingActions[gameId] ?? [];
 
+    final profileBefore = await getProfile(slotId: slotId);
+
     final record = PlayerGameRecord(
       gameId: gameId,
       startTime: start,
@@ -108,13 +129,30 @@ class PlayerLearningService {
       calledDutch: calledDutch,
       wonDutch: wonDutch,
       actions: actions,
+      profileBefore: Map<String, dynamic>.from(profileBefore.learnedParameters),
     );
 
-    await _appendHistory(record, slotId: slotId);
-
-    final profile = await getProfile(slotId: slotId);
-    final updated = _updateProfile(profile, record);
+    final updated = _updateProfile(profileBefore, record);
     await _saveProfile(updated, slotId: slotId);
+
+    final recordWithAfter = PlayerGameRecord(
+      gameId: record.gameId,
+      startTime: record.startTime,
+      endTime: record.endTime,
+      usedSBMM: record.usedSBMM,
+      numberOfPlayers: record.numberOfPlayers,
+      finalRank: record.finalRank,
+      finalScore: record.finalScore,
+      calledDutch: record.calledDutch,
+      wonDutch: record.wonDutch,
+      actions: record.actions,
+      profileBefore: record.profileBefore,
+      profileAfter: Map<String, dynamic>.from(updated.learnedParameters),
+    );
+
+    await _appendHistory(recordWithAfter, slotId: slotId);
+
+    await _uploadToServer(slotId: slotId, profile: updated);
 
     _gameStart.remove(gameId);
     _pendingActions.remove(gameId);
@@ -130,6 +168,46 @@ class PlayerLearningService {
     final trimmed = updated.length > 10 ? updated.sublist(0, 10) : updated;
 
     await prefs.setStringList(_historyKey(slotId), trimmed);
+  }
+
+  Future<void> _uploadToServer({
+    required int slotId,
+    required PlayerProfile profile,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final clientId = prefs.getString('multiplayer_client_id');
+      if (clientId == null || clientId.isEmpty) return;
+
+      final history = await getHistory(slotId: slotId);
+
+      final payload = {
+        'clientId': clientId,
+        'slotId': slotId,
+        'profile': profile.toJson(),
+        'history': history.map((g) => {
+              'gameId': g.gameId,
+              'startTime': g.startTime.toIso8601String(),
+              'endTime': g.endTime.toIso8601String(),
+              'usedSBMM': g.usedSBMM,
+              'numberOfPlayers': g.numberOfPlayers,
+              'finalRank': g.finalRank,
+              'finalScore': g.finalScore,
+              'calledDutch': g.calledDutch,
+              'wonDutch': g.wonDutch,
+              'profileBefore': g.profileBefore,
+              'profileAfter': g.profileAfter,
+            }).toList(),
+      };
+
+      await http.post(
+        Uri.parse('$_serverUrl/upload'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+    } catch (_) {
+      // best-effort
+    }
   }
 
   PlayerProfile _updateProfile(PlayerProfile profile, PlayerGameRecord record) {

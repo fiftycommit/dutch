@@ -13,6 +13,7 @@ import '../screens/dutch_reveal_screen.dart';
 import '../screens/rules_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/stats_screen.dart';
+import '../screens/ai_profile_screen.dart';
 import '../screens/multiplayer_menu_screen.dart';
 import '../screens/multiplayer_mode_selection_screen.dart';
 import '../screens/create_mode_selection_screen.dart';
@@ -105,6 +106,15 @@ class AppRouter {
           path: '/stats',
           name: 'stats',
           builder: (context, state) => const StatsScreen(),
+        ),
+
+        GoRoute(
+          path: '/ai-profile',
+          name: 'aiProfile',
+          builder: (context, state) {
+            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            return AiProfileScreen(slotId: slot);
+          },
         ),
 
         // ============ MODE MULTIJOUEUR ============
