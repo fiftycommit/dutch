@@ -661,13 +661,15 @@ class MultiplayerService {
     _socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
       if (completer.isCompleted) return;
       
+      debugPrint('📦 Réponse reçue: $response');
+      
       if (response == null) {
         debugPrint('❌ Pas de réponse du serveur');
         completer.complete([]);
         return;
       }
 
-      if (response['success'] == true) {
+      if (response is Map && response['success'] == true) {
         final rooms = response['rooms'] as List<dynamic>?;
         if (rooms != null) {
           final publicRooms = rooms
@@ -679,12 +681,12 @@ class MultiplayerService {
           completer.complete([]);
         }
       } else {
-        debugPrint('❌ Erreur récupération rooms: ${response['error']}');
+        debugPrint('❌ Erreur récupération rooms: ${response is Map ? response['error'] : 'Format invalide'}');
         completer.complete([]);
       }
     });
 
-    // Timeout de 5 secondes pour éviter d'attendre indéfiniment
+    // Timeout de 5 secondes
     return completer.future.timeout(
       const Duration(seconds: 5),
       onTimeout: () {

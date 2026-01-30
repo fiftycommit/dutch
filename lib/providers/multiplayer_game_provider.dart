@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
@@ -415,7 +416,10 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         }
       }
       
-      notifyListeners();
+      // Utiliser addPostFrameCallback pour éviter setState during build
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     };
 
     _multiplayerService.onRoomClosed = (data) {

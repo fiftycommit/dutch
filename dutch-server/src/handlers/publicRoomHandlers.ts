@@ -25,6 +25,7 @@ export function setupPublicRoomHandlers(socket: Socket, rooms: Map<string, any>)
         gameMode: room.gameMode,
         host: room.host,
         hostMMR: room.hostMMR,
+        isPublic: true,
       }));
 
       console.log(`🔍 ${socket.id} demande les rooms publiques: ${formattedRooms.length} trouvées`);

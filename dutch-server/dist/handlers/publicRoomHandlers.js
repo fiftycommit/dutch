@@ -28,6 +28,7 @@ function setupPublicRoomHandlers(socket, rooms) {
                 gameMode: room.gameMode,
                 host: room.host,
                 hostMMR: room.hostMMR,
+                isPublic: true,
             }));
             console.log(`🔍 ${socket.id} demande les rooms publiques: ${formattedRooms.length} trouvées`);
             if (typeof callback === 'function') {
