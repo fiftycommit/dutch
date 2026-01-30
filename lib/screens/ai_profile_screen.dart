@@ -254,7 +254,7 @@ class _ClientIdCard extends StatelessWidget {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                SelectableText(
                   value ?? 'Non initialisé (joue une partie multi ou relance l’app)',
                   style: const TextStyle(color: Colors.white60, fontSize: 12),
                 ),
