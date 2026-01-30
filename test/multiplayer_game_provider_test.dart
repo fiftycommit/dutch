@@ -74,7 +74,12 @@ class FakeMultiplayerService extends MultiplayerService {
       null;
 
   @override
-  Future<bool> startGame({bool fillBots = false}) async => true;
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async => true;
 
   @override
   void setFocused(bool focused) {

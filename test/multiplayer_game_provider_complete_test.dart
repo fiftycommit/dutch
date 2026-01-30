@@ -69,8 +69,13 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  Future<bool> startGame({bool fillBots = false}) async {
-    calls.add('startGame:$fillBots');
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async {
+    calls.add('startGame:$fillBots:$numberOfBots:$useSBMM:$botDifficulty');
     return true;
   }
 

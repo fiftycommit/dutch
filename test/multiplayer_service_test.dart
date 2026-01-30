@@ -86,9 +86,20 @@ class TestableMultiplayerService extends MultiplayerService {
   }
 
   @override
-  Future<bool> startGame({bool fillBots = false}) async {
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async {
     methodCalls.add('startGame');
-    emittedEvents.add({'event': 'room:start_game', 'fillBots': fillBots});
+    emittedEvents.add({
+      'event': 'room:start_game',
+      'fillBots': fillBots,
+      'numberOfBots': numberOfBots,
+      'useSBMM': useSBMM,
+      'botDifficulty': botDifficulty,
+    });
     return true;
   }
 

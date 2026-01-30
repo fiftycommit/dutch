@@ -38,7 +38,12 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  Future<bool> startGame({bool fillBots = false}) async {
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async {
     // Simulate game start event
     onGameStarted?.call("Game Started");
 

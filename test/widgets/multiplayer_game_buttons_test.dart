@@ -53,7 +53,12 @@ class MockMultiplayerService extends MultiplayerService {
           {required String roomCode, required String playerName}) async =>
       {'success': true};
   @override
-  Future<bool> startGame({bool fillBots = false}) async => true;
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async => true;
   @override
   void attemptMatch(int cardIndex) {}
   @override
