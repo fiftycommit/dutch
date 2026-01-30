@@ -1091,6 +1091,75 @@ class SpecialPowerDialogs {
     );
   }
 
+  static void showBotSpyNotification(
+      BuildContext context, Player bot, String targetName, int cardIndex) {
+    final isMe = targetName == "Vous";
+    String botDisplay = _getBotPositionDisplay(context, bot);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: Colors.blue.shade900,
+        builder: (context, metrics) {
+          final gapS = metrics.space(12);
+          final gapM = metrics.space(20);
+          final iconSize = metrics.size(50);
+          final titleSize = metrics.font(20);
+          final bodySize = metrics.font(14);
+          final alertSize = metrics.font(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.remove_red_eye, color: Colors.white, size: iconSize),
+              SizedBox(height: gapS),
+              Text(
+                "👁️ ESPIONNAGE !",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: gapS),
+              Text(
+                "$botDisplay espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              ),
+              if (isMe) ...[
+                SizedBox(height: metrics.space(8)),
+                Text(
+                  "Un bot connaît maintenant votre carte",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: alertSize,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+              SizedBox(height: gapM),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue.shade900,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(28),
+                      vertical: metrics.space(12)),
+                ),
+                child: Text("OK",
+                    style:
+                        TextStyle(fontSize: buttonSize, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   static String _getBotPositionDisplay(BuildContext context, Player bot) {
     try {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);

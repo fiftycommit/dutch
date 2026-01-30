@@ -511,6 +511,17 @@ class BotAI {
           idx = _random.nextInt(target.hand.length);
         }
         GameLogic.lookAtCard(gameState, target, idx);
+        
+        // Notification si le bot espionne le joueur humain
+        if (target.isHuman && _context != null) {
+          final gameProvider = Provider.of<GameProvider>(_context!, listen: false);
+          gameProvider.pauseReactionTimerForNotification();
+
+          SpecialPowerDialogs.showBotSpyNotification(_context!, bot, target.name, idx);
+          await Future.delayed(const Duration(milliseconds: 2000));
+
+          gameProvider.resumeReactionTimerAfterNotification();
+        }
       }
     } else if (val == 'V') {
       await _executeValetStrategy(gameState, bot, difficulty);
