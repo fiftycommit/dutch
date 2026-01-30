@@ -34,6 +34,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie'),
         backgroundColor: const Color(0xFF1a3a28),
