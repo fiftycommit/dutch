@@ -364,10 +364,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
   // Liste de prénoms pour les bots
   static final List<String> _botNames = [
-    'Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'Felix',
-    'Grace', 'Hugo', 'Iris', 'Jack', 'Luna', 'Max',
-    'Nina', 'Oscar', 'Paul', 'Rose', 'Sam', 'Tom',
-    'Victor', 'Zoe', 'Arthur', 'Clara', 'David', 'Eva'
+    'Max', 'Yanis', 'Rohi', 'Millie', 'Kellinho', 'Kifa', 'Zoe', 'VR6'
   ];
   
   static final Set<String> _usedNames = {};
