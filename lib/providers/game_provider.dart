@@ -113,6 +113,8 @@ class GameProvider with ChangeNotifier {
           gameState: _gameState!,
           usedSBMM: useSBMM,
         );
+        // Initialiser le premier round
+        _botLearningService.startNewRound(player.id);
       }
     }
 
@@ -179,9 +181,8 @@ class GameProvider with ChangeNotifier {
     GameLogic.replaceCard(_gameState!, cardIndex);
     final afterScore = human.getEstimatedScore();
     
-    // Tracker: incrémenter tours et enregistrer défausse pour tous les bots
+    // Tracker: enregistrer défausse pour tous les bots
     for (var player in _gameState!.players.where((p) => !p.isHuman)) {
-      _botLearningService.incrementTurn(player.id);
       _botLearningService.recordDiscard(player.id);
     }
 
@@ -232,9 +233,8 @@ class GameProvider with ChangeNotifier {
     GameLogic.discardDrawnCard(_gameState!);
     final afterScore = human.getEstimatedScore();
     
-    // Tracker: incrémenter tours et enregistrer défausse pour tous les bots
+    // Tracker: enregistrer défausse pour tous les bots
     for (var player in _gameState!.players.where((p) => !p.isHuman)) {
-      _botLearningService.incrementTurn(player.id);
       _botLearningService.recordDiscard(player.id);
     }
 
@@ -763,6 +763,12 @@ class GameProvider with ChangeNotifier {
     _gameState!.lastSpiedCard = null;
 
     GameLogic.nextPlayer(_gameState!);
+    
+    // Tracker: incrémenter le compteur de tours pour tous les bots à chaque changement de joueur
+    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
+      _botLearningService.incrementTurn(player.id);
+    }
+    
     notifyListeners();
 
     if (!_gameState!.currentPlayer.isHuman && !_isPaused) {
