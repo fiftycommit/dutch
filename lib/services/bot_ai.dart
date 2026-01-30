@@ -702,11 +702,7 @@ class BotAI {
 
     GameLogic.swapCards(gs, bot, myCardIdx, target, targetIdx);
 
-    // DEBUG: Vérifier si la notification devrait s'afficher
-    print('DEBUG Valet: target.isHuman=${target.isHuman}, target.name=${target.name}, _context=${_context != null}');
-    
     if (target.isHuman && _context != null) {
-      print('DEBUG Valet: Affichage de la notification');
       final gameProvider = Provider.of<GameProvider>(_context!, listen: false);
       gameProvider.pauseReactionTimerForNotification();
 
@@ -714,8 +710,6 @@ class BotAI {
       await Future.delayed(const Duration(milliseconds: 2000));
 
       gameProvider.resumeReactionTimerAfterNotification();
-    } else {
-      print('DEBUG Valet: Notification ignorée - isHuman=${target.isHuman}, context=${_context != null}');
     }
   }
 

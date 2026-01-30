@@ -46,6 +46,10 @@ export class RoomManager {
   private stalePlayerMs: number;
   private now: () => number;
 
+  public getIO(): Server {
+    return this.io;
+  }
+
   constructor(private io: Server, options: Partial<RoomManagerOptions> = {}) {
     this.turnTimeoutMs = options.turnTimeoutMs ?? 20000;
     this.presenceGraceMs = options.presenceGraceMs ?? 3000;
