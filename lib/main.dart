@@ -67,6 +67,9 @@ class _DutchGameAppState extends State<DutchGameApp> {
             routerConfig: router,
             title: 'Dutch Card Game',
             debugShowCheckedModeBanner: false,
+            builder: (context, child) {
+              return SelectionArea(child: child ?? const SizedBox.shrink());
+            },
             theme: ThemeData(
               primarySwatch: Colors.green,
               scaffoldBackgroundColor:
