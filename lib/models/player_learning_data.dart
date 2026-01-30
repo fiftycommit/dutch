@@ -61,6 +61,7 @@ class PlayerProfile {
   final DateTime createdAt;
   final DateTime lastUpdatedAt;
   final int gamesAnalyzed;
+  final int mmr;
   final Map<String, dynamic> learnedParameters;
 
   PlayerProfile({
@@ -68,6 +69,7 @@ class PlayerProfile {
     required this.createdAt,
     required this.lastUpdatedAt,
     required this.gamesAnalyzed,
+    this.mmr = 1000,
     required this.learnedParameters,
   });
 
@@ -77,6 +79,7 @@ class PlayerProfile {
       createdAt: DateTime.now(),
       lastUpdatedAt: DateTime.now(),
       gamesAnalyzed: 0,
+      mmr: 1000,
       learnedParameters: {
         'aggressiveness': 0.5,
         'caution': 0.5,
@@ -102,6 +105,7 @@ class PlayerProfile {
         'createdAt': createdAt.toIso8601String(),
         'lastUpdatedAt': lastUpdatedAt.toIso8601String(),
         'gamesAnalyzed': gamesAnalyzed,
+        'mmr': mmr,
         'learnedParameters': learnedParameters,
       };
 
@@ -112,12 +116,22 @@ class PlayerProfile {
       lastUpdatedAt:
           DateTime.tryParse(json['lastUpdatedAt'] ?? '') ?? DateTime.now(),
       gamesAnalyzed: json['gamesAnalyzed'] ?? 0,
+      mmr: json['mmr'] ?? 1000,
       learnedParameters:
           Map<String, dynamic>.from(json['learnedParameters'] ?? {}),
     );
   }
 
-  String toJsonString() => jsonEncode(toJson());
+  String toJsonString() {
+    return jsonEncode({
+      'profileId': profileId,
+      'createdAt': createdAt.toIso8601String(),
+      'lastUpdatedAt': lastUpdatedAt.toIso8601String(),
+      'gamesAnalyzed': gamesAnalyzed,
+      'mmr': mmr,
+      'learnedParameters': learnedParameters,
+    });
+  }
 
   factory PlayerProfile.fromJsonString(String raw) {
     return PlayerProfile.fromJson(jsonDecode(raw));

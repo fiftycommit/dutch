@@ -402,11 +402,19 @@ class PlayerLearningService {
     params['caution_winning'] = clamp01(newCautionWinning);
     params['caution_losing'] = clamp01(newCautionLosing);
 
+    // Calcul du MMR selon le nombre de joueurs et le classement final
+    final int newMMR = _calculateMMRChange(
+      currentMMR: profile.mmr,
+      finalRank: record.finalRank,
+      numberOfPlayers: record.numberOfPlayers,
+    );
+
     return PlayerProfile(
       profileId: profile.profileId,
       createdAt: profile.createdAt,
       lastUpdatedAt: DateTime.now(),
       gamesAnalyzed: profile.gamesAnalyzed + 1,
+      mmr: newMMR,
       learnedParameters: params,
     );
   }
@@ -431,6 +439,37 @@ class PlayerLearningService {
           .map((p) => p.hand.length)
           .toList(),
     };
+  }
+
+  /// Calcule le changement de MMR selon le classement final et le nombre de joueurs
+  /// Plus il y a de joueurs, plus les gains/pertes sont importants
+  int _calculateMMRChange({
+    required int currentMMR,
+    required int finalRank,
+    required int numberOfPlayers,
+  }) {
+    // Multiplicateur selon le nombre de joueurs (2-6 joueurs)
+    // 2 joueurs: x1.0, 3: x1.2, 4: x1.4, 5: x1.6, 6: x1.8
+    final double playerMultiplier = 1.0 + (numberOfPlayers - 2) * 0.2;
+    
+    // Points de base selon le classement
+    // 1er: +30, 2e: +10, 3e: 0, 4e: -10, 5e: -20, 6e: -30
+    final int basePoints = {
+      1: 30,
+      2: 10,
+      3: 0,
+      4: -10,
+      5: -20,
+      6: -30,
+    }[finalRank] ?? 0;
+    
+    // Appliquer le multiplicateur
+    final int mmrChange = (basePoints * playerMultiplier).round();
+    
+    // Nouveau MMR (minimum 0)
+    final int newMMR = (currentMMR + mmrChange).clamp(0, 9999);
+    
+    return newMMR;
   }
 
   static bool isBadPowerDecision({
