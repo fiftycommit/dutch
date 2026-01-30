@@ -86,6 +86,7 @@ function renderHomePage(roomCount: number) {
         <h2>📡 Endpoints</h2>
         <div class="endpoint">GET <a href="/health">/health</a> - Health check</div>
         <div class="endpoint">GET <a href="/rooms">/rooms</a> - Liste des rooms</div>
+        <div class="endpoint">GET <a href="/bot-stats">🤖 /bot-stats</a> - Dashboard des bots</div>
         <div class="endpoint">WebSocket /socket.io - Connexion multijoueur</div>
 
         <h2>🎯 Comment jouer ?</h2>
@@ -176,7 +177,7 @@ export function startServer() {
 
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
-    res.sendFile('bot-stats.html', { root: './public' });
+    res.sendFile('bot-dashboard.html', { root: './public' });
   });
 
   const PORT = process.env.PORT || 3000;

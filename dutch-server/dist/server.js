@@ -15,6 +15,7 @@ const gameHandler_1 = require("./handlers/gameHandler");
 const SecurityService_1 = require("./services/SecurityService");
 const publicRoomHandlers_1 = require("./handlers/publicRoomHandlers");
 const publicRoomService_1 = require("./services/publicRoomService");
+const botLearningRoutes_1 = __importDefault(require("./routes/botLearningRoutes"));
 function renderHomePage(roomCount) {
     return `
     <!DOCTYPE html>
@@ -90,6 +91,7 @@ function renderHomePage(roomCount) {
         <h2>📡 Endpoints</h2>
         <div class="endpoint">GET <a href="/health">/health</a> - Health check</div>
         <div class="endpoint">GET <a href="/rooms">/rooms</a> - Liste des rooms</div>
+        <div class="endpoint">GET <a href="/bot-stats">🤖 /bot-stats</a> - Dashboard des bots</div>
         <div class="endpoint">WebSocket /socket.io - Connexion multijoueur</div>
 
         <h2>🎯 Comment jouer ?</h2>
@@ -162,6 +164,12 @@ function startServer() {
     app.get('/rooms/stats', (req, res) => {
         const stats = publicRoomService_1.publicRoomService.getStats();
         res.json({ success: true, stats });
+    });
+    // Routes pour l'apprentissage des bots
+    app.use('/api/bot-learning', botLearningRoutes_1.default);
+    // Dashboard des stats des bots
+    app.get('/bot-stats', (req, res) => {
+        res.sendFile('bot-dashboard.html', { root: './public' });
     });
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {

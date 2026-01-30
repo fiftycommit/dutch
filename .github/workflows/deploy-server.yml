@@ -80,7 +80,18 @@ jobs:
             npm install --production
             npm run build
             
+            # Create ML data directories
+            echo "Creating ML data directories..."
+            mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities}
+            chmod -R 755 data/
+            
             # Update Nginx config if needed
+            if ! grep -q "location /bot-stats" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for ML dashboard..."
+              sed -i '/location \/health {/i\    location /bot-stats {\n        proxy_pass http://dutch_backend/bot-stats;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/bot-learning {\n        proxy_pass http://dutch_backend/api/bot-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
+            
             if ! grep -q "location /status" /etc/nginx/sites-available/dutch-server; then
               echo "Updating Nginx configuration..."
               sed -i '/location \/health {/i\    location /status {\n        proxy_pass http://dutch_backend/status;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /rooms {\n        proxy_pass http://dutch_backend/rooms;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
@@ -89,3 +100,4 @@ jobs:
             
             pm2 restart dutch-server || pm2 start dist/index.js --name dutch-server
             echo "✅ Backend deployed successfully!"
+            echo "🤖 ML Dashboard: https://dutch-game.me/bot-stats"

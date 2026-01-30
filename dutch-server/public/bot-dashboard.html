@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Dashboard Bots - Dutch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .bot-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .bot-item {
+            display: grid;
+            grid-template-columns: 50px 1fr 120px 120px 100px;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            gap: 15px;
+        }
+
+        .bot-rank {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+        }
+
+        .bot-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bot-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        .bot-behavior {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .bot-mmr {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #764ba2;
+        }
+
+        .bot-winrate {
+            font-weight: 600;
+            color: #28a745;
+        }
+
+        .bot-games {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .personality-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .personality-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .personality-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .personality-desc {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+        }
+
+        .personality-traits {
+            display: grid;
+            gap: 8px;
+        }
+
+        .trait {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .trait-name {
+            color: #666;
+        }
+
+        .trait-bar {
+            flex: 1;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            margin: 0 10px;
+            overflow: hidden;
+        }
+
+        .trait-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .trait-value {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 20px;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .ml-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .ml-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .ml-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .ml-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .ml-stat:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .bot-item {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            
+            .ml-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Dashboard des Bots</h1>
+            <p class="subtitle">Suivi en temps réel de l'apprentissage automatique</p>
+        </header>
+
+        <div class="stats-grid" id="globalStats">
+            <div class="stat-card">
+                <div class="stat-label">Total Parties</div>
+                <div class="stat-value" id="totalGames">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Bots Actifs</div>
+                <div class="stat-value" id="totalBots">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Taux Victoire Moyen</div>
+                <div class="stat-value" id="avgWinRate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">MMR Moyen</div>
+                <div class="stat-value" id="avgMMR">-</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">🏆 Top 10 Bots par MMR</h2>
+            <div id="topBots" class="bot-list">
+                <div class="loading">Chargement...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">🧠 Statistiques Machine Learning</h2>
+            <div id="mlStats" class="ml-stats">
+                <div class="loading">Chargement...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">🎭 Personnalités Disponibles</h2>
+            <div id="personalities" class="personality-grid">
+                <div class="loading">Chargement...</div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="loadAllData()">🔄 Actualiser</button>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function fetchAPI(endpoint) {
+            try {
+                const response = await fetch(`${API_BASE}/api/bot-learning${endpoint}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error(`Erreur API ${endpoint}:`, error);
+                return null;
+            }
+        }
+
+        async function loadGlobalStats() {
+            const stats = await fetchAPI('/stats');
+            if (!stats) return;
+
+            document.getElementById('totalGames').textContent = stats.totalGames || 0;
+            document.getElementById('totalBots').textContent = stats.totalBots || 0;
+            document.getElementById('avgWinRate').textContent = 
+                stats.avgWinRate ? `${(stats.avgWinRate * 100).toFixed(1)}%` : '-';
+            document.getElementById('avgMMR').textContent = 
+                stats.avgMMR ? Math.round(stats.avgMMR) : '-';
+        }
+
+        async function loadTopBots() {
+            const bots = await fetchAPI('/top-bots?limit=10');
+            const container = document.getElementById('topBots');
+            
+            if (!bots || bots.length === 0) {
+                container.innerHTML = '<div class="loading">Aucun bot trouvé</div>';
+                return;
+            }
+
+            container.innerHTML = bots.map((bot, index) => `
+                <div class="bot-item">
+                    <div class="bot-rank">#${index + 1}</div>
+                    <div class="bot-info">
+                        <div class="bot-name">${bot.botName || 'Bot inconnu'}</div>
+                        <div class="bot-behavior">${bot.behavior || 'balanced'} • ${bot.skillLevel || 'silver'}</div>
+                    </div>
+                    <div class="bot-mmr">${Math.round(bot.mmr || 1500)} MMR</div>
+                    <div class="bot-winrate">${((bot.wins / bot.totalGames) * 100).toFixed(1)}% WR</div>
+                    <div class="bot-games">${bot.totalGames} parties</div>
+                </div>
+            `).join('');
+        }
+
+        async function loadMLStats() {
+            const stats = await fetchAPI('/ml-stats');
+            const container = document.getElementById('mlStats');
+            
+            if (!stats) {
+                container.innerHTML = '<div class="loading">Erreur de chargement</div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="ml-card">
+                    <div class="ml-title">🎯 Q-Learning</div>
+                    <div class="ml-stat">
+                        <span>États explorés</span>
+                        <strong>${stats.qLearning?.totalStates || 0}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Actions totales</span>
+                        <strong>${stats.qLearning?.totalActions || 0}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Visites totales</span>
+                        <strong>${stats.qLearning?.totalVisits || 0}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Actions/État (moy)</span>
+                        <strong>${stats.qLearning?.avgActionsPerState?.toFixed(2) || '0.00'}</strong>
+                    </div>
+                </div>
+                <div class="ml-card">
+                    <div class="ml-title">🧠 Réseau de Neurones</div>
+                    <div class="ml-stat">
+                        <span>Architecture</span>
+                        <strong>${stats.neuralNetwork?.architecture || '-'}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Couches</span>
+                        <strong>${stats.neuralNetwork?.totalLayers || 0}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Paramètres</span>
+                        <strong>${stats.neuralNetwork?.totalParameters || 0}</strong>
+                    </div>
+                    <div class="ml-stat">
+                        <span>Parties entraînées</span>
+                        <strong>${stats.neuralNetwork?.gamesProcessed || 0}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadPersonalities() {
+            const personalities = await fetchAPI('/personalities');
+            const container = document.getElementById('personalities');
+            
+            if (!personalities || personalities.length === 0) {
+                container.innerHTML = '<div class="loading">Aucune personnalité trouvée</div>';
+                return;
+            }
+
+            container.innerHTML = personalities.map(p => `
+                <div class="personality-card">
+                    <div class="personality-name">${p.name}</div>
+                    <div class="personality-desc">${p.description}</div>
+                    <div class="personality-traits">
+                        <div class="trait">
+                            <span class="trait-name">Agressivité</span>
+                            <div class="trait-bar">
+                                <div class="trait-fill" style="width: ${p.traits.aggressiveness * 100}%"></div>
+                            </div>
+                            <span class="trait-value">${(p.traits.aggressiveness * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="trait">
+                            <span class="trait-name">Prudence</span>
+                            <div class="trait-bar">
+                                <div class="trait-fill" style="width: ${p.traits.caution * 100}%"></div>
+                            </div>
+                            <span class="trait-value">${(p.traits.caution * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="trait">
+                            <span class="trait-name">Prise de risque</span>
+                            <div class="trait-bar">
+                                <div class="trait-fill" style="width: ${p.traits.riskTolerance * 100}%"></div>
+                            </div>
+                            <span class="trait-value">${(p.traits.riskTolerance * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadAllData() {
+            await Promise.all([
+                loadGlobalStats(),
+                loadTopBots(),
+                loadMLStats(),
+                loadPersonalities()
+            ]);
+        }
+
+        // Chargement initial
+        loadAllData();
+
+        // Auto-refresh toutes les 30 secondes
+        setInterval(loadAllData, 30000);
+    </script>
+</body>
+</html>

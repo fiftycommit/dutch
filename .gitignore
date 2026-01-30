@@ -45,3 +45,27 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node.js / Server
+dutch-server/node_modules/
+dutch-server/dist/
+dutch-server/.env
+dutch-server/npm-debug.log*
+dutch-server/yarn-debug.log*
+dutch-server/yarn-error.log*
+
+# Bot Learning / ML Data
+dutch-server/data/bot-learning/games/*.json
+dutch-server/data/bot-learning/profiles/*.json
+dutch-server/data/bot-learning/qlearning/*.json
+dutch-server/data/bot-learning/neural/*.json
+dutch-server/data/bot-learning/clones/*.json
+dutch-server/data/bot-learning/personalities/*.json
+
+# Keep directory structure but ignore content
+!dutch-server/data/bot-learning/games/.gitkeep
+!dutch-server/data/bot-learning/profiles/.gitkeep
+!dutch-server/data/bot-learning/qlearning/.gitkeep
+!dutch-server/data/bot-learning/neural/.gitkeep
+!dutch-server/data/bot-learning/clones/.gitkeep
+!dutch-server/data/bot-learning/personalities/.gitkeep

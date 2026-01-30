@@ -42,7 +42,10 @@ export class BotPersonalityService {
 
   private async ensureDataDirectory() {
     try {
-      await fs.mkdir(this.dataDir, { recursive: true });
+      const fsSync = require('fs');
+      if (!fsSync.existsSync(this.dataDir)) {
+        fsSync.mkdirSync(this.dataDir, { recursive: true });
+      }
     } catch (error) {
       console.error('❌ Erreur création répertoire personalities:', error);
     }

@@ -33,7 +33,10 @@ export class PlayerCloningService {
 
   private async ensureDataDirectory() {
     try {
-      await fs.mkdir(this.dataDir, { recursive: true });
+      const fsSync = require('fs');
+      if (!fsSync.existsSync(this.dataDir)) {
+        fsSync.mkdirSync(this.dataDir, { recursive: true });
+      }
     } catch (error) {
       console.error('❌ Erreur création répertoire clones:', error);
     }
