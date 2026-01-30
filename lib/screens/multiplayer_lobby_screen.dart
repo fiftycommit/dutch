@@ -1462,32 +1462,47 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int maxPlayers,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    bool fillBots = false;
-    if (connectedHumans < maxPlayers) {
-      final choice = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Completer la table ?'),
-          content: Text(
-            'Vous etes $connectedHumans/$maxPlayers.\n'
-            'Remplir avec des bots ?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Non'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Oui'),
-            ),
-          ],
-        ),
-      );
-      fillBots = choice == true;
+    
+    // Si on a déjà le maximum de joueurs, lancer directement
+    if (connectedHumans >= maxPlayers) {
+      await provider.startGame(fillBots: false);
+      if (!mounted) return;
+      if (provider.errorMessage != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(provider.errorMessage!)),
+        );
+        provider.clearError();
+      }
+      return;
     }
 
-    await provider.startGame(fillBots: fillBots);
+    // Sinon, afficher le dialogue de sélection de bots
+    final result = await _showBotSelectionDialog(
+      context,
+      connectedHumans,
+      maxPlayers,
+      provider,
+    );
+    
+    if (result == null) return; // Annulé
+    
+    final numberOfBots = result['numberOfBots'] as int;
+    final useSBMM = result['useSBMM'] as bool;
+    final botDifficulty = result['botDifficulty'] as int?;
+    
+    // Mettre à jour les settings de la room si nécessaire
+    if (numberOfBots > 0) {
+      // TODO: Envoyer les paramètres au serveur
+      await provider.startGame(
+        fillBots: numberOfBots > 0,
+        numberOfBots: numberOfBots,
+        useSBMM: useSBMM,
+        botDifficulty: botDifficulty,
+      );
+    } else {
+      await provider.startGame(fillBots: false);
+    }
+    
     if (!mounted) return;
     if (provider.errorMessage != null) {
       messenger.showSnackBar(
@@ -1495,6 +1510,123 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       );
       provider.clearError();
     }
+  }
+
+  Future<Map<String, dynamic>?> _showBotSelectionDialog(
+    BuildContext context,
+    int connectedHumans,
+    int maxPlayers,
+    MultiplayerGameProvider provider,
+  ) async {
+    int numberOfBots = maxPlayers - connectedHumans;
+    bool useSBMM = true;
+    int botDifficulty = 1; // Moyen par défaut
+
+    return await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.smart_toy),
+              SizedBox(width: 8),
+              Text('Ajouter des bots'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vous êtes $connectedHumans/$maxPlayers joueurs.',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                
+                // Nombre de bots
+                const Text(
+                  'Nombre de bots',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: List.generate(
+                    maxPlayers - connectedHumans + 1,
+                    (index) => ChoiceChip(
+                      label: Text('$index'),
+                      selected: numberOfBots == index,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => numberOfBots = index);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                
+                if (numberOfBots > 0) ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  
+                  // Mode SBMM ou Manuel
+                  const Text(
+                    'Niveau des bots',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    title: const Text('Mode adaptatif (SBMM)'),
+                    subtitle: Text(
+                      useSBMM
+                          ? 'Les bots s\'adaptent à votre niveau'
+                          : 'Choisissez le niveau manuellement',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    value: useSBMM,
+                    onChanged: (value) {
+                      setState(() => useSBMM = value);
+                    },
+                  ),
+                  
+                  if (!useSBMM) ...[
+                    const SizedBox(height: 8),
+                    SegmentedButton<int>(
+                      segments: const [
+                        ButtonSegment(value: 0, label: Text('Facile')),
+                        ButtonSegment(value: 1, label: Text('Moyen')),
+                        ButtonSegment(value: 2, label: Text('Difficile')),
+                        ButtonSegment(value: 3, label: Text('Mix')),
+                      ],
+                      selected: {botDifficulty},
+                      onSelectionChanged: (selection) {
+                        setState(() => botDifficulty = selection.first);
+                      },
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, {
+                'numberOfBots': numberOfBots,
+                'useSBMM': useSBMM,
+                'botDifficulty': useSBMM ? null : botDifficulty,
+              }),
+              child: const Text('Lancer'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   int _connectedHumans(MultiplayerGameProvider provider) {

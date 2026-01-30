@@ -769,7 +769,12 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
-  Future<void> startGame({bool fillBots = false}) async {
+  Future<void> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async {
     if (!_isHost) {
       _errorMessage = "Seul l'hôte peut démarrer la partie";
       notifyListeners();
@@ -790,7 +795,12 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
 
     try {
       _errorMessage = null;
-      final success = await _multiplayerService.startGame(fillBots: fillBots);
+      final success = await _multiplayerService.startGame(
+        fillBots: fillBots,
+        numberOfBots: numberOfBots,
+        useSBMM: useSBMM,
+        botDifficulty: botDifficulty,
+      );
 
       if (!success) {
         _errorMessage = "Erreur lors du démarrage de la partie";

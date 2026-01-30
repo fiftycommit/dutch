@@ -9,6 +9,9 @@ export interface GameSettings {
   minPlayers: number;
   maxPlayers: number;
   fillBots: boolean;
+  useSBMM?: boolean;
+  numberOfBots?: number;
+  hostClientId?: string;
 }
 
 export enum RoomStatus {

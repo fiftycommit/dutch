@@ -754,7 +754,12 @@ class MultiplayerService {
   }
 
   // Démarrer la partie (hôte uniquement)
-  Future<bool> startGame({bool fillBots = false}) async {
+  Future<bool> startGame({
+    bool fillBots = false,
+    int? numberOfBots,
+    bool? useSBMM,
+    int? botDifficulty,
+  }) async {
     if (_currentRoomCode == null) {
       debugPrint('❌ Pas de room active');
       return false;
@@ -764,10 +769,22 @@ class MultiplayerService {
 
     debugPrint('🎮 Démarrage de la partie...');
 
-    _socket!.emitWithAck('room:start_game', {
+    final data = {
       'roomCode': _currentRoomCode,
       'fillBots': fillBots,
-    }, ack: (response) {
+    };
+    
+    if (numberOfBots != null) {
+      data['numberOfBots'] = numberOfBots;
+    }
+    if (useSBMM != null) {
+      data['useSBMM'] = useSBMM;
+    }
+    if (botDifficulty != null) {
+      data['botDifficulty'] = botDifficulty;
+    }
+
+    _socket!.emitWithAck('room:start_game', data, ack: (response) {
       if (response == null) {
         debugPrint('❌ Pas de réponse du serveur');
         completer.complete(false);

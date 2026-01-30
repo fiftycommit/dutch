@@ -243,10 +243,19 @@ class RoomManager {
         if (this.activePlayerCount(room) > maxPlayers)
             return false;
         const difficulty = this.getBotDifficulty(room.settings);
-        if (fillBots) {
-            while (room.players.length < maxPlayers) {
-                room.players.push(this.createBot(room.players.length, difficulty));
-            }
+        // Déterminer le nombre de bots à ajouter
+        let targetPlayerCount = maxPlayers;
+        if (room.settings.numberOfBots !== undefined) {
+            // Nombre de bots spécifié explicitement
+            targetPlayerCount = Math.min(room.players.length + room.settings.numberOfBots, maxPlayers);
+        }
+        else if (!fillBots) {
+            // Ne pas ajouter de bots
+            targetPlayerCount = room.players.length;
+        }
+        // Ajouter les bots jusqu'au nombre cible
+        while (room.players.length < targetPlayerCount) {
+            room.players.push(this.createBot(room.players.length, difficulty));
         }
         const gameState = (0, GameState_1.createGameState)(room.players, room.gameMode, difficulty);
         GameLogic_1.GameLogic.initializeGame(gameState);
@@ -1323,8 +1332,8 @@ class RoomManager {
             : GameState_1.Difficulty.medium;
         const minPlayersRaw = typeof settings?.minPlayers === 'number' ? settings.minPlayers : 2;
         const maxPlayersRaw = typeof settings?.maxPlayers === 'number' ? settings.maxPlayers : 4;
-        let minPlayers = Math.max(2, Math.min(4, minPlayersRaw));
-        let maxPlayers = Math.max(2, Math.min(4, maxPlayersRaw));
+        let minPlayers = Math.max(2, Math.min(6, minPlayersRaw));
+        let maxPlayers = Math.max(2, Math.min(6, maxPlayersRaw));
         if (maxPlayers < minPlayers) {
             maxPlayers = minPlayers;
         }
@@ -1346,6 +1355,8 @@ class RoomManager {
         return GameState_1.GameMode.quick;
     }
     getBotDifficulty(settings) {
+        // Le client Flutter calculera la difficulté SBMM et l'enverra dans botDifficulty
+        // Si useSBMM est true, le client aura déjà calculé la difficulté recommandée
         if (typeof settings?.botDifficulty === 'number') {
             return settings.botDifficulty;
         }
