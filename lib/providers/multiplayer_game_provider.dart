@@ -641,13 +641,42 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
-  Future<void> joinPublicRoom() async {
+  // Créer une room publique et aller au lobby
+  Future<void> createPublicRoom({String playerName = 'Joueur'}) async {
     try {
       _isConnecting = true;
       _errorMessage = null;
       notifyListeners();
 
-      // Chercher une room publique disponible ou en créer une
+      await createRoom(
+        settings: GameSettings(
+          gameMode: GameMode.quick,
+          numberOfPlayers: 4,
+          isPublic: true,
+          minPlayers: 2,
+          maxPlayers: 4,
+        ),
+        playerName: playerName,
+      );
+
+      _isConnecting = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isConnecting = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // Chercher et rejoindre une room publique existante
+  Future<void> searchAndJoinPublicRoom({String playerName = 'Joueur'}) async {
+    try {
+      _isConnecting = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      // Chercher des rooms publiques disponibles
       final publicRooms = await _multiplayerService.getPublicRooms();
       
       if (publicRooms != null && publicRooms.isNotEmpty) {
@@ -655,18 +684,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver {
         final room = publicRooms.first;
         await joinRoom(
           roomCode: room['code'] as String,
-          playerName: 'Joueur',
+          playerName: playerName,
         );
       } else {
-        // Créer une nouvelle room publique
-        await createRoom(
-          settings: GameSettings(
-            gameMode: GameMode.quick,
-            numberOfPlayers: 4,
-            isPublic: true,
-          ),
-          playerName: 'Joueur',
-        );
+        // Aucune room disponible
+        throw Exception('Aucune partie publique disponible');
       }
 
       _isConnecting = false;

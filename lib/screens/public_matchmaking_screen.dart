@@ -12,78 +12,109 @@ class PublicMatchmakingScreen extends StatefulWidget {
       _PublicMatchmakingScreenState();
 }
 
-class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late AnimationController _rotationController;
-  late Animation<double> _pulseAnimation;
-  Timer? _searchTimer;
-  int _searchDuration = 0;
+class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
+  List<Map<String, dynamic>>? _publicRooms;
+  bool _isLoading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _rotationController = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat();
-
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startMatchmaking();
+    _loadPublicRooms();
+    // Rafraîchir toutes les 5 secondes
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _loadPublicRooms();
     });
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _rotationController.dispose();
-    _searchTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
-  void _startMatchmaking() {
+  Future<void> _loadPublicRooms() async {
     final provider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
-
-    setState(() {
-      _searchDuration = 0;
-    });
-
-    _searchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _searchDuration++;
-        });
-      }
-    });
-
-    provider.joinPublicRoom();
+    
+    final rooms = await provider.getPublicRooms();
+    
+    if (mounted) {
+      setState(() {
+        _publicRooms = rooms;
+        _isLoading = false;
+      });
+    }
   }
 
-  void _cancelMatchmaking() {
+  Future<void> _joinRoom(String roomCode, String playerName) async {
     final provider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
-
-    _searchTimer?.cancel();
-
-    provider.leaveRoom();
-    context.pop();
+    
+    try {
+      await provider.joinRoom(
+        roomCode: roomCode,
+        playerName: playerName,
+      );
+      
+      if (!mounted) return;
+      context.go('/lobby');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final secs = seconds % 60;
-    return '${minutes.toString().padLeft(1, '0')}:${secs.toString().padLeft(2, '0')}';
+  void _goBack() {
+    context.go('/multiplayer/mode-selection');
+  }
+
+  String _getTierFromMMR(int? mmr) {
+    if (mmr == null) return 'Bronze';
+    
+    // Même logique que CompetitiveService._getTier()
+    if (mmr >= 2200) return 'Diamant';
+    if (mmr >= 1900) return 'Platine';
+    if (mmr >= 1600) return 'Or';
+    if (mmr >= 1300) return 'Argent';
+    return 'Bronze';
+  }
+
+  Color _getTierColor(String tier) {
+    switch (tier) {
+      case 'Diamant':
+        return Colors.cyan.shade700;
+      case 'Platine':
+        return Colors.purple.shade400;
+      case 'Or':
+        return Colors.amber.shade700;
+      case 'Argent':
+        return Colors.grey.shade600;
+      case 'Bronze':
+        return Colors.brown.shade600;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getTierIcon(String tier) {
+    switch (tier) {
+      case 'Diamant':
+        return Icons.diamond;
+      case 'Platine':
+      case 'Or':
+      case 'Argent':
+        return Icons.military_tech;
+      case 'Bronze':
+        return Icons.shield;
+      default:
+        return Icons.emoji_events;
+    }
   }
 
   @override
@@ -101,171 +132,266 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen>
           ),
         ),
         child: SafeArea(
-          child: Consumer<MultiplayerGameProvider>(
-            builder: (context, provider, child) {
-              if (provider.isInLobby && !provider.isPlaying) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    context.go('/multiplayer/lobby');
-                  }
-                });
-              }
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon:
-                              const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: _cancelMatchmaking,
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'RECHERCHE DE PARTIE',
-                          style: TextStyle(
-                            color: Colors.amber,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ],
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: _goBack,
                     ),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ScaleTransition(
-                            scale: _pulseAnimation,
-                            child: RotationTransition(
-                              turns: _rotationController,
-                              child: Container(
-                                width: 120,
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      Colors.blue.shade400,
-                                      Colors.blue.shade700,
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          Colors.blue.withValues(alpha: 0.5),
-                                      blurRadius: 30,
-                                      spreadRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.search,
-                                  size: 60,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 40),
-                          const Text(
-                            'Recherche de joueurs...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _formatDuration(_searchDuration),
-                            style: TextStyle(
-                              color: Colors.blue.shade300,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 40),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black26,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.blue.withValues(alpha: 0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                    const SizedBox(width: 12),
+                    const Text(
+                      'PARTIES PUBLIQUES',
+                      style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      onPressed: _loadPublicRooms,
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.amber),
+                      )
+                    : _publicRooms == null || _publicRooms!.isEmpty
+                        ? _buildEmptyState()
+                        : _buildRoomList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(isMobile ? 20 : 40),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.search_off,
+                      size: isMobile ? 80 : 100,
+                      color: Colors.white54,
+                    ),
+                    SizedBox(height: isMobile ? 16 : 24),
+                    Text(
+                      'Aucune partie disponible',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isMobile ? 20 : 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: isMobile ? 8 : 12),
+                    Text(
+                      'Créez une partie ou réessayez plus tard',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: isMobile ? 14 : 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoomList() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        return ListView.builder(
+          padding: EdgeInsets.all(isMobile ? 16 : 20),
+          itemCount: _publicRooms!.length,
+          itemBuilder: (context, index) {
+            final room = _publicRooms![index];
+            final roomCode = room['code'] as String;
+            final players = room['players'] as int;
+            final maxPlayers = room['maxPlayers'] as int;
+            final host = room['host'] as String;
+            final hostMMR = room['hostMMR'] as int?;
+            final tier = _getTierFromMMR(hostMMR);
+            final tierColor = _getTierColor(tier);
+            final tierIcon = _getTierIcon(tier);
+            
+            return Card(
+              margin: EdgeInsets.only(bottom: isMobile ? 12 : 16),
+              color: Colors.white.withValues(alpha: 0.95),
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: InkWell(
+                onTap: () => _showJoinDialog(roomCode),
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: EdgeInsets.all(isMobile ? 16 : 20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: isMobile ? 50 : 60,
+                        height: isMobile ? 50 : 60,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.people,
+                          size: isMobile ? 28 : 32,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                      SizedBox(width: isMobile ? 12 : 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Icon(
-                                  Icons.people,
-                                  color: Colors.blue.shade300,
-                                  size: 20,
+                                Text(
+                                  roomCode,
+                                  style: TextStyle(
+                                    fontSize: isMobile ? 16 : 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                    letterSpacing: 2,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 6 : 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tierColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        tierIcon,
+                                        size: isMobile ? 12 : 14,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        tier,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: isMobile ? 10 : 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: isMobile ? 4 : 6),
+                            Text(
+                              'Hôte: $host',
+                              style: TextStyle(
+                                fontSize: isMobile ? 13 : 14,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            SizedBox(height: isMobile ? 4 : 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person,
+                                  size: isMobile ? 14 : 16,
+                                  color: Colors.black54,
+                                ),
+                                const SizedBox(width: 4),
                                 Text(
-                                  '${provider.playersInLobby.length}/4 joueurs',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
+                                  '$players/$maxPlayers joueurs',
+                                  style: TextStyle(
+                                    fontSize: isMobile ? 13 : 14,
+                                    color: Colors.black54,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 60),
-                          ElevatedButton(
-                            onPressed: _cancelMatchmaking,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 40,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.close),
-                                SizedBox(width: 8),
-                                Text(
-                                  'ANNULER',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.blue.shade700,
+                        size: isMobile ? 18 : 20,
+                      ),
+                    ],
                   ),
-                ],
-              );
-            },
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showJoinDialog(String roomCode) {
+    final nameController = TextEditingController(text: 'Joueur');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rejoindre la partie'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: 'Votre nom',
+            hintText: 'Entrez votre nom',
           ),
+          maxLength: 20,
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _joinRoom(roomCode, nameController.text.trim());
+            },
+            child: const Text('Rejoindre'),
+          ),
+        ],
       ),
     );
   }

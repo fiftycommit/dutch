@@ -95,7 +95,7 @@ void main() {
       expect(rooms!.length, 0);
     });
 
-    test('joinPublicRoom should join existing room when available', () async {
+    test('searchAndJoinPublicRoom should join existing room when available', () async {
       mockService.mockPublicRooms = [
         {
           'code': 'ABC123',
@@ -106,16 +106,14 @@ void main() {
         },
       ];
 
-      await provider.joinPublicRoom();
+      await provider.searchAndJoinPublicRoom();
 
       // Vérifier qu'on n'a pas créé de nouvelle room
       expect(mockService.lastCreatedSettings, isNull);
     });
 
-    test('joinPublicRoom should create new room when none available', () async {
-      mockService.mockPublicRooms = [];
-
-      await provider.joinPublicRoom();
+    test('createPublicRoom should create new room', () async {
+      await provider.createPublicRoom(playerName: 'TestPlayer');
 
       // Vérifier qu'une nouvelle room a été créée
       expect(mockService.lastCreatedSettings, isNotNull);
@@ -123,11 +121,11 @@ void main() {
       expect(mockService.lastCreatedSettings!.numberOfPlayers, 4);
     });
 
-    test('joinPublicRoom should handle errors gracefully', () async {
-      mockService.shouldFailGetPublicRooms = true;
+    test('searchAndJoinPublicRoom should throw when no rooms available', () async {
+      mockService.mockPublicRooms = [];
 
       expect(
-        () => provider.joinPublicRoom(),
+        () => provider.searchAndJoinPublicRoom(),
         throwsException,
       );
     });

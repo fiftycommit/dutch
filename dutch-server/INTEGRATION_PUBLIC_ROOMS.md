@@ -59,7 +59,8 @@ socket.on('room:create', async (data, callback) => {
         roomCode,
         playerName,
         settings.gameMode || 'quick',
-        settings.numberOfPlayers || 4
+        settings.numberOfPlayers || 4,
+        data.playerMMR // Optionnel: MMR du joueur pour afficher son niveau
       );
     }
 

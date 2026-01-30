@@ -164,7 +164,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
             title: 'Creer une partie',
             subtitle: 'Tu deviens hote et tu invites tes amis.',
             color: colors.primaryContainer,
-            onTap: () => setState(() => _flow = _MenuFlow.create),
+            onTap: () => context.go('/multiplayer/mode-selection'),
           ),
           const SizedBox(height: 16),
           _buildHeroCard(

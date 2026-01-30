@@ -8,6 +8,7 @@ interface PublicRoom {
   maxPlayers: number;
   gameMode: string;
   host: string;
+  hostMMR?: number;
   createdAt: Date;
   isPublic: boolean;
 }
@@ -27,7 +28,8 @@ class PublicRoomService {
     code: string,
     host: string,
     gameMode: string,
-    maxPlayers: number = 4
+    maxPlayers: number = 4,
+    hostMMR?: number
   ): void {
     this.publicRooms.set(code, {
       code,
@@ -35,10 +37,11 @@ class PublicRoomService {
       maxPlayers,
       gameMode,
       host,
+      hostMMR,
       createdAt: new Date(),
       isPublic: true,
     });
-    console.log(`📢 Room publique créée: ${code} (${gameMode})`);
+    console.log(`📢 Room publique créée: ${code} (${gameMode}) - MMR: ${hostMMR || 'N/A'}`);
   }
 
   /**

@@ -24,6 +24,7 @@ export function setupPublicRoomHandlers(socket: Socket, rooms: Map<string, any>)
         maxPlayers: room.maxPlayers,
         gameMode: room.gameMode,
         host: room.host,
+        hostMMR: room.hostMMR,
       }));
 
       console.log(`🔍 ${socket.id} demande les rooms publiques: ${formattedRooms.length} trouvées`);
@@ -79,9 +80,10 @@ export function onPublicRoomCreated(
   roomCode: string,
   hostName: string,
   gameMode: string,
-  maxPlayers: number
+  maxPlayers: number,
+  hostMMR?: number
 ): void {
-  publicRoomService.addPublicRoom(roomCode, hostName, gameMode, maxPlayers);
+  publicRoomService.addPublicRoom(roomCode, hostName, gameMode, maxPlayers, hostMMR);
 }
 
 /**

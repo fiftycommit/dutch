@@ -14,6 +14,9 @@ import '../screens/rules_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/stats_screen.dart';
 import '../screens/multiplayer_menu_screen.dart';
+import '../screens/multiplayer_mode_selection_screen.dart';
+import '../screens/create_public_room_screen.dart';
+import '../screens/public_matchmaking_screen.dart';
 import '../screens/multiplayer_lobby_screen.dart';
 import '../screens/multiplayer_memorization_screen.dart';
 import '../screens/multiplayer_game_screen.dart';
@@ -105,6 +108,27 @@ class AppRouter {
           path: '/multiplayer',
           name: 'multiplayer',
           builder: (context, state) => const MultiplayerMenuScreen(),
+        ),
+
+        // Sélection du mode (public/privé)
+        GoRoute(
+          path: '/multiplayer/mode-selection',
+          name: 'multiplayerModeSelection',
+          builder: (context, state) => const MultiplayerModeSelectionScreen(),
+        ),
+
+        // Créer une room publique
+        GoRoute(
+          path: '/multiplayer/create-public',
+          name: 'createPublicRoom',
+          builder: (context, state) => const CreatePublicRoomScreen(),
+        ),
+
+        // Matchmaking public (recherche)
+        GoRoute(
+          path: '/multiplayer/matchmaking',
+          name: 'publicMatchmaking',
+          builder: (context, state) => const PublicMatchmakingScreen(),
         ),
 
         // Route pour le lobby (le roomCode est géré par le provider)
@@ -311,6 +335,9 @@ extension GoRouterNavigation on BuildContext {
 
   // Multiplayer
   void goMultiplayer() => go('/multiplayer');
+  void goMultiplayerModeSelection() => go('/multiplayer/mode-selection');
+  void goCreatePublicRoom() => go('/multiplayer/create-public');
+  void goPublicMatchmaking() => go('/multiplayer/matchmaking');
   void goLobby() => go('/lobby');
   void goMultiplayerMemorization() => go('/multiplayer/memorization');
   void goMultiplayerGame() => go('/multiplayer/game');

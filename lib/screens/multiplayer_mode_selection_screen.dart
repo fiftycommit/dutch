@@ -43,14 +43,19 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 600),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: 600,
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
                           const Text(
                             'Choisissez votre mode de jeu',
                             style: TextStyle(
@@ -62,28 +67,30 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 40),
                           _ModeCard(
-                            icon: Icons.public,
-                            title: 'PARTIE PUBLIQUE',
+                            icon: Icons.add_circle,
+                            title: 'CRÉER UNE PARTIE',
                             description:
-                                'Rejoignez une partie rapide avec des joueurs aléatoires',
+                                'Créez une room publique et attendez des joueurs',
                             color: Colors.blue,
-                            onTap: () => context.push('/multiplayer/public'),
-                            badge: 'RAPIDE',
+                            onTap: () => context.go('/multiplayer/create-public'),
+                            badge: 'HÔTE',
                           ),
                           const SizedBox(height: 20),
                           _ModeCard(
-                            icon: Icons.lock,
-                            title: 'PARTIE PRIVÉE',
+                            icon: Icons.search,
+                            title: 'REJOINDRE UNE PARTIE',
                             description:
-                                'Créez ou rejoignez une partie avec vos amis',
+                                'Cherchez et rejoignez une partie publique existante',
                             color: Colors.green,
-                            onTap: () => context.push('/multiplayer/private'),
-                            badge: 'AMIS',
+                            onTap: () => context.go('/multiplayer/matchmaking'),
+                            badge: 'RECHERCHE',
                           ),
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -141,24 +148,28 @@ class _ModeCardState extends State<_ModeCard>
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: GestureDetector(
-        onTapDown: (_) {
-          setState(() => _isPressed = true);
-          _controller.forward();
-        },
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          _controller.reverse();
-          widget.onTap();
-        },
-        onTapCancel: () {
-          setState(() => _isPressed = false);
-          _controller.reverse();
-        },
-        child: Container(
-          padding: const EdgeInsets.all(24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        return ScaleTransition(
+          scale: _scaleAnimation,
+          child: GestureDetector(
+            onTapDown: (_) {
+              setState(() => _isPressed = true);
+              _controller.forward();
+            },
+            onTapUp: (_) {
+              setState(() => _isPressed = false);
+              _controller.reverse();
+              widget.onTap();
+            },
+            onTapCancel: () {
+              setState(() => _isPressed = false);
+              _controller.reverse();
+            },
+            child: Container(
+              padding: EdgeInsets.all(isMobile ? 16 : 24),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -185,77 +196,81 @@ class _ModeCardState extends State<_ModeCard>
                   ]
                 : [],
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: widget.color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  widget.icon,
-                  size: 40,
-                  color: widget.color,
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(isMobile ? 12 : 16),
+                    decoration: BoxDecoration(
+                      color: widget.color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      widget.icon,
+                      size: isMobile ? 32 : 40,
+                      color: widget.color,
+                    ),
+                  ),
+                  SizedBox(width: isMobile ? 12 : 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: widget.color,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            widget.badge,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.title,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isMobile ? 14 : 18,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                              ),
                             ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 6 : 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: widget.color,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                widget.badge,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isMobile ? 9 : 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: isMobile ? 6 : 8),
+                        Text(
+                          widget.description,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: isMobile ? 12 : 14,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.description,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: widget.color,
+                    size: isMobile ? 16 : 20,
+                  ),
+                ],
               ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: widget.color,
-                size: 20,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
