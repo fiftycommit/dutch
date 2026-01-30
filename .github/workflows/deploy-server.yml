@@ -68,7 +68,7 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "dutch-server/*"
-          target: "/root/apps/"
+          target: "/var/www/"
           strip_components: 0
 
       - name: Install and restart server
@@ -78,7 +78,8 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /root/apps/dutch-server
+            mkdir -p /var/www/dutch-server
+            cd /var/www/dutch-server
             npm install --production
             npm run build
             
