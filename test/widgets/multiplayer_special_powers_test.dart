@@ -14,8 +14,8 @@ import 'package:dutch_game/widgets/responsive_dialog.dart';
 class MockMultiplayerService extends MultiplayerService {
   final List<String> calls = [];
 
-  @override
-  Function(GameState)? onGameStateUpdate;
+  // Callback pour les tests
+  Function(GameState)? gameStateUpdateCallback;
 
   @override
   String get playerId => 'p1';

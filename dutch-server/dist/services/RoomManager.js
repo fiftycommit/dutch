@@ -19,7 +19,7 @@ class RoomManager {
         this.presenceGraceMs = options.presenceGraceMs ?? 3000;
         this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
         this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
-        this.stalePlayerMs = options.stalePlayerMs ?? 60000;
+        this.stalePlayerMs = options.stalePlayerMs ?? 15000;
         this.now = options.now ?? (() => Date.now());
         this.timerManager = new TimerManager_1.TimerManager({
             getRoom: (roomCode) => this.getRoom(roomCode),
@@ -107,6 +107,10 @@ class RoomManager {
         }
         this.pruneWaitingRoom(room);
         this.ensureHost(room);
+        // Vérifier si le joueur a été kické
+        if (clientId && room.kickedClientIds?.has(clientId)) {
+            return { error: 'Vous avez été exclu de cette room' };
+        }
         if (clientId) {
             const existing = room.players.find((p) => p.clientId === clientId);
             if (existing) {
@@ -278,11 +282,20 @@ class RoomManager {
             // Transition to playing phase
             gameState.phase = GameState_1.GamePhase.playing;
             this.clearTurnTimer(roomCode);
-            this.startTurnTimer(roomCode);
             // Notify all players that game is starting
             this.io.to(roomCode).emit('game:all_ready', {
                 message: 'Tous les joueurs sont prêts !',
             });
+            // Si c'est le tour d'un bot, lancer son tour
+            // Sinon, démarrer le timer pour le joueur humain
+            const currentPlayer = (0, GameState_1.getCurrentPlayer)(gameState);
+            if (!currentPlayer.isHuman) {
+                // Lancer le tour du bot après un court délai
+                setTimeout(() => this.checkAndPlayBotTurn(roomCode), 500);
+            }
+            else {
+                this.startTurnTimer(roomCode);
+            }
         }
         this.touchRoom(room);
         this.broadcastGameState(roomCode, 'PLAYER_READY', {
@@ -310,6 +323,7 @@ class RoomManager {
         });
     }
     startReactionTimer(roomCode, durationMs) {
+        // Arrêter le timer de tour quand la phase de réaction commence
         this.clearTurnTimer(roomCode);
         this.timerManager.startReactionTimer(roomCode, durationMs);
     }
@@ -392,22 +406,73 @@ class RoomManager {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
             return;
-        // Calculer les scores de cette manche pour chaque joueur
-        const roundScores = room.gameState.players.map((player) => ({
-            playerId: player.id,
-            clientId: player.clientId,
-            name: player.name,
-            score: (0, Player_1.calculateScore)(player),
-            hand: player.hand, // Inclure les cartes pour affichage
+        // Calculer les scores de carte de cette manche pour chaque joueur
+        const playersWithScores = room.gameState.players.map((player) => ({
+            player,
+            cardScore: (0, Player_1.calculateScore)(player),
         }));
-        // Calculer et stocker les scores cumulés
-        this.updateCumulativeScores(room);
+        // Trier par score de cartes (le plus bas est le meilleur)
+        playersWithScores.sort((a, b) => a.cardScore - b.cardScore);
+        // Calculer les rangs avec égalités
+        const ranks = new Map();
+        let currentRank = 1;
+        for (let i = 0; i < playersWithScores.length; i++) {
+            if (i > 0 && playersWithScores[i].cardScore > playersWithScores[i - 1].cardScore) {
+                currentRank = i + 1;
+            }
+            ranks.set(playersWithScores[i].player.id, currentRank);
+        }
+        // Calculer les points RP selon le classement (comme en mode solo)
+        const getRPForRank = (rank, totalPlayers) => {
+            // Système de points basé sur la position
+            if (rank === 1)
+                return 30; // 1er gagne des points
+            if (rank === totalPlayers)
+                return -20; // Dernier perd des points
+            if (rank === 2)
+                return 10; // 2ème gagne un peu
+            if (rank === totalPlayers - 1)
+                return -10; // Avant-dernier perd un peu
+            return 0; // Milieu de classement
+        };
+        const dutchCallerId = room.gameState.dutchCallerId;
+        const totalPlayers = playersWithScores.length;
+        // Générer les scores finaux avec RP
+        const roundScores = playersWithScores.map(({ player, cardScore }) => {
+            const rank = ranks.get(player.id) || totalPlayers;
+            let rpChange = getRPForRank(rank, totalPlayers);
+            // Bonus/Malus Dutch
+            if (player.id === dutchCallerId) {
+                if (rank === 1) {
+                    rpChange += 20; // Bonus Dutch gagné
+                    // Bonus main vide (perfect Dutch)
+                    if (player.hand.length === 0) {
+                        rpChange += 30;
+                    }
+                }
+                else {
+                    rpChange -= 30; // Malus Dutch raté
+                }
+            }
+            return {
+                playerId: player.id,
+                clientId: player.clientId,
+                name: player.name,
+                cardScore, // Score de cartes (somme)
+                rank,
+                rpChange, // Points gagnés/perdus cette manche
+                hand: player.hand, // Inclure les cartes pour affichage
+                calledDutch: player.id === dutchCallerId,
+            };
+        });
+        // Calculer et stocker les scores cumulés (utilise rpChange au lieu de cardScore)
+        this.updateCumulativeScoresWithRP(room, roundScores);
         room.status = Room_1.RoomStatus.ended;
         room.gameState.phase = GameState_1.GamePhase.ended;
         this.clearTurnTimer(roomCode);
         this.broadcastGameState(roomCode, 'GAME_ENDED', {
             message: 'Partie terminée !',
-            roundScores, // Scores de cette manche
+            roundScores, // Scores de cette manche avec RP
             cumulativeScores: this.getCumulativeScoresArray(room),
         });
         this.broadcastPresence(roomCode);
@@ -474,6 +539,13 @@ class RoomManager {
             roomCode,
             message: "Vous avez été exclu de la room par l'hôte",
         });
+        // Ajouter le clientId à la liste des kickés pour empêcher le rejoin
+        if (target.clientId) {
+            if (!room.kickedClientIds) {
+                room.kickedClientIds = new Set();
+            }
+            room.kickedClientIds.add(target.clientId);
+        }
         // Retirer le joueur
         room.players.splice(targetIndex, 1);
         this.reindexPlayers(room);
@@ -497,6 +569,21 @@ class RoomManager {
             const currentScore = room.cumulativeScores.get(scoreKey) || 0;
             const roundScore = (0, Player_1.calculateScore)(player);
             room.cumulativeScores.set(scoreKey, currentScore + roundScore);
+        }
+    }
+    /**
+     * Met à jour les scores cumulés avec le système RP (points de classement)
+     */
+    updateCumulativeScoresWithRP(room, roundScores) {
+        // Initialiser si nécessaire
+        if (!room.cumulativeScores) {
+            room.cumulativeScores = new Map();
+        }
+        // Ajouter les RP de cette manche
+        for (const score of roundScores) {
+            const scoreKey = score.clientId || score.playerId;
+            const currentScore = room.cumulativeScores.get(scoreKey) || 0;
+            room.cumulativeScores.set(scoreKey, currentScore + score.rpChange);
         }
     }
     /**
@@ -593,11 +680,8 @@ class RoomManager {
         if (pending && pending.playerId === playerId) {
             this.clearPresenceCheck(roomCode, playerId);
         }
-        if (room.gameState &&
-            room.gameState.phase === GameState_1.GamePhase.playing &&
-            (0, GameState_1.getCurrentPlayer)(room.gameState).id === playerId) {
-            this.startTurnTimer(roomCode);
-        }
+        // Note: Le timer n'est plus réinitialisé après chaque action.
+        // Il démarre au début du tour et se termine à la phase de réaction.
     }
     updateFocus(roomCode, socketId, focused) {
         const room = this.rooms.get(roomCode);
@@ -758,6 +842,9 @@ class RoomManager {
         // Si le jeu est en pause, on ne lance pas le timer maintenant
         if (room.isPaused)
             return;
+        // Si on attend un pouvoir spécial, ne pas lancer le timer
+        if (room.gameState.isWaitingForSpecialPower)
+            return;
         // Mettre à jour les infos de timer dans le gameState pour l'affichage client
         room.gameState.turnStartTime = this.now();
         room.gameState.turnTimeoutMs = this.turnTimeoutMs;
@@ -838,6 +925,13 @@ class RoomManager {
         player.lastSeenAt = this.now();
         this.clearPresenceCheck(roomCode, playerId);
         this.clearTurnTimer(roomCode);
+        // Notifier tous les joueurs qu'un joueur est devenu AFK/spectateur
+        this.io.to(roomCode).emit('player:afk', {
+            playerId: player.id,
+            playerName: player.name,
+            reason,
+            roomCode,
+        });
         // Check if only one active player remains ("Last Man Standing")
         const activeCount = this.activePlayerCount(room);
         if (activeCount <= 1) {
@@ -1094,6 +1188,30 @@ class RoomManager {
         if (room.hostPlayerId !== socketId)
             return false;
         room.gameMode = mode;
+        this.broadcastPresence(roomCode);
+        return true;
+    }
+    /**
+     * Met à jour les paramètres de la room (hôte uniquement, en lobby)
+     */
+    updateRoomSettings(roomCode, socketId, settings) {
+        const room = this.rooms.get(roomCode);
+        if (!room || room.status !== Room_1.RoomStatus.waiting)
+            return false;
+        if (room.hostPlayerId !== socketId)
+            return false;
+        // Mettre à jour les paramètres
+        if (settings.botDifficulty !== undefined) {
+            room.settings.botDifficulty = settings.botDifficulty;
+        }
+        if (settings.luckDifficulty !== undefined) {
+            room.settings.luckDifficulty = settings.luckDifficulty;
+        }
+        // Notifier tous les joueurs du changement
+        this.io.to(roomCode).emit('room:settings_updated', {
+            roomCode,
+            settings: room.settings,
+        });
         this.broadcastPresence(roomCode);
         return true;
     }

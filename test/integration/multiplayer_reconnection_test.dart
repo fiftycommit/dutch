@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dutch_game/providers/multiplayer_game_provider.dart';
-import 'package:dutch_game/services/multiplayer_service.dart';
 
 void main() {
   group('Silent Reconnection Integration Tests', () {

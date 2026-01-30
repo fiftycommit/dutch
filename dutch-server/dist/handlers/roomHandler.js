@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupRoomHandler = setupRoomHandler;
+const publicRoomHandlers_1 = require("./publicRoomHandlers");
 function setupRoomHandler(socket, roomManager) {
     socket.on('room:create', (data, callback) => {
         try {
@@ -8,6 +9,10 @@ function setupRoomHandler(socket, roomManager) {
             socket.join(room.id);
             roomManager.broadcastPresence(room.id);
             console.log(`Room created: ${room.id} by ${socket.id}`);
+            // Si c'est une room publique, l'ajouter au service
+            if (data.settings?.isPublic === true) {
+                (0, publicRoomHandlers_1.onPublicRoomCreated)(room.id, data.playerName || 'Joueur', data.settings.gameMode || 'quick', data.settings.numberOfPlayers || 4);
+            }
             callback({ success: true, roomCode: room.id, room });
         }
         catch (error) {
@@ -28,6 +33,10 @@ function setupRoomHandler(socket, roomManager) {
                 roomManager.notifyPlayerJoined(roomCode, result.player);
             }
             roomManager.broadcastPresence(roomCode);
+            // Mettre à jour le compteur pour les rooms publiques
+            if (result.room) {
+                (0, publicRoomHandlers_1.onPublicRoomPlayerJoined)(roomCode, result.room.players.length);
+            }
             console.log(`Player ${socket.id} joined room ${roomCode}`);
             callback({ success: true, room: result.room });
         }
@@ -113,6 +122,15 @@ function setupRoomHandler(socket, roomManager) {
         const { roomCode } = data;
         socket.leave(roomCode);
         roomManager.handleLeave(roomCode, socket.id);
+        // Mettre à jour le compteur pour les rooms publiques
+        const updatedRoom = roomManager.getRoom(roomCode);
+        if (updatedRoom) {
+            (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, updatedRoom.players.length);
+        }
+        else {
+            // La room n'existe plus, la supprimer du service public
+            (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, 0);
+        }
         console.log(`Player ${socket.id} left room ${roomCode}`);
     });
     // Fermer la room (hôte uniquement)
@@ -122,6 +140,8 @@ function setupRoomHandler(socket, roomManager) {
             const result = roomManager.closeRoom(roomCode, socket.id);
             if (result.success) {
                 socket.leave(roomCode);
+                // Supprimer du service de rooms publiques
+                (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, 0);
                 console.log(`Room ${roomCode} closed by host ${socket.id}`);
             }
             callback(result);

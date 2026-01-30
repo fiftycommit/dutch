@@ -15,7 +15,9 @@ import '../screens/settings_screen.dart';
 import '../screens/stats_screen.dart';
 import '../screens/multiplayer_menu_screen.dart';
 import '../screens/multiplayer_mode_selection_screen.dart';
+import '../screens/create_private_room_screen.dart';
 import '../screens/create_public_room_screen.dart';
+import '../screens/join_private_room_screen.dart';
 import '../screens/public_matchmaking_screen.dart';
 import '../screens/multiplayer_lobby_screen.dart';
 import '../screens/multiplayer_memorization_screen.dart';
@@ -117,14 +119,28 @@ class AppRouter {
           builder: (context, state) => const MultiplayerModeSelectionScreen(),
         ),
 
-        // Créer une room publique
+        // Créer un lobby privé
+        GoRoute(
+          path: '/multiplayer/create-private',
+          name: 'createPrivateRoom',
+          builder: (context, state) => const CreatePrivateRoomScreen(),
+        ),
+
+        // Créer un lobby public
         GoRoute(
           path: '/multiplayer/create-public',
           name: 'createPublicRoom',
           builder: (context, state) => const CreatePublicRoomScreen(),
         ),
 
-        // Matchmaking public (recherche)
+        // Rejoindre un lobby privé (avec code)
+        GoRoute(
+          path: '/multiplayer/join-private',
+          name: 'joinPrivateRoom',
+          builder: (context, state) => const JoinPrivateRoomScreen(),
+        ),
+
+        // Liste des lobbies publics
         GoRoute(
           path: '/multiplayer/matchmaking',
           name: 'publicMatchmaking',

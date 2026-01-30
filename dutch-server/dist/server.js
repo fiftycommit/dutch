@@ -13,6 +13,8 @@ const connectionHandler_1 = require("./handlers/connectionHandler");
 const roomHandler_1 = require("./handlers/roomHandler");
 const gameHandler_1 = require("./handlers/gameHandler");
 const SecurityService_1 = require("./services/SecurityService");
+const publicRoomHandlers_1 = require("./handlers/publicRoomHandlers");
+const publicRoomService_1 = require("./services/publicRoomService");
 function renderHomePage(roomCount) {
     return `
     <!DOCTYPE html>
@@ -132,6 +134,8 @@ function startServer() {
         (0, connectionHandler_1.setupConnectionHandler)(socket, roomManager);
         (0, roomHandler_1.setupRoomHandler)(socket, roomManager);
         (0, gameHandler_1.setupGameHandler)(socket, roomManager);
+        // Les handlers publics gèrent leur propre état via publicRoomService
+        (0, publicRoomHandlers_1.setupPublicRoomHandlers)(socket, new Map());
     });
     app.get('/', (req, res) => {
         res.send(renderHomePage(roomManager.getRoomCount()));
@@ -144,6 +148,14 @@ function startServer() {
     });
     app.get('/rooms/debug', (req, res) => {
         res.json(roomManager.listRoomsDebug());
+    });
+    app.get('/rooms/public', (req, res) => {
+        const publicRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
+        res.json({ success: true, rooms: publicRooms });
+    });
+    app.get('/rooms/stats', (req, res) => {
+        const stats = publicRoomService_1.publicRoomService.getStats();
+        res.json({ success: true, stats });
     });
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {

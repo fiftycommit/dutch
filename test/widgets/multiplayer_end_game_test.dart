@@ -17,12 +17,10 @@ import 'package:dutch_game/services/multiplayer_service.dart';
 class MockMultiplayerService extends MultiplayerService {
   final List<String> calls = [];
 
-  @override
-  Function(GameState)? onGameStateUpdate;
-  @override
-  Function(Map<String, dynamic>)? onGameAllReady;
-  @override
-  Function(Map<String, dynamic>)? onRoomRestarted;
+  // Callbacks pour les tests
+  Function(GameState)? gameStateUpdateCallback;
+  Function(Map<String, dynamic>)? gameAllReadyCallback;
+  Function(Map<String, dynamic>)? roomRestartedCallback;
 
   @override
   String get playerId => 'p1';

@@ -370,4 +370,22 @@ function setupGameHandler(socket, roomManager) {
             console.error('Error player:ready:', error);
         }
     });
+    // Handle room settings update (host only)
+    socket.on('room:update_settings', async (data) => {
+        try {
+            if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
+                return;
+            const { roomCode, botDifficulty, luckDifficulty } = data;
+            const success = roomManager.updateRoomSettings(roomCode, socket.id, {
+                botDifficulty,
+                luckDifficulty,
+            });
+            if (success) {
+                console.log(`[SETTINGS] Host ${socket.id} updated settings in room ${roomCode}`);
+            }
+        }
+        catch (error) {
+            console.error('Error room:update_settings:', error);
+        }
+    });
 }

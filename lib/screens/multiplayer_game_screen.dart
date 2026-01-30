@@ -601,7 +601,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                                 offset: Offset(0, 3))
                           ],
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             SizedBox(
@@ -612,8 +612,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                                 color: Colors.white,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const Text(
+                            SizedBox(width: 12),
+                            Text(
                               'Reconnexion en cours...',
                               style: TextStyle(
                                   color: Colors.white,

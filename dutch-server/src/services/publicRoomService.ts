@@ -63,8 +63,8 @@ class PublicRoomService {
       room.players = count;
       console.log(`👥 Room ${code}: ${count}/${room.maxPlayers} joueurs`);
 
-      // Retirer la room si elle est pleine
-      if (count >= room.maxPlayers) {
+      // Retirer la room si elle est pleine ou vide
+      if (count >= room.maxPlayers || count <= 0) {
         this.removePublicRoom(code);
       }
     }

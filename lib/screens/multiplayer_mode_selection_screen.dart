@@ -27,7 +27,7 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.pop(),
+                      onPressed: () => context.go('/multiplayer'),
                     ),
                     const SizedBox(width: 12),
                     const Text(
@@ -45,47 +45,75 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: 600,
                           minHeight: constraints.maxHeight,
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                          const Text(
-                            'Choisissez votre mode de jeu',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500,
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 16.0 : 20.0,
+                              vertical: isMobile ? 10.0 : 20.0,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 40),
-                          _ModeCard(
-                            icon: Icons.add_circle,
-                            title: 'CRÉER UNE PARTIE',
-                            description:
-                                'Créez une room publique et attendez des joueurs',
-                            color: Colors.blue,
-                            onTap: () => context.go('/multiplayer/create-public'),
-                            badge: 'HÔTE',
-                          ),
-                          const SizedBox(height: 20),
-                          _ModeCard(
-                            icon: Icons.search,
-                            title: 'REJOINDRE UNE PARTIE',
-                            description:
-                                'Cherchez et rejoignez une partie publique existante',
-                            color: Colors.green,
-                            onTap: () => context.go('/multiplayer/matchmaking'),
-                            badge: 'RECHERCHE',
-                          ),
-                            ],
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Section CRÉER UN LOBBY
+                                _SectionHeader(
+                                  icon: Icons.add_circle_outline,
+                                  title: 'CRÉER UN LOBBY',
+                                  isMobile: isMobile,
+                                ),
+                                SizedBox(height: isMobile ? 12 : 16),
+                                _ModeCard(
+                                  icon: Icons.lock_outline,
+                                  title: 'Lobby Privé',
+                                  description: 'Crée un lobby et partage le code à tes amis',
+                                  color: Colors.blue.shade700,
+                                  onTap: () => context.go('/multiplayer/create-private'),
+                                  badge: 'CODE',
+                                ),
+                                SizedBox(height: isMobile ? 10 : 12),
+                                _ModeCard(
+                                  icon: Icons.public,
+                                  title: 'Lobby Public',
+                                  description: 'Crée un lobby visible par tous les joueurs',
+                                  color: Colors.green.shade700,
+                                  onTap: () => context.go('/multiplayer/create-public'),
+                                  badge: 'OUVERT',
+                                ),
+                                
+                                SizedBox(height: isMobile ? 28 : 40),
+                                
+                                // Section REJOINDRE UN LOBBY
+                                _SectionHeader(
+                                  icon: Icons.login,
+                                  title: 'REJOINDRE UN LOBBY',
+                                  isMobile: isMobile,
+                                ),
+                                SizedBox(height: isMobile ? 12 : 16),
+                                _ModeCard(
+                                  icon: Icons.vpn_key,
+                                  title: 'Lobby Privé',
+                                  description: 'Entre le code à 6 caractères pour rejoindre',
+                                  color: Colors.orange.shade700,
+                                  onTap: () => context.go('/multiplayer/join-private'),
+                                  badge: 'CODE',
+                                ),
+                                SizedBox(height: isMobile ? 10 : 12),
+                                _ModeCard(
+                                  icon: Icons.list_alt,
+                                  title: 'Lobby Public',
+                                  description: 'Parcours la liste des lobbies ouverts',
+                                  color: Colors.purple.shade700,
+                                  onTap: () => context.go('/multiplayer/matchmaking'),
+                                  badge: 'LISTE',
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -97,6 +125,42 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool isMobile;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.isMobile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          color: Colors.amber,
+          size: isMobile ? 22 : 26,
+        ),
+        SizedBox(width: isMobile ? 8 : 10),
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.amber,
+            fontSize: isMobile ? 16 : 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }

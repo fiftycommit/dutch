@@ -155,6 +155,16 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     const { roomCode } = data;
     socket.leave(roomCode);
     roomManager.handleLeave(roomCode, socket.id);
+    
+    // Mettre à jour le compteur pour les rooms publiques
+    const updatedRoom = roomManager.getRoom(roomCode);
+    if (updatedRoom) {
+      onPublicRoomPlayerLeft(roomCode, updatedRoom.players.length);
+    } else {
+      // La room n'existe plus, la supprimer du service public
+      onPublicRoomPlayerLeft(roomCode, 0);
+    }
+    
     console.log(`Player ${socket.id} left room ${roomCode}`);
   });
 
@@ -166,6 +176,8 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
 
       if (result.success) {
         socket.leave(roomCode);
+        // Supprimer du service de rooms publiques
+        onPublicRoomPlayerLeft(roomCode, 0);
         console.log(`Room ${roomCode} closed by host ${socket.id}`);
       }
 

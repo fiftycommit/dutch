@@ -5,15 +5,12 @@ import 'package:dutch_game/widgets/emote_overlay.dart';
 void main() {
   group('EmoteOverlay', () {
     testWidgets('should display emote grid', (WidgetTester tester) async {
-      bool closeCalled = false;
-      String? sentEmote;
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: EmoteOverlay(
-              onClose: () => closeCalled = true,
-              onEmoteSent: (emoji) => sentEmote = emoji,
+              onClose: () {},
+              onEmoteSent: (emoji) {},
             ),
           ),
         ),

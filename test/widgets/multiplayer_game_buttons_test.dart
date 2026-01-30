@@ -15,8 +15,8 @@ import 'package:dutch_game/widgets/player_hand.dart';
 class MockMultiplayerService extends MultiplayerService {
   final List<String> calls = [];
 
-  @override
-  Function(GameState)? onGameStateUpdate;
+  // Callback pour les mises à jour
+  Function(GameState)? gameStateUpdateCallback;
 
   @override
   String get playerId => 'p1';

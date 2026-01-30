@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/multiplayer_game_provider.dart';
 import '../services/multiplayer_service.dart';
@@ -207,7 +208,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Column(
                             children: [
-                              _buildRoomCodeCard(context, provider, colors),
+                              // Afficher le code uniquement pour les lobbies privés
+                              if (provider.roomSettings?.isPublic == true)
+                                _buildPublicLobbyBadge()
+                              else
+                                _buildRoomCodeCard(context, provider, colors),
                               if (provider.roomSettings != null)
                                 _buildSettingsRow(
                                     provider, minPlayers, maxPlayers),
@@ -480,14 +485,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       if (confirm == true && mounted) {
         await provider.closeRoom();
         if (mounted) {
-          Navigator.pop(context);
+          context.go('/multiplayer');
         }
       }
     } else {
       // Simplement quitter
       provider.leaveRoom();
       if (mounted) {
-        Navigator.pop(context);
+        context.go('/multiplayer');
       }
     }
   }
@@ -852,6 +857,40 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     );
   }
 
+  Widget _buildPublicLobbyBadge() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.green.withValues(alpha: 0.5),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.public,
+            color: Colors.green.shade300,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Lobby Public',
+            style: TextStyle(
+              color: Colors.green.shade300,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRoomCodeCard(
     BuildContext context,
     MultiplayerGameProvider provider,
@@ -902,7 +941,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               Clipboard.setData(ClipboardData(text: code));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Code copie'),
+                  content: const Text('Code copié'),
                   backgroundColor: colors.primaryContainer,
                   duration: const Duration(seconds: 1),
                 ),
