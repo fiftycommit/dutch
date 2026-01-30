@@ -115,6 +115,16 @@ class GameState {
   }
 
   void smartShuffle() {
+    // MODE EXPÉRIMENTAL: Mélange 100% aléatoire pour analyser les patterns
+    // On ignore temporairement les modes TACTIQUE/CHALLENGER pour collecter des données
+    // sur les mélanges naturels et identifier quels patterns créent des parties faciles/coriaces
+    deck.shuffle(Random());
+    addToHistory("🎲 Mélange 100% aléatoire (Mode Expérimental)");
+  }
+  
+  // Ancienne méthode smartShuffle commentée (TACTIQUE/CHALLENGER)
+  // Sera remplacée par un modèle ML après analyse des données
+  void _smartShuffleOld() {
     Random rnd = Random();
     deck.shuffle();
     if (difficulty == Difficulty.easy) {

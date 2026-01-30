@@ -370,6 +370,7 @@ class BotAI {
       return;
     }
 
+    int drawnVal = drawn.points;
     int replaceIdx = -1;
     bool isBadDraw = false;
 
@@ -403,27 +404,56 @@ class BotAI {
     
     // Si on n'explore pas, continuer avec la logique d'optimization
 
+    int keepThreshold = difficulty.keepCardThreshold;
     
-    // MODE EXPÉRIMENTAL: TRIAGE 100% ALÉATOIRE
-    // On observe les patterns naturels pour déduire les règles optimales
-    
-    // Chercher la pire carte connue (pour savoir quoi remplacer si on garde)
+    // Ajuster selon le comportement
+    BotBehavior? behavior = bot.botBehavior;
+    switch (behavior) {
+      case BotBehavior.fast:
+        keepThreshold = difficulty.name == "Platine" ? 8 :
+                       difficulty.name == "Or" ? 9 :
+                       difficulty.name == "Argent" ? 10 : 10;
+        break;
+      case BotBehavior.aggressive:
+        keepThreshold += 2;
+        break;
+      case BotBehavior.balanced:
+        if (phase == BotGamePhase.endgame) {
+          keepThreshold = (5 + difficulty.keepCardThreshold) ~/ 2;
+        } else {
+          keepThreshold = difficulty.keepCardThreshold;
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (phase == BotGamePhase.endgame && 
+        behavior != BotBehavior.fast && 
+        behavior != BotBehavior.balanced) {
+      keepThreshold -= 1;
+    }
+
+    // Chercher la pire carte connue
     int worstKnownValue = -1;
     for (int i = 0; i < bot.mentalMap.length; i++) {
       if (bot.mentalMap[i] != null) {
         int cardValue = bot.mentalMap[i]!.points;
-        if (cardValue > worstKnownValue) {
+        if (cardValue > worstKnownValue && cardValue > drawnVal) {
           worstKnownValue = cardValue;
           replaceIdx = i;
         }
       }
     }
 
-    // DÉCISION ALÉATOIRE 50/50: garder ou défausser
-    bool shouldKeep = _random.nextBool();
-    
-    if (shouldKeep && replaceIdx != -1) {
-      // Garder la carte piochée, remplacer la pire connue
+    if (replaceIdx != -1 && drawnVal <= keepThreshold) {
+      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+      if (!confused) {
+        bot.updateMentalMap(replaceIdx, drawn);
+      }
+      GameLogic.replaceCard(gs, replaceIdx);
+      bot.consecutiveBadDraws = 0;
+    } else if (replaceIdx != -1 && worstKnownValue > drawnVal + 3) {
       bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
       if (!confused) {
         bot.updateMentalMap(replaceIdx, drawn);
@@ -431,7 +461,6 @@ class BotAI {
       GameLogic.replaceCard(gs, replaceIdx);
       bot.consecutiveBadDraws = 0;
     } else {
-      // Défausser la carte piochée
       GameLogic.discardDrawnCard(gs);
       isBadDraw = true;
     }
