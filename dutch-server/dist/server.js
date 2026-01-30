@@ -137,7 +137,13 @@ function startServer() {
         // Les handlers publics gèrent leur propre état via publicRoomService
         (0, publicRoomHandlers_1.setupPublicRoomHandlers)(socket, new Map());
     });
-    app.get('/', (req, res) => {
+    app.get('/status', (req, res) => {
+        // Authentification basique optionnelle (décommente pour activer)
+        // const auth = req.headers.authorization;
+        // const token = process.env.STATUS_TOKEN || 'your-secret-token';
+        // if (auth !== `Bearer ${token}`) {
+        //   return res.status(401).json({ error: 'Unauthorized' });
+        // }
         res.send(renderHomePage(roomManager.getRoomCount()));
     });
     app.get('/health', (req, res) => {
