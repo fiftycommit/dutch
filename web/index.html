@@ -36,75 +36,13 @@
     html, body {
       margin: 0;
       padding: 0;
-      background: linear-gradient(135deg, #0d2818 0%, #1a472a 100%);
+      background: #0d2818;
       overflow: hidden;
       height: 100%;
-    }
-    
-    #loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: linear-gradient(135deg, #0d2818 0%, #1a472a 100%);
-      z-index: 9999;
-    }
-    
-    #loading-logo {
-      font-size: 48px;
-      font-weight: bold;
-      color: #FFC107;
-      margin-bottom: 30px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid rgba(255, 193, 7, 0.2);
-      border-top-color: #FFC107;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    #loading-text {
-      margin-top: 20px;
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 14px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
   </style>
 </head>
 <body>
-  <div id="loading">
-    <div id="loading-logo">🃏 DUTCH</div>
-    <div class="spinner"></div>
-    <div id="loading-text">Chargement...</div>
-  </div>
-  
   <script src="flutter_bootstrap.js" async></script>
-  
-  <script>
-    window.addEventListener('flutter-first-frame', function() {
-      var loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.opacity = '0';
-        loading.style.transition = 'opacity 0.3s';
-        setTimeout(function() {
-          loading.remove();
-        }, 300);
-      }
-    });
-  </script>
 </body>
 </html>
