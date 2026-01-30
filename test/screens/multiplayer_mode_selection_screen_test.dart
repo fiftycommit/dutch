@@ -10,6 +10,18 @@ Widget createTestApp() {
         path: '/',
         builder: (context, state) => const MultiplayerModeSelectionScreen(),
       ),
+      GoRoute(
+        path: '/multiplayer',
+        builder: (context, state) => const Scaffold(body: Text('Multiplayer')),
+      ),
+      GoRoute(
+        path: '/public-matchmaking',
+        builder: (context, state) => const Scaffold(body: Text('Public')),
+      ),
+      GoRoute(
+        path: '/create-room',
+        builder: (context, state) => const Scaffold(body: Text('Create')),
+      ),
     ],
   );
   return MaterialApp.router(routerConfig: router);

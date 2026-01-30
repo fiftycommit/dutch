@@ -42,6 +42,8 @@ class MockMultiplayerService extends MultiplayerService {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  
   group('MultiplayerGameProvider - Public Rooms', () {
     late MultiplayerGameProvider provider;
     late MockMultiplayerService mockService;
