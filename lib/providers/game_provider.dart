@@ -822,7 +822,22 @@ class GameProvider with ChangeNotifier {
 
     List<Player> ranking = _gameState!.getFinalRanking();
     List<Player> survivors = [];
-    int playersToKeep = min(3, ranking.length - 1);
+    
+    // Adapter le nombre de joueurs gardés selon le nombre actuel
+    // 6 joueurs → 4 → 3 → 2 (4 parties)
+    // 5 joueurs → 4 → 3 → 2 (4 parties)
+    // 4 joueurs → 3 → 2 (3 parties)
+    // 3 joueurs → 2 (2 parties)
+    int playersToKeep;
+    if (ranking.length >= 6) {
+      playersToKeep = 4; // Garder 4 joueurs sur 6
+    } else if (ranking.length >= 5) {
+      playersToKeep = 4; // Garder 4 joueurs sur 5
+    } else if (ranking.length >= 4) {
+      playersToKeep = 3; // Garder 3 joueurs sur 4
+    } else {
+      playersToKeep = ranking.length - 1; // Éliminer 1 joueur
+    }
 
     for (int i = 0; i < playersToKeep; i++) {
       Player p = ranking[i];
