@@ -24,12 +24,16 @@ export 'managers/solo/tournament_manager.dart' show TournamentResult;
 class GameProvider with ChangeNotifier implements IGameController {
   // État du jeu
   GameState? _gameState;
+  @override
   GameState? get gameState => _gameState;
+  @override
   bool get hasActiveGame => _gameState != null;
   
   BuildContext? _currentContext;
+  @override
   bool isProcessing = false;
   String? statusMessage;
+  @override
   Set<int> shakingCardIndices = {};
   
   bool _isPaused = false;
@@ -49,6 +53,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.phase == GamePhase.playing;
   
   int _currentReactionTimeMs = 3000;
+  @override
   int get currentReactionTimeMs => _currentReactionTimeMs;
   int _currentSlotId = 1;
   

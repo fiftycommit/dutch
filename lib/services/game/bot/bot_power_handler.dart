@@ -174,9 +174,14 @@ class BotPowerHandler {
                         difficulty.name == "Argent" ? 0.50 :
                         difficulty.name == "Or" ? 0.80 : 1.0;
 
-    if (behavior == BotBehavior.aggressive) smartChance += 0.10;
-    else if (behavior == BotBehavior.fast) smartChance -= 0.10;
-    if (target.isHuman) smartChance += 0.10;
+    if (behavior == BotBehavior.aggressive) {
+      smartChance += 0.10;
+    } else if (behavior == BotBehavior.fast) {
+      smartChance -= 0.10;
+    }
+    if (target.isHuman) {
+      smartChance += 0.10;
+    }
 
     smartChance = smartChance.clamp(0.0, 1.0);
 
@@ -267,25 +272,41 @@ class BotPowerHandler {
       }
 
       int knownCount = BotMemoryManager.countKnownCards(player);
-      if (knownCount >= 4) score += 24.0;
-      else if (knownCount >= 2) score += 16.0;
-      else if (knownCount >= 1) score += 8.0;
+      if (knownCount >= 4) {
+        score += 24.0;
+      } else if (knownCount >= 2) {
+        score += 16.0;
+      } else if (knownCount >= 1) {
+        score += 8.0;
+      }
       
       int cardCount = player.hand.length;
-      if (cardCount <= 2) score += 65.0;
-      else if (cardCount == 3) score += 40.0;
-      else if (cardCount == 4) score += 20.0;
+      if (cardCount <= 2) {
+        score += 65.0;
+      } else if (cardCount == 3) {
+        score += 40.0;
+      } else if (cardCount == 4) {
+        score += 20.0;
+      }
       
       int estimatedScore = player.getEstimatedScore();
-      if (estimatedScore <= 5) score += 28.0;
-      else if (estimatedScore <= 10) score += 16.0;
-      else if (estimatedScore <= 15) score += 8.0;
+      if (estimatedScore <= 5) {
+        score += 28.0;
+      } else if (estimatedScore <= 10) {
+        score += 16.0;
+      } else if (estimatedScore <= 15) {
+        score += 8.0;
+      }
       
       if (gameState != null && gameState.gameMode == GameMode.tournament) {
         int cumulativeScore = gameState.getCumulativeScore(player);
-        if (cumulativeScore <= 20) score += 20.0;
-        else if (cumulativeScore <= 40) score += 10.0;
-        else if (cumulativeScore >= 80) score -= 15.0;
+        if (cumulativeScore <= 20) {
+          score += 20.0;
+        } else if (cumulativeScore <= 40) {
+          score += 10.0;
+        } else if (cumulativeScore >= 80) {
+          score -= 15.0;
+        }
       }
       
       double randomFactor = _random.nextDouble() * 20.0;
@@ -317,16 +338,26 @@ class BotPowerHandler {
     }
     
     int cardCount = player.hand.length;
-    if (cardCount == 1) score += 130.0;
-    else if (cardCount == 2) score += 90.0;
-    else if (cardCount == 3) score += 55.0;
-    else if (cardCount == 4) score += 25.0;
-    else score += 10.0;
+    if (cardCount == 1) {
+      score += 130.0;
+    } else if (cardCount == 2) {
+      score += 90.0;
+    } else if (cardCount == 3) {
+      score += 55.0;
+    } else if (cardCount == 4) {
+      score += 25.0;
+    } else {
+      score += 10.0;
+    }
     
     int estimatedScore = player.getEstimatedScore();
-    if (estimatedScore <= 5) score += 35.0;
-    else if (estimatedScore <= 10) score += 22.0;
-    else if (estimatedScore <= 15) score += 12.0;
+    if (estimatedScore <= 5) {
+      score += 35.0;
+    } else if (estimatedScore <= 10) {
+      score += 22.0;
+    } else if (estimatedScore <= 15) {
+      score += 12.0;
+    }
 
     int bestPoints = BotMemoryManager.minPointsInHand(player);
     double pointsMultiplier = difficulty.name == "Platine" ? 4.0 :
@@ -336,9 +367,13 @@ class BotPowerHandler {
     
     if (gameState != null && gameState.gameMode == GameMode.tournament) {
       int cumulativeScore = gameState.getCumulativeScore(player);
-      if (cumulativeScore <= 20) score += 25.0;
-      else if (cumulativeScore <= 40) score += 15.0;
-      else if (cumulativeScore >= 80) score -= 20.0;
+      if (cumulativeScore <= 20) {
+        score += 25.0;
+      } else if (cumulativeScore <= 40) {
+        score += 15.0;
+      } else if (cumulativeScore >= 80) {
+        score -= 20.0;
+      }
     }
     
     double randomBonus = _random.nextDouble() * 30.0;

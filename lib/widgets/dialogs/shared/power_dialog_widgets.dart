@@ -58,7 +58,7 @@ class PowerDialogWidgets {
           vertical: metrics.space(8),
         ),
         decoration: BoxDecoration(
-          color: isSelected ? baseColor.withOpacity(0.8) : baseColor,
+          color: isSelected ? baseColor.withValues(alpha: 0.8) : baseColor,
           border: Border.all(
             color: isSelected ? Colors.amber : Colors.white30,
           ),

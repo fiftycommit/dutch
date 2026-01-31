@@ -1,3 +1,5 @@
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
 import { BotPersonalityService } from '../services/BotPersonalityService';
 
 describe('BotPersonalityService', () => {
@@ -11,22 +13,22 @@ describe('BotPersonalityService', () => {
     it('devrait retourner 8 personnalités par défaut', () => {
       const personalities = personalityService.getAllPersonalities();
       
-      expect(personalities).toHaveLength(8);
-      expect(personalities.every(p => p.id && p.name && p.description)).toBe(true);
+      assert.strictEqual(personalities.length, 8);
+      assert.ok(personalities.every(p => p.id && p.name && p.description));
     });
 
     it('devrait avoir des noms naturels', () => {
       const personalities = personalityService.getAllPersonalities();
       const names = personalities.map(p => p.name);
       
-      expect(names).toContain('Marco');
-      expect(names).toContain('Sophie');
-      expect(names).toContain('Alex');
-      expect(names).toContain('Emma');
-      expect(names).toContain('Lucas');
-      expect(names).toContain('Léa');
-      expect(names).toContain('Thomas');
-      expect(names).toContain('Maxime');
+      assert.ok(names.includes('Marco'));
+      assert.ok(names.includes('Sophie'));
+      assert.ok(names.includes('Alex'));
+      assert.ok(names.includes('Emma'));
+      assert.ok(names.includes('Lucas'));
+      assert.ok(names.includes('Léa'));
+      assert.ok(names.includes('Thomas'));
+      assert.ok(names.includes('Maxime'));
     });
   });
 
@@ -34,14 +36,14 @@ describe('BotPersonalityService', () => {
     it('devrait récupérer une personnalité par ID', () => {
       const marco = personalityService.getPersonality('the_shark');
       
-      expect(marco).toBeDefined();
-      expect(marco?.name).toBe('Marco');
-      expect(marco?.traits.aggressiveness).toBeGreaterThan(0.9);
+      assert.ok(marco !== undefined);
+      assert.strictEqual(marco?.name, 'Marco');
+      assert.ok((marco?.traits.aggressiveness ?? 0) > 0.9);
     });
 
     it('devrait retourner undefined pour un ID inexistant', () => {
       const personality = personalityService.getPersonality('nonexistent');
-      expect(personality).toBeUndefined();
+      assert.strictEqual(personality, undefined);
     });
   });
 
@@ -49,13 +51,13 @@ describe('BotPersonalityService', () => {
     it('devrait retourner une personnalité aléatoire', () => {
       const personality = personalityService.getRandomPersonality();
       
-      expect(personality).toBeDefined();
-      expect(personality.id).toBeTruthy();
-      expect(personality.name).toBeTruthy();
+      assert.ok(personality !== undefined);
+      assert.ok(personality.id);
+      assert.ok(personality.name);
     });
 
     it('devrait retourner des personnalités différentes', () => {
-      const personalities = new Set();
+      const personalities = new Set<string>();
       
       for (let i = 0; i < 20; i++) {
         const p = personalityService.getRandomPersonality();
@@ -63,24 +65,24 @@ describe('BotPersonalityService', () => {
       }
       
       // Avec 20 tirages, on devrait avoir au moins 2 personnalités différentes
-      expect(personalities.size).toBeGreaterThan(1);
+      assert.ok(personalities.size > 1);
     });
   });
 
   describe('getPersonalityByDifficulty', () => {
     it('devrait retourner Léa pour easy', () => {
       const personality = personalityService.getPersonalityByDifficulty('easy');
-      expect(personality.name).toBe('Léa');
+      assert.strictEqual(personality.name, 'Léa');
     });
 
     it('devrait retourner Lucas pour medium', () => {
       const personality = personalityService.getPersonalityByDifficulty('medium');
-      expect(personality.name).toBe('Lucas');
+      assert.strictEqual(personality.name, 'Lucas');
     });
 
     it('devrait retourner Sophie pour hard', () => {
       const personality = personalityService.getPersonalityByDifficulty('hard');
-      expect(personality.name).toBe('Sophie');
+      assert.strictEqual(personality.name, 'Sophie');
     });
   });
 
@@ -88,8 +90,8 @@ describe('BotPersonalityService', () => {
     it('devrait créer une équipe équilibrée', () => {
       const team = personalityService.createBalancedTeam(3);
       
-      expect(team).toHaveLength(3);
-      expect(team.every(p => p.id && p.name)).toBe(true);
+      assert.strictEqual(team.length, 3);
+      assert.ok(team.every(p => p.id && p.name));
     });
 
     it('devrait mélanger agressifs, défensifs et équilibrés', () => {
@@ -99,8 +101,8 @@ describe('BotPersonalityService', () => {
       const defensive = team.filter(p => p.traits.caution > 0.7).length;
       
       // On devrait avoir un mélange
-      expect(aggressive).toBeGreaterThan(0);
-      expect(defensive).toBeGreaterThan(0);
+      assert.ok(aggressive > 0);
+      assert.ok(defensive > 0);
     });
   });
 
@@ -109,15 +111,15 @@ describe('BotPersonalityService', () => {
       const marco = personalityService.getPersonality('the_shark')!;
       const params = personalityService.personalityToBotParameters(marco);
       
-      expect(params).toHaveProperty('aggressiveness');
-      expect(params).toHaveProperty('caution');
-      expect(params).toHaveProperty('dutchThreshold');
-      expect(params).toHaveProperty('powerUsageRate');
-      expect(params).toHaveProperty('riskTolerance');
-      expect(params).toHaveProperty('preferredStrategy');
+      assert.ok('aggressiveness' in params);
+      assert.ok('caution' in params);
+      assert.ok('dutchThreshold' in params);
+      assert.ok('powerUsageRate' in params);
+      assert.ok('riskTolerance' in params);
+      assert.ok('preferredStrategy' in params);
       
-      expect(params.aggressiveness).toBe(marco.traits.aggressiveness);
-      expect(params.dutchThreshold).toBeGreaterThan(0);
+      assert.strictEqual(params.aggressiveness, marco.traits.aggressiveness);
+      assert.ok(params.dutchThreshold > 0);
     });
 
     it('devrait calculer le seuil Dutch moyen', () => {
@@ -125,7 +127,7 @@ describe('BotPersonalityService', () => {
       const params = personalityService.personalityToBotParameters(sophie);
       
       const expectedThreshold = (sophie.behaviors.dutchThresholdMin + sophie.behaviors.dutchThresholdMax) / 2;
-      expect(params.dutchThreshold).toBe(expectedThreshold);
+      assert.strictEqual(params.dutchThreshold, expectedThreshold);
     });
   });
 
@@ -162,8 +164,8 @@ describe('BotPersonalityService', () => {
       await personalityService.createCustomPersonality(customPersonality);
       
       const retrieved = personalityService.getPersonality('test_custom');
-      expect(retrieved).toBeDefined();
-      expect(retrieved?.name).toBe('Test Bot');
+      assert.ok(retrieved !== undefined);
+      assert.strictEqual(retrieved?.name, 'Test Bot');
     });
   });
 
@@ -172,12 +174,12 @@ describe('BotPersonalityService', () => {
       const personalities = personalityService.getAllPersonalities();
       
       personalities.forEach(p => {
-        expect(p.traits.aggressiveness).toBeGreaterThanOrEqual(0);
-        expect(p.traits.aggressiveness).toBeLessThanOrEqual(1);
-        expect(p.traits.caution).toBeGreaterThanOrEqual(0);
-        expect(p.traits.caution).toBeLessThanOrEqual(1);
-        expect(p.traits.riskTolerance).toBeGreaterThanOrEqual(0);
-        expect(p.traits.riskTolerance).toBeLessThanOrEqual(1);
+        assert.ok(p.traits.aggressiveness >= 0);
+        assert.ok(p.traits.aggressiveness <= 1);
+        assert.ok(p.traits.caution >= 0);
+        assert.ok(p.traits.caution <= 1);
+        assert.ok(p.traits.riskTolerance >= 0);
+        assert.ok(p.traits.riskTolerance <= 1);
       });
     });
 
@@ -185,9 +187,9 @@ describe('BotPersonalityService', () => {
       const personalities = personalityService.getAllPersonalities();
       
       personalities.forEach(p => {
-        expect(p.behaviors.dutchThresholdMin).toBeLessThanOrEqual(p.behaviors.dutchThresholdMax);
-        expect(p.behaviors.dutchThresholdMin).toBeGreaterThanOrEqual(5);
-        expect(p.behaviors.dutchThresholdMax).toBeLessThanOrEqual(30);
+        assert.ok(p.behaviors.dutchThresholdMin <= p.behaviors.dutchThresholdMax);
+        assert.ok(p.behaviors.dutchThresholdMin >= 5);
+        assert.ok(p.behaviors.dutchThresholdMax <= 30);
       });
     });
 
@@ -195,10 +197,10 @@ describe('BotPersonalityService', () => {
       const personalities = personalityService.getAllPersonalities();
       
       personalities.forEach(p => {
-        expect(p.quirks.length).toBeGreaterThan(0);
-        expect(p.voiceLines).toBeDefined();
+        assert.ok(p.quirks.length > 0);
+        assert.ok(p.voiceLines !== undefined);
         if (p.voiceLines) {
-          expect(p.voiceLines.length).toBeGreaterThan(0);
+          assert.ok(p.voiceLines.length > 0);
         }
       });
     });

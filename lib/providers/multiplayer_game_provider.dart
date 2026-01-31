@@ -40,6 +40,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   // État du jeu
   GameState? _gameState;
+  @override
   GameState? get gameState => _gameState;
 
   String? _roomCode;
@@ -52,6 +53,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   bool get isHost => _isHost;
 
   bool _isProcessingAction = false;
+  @override
   bool get isProcessing => _isProcessingAction;
 
   List<Map<String, dynamic>> _playersInLobby = [];
@@ -87,6 +89,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   bool _isPlaying = false;
   bool get isPlaying => _isPlaying;
 
+  @override
   Set<int> shakingCardIndices = {};
 
   bool _isPaused = false;
@@ -140,6 +143,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   Map<String, dynamic>? get pendingJokerNotification => _notificationManager.pendingJokerNotification;
   Map<String, dynamic>? get pendingSpyNotification => _notificationManager.pendingSpyNotification;
 
+  @override
   int get currentReactionTimeMs => _timerManager.reactionTimeMs;
   int get reactionTimeMs => _timerManager.reactionTimeMs;
 

@@ -1,6 +1,5 @@
 import 'dart:math';
 import '../../../models/game_state.dart';
-import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import 'bot_difficulty.dart';
 import 'bot_config.dart';
@@ -113,9 +112,13 @@ class BotDutchStrategy {
     double audacity = 0.0;
     
     int cardCount = bot.hand.length;
-    if (cardCount == 1) audacity += 3.0;
-    else if (cardCount == 2) audacity += 2.0;
-    else if (cardCount == 3) audacity += 1.0;
+    if (cardCount == 1) {
+      audacity += 3.0;
+    } else if (cardCount == 2) {
+      audacity += 2.0;
+    } else if (cardCount == 3) {
+      audacity += 1.0;
+    }
     
     if (bot.consecutiveBadDraws >= 3) {
       audacity += (bot.consecutiveBadDraws - 2) * 0.5;
@@ -124,11 +127,17 @@ class BotDutchStrategy {
     int dangerousOpponents = gs.players.where((p) => p.id != bot.id && p.hand.length <= 2).length;
     audacity -= dangerousOpponents * 0.5;
     
-    if (bot.botBehavior == BotBehavior.aggressive) audacity += 1.0;
-    else if (bot.botBehavior == BotBehavior.balanced) audacity -= 1.0;
+    if (bot.botBehavior == BotBehavior.aggressive) {
+      audacity += 1.0;
+    } else if (bot.botBehavior == BotBehavior.balanced) {
+      audacity -= 1.0;
+    }
     
-    if (difficulty.name == "Bronze") audacity *= 0.5;
-    else if (difficulty.name == "Platine") audacity *= 1.2;
+    if (difficulty.name == "Bronze") {
+      audacity *= 0.5;
+    } else if (difficulty.name == "Platine") {
+      audacity *= 1.2;
+    }
     
     return audacity.clamp(-3.0, 5.0);
   }

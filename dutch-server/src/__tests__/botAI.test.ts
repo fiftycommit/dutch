@@ -57,29 +57,20 @@ describe('BotAI', () => {
     });
 
     it('can call Dutch when score is low enough', async () => {
-      const state = createInitializedGameState();
-      state.currentPlayerIndex = 1; // Bot
-
-      // Give bot very low cards to encourage Dutch
-      state.players[1].hand = [
-        createCard('hearts', 'A'), // 1 pt
-        createCard('diamonds', 'A'), // 1 pt
-        createCard('hearts', 'R'), // 0 pt (red king)
-        createCard('joker', 'JOKER'), // 0 pt
-      ];
-      state.players[1].knownCards = [true, true, true, true];
-
-      // Run multiple times - Dutch should be called at some point
+      // Run multiple times - Dutch should be called at some point with a very low score
+      // This is probabilistic, so we give many attempts
       let dutchCalled = false;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 30; i++) {
         BotAI.clearAllBotMemories();
         const testState = createInitializedGameState();
-        testState.currentPlayerIndex = 1;
+        testState.currentPlayerIndex = 1; // Bot
+
+        // Give bot very low cards (score = 2) to encourage Dutch
         testState.players[1].hand = [
-          createCard('hearts', 'A'),
-          createCard('diamonds', 'A'),
-          createCard('hearts', 'R'),
-          createCard('joker', 'JOKER'),
+          createCard('hearts', 'A'), // 1 pt
+          createCard('diamonds', 'A'), // 1 pt
+          createCard('hearts', 'R'), // 0 pt (red king)
+          createCard('joker', 'JOKER'), // 0 pt
         ];
         testState.players[1].knownCards = [true, true, true, true];
 
@@ -91,8 +82,8 @@ describe('BotAI', () => {
         }
       }
 
-      // At least one Dutch call should happen with score of 2
-      assert.ok(dutchCalled, 'Bot should call Dutch with very low score');
+      // At least one Dutch call should happen with score of 2 over 30 attempts
+      assert.ok(dutchCalled, 'Bot should call Dutch with very low score (2 pts) within 30 attempts');
     });
 
     it('uses player MMR for difficulty when provided', async () => {

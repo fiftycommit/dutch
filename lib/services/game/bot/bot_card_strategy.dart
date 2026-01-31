@@ -1,6 +1,5 @@
 import 'dart:math';
 import '../../../models/game_state.dart';
-import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import '../../../models/playing_card.dart';
 import 'bot_difficulty.dart';
@@ -157,8 +156,11 @@ class BotCardStrategy {
   static double _getMatchChance(Player bot, BotDifficulty difficulty, BotGamePhase phase, GameState gameState) {
     double matchChance = difficulty.reactionMatchChance;
     
-    if (bot.hand.length >= 5) matchChance += 0.15;
-    else if (bot.hand.length >= 4) matchChance += 0.10;
+    if (bot.hand.length >= 5) {
+      matchChance += 0.15;
+    } else if (bot.hand.length >= 4) {
+      matchChance += 0.10;
+    }
     
     if (bot.botBehavior == BotBehavior.fast) {
       matchChance = 1.0;

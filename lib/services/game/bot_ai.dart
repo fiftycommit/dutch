@@ -7,7 +7,6 @@ import 'bot/bot_memory_manager.dart';
 import 'bot/bot_dutch_strategy.dart';
 import 'bot/bot_card_strategy.dart';
 import 'bot/bot_power_handler.dart';
-import 'bot/bot_difficulty.dart';
 
 export 'bot/bot_config.dart' show BotGamePhase, BotBehavior, BotSkillLevel;
 export 'bot/bot_difficulty.dart' show BotDifficulty;
@@ -16,17 +15,11 @@ export 'bot/bot_difficulty.dart' show BotDifficulty;
 /// Principe GRASP: Controller - Point d'entrée, délègue aux modules spécialisés
 /// Principe SOLID: SRP - Coordination uniquement
 class BotAI {
-  static BuildContext? _currentContext;
 
   /// Joue le tour d'un bot
   static Future<void> playBotTurn(GameState gameState, {int? playerMMR, BuildContext? context}) async {
-    _currentContext = context;
-
     Player bot = gameState.currentPlayer;
-    if (bot.isHuman) {
-      _currentContext = null;
-      return;
-    }
+    if (bot.isHuman) return;
 
     final difficulty = BotConfig.getDifficulty(bot, playerMMR);
     final phase = BotConfig.getBotPhase(bot, gameState);
@@ -41,7 +34,6 @@ class BotAI {
     // Vérifier si le bot doit appeler Dutch
     if (BotDutchStrategy.shouldCallDutch(gameState, bot, difficulty, phase)) {
       GameLogic.callDutch(gameState);
-      _currentContext = null;
       return;
     }
 
@@ -51,8 +43,6 @@ class BotAI {
     // Décider quoi faire avec la carte piochée
     await Future.delayed(const Duration(milliseconds: 1000));
     await BotCardStrategy.decideCardAction(gameState, bot, difficulty, phase);
-    
-    _currentContext = null;
   }
 
   /// Tente un match de réaction pour un bot
@@ -69,14 +59,10 @@ class BotAI {
   /// Utilise le pouvoir spécial du bot
   static Future<void> useBotSpecialPower(GameState gameState, {int? playerMMR, BuildContext? context}) async {
     if (!gameState.isWaitingForSpecialPower || gameState.specialCardToActivate == null) return;
-    
-    _currentContext = context;
 
     Player bot = gameState.currentPlayer;
     final difficulty = BotConfig.getDifficulty(bot, playerMMR);
 
     await BotPowerHandler.useBotSpecialPower(gameState, difficulty, context);
-    
-    _currentContext = null;
   }
 }

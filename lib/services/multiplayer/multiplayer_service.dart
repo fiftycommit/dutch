@@ -409,9 +409,13 @@ class MultiplayerService {
     final updateType = data['type'] as String?;
     final gameStateJson = data['gameState'] as Map<String, dynamic>?;
 
-    if (updateType == 'GAME_STARTED') onGameStarted?.call(data['message'] as String? ?? '');
-    else if (updateType == 'GAME_PAUSED') onGamePaused?.call(data['pausedBy'] as String? ?? 'Inconnu');
-    else if (updateType == 'GAME_RESUMED') onGameResumed?.call(data['resumedBy'] as String? ?? 'Inconnu');
+    if (updateType == 'GAME_STARTED') {
+      onGameStarted?.call(data['message'] as String? ?? '');
+    } else if (updateType == 'GAME_PAUSED') {
+      onGamePaused?.call(data['pausedBy'] as String? ?? 'Inconnu');
+    } else if (updateType == 'GAME_RESUMED') {
+      onGameResumed?.call(data['resumedBy'] as String? ?? 'Inconnu');
+    }
 
     final reactionTimeMs = data['reactionTimeMs'];
     if (reactionTimeMs is int) onReactionTimeConfig?.call(reactionTimeMs);
