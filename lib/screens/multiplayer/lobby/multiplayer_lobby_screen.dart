@@ -1490,9 +1490,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     final useSBMM = result['useSBMM'] as bool;
     final botDifficulty = result['botDifficulty'] as int?;
     
-    // Mettre à jour les settings de la room si nécessaire
+    // Démarrer la partie avec les paramètres de bots
     if (numberOfBots > 0) {
-      // TODO: Envoyer les paramètres au serveur
       await provider.startGame(
         fillBots: numberOfBots > 0,
         numberOfBots: numberOfBots,
