@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/game_settings.dart';
-import 'rp_calculator.dart';
+import '../../../models/player.dart';
+import '../../../models/game_settings.dart';
+import '../game/rp_calculator.dart';
 
 class StatsService {
   static const String _statsKeyPrefix = 'game_stats_slot_';

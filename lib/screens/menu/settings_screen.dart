@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/settings_provider.dart';
-import '../models/game_settings.dart';
+import '../../providers/settings_provider.dart';
+import '../../models/game_settings.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

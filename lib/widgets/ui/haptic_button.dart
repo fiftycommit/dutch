@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/screen_utils.dart';
+import '../../utils/screen_utils.dart';
 
 class HapticButton extends StatefulWidget {
   final VoidCallback? onPressed;

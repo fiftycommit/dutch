@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/card.dart';
-import '../models/player.dart';
-import '../providers/multiplayer_game_provider.dart';
-import 'card_widget.dart';
+import '../../models/card.dart';
+import '../../models/player.dart';
+import '../../providers/multiplayer_game_provider.dart';
+import '../game/card_widget.dart';
 import 'responsive_dialog.dart';
 
 /// Dialogs pour les pouvoirs spéciaux en mode multijoueur

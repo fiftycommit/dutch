@@ -1,15 +1,15 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../models/card.dart';
-import '../models/game_settings.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../models/card.dart';
+import '../../models/game_settings.dart';
 import 'game_logic.dart';
 import 'bot_difficulty.dart';
-import '../widgets/special_power_dialogs.dart';
-import '../main.dart';
+import '../../widgets/dialogs/special_power_dialogs.dart';
+import '../../main.dart';
 import 'package:provider/provider.dart';
-import '../providers/game_provider.dart';
+import '../../providers/game_provider.dart';
 
 enum BotGamePhase {
   exploration,  // DÃÂ©couvrir ses cartes

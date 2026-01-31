@@ -2,13 +2,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/player.dart';
-import '../providers/game_provider.dart';
-import '../widgets/card_widget.dart';
-import '../widgets/responsive_dialog.dart';
-import '../utils/screen_utils.dart';
+import '../../models/player.dart';
+import '../../providers/game_provider.dart';
+import '../../widgets/game/card_widget.dart';
+import '../../widgets/dialogs/responsive_dialog.dart';
+import '../../utils/screen_utils.dart';
 import 'game_screen.dart';
-import '../models/game_state.dart';
+import '../../models/game_state.dart';
 
 class MemorizationScreen extends StatefulWidget {
   const MemorizationScreen({super.key});

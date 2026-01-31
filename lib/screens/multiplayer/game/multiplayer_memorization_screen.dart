@@ -3,12 +3,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/player.dart';
+import '../../../../../models/player.dart';
 
-import '../providers/multiplayer_game_provider.dart';
-import '../widgets/card_widget.dart';
-import '../widgets/responsive_dialog.dart';
-import '../utils/screen_utils.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../widgets/game/card_widget.dart';
+import '../../../widgets/dialogs/responsive_dialog.dart';
+import '../../../utils/screen_utils.dart';
 import 'multiplayer_game_screen.dart';
 
 class MultiplayerMemorizationScreen extends StatefulWidget {

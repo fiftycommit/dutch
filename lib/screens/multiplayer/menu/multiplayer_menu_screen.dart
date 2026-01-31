@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/multiplayer_game_provider.dart';
-import '../models/game_state.dart';
-import '../models/game_settings.dart';
-import '../services/multiplayer/multiplayer_service.dart';
-import 'multiplayer_lobby_screen.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../models/game_state.dart';
+import '../../../../../models/game_settings.dart';
+import '../../../../../services/multiplayer/multiplayer_service.dart';
+import '../lobby/multiplayer_lobby_screen.dart';
 
 enum _MenuFlow { choose, create, join }
 

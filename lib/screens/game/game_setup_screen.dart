@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../models/player.dart';
-import '../models/game_state.dart';
-import '../models/game_settings.dart';
-import '../providers/game_provider.dart';
-import '../providers/settings_provider.dart';
-import '../services/learning/player_learning_service.dart';
+import '../../models/player.dart';
+import '../../models/game_state.dart';
+import '../../models/game_settings.dart';
+import '../../providers/game_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../services/learning/player_learning_service.dart';
 import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {

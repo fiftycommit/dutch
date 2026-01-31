@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../services/ui/stats_service.dart';
-import '../widgets/responsive_dialog.dart';
+import '../../services/ui/stats_service.dart';
+import '../../widgets/dialogs/responsive_dialog.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});

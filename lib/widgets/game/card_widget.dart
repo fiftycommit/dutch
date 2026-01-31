@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../models/card.dart';
-import '../utils/screen_utils.dart';
+import '../../models/card.dart';
+import '../../utils/screen_utils.dart';
 
 enum CardSize { tiny, small, medium, large, drawn }
 

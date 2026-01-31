@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/multiplayer_game_provider.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
 
 class CreatePublicRoomScreen extends StatefulWidget {
   const CreatePublicRoomScreen({super.key});

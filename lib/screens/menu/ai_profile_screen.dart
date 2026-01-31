@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/player_learning_data.dart';
-import '../services/learning/player_learning_service.dart';
+import '../../models/player_learning_data.dart';
+import '../../services/learning/player_learning_service.dart';
 
 class AiProfileScreen extends StatefulWidget {
   final int slotId;

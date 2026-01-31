@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/game_state.dart';
-import '../services/ui/haptic_service.dart';
+import '../../models/game_state.dart';
+import '../../services/ui/haptic_service.dart';
 import 'card_widget.dart';
 
 class CenterTable extends StatefulWidget {

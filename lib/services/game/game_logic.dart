@@ -1,8 +1,8 @@
 import 'dart:math';
-import '../models/card.dart';
-import '../models/player.dart';
-import '../models/game_state.dart';
-import '../models/game_settings.dart';
+import '../../models/card.dart';
+import '../../models/player.dart';
+import '../../models/game_state.dart';
+import '../../models/game_settings.dart';
 
 class GameLogic {
   static final Random _random = Random();

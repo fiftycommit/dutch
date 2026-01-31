@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../models/bot_learning_data.dart';
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../core/interfaces/i_learning_service.dart';
+import '../../models/bot_learning_data.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../core/interfaces/i_learning_service.dart';
 
 /// Service pour enregistrer et envoyer les données d'apprentissage des bots
 class BotLearningService implements ILearningService {

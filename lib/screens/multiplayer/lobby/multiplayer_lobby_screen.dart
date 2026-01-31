@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/multiplayer_game_provider.dart';
-import '../services/multiplayer/multiplayer_service.dart';
-import '../models/game_state.dart';
-import '../models/game_settings.dart';
-import '../widgets/connection_error_dialog.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../services/multiplayer/multiplayer_service.dart';
+import '../../../../../models/game_state.dart';
+import '../../../../../models/game_settings.dart';
+import '../../../widgets/dialogs/connection_error_dialog.dart';
 
-import 'multiplayer_memorization_screen.dart';
+import '../game/multiplayer_memorization_screen.dart';
 
 class MultiplayerLobbyScreen extends StatefulWidget {
   const MultiplayerLobbyScreen({super.key});

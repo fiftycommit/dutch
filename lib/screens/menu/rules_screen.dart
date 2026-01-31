@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../utils/screen_utils.dart';
+import '../../utils/screen_utils.dart';
 
 class RulesScreen extends StatelessWidget {
   const RulesScreen({super.key});

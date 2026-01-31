@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../utils/screen_utils.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../utils/screen_utils.dart';
 import 'game_action_button.dart';
 
 class GameControls extends StatelessWidget {

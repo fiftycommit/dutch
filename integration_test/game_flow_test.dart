@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:dutch_game/main.dart' as app;
-import 'package:dutch_game/widgets/card_widget.dart';
+import 'package:dutch_game/widgets/game/card_widget.dart';
 
 Future<void> _pumpUntilFound(
   WidgetTester tester,

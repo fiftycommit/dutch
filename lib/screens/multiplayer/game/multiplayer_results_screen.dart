@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../providers/multiplayer_game_provider.dart';
-import '../utils/screen_utils.dart';
-import '../widgets/player_avatar.dart';
-import 'multiplayer_lobby_screen.dart';
+import '../../../../../models/game_state.dart';
+import '../../../../../models/player.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../utils/screen_utils.dart';
+import '../../../widgets/game/player_avatar.dart';
+import '../lobby/multiplayer_lobby_screen.dart';
 
 class MultiplayerResultsScreen extends StatelessWidget {
   final GameState gameState;

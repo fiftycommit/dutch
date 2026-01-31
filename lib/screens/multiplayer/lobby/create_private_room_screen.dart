@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/multiplayer_game_provider.dart';
-import '../models/game_settings.dart';
-import '../models/game_state.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../models/game_settings.dart';
+import '../../../../../models/game_state.dart';
 
 class CreatePrivateRoomScreen extends StatefulWidget {
   const CreatePrivateRoomScreen({super.key});

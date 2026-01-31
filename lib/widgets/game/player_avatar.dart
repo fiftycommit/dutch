@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../models/player.dart';
-import '../utils/screen_utils.dart';
+import '../../models/player.dart';
+import '../../utils/screen_utils.dart';
 
 class PlayerAvatar extends StatefulWidget {
   final Player player;

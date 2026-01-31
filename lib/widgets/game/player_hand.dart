@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../models/player.dart';
+import '../../models/player.dart';
 import 'card_widget.dart';
-import '../utils/screen_utils.dart';
+import '../../utils/screen_utils.dart';
 
 const double _cardAspectRatio = 7 / 5;
 

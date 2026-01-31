@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../models/card.dart';
-import '../models/player_learning_data.dart';
-import '../core/interfaces/i_learning_service.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../models/card.dart';
+import '../../models/player_learning_data.dart';
+import '../../core/interfaces/i_learning_service.dart';
 
 class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';

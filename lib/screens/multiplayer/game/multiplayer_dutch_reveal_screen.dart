@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../providers/multiplayer_game_provider.dart';
-import '../widgets/card_widget.dart';
+import '../../../../../models/game_state.dart';
+import '../../../../../models/player.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../widgets/game/card_widget.dart';
 import 'multiplayer_results_screen.dart';
-import 'multiplayer_lobby_screen.dart';
+import '../lobby/multiplayer_lobby_screen.dart';
 
 class MultiplayerDutchRevealScreen extends StatefulWidget {
   const MultiplayerDutchRevealScreen({super.key});

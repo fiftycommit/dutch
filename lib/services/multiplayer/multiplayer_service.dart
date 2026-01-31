@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
-import '../models/game_state.dart';
-import '../models/game_settings.dart';
-import '../models/card.dart';
+import '../../models/game_state.dart';
+import '../../models/game_settings.dart';
+import '../../models/card.dart';
 
 /// État de la connexion Socket.IO
 enum SocketConnectionState {

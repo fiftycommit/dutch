@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/multiplayer_game_provider.dart';
+import '../../../../../providers/multiplayer_game_provider.dart';
 import 'dart:async';
 
 class PublicMatchmakingScreen extends StatefulWidget {

@@ -1,6 +1,6 @@
 import '../../models/game_state.dart';
 import '../../models/player.dart';
-import '../../services/game_state_validator.dart';
+import '../../services/game/game_state_validator.dart';
 
 /// Interface abstraite pour le service de validation
 /// Principe SOLID: DIP - Dépendre d'abstractions, pas de concrétions

@@ -1,6 +1,6 @@
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../core/interfaces/i_validation_service.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../core/interfaces/i_validation_service.dart';
 
 /// Service de validation de la cohérence de l'état du jeu
 /// Principe GRASP: Pure Fabrication - Service technique de validation

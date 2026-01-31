@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
-import '../models/game_state.dart';
-import '../models/player.dart';
-import '../models/card.dart';
-import '../providers/game_provider.dart';
-import '../widgets/card_widget.dart';
+import '../../models/game_state.dart';
+import '../../models/player.dart';
+import '../../models/card.dart';
+import '../../providers/game_provider.dart';
+import '../../widgets/game/card_widget.dart';
 import 'results_screen.dart';
 
 class DutchRevealScreen extends StatefulWidget {

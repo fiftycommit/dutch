@@ -1,6 +1,6 @@
-import '../models/game_state.dart';
-import '../core/interfaces/i_learning_service.dart';
-import '../core/interfaces/i_tracking_service.dart';
+import '../../models/game_state.dart';
+import '../../core/interfaces/i_learning_service.dart';
+import '../../core/interfaces/i_tracking_service.dart';
 
 /// Service dédié au tracking des données de jeu pour l'apprentissage ML
 /// Principe GRASP: Pure Fabrication - Service technique qui n'existe pas dans le domaine métier
