@@ -55,8 +55,8 @@ class BotAI {
 
     // Décider quoi faire avec la carte piochée
     final postDrawDelay = personality != null
-        ? (personality.decisionSpeedMs * 0.25).round().clamp(50, 300)
-        : 200;
+        ? (personality.decisionSpeedMs * 0.35).round().clamp(150, 900)
+        : 600;
     await Future.delayed(Duration(milliseconds: postDrawDelay));
     await BotCardStrategy.decideCardAction(
       gameState,

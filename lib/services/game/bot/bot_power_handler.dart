@@ -30,8 +30,8 @@ class BotPowerHandler {
     String val = gameState.specialCardToActivate!.value;
 
     final baseDelay = personality != null
-        ? (personality.decisionSpeedMs * 0.25).round().clamp(80, 300)
-        : 200;
+        ? (personality.decisionSpeedMs * 0.35).round().clamp(150, 700)
+        : 400;
     await Future.delayed(Duration(milliseconds: baseDelay));
 
     final usageRate = _getPowerUsageRate(val, personality);
@@ -91,7 +91,7 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotSpyNotification(context, bot, target.name, idx);
-      await Future.delayed(const Duration(milliseconds: 900));
+      await Future.delayed(const Duration(milliseconds: 1400));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
@@ -147,7 +147,7 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotSwapNotification(context, bot, target.name, targetIdx);
-      await Future.delayed(const Duration(milliseconds: 900));
+      await Future.delayed(const Duration(milliseconds: 1400));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
@@ -280,7 +280,7 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotJokerNotification(context, bot, target.name);
-      await Future.delayed(const Duration(milliseconds: 1100));
+      await Future.delayed(const Duration(milliseconds: 1700));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }

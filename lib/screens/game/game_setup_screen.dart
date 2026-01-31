@@ -310,13 +310,28 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         // 1er bot = un peu au-dessus pour challenge
         final boost = i == 0 ? 0.10 : 0.0;
 
+        double clampMs(double v) => v.clamp(500.0, 10000.0);
+
+        double strategyCode(String? value) {
+          final v = value?.toLowerCase().trim();
+          if (v == 'leader') return 0.0;
+          if (v == 'weak') return 1.0;
+          return 2.0; // random
+        }
+
         aiParameters = {
           'aggressiveness': clamp01(baseNum('aggressiveness', 0.5) + delta + boost * 0.2),
           'caution': clamp01(baseNum('caution', 0.5) - delta),
           'dutchThreshold': (baseNum('dutchThreshold', 15.0) - boost * 2.0).clamp(5.0, 30.0),
           'powerUsageRate': clamp01(baseNum('powerUsageRate', 0.5) + delta + boost * 0.1),
+          'powerDefensiveRate': clamp01(baseNum('powerDefensiveRate', 0.5) + delta * 0.4),
+          'powerOffensiveRate': clamp01(baseNum('powerOffensiveRate', 0.5) + delta * 0.4),
           'memoryAccuracy': clamp01(baseNum('memoryAccuracy', 0.7) + boost + delta),
+          'memoryRetention': clamp01(baseNum('memoryRetention', 0.7) + delta),
           'riskTolerance': clamp01(baseNum('riskTolerance', 0.5) + delta + boost * 0.15),
+          'adaptability': clamp01(baseNum('adaptability', 0.5) + delta * 0.5),
+          'decisionSpeed': clampMs(baseNum('decisionSpeed', 2000.0) * (1.0 - delta * 0.5)),
+          'targetingStrategy': strategyCode(base['targetingStrategy']?.toString()),
         };
       }
       

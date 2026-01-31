@@ -69,9 +69,9 @@ class BotConfig {
         difficultyFactor = 0.95;
       }
 
-      final base = (personality.decisionSpeedMs * behaviorFactor * difficultyFactor)
+      final base = (personality.decisionSpeedMs * behaviorFactor * difficultyFactor * 0.6)
           .round()
-          .clamp(50, 600);
+          .clamp(200, 1600);
       return base;
     }
 
@@ -80,23 +80,23 @@ class BotConfig {
       
       switch (difficulty.name) {
         case "Bronze":
-          return criticalMoment ? 250 : 180;
+          return criticalMoment ? 700 : 450;
         case "Argent":
-          return criticalMoment ? 350 : 220;
+          return criticalMoment ? 900 : 550;
         case "Or":
-          return criticalMoment ? 450 : 280;
+          return criticalMoment ? 1100 : 700;
         case "Platine":
-          return criticalMoment ? 550 : 320;
+          return criticalMoment ? 1300 : 800;
         default:
-          return 250;
+          return 600;
       }
     }
 
     if (behavior == BotBehavior.aggressive) {
-      return difficulty.name == "Or" || difficulty.name == "Platine" ? 220 : 180;
+      return difficulty.name == "Or" || difficulty.name == "Platine" ? 550 : 450;
     }
 
-    return 220;
+    return 600;
   }
 
   /// Convertit les paramètres AI en BotDifficulty

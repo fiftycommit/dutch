@@ -50,6 +50,19 @@ class BotPersonality {
 
     double clamp01(double v) => v.clamp(0.0, 1.0);
 
+    String resolveStrategy(dynamic value) {
+      if (value is num) {
+        if (value <= 0.5) return 'leader';
+        if (value <= 1.5) return 'weak';
+        return 'random';
+      }
+      if (value is String) {
+        final v = value.trim().toLowerCase();
+        if (v == 'leader' || v == 'weak' || v == 'random') return v;
+      }
+      return 'random';
+    }
+
     return BotPersonality(
       aggressiveness: clamp01(numParam('aggressiveness', 0.5)),
       caution: clamp01(numParam('caution', 0.5)),
@@ -67,9 +80,7 @@ class BotPersonality {
       aggressivenessLosing: clamp01(numParam('aggressiveness_losing', 0.5)),
       cautionWinning: clamp01(numParam('caution_winning', 0.5)),
       cautionLosing: clamp01(numParam('caution_losing', 0.5)),
-      targetingStrategy:
-          (params['targetingStrategy'] as String?)?.trim().toLowerCase() ??
-              'random',
+      targetingStrategy: resolveStrategy(params['targetingStrategy']),
     );
   }
 }

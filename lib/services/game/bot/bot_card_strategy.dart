@@ -172,12 +172,12 @@ class BotCardStrategy {
         
         if (knownCard.matches(topDiscard)) {
           if (_random.nextDouble() < difficulty.matchAccuracy) {
-            int reactionDelay = (250 * (1 - difficulty.reactionSpeed)).round() + 80;
+            int reactionDelay = (380 * (1 - difficulty.reactionSpeed)).round() + 120;
             if (personality != null) {
               reactionDelay =
                   (reactionDelay * (personality.decisionSpeedMs / 2000.0))
                       .round()
-                      .clamp(50, 400);
+                      .clamp(120, 900);
             }
             await Future.delayed(Duration(milliseconds: reactionDelay));
             
@@ -261,12 +261,12 @@ class BotCardStrategy {
     PlayingCard blindCard = bot.hand[blindIndex];
     
     if (blindCard.matches(topDiscard)) {
-      int reactionDelay = (220 * (1 - difficulty.reactionSpeed)).round() + 70;
+      int reactionDelay = (320 * (1 - difficulty.reactionSpeed)).round() + 120;
       if (personality != null) {
         reactionDelay =
             (reactionDelay * (personality.decisionSpeedMs / 2000.0))
                 .round()
-                .clamp(50, 350);
+                .clamp(120, 850);
       }
       await Future.delayed(Duration(milliseconds: reactionDelay));
       
