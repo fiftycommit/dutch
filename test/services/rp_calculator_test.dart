@@ -255,14 +255,6 @@ void main() {
 
     group('calculateRP - tournament', () {
       test('tournament gives more points', () {
-        final normal = RPCalculator.calculateRP(
-          playerRank: 1,
-          currentMMR: 500,
-          calledDutch: false,
-          hasEmptyHand: false,
-          isTournament: false,
-        );
-
         final tournament = RPCalculator.calculateRP(
           playerRank: 1,
           currentMMR: 500,
@@ -272,7 +264,7 @@ void main() {
           tournamentRound: 1,
         );
 
-        // Round 1 has same multiplier, but round 2/3 have more
+        // Round 1 is non-null; later rounds are covered below.
         expect(tournament, isNotNull);
       });
 

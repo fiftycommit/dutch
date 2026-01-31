@@ -10,6 +10,7 @@ class MockGameTrackingProvider extends GameTrackingProvider {
   int initTrackingCount = 0;
   int finalizeBotRecordingsCount = 0;
 
+  @override
   void startGameRecording({
     required GameState gameState,
     required int slotId,
@@ -19,6 +20,7 @@ class MockGameTrackingProvider extends GameTrackingProvider {
     humanActionCounter = 0;
   }
 
+  @override
   void recordPlayerAction({
     required String actionType,
     required GameState gameState,
@@ -35,12 +37,14 @@ class MockGameTrackingProvider extends GameTrackingProvider {
     humanActionCounter++;
   }
 
+  @override
   void updateLastActionResult({required Map<String, dynamic> result}) {
     if (recordedActions.isNotEmpty) {
       recordedActions.last['result'] = result;
     }
   }
 
+  @override
   void recordPlayerActionWithResult({
     required String actionType,
     required GameState gameState,
@@ -59,10 +63,13 @@ class MockGameTrackingProvider extends GameTrackingProvider {
     humanActionCounter++;
   }
 
+  @override
   void incrementBotTurns(GameState gameState) {}
 
+  @override
   void recordBotDiscards(GameState gameState) {}
 
+  @override
   Future<void> endBotRecording({
     required String botPlayerId,
     required int finalScore,
@@ -76,6 +83,7 @@ class MockGameTrackingProvider extends GameTrackingProvider {
     required int botFinalHandSize,
   }) async {}
 
+  @override
   Future<PlayerProfile> endPlayerRecording({
     required int slotId,
     required bool usedSBMM,
@@ -88,16 +96,19 @@ class MockGameTrackingProvider extends GameTrackingProvider {
     return PlayerProfile.defaultProfile(profileId: 'slot_$slotId');
   }
 
+  @override
   void initTracking(GameState gameState, bool useSBMM) {
     initTrackingCount++;
     currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
     humanActionCounter = 0;
   }
 
+  @override
   Future<void> finalizeBotRecordings(GameState gameState) async {
     finalizeBotRecordingsCount++;
   }
 
+  @override
   void reset() {
     currentGameId = null;
     humanActionCounter = 0;

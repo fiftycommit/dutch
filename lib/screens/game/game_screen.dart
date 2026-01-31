@@ -106,7 +106,9 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                   controller: gameProvider,
                   supportsTakeFromDiscard: false, // Solo mode
                 ),
-                multiplayerConfig: MultiplayerConfig.solo,
+                multiplayerConfig: MultiplayerConfig(
+                  reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
+                ),
               ),
               if (gameState.gameMode == GameMode.tournament)
                 Positioned(
@@ -137,6 +139,16 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white54)),
                 ),
+              // Bouton Pause
+              Positioned(
+                top: 10,
+                right: 10,
+                child: IconButton(
+                  onPressed: () => gameProvider.pauseGame(),
+                  icon: const Icon(Icons.pause_circle_outline, color: Colors.white70, size: 32),
+                  tooltip: 'Pause',
+                ),
+              ),
               if (gameProvider.isPaused)
                 _buildPauseOverlay(gameProvider),
             ],

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/bot/bot_config.dart';
 import 'package:dutch_game/services/game/bot/bot_difficulty.dart';
 import 'package:dutch_game/models/game_state.dart';
-import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/models/playing_card.dart';
 

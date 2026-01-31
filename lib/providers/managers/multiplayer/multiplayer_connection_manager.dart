@@ -114,14 +114,15 @@ class MultiplayerConnectionManager {
 
       await _multiplayerService.connect();
 
-      if (_connectionState == SocketConnectionState.connected && _onReconnectToRoom != null) {
+      final onReconnect = _onReconnectToRoom;
+      if (_connectionState == SocketConnectionState.connected && onReconnect != null) {
         final savedPlayerName = playersInLobby.firstWhere(
               (p) => p['id'] == playerId,
               orElse: () => {'name': 'Joueur'},
             )['name'] as String? ??
             'Joueur';
 
-        await _onReconnectToRoom!(roomCode, savedPlayerName);
+        await onReconnect(roomCode, savedPlayerName);
       }
     } catch (e) {
       debugPrint('❌ Erreur lors de la reconnexion silencieuse: $e');

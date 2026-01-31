@@ -28,8 +28,8 @@ class MockMultiplayerService extends MultiplayerService {
   String? _mockClientId = 'test_client';
   bool _mockIsConnected = true;
   SocketConnectionState _mockConnectionState = SocketConnectionState.connected;
-  int _mockLatencyMs = 50;
-  int _mockServerTimeOffsetMs = 0;
+  final int _mockLatencyMs = 50;
+  final int _mockServerTimeOffsetMs = 0;
 
   // Mock return values
   Map<String, dynamic>? mockCreateRoomResult;
