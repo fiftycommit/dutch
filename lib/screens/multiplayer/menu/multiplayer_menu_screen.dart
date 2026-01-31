@@ -30,6 +30,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   @override
   void initState() {
     super.initState();
+    _initProvider();
+  }
+
+  Future<void> _initProvider() async {
+    final provider = context.read<MultiplayerGameProvider>();
+    await provider.init();
     _loadMyRooms();
   }
 

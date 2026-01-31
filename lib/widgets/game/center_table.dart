@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/game_state.dart';
 import '../../services/ui/haptic_service.dart';
 import 'card_widget.dart';
+import 'svg_builder_provider.dart';
 
 class CenterTable extends StatefulWidget {
   final GameState gameState;
@@ -13,6 +14,7 @@ class CenterTable extends StatefulWidget {
   final VoidCallback? onTakeFromDiscard;
   final int reactionTimeTotalMs;
   final bool enableHaptics;
+  final SvgBuilder? svgBuilder;
 
   const CenterTable({
     super.key,
@@ -25,6 +27,7 @@ class CenterTable extends StatefulWidget {
     this.onTakeFromDiscard,
     this.reactionTimeTotalMs = 3000,
     this.enableHaptics = false,
+    this.svgBuilder,
   });
 
   @override
@@ -228,6 +231,7 @@ class _CenterTableState extends State<CenterTable> {
             card: gs.drawnCard,
             size: cardSize,
             isRevealed: true,
+            svgBuilder: widget.svgBuilder,
           ),
           SizedBox(height: widget.isCompactMode ? 8 : 12),
           Container(
@@ -283,13 +287,13 @@ class _CenterTableState extends State<CenterTable> {
 
     final deckCard = Opacity(
       opacity: canDraw ? 1.0 : 0.6,
-      child: CardWidget(card: null, size: cardSize, isRevealed: false),
+      child: CardWidget(card: null, size: cardSize, isRevealed: false, svgBuilder: widget.svgBuilder),
     );
     final deckWidget = canDraw
         ? GestureDetector(onTap: widget.onDrawCard, child: deckCard)
         : deckCard;
     final discardCard =
-        CardWidget(card: gs.topDiscardCard, size: cardSize, isRevealed: true);
+        CardWidget(card: gs.topDiscardCard, size: cardSize, isRevealed: true, svgBuilder: widget.svgBuilder);
     final discardWidget = canTakeDiscard
         ? GestureDetector(onTap: widget.onTakeFromDiscard, child: discardCard)
         : (widget.onShowDiscard != null

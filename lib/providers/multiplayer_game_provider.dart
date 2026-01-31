@@ -166,6 +166,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
         return p['ready'] == true;
       }).length;
 
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
+
   MultiplayerGameProvider({MultiplayerService? multiplayerService})
       : _multiplayerService = multiplayerService ?? MultiplayerService() {
     WidgetsBinding.instance.addObserver(this);
@@ -186,7 +189,14 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     );
     
     _setupListeners();
-    _multiplayerService.cleanupInactiveRooms();
+  }
+
+  /// Initialize the provider - call this in initState() of multiplayer screens
+  /// This performs async operations that shouldn't be in the constructor
+  Future<void> init() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+    await _multiplayerService.cleanupInactiveRooms();
   }
 
   Map<String, dynamic>? get _localPresence {

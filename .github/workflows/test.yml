@@ -1,0 +1,50 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze --no-fatal-infos
+
+      # Critical tests first (fail-fast)
+      - name: Run critical tests
+        run: flutter test test/critical/ test/regression/
+
+      # Full test suite with coverage
+      - name: Run all tests with coverage
+        run: flutter test --coverage
+
+      # Check minimum coverage threshold (50%)
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(grep -E "^LF:|^LH:" coverage/lcov.info | paste - - | awk -F'[: \t]+' '{total+=$2; hit+=$4} END{printf "%.1f", (hit/total)*100}')
+          echo "Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
+            echo "❌ Coverage $COVERAGE% is below 50% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage $COVERAGE% meets 50% threshold"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage/lcov.info
+          fail_ci_if_error: false

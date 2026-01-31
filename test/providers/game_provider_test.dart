@@ -82,7 +82,6 @@ void main() {
     });
 
     test('should load MMR when SBMM is enabled', () async {
-      // Skip: requires SharedPreferences mock for async operations
       mockStats.mockStats['mmr'] = 750;
 
       final players = [
@@ -97,6 +96,9 @@ void main() {
         reactionTimeMs: 3000,
         useSBMM: true,
       );
+
+      // Wait for async MMR loading
+      await Future.delayed(const Duration(milliseconds: 100));
 
       expect(gameProvider.playerMMR, 750);
     });
@@ -180,41 +182,7 @@ void main() {
     });
   });
 
-  group('GameProvider - Dutch Call', () {
-    setUp(() async {
-      final players = [
-        Player(id: 'human', name: 'Player', isHuman: true, position: 0),
-        Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1),
-      ];
-
-      gameProvider.createNewGame(
-        players: players,
-        gameMode: GameMode.quick,
-        difficulty: Difficulty.medium,
-        reactionTimeMs: 3000,
-      );
-
-      gameProvider.gameState!.phase = GamePhase.playing;
-      gameProvider.gameState!.currentPlayerIndex = 0;
-    });
-
-    test('should allow human to call Dutch on their turn', () {
-      gameProvider.callDutch();
-
-      // callDutch triggers endGame, so phase goes to dutchCalled then ended
-      expect(gameProvider.gameState!.dutchCallerId, 'human');
-      expect(gameProvider.gameState!.phase, isIn([GamePhase.dutchCalled, GamePhase.ended]));
-    });
-
-    test('should not allow Dutch call when card is drawn', () {
-      gameProvider.drawCard();
-
-      gameProvider.callDutch();
-
-      // Phase should not change since a card is drawn
-      expect(gameProvider.gameState!.phase, GamePhase.playing);
-    });
-  });
+  // Dutch Call tests moved to game_provider_comprehensive_test.dart
 
   group('GameProvider - IGameController Interface', () {
     setUp(() async {
@@ -259,6 +227,88 @@ void main() {
 
       gameProvider.gameState!.phase = GamePhase.setup;
       expect(gameProvider.canLocalPlayerAct, false);
+    });
+  });
+
+  group('GameProvider - Pause/Resume', () {
+    setUp(() {
+      final players = [
+        Player(id: 'human', name: 'Player', isHuman: true, position: 0),
+        Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1),
+      ];
+
+      gameProvider.createNewGame(
+        players: players,
+        gameMode: GameMode.quick,
+        difficulty: Difficulty.medium,
+        reactionTimeMs: 3000,
+      );
+      gameProvider.gameState!.phase = GamePhase.playing;
+    });
+
+    test('pauseGame sets isPaused to true', () {
+      gameProvider.pauseGame();
+      expect(gameProvider.isPaused, true);
+    });
+
+    test('resumeGame sets isPaused to false', () {
+      gameProvider.pauseGame();
+      gameProvider.resumeGame();
+      expect(gameProvider.isPaused, false);
+    });
+
+    test('pause change l\'état isPaused', () {
+      gameProvider.pauseGame();
+      expect(gameProvider.isPaused, isTrue);
+      expect(gameProvider.isProcessing, isFalse);
+    });
+  });
+
+  group('GameProvider - End Game', () {
+    setUp(() {
+      final players = [
+        Player(id: 'human', name: 'Player', isHuman: true, position: 0),
+        Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1),
+      ];
+
+      gameProvider.createNewGame(
+        players: players,
+        gameMode: GameMode.quick,
+        difficulty: Difficulty.medium,
+        reactionTimeMs: 3000,
+      );
+      gameProvider.gameState!.phase = GamePhase.playing;
+    });
+
+    test('quitGame reset l\'état', () {
+      gameProvider.quitGame();
+
+      expect(gameProvider.gameState, isNull);
+      expect(gameProvider.hasActiveGame, isFalse);
+      expect(gameProvider.isPaused, isFalse);
+    });
+  });
+
+  group('GameProvider - Tournament', () {
+    setUp(() {
+      final players = [
+        Player(id: 'human', name: 'Player', isHuman: true, position: 0),
+        Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1),
+        Player(id: 'bot2', name: 'Bot 2', isHuman: false, position: 2),
+        Player(id: 'bot3', name: 'Bot 3', isHuman: false, position: 3),
+      ];
+
+      gameProvider.createNewGame(
+        players: players,
+        gameMode: GameMode.tournament,
+        difficulty: Difficulty.medium,
+        reactionTimeMs: 3000,
+        tournamentRound: 1,
+      );
+    });
+
+    test('mode tournoi existe', () {
+      expect(gameProvider.gameState!.gameMode, GameMode.tournament);
     });
   });
 }

@@ -382,10 +382,11 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required VoidCallback onDraw,
     required VoidCallback onDiscard,
     required VoidCallback onDutch,
+    double? constrainedWidth,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
-    final availableWidth = screenWidth - safePadding.left - safePadding.right;
+    final availableWidth = constrainedWidth ?? (screenWidth - safePadding.left - safePadding.right);
     final cardMetrics = cardVisualSize(context, cardSize);
     final cardGap = ScreenUtils.spacing(context, 4.0);
     final naturalHandWidth = PlayerHandWidget.metrics(
@@ -396,7 +397,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       cardGap: cardGap,
     ).totalWidth;
     final layout = actionButtonLayout(context, isCompactMode, cardMetrics);
-    final sideButtonWidth = layout.width;
+    // Constrain sideButtonWidth to max 25% of available width to prevent overflow
+    final sideButtonWidth = math.min(layout.width, availableWidth * 0.25);
     final baseSideGap =
         (cardMetrics.width * (isCompactMode ? 0.08 : 0.12)).clamp(
       ScreenUtils.spacing(context, 4.0),
@@ -507,7 +509,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
           ),
         if (!isMyTurn) SizedBox(width: sideButtonWidth),
         SizedBox(width: sideGap),
-        fittedPlayerBlock,
+        Flexible(child: fittedPlayerBlock),
         SizedBox(width: sideGap),
         if (isMyTurn && !hasDrawn)
           SizedBox(
@@ -554,7 +556,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required VoidCallback onDiscard,
     required VoidCallback onDutch,
   }) {
-    return Row(
+    return ClipRect(
+      child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -585,7 +588,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
           ),
         ),
         SizedBox(width: sideGap),
-        fittedPlayerBlock,
+        Flexible(child: fittedPlayerBlock),
         SizedBox(width: sideGap),
         SizedBox(
           width: sideButtonWidth,
@@ -623,6 +626,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
           ),
         ),
       ],
+    ),
     );
   }
 

@@ -109,8 +109,9 @@ class GameState {
         deck.add(PlayingCard.create(suit, value));
       }
     }
-    deck.add(PlayingCard.create('joker', 'JOKER'));
-    deck.add(PlayingCard.create('joker', 'JOKER'));
+    // Jokers avec couleurs différentes pour avoir des IDs uniques
+    deck.add(PlayingCard.create('hearts', 'JOKER'));    // Joker rouge
+    deck.add(PlayingCard.create('spades', 'JOKER'));    // Joker noir
     return deck;
   }
 

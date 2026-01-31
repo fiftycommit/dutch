@@ -352,8 +352,9 @@ class PlayerLearningService implements IPlayerLearningService {
     final memoryRetentionObserved = memoryTests == 0 ? memoryRetention : memoryCorrect / memoryTests;
 
     double newDutchQuality = dutchQuality;
-    if (record.calledDutch) {
-      final estimatedScore = record.actions.lastWhere((a) => a.actionType == 'dutch', orElse: () => record.actions.last).gameState['estimatedScore'] ?? record.finalScore;
+    if (record.calledDutch && record.actions.isNotEmpty) {
+      final dutchAction = record.actions.where((a) => a.actionType == 'dutch').lastOrNull;
+      final estimatedScore = (dutchAction ?? record.actions.last).gameState['estimatedScore'] ?? record.finalScore;
       final error = (estimatedScore - record.finalScore).abs() / 30.0;
       newDutchQuality = dutchQuality * 0.9 + (1.0 - error) * 0.1;
     }

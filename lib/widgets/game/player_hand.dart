@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/player.dart';
 import 'card_widget.dart';
+import 'svg_builder_provider.dart';
 import '../../utils/screen_utils.dart';
 
 const double _cardAspectRatio = 7 / 5;
@@ -29,6 +30,7 @@ class PlayerHandWidget extends StatefulWidget {
   final List<int>? selectedIndices;
   final CardSize cardSize;
   final bool overlapCards;
+  final SvgBuilder? svgBuilder;
 
   const PlayerHandWidget({
     super.key,
@@ -39,6 +41,7 @@ class PlayerHandWidget extends StatefulWidget {
     this.selectedIndices,
     this.cardSize = CardSize.medium,
     this.overlapCards = true,
+    this.svgBuilder,
   });
 
   @override
@@ -214,6 +217,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
                 card: null,
                 size: widget.cardSize,
                 isRevealed: shouldReveal,
+                svgBuilder: widget.svgBuilder,
               ),
             ),
           );

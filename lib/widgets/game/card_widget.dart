@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../models/playing_card.dart';
 import '../../utils/screen_utils.dart';
+import 'svg_builder_provider.dart';
 
 enum CardSize { tiny, small, medium, large, drawn }
 
@@ -12,6 +12,7 @@ class CardWidget extends StatelessWidget {
   final CardSize size;
   final bool isRevealed;
   final VoidCallback? onTap;
+  final SvgBuilder? svgBuilder;
 
   const CardWidget({
     super.key,
@@ -19,6 +20,7 @@ class CardWidget extends StatelessWidget {
     required this.size,
     required this.isRevealed,
     this.onTap,
+    this.svgBuilder,
   });
 
   @override
@@ -67,31 +69,19 @@ class CardWidget extends StatelessWidget {
         child: ClipRRect(
           borderRadius:
               BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
-          child: _buildCardImage(width, height),
+          child: _buildCardImage(context, width, height),
         ),
       ),
     );
   }
 
-  Widget _buildCardImage(double w, double h) {
+  Widget _buildCardImage(BuildContext context, double w, double h) {
+    final builder = svgBuilder ?? SvgBuilderProvider.maybeOf(context);
+    
     if (card == null || !isRevealed) {
-      return SvgPicture.asset(
-        'assets/images/cards/dos-bleu.svg',
-        width: w,
-        height: h,
-        fit: BoxFit.contain,
-      );
+      return builder('assets/images/cards/dos-bleu.svg', w, h);
     }
 
-    return SvgPicture.asset(
-      card!.imagePath,
-      width: w,
-      height: h,
-      fit: BoxFit.contain,
-      placeholderBuilder: (context) => Container(
-        color: Colors.white,
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-    );
+    return builder(card!.imagePath, w, h);
   }
 }

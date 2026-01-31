@@ -383,6 +383,7 @@ class _GameTableContentState extends State<_GameTableContent>
                     playerBadgeSize,
                     blockSpacing,
                     playerAreaHeight,
+                    constraints.maxWidth - (sideBandWidth * 2),
                   ),
                 ),
 
@@ -616,6 +617,7 @@ class _GameTableContentState extends State<_GameTableContent>
     double badgeSize,
     double spacing,
     double maxHeight,
+    double availableWidth,
   ) {
     return buildPlayerAreaWithButtons(
       context: context,
@@ -638,6 +640,7 @@ class _GameTableContentState extends State<_GameTableContent>
           callbacks.onCallDutch();
         }
       },
+      constrainedWidth: availableWidth,
     );
   }
 

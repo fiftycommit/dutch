@@ -1,8 +1,9 @@
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/player_learning_data.dart';
+import 'package:dutch_game/providers/game_tracking_provider.dart';
 
 /// Mock GameTrackingProvider for testing
-class MockGameTrackingProvider {
+class MockGameTrackingProvider extends GameTrackingProvider {
   String? currentGameId;
   int humanActionCounter = 0;
   List<Map<String, dynamic>> recordedActions = [];

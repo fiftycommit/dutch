@@ -83,7 +83,10 @@ class TournamentManager {
 
     List<Player> survivors = [];
     for (int i = 0; i < ranking.length - 1; i++) {
-      survivors.add(ranking[i]);
+      // Exclure l'humain des survivors car il est éliminé
+      if (!ranking[i].isHuman) {
+        survivors.add(ranking[i]);
+      }
     }
 
     List<Player> currentPlayers = survivors;

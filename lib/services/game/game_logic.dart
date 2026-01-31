@@ -70,6 +70,11 @@ class GameLogic {
   static void drawCard(GameState gameState) {
     if (gameState.deck.isEmpty) _refillDeck(gameState);
 
+    // Si _refillDeck a déjà terminé la partie, ne pas continuer
+    if (gameState.phase == GamePhase.ended || gameState.phase == GamePhase.dutchCalled) {
+      return;
+    }
+
     if (gameState.deck.isNotEmpty) {
       gameState.drawnCard = gameState.deck.removeLast();
       gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
