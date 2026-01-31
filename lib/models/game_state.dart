@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'card.dart';
+import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
 

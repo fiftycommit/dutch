@@ -1,6 +1,6 @@
 import '../../models/player.dart';
 import '../../models/game_state.dart';
-import '../game/bot_difficulty.dart';
+import '../game/bot/bot_difficulty.dart';
 
 /// Interface pour les stratégies de comportement des bots
 /// Principe SOLID: LSP - Les stratégies peuvent être substituées sans changer le comportement

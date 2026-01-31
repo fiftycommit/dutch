@@ -1,10 +1,6 @@
-import 'interfaces/i_learning_service.dart';
-import 'interfaces/i_tracking_service.dart';
-import 'interfaces/i_validation_service.dart';
-import '../services/learning/bot_learning_service.dart';
-import '../services/learning/player_learning_service.dart';
-import '../services/learning/game_tracking_service.dart';
-import '../services/game/game_state_validator.dart';
+import 'di/register_game_services.dart';
+import 'di/register_ui_services.dart';
+import 'di/register_multiplayer_services.dart';
 
 /// Service Locator pour gérer les dépendances
 /// Principe GRASP: Pure Fabrication - Service technique de gestion des dépendances
@@ -42,24 +38,14 @@ class ServiceLocator {
   }
 
   /// Configuration par défaut des services
+  /// Délègue aux fichiers di/register_*_services.dart pour plus de clarté
   static void setupDefaultServices() {
     final locator = ServiceLocator();
 
-    // Services d'apprentissage
-    final botLearningService = BotLearningService();
-    final playerLearningService = PlayerLearningService();
-
-    // Enregistrer les services avec leurs interfaces
-    locator.register<ILearningService>(botLearningService);
-    locator.register<IPlayerLearningService>(playerLearningService);
-
-    // Service de tracking (dépend de ILearningService)
-    final trackingService = GameTrackingService(botLearningService);
-    locator.register<ITrackingService>(trackingService);
-
-    // Service de validation
-    final validationService = GameStateValidator();
-    locator.register<IValidationService>(validationService);
+    // Enregistrer les services par catégorie
+    registerGameServices(locator);      // Logique métier pure
+    registerUIServices(locator);        // Services UI (haptics, stats)
+    registerMultiplayerServices(locator); // Services réseau (si singleton)
   }
 }
 

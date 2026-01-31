@@ -48,6 +48,8 @@ class GameTrackingProvider {
     required String actionType,
     required GameState gameState,
     required Map<String, dynamic> actionDetails,
+    String? powerType,
+    String? targetStrategy,
   }) {
     if (_currentGameId == null) return;
     
@@ -60,6 +62,8 @@ class GameTrackingProvider {
       gameState: gameState,
       human: human,
       actionDetails: actionDetails,
+      powerType: powerType,
+      targetStrategy: targetStrategy,
     );
   }
 
@@ -68,6 +72,36 @@ class GameTrackingProvider {
     required Map<String, dynamic> result,
   }) {
     if (_currentGameId == null) return;
+    
+    _playerLearningService.updateLastActionResult(
+      gameId: _currentGameId!,
+      result: result,
+    );
+  }
+
+  /// Enregistrer une action du joueur avec son résultat immédiat (méthode combinée)
+  void recordPlayerActionWithResult({
+    required String actionType,
+    required GameState gameState,
+    required Map<String, dynamic> actionDetails,
+    required Map<String, dynamic> result,
+    String? powerType,
+    String? targetStrategy,
+  }) {
+    if (_currentGameId == null) return;
+    
+    final human = gameState.players.firstWhere((p) => p.isHuman);
+    
+    _playerLearningService.recordAction(
+      gameId: _currentGameId!,
+      actionType: actionType,
+      turnNumber: _humanActionCounter++,
+      gameState: gameState,
+      human: human,
+      actionDetails: actionDetails,
+      powerType: powerType,
+      targetStrategy: targetStrategy,
+    );
     
     _playerLearningService.updateLastActionResult(
       gameId: _currentGameId!,
@@ -143,6 +177,55 @@ class GameTrackingProvider {
       calledDutch: calledDutch,
       wonDutch: wonDutch,
     );
+  }
+
+  /// Démarrer l'enregistrement (version simplifiée pour le refactoring)
+  void initTracking(GameState gameState, bool useSBMM) {
+    _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
+    _humanActionCounter = 0;
+    
+    _playerLearningService.startGame(gameId: _currentGameId!);
+    
+    for (var player in gameState.players.where((p) => !p.isHuman)) {
+      _botLearningService.startGameRecording(
+        gameId: _currentGameId!,
+        player: player,
+        gameState: gameState,
+        usedSBMM: useSBMM,
+      );
+      _botLearningService.startNewRound(player.id);
+    }
+  }
+
+  /// Finaliser l'enregistrement de tous les bots en fin de partie
+  Future<void> finalizeBotRecordings(GameState gameState) async {
+    if (_currentGameId == null) return;
+    
+    final players = List<Player>.from(gameState.players);
+    players.sort((a, b) => a.calculateScore().compareTo(b.calculateScore()));
+    
+    final human = gameState.players.firstWhere((p) => p.isHuman);
+    final humanFinalScore = gameState.getFinalScore(human);
+    final humanFinalHandSize = human.hand.length;
+
+    for (var player in gameState.players.where((p) => !p.isHuman)) {
+      final rank = players.indexOf(player) + 1;
+      final calledDutch = gameState.dutchCallerId == player.id;
+      final wonDutch = calledDutch && rank == 1;
+      
+      await _botLearningService.endGameRecording(
+        botPlayerId: player.id,
+        finalScore: player.calculateScore(),
+        finalRank: rank,
+        calledDutch: calledDutch,
+        wonDutch: wonDutch,
+        cardsAtDutch: calledDutch ? player.hand.length : 0,
+        scoreAtDutch: calledDutch ? player.calculateScore() : 0,
+        humanFinalScore: humanFinalScore,
+        humanFinalHandSize: humanFinalHandSize,
+        botFinalHandSize: player.hand.length,
+      );
+    }
   }
 
   /// Réinitialiser le tracking

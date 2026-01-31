@@ -12,10 +12,11 @@ export 'game/player_hand.dart';
 // Dialogues et overlays
 export 'dialogs/connection_error_dialog.dart';
 export 'dialogs/emote_overlay.dart';
-export 'dialogs/multiplayer_special_power_dialogs.dart';
 export 'dialogs/presence_check_overlay.dart';
 export 'dialogs/responsive_dialog.dart';
-export 'dialogs/special_power_dialogs.dart';
+export 'dialogs/shared/unified_power_dialogs.dart';
+export 'dialogs/game/game_dialogs.dart';
+export 'dialogs/multiplayer/multiplayer_dialogs.dart';
 
 // Composants UI génériques
 export 'ui/competitive_stats_widget.dart';

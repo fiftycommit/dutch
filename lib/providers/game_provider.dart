@@ -1,57 +1,99 @@
 import 'dart:async';
-import 'dart:math';
-import '../models/card.dart';
+import '../models/playing_card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../services/game/game_logic.dart';
-import '../services/game/bot_ai.dart';
-import '../services/ui/stats_service.dart';
-import '../services/ui/haptic_service.dart';
-import '../services/learning/bot_learning_service.dart';
-import '../services/learning/player_learning_service.dart';
+import '../core/interfaces/i_haptic_service.dart';
+import '../core/interfaces/i_stats_service.dart';
+import '../core/interfaces/i_bot_ai_service.dart';
+import '../core/interfaces/i_game_controller.dart';
+import 'game_tracking_provider.dart';
+import 'managers/solo/tournament_manager.dart';
+import 'managers/solo/reaction_timer_manager.dart';
+import 'managers/solo/special_power_handler.dart';
+import 'managers/solo/bot_orchestrator.dart';
 import 'package:flutter/widgets.dart';
 
-class GameProvider with ChangeNotifier {
+export 'managers/solo/tournament_manager.dart' show TournamentResult;
+
+/// GameProvider refactoré - ~400 lignes au lieu de 1200
+/// Principe SOLID: SRP - Coordination uniquement, logique déléguée aux managers
+/// Principe GRASP: Controller - Point d'entrée pour les actions du jeu
+/// Implements IGameController pour permettre l'UI unifiée
+class GameProvider with ChangeNotifier implements IGameController {
+  // État du jeu
   GameState? _gameState;
   GameState? get gameState => _gameState;
   bool get hasActiveGame => _gameState != null;
   
   BuildContext? _currentContext;
-
   bool isProcessing = false;
   String? statusMessage;
   Set<int> shakingCardIndices = {};
   
-  // Service d'apprentissage des bots
-  final BotLearningService _botLearningService = BotLearningService();
-  final PlayerLearningService _playerLearningService = PlayerLearningService();
-  String? _currentGameId;
-
-  int _humanActionCounter = 0;
-  
   bool _isPaused = false;
+  @override
   bool get isPaused => _isPaused;
-
-  Timer? _reactionTimer;
+  
+  @override
+  Player? get localPlayer => _gameState?.players.where((p) => p.isHuman).firstOrNull;
+  
+  @override
+  bool get isLocalPlayerTurn => _gameState?.currentPlayer.isHuman ?? false;
+  
+  @override
+  bool get canLocalPlayerAct => 
+    _gameState != null && 
+    isLocalPlayerTurn && 
+    _gameState!.phase == GamePhase.playing;
+  
   int _currentReactionTimeMs = 3000;
   int get currentReactionTimeMs => _currentReactionTimeMs;
   int _currentSlotId = 1;
-
-  int? _remainingReactionTimeMs;
-  final ValueNotifier<int> reactionTimeRemaining = ValueNotifier<int>(0);
-
+  
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
   int _playerWinStreak = 0;
   int get playerWinStreak => _playerWinStreak;
 
-  List<TournamentResult>? _tournamentFinalRanking;
-  List<TournamentResult>? get tournamentFinalRanking => _tournamentFinalRanking;
-  
-  /// Scores cumulés du tournoi (persiste entre les manches)
-  Map<String, int> _tournamentCumulativeScores = {};
-  String? _activeTournamentId;
+  // Services injectés (Principe SOLID: DIP)
+  final IHapticService _hapticService;
+  final IStatsService _statsService;
+  final IBotAIService _botAIService;
+  final GameTrackingProvider _trackingProvider;
+
+  // Managers (Principe GRASP: Pure Fabrication)
+  late final TournamentManager _tournamentManager;
+  late final ReactionTimerManager _timerManager;
+  late final SpecialPowerHandler _powerHandler;
+  late final BotOrchestrator _botOrchestrator;
+
+  // Délégation au TournamentManager
+  List<TournamentResult>? get tournamentFinalRanking => _tournamentManager.finalRanking;
+  ValueNotifier<int> get reactionTimeRemaining => _timerManager.reactionTimeRemaining;
+
+  GameProvider({
+    required IHapticService hapticService,
+    required IStatsService statsService,
+    required IBotAIService botAIService,
+    required GameTrackingProvider trackingProvider,
+  })  : _hapticService = hapticService,
+        _statsService = statsService,
+        _botAIService = botAIService,
+        _trackingProvider = trackingProvider {
+    _tournamentManager = TournamentManager();
+    _timerManager = ReactionTimerManager(
+      onTimerEnd: _endReactionPhase,
+      onTimerUpdate: notifyListeners,
+    );
+    _powerHandler = SpecialPowerHandler(trackingProvider: _trackingProvider);
+    _botOrchestrator = BotOrchestrator(botAIService: _botAIService);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CRÉATION ET GESTION DU JEU
+  // ═══════════════════════════════════════════════════════════════════════════
 
   void createNewGame({
     required List<Player> players,
@@ -62,32 +104,22 @@ class GameProvider with ChangeNotifier {
     int saveSlot = 1,
     bool useSBMM = false,
   }) async {
-    if (tournamentRound == 1) {
-      _tournamentFinalRanking = null;
-      _tournamentCumulativeScores = {}; // Réinitialiser les scores au début du tournoi
-    }
+    // Initialiser le tournoi via le manager
     if (gameMode == GameMode.tournament) {
-      if (_activeTournamentId == null || tournamentRound == 1) {
-        _activeTournamentId = DateTime.now().millisecondsSinceEpoch.toString();
-      }
+      _tournamentManager.initializeTournament(tournamentRound);
     } else {
-      _activeTournamentId = null;
+      _tournamentManager.resetTournament();
     }
 
     _gameState = GameLogic.initializeGame(
-        players: players,
-        gameMode: gameMode,
-        difficulty: difficulty,
-        tournamentRound: tournamentRound);
-    
-    // Propager les scores cumulés au GameState
-    _gameState!.tournamentCumulativeScores = Map.from(_tournamentCumulativeScores);
+        players: players, gameMode: gameMode, difficulty: difficulty, tournamentRound: tournamentRound);
+    _gameState!.tournamentCumulativeScores = Map.from(_tournamentManager.cumulativeScores);
     
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
 
     if (useSBMM) {
-      final stats = await StatsService.getStats(slotId: saveSlot);
+      final stats = await _statsService.getStats(slotId: saveSlot);
       _playerMMR = stats['mmr'] ?? 0;
       _playerWinStreak = stats['winStreak'] ?? 0;
     } else {
@@ -95,848 +127,297 @@ class GameProvider with ChangeNotifier {
       _playerWinStreak = 0;
     }
 
-    for (var player in _gameState!.players) {
-      if (!player.isHuman) {
-        player.initializeBotMemory();
-      }
+    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
+      player.initializeBotMemory();
     }
 
-    // Initialiser l'enregistrement pour les bots
-    _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
-    _humanActionCounter = 0;
-    _playerLearningService.startGame(gameId: _currentGameId!);
-    for (var player in _gameState!.players) {
-      if (!player.isHuman) {
-        _botLearningService.startGameRecording(
-          gameId: _currentGameId!,
-          player: player,
-          gameState: _gameState!,
-          usedSBMM: useSBMM,
-        );
-        // Initialiser le premier round
-        _botLearningService.startNewRound(player.id);
-      }
-    }
+    // Initialiser le tracking
+    _trackingProvider.initTracking(_gameState!, useSBMM);
 
     shakingCardIndices.clear();
     isProcessing = false;
     notifyListeners();
   }
 
-  void setContext(BuildContext context) {
-    _currentContext = context;
-  }
+  void setContext(BuildContext context) => _currentContext = context;
 
   void checkIfBotShouldPlay() {
-    if (_gameState == null) return;
-    if (isProcessing) return;
-    if (_gameState!.phase != GamePhase.playing) return;
-    if (_gameState!.currentPlayer.isHuman) return;
-
-    _checkAndPlayBotTurn();
+    if (_botOrchestrator.shouldBotPlay(_gameState, isProcessing, _isPaused)) {
+      _checkAndPlayBotTurn();
+    }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTIONS DU JOUEUR (IGameController)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @override
   void drawCard() {
-    if (_gameState == null) return;
-    if (_gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman) return;
-    if (_gameState!.drawnCard != null) return;
+    if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
 
     shakingCardIndices.clear();
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
+    
     GameLogic.drawCard(_gameState!);
-    final afterScore = human.getEstimatedScore();
-
-    if (_currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'draw',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'source': 'deck',
-          'drawnCard': _gameState!.drawnCard?.toJson(),
-        },
-      );
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-        },
-      );
-    }
+    
+    _trackingProvider.recordPlayerActionWithResult(
+      actionType: 'draw',
+      gameState: _gameState!,
+      actionDetails: {'source': 'deck', 'drawnCard': _gameState!.drawnCard?.toJson()},
+      result: {'scoreChange': human.getEstimatedScore() - beforeScore},
+    );
     notifyListeners();
   }
 
+  @override
   void replaceCard(int cardIndex) {
-    if (_gameState == null) return;
-    if (!_gameState!.currentPlayer.isHuman) return;
-    if (_gameState!.drawnCard == null) return;
+    if (_gameState == null || !_gameState!.currentPlayer.isHuman || _gameState!.drawnCard == null) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     final drawnCard = _gameState!.drawnCard;
+    
     GameLogic.replaceCard(_gameState!, cardIndex);
-    final afterScore = human.getEstimatedScore();
-    
-    // Tracker: enregistrer défausse pour tous les bots
-    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
-      _botLearningService.recordDiscard(player.id);
-    }
+    _trackingProvider.recordBotDiscards(_gameState!);
 
-    if (_currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'replace',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'cardIndex': cardIndex,
-          'drawnCard': drawnCard?.toJson(),
-        },
-      );
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-        },
-      );
-    }
-    HapticService.cardTap();
+    _trackingProvider.recordPlayerActionWithResult(
+      actionType: 'replace',
+      gameState: _gameState!,
+      actionDetails: {'cardIndex': cardIndex, 'drawnCard': drawnCard?.toJson()},
+      result: {'scoreChange': human.getEstimatedScore() - beforeScore},
+    );
+    
+    _hapticService.cardTap();
     notifyListeners();
 
     if (_checkInstantEnd()) return;
-
-    if (_gameState!.isWaitingForSpecialPower) {
-      _pauseReactionTimer();
-      Future.delayed(const Duration(milliseconds: 1300)).then((_) {
-        if (_gameState != null && _gameState!.isWaitingForSpecialPower) {
-          notifyListeners();
-        }
-      });
-    } else {
-      startReactionPhase();
-    }
+    _handlePostAction();
   }
 
+  @override
   void discardDrawnCard() {
-    if (_gameState == null) return;
-    if (!_gameState!.currentPlayer.isHuman) return;
-    if (_gameState!.drawnCard == null) return;
+    if (_gameState == null || !_gameState!.currentPlayer.isHuman || _gameState!.drawnCard == null) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     final drawnCard = _gameState!.drawnCard;
-    GameLogic.discardDrawnCard(_gameState!);
-    final afterScore = human.getEstimatedScore();
     
-    // Tracker: enregistrer défausse pour tous les bots
-    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
-      _botLearningService.recordDiscard(player.id);
-    }
+    GameLogic.discardDrawnCard(_gameState!);
+    _trackingProvider.recordBotDiscards(_gameState!);
 
-    if (_currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'discard',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'source': 'drawn',
-          'card': drawnCard?.toJson(),
-        },
-      );
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-        },
-      );
-    }
-    HapticService.cardTap();
+    _trackingProvider.recordPlayerActionWithResult(
+      actionType: 'discard',
+      gameState: _gameState!,
+      actionDetails: {'source': 'drawn', 'card': drawnCard?.toJson()},
+      result: {'scoreChange': human.getEstimatedScore() - beforeScore},
+    );
+    
+    _hapticService.cardTap();
     notifyListeners();
 
     if (_checkInstantEnd()) return;
-
-    if (_gameState!.isWaitingForSpecialPower) {
-      _pauseReactionTimer();
-      Future.delayed(const Duration(milliseconds: 1300)).then((_) {
-        if (_gameState != null && _gameState!.isWaitingForSpecialPower) {
-          notifyListeners();
-        }
-      });
-    } else {
-      startReactionPhase();
-    }
+    _handlePostAction();
   }
 
+  @override
   void attemptMatch(int cardIndex, {Player? forcedPlayer}) async {
-    if (_gameState == null) return;
-    if (_gameState!.phase != GamePhase.reaction) return;
+    if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
 
-    Player player =
-        forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
-
+    Player player = forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
     if (cardIndex < 0 || cardIndex >= player.hand.length) return;
 
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
 
-    if (player.isHuman && _currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'match',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: player,
-        actionDetails: {
-          'cardIndex': cardIndex,
-        },
-      );
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'success': success,
-        },
-      );
-    }
-
     if (player.isHuman) {
-      if (success) {
-        HapticService.cardTap();
-      } else {
-        HapticService.error();
-      }
+      _trackingProvider.recordPlayerActionWithResult(
+        actionType: 'match',
+        gameState: _gameState!,
+        actionDetails: {'cardIndex': cardIndex},
+        result: {'success': success, 'scoreChange': 0},
+      );
+      success ? _hapticService.cardTap() : _hapticService.error();
     }
 
     if (!success) {
       shakingCardIndices.add(cardIndex);
       notifyListeners();
-
       await Future.delayed(const Duration(milliseconds: 500));
       shakingCardIndices.remove(cardIndex);
     }
-
     notifyListeners();
   }
 
+  @override
   void takeFromDiscard() {
-    if (_gameState == null) return;
-    if (_gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman) return;
-    if (_gameState!.drawnCard != null) return;
+    if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
     if (_gameState!.discardPile.isEmpty) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
-    _gameState!.addToHistory(
-        "${_gameState!.currentPlayer.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
+    _gameState!.addToHistory("${human.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
 
-    final afterScore = human.getEstimatedScore();
-    if (_currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'draw',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'source': 'discard',
-          'drawnCard': _gameState!.drawnCard?.toJson(),
-        },
-      );
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-        },
-      );
-    }
+    _trackingProvider.recordPlayerActionWithResult(
+      actionType: 'draw',
+      gameState: _gameState!,
+      actionDetails: {'source': 'discard', 'drawnCard': _gameState!.drawnCard?.toJson()},
+      result: {'scoreChange': human.getEstimatedScore() - beforeScore},
+    );
     notifyListeners();
   }
 
+  @override
   void callDutch() {
-    if (_gameState == null) return;
-    if (_gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman) return;
-    if (_gameState!.drawnCard != null) return;
+    if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
 
     final human = _gameState!.currentPlayer;
-    if (_currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'dutch',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {},
-      );
-    }
+    _trackingProvider.recordPlayerAction(actionType: 'dutch', gameState: _gameState!, actionDetails: {});
+    
     _gameState!.phase = GamePhase.dutchCalled;
     _gameState!.dutchCallerId = human.id;
     _gameState!.addToHistory("📢 ${human.name} crie DUTCH !");
     endGame();
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // POUVOIRS SPÉCIAUX (délégués au SpecialPowerHandler)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @override
   void skipSpecialPower() {
     if (_gameState == null) return;
-
-    final human = _gameState!.currentPlayer;
-    final specialCard = _gameState!.specialCardToActivate;
-    if (human.isHuman && _currentGameId != null && specialCard != null) {
-      final powerType = _getPowerType(specialCard);
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'power_skip',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'specialCard': specialCard.toJson(),
-          'powerType': powerType,
-        },
-        powerType: powerType,
-      );
-    }
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
-    _gameState!.addToHistory("⏭️ Pouvoir spécial ignoré.");
+    _powerHandler.skipPower(_gameState!);
     notifyListeners();
+    _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+  }
 
-    _resumeReactionTimer();
-
-    if (_gameState!.phase == GamePhase.playing) {
-      startReactionPhase();
+  @override
+  void handleCardTap(int cardIndex) {
+    if (_gameState == null || isProcessing) return;
+    final human = _gameState!.players.firstWhere((p) => p.isHuman);
+    final isLocalTurn = _gameState!.currentPlayer.isHuman;
+    
+    if (_gameState!.phase == GamePhase.reaction) {
+      attemptMatch(cardIndex, forcedPlayer: human);
+    } else if (_gameState!.phase == GamePhase.playing && isLocalTurn && _gameState!.drawnCard != null) {
+      replaceCard(cardIndex);
     }
   }
 
   void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
     if (_gameState == null) return;
-
-    PlayingCard? specialCard = _gameState!.specialCardToActivate;
-    if (specialCard == null) return;
-
-    Player currentPlayer = _gameState!.currentPlayer;
-    Player targetPlayer = _gameState!.players[targetPlayerIndex];
-
-    final beforeScore = currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
-    if (currentPlayer.isHuman && _currentGameId != null) {
-      final powerType = _getPowerType(specialCard);
-      final targetStrategy = _getTargetStrategy(targetPlayer);
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'power',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: currentPlayer,
-        actionDetails: {
-          'specialCard': specialCard.toJson(),
-          'targetPlayerIndex': targetPlayerIndex,
-          'targetCardIndex': targetCardIndex,
-          'powerType': powerType,
-          'targetPlayerId': targetPlayer.id,
-        },
-        powerType: powerType,
-        targetStrategy: targetStrategy,
-      );
-    }
-
-    if (specialCard.value == '7' || specialCard.value == '8') {
-      if (targetCardIndex < currentPlayer.hand.length) {
-        currentPlayer.knownCards[targetCardIndex] = true;
-        _gameState!.addToHistory(
-            "👁️ ${currentPlayer.name} regarde sa carte #${targetCardIndex + 1}");
-      }
-    } else if (specialCard.value == '9' || specialCard.value == '10') {
-      if (targetCardIndex < targetPlayer.hand.length) {
-        _gameState!.lastSpiedCard = targetPlayer.hand[targetCardIndex];
-        _gameState!.addToHistory(
-            "👁 ${currentPlayer.name} espionne ${targetPlayer.name} (carte #${targetCardIndex + 1})");
-      }
-    } else if (specialCard.value == 'V') {
-      _gameState!.pendingSwap = {
-        'targetPlayer': targetPlayerIndex,
-        'targetCard': targetCardIndex,
-        'ownCard': null,
-      };
-      notifyListeners();
-      return;
-    }
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
+    _powerHandler.usePower(_gameState!, targetPlayerIndex, targetCardIndex);
     notifyListeners();
-
-    if (currentPlayer.isHuman && _currentGameId != null && beforeScore != null) {
-      final afterScore = currentPlayer.getEstimatedScore();
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-          'isBadDecision': PlayerLearningService.isBadPowerDecision(
-            specialCard: specialCard,
-            target: targetPlayer,
-          ),
-        },
-      );
-    }
-
-    _resumeReactionTimer();
-
-    if (_gameState!.phase == GamePhase.playing) {
-      startReactionPhase();
-    }
+    if (_gameState!.pendingSwap != null) return; // Attendre completeSwap
+    _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
   }
 
   void completeSwap(int ownCardIndex) {
-    if (_gameState == null || _gameState!.pendingSwap == null) return;
-
-    int targetPlayerIndex = _gameState!.pendingSwap!['targetPlayer'];
-    int targetCardIndex = _gameState!.pendingSwap!['targetCard'];
-
-    Player currentPlayer = _gameState!.currentPlayer;
-    Player targetPlayer = _gameState!.players[targetPlayerIndex];
-
-    final beforeScore =
-        currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
-    if (currentPlayer.isHuman && _currentGameId != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'power',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: currentPlayer,
-        actionDetails: {
-          'specialCard': {'value': 'V'},
-          'targetPlayerIndex': targetPlayerIndex,
-          'targetCardIndex': targetCardIndex,
-          'ownCardIndex': ownCardIndex,
-        },
-      );
-    }
-
-    PlayingCard? myCard = currentPlayer.hand[ownCardIndex];
-    PlayingCard? theirCard = targetPlayer.hand[targetCardIndex];
-
-    currentPlayer.hand[ownCardIndex] = theirCard;
-    targetPlayer.hand[targetCardIndex] = myCard;
-
-    currentPlayer.knownCards[ownCardIndex] = false;
-    targetPlayer.knownCards[targetCardIndex] = false;
-
-    _gameState!.addToHistory(
-        "🔄 ${currentPlayer.name} échange avec ${targetPlayer.name}");
-
-    _gameState!.pendingSwap = null;
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
-
+    if (_gameState == null) return;
+    _powerHandler.completeSwap(_gameState!, ownCardIndex);
     notifyListeners();
-
-    if (currentPlayer.isHuman && _currentGameId != null && beforeScore != null) {
-      final afterScore = currentPlayer.getEstimatedScore();
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-        },
-      );
-    }
-
-    _resumeReactionTimer();
-
-    if (_gameState!.phase == GamePhase.playing) {
-      startReactionPhase();
-    }
+    _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
   }
 
   void executeLookAtCard(Player target, int cardIndex) {
     if (_gameState == null) return;
-
-    final human = _gameState!.currentPlayer;
-    final specialCard = _gameState!.specialCardToActivate;
-    final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
-    if (human.isHuman && _currentGameId != null && specialCard != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'power',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'specialCard': specialCard.toJson(),
-          'targetPlayerId': target.id,
-          'targetCardIndex': cardIndex,
-        },
-      );
-    }
-
-    if (cardIndex >= 0 && cardIndex < target.hand.length) {
-      if (target.isHuman) {
-        target.knownCards[cardIndex] = true;
-      }
-      _gameState!.lastSpiedCard = target.hand[cardIndex];
-      GameLogic.lookAtCard(_gameState!, target, cardIndex);
-    }
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
+    _powerHandler.executeLookAtCard(_gameState!, target, cardIndex);
     notifyListeners();
-
-    if (human.isHuman &&
-        _currentGameId != null &&
-        beforeScore != null &&
-        specialCard != null) {
-      final afterScore = human.getEstimatedScore();
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-          'isBadDecision': PlayerLearningService.isBadPowerDecision(
-            specialCard: specialCard,
-            target: target,
-          ),
-        },
-      );
-    }
-
-    _resumeReactionTimer();
-
-    if (_gameState!.phase == GamePhase.playing) {
-      startReactionPhase();
-    }
+    _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
   }
 
   void executeJokerEffect(Player target) {
     if (_gameState == null) return;
-
-    final human = _gameState!.currentPlayer;
-    final specialCard = _gameState!.specialCardToActivate;
-    final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
-    if (human.isHuman && _currentGameId != null && specialCard != null) {
-      _playerLearningService.recordAction(
-        gameId: _currentGameId!,
-        actionType: 'power',
-        turnNumber: ++_humanActionCounter,
-        gameState: _gameState!,
-        human: human,
-        actionDetails: {
-          'specialCard': specialCard.toJson(),
-          'targetPlayerId': target.id,
-        },
-      );
-    }
-
-    GameLogic.jokerEffect(_gameState!, target);
-
-    if (target.isHuman) {
-      for (int i = 0; i < target.knownCards.length; i++) {
-        target.knownCards[i] = false;
-      }
-    }
-
-    _gameState!.isWaitingForSpecialPower = false;
-    _gameState!.specialCardToActivate = null;
+    _powerHandler.executeJokerEffect(_gameState!, target);
     notifyListeners();
-
-    if (human.isHuman &&
-        _currentGameId != null &&
-        beforeScore != null &&
-        specialCard != null) {
-      final afterScore = human.getEstimatedScore();
-      _playerLearningService.updateLastActionResult(
-        gameId: _currentGameId!,
-        result: {
-          'scoreChange': afterScore - beforeScore,
-          'isBadDecision': PlayerLearningService.isBadPowerDecision(
-            specialCard: specialCard,
-            target: target,
-          ),
-        },
-      );
-    }
-
-    _resumeReactionTimer();
-
-    if (_gameState!.phase == GamePhase.playing) {
-      startReactionPhase();
-    }
+    _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
   }
 
-  void pauseReactionTimerForNotification() {
-    _pauseReactionTimer();
-  }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIMER DE RÉACTION (délégué au ReactionTimerManager)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  void resumeReactionTimerAfterNotification() {
-    _resumeReactionTimer();
-  }
+  void pauseReactionTimerForNotification() => _timerManager.pauseTimer(_gameState);
+  void resumeReactionTimerAfterNotification() => _timerManager.resumeTimer(_gameState!, _isPaused);
 
   void startReactionPhase() {
-    if (_gameState == null) return;
-    if (_isPaused) return; // Ne pas démarrer si en pause
-
-    _gameState!.phase = GamePhase.reaction;
-    _gameState!.reactionTimeRemaining = _currentReactionTimeMs;
-    reactionTimeRemaining.value = _currentReactionTimeMs;
-
-    _reactionTimer?.cancel();
-
-    _reactionTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
-      if (_gameState == null) {
-        timer.cancel();
-        return;
-      }
-      
-      // Ne pas décrémenter si en pause
-      if (_isPaused) return;
-
-      _gameState!.reactionTimeRemaining -= 30;
-      reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
-
-      if (_gameState!.reactionTimeRemaining <= 0) {
-        timer.cancel();
-        _endReactionPhase();
-        return;
-      }
-      
-      notifyListeners();
-    });
-
-    notifyListeners();
+    if (_gameState == null || _isPaused) return;
+    _timerManager.startReactionPhase(_gameState!, _currentReactionTimeMs, _isPaused);
     _simulateBotReaction();
   }
 
-  void _pauseReactionTimer() {
-    if (_reactionTimer != null && _reactionTimer!.isActive) {
-      _reactionTimer!.cancel();
-      _remainingReactionTimeMs = _gameState?.reactionTimeRemaining;
-    }
-  }
-
-  void _resumeReactionTimer() {
-    if (_remainingReactionTimeMs != null &&
-        _remainingReactionTimeMs! > 0 &&
-        _gameState != null) {
-      _gameState!.reactionTimeRemaining = _remainingReactionTimeMs!;
-      reactionTimeRemaining.value = _remainingReactionTimeMs!;
-
-      _reactionTimer?.cancel();
-      _reactionTimer =
-          Timer.periodic(const Duration(milliseconds: 30), (timer) {
-        if (_gameState == null) {
-          timer.cancel();
-          return;
-        }
-
-        if (_isPaused) {
-          timer.cancel();
-          return;
-        }
-
-        _gameState!.reactionTimeRemaining -= 30;
-        reactionTimeRemaining.value = _gameState!.reactionTimeRemaining;
-
-        if (_gameState!.reactionTimeRemaining <= 0) {
-          timer.cancel();
-          _endReactionPhase();
-        }
-
-        notifyListeners();
-      });
-
-      _remainingReactionTimeMs = null;
-      notifyListeners();
-    }
-  }
-
   void _endReactionPhase() {
-    if (_gameState == null) return;
-    if (_isPaused) return; // Ne pas terminer si en pause
-
-    _reactionTimer?.cancel();
+    if (_gameState == null || _isPaused) return;
+    _timerManager.cancelTimer();
     _gameState!.phase = GamePhase.playing;
     _gameState!.lastSpiedCard = null;
-
     GameLogic.nextPlayer(_gameState!);
-    
-    // Tracker: incrémenter le compteur de tours pour tous les bots à chaque changement de joueur
-    for (var player in _gameState!.players.where((p) => !p.isHuman)) {
-      _botLearningService.incrementTurn(player.id);
-    }
-    
+    _trackingProvider.incrementBotTurns(_gameState!);
     notifyListeners();
-
-    if (!_gameState!.currentPlayer.isHuman && !_isPaused) {
-      _checkAndPlayBotTurn();
-    }
+    if (!_gameState!.currentPlayer.isHuman && !_isPaused) _checkAndPlayBotTurn();
   }
 
-  void _simulateBotReaction() async {
-    if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
-    if (_isPaused) return; // Ne pas simuler si en pause
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BOTS (délégué au BotOrchestrator)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    PlayingCard? topCard = _gameState!.topDiscardCard;
-    if (topCard == null) return;
-
-    for (var bot in _gameState!.players.where((p) => !p.isHuman)) {
-      if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
-      if (_isPaused) return; // Vérifier à chaque itération
-
-      int delay = Random().nextInt(800) + 300;
-      await Future.delayed(Duration(milliseconds: delay));
-
-      if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
-
-      bool matched =
-          await BotAI.tryReactionMatch(_gameState!, bot, playerMMR: _playerMMR);
-
-      if (matched) {
-        notifyListeners();
-        return;
-      }
-    }
-    
-    // Notify listeners even if no bot matched to ensure UI updates
+  Future<void> _simulateBotReaction() async {
+    if (_gameState == null || _isPaused) return;
+    await _botOrchestrator.simulateBotReaction(_gameState!, _playerMMR, _isPaused);
     notifyListeners();
-  }
-
-  bool _checkInstantEnd() {
-    if (_gameState == null) return false;
-    if (_gameState!.deck.isEmpty) {
-      // Essayer de remplir la pioche avec la défausse
-      _refillDeckFromDiscard();
-      // Si toujours vide après avoir essayé de remplir, terminer le jeu
-      if (_gameState!.deck.isEmpty) {
-        endGame();
-        return true;
-      }
-    }
-    return false;
-  }
-  
-  /// Remplit la pioche avec les cartes de la défausse (sauf la carte du dessus)
-  /// Utilise smartShuffle avec le mode de mélange des paramètres
-  void _refillDeckFromDiscard() {
-    if (_gameState == null) return;
-    if (_gameState!.discardPile.length > 1) {
-      // Garder la carte du dessus de la défausse
-      PlayingCard topCard = _gameState!.discardPile.removeLast();
-      // Ajouter le reste à la pioche
-      _gameState!.deck.addAll(_gameState!.discardPile);
-      _gameState!.discardPile.clear();
-      _gameState!.discardPile.add(topCard);
-      // Mélanger la nouvelle pioche avec smartShuffle (utilise la difficulté du gameState)
-      _gameState!.smartShuffle();
-      _gameState!.addToHistory("🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
-      notifyListeners();
-    }
   }
 
   Future<void> _checkAndPlayBotTurn() async {
-    if (_gameState == null) return;
-    if (_gameState!.phase == GamePhase.ended) return;
-    if (_isPaused) return; // Ne pas jouer si en pause
+    if (!_botOrchestrator.shouldBotPlay(_gameState, isProcessing, _isPaused)) return;
     if (_checkInstantEnd()) return;
 
-    if (_gameState!.currentPlayer.isHuman) {
-      isProcessing = false;
-      notifyListeners();
+    isProcessing = true;
+    notifyListeners();
+
+    await _botOrchestrator.playBotTurn(_gameState!, _playerMMR, _isPaused, _currentContext, () async => _checkInstantEnd());
+
+    if (_gameState?.phase == GamePhase.dutchCalled) {
+      endGame();
       return;
-    }
-
-    int loopCount = 0;
-    while (_gameState != null &&
-        !_gameState!.currentPlayer.isHuman &&
-        _gameState!.phase == GamePhase.playing &&
-        !_isPaused) { // Arrêter la boucle si en pause
-      loopCount++;
-
-      if (loopCount > 10) break;
-      if (_isPaused) break; // Arrêter si en pause
-      if (_checkInstantEnd()) return;
-
-      isProcessing = true;
-      notifyListeners();
-
-      // Attendre mais vérifier la pause régulièrement
-      for (int i = 0; i < 8; i++) {
-        if (_isPaused) break;
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-      if (_isPaused) break;
-
-      if (_gameState == null) break;
-
-      try {
-        if (_isPaused) break;
-        await BotAI.playBotTurn(_gameState!, playerMMR: _playerMMR, context: _currentContext);
-        if (_isPaused) break;
-        notifyListeners();
-
-        if (_gameState!.phase == GamePhase.dutchCalled) {
-          endGame();
-          return;
-        }
-
-        if (_gameState!.isWaitingForSpecialPower) {
-          // Attendre mais vérifier la pause
-          for (int i = 0; i < 8; i++) {
-            if (_isPaused) break;
-            await Future.delayed(const Duration(milliseconds: 100));
-          }
-          if (_isPaused) break;
-          
-          await BotAI.useBotSpecialPower(_gameState!, playerMMR: _playerMMR, context: _currentContext);
-          if (_isPaused) break;
-          notifyListeners();
-
-          _gameState!.isWaitingForSpecialPower = false;
-          _gameState!.specialCardToActivate = null;
-        }
-      } catch (e) {
-        if (_gameState != null && _gameState!.drawnCard != null) {
-          _gameState!.discardPile.add(_gameState!.drawnCard!);
-          _gameState!.drawnCard = null;
-        }
-      }
-
-      if (_isPaused) break;
-      if (_gameState != null && _gameState!.phase == GamePhase.playing) {
-        startReactionPhase();
-        break;
-      } else {
-        break;
-      }
     }
 
     isProcessing = false;
     notifyListeners();
+    if (_gameState?.phase == GamePhase.playing) startReactionPhase();
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PAUSE / REPRISE
+  // ═══════════════════════════════════════════════════════════════════════════
 
   void pauseGame() {
     _isPaused = true;
-    _pauseReactionTimer();
-    isProcessing = false; // Arrêter le processing
+    _timerManager.pauseTimer(_gameState);
+    isProcessing = false;
     notifyListeners();
   }
-  
+
   void resumeGame() {
     _isPaused = false;
-    // Reprendre le timer de réaction si on était en phase reaction
-    if (_gameState != null && _gameState!.phase == GamePhase.reaction && _remainingReactionTimeMs != null) {
-      _resumeReactionTimer();
-    }
+    if (_gameState?.phase == GamePhase.reaction) _timerManager.resumeTimer(_gameState!, _isPaused);
     notifyListeners();
-    // Relancer le tour des bots si c'est leur tour
     if (_gameState != null && !_gameState!.currentPlayer.isHuman && _gameState!.phase == GamePhase.playing) {
       _checkAndPlayBotTurn();
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIN DE PARTIE
+  // ═══════════════════════════════════════════════════════════════════════════
 
   void endGame() {
     if (_gameState == null) return;
@@ -948,232 +429,70 @@ class GameProvider with ChangeNotifier {
       }
     }
 
-    // Finaliser l'enregistrement des bots
-    _finalizeBotRecordings();
+    _trackingProvider.finalizeBotRecordings(_gameState!);
 
     List<Player> ranking = _gameState!.getFinalRanking();
     Player human = _gameState!.players.firstWhere((p) => p.isHuman);
-
     int playerRank = ranking.indexWhere((p) => p.id == human.id) + 1;
     bool calledDutch = _gameState!.dutchCallerId == human.id;
     bool wonDutch = calledDutch && playerRank == 1;
-    bool isSBMM = _playerMMR != null;
 
-    final gameId = _currentGameId;
-    if (gameId != null) {
-      _playerLearningService
-          .endGame(
-            gameId: gameId,
-            slotId: _currentSlotId,
-            usedSBMM: isSBMM,
-            gameState: _gameState!,
-            human: human,
-            finalRank: playerRank,
-            finalScore: _gameState!.getFinalScore(human),
-            calledDutch: calledDutch,
-            wonDutch: wonDutch,
-          )
-          .then((_) {});
-    }
+    _trackingProvider.endPlayerRecording(
+      slotId: _currentSlotId,
+      usedSBMM: _playerMMR != null,
+      gameState: _gameState!,
+      finalScore: _gameState!.getFinalScore(human),
+      finalRank: playerRank,
+      calledDutch: calledDutch,
+      wonDutch: wonDutch,
+    );
 
-    if (_gameState!.dutchCallerId != null) {
-      Player dutchCaller = _gameState!.players
-          .firstWhere((p) => p.id == _gameState!.dutchCallerId);
-      int dutchCallerRank =
-          ranking.indexWhere((p) => p.id == dutchCaller.id) + 1;
+    _addDutchHistory();
+    _logFinalRanking(ranking);
 
-      if (!dutchCaller.isHuman) {
-        dutchCaller.dutchHistory.add(DutchAttempt(
-          estimatedScore: dutchCaller.getEstimatedScore(),
-          actualScore: _gameState!.getFinalScore(dutchCaller),
-          won: dutchCallerRank == 1,
-          opponentsCount: _gameState!.players.length - 1,
-        ));
-
-        if (dutchCaller.dutchHistory.length > 10) {
-          dutchCaller.dutchHistory.removeAt(0);
-        }
-      }
-    }
-
-    final ranksWithTies = _gameState!.getFinalRanksWithTies();
-    _gameState!.addToHistory("🏁 Classement final");
-    String rankEmoji(int rank) {
-      switch (rank) {
-        case 1:
-          return "🥇";
-        case 2:
-          return "🥈";
-        case 3:
-          return "🥉";
-        default:
-          return "";
-      }
-    }
-    for (int i = 0; i < ranking.length; i++) {
-      final player = ranking[i];
-      final rank = ranksWithTies[player.id] ?? (i + 1);
-      final score = _gameState!.getFinalScore(player);
-      final badge = rankEmoji(rank);
-      final badgePrefix = badge.isEmpty ? "" : "$badge ";
-      final dutchTag =
-          player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
-      _gameState!
-          .addToHistory("$badgePrefix#$rank ${player.name}$dutchTag — $score pts");
-    }
-
-    // Calculer le numéro de manche tournoi (1, 2 ou 3)
-    int currentTournamentRound = _gameState!.gameMode == GameMode.tournament 
-        ? _gameState!.tournamentRound 
-        : 1;
-    
-    // Nombre de joueurs dans cette manche
-    int totalPlayersInRound = _gameState!.players.length;
-    
-    StatsService.saveGameResult(
+    _statsService.saveGameResult(
       playerRank: playerRank,
       score: _gameState!.getFinalScore(human),
       calledDutch: calledDutch,
       wonDutch: wonDutch,
       hasEmptyHand: human.hand.isEmpty,
       slotId: _currentSlotId,
-      isSBMM: isSBMM,
-      totalPlayers: totalPlayersInRound,
+      isSBMM: _playerMMR != null,
+      totalPlayers: _gameState!.players.length,
       isTournament: _gameState!.gameMode == GameMode.tournament,
-      tournamentRound: currentTournamentRound,
-      tournamentId: _activeTournamentId,
+      tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,
+      tournamentId: _tournamentManager.activeTournamentId,
       actionHistory: List<String>.from(_gameState!.actionHistory),
     );
 
     notifyListeners();
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TOURNOI (délégué au TournamentManager)
+  // ═══════════════════════════════════════════════════════════════════════════
+
   bool isHumanEliminatedInTournament() {
     if (_gameState == null) return false;
-    if (_gameState!.gameMode != GameMode.tournament) return false;
-
-    List<Player> ranking = _gameState!.getFinalRanking();
-    final ranksWithTies = _gameState!.getFinalRanksWithTies();
-    Player human = _gameState!.players.firstWhere((p) => p.isHuman);
-
-    int humanRank = ranksWithTies[human.id] ??
-        (ranking.indexWhere((p) => p.id == human.id) + 1);
-    int lastRank = ranking.length;
-    if (ranksWithTies.isNotEmpty) {
-      lastRank = ranksWithTies.values.reduce(max);
-    }
-    return humanRank == lastRank;
+    return _tournamentManager.isHumanEliminated(_gameState!);
   }
 
   void finishTournamentForHuman() {
     if (_gameState == null) return;
-
-    List<Player> ranking = _gameState!.getFinalRanking();
-    Player human = _gameState!.players.firstWhere((p) => p.isHuman);
-    int currentRound = _gameState!.tournamentRound;
-
-    _tournamentFinalRanking = [];
-
-    int humanFinalPosition = 5 - currentRound;
-
-    List<Player> survivors = [];
-    for (int i = 0; i < ranking.length - 1; i++) {
-      survivors.add(ranking[i]);
-    }
-
-    List<Player> currentPlayers = survivors;
-    int simulatedRound = currentRound + 1;
-
-    while (currentPlayers.length > 1 && simulatedRound <= 3) {
-      currentPlayers.shuffle();
-      Player eliminated = currentPlayers.removeLast();
-
-      int eliminatedPosition = 5 - simulatedRound;
-      _tournamentFinalRanking!.add(TournamentResult(
-        player: eliminated,
-        finalPosition: eliminatedPosition,
-        eliminatedAtRound: simulatedRound,
-      ));
-
-      simulatedRound++;
-    }
-
-    if (currentPlayers.isNotEmpty) {
-      _tournamentFinalRanking!.add(TournamentResult(
-        player: currentPlayers.first,
-        finalPosition: 1,
-        eliminatedAtRound: null,
-      ));
-    }
-
-    _tournamentFinalRanking!.add(TournamentResult(
-      player: human,
-      finalPosition: humanFinalPosition,
-      eliminatedAtRound: currentRound,
-    ));
-
-    _tournamentFinalRanking!
-        .sort((a, b) => a.finalPosition.compareTo(b.finalPosition));
-
+    _tournamentManager.finishTournamentForHuman(_gameState!);
     _gameState!.tournamentRound = 3;
     notifyListeners();
   }
 
-  int getTournamentRP(int finalPosition) {
-    switch (finalPosition) {
-      case 1:
-        return 150;
-      case 2:
-        return 60;
-      case 3:
-        return -5;
-      case 4:
-        return -30;
-      default:
-        return 0;
-    }
-  }
+  int getTournamentRP(int finalPosition) => _tournamentManager.calculateRP(finalPosition);
 
   void startNextTournamentRound() {
     if (_gameState == null) return;
-
-    // Mettre à jour les scores cumulés avant de changer de manche
     _gameState!.updateCumulativeScores();
-    _tournamentCumulativeScores = Map.from(_gameState!.tournamentCumulativeScores);
-
-    List<Player> ranking = _gameState!.getFinalRanking();
-    List<Player> survivors = [];
+    _tournamentManager.updateCumulativeScores(_gameState!);
     
-    // Adapter le nombre de joueurs gardés selon le nombre actuel
-    // 6 joueurs → 4 → 3 → 2 (4 parties)
-    // 5 joueurs → 4 → 3 → 2 (4 parties)
-    // 4 joueurs → 3 → 2 (3 parties)
-    // 3 joueurs → 2 (2 parties)
-    int playersToKeep;
-    if (ranking.length >= 6) {
-      playersToKeep = 4; // Garder 4 joueurs sur 6
-    } else if (ranking.length >= 5) {
-      playersToKeep = 4; // Garder 4 joueurs sur 5
-    } else if (ranking.length >= 4) {
-      playersToKeep = 3; // Garder 3 joueurs sur 4
-    } else {
-      playersToKeep = ranking.length - 1; // Éliminer 1 joueur
-    }
-
-    for (int i = 0; i < playersToKeep; i++) {
-      Player p = ranking[i];
-      survivors.add(Player(
-          id: p.id,
-          name: p.name,
-          isHuman: p.isHuman,
-          botBehavior: p.botBehavior,
-          botSkillLevel: p.botSkillLevel,
-          position: i));
-    }
-
+    List<Player> survivors = _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
     if (survivors.length < 2) return;
-
-    bool wasSBMM = _playerMMR != null;
 
     createNewGame(
       players: survivors,
@@ -1182,114 +501,98 @@ class GameProvider with ChangeNotifier {
       reactionTimeMs: _currentReactionTimeMs,
       tournamentRound: _gameState!.tournamentRound + 1,
       saveSlot: _currentSlotId,
-      useSBMM: wasSBMM,
+      useSBMM: _playerMMR != null,
     );
   }
 
   void quitGame() {
-    // Enregistrer l'abandon comme une défaite (dernier)
     if (_gameState != null) {
-      int playerCount = _gameState!.players.length;
-      
-      // Enregistrer dans les stats comme si on avait fini dernier
-      StatsService.saveGameResult(
-        score: 999, // Score élevé = défaite
-        playerRank: playerCount, // Dernier
-        calledDutch: false,
-        wonDutch: false,
-        hasEmptyHand: false, // Abandon = pas de main vide
-        isSBMM: _playerMMR != null,
-        slotId: _currentSlotId,
-        totalPlayers: playerCount,
-        isTournament: _gameState!.gameMode == GameMode.tournament,
-        tournamentRound: _gameState!.tournamentRound,
-        tournamentId: _activeTournamentId,
+      _statsService.saveGameResult(
+        score: 999, playerRank: _gameState!.players.length, calledDutch: false, wonDutch: false,
+        hasEmptyHand: false, isSBMM: _playerMMR != null, slotId: _currentSlotId,
+        totalPlayers: _gameState!.players.length, isTournament: _gameState!.gameMode == GameMode.tournament,
+        tournamentRound: _gameState!.tournamentRound, tournamentId: _tournamentManager.activeTournamentId,
         actionHistory: List<String>.from(_gameState!.actionHistory),
       );
     }
-    
     _gameState = null;
     _isPaused = false;
     isProcessing = false;
     shakingCardIndices.clear();
-    _reactionTimer?.cancel();
+    _timerManager.cancelTimer();
     _playerMMR = null;
-    _tournamentFinalRanking = null;
-    _remainingReactionTimeMs = null;
-    _activeTournamentId = null;
+    _tournamentManager.resetTournament();
     notifyListeners();
   }
 
-  /// Enregistre une action de bot
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MÉTHODES UTILITAIRES PRIVÉES
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Termine l'enregistrement des bots en fin de partie
-  Future<void> _finalizeBotRecordings() async {
-    if (_gameState == null || _currentGameId == null) return;
-    
-    // Calculer les rangs finaux
-    final players = List<Player>.from(_gameState!.players);
-    players.sort((a, b) => a.calculateScore().compareTo(b.calculateScore()));
-    
-    final human = _gameState!.players.firstWhere((p) => p.isHuman);
-    final humanFinalScore = _gameState!.getFinalScore(human);
-    final humanFinalHandSize = human.hand.length;
-
-    for (var player in _gameState!.players) {
-      if (player.isHuman) continue;
-      
-      final rank = players.indexOf(player) + 1;
-      final calledDutch = _gameState!.dutchCallerId == player.id;
-      final wonDutch = calledDutch && rank == 1;
-      
-      await _botLearningService.endGameRecording(
-        botPlayerId: player.id,
-        finalScore: player.calculateScore(),
-        finalRank: rank,
-        calledDutch: calledDutch,
-        wonDutch: wonDutch,
-        cardsAtDutch: calledDutch ? player.hand.length : 0,
-        scoreAtDutch: calledDutch ? player.calculateScore() : 0,
-        humanFinalScore: humanFinalScore,
-        humanFinalHandSize: humanFinalHandSize,
-        botFinalHandSize: player.hand.length,
-      );
+  void _handlePostAction() {
+    if (_gameState!.isWaitingForSpecialPower) {
+      _timerManager.pauseTimer(_gameState);
+      Future.delayed(const Duration(milliseconds: 1300)).then((_) {
+        if (_gameState?.isWaitingForSpecialPower == true) notifyListeners();
+      });
+    } else {
+      startReactionPhase();
     }
   }
 
-  String _getPowerType(PlayingCard card) {
-    if (card.value == '7' || card.value == '8') return card.value;
-    if (card.value == '9' || card.value == '10') return card.value;
-    if (card.value == 'V') return 'jack';
-    if (card.value == 'JOKER') return 'joker';
-    return 'unknown';
+  bool _checkInstantEnd() {
+    if (_gameState == null) return false;
+    if (_gameState!.deck.isEmpty) {
+      _refillDeckFromDiscard();
+      if (_gameState!.deck.isEmpty) { endGame(); return true; }
+    }
+    return false;
   }
 
-  String _getTargetStrategy(Player target) {
-    if (_gameState == null) return 'random';
-    final players = List<Player>.from(_gameState!.players);
-    players.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
-    final targetRank = players.indexOf(target) + 1;
-    if (targetRank == 1) return 'leader';
-    if (targetRank == players.length) return 'weak';
-    return 'balanced';
+  void _refillDeckFromDiscard() {
+    if (_gameState == null || _gameState!.discardPile.length <= 1) return;
+    PlayingCard topCard = _gameState!.discardPile.removeLast();
+    _gameState!.deck.addAll(_gameState!.discardPile);
+    _gameState!.discardPile.clear();
+    _gameState!.discardPile.add(topCard);
+    _gameState!.smartShuffle();
+    _gameState!.addToHistory("🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
+    notifyListeners();
+  }
+
+  void _addDutchHistory() {
+    if (_gameState!.dutchCallerId == null) return;
+    Player dutchCaller = _gameState!.players.firstWhere((p) => p.id == _gameState!.dutchCallerId);
+    if (dutchCaller.isHuman) return;
+    
+    List<Player> ranking = _gameState!.getFinalRanking();
+    int dutchCallerRank = ranking.indexWhere((p) => p.id == dutchCaller.id) + 1;
+    dutchCaller.dutchHistory.add(DutchAttempt(
+      estimatedScore: dutchCaller.getEstimatedScore(),
+      actualScore: _gameState!.getFinalScore(dutchCaller),
+      won: dutchCallerRank == 1,
+      opponentsCount: _gameState!.players.length - 1,
+    ));
+    if (dutchCaller.dutchHistory.length > 10) dutchCaller.dutchHistory.removeAt(0);
+  }
+
+  void _logFinalRanking(List<Player> ranking) {
+    final ranksWithTies = _gameState!.getFinalRanksWithTies();
+    _gameState!.addToHistory("🏁 Classement final");
+    String rankEmoji(int rank) => rank == 1 ? "🥇" : rank == 2 ? "🥈" : rank == 3 ? "🥉" : "";
+    for (int i = 0; i < ranking.length; i++) {
+      final player = ranking[i];
+      final rank = ranksWithTies[player.id] ?? (i + 1);
+      final score = _gameState!.getFinalScore(player);
+      final badge = rankEmoji(rank);
+      final dutchTag = player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
+      _gameState!.addToHistory("${badge.isEmpty ? "" : "$badge "}#$rank ${player.name}$dutchTag — $score pts");
+    }
   }
 
   @override
   void dispose() {
-    _reactionTimer?.cancel();
-    reactionTimeRemaining.dispose();
+    _timerManager.dispose();
     super.dispose();
   }
-}
-
-class TournamentResult {
-  final Player player;
-  final int finalPosition;
-  final int? eliminatedAtRound;
-
-  TournamentResult({
-    required this.player,
-    required this.finalPosition,
-    this.eliminatedAtRound,
-  });
 }

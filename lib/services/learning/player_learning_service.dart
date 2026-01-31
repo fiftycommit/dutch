@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../models/game_state.dart';
 import '../../models/player.dart';
-import '../../models/card.dart';
+import '../../models/playing_card.dart';
 import '../../models/player_learning_data.dart';
 import '../../core/interfaces/i_learning_service.dart';
 

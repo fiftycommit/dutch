@@ -2,583 +2,92 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/game_state.dart';
-import '../../models/player.dart';
 import '../../providers/game_provider.dart';
-import '../../services/game/rp_calculator.dart';
-import '../../utils/screen_utils.dart';
-import '../../widgets/game/player_avatar.dart';
+import '../shared/unified_results_screen.dart' as shared;
 import 'memorization_screen.dart';
 
+/// Écran de résultats pour le mode solo
+/// Utilise la version unifiée avec configuration spécifique
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<GameProvider>(
-        builder: (context, gameProvider, child) {
-          if (!gameProvider.hasActiveGame) {
-            return const Center(child: Text('Pas de résultats'));
-          }
-
-          final gameState = gameProvider.gameState!;
-          final isTournament = gameState.gameMode == GameMode.tournament;
-          final isFinalRound = isTournament && gameState.tournamentRound >= 3;
-
-          bool isHumanEliminated =
-              isTournament && gameProvider.isHumanEliminatedInTournament();
-
-          bool isTournamentOver =
-              isTournament && (isFinalRound || isHumanEliminated);
-
-          final shouldSimulateFinalRanking = isTournament &&
-              isHumanEliminated &&
-              !isFinalRound &&
-              gameProvider.tournamentFinalRanking == null;
-          final useSimulatedRanking = isTournament &&
-              isHumanEliminated &&
-              gameProvider.tournamentFinalRanking != null;
-
-          if (shouldSimulateFinalRanking) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              gameProvider.finishTournamentForHuman();
-            });
-          }
-
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  SizedBox(height: ScreenUtils.spacing(context, 20)),
-
-                  // Titre
-                  Text(
-                    isTournament
-                        ? (isTournamentOver
-                            ? "FIN DU TOURNOI"
-                            : "MANCHE ${gameState.tournamentRound} TERMINÉE")
-                        : "RÉSULTATS",
-                    style: TextStyle(
-                      fontFamily: 'Rye',
-                      fontSize: ScreenUtils.scaleFont(context, 32),
-                      color: Colors.white,
-                      shadows: const [
-                        Shadow(
-                            color: Colors.black45,
-                            blurRadius: 10,
-                            offset: Offset(2, 2))
-                      ],
-                    ),
-                  ),
-
-                  if (useSimulatedRanking) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        "Vous avez été éliminé à la manche ${gameProvider.tournamentFinalRanking!.firstWhere((r) => r.player.isHuman).eliminatedAtRound}",
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 20),
-
-                  // Liste des joueurs (Classement)
-                  Expanded(
-                    child: _buildRankingList(
-                      context,
-                      gameProvider,
-                      gameState,
-                      isTournament,
-                      isTournamentOver,
-                      useSimulatedRanking,
-                    ),
-                  ),
-
-                  // Bouton d'action unique (centré)
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Center(
-                      child: SizedBox(
-                        width: 300,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (isTournament && !isTournamentOver) {
-
-                              gameProvider.startNextTournamentRound();
-
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        const MemorizationScreen()),
-                              );
-                            } else {
-                              context.go('/');
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber.shade700,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: Text(
-                            (isTournament && !isTournamentOver)
-                                ? 'MANCHE SUIVANTE >>'
-                                : 'TERMINER',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return Consumer<GameProvider>(
+      builder: (context, gameProvider, child) {
+        if (!gameProvider.hasActiveGame) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF1a472a),
+            body: Center(child: Text('Pas de résultats', style: TextStyle(color: Colors.white))),
           );
-        },
-      ),
-    );
-  }
+        }
 
+        final gameState = gameProvider.gameState!;
+        final isTournament = gameState.gameMode == GameMode.tournament;
+        final isFinalRound = isTournament && gameState.tournamentRound >= 3;
+        final isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
+        final isTournamentOver = isTournament && (isFinalRound || isHumanEliminated);
 
-  Widget _buildRankingList(
-      BuildContext context,
-      GameProvider gameProvider,
-      GameState gameState,
-      bool isTournament,
-      bool isTournamentOver,
-      bool useSimulatedRanking) {
-    
-    // Si on a un classement final de tournoi (humain éliminé), l'utiliser
-    if (useSimulatedRanking &&
-        isTournamentOver &&
-        gameProvider.tournamentFinalRanking != null) {
-      return ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: gameProvider.tournamentFinalRanking!.length,
-        itemBuilder: (context, index) {
-          final result = gameProvider.tournamentFinalRanking![index];
-          return _buildTournamentFinalResult(context, result, gameProvider);
-        },
-      );
-    }
+        // Déclencher la simulation du classement final si nécessaire
+        if (isTournament && isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            gameProvider.finishTournamentForHuman();
+          });
+        }
 
-    // Sinon, afficher le classement normal de la manche
-    final ranking = gameState.getFinalRanking();
-    final ranksWithTies = gameState.getFinalRanksWithTies();
-    
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: ranking.length,
-      itemBuilder: (context, index) {
-        final player = ranking[index];
-        // Utiliser le rang avec gestion des ex-aequo
-        final displayRank = ranksWithTies[player.id] ?? (index + 1);
-        return _buildPlayerResult(context, player, displayRank, gameState);
+        // Trouver le joueur humain
+        final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
+
+        return shared.ResultsScreen(
+          config: shared.ResultsConfig(
+            gameState: gameState,
+            localPlayerId: humanPlayer.id,
+            title: isTournament
+                ? (isTournamentOver ? "FIN DU TOURNOI" : "MANCHE ${gameState.tournamentRound} TERMINÉE")
+                : "RÉSULTATS",
+            alertBanner: (isTournament && isHumanEliminated && gameProvider.tournamentFinalRanking != null)
+                ? _buildEliminatedBanner(gameProvider)
+                : null,
+            buildActionButtons: (ctx) => [
+              shared.ResultsActionButton(
+                label: (isTournament && !isTournamentOver) ? 'MANCHE SUIVANTE >>' : 'TERMINER',
+                backgroundColor: Colors.amber.shade700,
+                onPressed: () {
+                  if (isTournament && !isTournamentOver) {
+                    gameProvider.startNextTournamentRound();
+                    Navigator.of(ctx).pushReplacement(
+                      MaterialPageRoute(builder: (_) => const MemorizationScreen()),
+                    );
+                  } else {
+                    ctx.go('/');
+                  }
+                },
+              ),
+            ],
+          ),
+        );
       },
     );
   }
 
-
-  Widget _buildTournamentFinalResult(BuildContext context, TournamentResult result, GameProvider gameProvider) {
-    bool isWinner = result.finalPosition == 1;
-    bool isHuman = result.player.isHuman;
-    bool isSBMM = gameProvider.playerMMR != null;
-    bool isEliminated = result.eliminatedAtRound != null;
-
-    int rpChange = isSBMM && isHuman ? gameProvider.getTournamentRP(result.finalPosition) : 0;
-    
-    String pointsChangeText = "";
-    Color pointsColor = Colors.grey;
-
-    if (isHuman) {
-      if (!isSBMM) {
-        pointsChangeText = "Mode Manuel";
-        pointsColor = Colors.white54;
-      } else {
-        if (rpChange > 0) {
-          pointsChangeText = "+$rpChange RP";
-          pointsColor = rpChange >= 100 ? Colors.amber : Colors.greenAccent;
-        } else if (rpChange < 0) {
-          pointsChangeText = "$rpChange RP";
-          pointsColor = Colors.redAccent;
-        } else {
-          pointsChangeText = "0 RP";
-          pointsColor = Colors.white54;
-        }
-      }
-    }
-
-    // Déterminer le texte de statut
-    String statusText = "";
-    if (isWinner) {
-      statusText = "🏆 CHAMPION";
-    } else if (result.eliminatedAtRound != null) {
-      statusText = "Éliminé manche ${result.eliminatedAtRound}";
-    }
-
-    // Couleurs selon le statut
-    Color backgroundColor;
-    Color? borderColor;
-    
-    if (isWinner) {
-      backgroundColor = Colors.amber.withValues(alpha: 0.2);
-      borderColor = Colors.amber;
-    } else if (isHuman && isEliminated) {
-
-      backgroundColor = Colors.red.withValues(alpha: 0.2);
-      borderColor = Colors.red;
-    } else if (isEliminated) {
-      backgroundColor = Colors.white.withValues(alpha: 0.05);
-      borderColor = null;
-    } else {
-      backgroundColor = Colors.white.withValues(alpha: 0.05);
-      borderColor = null;
-    }
-
+  Widget _buildEliminatedBanner(GameProvider gameProvider) {
+    final eliminatedRound = gameProvider.tournamentFinalRanking!
+        .firstWhere((r) => r.player.isHuman)
+        .eliminatedAtRound;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-        border: borderColor != null ? Border.all(color: borderColor, width: 2) : null,
+        color: Colors.red.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
       ),
-      child: Row(
-        children: [
-          // Position
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _getPositionColor(result.finalPosition),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                "#${result.finalPosition}",
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          PlayerAvatar(player: result.player, size: 50),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      result.player.name,
-                      style: TextStyle(
-                          color: isHuman 
-                              ? (isEliminated ? Colors.redAccent : Colors.lightBlueAccent) 
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16),
-                    ),
-                    if (isHuman) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: isEliminated ? Colors.red : Colors.blue,
-                            borderRadius: BorderRadius.circular(4)),
-                        child: const Text("VOUS",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10)),
-                      ),
-                    ],
-                    if (isWinner) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: Colors.amber,
-                            borderRadius: BorderRadius.circular(4)),
-                        child: const Text("CHAMPION",
-                            style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10)),
-                      ),
-                    ],
-                  ],
-                ),
-                if (statusText.isNotEmpty)
-                  Text(
-                    statusText,
-                    style: TextStyle(
-                        color: isWinner ? Colors.amber : (isHuman ? Colors.redAccent : Colors.white54),
-                        fontWeight: isWinner ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
-          // RP uniquement pour l'humain
-          if (isHuman)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  pointsChangeText,
-                  style: TextStyle(
-                      color: pointsColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Color _getPositionColor(int position) {
-    switch (position) {
-      case 1:
-        return Colors.amber.shade700;
-      case 2:
-        return Colors.grey.shade400;
-      case 3:
-        return Colors.brown.shade400;
-      default:
-        return Colors.red.shade700;
-    }
-  }
-
-  Widget _buildPlayerResult(
-      BuildContext context, Player player, int rank, GameState gs) {
-    bool isWinner = rank == 1;
-    bool isDutchCaller = gs.dutchCallerId == player.id;
-    bool isEliminated = isDutchCaller && !isWinner;
-    int score = gs.getFinalScore(player);
-
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    bool isSBMM = gameProvider.playerMMR != null;
-    bool isTournament = gs.gameMode == GameMode.tournament;
-    final winStreakAfter = (player.isHuman && isSBMM && rank == 1)
-        ? gameProvider.playerWinStreak + 1
-        : 0;
-
-    bool isTournamentEliminated =
-        isTournament && rank == gs.players.length && !isWinner;
-
-    String pointsChangeText = "";
-    Color pointsColor = Colors.grey;
-    String? streakText;
-
-    if (!isSBMM) {
-      pointsChangeText = "Mode Manuel";
-      pointsColor = Colors.white54;
-    } else if (isTournament) {
-      if (gs.tournamentRound < 3 && !isTournamentEliminated) {
-        pointsChangeText = "En cours...";
-        pointsColor = Colors.white54;
-      } else {
-        int finalPosition = rank;
-        if (isTournamentEliminated) {
-          finalPosition = 5 - gs.tournamentRound;
-        }
-        int rp = gameProvider.getTournamentRP(finalPosition);
-        if (winStreakAfter >= 2 && rp > 0) {
-          final streakMultiplier =
-              RPCalculator.getWinStreakMultiplier(winStreakAfter);
-          final boostedRp = (rp * streakMultiplier).round();
-          final streakBonus = boostedRp - rp;
-          if (streakBonus > 0) {
-            rp = boostedRp;
-            streakText =
-                "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)";
-          }
-        }
-        if (rp > 0) {
-          pointsChangeText = "+$rp RP";
-          pointsColor = rp >= 100 ? Colors.amber : Colors.greenAccent;
-        } else {
-          pointsChangeText = "$rp RP";
-          pointsColor = Colors.redAccent;
-        }
-      }
-    } else {
-      // Utiliser le calculateur centralisé pour les parties classiques
-      int currentMMR = gameProvider.playerMMR ?? 0;
-      
-      // Ne calculer que pour le joueur humain (pas les bots)
-      if (player.isHuman) {
-        // Vérifier si la main est vide (Dutch parfait)
-        bool hasEmptyHand = player.hand.isEmpty;
-        
-        // Nombre de joueurs et infos tournoi
-        int totalPlayers = gs.players.length;
-        int tournamentRound = gs.gameMode == GameMode.tournament ? gs.tournamentRound : 1;
-        
-        RPResult rpResult = RPCalculator.calculateRP(
-          playerRank: rank,
-          currentMMR: currentMMR,
-          calledDutch: isDutchCaller,
-          hasEmptyHand: hasEmptyHand,
-          isEliminated: isEliminated,
-          totalPlayers: totalPlayers,
-          isTournament: isTournament,
-          tournamentRound: tournamentRound,
-          winStreak: winStreakAfter,
-        );
-        
-        pointsChangeText = rpResult.formattedChange;
-        pointsColor = rpResult.isPositive 
-            ? (rpResult.totalChange >= 50 ? Colors.amber : Colors.greenAccent)
-            : (rpResult.totalChange <= -40 ? Colors.red : Colors.redAccent);
-        if (rpResult.streakBonus > 0) {
-          streakText =
-              "Combo x${rpResult.streakMultiplier.toStringAsFixed(1)} (+${rpResult.streakBonus} RP)";
-        }
-      } else {
-        // Pour les bots, on n'affiche pas de RP
-        pointsChangeText = "";
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isEliminated
-            ? Colors.red.withValues(alpha: 0.2)
-            : (isWinner
-                ? Colors.amber.withValues(alpha: 0.2)
-                : Colors.white.withValues(alpha: 0.05)),
-        borderRadius: BorderRadius.circular(12),
-        border: isEliminated ? Border.all(color: Colors.red, width: 2) : null,
-      ),
-      child: Row(
-        children: [
-          Text(
-            "#$rank",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: isWinner ? Colors.amber : Colors.white54,
-            ),
-          ),
-          const SizedBox(width: 16),
-          PlayerAvatar(player: player, size: 50),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      player.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16),
-                    ),
-                    if (isDutchCaller) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: Colors.amber,
-                            borderRadius: BorderRadius.circular(4)),
-                        child: const Text("DUTCH",
-                            style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10)),
-                      ),
-                    ],
-                    if (isTournamentEliminated) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(4)),
-                        child: const Text("ÉLIMINÉ",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10)),
-                      ),
-                    ],
-                  ],
-                ),
-                if (isEliminated)
-                  const Text(
-                    "❌ ÉLIMINÉ (Dutch raté !)",
-                    style: TextStyle(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                "$score pts",
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold),
-              ),
-              Text(
-                pointsChangeText,
-                style: TextStyle(
-                    color: pointsColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
-              ),
-              if (streakText != null)
-                Text(
-                  streakText,
-                  style: const TextStyle(
-                    color: Colors.orangeAccent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-            ],
-          ),
-        ],
+      child: Text(
+        "Vous avez été éliminé à la manche $eliminatedRound",
+        style: const TextStyle(
+          color: Colors.redAccent,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

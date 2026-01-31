@@ -1,19 +1,10 @@
 import 'package:flutter/material.dart';
+import 'responsive_dialog.dart';
 
 /// A dialog shown when the player loses connection to the server.
 /// Provides "Retry" and "Return to Menu" options.
-class ConnectionErrorDialog extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  final VoidCallback onReturnToMenu;
-
-  const ConnectionErrorDialog({
-    super.key,
-    required this.message,
-    required this.onRetry,
-    required this.onReturnToMenu,
-  });
-
+/// Uses ResponsiveDialog for consistent UI across the app.
+class ConnectionErrorDialog {
   /// Shows the connection error dialog.
   /// Returns true if user chose to retry, false if they chose to return to menu.
   static Future<bool?> show(
@@ -25,67 +16,88 @@ class ConnectionErrorDialog extends StatelessWidget {
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ConnectionErrorDialog(
-        message: message,
-        onRetry: () {
-          Navigator.of(ctx).pop(true);
-          onRetry();
-        },
-        onReturnToMenu: () {
-          Navigator.of(ctx).pop(false);
-          onReturnToMenu();
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF2D2D44),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Row(
-        children: [
-          Icon(Icons.wifi_off, color: Colors.redAccent, size: 28),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Connexion perdue',
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: const Color(0xFF1a472a),
+        builder: (context, metrics) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.wifi_off,
+                  color: Colors.redAccent,
+                  size: metrics.size(32),
+                ),
+                SizedBox(width: metrics.space(12)),
+                Text(
+                  'Connexion perdue',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: metrics.font(22),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: metrics.space(20)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+                fontSize: metrics.font(15),
               ),
             ),
-          ),
-        ],
-      ),
-      content: Text(
-        message,
-        style: const TextStyle(color: Colors.white70, fontSize: 15),
-      ),
-      actionsAlignment: MainAxisAlignment.spaceEvenly,
-      actions: [
-        TextButton.icon(
-          onPressed: onReturnToMenu,
-          icon: const Icon(Icons.home, color: Colors.white70),
-          label: const Text(
-            'Menu',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        ElevatedButton.icon(
-          onPressed: onRetry,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.greenAccent.shade700,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            SizedBox(height: metrics.space(30)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(ctx).pop(false);
+                    onReturnToMenu();
+                  },
+                  icon: Icon(
+                    Icons.home,
+                    color: Colors.white70,
+                    size: metrics.size(20),
+                  ),
+                  label: Text(
+                    'Menu',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: metrics.font(14),
+                    ),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(ctx).pop(true);
+                    onRetry();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.greenAccent.shade700,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: metrics.space(20),
+                      vertical: metrics.space(12),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: Icon(Icons.refresh, size: metrics.size(20)),
+                  label: Text(
+                    'Réessayer',
+                    style: TextStyle(fontSize: metrics.font(14)),
+                  ),
+                ),
+              ],
             ),
-          ),
-          icon: const Icon(Icons.refresh),
-          label: const Text('Réessayer'),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/card.dart';
+import '../../models/playing_card.dart';
 import 'card_widget.dart';
 
 class AnimatedCardTransition extends StatefulWidget {

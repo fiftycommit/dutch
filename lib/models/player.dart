@@ -1,5 +1,5 @@
 import 'package:flutter/painting.dart';
-import 'card.dart';
+import 'playing_card.dart';
 import 'game_settings.dart';
 
 class DutchAttempt {
@@ -172,6 +172,28 @@ class Player {
   }
 
   String get displayName => name;
+
+  /// Retourne le nom d'affichage avec position pour les bots (solo)
+  /// Utilise l'index passé pour déterminer Gauche/Haut/Droite
+  String getPositionDisplay(int indexInGame) {
+    if (isHuman) return name;
+    
+    String position;
+    switch (indexInGame) {
+      case 1:
+        position = "Bot Gauche";
+        break;
+      case 2:
+        position = "Bot Haut";
+        break;
+      case 3:
+        position = "Bot Droite";
+        break;
+      default:
+        position = name;
+    }
+    return "$displayAvatar $position";
+  }
 
   String get displayAvatar {
     if (!isHuman) {

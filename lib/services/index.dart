@@ -1,6 +1,6 @@
 // Barrel file pour les services
 export 'game/bot_ai.dart';
-export 'game/bot_difficulty.dart';
+export 'game/bot/bot_difficulty.dart';
 export 'game/game_logic.dart';
 export 'game/game_state_validator.dart';
 export 'game/rp_calculator.dart';

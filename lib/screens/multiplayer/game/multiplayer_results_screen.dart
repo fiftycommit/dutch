@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../../models/game_state.dart';
-import '../../../../../models/player.dart';
-import '../../../../../providers/multiplayer_game_provider.dart';
-import '../../../utils/screen_utils.dart';
-import '../../../widgets/game/player_avatar.dart';
+import '../../../models/game_state.dart';
+import '../../../models/player.dart';
+import '../../../providers/multiplayer_game_provider.dart';
+import '../../shared/unified_results_screen.dart' as shared;
 import '../lobby/multiplayer_lobby_screen.dart';
 
+/// Écran de résultats pour le mode multiplayer
+/// Utilise la version unifiée avec configuration spécifique
 class MultiplayerResultsScreen extends StatelessWidget {
   final GameState gameState;
   final String? localPlayerId;
@@ -21,303 +22,87 @@ class MultiplayerResultsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<MultiplayerGameProvider>();
 
-    // Si la room a été redémarrée, naviguer vers le lobby
-    if (provider.isInLobby &&
-        !provider.isPlaying &&
-        provider.roomCode != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (ModalRoute.of(context)?.isCurrent == true) {
+    return shared.ResultsScreen(
+      config: shared.ResultsConfig(
+        gameState: gameState,
+        localPlayerId: localPlayerId,
+        title: "RÉSULTATS",
+        shouldRedirect: () => provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
+        onRedirect: () {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const MultiplayerLobbyScreen()),
           );
-        }
-      });
-    }
-
-    final ranking = gameState.getFinalRanking();
-    final ranks = gameState.getFinalRanksWithTies();
-    final callerId = gameState.dutchCallerId;
-    final caller = callerId != null
-        ? gameState.players.firstWhere((p) => p.id == callerId)
-        : null;
-    final callerWon = gameState.didDutchCallerWin();
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              SizedBox(height: ScreenUtils.spacing(context, 16)),
-              Text(
-                "RÉSULTATS",
-                style: TextStyle(
-                  fontFamily: 'Rye',
-                  fontSize: ScreenUtils.scaleFont(context, 30),
-                  color: Colors.white,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black45,
-                      blurRadius: 10,
-                      offset: Offset(2, 2),
-                    )
-                  ],
-                ),
-              ),
-              if (caller != null) ...[
-                SizedBox(height: ScreenUtils.spacing(context, 8)),
-                Container(
-                  margin: EdgeInsets.symmetric(
-                    horizontal: ScreenUtils.spacing(context, 16),
-                  ),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ScreenUtils.spacing(context, 12),
-                    vertical: ScreenUtils.spacing(context, 8),
-                  ),
-                  decoration: BoxDecoration(
-                    color: callerWon
-                        ? Colors.green.withValues(alpha: 0.2)
-                        : Colors.red.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: callerWon ? Colors.greenAccent : Colors.redAccent,
-                    ),
-                  ),
-                  child: Text(
-                    callerWon
-                        ? "${caller.name} a crié DUTCH et gagne la manche !"
-                        : "${caller.name} a crié DUTCH mais perd la manche.",
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-              SizedBox(height: ScreenUtils.spacing(context, 12)),
-              Expanded(
-                child: ListView.builder(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ScreenUtils.spacing(context, 16),
-                  ),
-                  itemCount: ranking.length,
-                  itemBuilder: (context, index) {
-                    final player = ranking[index];
-                    final rank = ranks[player.id] ?? (index + 1);
-                    final isYou = player.id == localPlayerId;
-                    final isCaller = player.id == callerId;
-                    final score = gameState.getFinalScore(player);
-                    return _buildResultRow(
-                      context,
-                      player: player,
-                      rank: rank,
-                      score: score,
-                      isYou: isYou,
-                      isCaller: isCaller,
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
-                child: SizedBox(
-                  child: Column(
-                    children: [
-                      if (context.watch<MultiplayerGameProvider>().isHost) ...[
-                        SizedBox(
-                          width: 280,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              context
-                                  .read<MultiplayerGameProvider>()
-                                  .restartGame();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              "Retour au Salon (Host)",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: ScreenUtils.spacing(context, 12)),
-                      ] else ...[
-                        SizedBox(
-                          width: 280,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              // Retourner au lobby en remplaçant la pile de navigation
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (_) => const MultiplayerLobbyScreen(),
-                                ),
-                                (route) => route.isFirst,
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              "Retour au Salon",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: ScreenUtils.spacing(context, 12)),
-                      ],
-                      SizedBox(
-                        width: 280,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (context
-                                .read<MultiplayerGameProvider>()
-                                .isHost) {
-                              // Host closes room
-                              context
-                                  .read<MultiplayerGameProvider>()
-                                  .closeRoom();
-                              Navigator.of(context)
-                                  .popUntil((route) => route.isFirst);
-                            } else {
-                              // Non-host leaves
-                              context
-                                  .read<MultiplayerGameProvider>()
-                                  .leaveRoom();
-                              Navigator.of(context)
-                                  .popUntil((route) => route.isFirst);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context
-                                    .watch<MultiplayerGameProvider>()
-                                    .isHost
-                                ? Colors.red
-                                    .shade700 // Explicit "Close" color for host
-                                : Colors.amber.shade700,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            context.watch<MultiplayerGameProvider>().isHost
-                                ? "Fermer la room"
-                                : "Quitter",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        },
+        buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider),
+        rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
       ),
     );
   }
 
-  Widget _buildResultRow(
-    BuildContext context, {
-    required Player player,
-    required int rank,
-    required int score,
-    required bool isYou,
-    required bool isCaller,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 8)),
-      padding: EdgeInsets.symmetric(
-        horizontal: ScreenUtils.spacing(context, 12),
-        vertical: ScreenUtils.spacing(context, 10),
-      ),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCaller ? Colors.amber : Colors.white12,
-          width: isCaller ? 2 : 1,
+  /// Calcul des RP basé sur la position (simplifié pour multiplayer)
+  shared.PlayerRPResult? _calculateRP(Player player, int rank, GameState gs) {
+    // En multiplayer, tout le monde est humain donc on affiche les RP pour tous
+    if (player.isSpectator) return null;
+    
+    final totalPlayers = gs.players.where((p) => !p.isSpectator).length;
+    final isDutchCaller = gs.dutchCallerId == player.id;
+    final isWinner = rank == 1;
+    final isEliminated = isDutchCaller && !isWinner;
+    
+    int rp;
+    if (isEliminated) {
+      // Dutch raté = grosse pénalité
+      rp = -50;
+    } else if (isWinner) {
+      // Gagnant
+      rp = isDutchCaller ? 40 : 30; // Bonus si Dutch réussi
+    } else {
+      // Autres positions : RP décroissant
+      // 2ème: +10, 3ème: -10, 4ème: -20, etc.
+      rp = 20 - (rank * 10);
+      if (totalPlayers <= 2 && rank == 2) rp = -10; // 1v1
+    }
+    
+    return shared.PlayerRPResult(rpChange: rp);
+  }
+
+  List<Widget> _buildMultiplayerButtons(BuildContext context, MultiplayerGameProvider provider) {
+    return [
+      // Bouton retour au salon (Host) ou retour au salon (non-host)
+      if (provider.isHost)
+        shared.ResultsActionButton(
+          label: "Retour au Salon (Host)",
+          backgroundColor: Colors.green.shade700,
+          onPressed: () => provider.restartGame(),
+        )
+      else
+        shared.ResultsActionButton(
+          label: "Retour au Salon",
+          backgroundColor: Colors.blue.shade700,
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const MultiplayerLobbyScreen()),
+              (route) => route.isFirst,
+            );
+          },
         ),
+      
+      const SizedBox(height: 12),
+      
+      // Bouton quitter/fermer
+      shared.ResultsActionButton(
+        label: provider.isHost ? "Fermer la room" : "Quitter",
+        backgroundColor: provider.isHost ? Colors.red.shade700 : Colors.amber.shade700,
+        onPressed: () {
+          if (provider.isHost) {
+            provider.closeRoom();
+          } else {
+            provider.leaveRoom();
+          }
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Text(
-              "#$rank",
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          SizedBox(width: ScreenUtils.spacing(context, 10)),
-          PlayerAvatar(
-            player: player,
-            isActive: isCaller,
-            compactMode: true,
-            size: 28,
-          ),
-          SizedBox(width: ScreenUtils.spacing(context, 10)),
-          Expanded(
-            child: Text(
-              isYou ? "${player.name} (Vous)" : player.name,
-              style: TextStyle(
-                color: isYou ? Colors.amber : Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: ScreenUtils.scaleFont(context, 14),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(
-            "$score pts",
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: ScreenUtils.scaleFont(context, 12),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
+    ];
   }
 }

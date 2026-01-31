@@ -1,5 +1,5 @@
 import 'dart:math';
-import '../../models/card.dart';
+import '../../models/playing_card.dart';
 
 /// Interface pour les stratégies de mélange de cartes
 /// Principe SOLID: OCP - Ouvert à l'extension, fermé à la modification

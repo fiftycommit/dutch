@@ -1,0 +1,75 @@
+import 'package:flutter/services.dart';
+import '../../core/interfaces/i_haptic_service.dart';
+
+enum HapticIntensity {
+  light,
+  medium,
+  heavy,
+  error,
+  success,
+}
+
+/// Implémentation concrète du service de feedback haptique
+/// Principe SOLID: DIP - Implémente l'interface IHapticService
+class HapticServiceImpl implements IHapticService {
+  bool _isEnabled = true;
+
+  @override
+  void setEnabled(bool enabled) {
+    _isEnabled = enabled;
+  }
+
+  @override
+  bool get isEnabled => _isEnabled;
+
+  Future<void> trigger(HapticIntensity intensity) async {
+    if (!_isEnabled) return;
+
+    try {
+      switch (intensity) {
+        case HapticIntensity.light:
+          await HapticFeedback.selectionClick();
+          break;
+
+        case HapticIntensity.medium:
+          await HapticFeedback.mediumImpact();
+          break;
+
+        case HapticIntensity.heavy:
+          await HapticFeedback.heavyImpact();
+          break;
+
+        case HapticIntensity.error:
+          await HapticFeedback.heavyImpact();
+          await Future.delayed(const Duration(milliseconds: 100));
+          await HapticFeedback.heavyImpact();
+          break;
+
+        case HapticIntensity.success:
+          await HapticFeedback.lightImpact();
+          await Future.delayed(const Duration(milliseconds: 50));
+          await HapticFeedback.lightImpact();
+          await Future.delayed(const Duration(milliseconds: 50));
+          await HapticFeedback.lightImpact();
+          break;
+      }
+    } catch (e) {
+      // Certains appareils ne supportent pas le haptique
+    }
+  }
+
+  @override
+  Future<void> cardTap() => trigger(HapticIntensity.light);
+
+  @override
+  Future<void> buttonTap() => trigger(HapticIntensity.medium);
+
+  @override
+  Future<void> importantAction() => trigger(HapticIntensity.heavy);
+
+  @override
+  Future<void> error() => trigger(HapticIntensity.error);
+
+  @override
+  Future<void> success() => trigger(HapticIntensity.success);
+}

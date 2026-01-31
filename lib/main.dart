@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'core/service_locator.dart';
+import 'core/interfaces/i_haptic_service.dart';
+import 'core/interfaces/i_stats_service.dart';
+import 'core/interfaces/i_bot_ai_service.dart';
 import 'providers/game_provider.dart';
+import 'providers/game_tracking_provider.dart';
 import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
 import 'router/app_router.dart';
@@ -12,6 +17,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialiser le service locator avec tous les services
+  ServiceLocator.setupDefaultServices();
 
   // Autoriser toutes les orientations (le jeu s'adaptera)
   await SystemChrome.setPreferredOrientations([
@@ -54,7 +62,14 @@ class _DutchGameAppState extends State<DutchGameApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => GameProvider()),
+        ChangeNotifierProvider(
+          create: (_) => GameProvider(
+            hapticService: ServiceLocator().get<IHapticService>(),
+            statsService: ServiceLocator().get<IStatsService>(),
+            botAIService: ServiceLocator().get<IBotAIService>(),
+            trackingProvider: ServiceLocator().get<GameTrackingProvider>(),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => MultiplayerGameProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
