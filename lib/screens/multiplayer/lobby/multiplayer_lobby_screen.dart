@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/multiplayer_game_provider.dart';
-import '../services/multiplayer_service.dart';
+import '../services/multiplayer/multiplayer_service.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../widgets/connection_error_dialog.dart';

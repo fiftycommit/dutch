@@ -18,7 +18,7 @@ import 'results_screen.dart';
 import '../widgets/special_power_dialogs.dart';
 import 'main_menu_screen.dart';
 import 'dutch_reveal_screen.dart';
-import '../services/web_orientation_service.dart';
+import '../services/ui/web_orientation_service.dart';
 import '../widgets/center_table.dart';
 
 class GameScreen extends StatefulWidget {

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
-import '../services/haptic_service.dart';
-import '../services/sound_service.dart';
+import '../services/ui/haptic_service.dart';
+import '../services/ui/sound_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   GameSettings _settings = GameSettings();

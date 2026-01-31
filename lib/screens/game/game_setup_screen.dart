@@ -6,7 +6,7 @@ import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
-import '../services/player_learning_service.dart';
+import '../services/learning/player_learning_service.dart';
 import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {

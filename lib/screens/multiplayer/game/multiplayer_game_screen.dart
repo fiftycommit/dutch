@@ -20,13 +20,13 @@ import 'multiplayer_results_screen.dart';
 
 import 'multiplayer_dutch_reveal_screen.dart';
 import 'multiplayer_lobby_screen.dart';
-import '../services/web_orientation_service.dart';
-import '../services/multiplayer_service.dart';
+import '../services/ui/web_orientation_service.dart';
+import '../services/multiplayer/multiplayer_service.dart';
 import '../widgets/center_table.dart';
 import '../widgets/presence_check_overlay.dart';
 import '../widgets/connection_error_dialog.dart';
 import '../widgets/emote_overlay.dart';
-import '../services/emote_service.dart';
+import '../services/ui/emote_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});

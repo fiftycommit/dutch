@@ -5,9 +5,10 @@ import 'package:http/http.dart' as http;
 import '../models/bot_learning_data.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
+import '../core/interfaces/i_learning_service.dart';
 
 /// Service pour enregistrer et envoyer les données d'apprentissage des bots
-class BotLearningService {
+class BotLearningService implements ILearningService {
   static const String _serverUrl = 'https://dutch-game.me/api/bot-learning';
   
   // Enregistrement de la partie en cours
@@ -20,12 +21,14 @@ class BotLearningService {
   final Map<String, List<Map<String, dynamic>>> _triageDecisions = {};
   
   /// Démarre l'enregistrement d'une partie pour un bot
+  @override
   void startGameRecording({
     required String gameId,
-    required Player bot,
+    required Player player,
     required GameState gameState,
     required bool usedSBMM,
   }) {
+    final bot = player;
     if (bot.isHuman) return;
     
     final botId = '${bot.botBehavior}_${bot.botSkillLevel}';
@@ -113,6 +116,7 @@ class BotLearningService {
   }
   
   /// Termine l'enregistrement d'une partie et envoie les données au serveur
+  @override
   Future<void> endGameRecording({
     required String botPlayerId,
     required int finalScore,
@@ -287,6 +291,7 @@ class BotLearningService {
   }
 
   /// Incrémente le compteur de tours
+  @override
   void incrementTurn(String botPlayerId) {
     final counter = _turnCounters[botPlayerId];
     if (counter != null) {
@@ -295,6 +300,7 @@ class BotLearningService {
   }
 
   /// Enregistre une défausse pour le round actuel
+  @override
   void recordDiscard(String botPlayerId) {
     final discards = _discardsPerRound[botPlayerId];
     if (discards != null) {
@@ -307,6 +313,7 @@ class BotLearningService {
   }
 
   /// Démarre un nouveau round
+  @override
   void startNewRound(String botPlayerId) {
     final discards = _discardsPerRound[botPlayerId];
     if (discards != null) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../services/stats_service.dart';
+import '../services/ui/stats_service.dart';
 import '../widgets/responsive_dialog.dart';
 
 class StatsScreen extends StatefulWidget {

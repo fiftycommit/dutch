@@ -5,8 +5,9 @@ import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/card.dart';
 import '../models/player_learning_data.dart';
+import '../core/interfaces/i_learning_service.dart';
 
-class PlayerLearningService {
+class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
   static const String _historyKeyPrefix = 'player_action_history_slot_';
   static const String _serverUrl = 'https://dutch-game.me/api/player-learning';
@@ -57,6 +58,7 @@ class PlayerLearningService {
     return records;
   }
 
+  @override
   void startGame({
     required String gameId,
   }) {
@@ -64,6 +66,7 @@ class PlayerLearningService {
     _pendingActions[gameId] = [];
   }
 
+  @override
   void recordAction({
     required String gameId,
     required String actionType,
@@ -100,6 +103,7 @@ class PlayerLearningService {
     ));
   }
 
+  @override
   void updateLastActionResult({
     required String gameId,
     required Map<String, dynamic> result,
@@ -123,6 +127,7 @@ class PlayerLearningService {
     );
   }
 
+  @override
   Future<PlayerProfile> endGame({
     required String gameId,
     required int slotId,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/competitive_service.dart';
+import '../services/multiplayer/competitive_service.dart';
 
 class CompetitiveStatsWidget extends StatelessWidget {
   final CompetitiveStats stats;

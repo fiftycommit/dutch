@@ -3,9 +3,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
-import '../services/multiplayer_service.dart';
-import '../services/haptic_service.dart';
-import '../services/emote_service.dart';
+import '../services/multiplayer/multiplayer_service.dart';
+import '../services/ui/haptic_service.dart';
+import '../services/ui/emote_service.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 

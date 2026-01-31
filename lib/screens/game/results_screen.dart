@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../providers/game_provider.dart';
-import '../services/rp_calculator.dart';
+import '../services/game/rp_calculator.dart';
 import '../utils/screen_utils.dart';
 import '../widgets/player_avatar.dart';
 import 'memorization_screen.dart';

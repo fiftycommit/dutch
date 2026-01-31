@@ -4,12 +4,12 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
-import '../services/game_logic.dart';
-import '../services/bot_ai.dart';
-import '../services/stats_service.dart';
-import '../services/haptic_service.dart';
-import '../services/bot_learning_service.dart';
-import '../services/player_learning_service.dart';
+import '../services/game/game_logic.dart';
+import '../services/game/bot_ai.dart';
+import '../services/ui/stats_service.dart';
+import '../services/ui/haptic_service.dart';
+import '../services/learning/bot_learning_service.dart';
+import '../services/learning/player_learning_service.dart';
 import 'package:flutter/widgets.dart';
 
 class GameProvider with ChangeNotifier {
@@ -109,7 +109,7 @@ class GameProvider with ChangeNotifier {
       if (!player.isHuman) {
         _botLearningService.startGameRecording(
           gameId: _currentGameId!,
-          bot: player,
+          player: player,
           gameState: _gameState!,
           usedSBMM: useSBMM,
         );
