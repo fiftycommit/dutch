@@ -6,6 +6,7 @@ import 'bot_difficulty.dart';
 import '../game_logic.dart';
 import 'bot_config.dart';
 import 'bot_memory_manager.dart';
+import 'bot_personality.dart';
 
 /// Stratégie de gestion des cartes
 /// Principe GRASP: Information Expert - Décide quoi faire avec les cartes
@@ -14,7 +15,12 @@ class BotCardStrategy {
 
   /// Décide quoi faire avec la carte piochée
   static Future<void> decideCardAction(
-      GameState gs, Player bot, BotDifficulty difficulty, BotGamePhase phase) async {
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase, {
+    BotPersonality? personality,
+  }) async {
 
     PlayingCard? drawn = gs.drawnCard;
     if (drawn == null) return;
@@ -28,6 +34,13 @@ class BotCardStrategy {
     double exploreChance = difficulty.name == "Platine" ? 1.0 :
                           difficulty.name == "Or" ? 1.0 :
                           difficulty.name == "Argent" ? 0.80 : 0.50;
+
+    if (personality != null) {
+      final style = (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0);
+      exploreChance += style * 0.15;
+      exploreChance -= (personality.memoryAccuracy - 0.7) * 0.2;
+      exploreChance = exploreChance.clamp(0.2, 1.0);
+    }
     
     if (unknownIndices.isNotEmpty && _random.nextDouble() < exploreChance) {
       replaceIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
@@ -42,7 +55,12 @@ class BotCardStrategy {
     }
     
     // OPTIMIZATION : Chercher à améliorer le score
-    int keepThreshold = _getKeepThreshold(bot.botBehavior, difficulty, phase);
+    int keepThreshold = _getKeepThreshold(
+      bot.botBehavior,
+      difficulty,
+      phase,
+      personality: personality,
+    );
 
     // Chercher la pire carte connue
     int worstKnownValue = -1;
@@ -74,7 +92,12 @@ class BotCardStrategy {
     }
   }
 
-  static int _getKeepThreshold(BotBehavior? behavior, BotDifficulty difficulty, BotGamePhase phase) {
+  static int _getKeepThreshold(
+    BotBehavior? behavior,
+    BotDifficulty difficulty,
+    BotGamePhase phase, {
+    BotPersonality? personality,
+  }) {
     int keepThreshold = difficulty.keepCardThreshold;
     
     switch (behavior) {
@@ -101,6 +124,12 @@ class BotCardStrategy {
       keepThreshold -= 1;
     }
 
+    if (personality != null) {
+      final style = (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0);
+      keepThreshold += (style * 3).round();
+      keepThreshold = keepThreshold.clamp(2, 12);
+    }
+
     return keepThreshold;
   }
 
@@ -113,12 +142,24 @@ class BotCardStrategy {
   }
 
   /// Tente un match de réaction
-  static Future<bool> tryReactionMatch(GameState gameState, Player bot, BotDifficulty difficulty, BotGamePhase phase) async {
+  static Future<bool> tryReactionMatch(
+    GameState gameState,
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase, {
+    BotPersonality? personality,
+  }) async {
     if (gameState.phase != GamePhase.reaction) return false;
     if (bot.isHuman) return false;
     if (gameState.discardPile.isEmpty) return false;
 
-    double matchChance = _getMatchChance(bot, difficulty, phase, gameState);
+    double matchChance = _getMatchChance(
+      bot,
+      difficulty,
+      phase,
+      gameState,
+      personality: personality,
+    );
 
     if (_random.nextDouble() > matchChance) return false;
 
@@ -131,7 +172,13 @@ class BotCardStrategy {
         
         if (knownCard.matches(topDiscard)) {
           if (_random.nextDouble() < difficulty.matchAccuracy) {
-            int reactionDelay = (500 * (1 - difficulty.reactionSpeed)).round() + 200;
+            int reactionDelay = (250 * (1 - difficulty.reactionSpeed)).round() + 80;
+            if (personality != null) {
+              reactionDelay =
+                  (reactionDelay * (personality.decisionSpeedMs / 2000.0))
+                      .round()
+                      .clamp(50, 400);
+            }
             await Future.delayed(Duration(milliseconds: reactionDelay));
             
             bool success = GameLogic.matchCard(gameState, bot, i);
@@ -147,13 +194,25 @@ class BotCardStrategy {
 
     // Match à l'aveugle pour Or/Platine
     if (difficulty.name == "Or" || difficulty.name == "Platine") {
-      return await _tryBlindMatch(gameState, bot, difficulty, topDiscard);
+      return await _tryBlindMatch(
+        gameState,
+        bot,
+        difficulty,
+        topDiscard,
+        personality: personality,
+      );
     }
 
     return false;
   }
 
-  static double _getMatchChance(Player bot, BotDifficulty difficulty, BotGamePhase phase, GameState gameState) {
+  static double _getMatchChance(
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase,
+    GameState gameState, {
+    BotPersonality? personality,
+  }) {
     double matchChance = difficulty.reactionMatchChance;
     
     if (bot.hand.length >= 5) {
@@ -172,12 +231,26 @@ class BotCardStrategy {
       int cumulativeScore = gameState.getCumulativeScore(bot);
       if (cumulativeScore >= 70) matchChance += 0.20;
     }
+
+    if (personality != null) {
+      matchChance += (personality.riskTolerance - 0.5) * 0.2;
+    }
     
     return matchChance.clamp(0.0, 1.0);
   }
 
-  static Future<bool> _tryBlindMatch(GameState gameState, Player bot, BotDifficulty difficulty, PlayingCard topDiscard) async {
+  static Future<bool> _tryBlindMatch(
+    GameState gameState,
+    Player bot,
+    BotDifficulty difficulty,
+    PlayingCard topDiscard, {
+    BotPersonality? personality,
+  }) async {
     double blindMatchChance = difficulty.name == "Platine" ? 0.80 : 0.50;
+    if (personality != null) {
+      blindMatchChance += (personality.riskTolerance - 0.5) * 0.25;
+      blindMatchChance = blindMatchChance.clamp(0.1, 0.95);
+    }
     if (_random.nextDouble() >= blindMatchChance) return false;
 
     List<int> unknownIndices = BotMemoryManager.getUnknownIndices(bot);
@@ -188,7 +261,13 @@ class BotCardStrategy {
     PlayingCard blindCard = bot.hand[blindIndex];
     
     if (blindCard.matches(topDiscard)) {
-      int reactionDelay = (400 * (1 - difficulty.reactionSpeed)).round() + 150;
+      int reactionDelay = (220 * (1 - difficulty.reactionSpeed)).round() + 70;
+      if (personality != null) {
+        reactionDelay =
+            (reactionDelay * (personality.decisionSpeedMs / 2000.0))
+                .round()
+                .clamp(50, 350);
+      }
       await Future.delayed(Duration(milliseconds: reactionDelay));
       
       bool success = GameLogic.matchCard(gameState, bot, blindIndex);

@@ -10,6 +10,7 @@ import '../../../widgets/dialogs/shared/unified_power_dialogs.dart';
 import '../../../providers/game_provider.dart';
 import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
+import 'bot_personality.dart';
 
 /// Gestion des pouvoirs spéciaux des bots
 /// Principe GRASP: Controller - Orchestre l'utilisation des pouvoirs
@@ -17,22 +18,36 @@ class BotPowerHandler {
   static final Random _random = Random();
 
   /// Utilise le pouvoir spécial du bot
-  static Future<void> useBotSpecialPower(GameState gameState, BotDifficulty difficulty, BuildContext? context) async {
+  static Future<void> useBotSpecialPower(
+    GameState gameState,
+    BotDifficulty difficulty,
+    BuildContext? context, {
+    BotPersonality? personality,
+  }) async {
     if (!gameState.isWaitingForSpecialPower || gameState.specialCardToActivate == null) return;
 
     Player bot = gameState.currentPlayer;
     String val = gameState.specialCardToActivate!.value;
 
-    await Future.delayed(const Duration(milliseconds: 1000));
+    final baseDelay = personality != null
+        ? (personality.decisionSpeedMs * 0.25).round().clamp(80, 300)
+        : 200;
+    await Future.delayed(Duration(milliseconds: baseDelay));
+
+    final usageRate = _getPowerUsageRate(val, personality);
+    if (_random.nextDouble() > usageRate) {
+      _skipPower(gameState, bot);
+      return;
+    }
 
     if (val == '7') {
       _usePower7(gameState, bot, difficulty);
     } else if (val == '10') {
-      await _usePower10(gameState, bot, difficulty, context);
+      await _usePower10(gameState, bot, difficulty, context, personality: personality);
     } else if (val == 'V') {
-      await _usePowerValet(gameState, bot, difficulty, context);
+      await _usePowerValet(gameState, bot, difficulty, context, personality: personality);
     } else if (val == 'JOKER') {
-      await _usePowerJoker(gameState, bot, difficulty, context);
+      await _usePowerJoker(gameState, bot, difficulty, context, personality: personality);
     }
 
     gameState.isWaitingForSpecialPower = false;
@@ -54,8 +69,14 @@ class BotPowerHandler {
   // POUVOIR 10 : Espionner une carte adverse
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> _usePower10(GameState gameState, Player bot, BotDifficulty difficulty, BuildContext? context) async {
-    Player? target = _chooseSpyTarget(gameState, bot, difficulty);
+  static Future<void> _usePower10(
+    GameState gameState,
+    Player bot,
+    BotDifficulty difficulty,
+    BuildContext? context, {
+    BotPersonality? personality,
+  }) async {
+    Player? target = _chooseSpyTarget(gameState, bot, difficulty, personality: personality);
     if (target == null || target.hand.isEmpty) return;
 
     int idx;
@@ -70,14 +91,24 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotSpyNotification(context, bot, target.name, idx);
-      await Future.delayed(const Duration(milliseconds: 2000));
+      await Future.delayed(const Duration(milliseconds: 900));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
-  static Player? _chooseSpyTarget(GameState gs, Player bot, BotDifficulty difficulty) {
+  static Player? _chooseSpyTarget(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty, {
+    BotPersonality? personality,
+  }) {
     List<Player> opponents = gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.isEmpty) return null;
+
+    final strategyTarget = _selectTargetByStrategy(opponents, personality);
+    if (strategyTarget != null && _shouldUseStrategy(personality)) {
+      return strategyTarget;
+    }
 
     if ((difficulty.name == "Or" || difficulty.name == "Platine") ||
         bot.botBehavior == BotBehavior.balanced) {
@@ -92,8 +123,14 @@ class BotPowerHandler {
   // POUVOIR VALET : Échange de cartes
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> _usePowerValet(GameState gs, Player bot, BotDifficulty difficulty, BuildContext? context) async {
-    Player? target = _chooseValetTarget(gs, bot, difficulty);
+  static Future<void> _usePowerValet(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BuildContext? context, {
+    BotPersonality? personality,
+  }) async {
+    Player? target = _chooseValetTarget(gs, bot, difficulty, personality: personality);
     if (target == null || target.hand.isEmpty) return;
 
     int myCardIdx = BotMemoryManager.chooseBadCard(bot);
@@ -110,16 +147,26 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotSwapNotification(context, bot, target.name, targetIdx);
-      await Future.delayed(const Duration(milliseconds: 2000));
+      await Future.delayed(const Duration(milliseconds: 900));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
-  static Player? _chooseValetTarget(GameState gs, Player bot, BotDifficulty difficulty) {
+  static Player? _chooseValetTarget(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty, {
+    BotPersonality? personality,
+  }) {
     List<Player> opponents = gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.isEmpty) return null;
 
     BotBehavior? behavior = bot.botBehavior;
+
+    final strategyTarget = _selectTargetByStrategy(opponents, personality);
+    if (strategyTarget != null && _shouldUseStrategy(personality)) {
+      return strategyTarget;
+    }
 
     // CONTRE-ATTAQUE
     Player? counterTarget = BotThreatAnalyzer.getCounterAttackTarget(gs, bot, difficulty);
@@ -213,8 +260,14 @@ class BotPowerHandler {
   // POUVOIR JOKER : Mélanger la main d'un joueur
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> _usePowerJoker(GameState gs, Player bot, BotDifficulty difficulty, BuildContext? context) async {
-    Player? target = _chooseJokerTarget(gs, bot, difficulty);
+  static Future<void> _usePowerJoker(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BuildContext? context, {
+    BotPersonality? personality,
+  }) async {
+    Player? target = _chooseJokerTarget(gs, bot, difficulty, personality: personality);
     target ??= bot;
 
     GameLogic.jokerEffect(gs, target);
@@ -227,16 +280,26 @@ class BotPowerHandler {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
       UnifiedPowerDialogs.showBotJokerNotification(context, bot, target.name);
-      await Future.delayed(const Duration(milliseconds: 3000));
+      await Future.delayed(const Duration(milliseconds: 1100));
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
-  static Player? _chooseJokerTarget(GameState gs, Player bot, BotDifficulty difficulty) {
+  static Player? _chooseJokerTarget(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty, {
+    BotPersonality? personality,
+  }) {
     BotBehavior? behavior = bot.botBehavior;
     List<Player> possibleTargets = gs.players.where((p) => p.id != bot.id).toList();
     
     if (possibleTargets.isEmpty) return null;
+
+    final strategyTarget = _selectTargetByStrategy(possibleTargets, personality);
+    if (strategyTarget != null && _shouldUseStrategy(personality)) {
+      return strategyTarget;
+    }
 
     if (behavior == BotBehavior.fast) {
       possibleTargets.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
@@ -318,6 +381,49 @@ class BotPowerHandler {
     }
     
     return _selectHighestThreat(targets, threatScores);
+  }
+
+  static double _getPowerUsageRate(String value, BotPersonality? personality) {
+    if (personality == null) return 1.0;
+    final isDefensive = value == '7' || value == '8';
+    final base = personality.powerUsageRate;
+    final typeRate = isDefensive
+        ? personality.powerDefensiveRate
+        : personality.powerOffensiveRate;
+    final usage = (base * typeRate).clamp(0.05, 1.0);
+    return usage;
+  }
+
+  static void _skipPower(GameState gameState, Player bot) {
+    gameState.isWaitingForSpecialPower = false;
+    gameState.specialCardToActivate = null;
+    gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir.");
+  }
+
+  static bool _shouldUseStrategy(BotPersonality? personality) {
+    if (personality == null) return false;
+    final bias = 0.45 + (personality.adaptability * 0.4);
+    return _random.nextDouble() < bias.clamp(0.0, 0.9);
+  }
+
+  static Player? _selectTargetByStrategy(
+    List<Player> opponents,
+    BotPersonality? personality,
+  ) {
+    if (personality == null) return null;
+    final strategy = personality.targetingStrategy;
+    if (strategy == 'leader') {
+      return opponents.reduce((a, b) =>
+          a.getEstimatedScore() <= b.getEstimatedScore() ? a : b);
+    }
+    if (strategy == 'weak') {
+      return opponents.reduce((a, b) =>
+          a.getEstimatedScore() >= b.getEstimatedScore() ? a : b);
+    }
+    if (strategy == 'random') {
+      return opponents[_random.nextInt(opponents.length)];
+    }
+    return null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

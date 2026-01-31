@@ -8,6 +8,8 @@ import '../../../models/game_state.dart';
 class ReactionTimerManager {
   Timer? _reactionTimer;
   int? _remainingReactionTimeMs;
+  int _reactionDurationMs = 0;
+  int _reactionStartMs = 0;
   final ValueNotifier<int> reactionTimeRemaining = ValueNotifier<int>(0);
 
   /// Callback appelé quand le timer se termine
@@ -28,16 +30,18 @@ class ReactionTimerManager {
     gameState.phase = GamePhase.reaction;
     gameState.reactionTimeRemaining = reactionTimeMs;
     reactionTimeRemaining.value = reactionTimeMs;
+    _remainingReactionTimeMs = null;
+    _reactionDurationMs = reactionTimeMs;
+    _reactionStartMs = DateTime.now().millisecondsSinceEpoch;
 
     _reactionTimer?.cancel();
 
     _reactionTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
-      if (isPaused) return;
+      final remaining = _calculateRemainingMs();
+      gameState.reactionTimeRemaining = remaining;
+      reactionTimeRemaining.value = remaining;
 
-      gameState.reactionTimeRemaining -= 30;
-      reactionTimeRemaining.value = gameState.reactionTimeRemaining;
-
-      if (gameState.reactionTimeRemaining <= 0) {
+      if (remaining <= 0) {
         timer.cancel();
         onTimerEnd();
         return;
@@ -53,7 +57,12 @@ class ReactionTimerManager {
   void pauseTimer(GameState? gameState) {
     if (_reactionTimer != null && _reactionTimer!.isActive) {
       _reactionTimer!.cancel();
-      _remainingReactionTimeMs = gameState?.reactionTimeRemaining;
+      final remaining = _calculateRemainingMs();
+      _remainingReactionTimeMs = remaining;
+      if (gameState != null) {
+        gameState.reactionTimeRemaining = remaining;
+      }
+      reactionTimeRemaining.value = remaining;
     }
   }
 
@@ -63,6 +72,8 @@ class ReactionTimerManager {
         _remainingReactionTimeMs! > 0) {
       gameState.reactionTimeRemaining = _remainingReactionTimeMs!;
       reactionTimeRemaining.value = _remainingReactionTimeMs!;
+      _reactionDurationMs = _remainingReactionTimeMs!;
+      _reactionStartMs = DateTime.now().millisecondsSinceEpoch;
 
       _reactionTimer?.cancel();
       _reactionTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
@@ -71,10 +82,11 @@ class ReactionTimerManager {
           return;
         }
 
-        gameState.reactionTimeRemaining -= 30;
-        reactionTimeRemaining.value = gameState.reactionTimeRemaining;
+        final remaining = _calculateRemainingMs();
+        gameState.reactionTimeRemaining = remaining;
+        reactionTimeRemaining.value = remaining;
 
-        if (gameState.reactionTimeRemaining <= 0) {
+        if (remaining <= 0) {
           timer.cancel();
           onTimerEnd();
         }
@@ -85,6 +97,13 @@ class ReactionTimerManager {
       _remainingReactionTimeMs = null;
       onTimerUpdate();
     }
+  }
+
+  int _calculateRemainingMs() {
+    if (_reactionDurationMs <= 0) return 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final elapsed = now - _reactionStartMs;
+    return (_reactionDurationMs - elapsed).clamp(0, _reactionDurationMs);
   }
 
   /// Annuler le timer

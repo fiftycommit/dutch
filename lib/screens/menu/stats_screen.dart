@@ -282,20 +282,26 @@ class _StatsScreenState extends State<StatsScreen> {
         subtitle: Text(dateStr,
             style: const TextStyle(color: Colors.white54, fontSize: 12)),
         trailing: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text("$score pts",
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              "$score pts",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                height: 1.0,
+              ),
+            ),
             Text(
               rpDisplay.text,
               style: TextStyle(
                 color: rpDisplay.color,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
+                height: 1.0,
               ),
             ),
             if (streakBonus > 0 && streakMultiplier > 1.0)
@@ -303,9 +309,12 @@ class _StatsScreenState extends State<StatsScreen> {
                 "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)",
                 style: const TextStyle(
                   color: Colors.orangeAccent,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
+                  height: 1.0,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
           ],
         ),

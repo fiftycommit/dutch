@@ -41,7 +41,7 @@ class BotOrchestrator {
       if (gameState.phase != GamePhase.reaction) return false;
       if (isPaused) return false;
 
-      int delay = Random().nextInt(800) + 300;
+      int delay = Random().nextInt(150) + 50;
       await Future.delayed(Duration(milliseconds: delay));
 
       if (gameState.phase != GamePhase.reaction) return false;
@@ -83,9 +83,8 @@ class BotOrchestrator {
       if (shouldEnd) return;
 
       // Attendre un peu avant que le bot joue
-      for (int i = 0; i < 8; i++) {
-        if (isPaused) break;
-        await Future.delayed(const Duration(milliseconds: 100));
+      if (!isPaused) {
+        await Future.delayed(const Duration(milliseconds: 50));
       }
       if (isPaused) break;
 
@@ -106,9 +105,8 @@ class BotOrchestrator {
 
         if (gameState.isWaitingForSpecialPower) {
           // Attendre avant d'utiliser le pouvoir
-          for (int i = 0; i < 8; i++) {
-            if (isPaused) break;
-            await Future.delayed(const Duration(milliseconds: 100));
+          if (!isPaused) {
+            await Future.delayed(const Duration(milliseconds: 80));
           }
           if (isPaused) break;
           

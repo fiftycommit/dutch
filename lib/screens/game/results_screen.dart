@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/game_state.dart';
+import '../../models/player.dart';
 import '../../providers/game_provider.dart';
+import '../../services/game/rp_result_helper.dart';
 import '../shared/unified_results_screen.dart' as shared;
 import 'memorization_screen.dart';
 
@@ -37,6 +39,7 @@ class ResultsScreen extends StatelessWidget {
 
         // Trouver le joueur humain
         final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
+        final showRP = gameProvider.playerMMR != null;
 
         return shared.ResultsScreen(
           config: shared.ResultsConfig(
@@ -64,9 +67,38 @@ class ResultsScreen extends StatelessWidget {
                 },
               ),
             ],
+            rpCalculator: showRP
+                ? (player, rank) => _calculateRP(gameProvider, player, rank, gameState)
+                : null,
           ),
         );
       },
+    );
+  }
+
+  shared.PlayerRPResult? _calculateRP(
+    GameProvider provider,
+    Player player,
+    int rank,
+    GameState gameState,
+  ) {
+    if (player.isHuman) {
+      return RPResultHelper.build(
+        gameState: gameState,
+        player: player,
+        rank: rank,
+        currentMMR: provider.playerMMR,
+        winStreak: rank == 1 ? provider.playerWinStreak + 1 : 0,
+        overrideResult: provider.lastMatchRpResult,
+      );
+    }
+
+    return RPResultHelper.build(
+      gameState: gameState,
+      player: player,
+      rank: rank,
+      currentMMR: provider.playerMMR,
+      winStreak: 0,
     );
   }
 

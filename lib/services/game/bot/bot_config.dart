@@ -3,6 +3,7 @@ import '../../../models/game_state.dart';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import 'bot_difficulty.dart';
+import 'bot_personality.dart';
 
 export '../../../models/game_settings.dart' show BotBehavior, BotSkillLevel;
 
@@ -45,31 +46,57 @@ class BotConfig {
   }
 
   /// Calcule le temps de réflexion du bot
-  static int getThinkingTime(BotBehavior? behavior, BotDifficulty difficulty, GameState gameState) {
+  static int getThinkingTime(
+    BotBehavior? behavior,
+    BotDifficulty difficulty,
+    GameState gameState, {
+    BotPersonality? personality,
+  }) {
     if (behavior == null) return 800;
+
+    if (personality != null) {
+      double behaviorFactor = 1.0;
+      if (behavior == BotBehavior.fast) {
+        behaviorFactor = 0.75;
+      } else if (behavior == BotBehavior.aggressive) {
+        behaviorFactor = 0.85;
+      }
+
+      double difficultyFactor = 1.0;
+      if (difficulty.name == "Platine") {
+        difficultyFactor = 1.05;
+      } else if (difficulty.name == "Bronze") {
+        difficultyFactor = 0.95;
+      }
+
+      final base = (personality.decisionSpeedMs * behaviorFactor * difficultyFactor)
+          .round()
+          .clamp(50, 600);
+      return base;
+    }
 
     if (behavior == BotBehavior.balanced) {
       bool criticalMoment = gameState.players.any((p) => p.hand.length <= 2);
       
       switch (difficulty.name) {
         case "Bronze":
-          return criticalMoment ? 1000 : 800;
+          return criticalMoment ? 250 : 180;
         case "Argent":
-          return criticalMoment ? 1400 : 1000;
+          return criticalMoment ? 350 : 220;
         case "Or":
-          return criticalMoment ? 1800 : 1200;
+          return criticalMoment ? 450 : 280;
         case "Platine":
-          return criticalMoment ? 2000 : 1400;
+          return criticalMoment ? 550 : 320;
         default:
-          return 1000;
+          return 250;
       }
     }
 
     if (behavior == BotBehavior.aggressive) {
-      return difficulty.name == "Or" || difficulty.name == "Platine" ? 600 : 500;
+      return difficulty.name == "Or" || difficulty.name == "Platine" ? 220 : 180;
     }
 
-    return 900;
+    return 220;
   }
 
   /// Convertit les paramètres AI en BotDifficulty

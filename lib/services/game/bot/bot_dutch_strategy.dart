@@ -4,6 +4,7 @@ import '../../../models/player.dart';
 import 'bot_difficulty.dart';
 import 'bot_config.dart';
 import 'bot_threat_analyzer.dart';
+import 'bot_personality.dart';
 
 /// Stratégie de décision pour appeler Dutch
 /// Principe GRASP: Information Expert - Décide quand appeler Dutch
@@ -11,7 +12,13 @@ class BotDutchStrategy {
   static final Random _random = Random();
 
   /// Détermine si le bot doit appeler Dutch
-  static bool shouldCallDutch(GameState gs, Player bot, BotDifficulty difficulty, BotGamePhase phase) {
+  static bool shouldCallDutch(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase, {
+    BotPersonality? personality,
+  }) {
     int estimatedScore = bot.getEstimatedScore();
     BotBehavior? behavior = bot.botBehavior;
 
@@ -22,6 +29,33 @@ class BotDutchStrategy {
     double audacityBonus = _calculateAudacity(gs, bot, difficulty);
     double confidence = _calculateDutchConfidence(bot);
     double tournamentPressure = BotThreatAnalyzer.getTournamentPressure(gs, bot);
+
+    if (personality != null) {
+      final styleBoost =
+          (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0) * 2;
+      final adjustedThreshold = personality.dutchThreshold +
+          audacityBonus +
+          (confidence * 2) +
+          tournamentPressure +
+          styleBoost;
+
+      if (difficulty.name == "Platine" || difficulty.name == "Or") {
+        if (_shouldSmartDutch(
+          gs,
+          bot,
+          difficulty,
+          phase,
+          estimatedScore,
+          audacityBonus,
+          confidence,
+          tournamentPressure,
+        )) {
+          return true;
+        }
+      }
+
+      return estimatedScore <= adjustedThreshold.round();
+    }
 
     // NOUVELLE LOGIQUE : Bronze=peureux, Platine=stratégique
     if (difficulty.name == "Platine" || difficulty.name == "Or") {

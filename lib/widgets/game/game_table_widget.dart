@@ -179,8 +179,6 @@ class _GameTableContentState extends State<_GameTableContent>
     final screenHeight = screenSize.height;
     final screenWidth = screenSize.width;
     final isCompact = screenHeight < 400 || screenWidth < 700;
-    final isMedium = !isCompact && (screenHeight < 600 || screenWidth < 1000);
-
     final botCardType = isCompact ? CardSize.tiny : CardSize.small;
     final playerCardType = isCompact ? CardSize.small : CardSize.medium;
     final botCardMetrics = cardVisualSize(context, botCardType);
@@ -268,8 +266,6 @@ class _GameTableContentState extends State<_GameTableContent>
           final centerShiftFraction = centerHeight == 0
               ? 0.0
               : (centerShiftY / (centerHeight / 2)).clamp(-1.0, 1.0);
-          final buttonMargin = isCompact ? 2.0 : (isMedium ? 12.0 : 24.0);
-
           return Stack(
             children: [
               // Centre - Table (pioche + défausse)
@@ -397,28 +393,6 @@ class _GameTableContentState extends State<_GameTableContent>
                   child: _buildSpectatorBanner(context),
                 ),
 
-              // Boutons pause/quitter en haut à droite
-              Positioned(
-                top: buttonMargin,
-                right: buttonMargin,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.isProcessing)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white54,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
             ],
           );
         },

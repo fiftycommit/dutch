@@ -2,6 +2,7 @@ import 'dart:math';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import 'bot_difficulty.dart';
+import 'bot_personality.dart';
 
 /// Gestion de la mémoire des bots
 /// Principe GRASP: Information Expert - Gère la mémoire du bot
@@ -9,11 +10,21 @@ class BotMemoryManager {
   static final Random _random = Random();
 
   /// Applique la décroissance de la mémoire du bot
-  static void applyMemoryDecay(Player bot, BotDifficulty difficulty) {
+  static void applyMemoryDecay(
+    Player bot,
+    BotDifficulty difficulty, {
+    BotPersonality? personality,
+  }) {
     if (bot.knownCards.isEmpty || bot.mentalMap.isEmpty) return;
 
+    double forgetChance = difficulty.forgetChancePerTurn;
+    if (personality != null) {
+      final retention = personality.memoryRetention;
+      forgetChance = (forgetChance * (1.0 - (retention * 0.7))).clamp(0.01, 1.0);
+    }
+
     for (int i = 0; i < bot.knownCards.length; i++) {
-      if (bot.knownCards[i] && _random.nextDouble() < difficulty.forgetChancePerTurn) {
+      if (bot.knownCards[i] && _random.nextDouble() < forgetChance) {
         bot.forgetCard(i);
       }
     }

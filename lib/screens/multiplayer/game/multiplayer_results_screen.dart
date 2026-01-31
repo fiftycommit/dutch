@@ -3,12 +3,14 @@ import 'package:provider/provider.dart';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import '../../../providers/multiplayer_game_provider.dart';
+import '../../../services/game/rp_result_helper.dart';
+import '../../../services/multiplayer/competitive_service.dart';
 import '../../shared/unified_results_screen.dart' as shared;
 import '../lobby/multiplayer_lobby_screen.dart';
 
 /// Écran de résultats pour le mode multiplayer
 /// Utilise la version unifiée avec configuration spécifique
-class MultiplayerResultsScreen extends StatelessWidget {
+class MultiplayerResultsScreen extends StatefulWidget {
   final GameState gameState;
   final String? localPlayerId;
 
@@ -19,13 +21,39 @@ class MultiplayerResultsScreen extends StatelessWidget {
   });
 
   @override
+  State<MultiplayerResultsScreen> createState() =>
+      _MultiplayerResultsScreenState();
+}
+
+class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
+  int? _localMMR;
+  int _localWinStreak = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalCompetitiveStats();
+  }
+
+  Future<void> _loadLocalCompetitiveStats() async {
+    final playerId = widget.localPlayerId;
+    if (playerId == null) return;
+    final stats = await CompetitiveService.getStats(playerId);
+    if (!mounted) return;
+    setState(() {
+      _localMMR = stats.mmr;
+      _localWinStreak = stats.winStreak;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<MultiplayerGameProvider>();
 
     return shared.ResultsScreen(
       config: shared.ResultsConfig(
-        gameState: gameState,
-        localPlayerId: localPlayerId,
+        gameState: widget.gameState,
+        localPlayerId: widget.localPlayerId,
         title: "RÉSULTATS",
         shouldRedirect: () => provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
         onRedirect: () {
@@ -35,36 +63,23 @@ class MultiplayerResultsScreen extends StatelessWidget {
           );
         },
         buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider),
-        rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
+        rpCalculator: (player, rank) => _calculateRP(player, rank, widget.gameState),
       ),
     );
   }
 
-  /// Calcul des RP basé sur la position (simplifié pour multiplayer)
   shared.PlayerRPResult? _calculateRP(Player player, int rank, GameState gs) {
-    // En multiplayer, tout le monde est humain donc on affiche les RP pour tous
-    if (player.isSpectator) return null;
-    
-    final totalPlayers = gs.players.where((p) => !p.isSpectator).length;
-    final isDutchCaller = gs.dutchCallerId == player.id;
-    final isWinner = rank == 1;
-    final isEliminated = isDutchCaller && !isWinner;
-    
-    int rp;
-    if (isEliminated) {
-      // Dutch raté = grosse pénalité
-      rp = -50;
-    } else if (isWinner) {
-      // Gagnant
-      rp = isDutchCaller ? 40 : 30; // Bonus si Dutch réussi
-    } else {
-      // Autres positions : RP décroissant
-      // 2ème: +10, 3ème: -10, 4ème: -20, etc.
-      rp = 20 - (rank * 10);
-      if (totalPlayers <= 2 && rank == 2) rp = -10; // 1v1
-    }
-    
-    return shared.PlayerRPResult(rpChange: rp);
+    final currentMMR = _localMMR ?? 0;
+    final isLocalPlayer = player.id == widget.localPlayerId;
+    final winStreak = isLocalPlayer && rank == 1 ? _localWinStreak + 1 : 0;
+
+    return RPResultHelper.build(
+      gameState: gs,
+      player: player,
+      rank: rank,
+      currentMMR: currentMMR,
+      winStreak: winStreak,
+    );
   }
 
   List<Widget> _buildMultiplayerButtons(BuildContext context, MultiplayerGameProvider provider) {

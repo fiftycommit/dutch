@@ -7,6 +7,7 @@ import 'bot/bot_memory_manager.dart';
 import 'bot/bot_dutch_strategy.dart';
 import 'bot/bot_card_strategy.dart';
 import 'bot/bot_power_handler.dart';
+import 'bot/bot_personality.dart';
 
 export 'bot/bot_config.dart' show BotGamePhase, BotBehavior, BotSkillLevel;
 export 'bot/bot_difficulty.dart' show BotDifficulty;
@@ -23,16 +24,28 @@ class BotAI {
 
     final difficulty = BotConfig.getDifficulty(bot, playerMMR);
     final phase = BotConfig.getBotPhase(bot, gameState);
+    final personality = BotPersonality.fromBot(bot);
 
     // Appliquer la décroissance de la mémoire
-    BotMemoryManager.applyMemoryDecay(bot, difficulty);
+    BotMemoryManager.applyMemoryDecay(bot, difficulty, personality: personality);
 
     // Temps de réflexion
-    int thinkingTime = BotConfig.getThinkingTime(bot.botBehavior, difficulty, gameState);
+    int thinkingTime = BotConfig.getThinkingTime(
+      bot.botBehavior,
+      difficulty,
+      gameState,
+      personality: personality,
+    );
     await Future.delayed(Duration(milliseconds: thinkingTime));
 
     // Vérifier si le bot doit appeler Dutch
-    if (BotDutchStrategy.shouldCallDutch(gameState, bot, difficulty, phase)) {
+    if (BotDutchStrategy.shouldCallDutch(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    )) {
       GameLogic.callDutch(gameState);
       return;
     }
@@ -41,8 +54,17 @@ class BotAI {
     GameLogic.drawCard(gameState);
 
     // Décider quoi faire avec la carte piochée
-    await Future.delayed(const Duration(milliseconds: 1000));
-    await BotCardStrategy.decideCardAction(gameState, bot, difficulty, phase);
+    final postDrawDelay = personality != null
+        ? (personality.decisionSpeedMs * 0.25).round().clamp(50, 300)
+        : 200;
+    await Future.delayed(Duration(milliseconds: postDrawDelay));
+    await BotCardStrategy.decideCardAction(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    );
   }
 
   /// Tente un match de réaction pour un bot
@@ -52,8 +74,15 @@ class BotAI {
 
     final difficulty = BotConfig.getDifficulty(bot, playerMMR);
     final phase = BotConfig.getBotPhase(bot, gameState);
+    final personality = BotPersonality.fromBot(bot);
 
-    return await BotCardStrategy.tryReactionMatch(gameState, bot, difficulty, phase);
+    return await BotCardStrategy.tryReactionMatch(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    );
   }
 
   /// Utilise le pouvoir spécial du bot
@@ -62,7 +91,13 @@ class BotAI {
 
     Player bot = gameState.currentPlayer;
     final difficulty = BotConfig.getDifficulty(bot, playerMMR);
+    final personality = BotPersonality.fromBot(bot);
 
-    await BotPowerHandler.useBotSpecialPower(gameState, difficulty, context);
+    await BotPowerHandler.useBotSpecialPower(
+      gameState,
+      difficulty,
+      context,
+      personality: personality,
+    );
   }
 }

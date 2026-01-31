@@ -13,6 +13,7 @@ import 'managers/solo/tournament_manager.dart';
 import 'managers/solo/reaction_timer_manager.dart';
 import 'managers/solo/special_power_handler.dart';
 import 'managers/solo/bot_orchestrator.dart';
+import '../services/game/rp_calculator.dart';
 import 'package:flutter/widgets.dart';
 
 export 'managers/solo/tournament_manager.dart' show TournamentResult;
@@ -61,6 +62,8 @@ class GameProvider with ChangeNotifier implements IGameController {
   int? get playerMMR => _playerMMR;
   int _playerWinStreak = 0;
   int get playerWinStreak => _playerWinStreak;
+  RPResult? _lastMatchRpResult;
+  RPResult? get lastMatchRpResult => _lastMatchRpResult;
 
   // Services injectés (Principe SOLID: DIP)
   final IHapticService _hapticService;
@@ -122,6 +125,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
+    _lastMatchRpResult = null;
 
     if (useSBMM) {
       final stats = await _statsService.getStats(slotId: saveSlot);
@@ -441,6 +445,21 @@ class GameProvider with ChangeNotifier implements IGameController {
     int playerRank = ranking.indexWhere((p) => p.id == human.id) + 1;
     bool calledDutch = _gameState!.dutchCallerId == human.id;
     bool wonDutch = calledDutch && playerRank == 1;
+    _lastMatchRpResult = null;
+    if (_playerMMR != null) {
+      final winStreak = playerRank == 1 ? _playerWinStreak + 1 : 0;
+      _lastMatchRpResult = RPCalculator.calculateRP(
+        playerRank: playerRank,
+        currentMMR: _playerMMR!,
+        calledDutch: calledDutch,
+        hasEmptyHand: human.hand.isEmpty,
+        isEliminated: calledDutch && playerRank != 1,
+        totalPlayers: _gameState!.players.length,
+        isTournament: _gameState!.gameMode == GameMode.tournament,
+        tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,
+        winStreak: winStreak,
+      );
+    }
 
     _trackingProvider.endPlayerRecording(
       slotId: _currentSlotId,
