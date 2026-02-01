@@ -42,8 +42,8 @@ class TournamentManager {
       _cumulativeScores = {};
       _activeTournamentId = DateTime.now().millisecondsSinceEpoch.toString();
       _initialPlayers = playerCount;
-    } else if (_initialPlayers == null) {
-      _initialPlayers = playerCount + (tournamentRound - 1);
+    } else {
+      _initialPlayers ??= playerCount + (tournamentRound - 1);
     }
   }
 

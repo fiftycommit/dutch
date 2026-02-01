@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/providers/settings_provider.dart';
