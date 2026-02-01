@@ -16,7 +16,7 @@ void main() {
 
     group('initializeTournament', () {
       test('resets state on round 1', () {
-        manager.initializeTournament(1);
+        manager.initializeTournament(1, playerCount: 4);
 
         expect(manager.cumulativeScores, isEmpty);
         expect(manager.activeTournamentId, isNotNull);
@@ -24,11 +24,11 @@ void main() {
       });
 
       test('generates unique tournament ID', () {
-        manager.initializeTournament(1);
+        manager.initializeTournament(1, playerCount: 4);
         final firstId = manager.activeTournamentId;
 
         // Wait a bit to ensure different timestamp
-        manager.initializeTournament(1);
+        manager.initializeTournament(1, playerCount: 4);
         final secondId = manager.activeTournamentId;
 
         expect(firstId, isNotNull);
@@ -36,10 +36,10 @@ void main() {
       });
 
       test('does not reset on round > 1', () {
-        manager.initializeTournament(1);
+        manager.initializeTournament(1, playerCount: 4);
         final originalId = manager.activeTournamentId;
 
-        manager.initializeTournament(2);
+        manager.initializeTournament(2, playerCount: 3);
 
         expect(manager.activeTournamentId, originalId);
       });
@@ -47,7 +47,7 @@ void main() {
 
     group('resetTournament', () {
       test('clears all state', () {
-        manager.initializeTournament(1);
+        manager.initializeTournament(1, playerCount: 4);
         
         manager.resetTournament();
 
@@ -165,11 +165,14 @@ void main() {
         }
       });
 
-      test('assigns new positions', () {
+      test('preserves original positions', () {
+        final originalPositions = {
+          for (final player in gameState.players) player.id: player.position,
+        };
         final survivors = manager.prepareSurvivorsForNextRound(gameState);
 
-        for (int i = 0; i < survivors.length; i++) {
-          expect(survivors[i].position, i);
+        for (final survivor in survivors) {
+          expect(survivor.position, originalPositions[survivor.id]);
         }
       });
 
@@ -193,7 +196,7 @@ void main() {
 
         final survivors = manager.prepareSurvivorsForNextRound(gameState);
 
-        expect(survivors.length, 4);
+        expect(survivors.length, 5);
       });
     });
 

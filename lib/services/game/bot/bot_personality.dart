@@ -13,6 +13,10 @@ class BotPersonality {
   final double decisionSpeedMs;
   final double dutchThreshold;
   final double dutchQuality;
+  final double scoreGapWeight;
+  final double rankPenalty;
+  final double ghostInfluence;
+  final double ghostDutchThreshold;
   final double aggressivenessWinning;
   final double aggressivenessLosing;
   final double cautionWinning;
@@ -32,6 +36,10 @@ class BotPersonality {
     required this.decisionSpeedMs,
     required this.dutchThreshold,
     required this.dutchQuality,
+    required this.scoreGapWeight,
+    required this.rankPenalty,
+    required this.ghostInfluence,
+    required this.ghostDutchThreshold,
     required this.aggressivenessWinning,
     required this.aggressivenessLosing,
     required this.cautionWinning,
@@ -76,6 +84,10 @@ class BotPersonality {
       decisionSpeedMs: numParam('decisionSpeed', 2000.0).clamp(500.0, 10000.0),
       dutchThreshold: numParam('dutchThreshold', 15.0).clamp(5.0, 30.0),
       dutchQuality: clamp01(numParam('dutchQuality', 0.5)),
+      scoreGapWeight: numParam('scoreGapWeight', 0.7).clamp(0.0, 2.0),
+      rankPenalty: clamp01(numParam('rankPenalty', 0.0)),
+      ghostInfluence: clamp01(numParam('ghostInfluence', 0.0)),
+      ghostDutchThreshold: numParam('ghostDutchThreshold', 15.0).clamp(5.0, 30.0),
       aggressivenessWinning: clamp01(numParam('aggressiveness_winning', 0.5)),
       aggressivenessLosing: clamp01(numParam('aggressiveness_losing', 0.5)),
       cautionWinning: clamp01(numParam('caution_winning', 0.5)),

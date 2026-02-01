@@ -2,6 +2,8 @@ import 'dart:math';
 import '../../../models/game_state.dart';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
+import '../../../models/player_learning_data.dart';
+import '../../matchmaking/matchmaking_service.dart';
 import 'bot_difficulty.dart';
 import 'bot_personality.dart';
 
@@ -158,5 +160,45 @@ class BotConfig {
       return BotDifficulty.fromMMR(playerMMR);
     }
     return getSkillDifficulty(bot.botSkillLevel);
+  }
+
+  /// Génère les configurations de bots basées sur le matchmaking adaptatif
+  ///
+  /// Le rang (Bronze/Argent/Or/Platine) est purement cosmétique.
+  /// La vraie difficulté est calculée à partir du MMR du joueur :
+  /// - Un joueur fort en Bronze aura des bots plus difficiles
+  ///   qu'un joueur faible en Platine
+  /// - Plus on se rapproche d'un palier de rang, plus les bots sont forts
+  static List<Map<String, double>> generateMatchmakingBotParams({
+    required PlayerProfile playerProfile,
+    required int botCount,
+    bool forceChallenge = false,
+  }) {
+    final profiles = MatchmakingService.generateBotProfiles(
+      playerProfile: playerProfile,
+      botCount: botCount,
+      forceChallenge: forceChallenge,
+    );
+
+    return profiles.map((p) => p.adjustedParameters).toList();
+  }
+
+  /// Crée une BotDifficulty à partir d'un profil de matchmaking
+  static BotDifficulty difficultyFromMatchmakingProfile(
+    BotMatchmakingProfile profile,
+  ) {
+    return difficultyFromParameters(profile.adjustedParameters);
+  }
+
+  /// Retourne des informations de debug sur le matchmaking pour un joueur
+  static Map<String, dynamic> getMatchmakingDebugInfo(int playerMMR) {
+    return {
+      'playerMMR': playerMMR,
+      'cosmenticRank': MatchmakingService.getRankName(playerMMR),
+      'palierProgress': MatchmakingService.getPalierProgress(playerMMR),
+      'palierBoost': MatchmakingService.getPalierBoost(playerMMR),
+      'nextRankMMR': MatchmakingService.getNextRankMMR(playerMMR),
+      'progressPercent': MatchmakingService.getRankProgressPercent(playerMMR),
+    };
   }
 }

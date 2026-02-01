@@ -31,6 +31,9 @@ class ResultsConfig {
   
   /// Message d'alerte optionnel (ex: "Vous avez été éliminé")
   final Widget? alertBanner;
+
+  /// Liste des joueurs éliminés à cette manche (tournoi)
+  final Set<String>? eliminatedPlayerIds;
   
   /// Callback pour vérifier si on doit rediriger (multiplayer lobby)
   final bool Function()? shouldRedirect;
@@ -46,6 +49,7 @@ class ResultsConfig {
     this.title,
     this.subtitle,
     this.alertBanner,
+    this.eliminatedPlayerIds,
     this.shouldRedirect,
     this.onRedirect,
     this.rpCalculator,
@@ -199,7 +203,10 @@ class ResultsScreen extends StatelessWidget {
   Widget _buildPlayerResult(BuildContext context, Player player, int rank, GameState gs) {
     final isWinner = rank == 1;
     final isDutchCaller = gs.dutchCallerId == player.id;
-    final isEliminated = isDutchCaller && !isWinner;
+    final isDutchEliminated = isDutchCaller && !isWinner;
+    final isTournamentEliminated =
+        config.eliminatedPlayerIds?.contains(player.id) ?? false;
+    final isEliminated = isDutchEliminated || isTournamentEliminated;
     final score = gs.getFinalScore(player);
     final isLocalPlayer = player.id == config.localPlayerId || 
         (config.localPlayerId == null && player.isHuman);
@@ -302,9 +309,11 @@ class ResultsScreen extends StatelessWidget {
                   ],
                 ),
                 if (isEliminated)
-                  const Text(
-                    "❌ ÉLIMINÉ (Dutch raté !)",
-                    style: TextStyle(
+                  Text(
+                    isDutchEliminated
+                        ? "❌ ÉLIMINÉ (Dutch raté !)"
+                        : "❌ ÉLIMINÉ",
+                    style: const TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,

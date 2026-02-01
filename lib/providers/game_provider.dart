@@ -79,6 +79,10 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   // Délégation au TournamentManager
   List<TournamentResult>? get tournamentFinalRanking => _tournamentManager.finalRanking;
+  int get tournamentTotalRounds {
+    if (_gameState == null) return 1;
+    return _tournamentManager.getTotalRounds(_gameState!);
+  }
   ValueNotifier<int> get reactionTimeRemaining => _timerManager.reactionTimeRemaining;
 
   GameProvider({
@@ -114,7 +118,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   }) async {
     // Initialiser le tournoi via le manager
     if (gameMode == GameMode.tournament) {
-      _tournamentManager.initializeTournament(tournamentRound);
+      _tournamentManager.initializeTournament(tournamentRound, playerCount: players.length);
     } else {
       _tournamentManager.resetTournament();
     }
@@ -501,10 +505,14 @@ class GameProvider with ChangeNotifier implements IGameController {
     return _tournamentManager.isHumanEliminated(_gameState!);
   }
 
+  Set<String> getTournamentEliminatedIds() {
+    if (_gameState == null) return {};
+    return _tournamentManager.getEliminatedPlayerIds(_gameState!);
+  }
+
   void finishTournamentForHuman() {
     if (_gameState == null) return;
     _tournamentManager.finishTournamentForHuman(_gameState!);
-    _gameState!.tournamentRound = 3;
     notifyListeners();
   }
 
@@ -514,6 +522,11 @@ class GameProvider with ChangeNotifier implements IGameController {
     if (_gameState == null) return;
     _gameState!.updateCumulativeScores();
     _tournamentManager.updateCumulativeScores(_gameState!);
+
+    if (_gameState!.gameMode == GameMode.tournament &&
+        _gameState!.tournamentRound >= tournamentTotalRounds) {
+      return;
+    }
     
     List<Player> survivors = _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
     if (survivors.length < 2) return;

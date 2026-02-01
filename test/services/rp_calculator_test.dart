@@ -268,26 +268,67 @@ void main() {
         expect(tournament, isNotNull);
       });
 
-      test('later rounds give more points', () {
-        final round1 = RPCalculator.calculateRP(
+      test('stage multipliers are applied', () {
+        final round1Base = RPCalculator.calculateRP(
+          playerRank: 1,
+          currentMMR: 500,
+          calledDutch: false,
+          hasEmptyHand: false,
+          isTournament: false,
+          tournamentRound: 1,
+          totalPlayers: 4,
+        );
+        final round1Tournament = RPCalculator.calculateRP(
           playerRank: 1,
           currentMMR: 500,
           calledDutch: false,
           hasEmptyHand: false,
           isTournament: true,
           tournamentRound: 1,
+          totalPlayers: 4,
         );
 
-        final round3 = RPCalculator.calculateRP(
+        final round2Base = RPCalculator.calculateRP(
+          playerRank: 1,
+          currentMMR: 500,
+          calledDutch: false,
+          hasEmptyHand: false,
+          isTournament: false,
+          tournamentRound: 2,
+          totalPlayers: 3,
+        );
+        final round2Tournament = RPCalculator.calculateRP(
+          playerRank: 1,
+          currentMMR: 500,
+          calledDutch: false,
+          hasEmptyHand: false,
+          isTournament: true,
+          tournamentRound: 2,
+          totalPlayers: 3,
+        );
+
+        final round3Base = RPCalculator.calculateRP(
+          playerRank: 1,
+          currentMMR: 500,
+          calledDutch: false,
+          hasEmptyHand: false,
+          isTournament: false,
+          tournamentRound: 3,
+          totalPlayers: 2,
+        );
+        final round3Tournament = RPCalculator.calculateRP(
           playerRank: 1,
           currentMMR: 500,
           calledDutch: false,
           hasEmptyHand: false,
           isTournament: true,
           tournamentRound: 3,
+          totalPlayers: 2,
         );
 
-        expect(round3.totalChange, greaterThan(round1.totalChange));
+        expect(round1Tournament.baseChange, (round1Base.baseChange * 1.1).round());
+        expect(round2Tournament.baseChange, (round2Base.baseChange * 1.2).round());
+        expect(round3Tournament.baseChange, (round3Base.baseChange * 1.5).round());
       });
     });
 

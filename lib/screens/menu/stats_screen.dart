@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
+import '../../utils/tournament_labels.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -377,6 +378,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final matches = List<Map<String, dynamic>>.from(group.matches);
     matches.sort((a, b) =>
         (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
+    final totalRounds = _tournamentTotalRounds(matches);
 
     final finalPosition = _tournamentFinalPosition(matches);
     final title =
@@ -403,13 +405,14 @@ class _StatsScreenState extends State<StatsScreen> {
                   itemCount: matches.length,
                   itemBuilder: (context, index) {
                     final match = matches[index];
-                    final round = match['tournamentRound'] ?? (index + 1);
+                    final round = _roundValue(match['tournamentRound'], index + 1);
                     final dateStr = _formatDate(_parseDate(match));
-                    final subtitle = "Manche $round • $dateStr";
+                    final subtitle =
+                        "${tournamentStageLabel(round, totalRounds: totalRounds)} • $dateStr";
                     return _buildMatchHistoryTile(
                       match,
                       subtitleOverride: subtitle,
-                      onTap: () => _showMatchHistory(match, round: round),
+                      onTap: () => _showMatchHistory(match, round: round, totalRounds: totalRounds),
                     );
                   },
                 ),
@@ -427,7 +430,11 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  void _showMatchHistory(Map<String, dynamic> match, {int? round}) {
+  void _showMatchHistory(
+    Map<String, dynamic> match, {
+    int? round,
+    int? totalRounds,
+  }) {
     final actionsRaw = match['actionHistory'];
     final actions = actionsRaw is List
         ? actionsRaw.map((e) => e.toString()).toList()
@@ -435,7 +442,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final orderedActions = actions.reversed.toList();
     final title = round == null
         ? "Historique de la partie"
-        : "Historique • Manche $round";
+        : "Historique • ${tournamentStageLabel(round, totalRounds: totalRounds ?? kTournamentTotalRounds)}";
 
     showDialog(
       context: context,
@@ -581,25 +588,35 @@ class _StatsScreenState extends State<StatsScreen> {
     final sorted = List<Map<String, dynamic>>.from(matches)
       ..sort((a, b) =>
           (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
-    final maxRoundRaw = sorted.last['tournamentRound'] ?? 1;
-    final maxRound = maxRoundRaw is num ? maxRoundRaw.toInt() : 1;
-    final playerCounts = sorted
+    final lastRankRaw = sorted.last['rank'] ?? 0;
+    final lastRank = lastRankRaw is num ? lastRankRaw.toInt() : 0;
+    return lastRank;
+  }
+
+  int _tournamentTotalRounds(List<Map<String, dynamic>> matches) {
+    if (matches.isEmpty) return 1;
+    final playerCounts = matches
         .map((m) => m['totalPlayers'])
         .whereType<num>()
         .map((n) => n.toInt())
         .toList();
-    final initialPlayers = playerCounts.isNotEmpty
-        ? playerCounts.reduce((a, b) => a > b ? a : b)
-        : 4;
-    final basePosition = (initialPlayers + 1) - maxRound;
-    final lastRankRaw = sorted.last['rank'] ?? 0;
-    final lastRank = lastRankRaw is num ? lastRankRaw.toInt() : 0;
-    final isFinalRound = maxRound >= initialPlayers - 1;
-    if (isFinalRound && lastRank == 1) return 1;
-    if (isFinalRound && lastRank == 2) return 2;
-    if (basePosition < 1) return 1;
-    if (basePosition > initialPlayers) return initialPlayers;
-    return basePosition;
+    int initialPlayers;
+    if (playerCounts.isNotEmpty) {
+      initialPlayers = playerCounts.reduce((a, b) => a > b ? a : b);
+    } else {
+      final maxRound = matches
+          .map((m) => _roundValue(m['tournamentRound'], 1))
+          .reduce((a, b) => a > b ? a : b);
+      initialPlayers = maxRound + 1;
+    }
+    if (initialPlayers < 2) return 1;
+    return initialPlayers - 1;
+  }
+
+  int _roundValue(dynamic raw, int fallback) {
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw) ?? fallback;
+    return fallback;
   }
 
   void _confirmReset(BuildContext context, int slotId) {

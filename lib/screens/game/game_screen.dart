@@ -12,6 +12,7 @@ import 'package:dutch_game/screens/game/dutch_reveal_screen.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
+import 'package:dutch_game/utils/tournament_labels.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -87,6 +88,12 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
           }
 
           final gameState = gameProvider.gameState!;
+          final totalRounds = gameState.gameMode == GameMode.tournament
+              ? gameProvider.tournamentTotalRounds
+              : 1;
+          final remainingRounds = (totalRounds - gameState.tournamentRound)
+              .clamp(0, totalRounds)
+              .toInt();
 
           final size = MediaQuery.of(context).size;
           final isPortrait = size.height > size.width;
@@ -120,9 +127,28 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                     decoration: BoxDecoration(
                         color: Colors.black45,
                         borderRadius: BorderRadius.circular(20)),
-                    child: Text("Manche ${gameState.tournamentRound}",
-                        style: const TextStyle(
-                            color: Colors.amber, fontWeight: FontWeight.bold)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            tournamentStageLabel(
+                              gameState.tournamentRound,
+                              totalRounds: totalRounds,
+                            ),
+                            style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Manches restantes : $remainingRounds",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               if (gameState.phase == GamePhase.dutchCalled)

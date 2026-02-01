@@ -27,18 +27,23 @@ class TournamentManager {
   
   /// Classement final du tournoi
   List<TournamentResult>? _finalRanking;
+  int? _initialPlayers;
   
   /// Getters
   Map<String, int> get cumulativeScores => _cumulativeScores;
   String? get activeTournamentId => _activeTournamentId;
   List<TournamentResult>? get finalRanking => _finalRanking;
+  int? get initialPlayers => _initialPlayers;
 
   /// Initialiser un nouveau tournoi
-  void initializeTournament(int tournamentRound) {
+  void initializeTournament(int tournamentRound, {required int playerCount}) {
     if (tournamentRound == 1) {
       _finalRanking = null;
       _cumulativeScores = {};
       _activeTournamentId = DateTime.now().millisecondsSinceEpoch.toString();
+      _initialPlayers = playerCount;
+    } else if (_initialPlayers == null) {
+      _initialPlayers = playerCount + (tournamentRound - 1);
     }
   }
 
@@ -47,6 +52,7 @@ class TournamentManager {
     _activeTournamentId = null;
     _finalRanking = null;
     _cumulativeScores = {};
+    _initialPlayers = null;
   }
 
   /// Mettre à jour les scores cumulés
@@ -57,18 +63,19 @@ class TournamentManager {
   /// Vérifier si le joueur humain est éliminé
   bool isHumanEliminated(GameState gameState) {
     if (gameState.gameMode != GameMode.tournament) return false;
-
-    List<Player> ranking = gameState.getFinalRanking();
-    final ranksWithTies = gameState.getFinalRanksWithTies();
     Player human = gameState.players.firstWhere((p) => p.isHuman);
+    final keepIds = _getSurvivorIds(gameState);
+    return !keepIds.contains(human.id);
+  }
 
-    int humanRank = ranksWithTies[human.id] ??
-        (ranking.indexWhere((p) => p.id == human.id) + 1);
-    int lastRank = ranking.length;
-    if (ranksWithTies.isNotEmpty) {
-      lastRank = ranksWithTies.values.reduce(max);
-    }
-    return humanRank == lastRank;
+  /// Liste des joueurs éliminés à cette manche
+  Set<String> getEliminatedPlayerIds(GameState gameState) {
+    if (gameState.gameMode != GameMode.tournament) return {};
+    final keepIds = _getSurvivorIds(gameState);
+    return gameState.players
+        .where((p) => !keepIds.contains(p.id))
+        .map((p) => p.id)
+        .toSet();
   }
 
   /// Terminer le tournoi pour le joueur humain (simulation des manches restantes)
@@ -79,24 +86,21 @@ class TournamentManager {
 
     _finalRanking = [];
 
-    int humanFinalPosition = 5 - currentRound;
+    int humanFinalPosition = gameState.players.length;
 
     List<Player> survivors = [];
-    for (int i = 0; i < ranking.length - 1; i++) {
-      // Exclure l'humain des survivors car il est éliminé
-      if (!ranking[i].isHuman) {
-        survivors.add(ranking[i]);
-      }
+    for (int i = 0; i < ranking.length; i++) {
+      if (!ranking[i].isHuman) survivors.add(ranking[i]);
     }
 
     List<Player> currentPlayers = survivors;
     int simulatedRound = currentRound + 1;
 
-    while (currentPlayers.length > 1 && simulatedRound <= 3) {
+    while (currentPlayers.length > 1) {
       currentPlayers.shuffle();
+      int eliminatedPosition = currentPlayers.length;
       Player eliminated = currentPlayers.removeLast();
 
-      int eliminatedPosition = 5 - simulatedRound;
       _finalRanking!.add(TournamentResult(
         player: eliminated,
         finalPosition: eliminatedPosition,
@@ -139,35 +143,38 @@ class TournamentManager {
     }
   }
 
+  int getTotalRounds(GameState gameState) {
+    final initialCount =
+        _initialPlayers ?? (gameState.players.length + (gameState.tournamentRound - 1));
+    return max(1, initialCount - 1);
+  }
+
+  int _playersToKeep(int totalPlayers) => max(1, totalPlayers - 1);
+
+  Set<String> _getSurvivorIds(GameState gameState) {
+    final ranking = gameState.getFinalRanking();
+    final keepCount = _playersToKeep(ranking.length);
+    return ranking.take(keepCount).map((p) => p.id).toSet();
+  }
+
   /// Préparer les survivants pour la manche suivante
   List<Player> prepareSurvivorsForNextRound(GameState gameState) {
-    List<Player> ranking = gameState.getFinalRanking();
-    List<Player> survivors = [];
-    
-    // Adapter le nombre de joueurs gardés selon le nombre actuel
-    int playersToKeep;
-    if (ranking.length >= 6) {
-      playersToKeep = 4;
-    } else if (ranking.length >= 5) {
-      playersToKeep = 4;
-    } else if (ranking.length >= 4) {
-      playersToKeep = 3;
-    } else {
-      playersToKeep = ranking.length - 1;
-    }
+    final keepIds = _getSurvivorIds(gameState);
+    final survivors = gameState.players
+        .where((p) => keepIds.contains(p.id))
+        .toList();
 
-    for (int i = 0; i < playersToKeep; i++) {
-      Player p = ranking[i];
-      survivors.add(Player(
-        id: p.id,
-        name: p.name,
-        isHuman: p.isHuman,
-        botBehavior: p.botBehavior,
-        botSkillLevel: p.botSkillLevel,
-        position: i,
-      ));
-    }
-
-    return survivors;
+    return survivors
+        .map((p) => Player(
+              id: p.id,
+              name: p.name,
+              isHuman: p.isHuman,
+              botBehavior: p.botBehavior,
+              botSkillLevel: p.botSkillLevel,
+              aiParameters: p.aiParameters,
+              position: p.position,
+              isSpectator: p.isSpectator,
+            ))
+        .toList();
   }
 }

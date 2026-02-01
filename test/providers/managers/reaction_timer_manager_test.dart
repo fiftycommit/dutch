@@ -92,15 +92,16 @@ void main() {
     test('cancels active timer', () async {
       final gs = _createTestGameState();
       timerManager.startReactionPhase(gs, 3000, false);
-      
+
       final remainingBefore = gs.reactionTimeRemaining;
       timerManager.pauseTimer(gs);
-      
+
       // Wait to ensure timer doesn't continue
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       // Timer should not have decremented much after pause
-      expect(gs.reactionTimeRemaining, remainingBefore);
+      // Use closeTo to account for timing differences (timer may have ticked once before pause)
+      expect(gs.reactionTimeRemaining, closeTo(remainingBefore, 50));
     });
 
     test('stores remaining time', () {

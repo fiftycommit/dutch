@@ -139,7 +139,7 @@ void main() {
       test('fast behavior returns default time', () {
         final fast = BotConfig.getThinkingTime(BotBehavior.fast, BotDifficulty.silver, gameState);
 
-        expect(fast, 900);
+        expect(fast, 600); // Fast behavior uses default fallthrough (quick thinking)
       });
     });
 

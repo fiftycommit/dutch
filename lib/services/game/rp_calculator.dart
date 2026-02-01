@@ -75,7 +75,7 @@ class RPCalculator {
   /// [hasEmptyHand] : si le joueur a vidé sa main (toutes cartes défaussées)
   /// [isEliminated] : si le joueur est éliminé (Dutch raté en 1er)
   /// [isTournament] : si c'est une manche de tournoi (bonus/malus ajustés)
-  /// [tournamentRound] : numéro de la manche (1, 2 ou 3)
+  /// [tournamentRound] : numéro de la manche (1..N)
   /// [winStreak] : série actuelle de victoires (après la partie)
   static RPResult calculateRP({
     required int playerRank,
@@ -146,11 +146,16 @@ class RPCalculator {
     
     // Bonus tournoi selon la manche (plus on avance, plus c'est important)
     if (isTournament) {
+      final int totalRounds =
+          (totalPlayers + tournamentRound - 2).clamp(1, 99).toInt();
+      final int remainingRounds = totalRounds - tournamentRound;
       double tournamentMultiplier = 1.0;
-      if (tournamentRound == 2) {
-        tournamentMultiplier = 1.2; // Demi-finale
-      } else if (tournamentRound == 3) {
+      if (remainingRounds <= 0) {
         tournamentMultiplier = 1.5; // Finale
+      } else if (remainingRounds == 1) {
+        tournamentMultiplier = 1.2; // Demi-finale
+      } else if (remainingRounds == 2) {
+        tournamentMultiplier = 1.1; // Quart de finale
       }
       baseRP = (baseRP * tournamentMultiplier).round();
     }

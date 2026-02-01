@@ -7,6 +7,7 @@ import '../services/index.dart';
 class GameTrackingProvider {
   final BotLearningService _botLearningService;
   final PlayerLearningService _playerLearningService;
+  final BotTrainingService _botTrainingService;
   
   String? _currentGameId;
   int _humanActionCounter = 0;
@@ -15,7 +16,8 @@ class GameTrackingProvider {
     BotLearningService? botLearningService,
     PlayerLearningService? playerLearningService,
   })  : _botLearningService = botLearningService ?? BotLearningService(),
-        _playerLearningService = playerLearningService ?? PlayerLearningService();
+        _playerLearningService = playerLearningService ?? PlayerLearningService(),
+        _botTrainingService = BotTrainingService();
 
   /// Démarrer l'enregistrement d'une partie
   void startGameRecording({
@@ -224,6 +226,17 @@ class GameTrackingProvider {
         humanFinalScore: humanFinalScore,
         humanFinalHandSize: humanFinalHandSize,
         botFinalHandSize: player.hand.length,
+      );
+
+      final botKey = BotTrainingService.buildBotKey(
+        behavior: player.botBehavior,
+        skillLevel: player.botSkillLevel,
+      );
+      await _botTrainingService.updateWithResult(
+        botKey: botKey,
+        numberOfPlayers: players.length,
+        humanFinalScore: humanFinalScore,
+        botFinalScore: player.calculateScore(),
       );
     }
   }

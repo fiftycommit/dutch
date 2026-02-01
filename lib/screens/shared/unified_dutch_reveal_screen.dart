@@ -46,6 +46,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   final Map<String, ScrollController> _scrollControllers = {};
 
   String? winnerId;
+  String? eliminatedId;
   bool revealComplete = false;
 
   GameState get gameState => widget.config.gameState;
@@ -145,8 +146,15 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       finalWinnerId = winners.isNotEmpty ? winners.first : null;
     }
 
+    String? finalEliminatedId;
+    if (gameState.gameMode == GameMode.tournament) {
+      final ranking = gameState.getFinalRanking();
+      finalEliminatedId = ranking.isNotEmpty ? ranking.last.id : null;
+    }
+
     setState(() {
       winnerId = finalWinnerId;
+      eliminatedId = finalEliminatedId;
       revealComplete = true;
     });
 
@@ -231,6 +239,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   Widget _buildPlayerColumn(Player player, bool isCompact) {
     bool isWinner = winnerId == player.id;
     bool isDutchCaller = gameState.dutchCallerId == player.id;
+    bool isEliminated = revealComplete && eliminatedId == player.id;
     int score = currentScores[player.id] ?? 0;
 
     return Expanded(
@@ -240,9 +249,22 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         decoration: BoxDecoration(
           color: isWinner
               ? Colors.amber.withValues(alpha: 0.2)
-              : Colors.black12,
+              : (isEliminated
+                  ? Colors.red.withValues(alpha: 0.18)
+                  : Colors.black12),
           borderRadius: BorderRadius.circular(12),
-          border: isWinner ? Border.all(color: Colors.amber, width: 2) : null,
+          border: isWinner
+              ? Border.all(color: Colors.amber, width: 2)
+              : (isEliminated ? Border.all(color: Colors.redAccent, width: 2) : null),
+          boxShadow: isEliminated
+              ? [
+                  BoxShadow(
+                    color: Colors.red.withValues(alpha: 0.5),
+                    blurRadius: isCompact ? 8 : 12,
+                    spreadRadius: isCompact ? 1 : 2,
+                  )
+                ]
+              : null,
         ),
         child: Column(
           children: [

@@ -7,6 +7,7 @@ import '../../providers/game_provider.dart';
 import '../../services/game/rp_result_helper.dart';
 import '../shared/unified_results_screen.dart' as shared;
 import 'memorization_screen.dart';
+import '../../utils/tournament_labels.dart';
 
 /// Écran de résultats pour le mode solo
 /// Utilise la version unifiée avec configuration spécifique
@@ -26,9 +27,27 @@ class ResultsScreen extends StatelessWidget {
 
         final gameState = gameProvider.gameState!;
         final isTournament = gameState.gameMode == GameMode.tournament;
-        final isFinalRound = isTournament && gameState.tournamentRound >= 3;
+        final totalRounds = isTournament ? gameProvider.tournamentTotalRounds : 1;
+        final isFinalRound =
+            isTournament && gameState.tournamentRound >= totalRounds;
         final isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
         final isTournamentOver = isTournament && (isFinalRound || isHumanEliminated);
+        final stageLabel = isTournament
+            ? tournamentStageLabel(
+                gameState.tournamentRound,
+                totalRounds: totalRounds,
+              )
+            : null;
+
+        final eliminatedIds = <String>{};
+        if (isTournament) {
+          if (isFinalRound) {
+            final ranking = gameState.getFinalRanking();
+            eliminatedIds.addAll(ranking.skip(1).map((p) => p.id));
+          } else {
+            eliminatedIds.addAll(gameProvider.getTournamentEliminatedIds());
+          }
+        }
 
         // Déclencher la simulation du classement final si nécessaire
         if (isTournament && isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
@@ -46,11 +65,15 @@ class ResultsScreen extends StatelessWidget {
             gameState: gameState,
             localPlayerId: humanPlayer.id,
             title: isTournament
-                ? (isTournamentOver ? "FIN DU TOURNOI" : "MANCHE ${gameState.tournamentRound} TERMINÉE")
+                ? (isTournamentOver
+                    ? "FIN DU TOURNOI"
+                    : "${stageLabel!.toUpperCase()} TERMINÉE")
                 : "RÉSULTATS",
+            subtitle: isTournamentOver ? stageLabel : null,
             alertBanner: (isTournament && isHumanEliminated && gameProvider.tournamentFinalRanking != null)
-                ? _buildEliminatedBanner(gameProvider)
+                ? _buildEliminatedBanner(gameProvider, totalRounds)
                 : null,
+            eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
             buildActionButtons: (ctx) => [
               shared.ResultsActionButton(
                 label: (isTournament && !isTournamentOver) ? 'MANCHE SUIVANTE >>' : 'TERMINER',
@@ -102,10 +125,13 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEliminatedBanner(GameProvider gameProvider) {
+  Widget _buildEliminatedBanner(GameProvider gameProvider, int totalRounds) {
     final eliminatedRound = gameProvider.tournamentFinalRanking!
         .firstWhere((r) => r.player.isHuman)
         .eliminatedAtRound;
+    final stageLabel = eliminatedRound == null
+        ? null
+        : tournamentStageLabel(eliminatedRound, totalRounds: totalRounds);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -114,7 +140,9 @@ class ResultsScreen extends StatelessWidget {
         border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
       ),
       child: Text(
-        "Vous avez été éliminé à la manche $eliminatedRound",
+        stageLabel == null
+            ? "Vous avez été éliminé"
+            : "Vous avez été éliminé en $stageLabel",
         style: const TextStyle(
           color: Colors.redAccent,
           fontSize: 14,

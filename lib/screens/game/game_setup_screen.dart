@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/learning/player_learning_service.dart';
+import '../../services/learning/bot_training_service.dart';
+import '../../services/learning/ghost_clone_service.dart';
+import '../../services/game/bot/bot_config.dart';
 import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {
@@ -209,141 +213,20 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final settings = Provider.of<SettingsProvider>(context, listen: false);
     final navigator = Navigator.of(context);
 
-    BotSkillLevel skillLevel;
-    BotBehavior? sbmmBehavior;
-    BotSkillLevel? sbmmSkillLevel;
-
-    if (useSBMM) {
-      // SBMM solo: on utilise le profil joueur local (actions détaillées) pour matcher des bots similaires.
-      final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
-      final params = profile.learnedParameters;
-
-      double numParam(String key, double fallback) {
-        final v = params[key];
-        if (v is num) return v.toDouble();
-        return fallback;
-      }
-
-      final aggressiveness = numParam('aggressiveness', 0.5);
-      final caution = numParam('caution', 0.5);
-      final memoryAccuracy = numParam('memoryAccuracy', 0.7);
-      final riskTolerance = numParam('riskTolerance', 0.5);
-
-      // Skill level: principalement basé sur la qualité (mémoire / réaction / précision)
-      if (memoryAccuracy >= 0.86) {
-        sbmmSkillLevel = BotSkillLevel.platinum;
-      } else if (memoryAccuracy >= 0.76) {
-        sbmmSkillLevel = BotSkillLevel.gold;
-      } else if (memoryAccuracy >= 0.60) {
-        sbmmSkillLevel = BotSkillLevel.silver;
-      } else {
-        sbmmSkillLevel = BotSkillLevel.bronze;
-      }
-
-      // Behavior: basé sur le style (agressif / prudent / équilibré)
-      if (aggressiveness >= 0.65 || riskTolerance >= 0.65) {
-        sbmmBehavior = BotBehavior.aggressive;
-      } else if (caution >= 0.65 && riskTolerance <= 0.45) {
-        sbmmBehavior = BotBehavior.fast;
-      } else {
-        sbmmBehavior = BotBehavior.balanced;
-      }
-
-      skillLevel = sbmmSkillLevel;
-    } else {
-      skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
-    }
+    final int numberOfBots = selectedNumberOfPlayers - 1;
 
     List<Player> players = [
       Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
     ];
 
-    // Nombre de bots à créer (nombre de joueurs - 1 pour le joueur humain)
-    final int numberOfBots = selectedNumberOfPlayers - 1;
-    
-    // Comportements des bots
-    final botBehaviors = sbmmBehavior != null
-        ? [sbmmBehavior, BotBehavior.balanced, BotBehavior.aggressive]
-        : [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
-    
-    // Si mode mix, créer un mélange de difficultés
-    final bool isMixMode = selectedBotDifficulty == Difficulty.mix;
-    final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
-    
-    // Mélanger les comportements et niveaux pour plus de variété
-    final random = DateTime.now().millisecondsSinceEpoch;
-    final shuffledBehaviors = List<BotBehavior>.from(botBehaviors);
-    final shuffledSkills = List<BotSkillLevel>.from(mixSkillLevels);
-    
-    for (int i = 0; i < numberOfBots; i++) {
-      // Ajouter un peu d'aléatoire dans le choix du comportement
-      final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
-      final behavior = shuffledBehaviors[behaviorIndex];
-      
-      // En mode mix, varier les niveaux de manière plus aléatoire
-      final botSkill = isMixMode 
-          ? shuffledSkills[(i + (random >> (i + 3))) % mixSkillLevels.length]
-          : skillLevel;
-
-      Map<String, double>? aiParameters;
-      if (useSBMM) {
-        final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
-        final base = profile.learnedParameters;
-
-        double baseNum(String key, double fallback) {
-          final v = base[key];
-          if (v is num) return v.toDouble();
-          return fallback;
-        }
-
-        double clamp01(double v) {
-          if (v < 0) return 0;
-          if (v > 1) return 1;
-          return v;
-        }
-
-        // Bruit léger autour du profil pour créer une équipe variée mais similaire
-        final noise = ((random >> (i + 2)) % 100) / 1000.0; // 0.0..0.099
-        final sign = ((random >> (i + 5)) % 2) == 0 ? -1.0 : 1.0;
-        final delta = sign * noise;
-
-        // 1er bot = un peu au-dessus pour challenge
-        final boost = i == 0 ? 0.10 : 0.0;
-
-        double clampMs(double v) => v.clamp(500.0, 10000.0);
-
-        double strategyCode(String? value) {
-          final v = value?.toLowerCase().trim();
-          if (v == 'leader') return 0.0;
-          if (v == 'weak') return 1.0;
-          return 2.0; // random
-        }
-
-        aiParameters = {
-          'aggressiveness': clamp01(baseNum('aggressiveness', 0.5) + delta + boost * 0.2),
-          'caution': clamp01(baseNum('caution', 0.5) - delta),
-          'dutchThreshold': (baseNum('dutchThreshold', 15.0) - boost * 2.0).clamp(5.0, 30.0),
-          'powerUsageRate': clamp01(baseNum('powerUsageRate', 0.5) + delta + boost * 0.1),
-          'powerDefensiveRate': clamp01(baseNum('powerDefensiveRate', 0.5) + delta * 0.4),
-          'powerOffensiveRate': clamp01(baseNum('powerOffensiveRate', 0.5) + delta * 0.4),
-          'memoryAccuracy': clamp01(baseNum('memoryAccuracy', 0.7) + boost + delta),
-          'memoryRetention': clamp01(baseNum('memoryRetention', 0.7) + delta),
-          'riskTolerance': clamp01(baseNum('riskTolerance', 0.5) + delta + boost * 0.15),
-          'adaptability': clamp01(baseNum('adaptability', 0.5) + delta * 0.5),
-          'decisionSpeed': clampMs(baseNum('decisionSpeed', 2000.0) * (1.0 - delta * 0.5)),
-          'targetingStrategy': strategyCode(base['targetingStrategy']?.toString()),
-        };
-      }
-      
-      players.add(Player(
-        id: 'bot_$i',
-        name: _getBotName(behavior, botSkill),
-        isHuman: false,
-        botBehavior: behavior,
-        botSkillLevel: botSkill,
-        aiParameters: aiParameters,
-        position: i + 1
-      ));
+    if (useSBMM) {
+      // === NOUVEAU SYSTÈME DE MATCHMAKING ===
+      // Utilise le MMR du joueur pour calibrer les bots
+      // Le rang (Bronze/Argent/Or/Platine) est purement cosmétique
+      players.addAll(await _createSBMMBots(numberOfBots));
+    } else {
+      // Mode manuel : difficulté fixe choisie par l'utilisateur
+      players.addAll(_createManualBots(numberOfBots));
     }
 
     if (!mounted) return;
@@ -360,6 +243,191 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     if (!mounted) return;
     navigator.pushReplacement(
         MaterialPageRoute(builder: (context) => const MemorizationScreen()));
+  }
+
+  /// Crée les bots en mode SBMM (matchmaking adaptatif basé sur le MMR)
+  Future<List<Player>> _createSBMMBots(int numberOfBots) async {
+    final botTrainingService = BotTrainingService();
+    final ghostCloneService = GhostCloneService();
+
+    // Récupérer le profil joueur (une seule fois)
+    final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
+
+    // Infos pour le ghost clone
+    final prefs = await SharedPreferences.getInstance();
+    final ghostPlayerId = prefs.getString('multiplayer_client_id') ?? 'slot_${widget.saveSlot}';
+    final ghostPlayerName = profile.profileId;
+
+    // Générer les paramètres des bots via le nouveau MatchmakingService
+    // Ceci prend en compte : MMR, progression vers le palier, distribution auto
+    final botParamsList = BotConfig.generateMatchmakingBotParams(
+      playerProfile: profile,
+      botCount: numberOfBots,
+      forceChallenge: widget.isTournament,
+    );
+
+    // Déterminer les comportements variés pour chaque bot
+    final behaviors = _generateBotBehaviors(numberOfBots, profile.learnedParameters);
+
+    // Ghost profile (chargé une seule fois si nécessaire)
+    GhostProfile? ghostProfile;
+
+    final players = <Player>[];
+
+    for (int i = 0; i < numberOfBots; i++) {
+      final behavior = behaviors[i];
+      final baseParams = botParamsList[i];
+
+      // Récupérer le training state pour ce type de bot
+      final botKey = BotTrainingService.buildBotKey(
+        behavior: behavior,
+        skillLevel: _mmrToSkillLevel(profile.mmr),
+      );
+      final trainingState = await botTrainingService.getStateForBot(
+        botKey,
+        consumeTrainingGame: true,
+      );
+
+      // Charger le ghost profile si nécessaire (une seule fois)
+      if (trainingState.ghostInfluence > 0 && ghostProfile == null) {
+        ghostProfile = await ghostCloneService.getGhostProfile(
+          slotId: widget.saveSlot,
+          playerId: ghostPlayerId,
+          playerName: ghostPlayerName,
+        );
+      }
+
+      // Appliquer le ghost blending sur les paramètres de base
+      final aiParameters = _applyGhostBlending(
+        baseParams: baseParams,
+        ghostProfile: ghostProfile,
+        trainingState: trainingState,
+      );
+
+      players.add(Player(
+        id: 'bot_$i',
+        name: _getBotName(behavior, _mmrToSkillLevel(profile.mmr)),
+        isHuman: false,
+        botBehavior: behavior,
+        botSkillLevel: _mmrToSkillLevel(profile.mmr),
+        aiParameters: aiParameters,
+        position: i + 1,
+      ));
+    }
+
+    return players;
+  }
+
+  /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
+  List<Player> _createManualBots(int numberOfBots) {
+    final skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
+    final isMixMode = selectedBotDifficulty == Difficulty.mix;
+    final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
+    final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
+
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final players = <Player>[];
+
+    for (int i = 0; i < numberOfBots; i++) {
+      final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
+      final behavior = botBehaviors[behaviorIndex];
+
+      final botSkill = isMixMode
+          ? mixSkillLevels[(i + (random >> (i + 3))) % mixSkillLevels.length]
+          : skillLevel;
+
+      players.add(Player(
+        id: 'bot_$i',
+        name: _getBotName(behavior, botSkill),
+        isHuman: false,
+        botBehavior: behavior,
+        botSkillLevel: botSkill,
+        position: i + 1,
+      ));
+    }
+
+    return players;
+  }
+
+  /// Génère des comportements variés pour les bots basés sur le style du joueur
+  List<BotBehavior> _generateBotBehaviors(int count, Map<String, dynamic> playerParams) {
+    double numParam(String key, double fallback) {
+      final v = playerParams[key];
+      if (v is num) return v.toDouble();
+      return fallback;
+    }
+
+    final aggressiveness = numParam('aggressiveness', 0.5);
+    final caution = numParam('caution', 0.5);
+    final riskTolerance = numParam('riskTolerance', 0.5);
+
+    // Déterminer le style dominant du joueur
+    BotBehavior primaryBehavior;
+    if (aggressiveness >= 0.65 || riskTolerance >= 0.65) {
+      primaryBehavior = BotBehavior.aggressive;
+    } else if (caution >= 0.65 && riskTolerance <= 0.45) {
+      primaryBehavior = BotBehavior.fast;
+    } else {
+      primaryBehavior = BotBehavior.balanced;
+    }
+
+    // Créer une distribution variée autour du style du joueur
+    final behaviors = <BotBehavior>[];
+    final allBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
+
+    for (int i = 0; i < count; i++) {
+      if (i == 0) {
+        // Premier bot : même style que le joueur
+        behaviors.add(primaryBehavior);
+      } else {
+        // Autres bots : varier les styles
+        behaviors.add(allBehaviors[i % allBehaviors.length]);
+      }
+    }
+
+    return behaviors;
+  }
+
+  /// Applique le ghost blending sur les paramètres de base
+  Map<String, double> _applyGhostBlending({
+    required Map<String, double> baseParams,
+    GhostProfile? ghostProfile,
+    required BotTrainingState trainingState,
+  }) {
+    final ghostParams = ghostProfile?.params ?? const <String, double>{};
+    final ghostInfluence = trainingState.ghostInfluence;
+
+    double blend(String key, double baseValue) {
+      final ghostValue = ghostParams[key];
+      if (ghostValue == null || ghostInfluence <= 0) return baseValue;
+      return baseValue + (ghostValue - baseValue) * ghostInfluence;
+    }
+
+    // Copier les paramètres de base et appliquer le blending
+    final result = Map<String, double>.from(baseParams);
+
+    // Appliquer le ghost blending sur les paramètres clés
+    result['aggressiveness'] = blend('aggressiveness', result['aggressiveness'] ?? 0.5);
+    result['caution'] = blend('caution', result['caution'] ?? 0.5);
+    result['riskTolerance'] = blend('riskTolerance', result['riskTolerance'] ?? 0.5);
+    result['powerUsageRate'] = blend('powerUsageRate', result['powerUsageRate'] ?? 0.5);
+    result['decisionSpeed'] = blend('decisionSpeed', result['decisionSpeed'] ?? 2000.0).clamp(500.0, 10000.0);
+    result['dutchThreshold'] = blend('dutchThreshold', result['dutchThreshold'] ?? 15.0).clamp(5.0, 30.0);
+
+    // Ajouter les paramètres de training
+    result['ghostInfluence'] = ghostInfluence;
+    result['ghostDutchThreshold'] = ghostParams['dutchThreshold'] ?? result['dutchThreshold']!;
+    result['rankPenalty'] = trainingState.rankPenalty;
+
+    return result;
+  }
+
+  /// Convertit un MMR en BotSkillLevel (pour affichage/nom uniquement)
+  BotSkillLevel _mmrToSkillLevel(int mmr) {
+    if (mmr >= 900) return BotSkillLevel.platinum;
+    if (mmr >= 600) return BotSkillLevel.gold;
+    if (mmr >= 300) return BotSkillLevel.silver;
+    return BotSkillLevel.bronze;
   }
 
 

@@ -28,8 +28,9 @@ void main() {
         expect(gs.players.length, 3);
         expect(gs.deck.isNotEmpty, isTrue);
 
-        // 2. Passer en phase playing
+        // 2. Passer en phase playing avec un joueur de départ connu
         gs.phase = GamePhase.playing;
+        gs.currentPlayerIndex = 0; // Fixer le joueur initial pour un test déterministe
 
         // 3. DRAW: Piocher une carte
         GameLogic.drawCard(gs);
