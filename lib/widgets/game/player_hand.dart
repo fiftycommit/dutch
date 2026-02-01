@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -28,8 +29,11 @@ class PlayerHandWidget extends StatefulWidget {
   final bool isActive;
   final Function(int)? onCardTap;
   final List<int>? selectedIndices;
+  final List<int>? hiddenIndices;
+  final List<String>? hiddenCardIds;
   final CardSize cardSize;
   final bool overlapCards;
+  final bool fitToWidth;
   final SvgBuilder? svgBuilder;
 
   const PlayerHandWidget({
@@ -39,8 +43,11 @@ class PlayerHandWidget extends StatefulWidget {
     required this.isActive,
     this.onCardTap,
     this.selectedIndices,
+    this.hiddenIndices,
+    this.hiddenCardIds,
     this.cardSize = CardSize.medium,
     this.overlapCards = true,
+    this.fitToWidth = false,
     this.svgBuilder,
   });
 
@@ -107,17 +114,50 @@ class PlayerHandWidget extends StatefulWidget {
 
 class _PlayerHandWidgetState extends State<PlayerHandWidget> {
   late final ScrollController _scrollController;
+  int _lastHandLength = 0;
+  int? _penaltyHighlightIndex;
+  Timer? _penaltyTimer;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _lastHandLength = widget.player.hand.length;
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _penaltyTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayerHandWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.player.id != widget.player.id) {
+      _penaltyTimer?.cancel();
+      _penaltyHighlightIndex = null;
+      _lastHandLength = widget.player.hand.length;
+      return;
+    }
+
+    if (widget.player.hand.length > _lastHandLength) {
+      _penaltyTimer?.cancel();
+      setState(() {
+        _penaltyHighlightIndex = widget.player.hand.length - 1;
+      });
+      _penaltyTimer = Timer(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          setState(() {
+            _penaltyHighlightIndex = null;
+          });
+        }
+      });
+    }
+
+    _lastHandLength = widget.player.hand.length;
   }
 
   @override
@@ -139,16 +179,27 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
           final maxWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : metrics.totalWidth;
-          final needsScroll = metrics.totalWidth > maxWidth + 0.5;
+          double overlap = metrics.overlap;
+          double totalWidth = metrics.totalWidth;
+
+          if (widget.fitToWidth && count > 1 && totalWidth > maxWidth + 0.5) {
+            final desiredOverlap =
+                (maxWidth - metrics.cardWidth) / (count - 1);
+            final minOverlap = metrics.cardWidth * 0.55;
+            overlap = desiredOverlap.clamp(minOverlap, overlap);
+            totalWidth = metrics.cardWidth + (count - 1) * overlap;
+          }
+
+          final needsScroll = totalWidth > maxWidth + 0.5;
           final content = SizedBox(
-            width: metrics.totalWidth,
+            width: totalWidth,
             height: metrics.cardHeight,
             child: Stack(
               clipBehavior: Clip.none,
               children: List.generate(
                 count,
                 (index) => Positioned(
-                  left: index * metrics.overlap,
+                  left: index * overlap,
                   child: _buildCard(context, index),
                 ),
               ),
@@ -180,15 +231,13 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
 
   Widget _buildCard(BuildContext context, int index) {
     final isSelected = widget.selectedIndices?.contains(index) ?? false;
+    final isPenaltyHighlight = _penaltyHighlightIndex == index;
+    final cardId = widget.player.hand[index].id;
+    final isHidden = (widget.hiddenIndices?.contains(index) ?? false) ||
+        (widget.hiddenCardIds?.contains(cardId) ?? false);
     const bool shouldReveal = false;
 
-    return GestureDetector(
-      onTap: () {
-        if (widget.onCardTap != null && widget.isActive) {
-          widget.onCardTap!(index);
-        }
-      },
-      child: TweenAnimationBuilder<double>(
+    final cardBody = TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
         duration: const Duration(milliseconds: 500),
         builder: (context, shakeValue, child) {
@@ -198,11 +247,16 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
 
           return Transform.translate(
             offset: Offset(offset, 0),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    isSelected ? Border.all(color: Colors.red, width: 3) : null,
+                border: isSelected
+                    ? Border.all(color: Colors.red, width: 3)
+                    : (isPenaltyHighlight
+                        ? Border.all(color: Colors.redAccent, width: 2)
+                        : null),
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
@@ -211,7 +265,15 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
                           spreadRadius: 2,
                         )
                       ]
-                    : null,
+                    : (isPenaltyHighlight
+                        ? [
+                            BoxShadow(
+                              color: Colors.red.withValues(alpha: 0.45),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null),
               ),
               child: CardWidget(
                 card: null,
@@ -222,7 +284,25 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
             ),
           );
         },
-      ),
+      );
+
+    final tappable = GestureDetector(
+      onTap: () {
+        if (widget.onCardTap != null && widget.isActive && !isHidden) {
+          widget.onCardTap!(index);
+        }
+      },
+      child: cardBody,
+    );
+
+    if (!isHidden) return tappable;
+
+    return Visibility(
+      visible: false,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: IgnorePointer(child: tappable),
     );
   }
 }

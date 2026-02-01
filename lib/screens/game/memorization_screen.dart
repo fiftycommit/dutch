@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/game_state.dart';
 import '../../providers/game_provider.dart';
@@ -55,6 +56,7 @@ class MemorizationScreen extends StatelessWidget {
           });
         },
         buildGameScreen: (context) => const GameScreen(),
+        navigateToGame: (context) => context.go('/solo/game'),
         noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
         noPlayerMessage: "Les bots continuent...",
       ),

@@ -17,6 +17,9 @@ class MemorizationConfig {
   
   /// Widget de l'écran de jeu vers lequel naviguer
   final Widget Function(BuildContext context) buildGameScreen;
+
+  /// Navigation vers l'écran de jeu (optionnel)
+  final void Function(BuildContext context)? navigateToGame;
   
   /// Durée du timer en secondes (null = pas de timer)
   final int? countdownSeconds;
@@ -43,6 +46,7 @@ class MemorizationConfig {
     required this.localPlayer,
     required this.onMemorizationComplete,
     required this.buildGameScreen,
+    this.navigateToGame,
     this.countdownSeconds,
     this.showWaitingScreen = false,
     this.gameStartStream,
@@ -94,10 +98,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     if (config.gameStartStream != null) {
       _gameStartSubscription = config.gameStartStream!.listen((_) {
         if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: config.buildGameScreen),
-          );
+          _navigateToGame();
         }
       });
     }
@@ -177,11 +178,19 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       config.onMarkReady?.call();
       // Navigation will happen via gameStartStream
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: config.buildGameScreen),
-      );
+      _navigateToGame();
     }
+  }
+
+  void _navigateToGame() {
+    if (config.navigateToGame != null) {
+      config.navigateToGame!(context);
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: config.buildGameScreen),
+    );
   }
 
   Future<void> _showRevealedCardsDialog() async {

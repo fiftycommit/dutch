@@ -10,6 +10,7 @@ class AnimatedCardTransition extends StatefulWidget {
   final bool isRevealed;
   final VoidCallback? onComplete;
   final Duration duration;
+  final Curve curve;
 
   const AnimatedCardTransition({
     super.key,
@@ -19,7 +20,8 @@ class AnimatedCardTransition extends StatefulWidget {
     required this.size,
     this.isRevealed = false,
     this.onComplete,
-    this.duration = const Duration(milliseconds: 600),
+    this.duration = const Duration(milliseconds: 420),
+    this.curve = Curves.easeOutCubic,
   });
 
   @override
@@ -46,26 +48,26 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
       end: widget.endPosition,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeInOutCubic,
+      curve: widget.curve,
     ));
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.2),
-        weight: 30,
+        tween: Tween<double>(begin: 1.0, end: 1.08),
+        weight: 20,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.2, end: 1.0),
-        weight: 70,
+        tween: Tween<double>(begin: 1.08, end: 1.0),
+        weight: 80,
       ),
     ]).animate(_controller);
 
     _rotationAnimation = Tween<double>(
       begin: 0,
-      end: 0.1,
+      end: 0.06,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeInOut,
+      curve: Curves.easeOutCubic,
     ));
 
     _controller.forward().then((_) {
@@ -89,14 +91,16 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
         return Positioned(
           left: _positionAnimation.value.dx,
           top: _positionAnimation.value.dy,
-          child: Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Transform.rotate(
-              angle: _rotationAnimation.value,
-              child: CardWidget(
-                card: widget.card,
-                size: widget.size,
-                isRevealed: widget.isRevealed,
+          child: IgnorePointer(
+            child: Transform.scale(
+              scale: _scaleAnimation.value,
+              child: Transform.rotate(
+                angle: _rotationAnimation.value,
+                child: CardWidget(
+                  card: widget.card,
+                  size: widget.size,
+                  isRevealed: widget.isRevealed,
+                ),
               ),
             ),
           ),

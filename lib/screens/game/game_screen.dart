@@ -1,14 +1,13 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/providers/game_provider.dart';
-import 'package:dutch_game/screens/game/results_screen.dart';
+import 'package:dutch_game/providers/settings_provider.dart';
 import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
-import 'package:dutch_game/screens/menu/main_menu_screen.dart';
-import 'package:dutch_game/screens/game/dutch_reveal_screen.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
@@ -22,6 +21,8 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen>, GameScreenMixin<GameScreen> {
+  String? _specialPowerReadyId;
+  String? _specialPowerDialogShownId;
 
   @override
   void initState() {
@@ -45,10 +46,10 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
 
   void _tryNavigateToEnd(GameState? gameState) {
     if (gameState == null) return;
-    final destination = gameState.dutchCallerId != null
-        ? const DutchRevealScreen()
-        : const ResultsScreen();
-    maybeNavigateToEnd(gameState: gameState, destination: destination);
+    final routeLocation = gameState.dutchCallerId != null
+        ? '/solo/dutch-reveal'
+        : '/solo/results';
+    maybeNavigateToEnd(gameState: gameState, routeLocation: routeLocation);
   }
 
   void _checkAndStartBotTurn() {
@@ -113,6 +114,13 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                   controller: gameProvider,
                   supportsTakeFromDiscard: false, // Solo mode
                 ),
+                onSpecialPowerAnimationComplete: (cardId) {
+                  if (!mounted) return;
+                  setState(() {
+                    _specialPowerReadyId = cardId;
+                    _specialPowerDialogShownId = null;
+                  });
+                },
                 multiplayerConfig: MultiplayerConfig(
                   reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
                 ),
@@ -185,7 +193,11 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
   }
 
   Widget _buildSpecialPowerOverlay(GameProvider gp, GameState gs) {
-    if (gs.specialCardToActivate == null) return const SizedBox();
+    if (gs.specialCardToActivate == null) {
+      _specialPowerReadyId = null;
+      _specialPowerDialogShownId = null;
+      return const SizedBox();
+    }
     if (!gs.currentPlayer.isHuman) return const SizedBox();
 
     Player? playerWithPower;
@@ -202,12 +214,36 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
 
     if (!playerWithPower.isHuman) return const SizedBox();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ModalRoute.of(context)?.isCurrent == true &&
-          gs.isWaitingForSpecialPower) {
-        PlayingCard trigger = gs.specialCardToActivate!;
-        String val = trigger.value;
+    final animationsEnabled =
+        context.watch<SettingsProvider>().animationsEnabled;
 
+    final trigger = gs.specialCardToActivate!;
+    final triggerId = trigger.id;
+
+    if (!gs.isWaitingForSpecialPower) {
+      _resetSpecialPowerState();
+      return const SizedBox();
+    }
+
+    final ready = !animationsEnabled || _specialPowerReadyId == triggerId;
+    if (!ready) {
+      return const AbsorbPointer(
+        child: SizedBox.expand(),
+      );
+    }
+
+    if (_specialPowerDialogShownId != triggerId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final current = gp.gameState;
+        if (current == null ||
+            !current.isWaitingForSpecialPower ||
+            current.specialCardToActivate?.id != triggerId) {
+          return;
+        }
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        _specialPowerDialogShownId = triggerId;
+        final val = trigger.value;
         final config = PowerDialogConfig.solo(context);
         if (val == '7') {
           UnifiedPowerDialogs.showPower7Dialog(context, trigger, config);
@@ -220,10 +256,15 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
         } else {
           gp.skipSpecialPower();
         }
-      }
-    });
+      });
+    }
 
     return Container(color: Colors.black54);
+  }
+
+  void _resetSpecialPowerState() {
+    _specialPowerReadyId = null;
+    _specialPowerDialogShownId = null;
   }
 
   Widget _buildDutchNotification(GameState gs) {
@@ -286,10 +327,8 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                 final shouldQuit = await _showQuitConfirmation();
                 if (shouldQuit == true && mounted) {
                   if (!context.mounted) return;
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-                    (route) => false,
-                  );
+                  gp.quitGame();
+                  context.go('/');
                 } else {
                   gp.pauseGame();
                 }

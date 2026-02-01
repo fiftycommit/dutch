@@ -288,6 +288,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     int? turnDuration,
     bool isAfk = false,
     bool? isConnected,
+    Key? handKey,
+    List<int>? hiddenIndices,
+    List<String>? hiddenCardIds,
   }) {
     Widget badge = PlayerAvatar(
       player: player,
@@ -340,13 +343,17 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
         : badge;
 
     final handWidget = PlayerHandWidget(
+      key: handKey,
       player: player,
       isHuman: isHuman,
       isActive: canInteract,
       onCardTap: onCardTap,
       selectedIndices: selectedIndices,
+      hiddenIndices: hiddenIndices,
+      hiddenCardIds: hiddenCardIds,
       cardSize: cardSize,
       overlapCards: !isHuman,
+      fitToWidth: isHuman,
     );
 
     return Column(
@@ -383,6 +390,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required VoidCallback onDiscard,
     required VoidCallback onDutch,
     double? constrainedWidth,
+    Key? handKey,
+    List<int>? hiddenIndices,
+    List<String>? hiddenCardIds,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
@@ -434,6 +444,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       handWidth: handMaxWidth,
       selectedIndices: selectedIndices,
       onCardTap: onCardTap,
+      handKey: handKey,
+      hiddenIndices: hiddenIndices,
+      hiddenCardIds: hiddenCardIds,
     );
     final fittedPlayerBlock = SizedBox(
       height: maxHeight,
@@ -648,6 +661,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     int? turnDuration,
     bool? isConnected,
     bool isAfk = false,
+    Key? handKey,
+    List<int>? hiddenIndices,
+    List<String>? hiddenCardIds,
   }) {
     final cardMetrics = cardVisualSize(context, cardSize);
     final overlap =
@@ -672,6 +688,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       turnDuration: turnDuration,
       isConnected: isConnected,
       isAfk: isAfk,
+      handKey: handKey,
+      hiddenIndices: hiddenIndices,
+      hiddenCardIds: hiddenCardIds,
     );
   }
 }

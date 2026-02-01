@@ -6,7 +6,6 @@ import '../../models/player.dart';
 import '../../providers/game_provider.dart';
 import '../../services/game/rp_result_helper.dart';
 import '../shared/unified_results_screen.dart' as shared;
-import 'memorization_screen.dart';
 import '../../utils/tournament_labels.dart';
 
 /// Écran de résultats pour le mode solo
@@ -81,9 +80,7 @@ class ResultsScreen extends StatelessWidget {
                 onPressed: () {
                   if (isTournament && !isTournamentOver) {
                     gameProvider.startNextTournamentRound();
-                    Navigator.of(ctx).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const MemorizationScreen()),
-                    );
+                    ctx.go('/solo/memorization');
                   } else {
                     ctx.go('/');
                   }

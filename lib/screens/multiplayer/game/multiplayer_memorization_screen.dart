@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
 import '../../shared/unified_memorization_screen.dart' as shared;
@@ -40,6 +41,7 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
           // Le serveur gère tout
         },
         buildGameScreen: (context) => const MultiplayerGameScreen(),
+        navigateToGame: (context) => context.go('/multiplayer/game'),
         countdownSeconds: 15,
         showWaitingScreen: true,
         gameStartStream: gameStartStream,

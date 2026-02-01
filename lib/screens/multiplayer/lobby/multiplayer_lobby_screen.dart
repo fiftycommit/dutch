@@ -9,7 +9,6 @@ import '../../../../../models/game_state.dart';
 import '../../../../../models/game_settings.dart';
 import '../../../widgets/dialogs/connection_error_dialog.dart';
 
-import '../game/multiplayer_memorization_screen.dart';
 
 class MultiplayerLobbyScreen extends StatefulWidget {
   const MultiplayerLobbyScreen({super.key});
@@ -117,12 +116,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             if (!mounted) return;
             // Only push if we are the current route to avoid multiple pushes
             if (ModalRoute.of(context)?.isCurrent == true) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MultiplayerMemorizationScreen(),
-                ),
-              );
+              context.go('/multiplayer/memorization');
             }
           });
         }

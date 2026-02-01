@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/game_provider.dart';
 import '../shared/unified_dutch_reveal_screen.dart' as shared;
@@ -24,6 +25,7 @@ class DutchRevealScreen extends StatelessWidget {
       config: shared.DutchRevealConfig(
         gameState: gameProvider.gameState!,
         buildResultsScreen: (context) => const ResultsScreen(),
+        navigateToResults: (context) => context.go('/solo/results'),
         orderPlayers: shared.orderPlayersForSolo,
       ),
     );

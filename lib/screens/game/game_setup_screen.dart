@@ -11,7 +11,6 @@ import '../../services/learning/player_learning_service.dart';
 import '../../services/learning/bot_training_service.dart';
 import '../../services/learning/ghost_clone_service.dart';
 import '../../services/game/bot/bot_config.dart';
-import 'memorization_screen.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isTournament;
@@ -211,8 +210,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final settings = Provider.of<SettingsProvider>(context, listen: false);
-    final navigator = Navigator.of(context);
-
     final int numberOfBots = selectedNumberOfPlayers - 1;
 
     List<Player> players = [
@@ -241,8 +238,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     );
 
     if (!mounted) return;
-    navigator.pushReplacement(
-        MaterialPageRoute(builder: (context) => const MemorizationScreen()));
+    context.go('/solo/memorization');
   }
 
   /// Crée les bots en mode SBMM (matchmaking adaptatif basé sur le MMR)

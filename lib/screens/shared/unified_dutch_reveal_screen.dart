@@ -9,14 +9,18 @@ import '../../widgets/game/card_widget.dart';
 class DutchRevealConfig {
   final GameState gameState;
   final Widget Function(BuildContext context) buildResultsScreen;
+  final void Function(BuildContext context)? navigateToResults;
   final Widget? Function(BuildContext context)? buildLobbyRedirect;
+  final void Function(BuildContext context)? navigateToLobbyRedirect;
   final bool Function()? shouldRedirectToLobby;
   final List<Player> Function(List<Player>)? orderPlayers;
 
   const DutchRevealConfig({
     required this.gameState,
     required this.buildResultsScreen,
+    this.navigateToResults,
     this.buildLobbyRedirect,
+    this.navigateToLobbyRedirect,
     this.shouldRedirectToLobby,
     this.orderPlayers,
   });
@@ -160,6 +164,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
     await Future.delayed(const Duration(milliseconds: 2000));
     if (mounted) {
+      if (widget.config.navigateToResults != null) {
+        widget.config.navigateToResults!(context);
+        return;
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: widget.config.buildResultsScreen),
@@ -181,6 +189,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     if (widget.config.shouldRedirectToLobby?.call() == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          if (widget.config.navigateToLobbyRedirect != null) {
+            widget.config.navigateToLobbyRedirect!(context);
+            return;
+          }
           final lobbyScreen = widget.config.buildLobbyRedirect?.call(context);
           if (lobbyScreen != null) {
             Navigator.pushReplacement(

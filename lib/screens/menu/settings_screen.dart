@@ -120,6 +120,12 @@ class SettingsScreen extends StatelessWidget {
               settings.hapticEnabled,
               (val) => settings.toggleHaptic(val),
             ),
+            _buildSwitchTile(
+              "Animations",
+              "Vol des cartes et transitions",
+              settings.animationsEnabled,
+              (val) => settings.toggleAnimations(val),
+            ),
             const SizedBox(height: 10),
             _buildSwitchTile(
               "SBMM (Adaptatif)",

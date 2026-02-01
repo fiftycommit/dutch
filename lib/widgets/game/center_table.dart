@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/game_state.dart';
+import '../../models/playing_card.dart';
 import '../../services/ui/haptic_service.dart';
 import 'card_widget.dart';
 import 'svg_builder_provider.dart';
@@ -15,6 +16,10 @@ class CenterTable extends StatefulWidget {
   final int reactionTimeTotalMs;
   final bool enableHaptics;
   final SvgBuilder? svgBuilder;
+  final GlobalKey? deckKey;
+  final GlobalKey? discardKey;
+  final PlayingCard? discardCardOverride;
+  final GlobalKey? drawnCardKey;
 
   const CenterTable({
     super.key,
@@ -28,6 +33,10 @@ class CenterTable extends StatefulWidget {
     this.reactionTimeTotalMs = 3000,
     this.enableHaptics = false,
     this.svgBuilder,
+    this.deckKey,
+    this.discardKey,
+    this.discardCardOverride,
+    this.drawnCardKey,
   });
 
   @override
@@ -227,11 +236,14 @@ class _CenterTableState extends State<CenterTable> {
             ],
           ),
           SizedBox(height: widget.isCompactMode ? 8 : 12),
-          CardWidget(
-            card: gs.drawnCard,
-            size: cardSize,
-            isRevealed: true,
-            svgBuilder: widget.svgBuilder,
+          Container(
+            key: widget.drawnCardKey,
+            child: CardWidget(
+              card: gs.drawnCard,
+              size: cardSize,
+              isRevealed: true,
+              svgBuilder: widget.svgBuilder,
+            ),
           ),
           SizedBox(height: widget.isCompactMode ? 8 : 12),
           Container(
@@ -292,13 +304,21 @@ class _CenterTableState extends State<CenterTable> {
     final deckWidget = canDraw
         ? GestureDetector(onTap: widget.onDrawCard, child: deckCard)
         : deckCard;
-    final discardCard =
-        CardWidget(card: gs.topDiscardCard, size: cardSize, isRevealed: true, svgBuilder: widget.svgBuilder);
+    final deckWidgetWithKey =
+        Container(key: widget.deckKey, child: deckWidget);
+    final discardCard = CardWidget(
+      card: widget.discardCardOverride ?? gs.topDiscardCard,
+      size: cardSize,
+      isRevealed: true,
+      svgBuilder: widget.svgBuilder,
+    );
     final discardWidget = canTakeDiscard
         ? GestureDetector(onTap: widget.onTakeFromDiscard, child: discardCard)
         : (widget.onShowDiscard != null
             ? GestureDetector(onTap: widget.onShowDiscard, child: discardCard)
             : discardCard);
+    final discardWidgetWithKey =
+        Container(key: widget.discardKey, child: discardWidget);
 
     return Container(
       padding: EdgeInsets.all(padding),
@@ -327,7 +347,7 @@ class _CenterTableState extends State<CenterTable> {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              deckWidget,
+              deckWidgetWithKey,
               Positioned(
                 bottom: -2,
                 right: -2,
@@ -353,7 +373,7 @@ class _CenterTableState extends State<CenterTable> {
             ],
           ),
           SizedBox(width: widget.isCompactMode ? 10 : 20),
-          discardWidget,
+          discardWidgetWithKey,
         ],
       ),
     );

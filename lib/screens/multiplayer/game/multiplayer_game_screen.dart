@@ -3,10 +3,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
+import 'package:dutch_game/providers/settings_provider.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/ui/emote_service.dart';
 import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
@@ -18,9 +20,6 @@ import 'package:dutch_game/widgets/dialogs/multiplayer/multiplayer_dialogs.dart'
 import 'package:dutch_game/widgets/multiplayer/game_overlays.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
-import 'multiplayer_results_screen.dart';
-import 'multiplayer_dutch_reveal_screen.dart';
-import '../lobby/multiplayer_lobby_screen.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});
@@ -37,6 +36,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   bool _showEmoteOverlay = false;
   bool _hostClosedDialogShown = false;
   bool _kickedDialogShown = false;
+  String? _specialPowerReadyId;
+  String? _specialPowerDialogShownId;
 
   @override
   void initState() {
@@ -153,11 +154,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     super.dispose();
   }
 
-  void _tryNavigateToEnd(GameState gameState, String? localPlayerId) {
-    final destination = gameState.dutchCallerId != null
-        ? const MultiplayerDutchRevealScreen()
-        : MultiplayerResultsScreen(gameState: gameState, localPlayerId: localPlayerId);
-    maybeNavigateToEnd(gameState: gameState, destination: destination);
+  void _tryNavigateToEnd(GameState gameState) {
+    final routeLocation = gameState.dutchCallerId != null
+        ? '/multiplayer/dutch-reveal'
+        : '/multiplayer/results';
+    maybeNavigateToEnd(gameState: gameState, routeLocation: routeLocation);
   }
 
   Map<String, bool> _buildConnectionMap(MultiplayerGameProvider gp) {
@@ -264,7 +265,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         // Navigate if ended
         if (gameState.phase == GamePhase.ended) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _tryNavigateToEnd(gameState, gameProvider.playerId);
+            _tryNavigateToEnd(gameState);
           });
         }
 
@@ -356,6 +357,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         gameProvider.usePower10SpyOpponent(opponentIndex, cardIndex),
                     supportsTakeFromDiscard: true, // Multiplayer allows taking from discard
                   ),
+                  onSpecialPowerAnimationComplete: (cardId) {
+                    if (!mounted) return;
+                    setState(() {
+                      _specialPowerReadyId = cardId;
+                      _specialPowerDialogShownId = null;
+                    });
+                  },
                   multiplayerConfig: MultiplayerConfig(
                     playerId: gameProvider.playerId,
                     playerConnections: _buildConnectionMap(gameProvider),
@@ -495,18 +503,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final leave = await GameDialogs.confirmQuit(context);
     if (leave == true && mounted) {
       gp.forfeitGame();
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => const MultiplayerLobbyScreen(),
-        ),
-        (route) => route.isFirst,
-      );
+      if (!context.mounted) return;
+      context.go('/lobby');
     }
   }
 
   Widget _buildSpecialPowerOverlay(MultiplayerGameProvider gp, GameState gs) {
     // Vérifier si c'est à nous de jouer et si on attend un pouvoir spécial
-    if (gs.specialCardToActivate == null) return const SizedBox();
+    if (gs.specialCardToActivate == null) {
+      _specialPowerReadyId = null;
+      _specialPowerDialogShownId = null;
+      return const SizedBox();
+    }
     if (!gs.currentPlayer.isHuman) return const SizedBox();
 
     bool isMyTurn = gs.currentPlayer.id == gp.playerId;
@@ -515,30 +523,57 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     // Prevent re-showing if already processing
     if (gp.isProcessing) return const SizedBox();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (ModalRoute.of(context)?.isCurrent == true) {
-        if (gs.isWaitingForSpecialPower && gs.specialCardToActivate != null) {
-          PlayingCard trigger = gs.specialCardToActivate!;
-          String val = trigger.value;
+    final animationsEnabled =
+        context.watch<SettingsProvider>().animationsEnabled;
 
-          final config = PowerDialogConfig.multiplayer(context);
-          if (val == '7') {
-            UnifiedPowerDialogs.showPower7Dialog(context, trigger, config);
-          } else if (val == '10') {
-            UnifiedPowerDialogs.showPower10Dialog(context, trigger, config);
-          } else if (val == 'V') {
-            UnifiedPowerDialogs.showValetSwapDialog(context, trigger, config);
-          } else if (val == 'JOKER') {
-            UnifiedPowerDialogs.showJokerDialog(context, trigger, config);
-          } else {
-            gp.skipSpecialPower();
-          }
+    final trigger = gs.specialCardToActivate!;
+    final triggerId = trigger.id;
+
+    if (!gs.isWaitingForSpecialPower) {
+      _resetSpecialPowerState();
+      return const SizedBox();
+    }
+
+    final ready = !animationsEnabled || _specialPowerReadyId == triggerId;
+    if (!ready) {
+      return const AbsorbPointer(
+        child: SizedBox.expand(),
+      );
+    }
+
+    if (_specialPowerDialogShownId != triggerId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final current = gp.gameState;
+        if (current == null ||
+            !current.isWaitingForSpecialPower ||
+            current.specialCardToActivate?.id != triggerId) {
+          return;
         }
-      }
-    });
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        _specialPowerDialogShownId = triggerId;
+        final val = trigger.value;
+        final config = PowerDialogConfig.multiplayer(context);
+        if (val == '7') {
+          UnifiedPowerDialogs.showPower7Dialog(context, trigger, config);
+        } else if (val == '10') {
+          UnifiedPowerDialogs.showPower10Dialog(context, trigger, config);
+        } else if (val == 'V') {
+          UnifiedPowerDialogs.showValetSwapDialog(context, trigger, config);
+        } else if (val == 'JOKER') {
+          UnifiedPowerDialogs.showJokerDialog(context, trigger, config);
+        } else {
+          gp.skipSpecialPower();
+        }
+      });
+    }
 
     return Container(color: Colors.black54);
+  }
+
+  void _resetSpecialPowerState() {
+    _specialPowerReadyId = null;
+    _specialPowerDialogShownId = null;
   }
 
 }

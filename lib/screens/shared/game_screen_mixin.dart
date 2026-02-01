@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/services/ui/web_orientation_service.dart';
 
@@ -27,17 +28,24 @@ mixin GameScreenMixin<T extends StatefulWidget> on State<T> {
   /// Retourne true si la navigation a été effectuée
   bool maybeNavigateToEnd({
     required GameState gameState,
-    required Widget destination,
+    String? routeLocation,
+    Widget? destination,
   }) {
+    assert(routeLocation != null || destination != null,
+        'routeLocation or destination must be provided');
     if (_hasNavigatedToEndMixin) return false;
     if (gameState.phase != GamePhase.ended) return false;
     if (ModalRoute.of(context)?.isCurrent != true || !mounted) return false;
 
     _hasNavigatedToEndMixin = true;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
+    if (routeLocation != null) {
+      context.go(routeLocation);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => destination!),
+      );
+    }
     return true;
   }
 

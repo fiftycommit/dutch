@@ -29,6 +29,7 @@ class GameSettings {
 
   bool soundEnabled;
   bool hapticEnabled;
+  bool animationsEnabled;
   String playerName;
   
   bool isPublic;
@@ -47,6 +48,7 @@ class GameSettings {
     this.cardBackStyle = 'classic',
     this.soundEnabled = true,
     this.hapticEnabled = true,
+    this.animationsEnabled = true,
     this.playerName = "Vous",
     this.isPublic = false,
     this.numberOfPlayers = 4,
@@ -65,6 +67,7 @@ class GameSettings {
     String? cardBackStyle,
     bool? soundEnabled,
     bool? hapticEnabled,
+    bool? animationsEnabled,
     String? playerName,
     bool? isPublic,
     int? numberOfPlayers,
@@ -82,6 +85,7 @@ class GameSettings {
       cardBackStyle: cardBackStyle ?? this.cardBackStyle,
       soundEnabled: soundEnabled ?? this.soundEnabled,
       hapticEnabled: hapticEnabled ?? this.hapticEnabled,
+      animationsEnabled: animationsEnabled ?? this.animationsEnabled,
       playerName: playerName ?? this.playerName,
       isPublic: isPublic ?? this.isPublic,
       numberOfPlayers: numberOfPlayers ?? this.numberOfPlayers,
@@ -102,6 +106,7 @@ class GameSettings {
       cardBackStyle: json['cardBackStyle'] ?? 'classic',
       soundEnabled: json['soundEnabled'] ?? true,
       hapticEnabled: json['hapticEnabled'] ?? true,
+      animationsEnabled: json['animationsEnabled'] ?? true,
       playerName: json['playerName'] ?? "Vous",
       isPublic: json['isPublic'] ?? false,
       numberOfPlayers: json['numberOfPlayers'] ?? 4,
@@ -122,6 +127,7 @@ class GameSettings {
       'cardBackStyle': cardBackStyle,
       'soundEnabled': soundEnabled,
       'hapticEnabled': hapticEnabled,
+      'animationsEnabled': animationsEnabled,
       'playerName': playerName,
       'isPublic': isPublic,
       'numberOfPlayers': numberOfPlayers,

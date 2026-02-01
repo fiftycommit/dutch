@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
@@ -6,7 +7,6 @@ import '../../../providers/multiplayer_game_provider.dart';
 import '../../../services/game/rp_result_helper.dart';
 import '../../../services/multiplayer/competitive_service.dart';
 import '../../shared/unified_results_screen.dart' as shared;
-import '../lobby/multiplayer_lobby_screen.dart';
 
 /// Écran de résultats pour le mode multiplayer
 /// Utilise la version unifiée avec configuration spécifique
@@ -57,10 +57,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
         title: "RÉSULTATS",
         shouldRedirect: () => provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
         onRedirect: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const MultiplayerLobbyScreen()),
-          );
+          context.go('/lobby');
         },
         buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider),
         rpCalculator: (player, rank) => _calculateRP(player, rank, widget.gameState),
@@ -96,10 +93,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           label: "Retour au Salon",
           backgroundColor: Colors.blue.shade700,
           onPressed: () {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const MultiplayerLobbyScreen()),
-              (route) => route.isFirst,
-            );
+            context.go('/lobby');
           },
         ),
       
@@ -115,7 +109,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           } else {
             provider.leaveRoom();
           }
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          context.go('/multiplayer');
         },
       ),
     ];
