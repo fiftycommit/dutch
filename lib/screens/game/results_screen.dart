@@ -69,8 +69,12 @@ class ResultsScreen extends StatelessWidget {
                     : "${stageLabel!.toUpperCase()} TERMINÉE")
                 : "RÉSULTATS",
             subtitle: isTournamentOver ? stageLabel : null,
-            alertBanner: (isTournament && isHumanEliminated && gameProvider.tournamentFinalRanking != null)
-                ? _buildEliminatedBanner(gameProvider, totalRounds)
+            alertBanner: (isTournament && isHumanEliminated)
+                ? _buildEliminatedBanner(
+                    gameProvider,
+                    totalRounds,
+                    gameState.tournamentRound,
+                  )
                 : null,
             eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
             buildActionButtons: (ctx) => [
@@ -122,13 +126,21 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEliminatedBanner(GameProvider gameProvider, int totalRounds) {
-    final eliminatedRound = gameProvider.tournamentFinalRanking!
-        .firstWhere((r) => r.player.isHuman)
+  Widget _buildEliminatedBanner(
+    GameProvider gameProvider,
+    int totalRounds,
+    int currentRound,
+  ) {
+    final isFinalRound = currentRound >= totalRounds;
+    final eliminatedRound = gameProvider.tournamentFinalRanking
+        ?.firstWhere((r) => r.player.isHuman)
         .eliminatedAtRound;
-    final stageLabel = eliminatedRound == null
-        ? null
-        : tournamentStageLabel(eliminatedRound, totalRounds: totalRounds);
+    String? stageLabel;
+    if (isFinalRound) {
+      stageLabel = tournamentStageLabel(currentRound, totalRounds: totalRounds);
+    } else if (eliminatedRound != null) {
+      stageLabel = tournamentStageLabel(eliminatedRound, totalRounds: totalRounds);
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(

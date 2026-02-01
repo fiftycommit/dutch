@@ -178,7 +178,25 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
   }
 
   double compactBadgeWidth(BuildContext context, Player player, double size) {
-    return size * 3;
+    final fontSize = ScreenUtils.scaleFont(context, size * 0.35);
+    final baseStyle = DefaultTextStyle.of(context).style;
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: player.displayName,
+        style: baseStyle.copyWith(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final padding = ScreenUtils.spacing(context, 10);
+    final reserveTrailing = ScreenUtils.spacing(context, 14);
+    final contentWidth = textPainter.width + reserveTrailing;
+    final minWidth = size * 2.9;
+    final maxWidth = ScreenUtils.usableWidth(context) * 0.6;
+    return (contentWidth + padding * 2).clamp(minWidth, maxWidth);
   }
 
   ActionButtonLayout actionButtonLayout(
@@ -298,6 +316,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       isActive: isActive,
       showName: true,
       compactMode: true,
+      reserveTrailingSpace: showCountBadge,
       turnStartTime: turnStartTime,
       turnDuration: turnDuration,
       isAfk: isAfk,

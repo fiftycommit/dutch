@@ -9,6 +9,7 @@ class PlayerAvatar extends StatefulWidget {
   final bool showName;
   final double size;
   final bool compactMode; // Mode compact: juste le badge avec emoji + nom
+  final bool reserveTrailingSpace; // Espace réservé pour le badge de cartes
   final int? turnStartTime; // Timestamp du début du tour (ms)
   final int? turnDuration; // Durée totale du tour (ms)
   final bool isAfk; // Si le joueur est AFK
@@ -20,6 +21,7 @@ class PlayerAvatar extends StatefulWidget {
     this.showName = true,
     this.size = 60.0,
     this.compactMode = false,
+    this.reserveTrailingSpace = false,
     this.turnStartTime,
     this.turnDuration,
     this.isAfk = false,
@@ -107,7 +109,6 @@ class _PlayerAvatarState extends State<PlayerAvatar>
   Widget _buildCompactBadge(BuildContext context) {
     final badgeHeight = ScreenUtils.scale(context, widget.size * 0.6);
     final fontSize = ScreenUtils.scaleFont(context, widget.size * 0.35);
-    final emojiSize = ScreenUtils.scaleFont(context, widget.size * 0.4);
 
     Color backgroundColor = widget.isActive
         ? Colors.amber.shade700
@@ -176,11 +177,6 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        widget.player.displayAvatar,
-                        style: TextStyle(fontSize: emojiSize),
-                      ),
-                      SizedBox(width: ScreenUtils.spacing(context, 4)),
                       Flexible(
                         fit: FlexFit.loose,
                         child: Text(
@@ -195,6 +191,8 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (widget.reserveTrailingSpace)
+                        SizedBox(width: ScreenUtils.spacing(context, 14)),
                       if (widget.isAfk) ...[
                         SizedBox(width: ScreenUtils.spacing(context, 4)),
                         Container(
