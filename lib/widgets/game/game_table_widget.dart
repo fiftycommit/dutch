@@ -853,6 +853,7 @@ class _GameTableContentState extends State<_GameTableContent>
         math.max(botBlockHeight, math.max(maxBotBadgeWidth, maxBotHandWidth));
     final sideBandWidth = sideBandContentWidth + outerGap + centerGapX;
     final centerMinHeight = estimateCenterMinHeight(context, gs, isCompact);
+    final opponentCount = opponents.length;
 
     return SafeArea(
       child: LayoutBuilder(
@@ -945,8 +946,8 @@ class _GameTableContentState extends State<_GameTableContent>
                 ),
             ),
 
-              // Gauche - Adversaires
-              if (opponents.isNotEmpty)
+              // Disposition adversaires (2-4 joueurs personnalisée, 5-6 inchangé)
+              if (opponentCount >= 4)
                 Positioned(
                   left: 0,
                   top: 0,
@@ -962,9 +963,7 @@ class _GameTableContentState extends State<_GameTableContent>
                     outerGap,
                   ),
                 ),
-
-              // Haut - Adversaire position 3 (si 4 joueurs)
-              if (opponents.length >= 3)
+              if (opponentCount >= 4)
                 Positioned(
                   top: 0,
                   left: sideBandWidth,
@@ -984,9 +983,7 @@ class _GameTableContentState extends State<_GameTableContent>
                     ),
                   ),
                 ),
-
-              // Droite - Adversaire position 4 (si 4+ joueurs)
-              if (opponents.length >= 4)
+              if (opponentCount >= 4)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -1000,6 +997,118 @@ class _GameTableContentState extends State<_GameTableContent>
                     botBadgeSize,
                     blockSpacing,
                     outerGap,
+                  ),
+                ),
+              if (opponentCount == 3)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: sideBandWidth,
+                  child: _buildSingleLeftOpponent(
+                    context,
+                    opponents[0],
+                    isCompact,
+                    botCardType,
+                    botBadgeSize,
+                    blockSpacing,
+                    outerGap,
+                  ),
+                ),
+              if (opponentCount == 3)
+                Positioned(
+                  top: 0,
+                  left: sideBandWidth,
+                  right: sideBandWidth,
+                  height: topBandHeight,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: outerGap),
+                      child: _buildOpponentBlock(
+                        context,
+                        opponents[1],
+                        isCompact,
+                        botCardType,
+                        botBadgeSize,
+                        blockSpacing,
+                      ),
+                    ),
+                  ),
+                ),
+              if (opponentCount == 3)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: sideBandWidth,
+                  child: _buildSingleRightOpponent(
+                    context,
+                    opponents[2],
+                    isCompact,
+                    botCardType,
+                    botBadgeSize,
+                    blockSpacing,
+                    outerGap,
+                  ),
+                ),
+              if (opponentCount == 2)
+                Positioned(
+                  top: 0,
+                  left: sideBandWidth,
+                  right: sideBandWidth,
+                  height: topBandHeight,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: outerGap),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: _buildOpponentBlock(
+                              context,
+                              opponents[0],
+                              isCompact,
+                              botCardType,
+                              botBadgeSize,
+                              blockSpacing,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: _buildOpponentBlock(
+                              context,
+                              opponents[1],
+                              isCompact,
+                              botCardType,
+                              botBadgeSize,
+                              blockSpacing,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (opponentCount == 1)
+                Positioned(
+                  top: 0,
+                  left: sideBandWidth,
+                  right: sideBandWidth,
+                  height: topBandHeight,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: outerGap),
+                      child: _buildOpponentBlock(
+                        context,
+                        opponents[0],
+                        isCompact,
+                        botCardType,
+                        botBadgeSize,
+                        blockSpacing,
+                      ),
+                    ),
                   ),
                 ),
 
@@ -1149,6 +1258,34 @@ class _GameTableContentState extends State<_GameTableContent>
     );
   }
 
+  Widget _buildSingleLeftOpponent(
+    BuildContext context,
+    Player opponent,
+    bool isCompact,
+    CardSize cardSize,
+    double badgeSize,
+    double spacing,
+    double outerGap,
+  ) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.only(left: outerGap),
+        child: RotatedBox(
+          quarterTurns: 1,
+          child: _buildOpponentBlock(
+            context,
+            opponent,
+            isCompact,
+            cardSize,
+            badgeSize,
+            spacing,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRightOpponents(
     BuildContext context,
     List<Player> opponents,
@@ -1213,6 +1350,34 @@ class _GameTableContentState extends State<_GameTableContent>
           child: _buildOpponentBlock(
             context,
             opponents[3],
+            isCompact,
+            cardSize,
+            badgeSize,
+            spacing,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSingleRightOpponent(
+    BuildContext context,
+    Player opponent,
+    bool isCompact,
+    CardSize cardSize,
+    double badgeSize,
+    double spacing,
+    double outerGap,
+  ) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: EdgeInsets.only(right: outerGap),
+        child: RotatedBox(
+          quarterTurns: 3,
+          child: _buildOpponentBlock(
+            context,
+            opponent,
             isCompact,
             cardSize,
             badgeSize,
