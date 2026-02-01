@@ -192,10 +192,10 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       maxLines: 1,
     )..layout();
     final padding = ScreenUtils.spacing(context, 10);
-    final reserveTrailing = ScreenUtils.spacing(context, 14);
+    final reserveTrailing = ScreenUtils.spacing(context, 18);
     final contentWidth = textPainter.width + reserveTrailing;
     final minWidth = size * 2.9;
-    final maxWidth = ScreenUtils.usableWidth(context) * 0.6;
+    final maxWidth = ScreenUtils.usableWidth(context) * 0.65;
     return (contentWidth + padding * 2).clamp(minWidth, maxWidth);
   }
 
@@ -350,8 +350,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
             children: [
               badge,
               Positioned(
-                right: -6,
-                top: -6,
+                right: -8,
+                top: -8,
                 child: CardCountBadge(
                   count: player.hand.length,
                   isCompact: isCompactMode,

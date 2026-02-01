@@ -192,7 +192,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                         ),
                       ),
                       if (widget.reserveTrailingSpace)
-                        SizedBox(width: ScreenUtils.spacing(context, 14)),
+                        SizedBox(width: ScreenUtils.spacing(context, 18)),
                       if (widget.isAfk) ...[
                         SizedBox(width: ScreenUtils.spacing(context, 4)),
                         Container(

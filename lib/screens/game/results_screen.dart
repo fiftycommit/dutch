@@ -27,8 +27,13 @@ class ResultsScreen extends StatelessWidget {
         final gameState = gameProvider.gameState!;
         final isTournament = gameState.gameMode == GameMode.tournament;
         final totalRounds = isTournament ? gameProvider.tournamentTotalRounds : 1;
-        final isFinalRound =
-            isTournament && gameState.tournamentRound >= totalRounds;
+        final remainingRounds = isTournament
+            ? (totalRounds - gameState.tournamentRound)
+                .clamp(0, totalRounds)
+                .toInt()
+            : 0;
+        final isFinalRound = isTournament &&
+            (remainingRounds == 0 || gameState.players.length <= 2);
         final isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
         final isTournamentOver = isTournament && (isFinalRound || isHumanEliminated);
         final stageLabel = isTournament
@@ -48,15 +53,20 @@ class ResultsScreen extends StatelessWidget {
           }
         }
 
+        final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
+        final humanRank = () {
+          final ranksWithTies = gameState.getFinalRanksWithTies();
+          return ranksWithTies[humanPlayer.id] ??
+              (gameState.getFinalRanking().indexWhere((p) => p.id == humanPlayer.id) + 1);
+        }();
+        final isTournamentWinner = isTournament && isFinalRound && humanRank == 1;
+
         // Déclencher la simulation du classement final si nécessaire
         if (isTournament && isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             gameProvider.finishTournamentForHuman();
           });
         }
-
-        // Trouver le joueur humain
-        final humanPlayer = gameState.players.firstWhere((p) => p.isHuman);
         final showRP = gameProvider.playerMMR != null;
 
         return shared.ResultsScreen(
@@ -69,13 +79,16 @@ class ResultsScreen extends StatelessWidget {
                     : "${stageLabel!.toUpperCase()} TERMINÉE")
                 : "RÉSULTATS",
             subtitle: isTournamentOver ? stageLabel : null,
-            alertBanner: (isTournament && isHumanEliminated)
-                ? _buildEliminatedBanner(
-                    gameProvider,
-                    totalRounds,
-                    gameState.tournamentRound,
-                  )
-                : null,
+            alertBanner: isTournamentWinner
+                ? _buildTournamentWinnerBanner()
+                : (isTournament && isHumanEliminated)
+                    ? _buildEliminatedBanner(
+                        gameProvider,
+                        totalRounds,
+                        gameState.tournamentRound,
+                      )
+                    : null,
+            isTournamentFinal: isFinalRound,
             eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
             buildActionButtons: (ctx) => [
               shared.ResultsActionButton(
@@ -154,6 +167,25 @@ class ResultsScreen extends StatelessWidget {
             : "Vous avez été éliminé en $stageLabel",
         style: const TextStyle(
           color: Colors.redAccent,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTournamentWinnerBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+      ),
+      child: const Text(
+        "🏆 Vous gagnez le tournoi !",
+        style: TextStyle(
+          color: Colors.greenAccent,
           fontSize: 14,
           fontWeight: FontWeight.bold,
         ),

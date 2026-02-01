@@ -28,6 +28,9 @@ class ResultsConfig {
   
   /// Sous-titre optionnel (ex: "MANCHE 2 TERMINÉE")
   final String? subtitle;
+
+  /// Indique si on est en finale de tournoi (pour textes spécifiques)
+  final bool isTournamentFinal;
   
   /// Message d'alerte optionnel (ex: "Vous avez été éliminé")
   final Widget? alertBanner;
@@ -48,6 +51,7 @@ class ResultsConfig {
     this.localPlayerId,
     this.title,
     this.subtitle,
+    this.isTournamentFinal = false,
     this.alertBanner,
     this.eliminatedPlayerIds,
     this.shouldRedirect,
@@ -170,6 +174,8 @@ class ResultsScreen extends StatelessWidget {
   }
 
   Widget _buildDutchCallerBanner(BuildContext context, Player caller, bool callerWon) {
+    final isFinal = config.isTournamentFinal;
+    final callerWinsTournament = isFinal && callerWon;
     return Container(
       margin: EdgeInsets.symmetric(
         horizontal: ScreenUtils.spacing(context, 16),
@@ -189,8 +195,8 @@ class ResultsScreen extends StatelessWidget {
       ),
       child: Text(
         callerWon
-            ? "${caller.name} a crié DUTCH et gagne la manche !"
-            : "${caller.name} a crié DUTCH mais perd la manche.",
+            ? "${caller.name} a crié DUTCH et gagne ${callerWinsTournament ? "le tournoi" : "la manche"} !"
+            : "${caller.name} a crié DUTCH mais perd ${isFinal ? "la finale" : "la manche"}.",
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: Colors.white,

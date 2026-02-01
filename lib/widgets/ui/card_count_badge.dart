@@ -15,7 +15,7 @@ class CardCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(isCompact ? 4 : 6),
+      padding: EdgeInsets.all(isCompact ? 3 : 6),
       decoration: BoxDecoration(
         color: Colors.amber,
         shape: BoxShape.circle,
@@ -25,7 +25,7 @@ class CardCountBadge extends StatelessWidget {
         "$count",
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: isCompact ? 10 : 14,
+          fontSize: isCompact ? 9 : 14,
           color: Colors.black,
         ),
       ),
