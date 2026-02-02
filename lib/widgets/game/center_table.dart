@@ -46,15 +46,67 @@ class CenterTable extends StatefulWidget {
   State<CenterTable> createState() => _CenterTableState();
 }
 
-class _CenterTableState extends State<CenterTable> {
+class _CenterTableState extends State<CenterTable> with SingleTickerProviderStateMixin {
   bool _isDrawnCardExpanded = false;
   String? _lastDrawnCardId;
   int? _lastRedZoneHapticAtMs;
+  late AnimationController _progressController;
+  double _currentProgress = 1.0;
 
   @override
   void initState() {
     super.initState();
     _lastDrawnCardId = widget.gameState.drawnCard?.id;
+    // Controller pour animation fluide synchronisée avec l'écran (vsync)
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10), // Durée arbitraire, on calcule manuellement
+    )..addListener(_onProgressTick);
+    _initProgress();
+  }
+
+  void _initProgress() {
+    final total = widget.reactionTimeTotalMs;
+    final remaining = widget.gameState.reactionTimeRemaining;
+    _currentProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 1.0;
+    if (widget.gameState.phase == GamePhase.reaction && !_progressController.isAnimating) {
+      _progressController.repeat();
+    }
+  }
+
+  void _onProgressTick() {
+    if (!mounted) return;
+    if (widget.gameState.phase != GamePhase.reaction) {
+      return;
+    }
+    // Calculer le progrès actuel basé sur le temps restant
+    final total = widget.reactionTimeTotalMs;
+    final remaining = widget.gameState.reactionTimeRemaining;
+    final newProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
+
+    if ((_currentProgress - newProgress).abs() > 0.001) {
+      setState(() {
+        _currentProgress = newProgress;
+      });
+    }
+  }
+
+  void _updateProgressTarget() {
+    // Démarrer/arrêter l'animation selon la phase
+    if (widget.gameState.phase == GamePhase.reaction) {
+      if (!_progressController.isAnimating) {
+        _progressController.repeat();
+      }
+    } else {
+      _progressController.stop();
+      _currentProgress = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
   }
 
   @override
@@ -71,6 +123,7 @@ class _CenterTableState extends State<CenterTable> {
     if (widget.enableHaptics) {
       _maybeTriggerHaptic(oldWidget.gameState.reactionTimeRemaining);
     }
+    _updateProgressTarget();
   }
 
   int _redZoneIntervalMs(double progress) {
@@ -80,9 +133,7 @@ class _CenterTableState extends State<CenterTable> {
   }
 
   Widget _buildReactionProgress() {
-    final total = widget.reactionTimeTotalMs;
-    final remaining = widget.gameState.reactionTimeRemaining;
-    final progress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
+    final progress = _currentProgress;
 
     Color progressColor;
     if (progress > 0.6) {
@@ -95,17 +146,11 @@ class _CenterTableState extends State<CenterTable> {
       progressColor = Colors.red;
     }
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: progress, end: progress),
-      duration: const Duration(milliseconds: 100),
-      builder: (context, animatedProgress, child) {
-        return LinearProgressIndicator(
-          value: animatedProgress,
-          backgroundColor: Colors.black26,
-          color: progressColor,
-          borderRadius: BorderRadius.circular(4),
-        );
-      },
+    return LinearProgressIndicator(
+      value: progress,
+      backgroundColor: Colors.black26,
+      color: progressColor,
+      borderRadius: BorderRadius.circular(4),
     );
   }
 

@@ -29,6 +29,13 @@ export class SecurityService {
         duration: 1,
     });
 
+    // 4. Rate Limiting spécifique pour les matchs de cartes (Anti-Spam Match)
+    // Limite: 1 match par 500ms par joueur (évite le spam de matchs qui vide la pioche)
+    private static matchLimiter = new RateLimiterMemory({
+        points: 1,
+        duration: 0.5, // 500ms entre chaque tentative de match
+    });
+
     static async checkConnectionLimit(ip: string): Promise<void> {
         try {
             await this.connectionLimiter.consume(ip);
@@ -43,6 +50,15 @@ export class SecurityService {
             return true;
         } catch (e) {
             return false; // Rate limit exceeded
+        }
+    }
+
+    static async checkMatchRateLimit(socketId: string): Promise<boolean> {
+        try {
+            await this.matchLimiter.consume(socketId);
+            return true;
+        } catch (e) {
+            return false; // Rate limit exceeded - trop de tentatives de match
         }
     }
 }

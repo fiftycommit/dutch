@@ -164,6 +164,11 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:attempt_match', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      // Rate limit spécifique pour éviter le spam de matchs (500ms entre chaque)
+      if (!await SecurityService.checkMatchRateLimit(socket.id)) {
+        console.log(`[MATCH] Rate limited for ${socket.id} - too many match attempts`);
+        return;
+      }
       const room = roomManager.getRoom(data.roomCode);
       if (!room || !room.gameState) return;
 

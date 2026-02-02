@@ -119,8 +119,10 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
 
+      // Utiliser fillBots des settings de la room par défaut, sauf si explicitement spécifié
+      const fillBots = data.fillBots !== undefined ? data.fillBots === true : room.settings?.fillBots !== false;
       const started = roomManager.startGame(roomCode, {
-        fillBots: data.fillBots === true,
+        fillBots,
       });
       callback({ success: started });
 
@@ -286,6 +288,54 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
       callback({ success });
     } catch (error: any) {
       console.error('Error kicking player:', error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Accepter une demande de rejoin (hôte uniquement)
+  socket.on('room:accept_join', (data, callback) => {
+    try {
+      const roomCode = data.roomCode?.toString().toUpperCase();
+      const targetClientId = data.clientId?.toString();
+
+      if (!targetClientId) {
+        callback({ success: false, error: 'clientId requis' });
+        return;
+      }
+
+      const success = roomManager.acceptJoinRequest(roomCode, socket.id, targetClientId);
+
+      if (success) {
+        console.log(`Join request accepted for ${targetClientId} in ${roomCode}`);
+      }
+
+      callback({ success });
+    } catch (error: any) {
+      console.error('Error accepting join request:', error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  // Refuser une demande de rejoin (hôte uniquement)
+  socket.on('room:reject_join', (data, callback) => {
+    try {
+      const roomCode = data.roomCode?.toString().toUpperCase();
+      const targetClientId = data.clientId?.toString();
+
+      if (!targetClientId) {
+        callback({ success: false, error: 'clientId requis' });
+        return;
+      }
+
+      const success = roomManager.rejectJoinRequest(roomCode, socket.id, targetClientId);
+
+      if (success) {
+        console.log(`Join request rejected for ${targetClientId} in ${roomCode}`);
+      }
+
+      callback({ success });
+    } catch (error: any) {
+      console.error('Error rejecting join request:', error);
       callback({ success: false, error: error.message });
     }
   });

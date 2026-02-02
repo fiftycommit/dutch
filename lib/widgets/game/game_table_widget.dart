@@ -295,6 +295,15 @@ class _GameTableContentState extends State<_GameTableContent>
       return;
     }
 
+    // En multijoueur, ne montrer l'animation que si c'est le joueur local qui agit
+    // (la carte piochée était visible par lui et il la défausse/remplace)
+    final isMultiplayer = mpConfig.playerId != null;
+    if (isMultiplayer && _lastDrawnCard == null) {
+      // Si on n'avait pas de carte piochée visible, on ne doit pas animer
+      // car c'est probablement l'action d'un autre joueur
+      return;
+    }
+
     final currentDiscard = gs.discardPile.length;
     if (currentDiscard <= _lastDiscardPileSize) {
       return;
@@ -337,6 +346,10 @@ class _GameTableContentState extends State<_GameTableContent>
     final previousDrawn = _lastDrawnCard;
     final currentDrawn = gs.drawnCard;
     if (previousDrawn == null || currentDrawn != null) return;
+
+    // En multijoueur, cette animation ne concerne que le joueur local
+    // car seul lui peut voir sa carte piochée
+    // Si _lastDrawnCard existait, c'est que c'était notre tour et on avait pioché
 
     if (gs.discardPile.length <= _lastDiscardPileSize) return;
 

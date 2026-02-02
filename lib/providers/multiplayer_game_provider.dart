@@ -287,6 +287,17 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       _pausedByName = null;
       notifyListeners();
     };
+    _multiplayerService.onEmoteReceived = _handleEmoteReceived;
+  }
+
+  void _handleEmoteReceived(Map<String, dynamic> data) {
+    final emoji = data['emoji'] as String?;
+    final playerName = data['playerName'] as String?;
+    final senderId = data['playerId'] as String?;
+    if (emoji == null || playerName == null) return;
+    // Ne pas afficher l'emote si c'est nous qui l'avons envoyé (déjà affiché localement)
+    if (senderId != null && senderId == playerId) return;
+    _chatManager.addLocalEmote(emoji, playerName, senderId ?? '');
   }
 
   void _handleGameStateUpdate(GameState gameState) {

@@ -197,9 +197,30 @@ export class RoomManager {
     this.pruneWaitingRoom(room);
     this.ensureHost(room);
 
-    // Vérifier si le joueur a été kické
+    // Vérifier si le joueur a été kické - il doit demander à revenir
     if (clientId && room.kickedClientIds?.has(clientId)) {
-      return { error: 'Vous avez été exclu de cette room' };
+      // Créer une demande de rejoin au lieu de refuser directement
+      if (!room.pendingJoinRequests) {
+        room.pendingJoinRequests = new Map();
+      }
+
+      // Ajouter la demande
+      room.pendingJoinRequests.set(clientId, {
+        clientId,
+        socketId,
+        playerName: playerName || 'Joueur',
+        timestamp: this.now(),
+      });
+
+      // Notifier l'hôte qu'un joueur kické veut revenir
+      this.io.to(room.hostPlayerId).emit('room:join_request', {
+        roomCode,
+        clientId,
+        playerName: playerName || 'Joueur',
+        message: `${playerName || 'Un joueur'} demande à rejoindre la room`,
+      });
+
+      return { error: 'PENDING_APPROVAL' }; // Code spécial pour le client
     }
 
     if (clientId) {
@@ -336,7 +357,11 @@ export class RoomManager {
     if (!room) return false;
 
     this.pruneWaitingRoom(room);
-    room.players = room.players.filter((p) => !p.isHuman || p.connected !== false);
+    // Ne garder que les joueurs PRÊTS (humains connectés et prêts, ou bots)
+    room.players = room.players.filter((p) => {
+      if (!p.isHuman) return true; // Garder les bots
+      return p.connected !== false && p.ready; // Humains: connectés ET prêts
+    });
     this.reindexPlayers(room);
     this.ensureHost(room);
 
@@ -742,6 +767,69 @@ export class RoomManager {
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
 
+    return true;
+  }
+
+  /**
+   * Accepter une demande de rejoin d'un joueur kické (hôte uniquement)
+   */
+  acceptJoinRequest(
+    roomCode: string,
+    hostId: string,
+    targetClientId: string
+  ): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+
+    // Seul l'hôte peut accepter
+    if (room.hostPlayerId !== hostId) return false;
+
+    const request = room.pendingJoinRequests?.get(targetClientId);
+    if (!request) return false;
+
+    // Retirer de la liste des kickés
+    room.kickedClientIds?.delete(targetClientId);
+
+    // Retirer la demande en attente
+    room.pendingJoinRequests?.delete(targetClientId);
+
+    // Notifier le joueur qu'il peut rejoindre
+    this.io.to(request.socketId).emit('room:join_accepted', {
+      roomCode,
+      message: "L'hôte a accepté votre demande",
+    });
+
+    this.touchRoom(room);
+    return true;
+  }
+
+  /**
+   * Refuser une demande de rejoin d'un joueur kické (hôte uniquement)
+   */
+  rejectJoinRequest(
+    roomCode: string,
+    hostId: string,
+    targetClientId: string
+  ): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+
+    // Seul l'hôte peut refuser
+    if (room.hostPlayerId !== hostId) return false;
+
+    const request = room.pendingJoinRequests?.get(targetClientId);
+    if (!request) return false;
+
+    // Retirer la demande en attente
+    room.pendingJoinRequests?.delete(targetClientId);
+
+    // Notifier le joueur que sa demande est refusée
+    this.io.to(request.socketId).emit('room:join_rejected', {
+      roomCode,
+      message: "L'hôte a refusé votre demande",
+    });
+
+    this.touchRoom(room);
     return true;
   }
 

@@ -80,35 +80,44 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
   }
 
   List<Widget> _buildMultiplayerButtons(BuildContext context, MultiplayerGameProvider provider) {
-    return [
-      // Bouton retour au salon (Host) ou retour au salon (non-host)
-      if (provider.isHost)
-        shared.ResultsActionButton(
-          label: "Retour au Salon (Host)",
-          backgroundColor: Colors.green.shade700,
-          onPressed: () => provider.restartGame(),
-        )
-      else
+    if (provider.isHost) {
+      return [
+        // Bouton retour au salon (Host uniquement)
         shared.ResultsActionButton(
           label: "Retour au Salon",
-          backgroundColor: Colors.blue.shade700,
+          backgroundColor: Colors.green.shade700,
+          onPressed: () => provider.restartGame(),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Bouton fermer la room (Host uniquement)
+        shared.ResultsActionButton(
+          label: "Fermer la room",
+          backgroundColor: Colors.red.shade700,
           onPressed: () {
-            context.go('/lobby');
+            provider.closeRoom();
+            context.go('/multiplayer');
           },
         ),
-      
-      const SizedBox(height: 12),
-      
-      // Bouton quitter/fermer
+      ];
+    }
+
+    // Non-host: boutons pour retourner au lobby ou quitter
+    return [
       shared.ResultsActionButton(
-        label: provider.isHost ? "Fermer la room" : "Quitter",
-        backgroundColor: provider.isHost ? Colors.red.shade700 : Colors.amber.shade700,
+        label: "Retour au Salon",
+        backgroundColor: Colors.green.shade700,
+        onPressed: () => context.go('/lobby'),
+      ),
+
+      const SizedBox(height: 12),
+
+      shared.ResultsActionButton(
+        label: "Quitter",
+        backgroundColor: Colors.red.shade700,
         onPressed: () {
-          if (provider.isHost) {
-            provider.closeRoom();
-          } else {
-            provider.leaveRoom();
-          }
+          provider.leaveRoom();
           context.go('/multiplayer');
         },
       ),

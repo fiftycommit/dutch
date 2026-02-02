@@ -572,16 +572,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           const SnackBar(content: Text('Impossible de devenir hôte')),
         );
         provider.acknowledgeRoomClosed();
-        Navigator.pop(context); // Close dialog
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context); // Leave lobby
+        if (mounted) {
+          context.go('/multiplayer');
         }
       }
     } else {
       provider.acknowledgeRoomClosed();
-      Navigator.pop(context); // Close dialog
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context); // Leave lobby
+      if (mounted) {
+        context.go('/multiplayer');
       }
     }
   }
@@ -614,8 +612,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       },
       onReturnToMenu: () {
         provider.clearError();
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context);
+        if (mounted) {
+          context.go('/multiplayer');
         }
       },
     );
