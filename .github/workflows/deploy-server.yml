@@ -117,6 +117,13 @@ jobs:
               nginx -t && systemctl reload nginx
             fi
 
+            # Ensure sitemap.xml and robots.txt are served correctly (SEO)
+            if ! grep -q "location = /robots.txt" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for SEO files..."
+              sed -i '/location \/ {/i\    location = /sitemap.xml {\n        root /var/www/dutch/web;\n        default_type application/xml;\n        try_files /sitemap.xml =404;\n    }\n\n    location = /robots.txt {\n        root /var/www/dutch/web;\n        default_type text/plain;\n        try_files /robots.txt =404;\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
+
             # Ensure /version is routed to backend (otherwise Flutter SPA catches it)
             if ! grep -q "location /version" /etc/nginx/sites-available/dutch-server; then
               echo "Updating Nginx configuration for /version endpoint..."
