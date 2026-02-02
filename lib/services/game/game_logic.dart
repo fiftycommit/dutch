@@ -31,8 +31,9 @@ class GameLogic {
       phase: GamePhase.setup,
     );
 
-    gameState.smartShuffle();
     gameState.dealCards();
+    // Appliquer la méthode de mélange choisie (chance) sur le deck restant
+    gameState.smartShuffle();
 
     for (var player in players) {
       if (!player.isHuman) {

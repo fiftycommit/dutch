@@ -2,6 +2,7 @@ import 'dart:math';
 import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
+import '../services/game/shuffle_strategy.dart';
 
 enum GameMode { quick, tournament }
 
@@ -116,11 +117,13 @@ class GameState {
   }
 
   void smartShuffle() {
-    // MODE EXPÉRIMENTAL: Mélange 100% aléatoire pour analyser les patterns
-    // On ignore temporairement les modes TACTIQUE/CHALLENGER pour collecter des données
-    // sur les mélanges naturels et identifier quels patterns créent des parties faciles/coriaces
-    deck.shuffle(Random());
-    addToHistory("🎲 Mélange 100% aléatoire (Mode Expérimental)");
+    // Aligne le mélange sur la méthode choisie dans les réglages (luckDifficulty).
+    final strategy = _resolveShuffleStrategy();
+    final shuffled = strategy.shuffle(deck);
+    deck
+      ..clear()
+      ..addAll(shuffled);
+    addToHistory("🎲 Mélange ${_shuffleLabel()}");
   }
   
 
@@ -362,7 +365,37 @@ class GameState {
   }
 
   void shuffleDeckRandomly() {
-    deck.shuffle(Random());
+    final shuffled = RandomShuffleStrategy().shuffle(deck);
+    deck
+      ..clear()
+      ..addAll(shuffled);
+  }
+
+  ShuffleStrategy _resolveShuffleStrategy() {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return RandomShuffleStrategy();
+      case Difficulty.medium:
+        return SmartShuffleStrategy('medium');
+      case Difficulty.hard:
+        return SmartShuffleStrategy('hard');
+      case Difficulty.mix:
+        // Mix est utilisé ailleurs pour les bots; ici on le garde en mode expérimental.
+        return MLShuffleStrategy('medium');
+    }
+  }
+
+  String _shuffleLabel() {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return 'Détendu';
+      case Difficulty.medium:
+        return 'Tactique';
+      case Difficulty.hard:
+        return 'Challenger';
+      case Difficulty.mix:
+        return 'ML (expérimental)';
+    }
   }
 
   List<Player> getFinalRanking() {

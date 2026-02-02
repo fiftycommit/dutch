@@ -393,9 +393,13 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
         title: const Text('Rejoindre le salon'),
         content: TextField(
           controller: nameController,
+          style: const TextStyle(color: Colors.black87),
           decoration: const InputDecoration(
             labelText: 'Votre nom',
             hintText: 'Entrez votre nom',
+            labelStyle: TextStyle(color: Colors.black87),
+            hintStyle: TextStyle(color: Colors.black54),
+            counterStyle: TextStyle(color: Colors.black54),
           ),
           maxLength: 20,
         ),

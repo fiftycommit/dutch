@@ -106,6 +106,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     FocusScope.of(context).unfocus();
   }
 
+  double _uiScale(BuildContext context) {
+    final height = MediaQuery.of(context).size.height;
+    return (height / 700).clamp(0.55, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<MultiplayerGameProvider>(
@@ -165,6 +170,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         final size = mediaQuery.size;
         final isLandscape = size.width > size.height;
         final isWide = size.width >= 700;
+        final heightScale = (size.height / 700).clamp(0.55, 1.0);
+        final isCompactLandscape = isLandscape && heightScale < 0.85;
+        final isQuickMode = provider.roomSettings?.gameMode == GameMode.quick;
+        final showPublicBadge = provider.roomSettings?.isPublic == true;
+        final showRoomCode = !showPublicBadge && !isQuickMode;
+        final sectionSpacing = 8.0 * heightScale;
+        final contentSpacing = 12.0 * heightScale;
+        final bottomSpacing = 16.0 * heightScale;
         final maxPlayers = provider.roomSettings?.maxPlayers ?? 4;
         final minPlayers = provider.roomSettings?.minPlayers ?? 2;
         final connectedHumans = _connectedHumans(provider);
@@ -203,14 +216,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           child: Column(
                             children: [
                               // Afficher le code uniquement pour les lobbies privés
-                              if (provider.roomSettings?.isPublic == true)
+                              if (showPublicBadge)
                                 _buildPublicLobbyBadge()
-                              else
+                              else if (showRoomCode)
                                 _buildRoomCodeCard(context, provider, colors),
                               if (provider.roomSettings != null)
                                 _buildSettingsRow(
-                                    provider, minPlayers, maxPlayers),
-                              const SizedBox(height: 8),
+                                    context, provider, minPlayers, maxPlayers),
+                              SizedBox(height: sectionSpacing),
                               Expanded(
                                 child: isLandscape || isWide
                                     ? _buildLandscapeLayout(
@@ -226,7 +239,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                         maxPlayers,
                                       ),
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: contentSpacing),
                               _buildBottomButtons(
                                 context,
                                 provider,
@@ -235,8 +248,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                 connectedHumans,
                                 maxPlayers,
                                 minPlayers,
+                                compact: isCompactLandscape,
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: bottomSpacing),
                             ],
                           ),
                         ),
@@ -257,8 +271,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     MultiplayerGameProvider provider,
     ColorScheme colors,
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding:
+          EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
       child: Row(
         children: [
           // Bouton Quitter/Fermer
@@ -267,15 +285,16 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               provider.isHost ? Icons.close : Icons.arrow_back,
               color: Colors.white,
             ),
+            iconSize: f(22),
             tooltip: provider.isHost ? 'Fermer la room' : 'Quitter',
             onPressed: () => _handleLeaveOrClose(context, provider),
           ),
-          const SizedBox(width: 8),
-          const Expanded(
+          SizedBox(width: f(8)),
+          Expanded(
             child: Text(
               "Salle d'attente",
               style: TextStyle(
-                fontSize: 20,
+                fontSize: f(20),
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
@@ -285,19 +304,24 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           if (provider.isHost)
             IconButton(
               icon: const Icon(Icons.settings, color: Colors.white),
+              iconSize: f(22),
               tooltip: 'Paramètres',
               onPressed: () => _showSettingsDialog(context, provider),
             ),
-          _buildConnectionIndicator(provider, colors),
+          _buildConnectionIndicator(context, provider, colors),
         ],
       ),
     );
   }
 
   Widget _buildConnectionIndicator(
+    BuildContext context,
     MultiplayerGameProvider provider,
     ColorScheme colors,
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
+
     String label;
     Color color;
     IconData icon;
@@ -326,22 +350,22 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(f(14)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 4),
+          Icon(icon, color: Colors.white, size: f(14)),
+          SizedBox(width: f(4)),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 12,
+              fontSize: f(12),
             ),
           ),
         ],
@@ -600,32 +624,38 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Widget _buildSettingsRow(
+    BuildContext context,
     MultiplayerGameProvider provider,
     int minPlayers,
     int maxPlayers,
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     final isQuickMode = provider.roomSettings!.gameMode == GameMode.quick;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: f(8)),
       child: Wrap(
         alignment: WrapAlignment.center,
-        spacing: 8,
-        runSpacing: 8,
+        spacing: f(8),
+        runSpacing: f(8),
         children: [
           // Mode de jeu - modifiable par l'hôte
           if (provider.isHost)
-            _buildGameModeSelector(provider, isQuickMode)
+            _buildGameModeSelector(context, provider, isQuickMode)
           else
             _buildSettingChip(
+              context,
               label: isQuickMode ? 'Rapide' : 'Tournoi',
               icon: Icons.flag,
             ),
           _buildSettingChip(
+            context,
             label: 'Min $minPlayers',
             icon: Icons.people,
           ),
           _buildSettingChip(
+            context,
             label: 'Max $maxPlayers',
             icon: Icons.groups,
           ),
@@ -635,26 +665,31 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Widget _buildGameModeSelector(
+    BuildContext context,
     MultiplayerGameProvider provider,
     bool isQuickMode,
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: f(4), vertical: f(2)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(f(20)),
         border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildModeButton(
+            context: context,
             label: 'Rapide',
             icon: Icons.bolt,
             isSelected: isQuickMode,
             onTap: () => provider.setGameMode(GameMode.quick),
           ),
           _buildModeButton(
+            context: context,
             label: 'Tournoi',
             icon: Icons.emoji_events,
             isSelected: !isQuickMode,
@@ -666,35 +701,38 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Widget _buildModeButton({
+    required BuildContext context,
     required String label,
     required IconData icon,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(6)),
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.white.withValues(alpha: 0.3)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(f(16)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 14,
+              size: f(14),
               color: isSelected ? Colors.white : Colors.white70,
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: f(4)),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.white70,
-                fontSize: 11,
+                fontSize: f(11),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
@@ -710,6 +748,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int connectedHumans,
     int maxPlayers,
   ) {
+    final scale = _uiScale(context);
+    final chatFlex = scale < 0.8 ? 1 : 2;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -718,9 +758,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           child: _buildPlayersPanel(
               context, provider, connectedHumans, maxPlayers),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12 * scale),
         Expanded(
-          flex: 2,
+          flex: chatFlex,
           child: _buildChatPanel(context, provider),
         ),
       ],
@@ -733,6 +773,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int connectedHumans,
     int maxPlayers,
   ) {
+    final scale = _uiScale(context);
+    final chatHeight = (MediaQuery.of(context).size.height * 0.28)
+        .clamp(120.0 * scale, 200.0 * scale);
     return Column(
       children: [
         Expanded(
@@ -740,9 +783,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           child: _buildPlayersPanel(
               context, provider, connectedHumans, maxPlayers),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12 * scale),
         SizedBox(
-          height: 180,
+          height: chatHeight,
           child: _buildChatPanel(context, provider),
         ),
       ],
@@ -757,17 +800,21 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int connectedHumans,
     int maxPlayers,
     int minPlayers,
+    {bool compact = false}
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     // Si la partie est en cours, afficher le bouton "Regarder"
     if (provider.roomStatus == 'playing') {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
           onPressed: () => provider.watchGame(),
-          icon: const Icon(Icons.visibility),
+          icon: Icon(Icons.visibility, size: f(18)),
           label: const Text('REGARDER LA PARTIE'),
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding:
+                EdgeInsets.symmetric(vertical: f(compact ? 12 : 16)),
             backgroundColor: colors.tertiary,
             foregroundColor: Colors.white,
             elevation: 4,
@@ -788,11 +835,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   provider.isReady
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
-                  size: 20,
+                  size: f(20),
                 ),
                 label: Text(provider.isReady ? 'Pret' : 'Passer pret'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding:
+                      EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
                   backgroundColor:
                       provider.isReady ? colors.tertiary : Colors.white,
                   foregroundColor:
@@ -801,7 +849,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: f(12)),
             Expanded(
               child: ElevatedButton(
                 onPressed: canStart
@@ -813,7 +861,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                         )
                     : null,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding:
+                      EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
                   backgroundColor: colors.primaryContainer,
                   foregroundColor: colors.onPrimaryContainer,
                   disabledBackgroundColor: Colors.white.withValues(alpha: 0.35),
@@ -824,8 +873,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           ? 'Lancer'
                           : 'Pret: ${provider.readyHumanCount}/$minPlayers')
                       : "Attente hote",
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: f(14),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -833,9 +882,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ),
           ],
         ),
-        if (!provider.isHost)
+        if (!provider.isHost && !compact)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: f(8)),
             child: Text(
               provider.isReady
                   ? "Tu es pret. L'hote peut lancer."
@@ -843,7 +892,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.9),
-                fontSize: 12,
+                fontSize: f(12),
               ),
             ),
           ),
@@ -852,15 +901,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Widget _buildPublicLobbyBadge() {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(vertical: f(8)),
+      padding: EdgeInsets.all(f(16)),
       decoration: BoxDecoration(
         color: Colors.green.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(f(16)),
         border: Border.all(
           color: Colors.green.withValues(alpha: 0.5),
-          width: 1.2,
+          width: f(1.2),
         ),
       ),
       child: Row(
@@ -869,14 +920,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           Icon(
             Icons.public,
             color: Colors.green.shade300,
-            size: 24,
+            size: f(24),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: f(12)),
           Text(
             'Salon Public',
             style: TextStyle(
               color: Colors.green.shade300,
-              fontSize: 18,
+              fontSize: f(18),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -890,15 +941,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     MultiplayerGameProvider provider,
     ColorScheme colors,
   ) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(vertical: f(8)),
+      padding: EdgeInsets.all(f(16)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(f(16)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.26),
-          width: 1.2,
+          width: f(1.2),
         ),
       ),
       child: Row(
@@ -910,24 +963,24 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 'Code',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 12,
+                  fontSize: f(12),
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: f(4)),
               Text(
                 provider.roomCode ?? '------',
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 28,
+                  fontSize: f(28),
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 4,
+                  letterSpacing: f(4),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: f(16)),
           IconButton(
-            icon: const Icon(Icons.copy, color: Colors.white),
+            icon: Icon(Icons.copy, color: Colors.white, size: f(20)),
             tooltip: 'Copier',
             onPressed: () {
               final code = provider.roomCode;
@@ -955,15 +1008,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   ) {
     final colors = Theme.of(context).colorScheme;
     final hasScores = provider.cumulativeScores.isNotEmpty;
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(f(12)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(f(16)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.24),
-          width: 1.2,
+          width: f(1.2),
         ),
       ),
       child: LayoutBuilder(
@@ -980,12 +1035,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.people, size: 20, color: Colors.white),
-                  const SizedBox(width: 8),
+                  Icon(Icons.people, size: f(20), color: Colors.white),
+                  SizedBox(width: f(8)),
                   Text(
                     'Joueurs ($connectedHumans/$maxPlayers)',
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: f(16),
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -993,23 +1048,23 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   if (hasScores) ...[
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: f(8), vertical: f(3)),
                       decoration: BoxDecoration(
                         color: colors.tertiary.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(f(12)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.emoji_events,
-                              size: 14, color: Colors.white),
-                          SizedBox(width: 4),
+                              size: f(14), color: Colors.white),
+                          SizedBox(width: f(4)),
                           Text(
                             'Classement',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: f(11),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1019,7 +1074,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   ],
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: f(10)),
               Expanded(
                 child: provider.playersInLobby.isEmpty
                     ? const Center(child: CircularProgressIndicator())
@@ -1048,16 +1103,16 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                               _getPlayerRank(provider, playerClientId);
 
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: EdgeInsets.only(bottom: f(8)),
                             color: Colors.white.withValues(alpha: 0.94),
                             elevation: 2,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(f(12)),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: f(12),
+                                vertical: f(10),
                               ),
                               child: Row(
                                 children: [
@@ -1065,15 +1120,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                   Stack(
                                     children: [
                                       CircleAvatar(
-                                        radius: 18,
+                                        radius: f(18),
                                         backgroundColor: colors.primary,
                                         foregroundColor: colors.onPrimary,
                                         child: Text(
                                           (player['name'] ?? 'J')[0]
                                               .toUpperCase(),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 14,
+                                            fontSize: f(14),
                                           ),
                                         ),
                                       ),
@@ -1082,20 +1137,20 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                           right: -2,
                                           bottom: -2,
                                           child: Container(
-                                            padding: const EdgeInsets.all(3),
+                                            padding: EdgeInsets.all(f(3)),
                                             decoration: BoxDecoration(
                                               color: _getRankColor(playerRank),
                                               shape: BoxShape.circle,
                                               border: Border.all(
                                                 color: Colors.white,
-                                                width: 1.5,
+                                                width: f(1.5),
                                               ),
                                             ),
                                             child: Text(
                                               '$playerRank',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: Colors.white,
-                                                fontSize: 9,
+                                                fontSize: f(9),
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -1103,7 +1158,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                         ),
                                     ],
                                   ),
-                                  const SizedBox(width: 10),
+                                  SizedBox(width: f(10)),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -1115,50 +1170,50 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                               child: Text(
                                                 player['name'] ?? 'Joueur',
                                                 overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 14,
+                                                  fontSize: f(14),
                                                   color: Colors.black87,
                                                 ),
                                               ),
                                             ),
                                             if (isYou)
                                               _buildMiniTag(
-                                                  'Vous', colors.primary),
+                                                  context, 'Vous', colors.primary),
                                             if (isHost)
                                               _buildMiniTag(
-                                                  'Hote', colors.secondary),
+                                                  context, 'Hote', colors.secondary),
                                           ],
                                         ),
-                                        const SizedBox(height: 2),
+                                        SizedBox(height: f(2)),
                                         Row(
                                           children: [
                                             Text(
                                               _presenceLabel(presence,
                                                   provider.roomStatus),
                                               style: TextStyle(
-                                                fontSize: 11,
+                                                fontSize: f(11),
                                                 color: Colors.grey[600],
                                               ),
                                             ),
                                             if (playerScore != null) ...[
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: f(8)),
                                               Container(
                                                 padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 1,
+                                                    EdgeInsets.symmetric(
+                                                  horizontal: f(6),
+                                                  vertical: f(1),
                                                 ),
                                                 decoration: BoxDecoration(
                                                   color:
                                                       colors.primaryContainer,
                                                   borderRadius:
-                                                      BorderRadius.circular(8),
+                                                      BorderRadius.circular(f(8)),
                                                 ),
                                                 child: Text(
                                                   '$playerScore pts',
                                                   style: TextStyle(
-                                                    fontSize: 10,
+                                                    fontSize: f(10),
                                                     fontWeight: FontWeight.bold,
                                                     color: colors
                                                         .onPrimaryContainer,
@@ -1173,17 +1228,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                   ),
                                   if (isReady && !isSpectator)
                                     Icon(Icons.check_circle,
-                                        color: colors.tertiary, size: 20),
+                                        color: colors.tertiary, size: f(20)),
                                   if (isSpectator)
-                                    const Icon(Icons.visibility,
-                                        color: Colors.blueGrey, size: 20),
-                                  const SizedBox(width: 4),
+                                    Icon(Icons.visibility,
+                                        color: Colors.blueGrey, size: f(20)),
+                                  SizedBox(width: f(4)),
                                   _presenceDot(presence),
                                   if (provider.isHost && !isYou) ...[
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: f(8)),
                                     IconButton(
                                       icon: Icon(Icons.remove_circle_outline,
-                                          color: colors.error, size: 20),
+                                          color: colors.error, size: f(20)),
                                       tooltip: 'Expulser',
                                       onPressed: () async {
                                         final confirm = await showDialog<bool>(
@@ -1283,145 +1338,172 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           width: 1.2,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.forum, size: 18, color: Colors.white),
-              SizedBox(width: 6),
-              Text(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = (constraints.maxHeight / 320).clamp(0.55, 1.0);
+          double f(double size) => size * scale;
+          if (constraints.maxHeight < 120) {
+            return Center(
+              child: Text(
                 'Chat',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Colors.white.withValues(alpha: 0.7),
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: f(12),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.forum, size: f(18), color: Colors.white),
+                  SizedBox(width: f(6)),
+                  Text(
+                    'Chat',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: f(14),
+                    ),
+                  ),
+                ],
               ),
-              child: messages.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Soyez sympas :)',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 11,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: _chatScrollController,
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[index];
-                        final isMe = (message['clientId'] != null &&
-                                message['clientId'] == provider.clientId) ||
-                            (message['playerId'] == provider.playerId);
-                        return Align(
-                          alignment: isMe
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isMe
-                                  ? colors.primaryContainer
-                                  : Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  isMe ? 'Vous' : (message['name'] ?? 'Joueur'),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: isMe
-                                        ? colors.onPrimaryContainer
-                                        : colors.primary,
-                                  ),
-                                ),
-                                Text(
-                                  message['message']?.toString() ?? '',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isMe
-                                        ? colors.onPrimaryContainer
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ],
+              SizedBox(height: f(8)),
+              Expanded(
+                child: Container(
+                  padding: EdgeInsets.all(f(8)),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(f(10)),
+                  ),
+                  child: messages.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Soyez sympas :)',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: f(11),
                             ),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _chatController,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendChat(provider),
-                    style: const TextStyle(color: Colors.black87, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Message...',
-                      hintStyle:
-                          const TextStyle(color: Colors.black45, fontSize: 13),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
+                        )
+                      : ListView.builder(
+                          controller: _chatScrollController,
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
+                            final isMe = (message['clientId'] != null &&
+                                    message['clientId'] == provider.clientId) ||
+                                (message['playerId'] == provider.playerId);
+                            return Align(
+                              alignment: isMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                margin: EdgeInsets.only(bottom: f(6)),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: f(10),
+                                  vertical: f(6),
+                                ),
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? colors.primaryContainer
+                                      : Colors.white.withValues(alpha: 0.9),
+                                  borderRadius: BorderRadius.circular(f(10)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isMe
+                                          ? 'Vous'
+                                          : (message['name'] ?? 'Joueur'),
+                                      style: TextStyle(
+                                        fontSize: f(10),
+                                        fontWeight: FontWeight.bold,
+                                        color: isMe
+                                            ? colors.onPrimaryContainer
+                                            : colors.primary,
+                                      ),
+                                    ),
+                                    SizedBox(height: f(2)),
+                                    Text(
+                                      message['message']?.toString() ?? '',
+                                      style: TextStyle(
+                                        fontSize: f(13),
+                                        color: isMe
+                                            ? colors.onPrimaryContainer
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ),
-              const SizedBox(width: 6),
-              SizedBox(
-                height: 40,
-                width: 40,
-                child: IconButton.filled(
-                  onPressed: () => _sendChat(provider),
-                  icon: const Icon(Icons.send, size: 18),
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.primary,
-                    foregroundColor: colors.onPrimary,
-                    padding: EdgeInsets.zero,
+              SizedBox(height: f(8)),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: f(40),
+                      child: TextField(
+                        controller: _chatController,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendChat(provider),
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: f(14),
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Message...',
+                          hintStyle: TextStyle(
+                            color: Colors.black45,
+                            fontSize: f(13),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: f(12),
+                            vertical: f(8),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(f(10)),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(width: f(6)),
+                  SizedBox(
+                    height: f(40),
+                    width: f(40),
+                    child: IconButton.filled(
+                      onPressed: () => _sendChat(provider),
+                      icon: Icon(Icons.send, size: f(18)),
+                      style: IconButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1630,24 +1712,30 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }).length;
   }
 
-  Widget _buildSettingChip({required String label, required IconData icon}) {
+  Widget _buildSettingChip(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+  }) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(6)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(f(20)),
         border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.white),
-          const SizedBox(width: 4),
+          Icon(icon, size: f(12), color: Colors.white),
+          SizedBox(width: f(4)),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 11,
+              fontSize: f(11),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1656,19 +1744,21 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     );
   }
 
-  Widget _buildMiniTag(String text, Color color) {
+  Widget _buildMiniTag(BuildContext context, String text, Color color) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
     return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      margin: EdgeInsets.only(left: f(6)),
+      padding: EdgeInsets.symmetric(horizontal: f(6), vertical: f(2)),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(f(10)),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 9,
+          fontSize: f(9),
           fontWeight: FontWeight.bold,
         ),
       ),

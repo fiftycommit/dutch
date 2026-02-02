@@ -1,6 +1,6 @@
 # DUTCH' 78 🎴
 
-Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose 1 joueur humain à 3 bots.
+Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose 1 joueur humain à des bots (2 à 6 joueurs).
 
 ## ✨ Points forts
 
@@ -10,6 +10,7 @@ Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose 1 jou
 - Pouvoirs spéciaux interactifs (7, 10, Valet, Joker)
 - Bots à comportements distincts + SBMM basé sur votre RP
 - 3 profils, statistiques, rangs et réglages avancés
+- Mode multijoueur via serveur Socket.IO (en cours)
 
 ## 🕹️ Déroulement d'une partie
 
@@ -54,8 +55,15 @@ Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose 1 jou
 ## ⚙️ Réglages
 
 - Vitesse de réaction de la défausse collective.
-- Méthode de mélange : Détendu / Tactique / Challenger.
+- Méthode de mélange : Détendu / Tactique / Challenger (branchée sur `ShuffleStrategy`).
 - Effets sonores, vibrations, SBMM.
+
+## 🧪 Mélange & pioche (chance)
+
+- Détendu → mélange 100% aléatoire (chance pure).
+- Tactique → mélange équilibré (moins d’extrêmes).
+- Challenger → pioche exigeante (mauvaises cartes plus accessibles).
+- Stratégie ML expérimentale présente (non entraînée, activable via `Difficulty.mix` côté code).
 
 ## 🚀 Installation & lancement
 
@@ -77,28 +85,39 @@ flutter run
 flutter run -d chrome
 ```
 
+### Serveur multijoueur (optionnel)
+
+```bash
+cd dutch-server
+npm install
+npm run dev
+```
+
 ## 🗂️ Structure du projet
 
 ```
 lib/
 ├── main.dart
-├── models/ (card, player, game_state, game_settings)
-├── providers/ (game_provider, settings_provider)
+├── core/ (di, interfaces, service_locator)
+├── models/ (playing_card, player, game_state, game_settings)
+├── providers/ (game_provider, settings_provider, multiplayer_game_provider)
+├── router/ (app_router)
 ├── screens/
-│   ├── splash_screen.dart
-│   ├── main_menu_screen.dart
-│   ├── game_setup_screen.dart
-│   ├── memorization_screen.dart
-│   ├── game_screen.dart
-│   ├── game_screen/center_table.dart
-│   ├── dutch_reveal_screen.dart
-│   ├── results_screen.dart
-│   ├── rules_screen.dart
-│   ├── stats_screen.dart
-│   └── settings_screen.dart
-├── widgets/ (card_widget, player_hand, player_avatar, special_power_dialogs, responsive_dialog)
-├── services/ (game_logic, bot_ai, bot_difficulty, stats_service, rp_calculator, sound_service, haptic_service, web_orientation_service)
+│   ├── game/ (setup, memorization, game, results, dutch_reveal)
+│   ├── menu/ (main, rules, settings, stats, ai_profile)
+│   ├── multiplayer/ (menu, lobby, game)
+│   └── shared/
+├── widgets/ (dialogs, game, multiplayer, ui)
+├── services/
+│   ├── game/ (game_logic, bot_ai, shuffle_strategy, rp_calculator)
+│   ├── learning/ (bot_training, player_learning, ghost_clone)
+│   ├── matchmaking/
+│   ├── multiplayer/
+│   └── ui/ (sound, haptic, stats, emotes, orientation)
 └── utils/ (screen_utils.dart)
+
+dutch-server/
+└── src/ (Socket.IO server + logique multijoueur)
 ```
 
 ## 🧰 Tech stack
@@ -106,8 +125,15 @@ lib/
 - Flutter / Dart
 - Provider
 - SharedPreferences
+- Hive
 - audioplayers
 - flutter_svg
+- go_router
+- socket_io_client / http
+
+Serveur :
+- Node.js / TypeScript
+- Socket.IO
 
 ## 🙌 Crédits
 

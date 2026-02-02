@@ -800,6 +800,12 @@ class _GameTableContentState extends State<_GameTableContent>
     final screenHeight = screenSize.height;
     final screenWidth = screenSize.width;
     final isCompact = screenHeight < 400 || screenWidth < 700;
+    final isLandscape = screenWidth > screenHeight;
+    // Active la disposition latérale pioche/défausse sur les petits écrans en paysage
+    // (iPhones, petites tablettes en paysage avec hauteur < 500)
+    final useSideDeckDiscard = isLandscape && screenHeight < 500;
+    final showCenterDeck =
+        !useSideDeckDiscard || isSpectator || human == null;
     final botCardType = isCompact ? CardSize.tiny : CardSize.small;
     final playerCardType = isCompact ? CardSize.small : CardSize.medium;
     final botCardMetrics = cardVisualSize(context, botCardType);
@@ -880,6 +886,44 @@ class _GameTableContentState extends State<_GameTableContent>
           );
           final isDrawnCardVisible =
               _isMyTurn && _hasDrawn && gs.drawnCard != null;
+
+          final centerSmallMetrics = cardVisualSize(context, CardSize.small);
+          final centerMediumMetrics = cardVisualSize(context, CardSize.medium);
+          const centerSmallPadding = 8.0;
+          const centerMediumPadding = 15.0;
+          const centerSmallGap = 10.0;
+          const centerMediumGap = 20.0;
+          final centerSmallWidth =
+              (centerSmallMetrics.width * 2) + centerSmallGap + (centerSmallPadding * 2);
+          final centerSmallHeight =
+              centerSmallMetrics.height + (centerSmallPadding * 2);
+          final centerMediumWidth =
+              (centerMediumMetrics.width * 2) + centerMediumGap + (centerMediumPadding * 2);
+          final centerMediumHeight =
+              centerMediumMetrics.height + (centerMediumPadding * 2);
+          final centerUseMedium =
+              centerWidth >= centerMediumWidth && centerHeight >= centerMediumHeight;
+          final centerCompact = isCompact && !centerUseMedium;
+          final baseCenterWidth = centerUseMedium ? centerMediumWidth : centerSmallWidth;
+          final baseCenterHeight = centerUseMedium ? centerMediumHeight : centerSmallHeight;
+          final rawCenterScale = math.min(
+            baseCenterWidth <= 0 ? 1.0 : centerWidth / baseCenterWidth,
+            baseCenterHeight <= 0 ? 1.0 : centerHeight / baseCenterHeight,
+          );
+          final centerScale = isCompact
+              ? rawCenterScale.clamp(1.0, 1.25).toDouble()
+              : 1.0;
+
+          // Largeur des zones pioche/défausse latérales
+          // Calculée en réservant d'abord l'espace nécessaire au centre,
+          // puis en distribuant l'espace restant aux côtés
+          final desiredCenterWidth = baseCenterWidth * centerScale;
+          final centerReservedWidth = desiredCenterWidth.clamp(0.0, centerWidth);
+          final remainingWidth = centerWidth - centerReservedWidth;
+          final sideAccessoryWidth = useSideDeckDiscard
+              ? (remainingWidth / 2)
+              : 0.0;
+
           final centerShiftY = (botCardMetrics.height -
                   playerCardMetrics.height -
                   topBandHeight +
@@ -898,13 +942,16 @@ class _GameTableContentState extends State<_GameTableContent>
       });
     }
 
+    // Largeur effective pour le centre (réduite si accessoires latéraux)
+    final effectiveSideBandWidth = sideBandWidth + sideAccessoryWidth;
+
     return Stack(
       key: _stackKey,
       children: [
-        // Centre - Table (pioche + défausse)
+        // Centre - Table (pioche + défausse ou juste texte reaction)
         Positioned(
-          left: sideBandWidth,
-          right: sideBandWidth,
+          left: effectiveSideBandWidth,
+          right: effectiveSideBandWidth,
                 top: topBandHeight,
                 bottom: bottomBandHeight,
                 child: Center(
@@ -916,35 +963,61 @@ class _GameTableContentState extends State<_GameTableContent>
                     child: Align(
                       alignment: Alignment(
                         0,
-                        isDrawnCardVisible ? centerShiftFraction : 0.0,
+                        isDrawnCardVisible
+                            ? centerShiftFraction
+                            : (isCompact ? centerShiftFraction * 0.35 : 0.0),
                       ),
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.center,
-                      child: CenterTable(
-                        gameState: gs,
-                        isMyTurn: _isMyTurn,
-                        hasDrawn: _hasDrawn,
-                        isCompactMode: isCompact,
-                        onShowDiscard: callbacks.onShowDiscardPile,
-                        onDrawCard: callbacks.onDrawCard,
-                        onTakeFromDiscard: callbacks.onTakeFromDiscard,
-                        reactionTimeTotalMs:
-                            mpConfig.reactionTimeTotalMs,
-                        enableHaptics: true,
-                        deckKey: _deckKey,
-                        discardKey: _discardKey,
-                        discardCardOverride:
-                            gs.phase == GamePhase.playing
-                                ? _discardOverrideCard
-                                : null,
-                        drawnCardKey: _drawnCardKey,
-                      ),
+                        child: Transform.scale(
+                          scale: centerScale,
+                          child: CenterTable(
+                            gameState: gs,
+                            isMyTurn: _isMyTurn,
+                            hasDrawn: _hasDrawn,
+                            isCompactMode: centerCompact,
+                            onShowDiscard: callbacks.onShowDiscardPile,
+                            onDrawCard: callbacks.onDrawCard,
+                            onTakeFromDiscard: callbacks.onTakeFromDiscard,
+                            reactionTimeTotalMs:
+                                mpConfig.reactionTimeTotalMs,
+                            enableHaptics: true,
+                            showDeckAndDiscard: showCenterDeck,
+                            deckKey: _deckKey,
+                            discardKey: _discardKey,
+                            discardCardOverride:
+                                gs.phase == GamePhase.playing
+                                    ? _discardOverrideCard
+                                    : null,
+                            drawnCardKey: _drawnCardKey,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
             ),
+
+              // Pioche à gauche (entre adversaires gauche et centre)
+              if (useSideDeckDiscard && !isSpectator && human != null)
+                Positioned(
+                  left: sideBandWidth,
+                  top: topBandHeight,
+                  bottom: bottomBandHeight,
+                  width: sideAccessoryWidth,
+                  child: _buildSideDeck(context, sideAccessoryWidth, centerHeight),
+                ),
+
+              // Défausse à droite (entre centre et adversaires droite)
+              if (useSideDeckDiscard && !isSpectator && human != null)
+                Positioned(
+                  right: sideBandWidth,
+                  top: topBandHeight,
+                  bottom: bottomBandHeight,
+                  width: sideAccessoryWidth,
+                  child: _buildSideDiscard(context, sideAccessoryWidth, centerHeight),
+                ),
 
               // Disposition adversaires (2-4 joueurs personnalisée, 5-6 inchangé)
               if (opponentCount >= 4)
@@ -1461,6 +1534,99 @@ class _GameTableContentState extends State<_GameTableContent>
       handKey: _handKeys[human.id],
       hiddenIndices: _hiddenCardIndexByPlayer[human.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
+    );
+  }
+
+  Widget _buildSideDeck(BuildContext context, double maxWidth, double maxHeight) {
+    final canDraw = _isMyTurn && !_hasDrawn && gs.phase == GamePhase.playing;
+    const padding = 8.0;
+
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Container(
+          padding: const EdgeInsets.all(padding),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white12, width: 1.5),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Opacity(
+                opacity: canDraw ? 1.0 : 0.6,
+                child: GestureDetector(
+                  onTap: canDraw ? callbacks.onDrawCard : null,
+                  child: CardWidget(
+                    key: _deckKey,
+                    card: null,
+                    size: CardSize.medium,
+                    isRevealed: false,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${gs.deck.length}',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideDiscard(BuildContext context, double maxWidth, double maxHeight) {
+    final canTakeDiscard = callbacks.onTakeFromDiscard != null &&
+        _isMyTurn &&
+        !_hasDrawn &&
+        gs.phase == GamePhase.playing &&
+        gs.discardPile.isNotEmpty;
+    final discardCard = (gs.phase == GamePhase.playing
+            ? _discardOverrideCard
+            : null) ??
+        gs.topDiscardCard;
+    const padding = 8.0;
+
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Container(
+          padding: const EdgeInsets.all(padding),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white12, width: 1.5),
+          ),
+          child: GestureDetector(
+            onTap: canTakeDiscard
+                ? callbacks.onTakeFromDiscard
+                : callbacks.onShowDiscardPile,
+            child: CardWidget(
+              key: _discardKey,
+              card: discardCard,
+              size: CardSize.medium,
+              isRevealed: true,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

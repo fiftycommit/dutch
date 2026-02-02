@@ -54,152 +54,213 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
             colors: [Color(0xFF1a3a28), Color(0xFF0d1f15)],
           ),
         ),
-        child: Center(
-          child: _isLoading
-              ? const CircularProgressIndicator(color: Colors.amber)
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Niveau des Bots",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (_isLoading) {
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.amber),
+              );
+            }
+
+            final scale = (constraints.maxHeight / 680).clamp(0.55, 1.0);
+            final isCompact = scale < 0.85;
+            double f(double size) => size * scale;
+
+            final spacingSmall = f(20);
+            final spacingMedium = f(30);
+            final spacingLarge = f(50);
+            final buttonPadding = EdgeInsets.symmetric(
+              horizontal: f(50),
+              vertical: f(15),
+            );
+            final botSegmentStyle = ButtonStyle(
+              visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
+              tapTargetSize:
+                  isCompact ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
+              padding: WidgetStateProperty.all(
+                EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
+              ),
+              textStyle: WidgetStateProperty.all(
+                TextStyle(fontSize: f(13), fontWeight: FontWeight.w600),
+              ),
+              backgroundColor:
+                  WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.amber;
+                }
+                return Colors.white10;
+              }),
+              foregroundColor:
+                  WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.black;
+                }
+                return Colors.white;
+              }),
+            );
+            final playerSegmentStyle = ButtonStyle(
+              visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
+              tapTargetSize:
+                  isCompact ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
+              padding: WidgetStateProperty.all(
+                EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
+              ),
+              textStyle: WidgetStateProperty.all(
+                TextStyle(fontSize: f(13), fontWeight: FontWeight.w600),
+              ),
+              backgroundColor:
+                  WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.green;
+                }
+                return Colors.white10;
+              }),
+              foregroundColor:
+                  WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return Colors.white70;
+              }),
+            );
+            final content = Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  "Niveau des Bots",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: f(20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: spacingSmall),
+                if (useSBMM) ...[
+                  Container(
+                    padding: EdgeInsets.all(f(20)),
+                    margin: EdgeInsets.symmetric(
+                      horizontal: f(40),
                     ),
-                    const SizedBox(height: 20),
-                    if (useSBMM) ...[
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        margin: const EdgeInsets.symmetric(horizontal: 40),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.1),
-                          border: Border.all(color: Colors.amber),
-                          borderRadius: BorderRadius.circular(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.1),
+                      border: Border.all(color: Colors.amber),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Colors.amber,
+                          size: f(40),
                         ),
-                        child: const Column(
-                          children: [
-                            Icon(Icons.auto_awesome,
-                                color: Colors.amber, size: 40),
-                            SizedBox(height: 10),
-                            Text("Mode Adaptatif Actif",
-                                style: TextStyle(
-                                    color: Colors.amber,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18)),
-                            SizedBox(height: 5),
-                            Text(
-                                "Le niveau s'ajuste automatiquement à vos résultats.",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 12)),
-                          ],
+                        SizedBox(height: f(10)),
+                        Text(
+                          "Mode Adaptatif Actif",
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: f(18),
+                          ),
                         ),
+                        SizedBox(height: f(5)),
+                        Text(
+                          "Le niveau s'ajuste automatiquement à vos résultats.",
+                          textAlign: TextAlign.center,
+                          style:
+                              TextStyle(color: Colors.white70, fontSize: f(12)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  SegmentedButton<Difficulty>(
+                    segments: [
+                      ButtonSegment(
+                        value: Difficulty.easy,
+                        label: const Text("Facile"),
+                        icon: Icon(Icons.sentiment_satisfied, size: f(18)),
                       ),
-                    ] else ...[
-                      SegmentedButton<Difficulty>(
-                        segments: const [
-                          ButtonSegment(
-                              value: Difficulty.easy,
-                              label: Text("Facile"),
-                              icon: Icon(Icons.sentiment_satisfied)),
-                          ButtonSegment(
-                              value: Difficulty.medium,
-                              label: Text("Moyen"),
-                              icon: Icon(Icons.sentiment_neutral)),
-                          ButtonSegment(
-                              value: Difficulty.hard,
-                              label: Text("Difficile"),
-                              icon: Icon(Icons.sentiment_very_dissatisfied)),
-                          ButtonSegment(
-                              value: Difficulty.mix,
-                              label: Text("Mix"),
-                              icon: Icon(Icons.shuffle)),
-                        ],
-                        selected: {selectedBotDifficulty},
-                        onSelectionChanged: (Set<Difficulty> newSelection) {
-                          setState(() {
-                            selectedBotDifficulty = newSelection.first;
-                          });
-                        },
-                        style: ButtonStyle(
-                          backgroundColor:
-                              WidgetStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Colors.amber;
-                            }
-                            return Colors.white10;
-                          }),
-                          foregroundColor:
-                              WidgetStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Colors.black;
-                            }
-                            return Colors.white;
-                          }),
-                        ),
+                      ButtonSegment(
+                        value: Difficulty.medium,
+                        label: const Text("Moyen"),
+                        icon: Icon(Icons.sentiment_neutral, size: f(18)),
+                      ),
+                      ButtonSegment(
+                        value: Difficulty.hard,
+                        label: const Text("Difficile"),
+                        icon:
+                            Icon(Icons.sentiment_very_dissatisfied, size: f(18)),
+                      ),
+                      ButtonSegment(
+                        value: Difficulty.mix,
+                        label: const Text("Mix"),
+                        icon: Icon(Icons.shuffle, size: f(18)),
                       ),
                     ],
-                    const SizedBox(height: 30),
-                    const Text(
-                      "Nombre de joueurs",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 20),
-                    SegmentedButton<int>(
-                      segments: widget.isTournament 
-                        ? const [
-                            ButtonSegment(value: 4, label: Text("4")),
-                            ButtonSegment(value: 6, label: Text("6")),
-                          ]
-                        : const [
-                            ButtonSegment(value: 2, label: Text("2")),
-                            ButtonSegment(value: 3, label: Text("3")),
-                            ButtonSegment(value: 4, label: Text("4")),
-                            ButtonSegment(value: 5, label: Text("5")),
-                            ButtonSegment(value: 6, label: Text("6")),
-                          ],
-                      selected: {selectedNumberOfPlayers},
-                      onSelectionChanged: (Set<int> newSelection) {
-                        setState(() {
-                          selectedNumberOfPlayers = newSelection.first;
-                        });
-                      },
-                      style: ButtonStyle(
-                        backgroundColor:
-                            WidgetStateProperty.resolveWith<Color>((states) {
-                          if (states.contains(WidgetState.selected)) {
-                            return Colors.green;
-                          }
-                          return Colors.white10;
-                        }),
-                        foregroundColor:
-                            WidgetStateProperty.resolveWith<Color>((states) {
-                          if (states.contains(WidgetState.selected)) {
-                            return Colors.white;
-                          }
-                          return Colors.white70;
-                        }),
-                      ),
-                    ),
-                    const SizedBox(height: 50),
-                    ElevatedButton(
-                      onPressed: () => _startGame(context, useSBMM),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 50, vertical: 15),
-                        textStyle: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      child: const Text("COMMENCER"),
-                    ),
-                  ],
+                    selected: {selectedBotDifficulty},
+                    onSelectionChanged: (Set<Difficulty> newSelection) {
+                      setState(() {
+                        selectedBotDifficulty = newSelection.first;
+                      });
+                    },
+                    style: botSegmentStyle,
+                  ),
+                ],
+                SizedBox(height: spacingMedium),
+                Text(
+                  "Nombre de joueurs",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: f(20),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                SizedBox(height: spacingSmall),
+                SegmentedButton<int>(
+                  segments: widget.isTournament
+                      ? const [
+                          ButtonSegment(value: 4, label: Text("4")),
+                          ButtonSegment(value: 6, label: Text("6")),
+                        ]
+                      : const [
+                          ButtonSegment(value: 2, label: Text("2")),
+                          ButtonSegment(value: 3, label: Text("3")),
+                          ButtonSegment(value: 4, label: Text("4")),
+                          ButtonSegment(value: 5, label: Text("5")),
+                          ButtonSegment(value: 6, label: Text("6")),
+                        ],
+                  selected: {selectedNumberOfPlayers},
+                  onSelectionChanged: (Set<int> newSelection) {
+                    setState(() {
+                      selectedNumberOfPlayers = newSelection.first;
+                    });
+                  },
+                  style: playerSegmentStyle,
+                ),
+                SizedBox(height: spacingLarge),
+                ElevatedButton(
+                  onPressed: () => _startGame(context, useSBMM),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: buttonPadding,
+                    textStyle: TextStyle(
+                      fontSize: f(18),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  child: const Text("COMMENCER"),
+                ),
+              ],
+            );
+
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: content,
+              ),
+            );
+          },
         ),
       ),
     );

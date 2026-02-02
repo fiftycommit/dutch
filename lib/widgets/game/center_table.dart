@@ -3,6 +3,7 @@ import '../../models/game_state.dart';
 import '../../models/playing_card.dart';
 import '../../services/ui/haptic_service.dart';
 import 'card_widget.dart';
+import 'deck_discard_widget.dart';
 import 'svg_builder_provider.dart';
 
 class CenterTable extends StatefulWidget {
@@ -20,6 +21,7 @@ class CenterTable extends StatefulWidget {
   final GlobalKey? discardKey;
   final PlayingCard? discardCardOverride;
   final GlobalKey? drawnCardKey;
+  final bool showDeckAndDiscard;
 
   const CenterTable({
     super.key,
@@ -37,6 +39,7 @@ class CenterTable extends StatefulWidget {
     this.discardKey,
     this.discardCardOverride,
     this.drawnCardKey,
+    this.showDeckAndDiscard = true,
   });
 
   @override
@@ -169,7 +172,7 @@ class _CenterTableState extends State<CenterTable> {
         ],
         if (widget.isMyTurn && widget.hasDrawn && gs.drawnCard != null) ...[
           _buildDrawnCardDisplay(gs),
-        ] else ...[
+        ] else if (widget.showDeckAndDiscard) ...[
           _buildDeckAndDiscard(gs, cardSize, padding, deckCount),
         ],
       ],
@@ -297,28 +300,25 @@ class _CenterTableState extends State<CenterTable> {
         gs.phase == GamePhase.playing &&
         gs.discardPile.isNotEmpty;
 
-    final deckCard = Opacity(
-      opacity: canDraw ? 1.0 : 0.6,
-      child: CardWidget(card: null, size: cardSize, isRevealed: false, svgBuilder: widget.svgBuilder),
-    );
-    final deckWidget = canDraw
-        ? GestureDetector(onTap: widget.onDrawCard, child: deckCard)
-        : deckCard;
-    final deckWidgetWithKey =
-        Container(key: widget.deckKey, child: deckWidget);
-    final discardCard = CardWidget(
-      card: widget.discardCardOverride ?? gs.topDiscardCard,
-      size: cardSize,
-      isRevealed: true,
+    final deckWidgetWithKey = DeckCardWidget(
+      key: widget.deckKey,
+      deckCount: deckCount,
+      cardSize: cardSize,
+      isCompact: widget.isCompactMode,
+      enabled: canDraw,
+      onTap: canDraw ? widget.onDrawCard : null,
       svgBuilder: widget.svgBuilder,
     );
-    final discardWidget = canTakeDiscard
-        ? GestureDetector(onTap: widget.onTakeFromDiscard, child: discardCard)
-        : (widget.onShowDiscard != null
-            ? GestureDetector(onTap: widget.onShowDiscard, child: discardCard)
-            : discardCard);
-    final discardWidgetWithKey =
-        Container(key: widget.discardKey, child: discardWidget);
+
+    final discardWidgetWithKey = DiscardCardWidget(
+      key: widget.discardKey,
+      card: widget.discardCardOverride ?? gs.topDiscardCard,
+      cardSize: cardSize,
+      onTap: canTakeDiscard
+          ? widget.onTakeFromDiscard
+          : widget.onShowDiscard,
+      svgBuilder: widget.svgBuilder,
+    );
 
     return Container(
       padding: EdgeInsets.all(padding),

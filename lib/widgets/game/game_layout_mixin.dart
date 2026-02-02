@@ -412,6 +412,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     Key? handKey,
     List<int>? hiddenIndices,
     List<String>? hiddenCardIds,
+    Widget? leftAccessory,
+    Widget? rightAccessory,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
@@ -478,6 +480,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
 
     if (isCompactMode) {
       return _buildCompactPlayerArea(
+        context: context,
         isMyTurn: isMyTurn,
         hasDrawn: hasDrawn,
         sideButtonWidth: sideButtonWidth,
@@ -487,6 +490,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
         onDraw: onDraw,
         onDiscard: onDiscard,
         onDutch: onDutch,
+        maxHeight: maxHeight,
+        leftAccessory: leftAccessory,
+        rightAccessory: rightAccessory,
       );
     }
 
@@ -505,6 +511,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
   }
 
   Widget _buildCompactPlayerArea({
+    required BuildContext context,
     required bool isMyTurn,
     required bool hasDrawn,
     required double sideButtonWidth,
@@ -514,7 +521,111 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required VoidCallback onDraw,
     required VoidCallback onDiscard,
     required VoidCallback onDutch,
+    required double maxHeight,
+    Widget? leftAccessory,
+    Widget? rightAccessory,
   }) {
+    final hasAccessories = leftAccessory != null || rightAccessory != null;
+    if (hasAccessories) {
+      final accessoryGap = ScreenUtils.spacing(context, 4.0);
+      final accessoryHeight = math.max(
+        0.0,
+        maxHeight - actionButtonHeight - accessoryGap,
+      );
+
+      Widget buildSideColumn({
+        required Widget? accessory,
+        required Widget buttonChild,
+      }) {
+        return SizedBox(
+          width: sideButtonWidth,
+          height: maxHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: sideButtonWidth,
+                height: accessoryHeight,
+                child: accessory != null
+                    ? FittedBox(
+                        fit: BoxFit.contain,
+                        alignment: Alignment.bottomCenter,
+                        child: accessory,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              if (accessoryHeight > 0) SizedBox(height: accessoryGap),
+              SizedBox(
+                width: sideButtonWidth,
+                height: actionButtonHeight,
+                child: buttonChild,
+              ),
+            ],
+          ),
+        );
+      }
+
+      final leftButtonChild = isMyTurn
+          ? (hasDrawn
+              ? GameActionButton(
+                  label: "JETER",
+                  color: Colors.redAccent,
+                  onTap: onDiscard,
+                  withPulse: true,
+                  compact: true,
+                )
+              : GameActionButton(
+                  label: "PIOCHER",
+                  color: Colors.green,
+                  onTap: onDraw,
+                  withPulse: true,
+                  compact: true,
+                ))
+          : const SizedBox.shrink();
+
+      final rightButtonChild = isMyTurn && !hasDrawn
+          ? GameActionButton(
+              label: "DUTCH",
+              color: Colors.amber.shade700,
+              onTap: onDutch,
+              withPulse: true,
+              compact: true,
+            )
+          : (isMyTurn && hasDrawn
+              ? Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.blueAccent)),
+                  child: const Text("GARDER",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold)),
+                )
+              : const SizedBox.shrink());
+
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          buildSideColumn(
+            accessory: leftAccessory,
+            buttonChild: leftButtonChild,
+          ),
+          SizedBox(width: sideGap),
+          Flexible(child: fittedPlayerBlock),
+          SizedBox(width: sideGap),
+          buildSideColumn(
+            accessory: rightAccessory,
+            buttonChild: rightButtonChild,
+          ),
+        ],
+      );
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
