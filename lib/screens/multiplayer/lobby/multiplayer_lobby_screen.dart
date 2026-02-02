@@ -1236,39 +1236,66 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                     SizedBox(width: f(8)),
                                     IconButton(
                                       icon: Icon(Icons.remove_circle_outline,
-                                          color: colors.error, size: f(20)),
-                                      tooltip: 'Expulser',
+                                          color: Colors.orange, size: f(20)),
+                                      tooltip: 'Exclure (peut revenir)',
                                       onPressed: () async {
                                         final confirm = await showDialog<bool>(
                                           context: context,
                                           builder: (ctx) => AlertDialog(
-                                            title: const Text(
-                                                'Expulser ce joueur ?'),
+                                            title: const Text('Exclure ce joueur ?'),
                                             content: Text(
-                                                'Voulez-vous vraiment expulser ${player['name']} ?'),
+                                                '${player['name']} sera exclu mais pourra revenir dans la room.'),
                                             actions: [
                                               TextButton(
-                                                onPressed: () =>
-                                                    Navigator.pop(ctx, false),
+                                                onPressed: () => Navigator.pop(ctx, false),
                                                 child: const Text('Annuler'),
                                               ),
                                               FilledButton(
-                                                onPressed: () =>
-                                                    Navigator.pop(ctx, true),
-                                                style: FilledButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.red),
-                                                child: const Text('Expulser'),
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+                                                child: const Text('Exclure'),
                                               ),
                                             ],
                                           ),
                                         );
 
                                         if (confirm == true) {
-                                          final clientId =
-                                              player['clientId'] as String?;
+                                          final clientId = player['clientId'] as String?;
                                           if (clientId != null) {
                                             await provider.kickPlayer(clientId);
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.block,
+                                          color: colors.error, size: f(20)),
+                                      tooltip: 'Bannir (définitif)',
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Bannir ce joueur ?'),
+                                            content: Text(
+                                                '${player['name']} sera banni et ne pourra PLUS rejoindre cette room.'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(ctx, false),
+                                                child: const Text('Annuler'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                                child: const Text('Bannir'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirm == true) {
+                                          final clientId = player['clientId'] as String?;
+                                          if (clientId != null) {
+                                            await provider.banPlayer(clientId);
                                           }
                                         }
                                       },

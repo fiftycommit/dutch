@@ -268,7 +268,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  // Kick un joueur (hôte uniquement)
+  // Kick un joueur (hôte uniquement) - le joueur PEUT revenir
   socket.on('room:kick', (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
@@ -282,7 +282,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
       const success = roomManager.kickPlayer(roomCode, socket.id, targetClientId);
 
       if (success) {
-        console.log(`Player ${targetClientId} kicked from ${roomCode}`);
+        console.log(`Player ${targetClientId} kicked from ${roomCode} (can rejoin)`);
       }
 
       callback({ success });
@@ -292,8 +292,8 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  // Accepter une demande de rejoin (hôte uniquement)
-  socket.on('room:accept_join', (data, callback) => {
+  // Bannir un joueur définitivement (hôte uniquement) - le joueur NE PEUT PAS revenir
+  socket.on('room:ban', (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
       const targetClientId = data.clientId?.toString();
@@ -303,39 +303,15 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
 
-      const success = roomManager.acceptJoinRequest(roomCode, socket.id, targetClientId);
+      const success = roomManager.banPlayer(roomCode, socket.id, targetClientId);
 
       if (success) {
-        console.log(`Join request accepted for ${targetClientId} in ${roomCode}`);
+        console.log(`Player ${targetClientId} BANNED from ${roomCode}`);
       }
 
       callback({ success });
     } catch (error: any) {
-      console.error('Error accepting join request:', error);
-      callback({ success: false, error: error.message });
-    }
-  });
-
-  // Refuser une demande de rejoin (hôte uniquement)
-  socket.on('room:reject_join', (data, callback) => {
-    try {
-      const roomCode = data.roomCode?.toString().toUpperCase();
-      const targetClientId = data.clientId?.toString();
-
-      if (!targetClientId) {
-        callback({ success: false, error: 'clientId requis' });
-        return;
-      }
-
-      const success = roomManager.rejectJoinRequest(roomCode, socket.id, targetClientId);
-
-      if (success) {
-        console.log(`Join request rejected for ${targetClientId} in ${roomCode}`);
-      }
-
-      callback({ success });
-    } catch (error: any) {
-      console.error('Error rejecting join request:', error);
+      console.error('Error banning player:', error);
       callback({ success: false, error: error.message });
     }
   });

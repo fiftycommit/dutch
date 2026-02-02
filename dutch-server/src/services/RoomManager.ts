@@ -197,30 +197,9 @@ export class RoomManager {
     this.pruneWaitingRoom(room);
     this.ensureHost(room);
 
-    // Vérifier si le joueur a été kické - il doit demander à revenir
-    if (clientId && room.kickedClientIds?.has(clientId)) {
-      // Créer une demande de rejoin au lieu de refuser directement
-      if (!room.pendingJoinRequests) {
-        room.pendingJoinRequests = new Map();
-      }
-
-      // Ajouter la demande
-      room.pendingJoinRequests.set(clientId, {
-        clientId,
-        socketId,
-        playerName: playerName || 'Joueur',
-        timestamp: this.now(),
-      });
-
-      // Notifier l'hôte qu'un joueur kické veut revenir
-      this.io.to(room.hostPlayerId).emit('room:join_request', {
-        roomCode,
-        clientId,
-        playerName: playerName || 'Joueur',
-        message: `${playerName || 'Un joueur'} demande à rejoindre la room`,
-      });
-
-      return { error: 'PENDING_APPROVAL' }; // Code spécial pour le client
+    // Vérifier si le joueur a été BANNI (pas juste kické)
+    if (clientId && room.bannedClientIds?.has(clientId)) {
+      return { error: 'Vous avez été banni de cette room' };
     }
 
     if (clientId) {
@@ -746,21 +725,14 @@ export class RoomManager {
     // On ne peut pas se kick soi-même
     if (target.id === hostId) return false;
 
-    // Notifier le joueur qu'il est kicked
+    // Notifier le joueur qu'il est kické (peut revenir)
     this.io.to(target.id).emit('room:kicked', {
       roomCode,
       message: "Vous avez été exclu de la room par l'hôte",
+      canRejoin: true, // Le joueur PEUT revenir
     });
 
-    // Ajouter le clientId à la liste des kickés pour empêcher le rejoin
-    if (target.clientId) {
-      if (!room.kickedClientIds) {
-        room.kickedClientIds = new Set();
-      }
-      room.kickedClientIds.add(target.clientId);
-    }
-
-    // Retirer le joueur
+    // Retirer le joueur (mais ne pas le bannir - il peut revenir)
     room.players.splice(targetIndex, 1);
     this.reindexPlayers(room);
 
@@ -771,9 +743,9 @@ export class RoomManager {
   }
 
   /**
-   * Accepter une demande de rejoin d'un joueur kické (hôte uniquement)
+   * Bannir un joueur définitivement (hôte uniquement)
    */
-  acceptJoinRequest(
+  banPlayer(
     roomCode: string,
     hostId: string,
     targetClientId: string
@@ -781,53 +753,43 @@ export class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room) return false;
 
-    // Seul l'hôte peut accepter
+    // Seul l'hôte peut bannir
     if (room.hostPlayerId !== hostId) return false;
 
-    const request = room.pendingJoinRequests?.get(targetClientId);
-    if (!request) return false;
+    // Trouver le joueur à bannir par clientId
+    const targetIndex = room.players.findIndex(
+      (p) => p.clientId === targetClientId
+    );
+    if (targetIndex < 0) return false;
 
-    // Retirer de la liste des kickés
-    room.kickedClientIds?.delete(targetClientId);
+    const target = room.players[targetIndex];
 
-    // Retirer la demande en attente
-    room.pendingJoinRequests?.delete(targetClientId);
+    // On ne peut pas se bannir soi-même
+    if (target.id === hostId) return false;
 
-    // Notifier le joueur qu'il peut rejoindre
-    this.io.to(request.socketId).emit('room:join_accepted', {
+    // Notifier le joueur qu'il est banni (ne peut PAS revenir)
+    this.io.to(target.id).emit('room:banned', {
       roomCode,
-      message: "L'hôte a accepté votre demande",
+      message: "Vous avez été banni de cette room par l'hôte",
+      canRejoin: false,
     });
+
+    // Ajouter le clientId à la liste des bannis
+    if (target.clientId) {
+      if (!room.bannedClientIds) {
+        room.bannedClientIds = new Set();
+      }
+      room.bannedClientIds.add(target.clientId);
+    }
+
+    // Retirer le joueur
+    room.players.splice(targetIndex, 1);
+    this.reindexPlayers(room);
 
     this.touchRoom(room);
+    this.broadcastPresence(roomCode);
+
     return true;
-  }
-
-  /**
-   * Refuser une demande de rejoin d'un joueur kické (hôte uniquement)
-   */
-  rejectJoinRequest(
-    roomCode: string,
-    hostId: string,
-    targetClientId: string
-  ): boolean {
-    const room = this.rooms.get(roomCode);
-    if (!room) return false;
-
-    // Seul l'hôte peut refuser
-    if (room.hostPlayerId !== hostId) return false;
-
-    const request = room.pendingJoinRequests?.get(targetClientId);
-    if (!request) return false;
-
-    // Retirer la demande en attente
-    room.pendingJoinRequests?.delete(targetClientId);
-
-    // Notifier le joueur que sa demande est refusée
-    this.io.to(request.socketId).emit('room:join_rejected', {
-      roomCode,
-      message: "L'hôte a refusé votre demande",
-    });
 
     this.touchRoom(room);
     return true;

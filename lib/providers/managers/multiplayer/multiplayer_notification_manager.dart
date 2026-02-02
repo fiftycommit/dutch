@@ -11,11 +11,17 @@ class MultiplayerNotificationManager {
   String? _closedRoomCode;
   String? get closedRoomCode => _closedRoomCode;
 
-  // Kick par l'hôte
+  // Kick par l'hôte (peut revenir)
   bool _wasKicked = false;
   bool get wasKicked => _wasKicked;
   String? _kickedMessage;
   String? get kickedMessage => _kickedMessage;
+
+  // Ban par l'hôte (définitif)
+  bool _wasBanned = false;
+  bool get wasBanned => _wasBanned;
+  String? _bannedMessage;
+  String? get bannedMessage => _bannedMessage;
 
   // Notification: joueur parti
   bool _playerLeftNotification = false;
@@ -76,13 +82,28 @@ class MultiplayerNotificationManager {
 
   void handleKicked(Map<String, dynamic> data) {
     _wasKicked = true;
-    _kickedMessage = data['message']?.toString() ?? 'Vous avez été exclu';
+    _kickedMessage = data['message']?.toString() ?? 'Vous avez été exclu (vous pouvez revenir)';
     _notifyListeners();
   }
 
   void acknowledgeKicked() {
     _wasKicked = false;
     _kickedMessage = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BAN
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void handleBanned(Map<String, dynamic> data) {
+    _wasBanned = true;
+    _bannedMessage = data['message']?.toString() ?? 'Vous avez été banni de cette room';
+    _notifyListeners();
+  }
+
+  void acknowledgeBanned() {
+    _wasBanned = false;
+    _bannedMessage = null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -178,6 +199,8 @@ class MultiplayerNotificationManager {
     _closedRoomCode = null;
     _wasKicked = false;
     _kickedMessage = null;
+    _wasBanned = false;
+    _bannedMessage = null;
     _playerLeftNotification = false;
     _lastPlayerLeftName = null;
     _specialPowerNotification = false;

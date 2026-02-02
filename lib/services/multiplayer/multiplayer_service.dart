@@ -56,6 +56,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onRoomClosed;
   Function(Map<String, dynamic>)? onRoomRestarted;
   Function(Map<String, dynamic>)? onKicked;
+  Function(Map<String, dynamic>)? onBanned;
   Function(Map<String, dynamic>)? onPlayerLeft;
   Function(Map<String, dynamic>)? onPlayerAfk;
   Function(Map<String, dynamic>)? onSpecialPowerTargeted;
@@ -296,6 +297,18 @@ class MultiplayerService {
     return completer.future;
   }
 
+  /// Bannir un joueur définitivement (ne peut plus revenir)
+  Future<bool> banPlayer(String clientId) async {
+    if (_currentRoomCode == null) return false;
+    final completer = Completer<bool>();
+
+    socket?.emitWithAck('room:ban', {'roomCode': _currentRoomCode, 'clientId': clientId}, ack: (response) {
+      completer.complete(response?['success'] == true);
+    });
+
+    return completer.future;
+  }
+
   Future<bool> setGameMode(int gameMode) async {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
@@ -373,10 +386,19 @@ class MultiplayerService {
     socket.on('room:restarted', (data) { if (data is Map) onRoomRestarted?.call(data.cast<String, dynamic>()); });
     
     socket.on('room:kicked', (data) {
+      // Kické mais peut revenir
       if (_currentRoomCode != null) _roomsRepository.removeRoom(_currentRoomCode!);
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onKicked?.call(data.cast<String, dynamic>());
+    });
+
+    socket.on('room:banned', (data) {
+      // Banni définitivement - ne peut plus revenir
+      if (_currentRoomCode != null) _roomsRepository.removeRoom(_currentRoomCode!);
+      _currentRoomCode = null;
+      _connectionHandler.lastRoomCode = null;
+      if (data is Map) onBanned?.call(data.cast<String, dynamic>());
     });
     
     socket.on('player:left', (data) { if (data is Map) onPlayerLeft?.call(data.cast<String, dynamic>()); });

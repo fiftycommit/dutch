@@ -261,6 +261,10 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       _notificationManager.handleKicked(data);
       _resetRoomState();
     };
+    _multiplayerService.onBanned = (data) {
+      _notificationManager.handleBanned(data);
+      _resetRoomState();
+    };
     _multiplayerService.onPlayerLeft = _notificationManager.handlePlayerLeft;
     _multiplayerService.onPlayerAfk = (data) {
       final playerId = data['playerId']?.toString();
@@ -491,6 +495,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   Future<bool> restartGame() async => _isHost ? await _multiplayerService.restartGame() : false;
   Future<bool> kickPlayer(String clientId) async => _isHost ? await _multiplayerService.kickPlayer(clientId) : false;
+  Future<bool> banPlayer(String clientId) async => _isHost ? await _multiplayerService.banPlayer(clientId) : false;
 
   Future<bool> setGameMode(GameMode mode) async {
     if (!_isHost) return false;
