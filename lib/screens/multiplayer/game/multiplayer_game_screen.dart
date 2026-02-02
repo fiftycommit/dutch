@@ -35,6 +35,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   bool _showEmoteOverlay = false;
   bool _hostClosedDialogShown = false;
   bool _kickedDialogShown = false;
+  bool _bannedDialogShown = false;
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
 
@@ -250,12 +251,25 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           });
         }
 
-        // Handle Kicked (AFK or manually)
+        // Handle Kicked (AFK or manually) - peut revenir
         if (gameProvider.wasKicked && !_kickedDialogShown) {
           _kickedDialogShown = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              gameProvider.acknowledgeKicked();
               MultiplayerDialogs.showKickedDialog(context, gameProvider.kickedMessage);
+            }
+          });
+          return const Scaffold(backgroundColor: Color(0xFF1a472a));
+        }
+
+        // Handle Banned - définitif
+        if (gameProvider.wasBanned && !_bannedDialogShown) {
+          _bannedDialogShown = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+              gameProvider.acknowledgeBanned();
+              MultiplayerDialogs.showBannedDialog(context, gameProvider.bannedMessage);
             }
           });
           return const Scaffold(backgroundColor: Color(0xFF1a472a));

@@ -8,6 +8,7 @@ import '../../../../../services/multiplayer/multiplayer_service.dart';
 import '../../../../../models/game_state.dart';
 import '../../../../../models/game_settings.dart';
 import '../../../widgets/dialogs/connection_error_dialog.dart';
+import '../../../widgets/dialogs/multiplayer/multiplayer_dialogs.dart';
 
 
 class MultiplayerLobbyScreen extends StatefulWidget {
@@ -131,6 +132,22 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             _showRoomClosedDialog(context, provider);
+          });
+        }
+
+        // Afficher dialog si kické (peut revenir)
+        if (provider.wasKicked) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _showKickedDialog(context, provider);
+          });
+        }
+
+        // Afficher dialog si banni (définitif)
+        if (provider.wasBanned) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _showBannedDialog(context, provider);
           });
         }
 
@@ -582,6 +599,42 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         context.go('/multiplayer');
       }
     }
+  }
+
+  bool _kickedDialogShown = false;
+
+  void _showKickedDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) {
+    if (_kickedDialogShown) return;
+    _kickedDialogShown = true;
+
+    provider.acknowledgeKicked();
+    MultiplayerDialogs.showKickedDialog(context, provider.kickedMessage);
+
+    // Reset après fermeture
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _kickedDialogShown = false;
+    });
+  }
+
+  bool _bannedDialogShown = false;
+
+  void _showBannedDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) {
+    if (_bannedDialogShown) return;
+    _bannedDialogShown = true;
+
+    provider.acknowledgeBanned();
+    MultiplayerDialogs.showBannedDialog(context, provider.bannedMessage);
+
+    // Reset après fermeture
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _bannedDialogShown = false;
+    });
   }
 
   bool _connectionErrorDialogShown = false;

@@ -134,6 +134,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   String? get closedRoomCode => _notificationManager.closedRoomCode;
   bool get wasKicked => _notificationManager.wasKicked;
   String? get kickedMessage => _notificationManager.kickedMessage;
+  bool get wasBanned => _notificationManager.wasBanned;
+  String? get bannedMessage => _notificationManager.bannedMessage;
   bool get playerLeftNotification => _notificationManager.playerLeftNotification;
   String? get lastPlayerLeftName => _notificationManager.lastPlayerLeftName;
   bool get specialPowerNotification => _notificationManager.specialPowerNotification;
@@ -589,6 +591,7 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   void clearSpyNotification() => _notificationManager.clearSpyNotification();
   void acknowledgeRoomClosed() { _notificationManager.acknowledgeRoomClosed(); _resetRoomState(); }
   void acknowledgeKicked() => _notificationManager.acknowledgeKicked();
+  void acknowledgeBanned() => _notificationManager.acknowledgeBanned();
   void clearError() { _notificationManager.clearError(); _connectionManager.clearError(); }
 
   void closeSpiedCardDialog() {
