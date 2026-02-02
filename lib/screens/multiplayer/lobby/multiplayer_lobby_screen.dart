@@ -116,8 +116,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   Widget build(BuildContext context) {
     return Consumer<MultiplayerGameProvider>(
       builder: (context, provider, _) {
-        // Naviguer vers le jeu si la partie a commencé
-        if (provider.isPlaying && provider.gameState != null) {
+        // Naviguer vers le jeu si la partie a commencé (mais pas si elle est terminée)
+        if (provider.isPlaying && provider.gameState != null && 
+            provider.gameState!.phase != GamePhase.ended) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             // Only push if we are the current route to avoid multiple pushes

@@ -19,6 +19,7 @@ import 'package:dutch_game/widgets/dialogs/multiplayer/multiplayer_dialogs.dart'
 import 'package:dutch_game/widgets/multiplayer/game_overlays.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
+import 'package:dutch_game/utils/tournament_labels.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});
@@ -389,7 +390,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   ),
                 ),
 
-                // Room Code and FPS/Status Overlay would go here if desired
+                // Room Code and Tournament Info Overlay
                 Positioned(
                   top: 10,
                   left: 10,
@@ -399,16 +400,47 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     decoration: BoxDecoration(
                         color: Colors.black45,
                         borderRadius: BorderRadius.circular(20)),
-                    child: Row(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.videogame_asset,
-                            color: Colors.white70, size: 16),
-                        const SizedBox(width: 8),
-                        Text("Room: ${gameProvider.roomCode ?? '?'}",
-                            style: const TextStyle(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              gameState.gameMode == GameMode.tournament 
+                                  ? Icons.emoji_events 
+                                  : Icons.videogame_asset,
+                              color: gameState.gameMode == GameMode.tournament 
+                                  ? Colors.amber 
+                                  : Colors.white70, 
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              gameState.gameMode == GameMode.tournament
+                                  ? tournamentStageLabel(
+                                      gameState.tournamentRound,
+                                      totalRounds: gameProvider.tournamentTotalRounds,
+                                    )
+                                  : "Room: ${gameProvider.roomCode ?? '?'}",
+                              style: const TextStyle(
                                 color: Colors.amber,
-                                fontWeight: FontWeight.bold)),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (gameState.gameMode == GameMode.tournament) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

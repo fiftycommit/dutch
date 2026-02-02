@@ -6,6 +6,7 @@ import '../../../models/player.dart';
 import '../../../providers/multiplayer_game_provider.dart';
 import '../../../services/game/rp_result_helper.dart';
 import '../../../services/multiplayer/competitive_service.dart';
+import '../../../utils/tournament_labels.dart';
 import '../../shared/unified_results_screen.dart' as shared;
 
 /// Écran de résultats pour le mode multiplayer
@@ -49,18 +50,109 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MultiplayerGameProvider>();
+    final gameState = widget.gameState;
+    final isTournament = gameState.gameMode == GameMode.tournament;
+    final totalRounds = isTournament ? provider.tournamentTotalRounds : 1;
+    final isFinalRound = provider.isTournamentFinalRound;
+    final isLocalEliminated = isTournament && provider.isLocalPlayerEliminated();
+    final isTournamentOver = isTournament && (isFinalRound || isLocalEliminated);
+    
+    final stageLabel = isTournament
+        ? tournamentStageLabel(gameState.tournamentRound, totalRounds: totalRounds)
+        : null;
+
+    final eliminatedIds = <String>{};
+    if (isTournament) {
+      eliminatedIds.addAll(provider.getEliminatedPlayerIds());
+    }
+
+    // Vérifier si le joueur local a gagné le tournoi
+    final localPlayer = gameState.players.where((p) => p.id == widget.localPlayerId).firstOrNull;
+    final localRank = localPlayer != null
+        ? (gameState.getFinalRanksWithTies()[localPlayer.id] ?? 
+           (gameState.getFinalRanking().indexWhere((p) => p.id == localPlayer.id) + 1))
+        : 0;
+    final isTournamentWinner = isTournament && isFinalRound && localRank == 1;
 
     return shared.ResultsScreen(
       config: shared.ResultsConfig(
-        gameState: widget.gameState,
+        gameState: gameState,
         localPlayerId: widget.localPlayerId,
-        title: "RÉSULTATS",
+        title: isTournament
+            ? (isTournamentOver
+                ? "FIN DU TOURNOI"
+                : "${stageLabel!.toUpperCase()} TERMINÉE")
+            : "RÉSULTATS",
+        subtitle: isTournamentOver ? stageLabel : null,
+        alertBanner: isTournamentWinner
+            ? _buildTournamentWinnerBanner()
+            : (isTournament && isLocalEliminated)
+                ? _buildEliminatedBanner(stageLabel)
+                : null,
+        isTournamentFinal: isFinalRound,
+        eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
         shouldRedirect: () => provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
         onRedirect: () {
           context.go('/lobby');
         },
-        buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider),
-        rpCalculator: (player, rank) => _calculateRP(player, rank, widget.gameState),
+        buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider, isTournament: isTournament, isTournamentOver: isTournamentOver),
+        rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
+      ),
+    );
+  }
+
+  Widget _buildTournamentWinnerBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.amber.shade700, Colors.orange.shade600],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.emoji_events, color: Colors.white, size: 24),
+          SizedBox(width: 8),
+          Text(
+            "🏆 CHAMPION DU TOURNOI ! 🏆",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEliminatedBanner(String? stageLabel) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.red.shade900.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.redAccent, width: 2),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            "💀 ÉLIMINÉ DU TOURNOI",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          if (stageLabel != null)
+            Text(
+              "Éliminé en $stageLabel",
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+        ],
       ),
     );
   }
@@ -79,13 +171,25 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     );
   }
 
-  List<Widget> _buildMultiplayerButtons(BuildContext context, MultiplayerGameProvider provider) {
+  List<Widget> _buildMultiplayerButtons(
+    BuildContext context,
+    MultiplayerGameProvider provider, {
+    bool isTournament = false,
+    bool isTournamentOver = false,
+  }) {
+    // Texte du bouton principal selon le mode
+    final nextRoundLabel = isTournament && !isTournamentOver
+        ? "MANCHE SUIVANTE >>"
+        : "Retour au Salon";
+
     if (provider.isHost) {
       return [
-        // Bouton retour au salon (Host uniquement)
+        // Bouton manche suivante / retour au salon (Host uniquement)
         shared.ResultsActionButton(
-          label: "Retour au Salon",
-          backgroundColor: Colors.green.shade700,
+          label: nextRoundLabel,
+          backgroundColor: isTournament && !isTournamentOver
+              ? Colors.amber.shade700
+              : Colors.green.shade700,
           onPressed: () => provider.restartGame(),
         ),
 
@@ -93,7 +197,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
 
         // Bouton fermer la room (Host uniquement)
         shared.ResultsActionButton(
-          label: "Fermer la room",
+          label: isTournamentOver ? "Terminer le tournoi" : "Fermer la room",
           backgroundColor: Colors.red.shade700,
           onPressed: () {
             provider.closeRoom();
@@ -103,23 +207,37 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    // Non-host: boutons pour retourner au lobby ou quitter
+    // Non-host: message d'attente uniquement (pas de navigation pour éviter les bugs)
     return [
-      shared.ResultsActionButton(
-        label: "Retour au Salon",
-        backgroundColor: Colors.green.shade700,
-        onPressed: () => context.go('/lobby'),
-      ),
-
-      const SizedBox(height: 12),
-
-      shared.ResultsActionButton(
-        label: "Quitter",
-        backgroundColor: Colors.red.shade700,
-        onPressed: () {
-          provider.leaveRoom();
-          context.go('/multiplayer');
-        },
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.black26,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              isTournament && !isTournamentOver
+                  ? "En attente de la manche suivante..."
+                  : "En attente de l'hôte...",
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
       ),
     ];
   }

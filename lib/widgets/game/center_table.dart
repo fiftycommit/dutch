@@ -74,20 +74,46 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     }
   }
 
+  double _targetProgress = 1.0;
+  DateTime? _lastProgressUpdate;
+
   void _onProgressTick() {
     if (!mounted) return;
     if (widget.gameState.phase != GamePhase.reaction) {
       return;
     }
-    // Calculer le progrès actuel basé sur le temps restant
+    
+    // Calculer le progrès cible basé sur le temps restant
     final total = widget.reactionTimeTotalMs;
     final remaining = widget.gameState.reactionTimeRemaining;
-    final newProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
-
-    if ((_currentProgress - newProgress).abs() > 0.001) {
-      setState(() {
-        _currentProgress = newProgress;
-      });
+    final newTarget = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
+    
+    // Mettre à jour la cible quand elle change significativement
+    if ((_targetProgress - newTarget).abs() > 0.01) {
+      _targetProgress = newTarget;
+      _lastProgressUpdate = DateTime.now();
+    }
+    
+    // Interpoler vers la cible pour une animation fluide
+    // Utiliser une interpolation linéaire avec un léger lissage
+    final now = DateTime.now();
+    if (_lastProgressUpdate != null) {
+      final elapsed = now.difference(_lastProgressUpdate!).inMilliseconds;
+      // Interpoler sur ~100ms pour lisser les mises à jour
+      final t = (elapsed / 100.0).clamp(0.0, 1.0);
+      final smoothProgress = _currentProgress + (_targetProgress - _currentProgress) * t;
+      
+      if ((_currentProgress - smoothProgress).abs() > 0.001) {
+        setState(() {
+          _currentProgress = smoothProgress;
+        });
+      }
+    } else {
+      if ((_currentProgress - newTarget).abs() > 0.001) {
+        setState(() {
+          _currentProgress = newTarget;
+        });
+      }
     }
   }
 

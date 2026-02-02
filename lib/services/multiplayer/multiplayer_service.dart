@@ -68,6 +68,8 @@ class MultiplayerService {
   Function(String)? onGameResumed;
   Function(Map<String, dynamic>)? onGameAllReady;
   Function(Map<String, dynamic>)? onEmoteReceived;
+  Function(Map<String, dynamic>)? onTournamentEliminated;
+  Function(Map<String, dynamic>)? onTournamentEnded;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONNEXION
@@ -409,6 +411,8 @@ class MultiplayerService {
     socket.on('special_power:spy_notification', (data) { if (data is Map) onSpyNotification?.call(data.cast<String, dynamic>()); });
 
     socket.on('game:emote', (data) { if (data is Map) onEmoteReceived?.call(data.cast<String, dynamic>()); });
+    socket.on('tournament:eliminated', (data) { if (data is Map) onTournamentEliminated?.call(data.cast<String, dynamic>()); });
+    socket.on('tournament:ended', (data) { if (data is Map) onTournamentEnded?.call(data.cast<String, dynamic>()); });
 
     socket.on('game:full_state', (data) {
       if (data is Map) {

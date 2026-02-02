@@ -225,6 +225,19 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
+    # Sitemap et robots.txt pour SEO (bypass SPA)
+    location = /sitemap.xml {
+        root /var/www/dutch/web;
+        default_type application/xml;
+        try_files /sitemap.xml =404;
+    }
+
+    location = /robots.txt {
+        root /var/www/dutch/web;
+        default_type text/plain;
+        try_files /robots.txt =404;
+    }
+
     # Tout le reste -> Flutter SPA (URL routing)
     location / {
         # Essaie de servir le fichier, sinon renvoie index.html

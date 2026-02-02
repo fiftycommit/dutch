@@ -251,7 +251,17 @@ class _GameTableContentState extends State<_GameTableContent>
     }
     _lastDiscardPileSize = gs.discardPile.length;
     _lastTopDiscardCard = gs.topDiscardCard;
-    _lastDrawnCard = gs.drawnCard;
+    // En multijoueur, ne tracker la carte piochée que si c'est notre tour
+    // Cela évite que tous les joueurs voient l'animation quand un autre pioche
+    final human = _humanPlayer;
+    final isMultiplayer = mpConfig.playerId != null;
+    final isMyTurn = human != null && gs.currentPlayer.id == human.id;
+    if (!isMultiplayer || isMyTurn) {
+      _lastDrawnCard = gs.drawnCard;
+    } else if (gs.drawnCard == null) {
+      // Reset quand la carte piochée disparaît (fin du tour de l'autre joueur)
+      _lastDrawnCard = null;
+    }
   }
 
   void _checkPenaltyAnimations() {

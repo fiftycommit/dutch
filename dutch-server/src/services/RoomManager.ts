@@ -654,6 +654,7 @@ export class RoomManager {
 
   /**
    * Redémarre une partie (rematch) - garde les joueurs et scores cumulés
+   * En mode tournoi: élimine le dernier du classement
    */
   restartGame(roomCode: string, requesterId: string): boolean {
     const room = this.rooms.get(roomCode);
@@ -665,10 +666,53 @@ export class RoomManager {
     // La partie doit être terminée
     if (room.status !== RoomStatus.ended) return false;
 
-    // Reset room state for new game
+    // En mode tournoi, gérer l'élimination
+    let eliminatedPlayerId: string | null = null;
+    if (room.gameMode === GameMode.tournament && room.gameState) {
+      // Calculer le classement final (score le plus bas = meilleur)
+      const ranking = [...room.gameState.players]
+        .filter(p => !room.gameState!.eliminatedPlayerIds.includes(p.id))
+        .sort((a, b) => calculateScore(a) - calculateScore(b));
+
+      // S'il reste plus de 2 joueurs, éliminer le dernier
+      if (ranking.length > 2) {
+        const eliminated = ranking[ranking.length - 1];
+        eliminatedPlayerId = eliminated.id;
+        console.log(`🏆 Tournoi ${roomCode}: ${eliminated.name} éliminé (score: ${calculateScore(eliminated)})`);
+      } else if (ranking.length <= 2) {
+        // C'était la finale, le tournoi est terminé
+        console.log(`🏆 Tournoi ${roomCode} terminé! Gagnant: ${ranking[0]?.name}`);
+      }
+    }
 
     // Remove bots so we can refill them or play just humans
-    room.players = room.players.filter((p) => p.isHuman);
+    // En mode tournoi, aussi retirer le joueur éliminé
+    room.players = room.players.filter((p) => {
+      if (!p.isHuman) return false; // Toujours retirer les bots
+      if (room.gameMode === GameMode.tournament && p.id === eliminatedPlayerId) {
+        // Notifier le joueur éliminé
+        this.io.to(p.id).emit('tournament:eliminated', {
+          roomCode,
+          message: 'Vous avez été éliminé du tournoi !',
+          finalRank: room.players.filter(pl => pl.isHuman).length,
+        });
+        return false; // Retirer le joueur éliminé
+      }
+      return true;
+    });
+
+    // Vérifier qu'il reste assez de joueurs pour continuer
+    const humanCount = room.players.filter(p => p.isHuman).length;
+    if (room.gameMode === GameMode.tournament && humanCount < 2) {
+      // Pas assez de joueurs, le tournoi est terminé
+      this.io.to(roomCode).emit('tournament:ended', {
+        roomCode,
+        message: 'Tournoi terminé !',
+        winner: room.players[0]?.name || 'Inconnu',
+      });
+      // Ne pas relancer, garder le status 'ended'
+      return false;
+    }
 
     room.status = RoomStatus.waiting;
     room.gameState = null;
@@ -693,8 +737,12 @@ export class RoomManager {
 
     this.io.to(roomCode).emit('room:restarted', {
       roomCode,
-      message: 'Nouvelle partie !',
+      message: room.gameMode === GameMode.tournament 
+        ? `Manche ${room.tournamentRound} !` 
+        : 'Nouvelle partie !',
       cumulativeScores: this.getCumulativeScoresArray(room),
+      tournamentRound: room.tournamentRound,
+      eliminatedPlayerId,
     });
 
     return true;
@@ -789,9 +837,6 @@ export class RoomManager {
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
 
-    return true;
-
-    this.touchRoom(room);
     return true;
   }
 

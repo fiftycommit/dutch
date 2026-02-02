@@ -161,6 +161,65 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   bool isPlayerAfk(String playerId) => _afkPlayerIds.contains(playerId);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TOURNOI
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Nombre total de manches du tournoi (joueurs initiaux - 1)
+  int get tournamentTotalRounds {
+    if (_gameState == null) return 1;
+    // Calcul basé sur le nombre de joueurs initial
+    // En manche N, il reste (initialPlayers - N + 1) joueurs
+    // Donc initialPlayers = players.length + tournamentRound - 1
+    final initialPlayers = _gameState!.players.length + _gameState!.tournamentRound - 1;
+    return initialPlayers - 1; // On élimine 1 joueur par manche jusqu'à 2
+  }
+
+  /// Manche actuelle du tournoi
+  int get tournamentRound => _gameState?.tournamentRound ?? 1;
+
+  /// Vérifie si c'est la dernière manche du tournoi
+  bool get isTournamentFinalRound {
+    if (_gameState?.gameMode != GameMode.tournament) return false;
+    return tournamentRound >= tournamentTotalRounds || _gameState!.players.length <= 2;
+  }
+
+  /// Vérifie si le joueur local est éliminé dans ce tournoi
+  bool isLocalPlayerEliminated() {
+    if (_gameState?.gameMode != GameMode.tournament) return false;
+    final survivorIds = _getSurvivorIds();
+    return playerId != null && !survivorIds.contains(playerId);
+  }
+
+  /// Récupère les IDs des joueurs éliminés à cette manche
+  Set<String> getEliminatedPlayerIds() {
+    if (_gameState?.gameMode != GameMode.tournament) return {};
+    if (isTournamentFinalRound) {
+      // En finale, tous sauf le gagnant sont "éliminés"
+      final ranking = _gameState!.getFinalRanking();
+      return ranking.skip(1).map((p) => p.id).toSet();
+    }
+    final survivorIds = _getSurvivorIds();
+    return _gameState!.players
+        .where((p) => !survivorIds.contains(p.id))
+        .map((p) => p.id)
+        .toSet();
+  }
+
+  /// Récupère les IDs des survivants (tous sauf le dernier du classement)
+  Set<String> _getSurvivorIds() {
+    if (_gameState == null) return {};
+    final ranking = _gameState!.getFinalRanking();
+    final keepCount = (ranking.length - 1).clamp(1, ranking.length);
+    return ranking.take(keepCount).map((p) => p.id).toSet();
+  }
+
+  /// Vérifie si le tournoi est terminé (finale jouée ou joueur local éliminé)
+  bool get isTournamentOver {
+    if (_gameState?.gameMode != GameMode.tournament) return false;
+    return isTournamentFinalRound || isLocalPlayerEliminated();
+  }
+
   int get readyHumanCount => _playersInLobby.where((p) {
         if (p['isHuman'] != true) return false;
         if (p['isSpectator'] == true) return false;
@@ -261,11 +320,13 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     };
     _multiplayerService.onKicked = (data) {
       _notificationManager.handleKicked(data);
-      _resetRoomState();
+      // Ne pas appeler _resetRoomState() ici - le dialog de kick naviguera vers /multiplayer
+      // et le state sera reset lors de la prochaine connexion à une room
     };
     _multiplayerService.onBanned = (data) {
       _notificationManager.handleBanned(data);
-      _resetRoomState();
+      // Ne pas appeler _resetRoomState() ici - le dialog de ban naviguera vers /multiplayer
+      // et le state sera reset lors de la prochaine connexion à une room
     };
     _multiplayerService.onPlayerLeft = _notificationManager.handlePlayerLeft;
     _multiplayerService.onPlayerAfk = (data) {
@@ -294,6 +355,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       notifyListeners();
     };
     _multiplayerService.onEmoteReceived = _handleEmoteReceived;
+    _multiplayerService.onTournamentEliminated = _handleTournamentEliminated;
+    _multiplayerService.onTournamentEnded = _handleTournamentEnded;
   }
 
   void _handleEmoteReceived(Map<String, dynamic> data) {
@@ -304,6 +367,40 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     // Ne pas afficher l'emote si c'est nous qui l'avons envoyé (déjà affiché localement)
     if (senderId != null && senderId == playerId) return;
     _chatManager.addLocalEmote(emoji, playerName, senderId ?? '');
+  }
+
+  // État pour le tournoi
+  bool _tournamentEliminated = false;
+  String? _tournamentEliminatedMessage;
+  bool _tournamentEnded = false;
+  String? _tournamentWinner;
+
+  bool get tournamentEliminated => _tournamentEliminated;
+  String? get tournamentEliminatedMessage => _tournamentEliminatedMessage;
+  bool get tournamentEnded => _tournamentEnded;
+  String? get tournamentWinner => _tournamentWinner;
+
+  void _handleTournamentEliminated(Map<String, dynamic> data) {
+    _tournamentEliminated = true;
+    _tournamentEliminatedMessage = data['message']?.toString() ?? 'Vous avez été éliminé du tournoi !';
+    notifyListeners();
+  }
+
+  void _handleTournamentEnded(Map<String, dynamic> data) {
+    _tournamentEnded = true;
+    _tournamentWinner = data['winner']?.toString();
+    notifyListeners();
+  }
+
+  void acknowledgeTournamentEliminated() {
+    _tournamentEliminated = false;
+    _tournamentEliminatedMessage = null;
+    _resetRoomState();
+  }
+
+  void acknowledgeTournamentEnded() {
+    _tournamentEnded = false;
+    _tournamentWinner = null;
   }
 
   void _handleGameStateUpdate(GameState gameState) {
@@ -590,8 +687,14 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   void clearJokerNotification() => _notificationManager.clearJokerNotification();
   void clearSpyNotification() => _notificationManager.clearSpyNotification();
   void acknowledgeRoomClosed() { _notificationManager.acknowledgeRoomClosed(); _resetRoomState(); }
-  void acknowledgeKicked() => _notificationManager.acknowledgeKicked();
-  void acknowledgeBanned() => _notificationManager.acknowledgeBanned();
+  void acknowledgeKicked() {
+    _notificationManager.acknowledgeKicked();
+    _resetRoomState();
+  }
+  void acknowledgeBanned() {
+    _notificationManager.acknowledgeBanned();
+    _resetRoomState();
+  }
   void clearError() { _notificationManager.clearError(); _connectionManager.clearError(); }
 
   void closeSpiedCardDialog() {

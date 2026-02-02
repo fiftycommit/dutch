@@ -292,6 +292,23 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
+  // Envoyer un emote à tous les joueurs de la room
+  socket.on('game:emote', (data) => {
+    try {
+      const roomCode = data.roomCode?.toString().toUpperCase();
+      if (!roomCode) return;
+
+      // Broadcast l'emote à tous les joueurs de la room (y compris l'envoyeur)
+      socket.to(roomCode).emit('game:emote', {
+        emoji: data.emoji,
+        playerName: data.playerName,
+        playerId: socket.id,
+      });
+    } catch (error) {
+      console.error('Error sending emote:', error);
+    }
+  });
+
   // Bannir un joueur définitivement (hôte uniquement) - le joueur NE PEUT PAS revenir
   socket.on('room:ban', (data, callback) => {
     try {
