@@ -13,11 +13,15 @@ class BotAIServiceImpl implements IBotAIService {
     GameState gameState, {
     int? playerMMR,
     BuildContext? context,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     await BotAI.playBotTurn(
       gameState,
       playerMMR: playerMMR,
       context: context,
+      hardcoreLevel: hardcoreLevel,
+      playerSkillEstimate: playerSkillEstimate,
     );
   }
 
@@ -26,11 +30,15 @@ class BotAIServiceImpl implements IBotAIService {
     GameState gameState,
     Player bot, {
     int? playerMMR,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     return await BotAI.tryReactionMatch(
       gameState,
       bot,
       playerMMR: playerMMR,
+      hardcoreLevel: hardcoreLevel,
+      playerSkillEstimate: playerSkillEstimate,
     );
   }
 
@@ -39,11 +47,15 @@ class BotAIServiceImpl implements IBotAIService {
     GameState gameState, {
     int? playerMMR,
     BuildContext? context,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     await BotAI.useBotSpecialPower(
       gameState,
       playerMMR: playerMMR,
       context: context,
+      hardcoreLevel: hardcoreLevel,
+      playerSkillEstimate: playerSkillEstimate,
     );
   }
 }

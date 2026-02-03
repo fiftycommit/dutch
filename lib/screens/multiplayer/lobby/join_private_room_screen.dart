@@ -107,7 +107,158 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    
+                    final isCompactLandscape = constraints.maxHeight < 400 && constraints.maxWidth > constraints.maxHeight;
+
+                    // Layout compact pour petit ecran en paysage
+                    if (isCompactLandscape) {
+                      return SingleChildScrollView(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            child: Card(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              elevation: 8,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Entre le code à 6 caractères partagé par l\'hôte',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Row avec code et pseudo
+                                    Row(
+                                      children: [
+                                        // Champ code
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _codeController,
+                                            enabled: !_isJoining,
+                                            textCapitalization: TextCapitalization.characters,
+                                            maxLength: 6,
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 4,
+                                            ),
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                                              UpperCaseTextFormatter(),
+                                            ],
+                                            decoration: InputDecoration(
+                                              labelText: 'Code du salon',
+                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              counterText: '',
+                                              isDense: true,
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              filled: true,
+                                              fillColor: Colors.grey.shade100,
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                                borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        // Champ pseudo
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _nameController,
+                                            enabled: !_isJoining,
+                                            textCapitalization: TextCapitalization.words,
+                                            maxLength: 20,
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                            decoration: InputDecoration(
+                                              labelText: 'Ton pseudo',
+                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              counterText: '',
+                                              isDense: true,
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              filled: true,
+                                              fillColor: Colors.grey.shade100,
+                                              prefixIcon: Icon(Icons.person, color: Colors.orange.shade700, size: 18),
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                                borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Bouton rejoindre
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        key: const Key('join_private_button'),
+                                        onPressed: _isJoining ? null : _joinRoom,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange.shade700,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          elevation: 4,
+                                        ),
+                                        child: _isJoining
+                                            ? const SizedBox(
+                                                height: 18,
+                                                width: 18,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : const Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.login, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'REJOINDRE',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.bold,
+                                                      letterSpacing: 1,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Layout standard
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
@@ -219,6 +370,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
+                                        key: const Key('join_private_button'),
                                         onPressed: _isJoining ? null : _joinRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.orange.shade700,

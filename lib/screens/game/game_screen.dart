@@ -11,6 +11,7 @@ import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -150,7 +151,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                         Text(
                           "Manches restantes : $remainingRounds",
                           style: const TextStyle(
-                            color: Colors.white70,
+                            color: AppColors.textSecondary,
                             fontSize: 11,
                           ),
                         ),
@@ -170,7 +171,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white54)),
+                          strokeWidth: 2, color: AppColors.textDisabled)),
                 ),
               // Bouton Pause
               Positioned(
@@ -178,7 +179,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                 right: 10,
                 child: IconButton(
                   onPressed: () => gameProvider.pauseGame(),
-                  icon: const Icon(Icons.pause_circle_outline, color: Colors.white70, size: 32),
+                  icon: const Icon(Icons.pause_circle_outline, color: AppColors.textSecondary, size: 32),
                   tooltip: 'Pause',
                 ),
               ),
@@ -375,7 +376,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
             const Text(
               'Le jeu Dutch se joue en mode paysage',
               style: TextStyle(
-                color: Colors.white70,
+                color: AppColors.textSecondary,
                 fontSize: 16,
               ),
             ),
@@ -383,7 +384,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
             const Text(
               '(ou agrandissez la fenêtre)',
               style: TextStyle(
-                color: Colors.white54,
+                color: AppColors.textDisabled,
                 fontSize: 14,
               ),
             ),

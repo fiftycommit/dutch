@@ -41,6 +41,12 @@ class GameState {
   /// Joueurs prêts (phase de mémorisation)
   List<String> readyPlayerIds;
 
+  /// Compteur de tours complets (une rotation de tous les joueurs = 1 tour)
+  int turnCount;
+
+  /// Compteur d'actions individuelles (chaque fois qu'un joueur joue)
+  int actionCount;
+
   GameState({
     required this.players,
     required this.deck,
@@ -64,6 +70,8 @@ class GameState {
     this.turnStartTime,
     this.turnTimeoutMs = 25000,
     List<String>? readyPlayerIds,
+    this.turnCount = 0,
+    this.actionCount = 0,
   })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
         actionHistory = actionHistory ?? [],
         tournamentCumulativeScores = tournamentCumulativeScores ?? {},
@@ -75,9 +83,20 @@ class GameState {
   int get remainingDeckCards => deck.length;
 
   void nextTurn() {
+    int oldIndex = currentPlayerIndex;
+    
+    // Incrémenter le compteur d'actions à chaque passage de tour
+    actionCount++;
+    
     do {
       currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
     } while (eliminatedPlayerIds.contains(currentPlayer.id));
+    
+    // Incrémenter le compteur de tours quand on revient au premier joueur actif
+    // (une rotation complète de la table)
+    if (currentPlayerIndex <= oldIndex && players.isNotEmpty) {
+      turnCount++;
+    }
   }
 
   void addToHistory(String action) {

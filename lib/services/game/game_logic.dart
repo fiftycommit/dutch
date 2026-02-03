@@ -3,6 +3,8 @@ import '../../models/playing_card.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
+import '../logging/game_logger_service.dart';
+import 'bot/bot_dutch_strategy.dart';
 
 class GameLogic {
   static final Random _random = Random();
@@ -13,6 +15,9 @@ class GameLogic {
     required Difficulty difficulty,
     int tournamentRound = 1,
   }) {
+    // Reset le tracker de défausses pour la nouvelle manche
+    BotDutchStrategy.discardTracker.reset();
+    
     List<PlayingCard> deck = GameState.createFullDeck();
 
     for (var p in players) {
@@ -79,6 +84,13 @@ class GameLogic {
     if (gameState.deck.isNotEmpty) {
       gameState.drawnCard = gameState.deck.removeLast();
       gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
+
+      // Log
+      GameLoggerService.instance.logDraw(
+        player: gameState.currentPlayer,
+        card: gameState.drawnCard!,
+        fromDiscard: false,
+      );
     } else {
       endGame(gameState);
     }
@@ -92,6 +104,18 @@ class GameLogic {
     gameState.drawnCard = null;
     gameState.addToHistory(
         "${gameState.currentPlayer.name} rejette la carte piochée.");
+
+    // Tracker la défausse pour le comptage de cartes
+    BotDutchStrategy.discardTracker.trackDiscard(
+      card, 
+      discardedBy: gameState.currentPlayer.id,
+    );
+
+    // Log
+    GameLoggerService.instance.logDiscard(
+      player: gameState.currentPlayer,
+      card: card,
+    );
 
     _checkSpecialPower(gameState, card);
   }
@@ -112,8 +136,28 @@ class GameLogic {
     player.knownCards[cardIndex] = true;
     gameState.drawnCard = null;
 
+    // FIX CRITIQUE : Mettre à jour la mentalMap du bot avec la nouvelle carte
+    // Sinon le bot raisonne sur l'ancienne carte → décisions incohérentes
+    if (!player.isHuman) {
+      player.updateMentalMap(cardIndex, newCard);
+    }
+
     gameState.discardPile.add(oldCard);
     gameState.addToHistory("${player.name} échange une carte.");
+
+    // Tracker la défausse pour le comptage de cartes
+    BotDutchStrategy.discardTracker.trackDiscard(
+      oldCard, 
+      discardedBy: player.id,
+    );
+
+    // Log
+    GameLoggerService.instance.logExchange(
+      player: player,
+      oldCard: oldCard,
+      newCard: newCard,
+      handIndex: cardIndex,
+    );
 
     _checkSpecialPower(gameState, oldCard);
   }
@@ -131,6 +175,12 @@ class GameLogic {
     if (playerCard.matches(topDiscard)) {
       gameState.discardPile.add(playerCard);
 
+      // Tracker le match pour le comptage de cartes
+      BotDutchStrategy.discardTracker.trackDiscard(
+        playerCard, 
+        discardedBy: player.id,
+      );
+
       List<PlayingCard> newHand = List.from(player.hand);
       List<bool> newKnownCards = List.from(player.knownCards);
 
@@ -144,8 +194,25 @@ class GameLogic {
         player.mentalMap.removeAt(cardIndex);
       }
 
+      // BUGFIX: Invalider TOUTE la mémoire espionnage sur ce joueur
+      // Car les indices des cartes ont changé après le match
+      for (final bot in gameState.players) {
+        if (!bot.isHuman) {
+          bot.forgetSpiedCards(player.id);
+        }
+      }
+
       gameState.addToHistory(
           "MATCH ! ${player.name} pose ${playerCard.displayName} !");
+
+      // Log
+      GameLoggerService.instance.logMatch(
+        player: player,
+        matchedCards: [playerCard],
+        handIndices: [cardIndex],
+        discardCard: topDiscard,
+      );
+
       if (gameState.phase != GamePhase.reaction) {
         _checkSpecialPower(gameState, playerCard);
       }
@@ -153,6 +220,14 @@ class GameLogic {
     } else {
       gameState.addToHistory(
           "${player.name} rate son match (${playerCard.displayName} ≠ ${topDiscard.displayName}) ! Pénalité !");
+
+      // Log
+      GameLoggerService.instance.logCustomAction(
+        player: player,
+        action: 'MATCH RATÉ',
+        details: '${playerCard.displayName} ≠ ${topDiscard.displayName} → pénalité',
+      );
+
       applyPenalty(gameState, player);
       return false;
     }
@@ -212,8 +287,28 @@ class GameLogic {
       p2.mentalMap[idx2] = null;
     }
 
+    // Invalider la mémoire espionnage pour tous les bots
+    // Car les cartes ont changé de place
+    for (final player in gameState.players) {
+      if (!player.isHuman) {
+        player.invalidateSpiedCard(p1.id, idx1);
+        player.invalidateSpiedCard(p2.id, idx2);
+      }
+    }
+
     gameState.addToHistory(
         "Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.");
+
+    // Log
+    GameLoggerService.instance.logValetExchange(
+      bot: gameState.currentPlayer,
+      player1: p1,
+      player2: p2,
+      index1: idx1,
+      index2: idx2,
+      card1: c1,
+      card2: c2,
+    );
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {
@@ -223,6 +318,14 @@ class GameLogic {
 
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
 
+    // Invalider toute la mémoire espionnage concernant ce joueur
+    // Car ses cartes ont été mélangées
+    for (final player in gameState.players) {
+      if (!player.isHuman) {
+        player.forgetSpiedCards(targetPlayer.id);
+      }
+    }
+
     if (!targetPlayer.isHuman) {
       targetPlayer.mentalMap =
           List<PlayingCard?>.filled(targetPlayer.hand.length, null, growable: true);
@@ -230,6 +333,14 @@ class GameLogic {
 
     gameState.addToHistory(
         "JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
+
+    // Log
+    GameLoggerService.instance.logPowerUse(
+      player: gameState.currentPlayer,
+      powerValue: 0,
+      powerName: 'JOKER',
+      description: 'Mélange les cartes de ${targetPlayer.name}',
+    );
   }
 
   static void _checkSpecialPower(GameState gameState, PlayingCard card) {
@@ -240,11 +351,18 @@ class GameLogic {
     }
   }
 
-  static void callDutch(GameState gameState) {
+  static void callDutch(GameState gameState, {String reason = 'Manuel'}) {
     if (gameState.dutchCallerId != null) return;
     gameState.dutchCallerId = gameState.currentPlayer.id;
     gameState.phase = GamePhase.dutchCalled;
     gameState.addToHistory('${gameState.currentPlayer.name} crie DUTCH !');
+
+    // Log
+    GameLoggerService.instance.logDutch(
+      player: gameState.currentPlayer,
+      estimatedScore: gameState.currentPlayer.getEstimatedScore(),
+      reason: reason,
+    );
   }
 
   static void endGame(GameState gameState) {

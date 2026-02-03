@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/tournament_labels.dart';
+import '../../utils/ui_constants.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -34,7 +35,7 @@ class _StatsScreenState extends State<StatsScreen> {
           bottom: const TabBar(
             indicatorColor: Colors.amber,
             labelColor: Colors.amber,
-            unselectedLabelColor: Colors.white60,
+            unselectedLabelColor: AppColors.textDisabled,
             tabs: [
               Tab(text: "Profil 1"),
               Tab(text: "Profil 2"),
@@ -191,7 +192,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(
         children: [
           const Text("Efficacité DUTCH",
-              style: TextStyle(color: Colors.white70)),
+              style: TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 10),
           Text("${successRate.toStringAsFixed(1)}%",
               style: const TextStyle(
@@ -281,7 +282,7 @@ class _StatsScreenState extends State<StatsScreen> {
           ],
         ),
         subtitle: Text(dateStr,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
         trailing: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -368,8 +369,8 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ],
         ),
-        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
-        trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+        subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textDisabled)),
+        trailing: const Icon(Icons.chevron_right, color: AppColors.textDisabled),
       ),
     );
   }
@@ -421,7 +422,7 @@ class _StatsScreenState extends State<StatsScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text("Fermer",
-                    style: TextStyle(color: Colors.white70)),
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
             ],
           );
@@ -465,7 +466,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     ? const Center(
                         child: Text(
                           "Aucun historique disponible",
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: AppColors.textDisabled),
                         ),
                       )
                     : ListView.separated(
@@ -475,7 +476,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         itemBuilder: (context, index) {
                           return Text(
                             orderedActions[index],
-                            style: const TextStyle(color: Colors.white70),
+                            style: const TextStyle(color: AppColors.textSecondary),
                           );
                         },
                       ),
@@ -484,7 +485,7 @@ class _StatsScreenState extends State<StatsScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text("Fermer",
-                    style: TextStyle(color: Colors.white70)),
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
             ],
           );
@@ -576,7 +577,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   _RpDisplay _rpDisplay(int mmrChange) {
     if (mmrChange == 0) {
-      return const _RpDisplay(text: "Mode Manuel", color: Colors.white54);
+      return const _RpDisplay(text: "Mode Manuel", color: AppColors.textDisabled);
     }
     final text = mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP";
     final color = mmrChange > 0 ? Colors.greenAccent : Colors.redAccent;
@@ -633,30 +634,139 @@ class _StatsScreenState extends State<StatsScreen> {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Réinitialiser Profil $slotId ?",
-                  style: TextStyle(color: Colors.white, fontSize: titleSize),
+              // Icône d'avertissement
+              Icon(Icons.warning_amber_rounded, 
+                   color: Colors.orange, 
+                   size: metrics.font(48)),
+              SizedBox(height: gap),
+              Text("⚠️ Réinitialiser Profil $slotId ?",
+                  style: TextStyle(color: Colors.white, fontSize: titleSize, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center),
               SizedBox(height: gap),
-              Text("Tout l'historique sera effacé.",
-                  style: TextStyle(color: Colors.white70, fontSize: bodySize),
-                  textAlign: TextAlign.center),
-              SizedBox(height: gap),
+              Container(
+                padding: EdgeInsets.all(metrics.space(12)),
+                decoration: BoxDecoration(
+                  color: Colors.red.withAlpha(40),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withAlpha(100)),
+                ),
+                child: Column(
+                  children: [
+                    Text("Cette action est irréversible !",
+                        style: TextStyle(color: Colors.red.shade300, fontSize: bodySize, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center),
+                    SizedBox(height: gap / 2),
+                    Text("Tout l'historique de ce profil sera définitivement effacé :",
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                        textAlign: TextAlign.center),
+                    SizedBox(height: gap / 2),
+                    Text("• Statistiques de parties\n• Points de classement (RP)\n• Historique des tournois",
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize - 1),
+                        textAlign: TextAlign.left),
+                  ],
+                ),
+              ),
+              SizedBox(height: gap * 1.5),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  TextButton(
+                  Expanded(
+                    child: OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text("Annuler",
-                          style: TextStyle(fontSize: buttonSize))),
-                  TextButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await StatsService.resetStats(slotId: slotId);
-                      setState(() {});
-                    },
-                    child: Text("Effacer",
-                        style:
-                            TextStyle(color: Colors.red, fontSize: buttonSize)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: AppColors.textDisabled),
+                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                      ),
+                      child: Text("Annuler", style: TextStyle(fontSize: buttonSize)),
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        // Deuxième confirmation
+                        _showFinalConfirmation(context, slotId);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                      ),
+                      child: Text("Effacer", style: TextStyle(fontSize: buttonSize)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showFinalConfirmation(BuildContext context, int slotId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => ResponsiveDialog(
+        backgroundColor: const Color(0xFF2d1a1a),
+        builder: (context, metrics) {
+          final titleSize = metrics.font(18);
+          final bodySize = metrics.font(14);
+          final gap = metrics.space(12);
+          final buttonSize = metrics.font(16);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.delete_forever, color: Colors.red, size: metrics.font(48)),
+              SizedBox(height: gap),
+              Text("Dernière chance !",
+                  style: TextStyle(color: Colors.red.shade300, fontSize: titleSize, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center),
+              SizedBox(height: gap),
+              Text("Appuyez sur \"Confirmer la suppression\" pour effacer définitivement le Profil $slotId.",
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                  textAlign: TextAlign.center),
+              SizedBox(height: gap * 1.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: AppColors.textDisabled),
+                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                      ),
+                      child: Text("Annuler", style: TextStyle(fontSize: buttonSize)),
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await StatsService.resetStats(slotId: slotId);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Profil $slotId réinitialisé'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          setState(() {});
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                      ),
+                      child: Text("Confirmer", style: TextStyle(fontSize: buttonSize)),
+                    ),
                   ),
                 ],
               ),
@@ -736,7 +846,7 @@ class _StatCard extends StatelessWidget {
                   fontSize: 22,
                   fontWeight: FontWeight.bold)),
           Text(title,
-              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
         ],
       ),
     );

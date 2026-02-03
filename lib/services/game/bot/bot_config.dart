@@ -6,8 +6,10 @@ import '../../../models/player_learning_data.dart';
 import '../../matchmaking/matchmaking_service.dart';
 import 'bot_difficulty.dart';
 import 'bot_personality.dart';
+import 'hardcore_bot_config.dart';
 
 export '../../../models/game_settings.dart' show BotBehavior, BotSkillLevel;
+export 'hardcore_bot_config.dart' show HardcoreLevel, HardcoreBotConfig, PlayerSkillEstimator;
 
 /// Phases de jeu du bot
 enum BotGamePhase {
@@ -152,13 +154,33 @@ class BotConfig {
   }
 
   /// Obtient la difficulté appropriée pour un bot
-  static BotDifficulty getDifficulty(Player bot, int? playerMMR) {
+  /// 
+  /// HARDCORE FIX: Si playerMMR est null, on utilise le skill level du bot
+  /// au lieu de forcer Argent (qui rendait tous les bots trop faciles)
+  static BotDifficulty getDifficulty(Player bot, int? playerMMR, {
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
+  }) {
+    // Mode hardcore: utilise la config hardcore
+    if (hardcoreLevel != null) {
+      return HardcoreBotConfig.getHardcoreDifficulty(
+        level: hardcoreLevel,
+        playerSkillEstimate: playerSkillEstimate ?? playerMMR ?? 1000,
+      );
+    }
+    
+    // Si on a des paramètres AI explicites, les utiliser
     if (bot.aiParameters != null) {
       return difficultyFromParameters(bot.aiParameters!);
     }
+    
+    // Si on a un MMR joueur, l'utiliser pour adapter la difficulté
     if (playerMMR != null) {
       return BotDifficulty.fromMMR(playerMMR);
     }
+    
+    // HARDCORE FIX: Au lieu de retourner Argent par défaut,
+    // utiliser le skill level configuré du bot
     return getSkillDifficulty(bot.botSkillLevel);
   }
 

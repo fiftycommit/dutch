@@ -100,7 +100,143 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    
+                    final isCompactLandscape = constraints.maxHeight < 400 && constraints.maxWidth > constraints.maxHeight;
+
+                    // Layout compact pour petit ecran en paysage
+                    if (isCompactLandscape) {
+                      return SingleChildScrollView(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            child: Card(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              elevation: 8,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Row avec pseudo et nom du salon
+                                    Row(
+                                      children: [
+                                        // Champ pseudo
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _nameController,
+                                            enabled: !_isCreating,
+                                            textCapitalization: TextCapitalization.words,
+                                            maxLength: 20,
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                            decoration: InputDecoration(
+                                              labelText: 'Ton pseudo',
+                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              counterText: '',
+                                              isDense: true,
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              filled: true,
+                                              fillColor: Colors.grey.shade100,
+                                              prefixIcon: const Icon(Icons.person, color: Colors.blue, size: 18),
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                                borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        // Champ nom du salon
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _roomNameController,
+                                            enabled: !_isCreating,
+                                            textCapitalization: TextCapitalization.words,
+                                            maxLength: 30,
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                            decoration: InputDecoration(
+                                              labelText: 'Nom du salon (optionnel)',
+                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              counterText: '',
+                                              isDense: true,
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              filled: true,
+                                              fillColor: Colors.grey.shade100,
+                                              prefixIcon: const Icon(Icons.label, color: Colors.blue, size: 18),
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                                borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Bouton creer
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        key: const Key('create_public_button'),
+                                        onPressed: _isCreating ? null : _createRoom,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          elevation: 4,
+                                        ),
+                                        child: _isCreating
+                                            ? const SizedBox(
+                                                height: 18,
+                                                width: 18,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : const Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.add_circle, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'CRÉER ET OUVRIR LE SALON',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.bold,
+                                                      letterSpacing: 1,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Layout standard
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
@@ -202,6 +338,7 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
+                                        key: const Key('create_public_button'),
                                         onPressed: _isCreating ? null : _createRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue,

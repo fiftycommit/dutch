@@ -31,4 +31,7 @@ abstract class IStatsService {
 
   /// Obtenir le nom du rang basé sur le MMR
   String getRankName(int mmr);
+  
+  /// Enregistrer les données de télémétrie AI pour calibrage SBMM
+  Future<void> recordAiTelemetry(Map<String, dynamic> telemetry, {int slotId = 1});
 }

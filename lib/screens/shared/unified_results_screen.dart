@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
+import '../../services/logging/game_logger_service.dart';
 import '../../utils/screen_utils.dart';
+import '../../utils/ui_constants.dart';
 import '../../widgets/game/player_avatar.dart';
 
 /// Résultat RP pour un joueur
@@ -100,22 +102,36 @@ class ResultsScreen extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(height: ScreenUtils.spacing(context, 16)),
-              
-              // Titre
-              Text(
-                config.title ?? "RÉSULTATS",
-                style: TextStyle(
-                  fontFamily: 'Rye',
-                  fontSize: ScreenUtils.scaleFont(context, 32),
-                  color: Colors.white,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black45,
-                      blurRadius: 10,
-                      offset: Offset(2, 2),
-                    )
+
+              // Titre + bouton log
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    config.title ?? "RÉSULTATS",
+                    style: TextStyle(
+                      fontFamily: 'Rye',
+                      fontSize: ScreenUtils.scaleFont(context, 32),
+                      color: Colors.white,
+                      shadows: const [
+                        Shadow(
+                          color: Colors.black45,
+                          blurRadius: 10,
+                          offset: Offset(2, 2),
+                        )
+                      ],
+                    ),
+                  ),
+                  if (GameLoggerService.instance.hasLog) ...[
+                    const SizedBox(width: 12),
+                    IconButton(
+                      onPressed: () => _downloadGameLog(context),
+                      icon: const Icon(Icons.download, color: Colors.white70),
+                      tooltip: 'Télécharger le log de la partie',
+                      iconSize: 24,
+                    ),
                   ],
-                ),
+                ],
               ),
               
               // Sous-titre optionnel
@@ -125,7 +141,7 @@ class ResultsScreen extends StatelessWidget {
                   config.subtitle!,
                   style: TextStyle(
                     fontSize: ScreenUtils.scaleFont(context, 14),
-                    color: Colors.white70,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -171,6 +187,29 @@ class ResultsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _downloadGameLog(BuildContext context) async {
+    try {
+      await GameLoggerService.instance.downloadLog();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Log téléchargé !'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erreur lors du téléchargement'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildDutchCallerBanner(BuildContext context, Player caller, bool callerWon) {

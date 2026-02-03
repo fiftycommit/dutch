@@ -7,6 +7,7 @@ import '../../../models/player.dart';
 import '../../../models/game_state.dart';
 import '../../../providers/game_provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
+import '../../../utils/ui_constants.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
 import 'power_notification_dialogs.dart';
@@ -151,7 +152,7 @@ class UnifiedPowerDialogs {
                   Text(
                     "Choisissez UNE de vos cartes à regarder",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
                   ),
                   SizedBox(height: spacing),
                   Wrap(
@@ -181,7 +182,7 @@ class UnifiedPowerDialogs {
                       Navigator.pop(ctx);
                       config.onSkipPower();
                     },
-                    child: Text("PASSER", style: TextStyle(color: Colors.white54, fontSize: buttonSize)),
+                    child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
                   ),
                 ],
               ),
@@ -229,7 +230,7 @@ class UnifiedPowerDialogs {
                   Text(
                     "Choisissez un adversaire puis une de ses cartes",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
                   ),
                   SizedBox(height: spacing),
                   _buildOpponentSelection(context, config, metrics, buttonSize),
@@ -258,7 +259,7 @@ class UnifiedPowerDialogs {
               Navigator.pop(context);
               config.onSkipPower();
             },
-            child: Text("OK", style: TextStyle(color: Colors.white54, fontSize: buttonSize)),
+            child: Text("OK", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
           ),
         ],
       );
@@ -296,7 +297,7 @@ class UnifiedPowerDialogs {
             Navigator.pop(context);
             config.onSkipPower();
           },
-          child: Text("PASSER", style: TextStyle(color: Colors.white54, fontSize: buttonSize)),
+          child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
         ),
       ],
     );
@@ -359,7 +360,7 @@ class UnifiedPowerDialogs {
                       Navigator.pop(ctx);
                       config.onSkipPower();
                     },
-                    child: Text("PASSER", style: TextStyle(color: Colors.white54, fontSize: buttonSize)),
+                    child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
                   ),
                 ],
               ),

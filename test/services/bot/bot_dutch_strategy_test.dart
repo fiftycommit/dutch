@@ -36,6 +36,7 @@ void main() {
         discardPile: [PlayingCard.create('hearts', '5')],
         currentPlayerIndex: 1,
         phase: GamePhase.playing,
+        turnCount: 5, // Assez de tours pour permettre Dutch (règles de pacing)
       );
 
       bot = players[1];

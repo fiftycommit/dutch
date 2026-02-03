@@ -5,6 +5,7 @@ import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../models/game_state.dart';
 import '../../../../../models/game_settings.dart';
 import '../../../../../services/multiplayer/multiplayer_service.dart';
+import '../../../../../utils/ui_constants.dart';
 import '../lobby/multiplayer_lobby_screen.dart';
 
 enum _MenuFlow { choose, create, join }
@@ -240,7 +241,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                 else
                   IconButton(
                     icon: const Icon(Icons.refresh,
-                        color: Colors.white70, size: 20),
+                        color: AppColors.textSecondary, size: 20),
                     onPressed: _loadMyRooms,
                     tooltip: 'Actualiser',
                     padding: EdgeInsets.zero,
@@ -255,7 +256,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                   padding: EdgeInsets.all(16),
                   child: Text(
                     'Chargement...',
-                    style: TextStyle(color: Colors.white70),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
               )
@@ -265,7 +266,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                   padding: EdgeInsets.all(16),
                   child: Text(
                     'Aucune room active',
-                    style: TextStyle(color: Colors.white70),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
               )
@@ -357,7 +358,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
         ),
         subtitle: Text(
           '$statusLabel • $playerCount joueur${playerCount > 1 ? 's' : ''}',
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         trailing: FilledButton(
           onPressed: () => _rejoinRoom(context, room.roomCode),

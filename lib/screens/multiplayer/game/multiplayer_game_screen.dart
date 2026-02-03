@@ -10,6 +10,7 @@ import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/providers/settings_provider.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/ui/emote_service.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
 import 'package:dutch_game/widgets/dialogs/presence_check_overlay.dart';
 import 'package:dutch_game/widgets/dialogs/connection_error_dialog.dart';
@@ -413,7 +414,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                                   : Icons.videogame_asset,
                               color: gameState.gameMode == GameMode.tournament 
                                   ? Colors.amber 
-                                  : Colors.white70, 
+                                  : AppColors.textSecondary, 
                               size: 16,
                             ),
                             const SizedBox(width: 8),
@@ -436,7 +437,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                           Text(
                             "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
                             style: const TextStyle(
-                              color: Colors.white70,
+                              color: AppColors.textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -460,7 +461,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white54)),
+                            strokeWidth: 2, color: AppColors.textDisabled)),
                   ),
 
                 // Notification: joueur a quitté
@@ -490,12 +491,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       ),
                       IconButton(
                         icon: const Icon(Icons.pause_circle_filled,
-                            color: Colors.white54, size: 32),
+                            color: AppColors.textDisabled, size: 32),
                         onPressed: () => gameProvider.pauseGame(),
                       ),
                       IconButton(
                         icon: const Icon(Icons.exit_to_app,
-                            color: Colors.white54, size: 32),
+                            color: AppColors.textDisabled, size: 32),
                         onPressed: () =>
                             _showQuitConfirmation(context, gameProvider),
                       ),

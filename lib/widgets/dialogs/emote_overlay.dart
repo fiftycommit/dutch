@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 
 class EmoteOverlay extends StatefulWidget {
   final VoidCallback onClose;
@@ -61,6 +62,13 @@ class _EmoteOverlayState extends State<EmoteOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isCompact = size.height < 400;
+    // Largeur maximale adaptative: 90% de l'ecran ou 400px max
+    final maxWidth = (size.width * 0.9).clamp(200.0, 400.0);
+    // Nombre de colonnes adaptatif
+    final crossAxisCount = isCompact ? 6 : 4;
+
     return GestureDetector(
       onTap: () {
         _controller.reverse().then((_) => widget.onClose());
@@ -73,11 +81,12 @@ class _EmoteOverlayState extends State<EmoteOverlay>
             child: ScaleTransition(
               scale: _scaleAnimation,
               child: Container(
-                margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.all(20),
+                margin: EdgeInsets.all(isCompact ? 10 : 20),
+                padding: EdgeInsets.all(isCompact ? 12 : 20),
+                constraints: BoxConstraints(maxWidth: maxWidth),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1a472a),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(isCompact ? 14 : 20),
                   border: Border.all(color: Colors.amber, width: 2),
                   boxShadow: [
                     BoxShadow(
@@ -93,34 +102,40 @@ class _EmoteOverlayState extends State<EmoteOverlay>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'ÉMOTES',
                           style: TextStyle(
                             color: Colors.amber,
-                            fontSize: 20,
+                            fontSize: isCompact ? 14 : 20,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white70),
+                          icon: Icon(Icons.close, color: AppColors.textSecondary, size: isCompact ? 20 : 24),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                           onPressed: () {
                             _controller.reverse().then((_) => widget.onClose());
                           },
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: 400,
+                    SizedBox(height: isCompact ? 6 : 10),
+                    // Utiliser ConstrainedBox pour limiter la hauteur du GridView
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: size.height * 0.5, // Max 50% de l'écran
+                      ),
                       child: GridView.builder(
                         shrinkWrap: true,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 1,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: isCompact ? 4 : 8,
+                          crossAxisSpacing: isCompact ? 4 : 8,
+                          // Ratio plus large pour accommoder emoji + label
+                          childAspectRatio: isCompact ? 1.0 : 0.85,
                         ),
                         itemCount: _emotes.length,
                         itemBuilder: (context, index) {
@@ -129,6 +144,7 @@ class _EmoteOverlayState extends State<EmoteOverlay>
                             emoji: emote['emoji']!,
                             label: emote['label']!,
                             onTap: () => _sendEmote(emote['emoji']!),
+                            isCompact: isCompact,
                           );
                         },
                       ),
@@ -148,11 +164,13 @@ class _EmoteButton extends StatefulWidget {
   final String emoji;
   final String label;
   final VoidCallback onTap;
+  final bool isCompact;
 
   const _EmoteButton({
     required this.emoji,
     required this.label,
     required this.onTap,
+    this.isCompact = false,
   });
 
   @override
@@ -177,29 +195,40 @@ class _EmoteButtonState extends State<_EmoteButton> {
         child: Container(
           decoration: BoxDecoration(
             color: Colors.black26,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 12),
             border: Border.all(
               color: _isPressed ? Colors.amber : Colors.white24,
-              width: 2,
+              width: widget.isCompact ? 1.5 : 2,
             ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                widget.emoji,
-                style: const TextStyle(fontSize: 32),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.emoji,
+                    style: TextStyle(fontSize: widget.isCompact ? 20 : 32),
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
+              if (!widget.isCompact) ...[
+                const SizedBox(height: 2),
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

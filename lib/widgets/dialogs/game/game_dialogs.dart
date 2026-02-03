@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../models/game_state.dart';
+import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
 import '../responsive_dialog.dart';
 
@@ -26,7 +27,7 @@ class GameDialogs {
                   style: TextStyle(color: Colors.white, fontSize: titleSize)),
               SizedBox(height: gap),
               Text('Êtes-vous sûr ?',
-                  style: TextStyle(color: Colors.white70, fontSize: bodySize)),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize)),
               SizedBox(height: gap),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -35,7 +36,7 @@ class GameDialogs {
                       onPressed: () => Navigator.pop(ctx, false),
                       child: Text('Non',
                           style: TextStyle(
-                              color: Colors.white54, fontSize: buttonSize))),
+                              color: AppColors.textDisabled, fontSize: buttonSize))),
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       style:
@@ -123,7 +124,7 @@ class GameDialogs {
               SizedBox(height: gap),
               Text(
                   "Quitter la partie ? Elle sera sauvegardée et comptée comme un abandon.",
-                  style: TextStyle(color: Colors.white70, fontSize: bodySize),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
                   textAlign: TextAlign.center),
               SizedBox(height: gap),
               Row(

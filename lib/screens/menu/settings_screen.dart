@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../models/game_settings.dart';
+import '../../utils/ui_constants.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -70,7 +71,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const Text(
                     "Temps disponible pour jouer une carte sur la défausse.",
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
                   ),
                 ],
               ),
@@ -144,7 +145,7 @@ class SettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10, left: 4),
       child: Text(title,
           style: const TextStyle(
-              color: Colors.white70,
+              color: AppColors.textSecondary,
               fontSize: 14,
               fontWeight: FontWeight.bold)),
     );
@@ -162,7 +163,7 @@ class SettingsScreen extends StatelessWidget {
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.amber,
@@ -201,7 +202,7 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(desc,
                       style:
-                          const TextStyle(color: Colors.white60, fontSize: 12)),
+                          const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
                 ],
               ),
             ),

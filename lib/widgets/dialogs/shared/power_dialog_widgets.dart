@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../models/playing_card.dart';
+import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
 import '../responsive_dialog.dart';
 
@@ -128,7 +129,7 @@ class PowerDialogWidgets {
             subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white70,
+              color: AppColors.textSecondary,
               fontSize: metrics.font(14),
             ),
           ),
@@ -148,7 +149,7 @@ class PowerDialogWidgets {
       child: Text(
         label,
         style: TextStyle(
-          color: Colors.white54,
+          color: AppColors.textDisabled,
           fontSize: metrics.font(16),
         ),
       ),

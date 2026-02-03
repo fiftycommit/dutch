@@ -8,6 +8,10 @@ import '../core/interfaces/i_haptic_service.dart';
 import '../core/interfaces/i_stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
+import '../services/game/bot/hardcore_bot_config.dart';
+import '../services/learning/bot_learning_service.dart';
+import '../services/learning/ai_telemetry_service.dart';
+import '../services/logging/game_logger_service.dart';
 import 'game_tracking_provider.dart';
 import 'managers/solo/tournament_manager.dart';
 import 'managers/solo/reaction_timer_manager.dart';
@@ -17,6 +21,7 @@ import '../services/game/rp_calculator.dart';
 import 'package:flutter/widgets.dart';
 
 export 'managers/solo/tournament_manager.dart' show TournamentResult;
+export '../services/game/bot/hardcore_bot_config.dart' show HardcoreLevel;
 
 /// GameProvider refactoré - ~400 lignes au lieu de 1200
 /// Principe SOLID: SRP - Coordination uniquement, logique déléguée aux managers
@@ -64,6 +69,15 @@ class GameProvider with ChangeNotifier implements IGameController {
   int get playerWinStreak => _playerWinStreak;
   RPResult? _lastMatchRpResult;
   RPResult? get lastMatchRpResult => _lastMatchRpResult;
+
+  // Mode Hardcore
+  HardcoreLevel? _hardcoreLevel;
+  HardcoreLevel? get hardcoreLevel => _hardcoreLevel;
+  final PlayerSkillEstimator _skillEstimator = PlayerSkillEstimator();
+  int get playerSkillEstimate => _skillEstimator.estimatedSkill;
+
+  // Flag ML hydration - bloque les bots jusqu'à ce que les params soient chargés
+  bool _botsHydrated = true; // true par défaut (pas de bots = pas besoin d'attendre)
 
   // Services injectés (Principe SOLID: DIP)
   final IHapticService _hapticService;
@@ -115,6 +129,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     int tournamentRound = 1,
     int saveSlot = 1,
     bool useSBMM = false,
+    HardcoreLevel? hardcoreLevel,
   }) async {
     // Initialiser le tournoi via le manager
     if (gameMode == GameMode.tournament) {
@@ -130,31 +145,117 @@ class GameProvider with ChangeNotifier implements IGameController {
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
     _lastMatchRpResult = null;
+    
+    // Mode hardcore
+    _hardcoreLevel = hardcoreLevel;
 
-    if (useSBMM) {
+    if (useSBMM || hardcoreLevel != null) {
       final stats = await _statsService.getStats(slotId: saveSlot);
-      _playerMMR = stats['mmr'] ?? 0;
+      _playerMMR = stats['mmr'] ?? 1000;
       _playerWinStreak = stats['winStreak'] ?? 0;
+      
+      // Initialiser l'estimateur de skill avec le MMR actuel
+      _skillEstimator.reset(initialMMR: _playerMMR);
     } else {
       _playerMMR = null;
       _playerWinStreak = 0;
+      _skillEstimator.reset(initialMMR: 1000);
     }
 
     for (var player in _gameState!.players.where((p) => !p.isHuman)) {
       player.initializeBotMemory();
     }
 
+    // Hydrater les bots avec les paramètres ML appris
+    // Le flag _botsHydrated bloque checkIfBotShouldPlay() jusqu'à completion
+    _botsHydrated = false;
+    _hydrateBotsWithLearnedParams();
+
     // Initialiser le tracking
     _trackingProvider.initTracking(_gameState!, useSBMM);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // TÉLÉMÉTRIE AI : Démarrer la collecte
+    // ═══════════════════════════════════════════════════════════════════════
+    AiTelemetryService().startGame(playerCount: players.length);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LOGGING : Démarrer l'enregistrement de la partie
+    // ═══════════════════════════════════════════════════════════════════════
+    GameLoggerService.instance.startNewGame(
+      players: players,
+      targetScore: 100,
+    );
+    GameLoggerService.instance.logRoundStart(
+      roundNumber: tournamentRound,
+      players: players,
+    );
 
     shakingCardIndices.clear();
     isProcessing = false;
     notifyListeners();
   }
 
+  /// Récupère les paramètres appris du serveur ML et les injecte dans les bots.
+  /// Cette opération est asynchrone et non-bloquante pour ne pas retarder le démarrage.
+  Future<void> _hydrateBotsWithLearnedParams() async {
+    if (_gameState == null) return;
+    
+    final botLearningService = BotLearningService();
+    final bots = _gameState!.players.where((p) => !p.isHuman).toList();
+    
+    for (int i = 0; i < bots.length; i++) {
+      final bot = bots[i];
+      if (bot.botBehavior == null || bot.botSkillLevel == null) continue;
+      
+      final behavior = bot.botBehavior.toString().split('.').last;
+      final skillLevel = bot.botSkillLevel.toString().split('.').last;
+      
+      try {
+        final params = await botLearningService.fetchBotParameters(
+          behavior: behavior,
+          skillLevel: skillLevel,
+        );
+        
+        if (params != null && params.isNotEmpty) {
+          // Le serveur retourne directement les learnedParameters (objet plat)
+          // Convertir en Map<String, double>
+          final aiParams = <String, double>{};
+          params.forEach((key, value) {
+            if (value is num) {
+              aiParams[key] = value.toDouble();
+            }
+          });
+          
+          if (aiParams.isNotEmpty) {
+            // Remplacer le bot dans la liste avec les nouveaux paramètres
+            final botIndex = _gameState!.players.indexOf(bot);
+            if (botIndex >= 0) {
+              _gameState!.players[botIndex] = bot.copyWith(aiParameters: aiParams);
+              debugPrint('✅ Bot $behavior/$skillLevel hydraté avec ${aiParams.length} paramètres ML');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Impossible de charger les paramètres ML pour $behavior/$skillLevel: $e');
+        // Continue avec les paramètres par défaut - pas critique
+      }
+    }
+    
+    // Marquer l'hydratation comme terminée et notifier
+    _botsHydrated = true;
+    notifyListeners();
+    
+    // Vérifier si un bot doit jouer maintenant que les params sont chargés
+    checkIfBotShouldPlay();
+  }
+
   void setContext(BuildContext context) => _currentContext = context;
 
   void checkIfBotShouldPlay() {
+    // Bloquer tant que les bots ne sont pas hydratés avec les params ML
+    if (!_botsHydrated) return;
+    
     if (_botOrchestrator.shouldBotPlay(_gameState, isProcessing, _isPaused)) {
       _checkAndPlayBotTurn();
     }
@@ -168,6 +269,13 @@ class GameProvider with ChangeNotifier implements IGameController {
   void drawCard() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
     if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
+
+    // LOG : État de l'humain au début de son tour
+    GameLoggerService.instance.logTurnStart(
+      player: _gameState!.currentPlayer,
+      turnNumber: _gameState!.turnCount,
+      allPlayers: _gameState!.players,
+    );
 
     shakingCardIndices.clear();
     final human = _gameState!.currentPlayer;
@@ -385,7 +493,13 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   Future<void> _simulateBotReaction() async {
     if (_gameState == null || _isPaused) return;
-    await _botOrchestrator.simulateBotReaction(_gameState!, _playerMMR, _isPaused);
+    await _botOrchestrator.simulateBotReaction(
+      _gameState!, 
+      _playerMMR, 
+      _isPaused,
+      hardcoreLevel: _hardcoreLevel,
+      playerSkillEstimate: _skillEstimator.estimatedSkill,
+    );
     notifyListeners();
   }
 
@@ -396,7 +510,15 @@ class GameProvider with ChangeNotifier implements IGameController {
     isProcessing = true;
     notifyListeners();
 
-    await _botOrchestrator.playBotTurn(_gameState!, _playerMMR, _isPaused, _currentContext, () async => _checkInstantEnd());
+    await _botOrchestrator.playBotTurn(
+      _gameState!, 
+      _playerMMR, 
+      _isPaused, 
+      _currentContext, 
+      () async => _checkInstantEnd(),
+      hardcoreLevel: _hardcoreLevel,
+      playerSkillEstimate: _skillEstimator.estimatedSkill,
+    );
 
     if (_gameState?.phase == GamePhase.dutchCalled) {
       endGame();
@@ -491,6 +613,43 @@ class GameProvider with ChangeNotifier implements IGameController {
       tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,
       tournamentId: _tournamentManager.activeTournamentId,
       actionHistory: List<String>.from(_gameState!.actionHistory),
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TÉLÉMÉTRIE AI : Générer le résumé et stocker
+    // ═══════════════════════════════════════════════════════════════════════
+    final aiSummary = AiTelemetryService().summarize(
+      playerWon: playerRank == 1,
+      winnerId: ranking.first.id,
+    );
+
+    // Stocker le résumé pour analyse SBMM
+    _statsService.recordAiTelemetry(aiSummary.toJson(), slotId: _currentSlotId);
+
+    // Debug log (TODO: supprimer en prod)
+    debugPrint(aiSummary.toString());
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LOGGING : Enregistrer la fin de partie
+    // ═══════════════════════════════════════════════════════════════════════
+    final dutchCaller = _gameState!.players.firstWhere(
+      (p) => p.id == _gameState!.dutchCallerId,
+      orElse: () => human,
+    );
+    GameLoggerService.instance.logRoundEnd(
+      players: _gameState!.players,
+      dutchCaller: dutchCaller,
+      dutchSuccess: ranking.first.id == _gameState!.dutchCallerId,
+    );
+
+    final totalScores = <String, int>{};
+    for (final p in _gameState!.players) {
+      totalScores[p.name] = _gameState!.getFinalScore(p);
+    }
+    GameLoggerService.instance.logGameEnd(
+      players: _gameState!.players,
+      totalScores: totalScores,
+      winner: ranking.first,
     );
 
     notifyListeners();

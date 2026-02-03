@@ -42,10 +42,11 @@ void main() {
     });
 
     group('getMostThreateningPlayer', () {
-      test('returns null when no player is threatening', () {
-        // All players have 4 cards - not threatening
+      test('returns player when they have fewer cards', () {
+        // Human has 4 cards - with new logic, always returns someone
         final result = BotThreatAnalyzer.getMostThreateningPlayer(gameState, bot);
-        expect(result, isNull);
+        // La nouvelle logique retourne toujours le joueur le plus menaçant (pas null)
+        expect(result, isNotNull);
       });
 
       test('returns player with fewest cards when threatening', () {
@@ -73,7 +74,7 @@ void main() {
         expect(result, equals(human)); // Lower score
       });
 
-      test('ignores self', () {
+      test('ignores self when selecting threat', () {
         bot.hand = [PlayingCard.create('hearts', 'A')]; // 1 card
         human.hand = [
           PlayingCard.create('hearts', '5'),
@@ -83,7 +84,8 @@ void main() {
         ];
         
         final result = BotThreatAnalyzer.getMostThreateningPlayer(gameState, bot);
-        expect(result, isNull); // Human has 4 cards, not threatening
+        // Le bot ne se cible pas lui-même, donc il cible human
+        expect(result, equals(human));
       });
     });
 
@@ -104,14 +106,13 @@ void main() {
     });
 
     group('analyzeDiscardPatterns', () {
-      test('returns empty for bronze difficulty', () {
-        final result = BotThreatAnalyzer.analyzeDiscardPatterns(gameState, bot, BotDifficulty.bronze);
-        expect(result, isEmpty);
-      });
-
-      test('returns empty for silver difficulty', () {
-        final result = BotThreatAnalyzer.analyzeDiscardPatterns(gameState, bot, BotDifficulty.silver);
-        expect(result, isEmpty);
+      test('returns scores for all difficulties now', () {
+        // La nouvelle logique analyse pour toutes les difficultés
+        final resultBronze = BotThreatAnalyzer.analyzeDiscardPatterns(gameState, bot, BotDifficulty.bronze);
+        final resultSilver = BotThreatAnalyzer.analyzeDiscardPatterns(gameState, bot, BotDifficulty.silver);
+        // Les deux renvoient maintenant des scores (comportement unifié)
+        expect(resultBronze, isNotEmpty);
+        expect(resultSilver, isNotEmpty);
       });
 
       test('returns danger scores for gold difficulty', () {

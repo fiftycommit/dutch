@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/player_learning_data.dart';
 import '../../services/learning/player_learning_service.dart';
+import '../../utils/ui_constants.dart';
 
 class AiProfileScreen extends StatefulWidget {
   final int slotId;
@@ -114,7 +115,7 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
     final profile = _profile;
     if (profile == null) {
       return const Center(
-        child: Text('Profil indisponible', style: TextStyle(color: Colors.white70)),
+        child: Text('Profil indisponible', style: TextStyle(color: AppColors.textSecondary)),
       );
     }
 
@@ -239,7 +240,7 @@ class _InfoCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                  style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
                 ),
               ],
             ),
@@ -282,7 +283,7 @@ class _ClientIdCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 SelectableText(
                   value ?? 'Non initialisé (joue une partie multi ou relance l’app)',
-                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                  style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
                 ),
               ],
             ),
@@ -362,7 +363,7 @@ class _ValueBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.white70)),
+            Text(label, style: const TextStyle(color: AppColors.textSecondary)),
             Text('${(value * 100).round()}%',
                 style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
           ],
@@ -442,7 +443,7 @@ class _LegendItem extends StatelessWidget {
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ],
     );
   }
@@ -534,7 +535,7 @@ class _HistoryCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (history.isEmpty)
-            const Text('Aucune partie enregistrée', style: TextStyle(color: Colors.white60)),
+            const Text('Aucune partie enregistrée', style: TextStyle(color: AppColors.textDisabled)),
           ...history.take(6).map((g) {
             final date = g.endTime.toLocal();
             return Padding(
@@ -545,7 +546,7 @@ class _HistoryCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ),
                   Text(
@@ -555,7 +556,7 @@ class _HistoryCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Text(
                     '${g.finalScore} pts',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),

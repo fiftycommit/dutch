@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'game_action_button.dart';
+import '../../utils/ui_constants.dart';
 
 /// Widget réutilisable pour la zone joueur avec boutons d'action
 /// Utilisé par game_screen.dart et multiplayer_game_screen.dart
@@ -106,7 +107,7 @@ class PlayerAreaWidget extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 8,
+                fontSize: AppFontSizes.small,
                 fontWeight: FontWeight.bold,
               ),
             ),

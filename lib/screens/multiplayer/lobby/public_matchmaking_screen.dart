@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../utils/ui_constants.dart';
 import 'dart:async';
 
 class PublicMatchmakingScreen extends StatefulWidget {
@@ -193,7 +194,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                     Icon(
                       Icons.search_off,
                       size: isMobile ? 80 : 100,
-                      color: Colors.white54,
+                      color: AppColors.textDisabled,
                     ),
                     SizedBox(height: isMobile ? 16 : 24),
                     Text(
@@ -209,7 +210,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
                     Text(
                       'Créez un salon ou réessayez plus tard',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.textSecondary,
                         fontSize: isMobile ? 14 : 16,
                       ),
                       textAlign: TextAlign.center,

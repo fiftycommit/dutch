@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 
 class GameActionButton extends StatefulWidget {
   final String label;
@@ -67,7 +68,7 @@ class _GameActionButtonState extends State<GameActionButton>
     final fontSize = widget.compact ? 9.0 : 11.0;
     final baseColor =
         isEnabled ? widget.color : widget.color.withValues(alpha: 0.35);
-    final labelColor = isEnabled ? Colors.white : Colors.white70;
+    final labelColor = isEnabled ? Colors.white : AppColors.textSecondary;
 
     final button = Material(
       color: Colors.transparent,

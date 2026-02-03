@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 import '../../models/game_state.dart';
 import '../../models/playing_card.dart';
 import '../../services/ui/haptic_service.dart';
@@ -434,7 +435,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
                   child: Text(
                     '$deckCount',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textSecondary,
                       fontSize: widget.isCompactMode ? 9 : 11,
                       fontWeight: FontWeight.bold,
                     ),

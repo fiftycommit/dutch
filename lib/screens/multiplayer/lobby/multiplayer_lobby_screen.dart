@@ -7,6 +7,7 @@ import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../services/multiplayer/multiplayer_service.dart';
 import '../../../../../models/game_state.dart';
 import '../../../../../models/game_settings.dart';
+import '../../../../../utils/ui_constants.dart';
 import '../../../widgets/dialogs/connection_error_dialog.dart';
 import '../../../widgets/dialogs/multiplayer/multiplayer_dialogs.dart';
 
@@ -190,9 +191,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         final isWide = size.width >= 700;
         final heightScale = (size.height / 700).clamp(0.55, 1.0);
         final isCompactLandscape = isLandscape && heightScale < 0.85;
-        final isQuickMode = provider.roomSettings?.gameMode == GameMode.quick;
-        final showPublicBadge = provider.roomSettings?.isPublic == true;
-        final showRoomCode = !showPublicBadge && !isQuickMode;
+        final isPublicRoom = provider.roomSettings?.isPublic == true;
+        // Pour les rooms publiques: afficher badge "PUBLIQUE" et pas de code
+        // Pour les rooms privées: toujours afficher le code (même en mode rapide)
+        final showPublicBadge = isPublicRoom;
+        // Ne pas montrer le code aux non-hôtes dans les rooms publiques
+        // (ils ont rejoint via matchmaking, pas besoin du code)
+        final showRoomCode = !isPublicRoom || provider.isHost;
         final sectionSpacing = 8.0 * heightScale;
         final contentSpacing = 12.0 * heightScale;
         final bottomSpacing = 16.0 * heightScale;
@@ -233,8 +238,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Column(
                             children: [
-                              // Afficher le code uniquement pour les lobbies privés
-                              if (showPublicBadge)
+                              // Pour les rooms publiques: afficher le badge pour tous
+                              // sauf l'hôte qui voit aussi le code
+                              if (showPublicBadge && !provider.isHost)
                                 _buildPublicLobbyBadge()
                               else if (showRoomCode)
                                 _buildRoomCodeCard(context, provider, colors),
@@ -777,13 +783,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             Icon(
               icon,
               size: f(14),
-              color: isSelected ? Colors.white : Colors.white70,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
             SizedBox(width: f(4)),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
                 fontSize: f(11),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
@@ -875,66 +881,101 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => provider.setReady(!provider.isReady),
-                icon: Icon(
-                  provider.isReady
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  size: f(20),
-                ),
-                label: Text(provider.isReady ? 'Pret' : 'Passer pret'),
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
-                  backgroundColor:
-                      provider.isReady ? colors.tertiary : Colors.white,
-                  foregroundColor:
-                      provider.isReady ? Colors.white : colors.primary,
-                  elevation: provider.isReady ? 6 : 2,
-                ),
-              ),
-            ),
-            SizedBox(width: f(12)),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: canStart
-                    ? () => _handleStartPressed(
-                          context,
-                          provider,
-                          connectedHumans,
-                          maxPlayers,
-                        )
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
-                  backgroundColor: colors.primaryContainer,
-                  foregroundColor: colors.onPrimaryContainer,
-                  disabledBackgroundColor: Colors.white.withValues(alpha: 0.35),
-                ),
-                child: Text(
-                  provider.isHost
-                      ? (canStart
-                          ? 'Lancer'
-                          : 'Pret: ${provider.readyHumanCount}/$minPlayers')
-                      : "Attente hote",
-                  style: TextStyle(
-                    fontSize: f(14),
-                    fontWeight: FontWeight.bold,
+    // Pour l'hote: bouton Pret + bouton Lancer
+    // Pour les autres: seulement bouton Pret (pleine largeur)
+    if (provider.isHost) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  key: const Key('host_ready_button'),
+                  onPressed: () => provider.setReady(!provider.isReady),
+                  icon: Icon(
+                    provider.isReady
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: f(20),
+                  ),
+                  label: Text(provider.isReady ? 'Pret' : 'Passer pret'),
+                  style: ElevatedButton.styleFrom(
+                    padding:
+                        EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
+                    backgroundColor:
+                        provider.isReady ? colors.tertiary : Colors.white,
+                    foregroundColor:
+                        provider.isReady ? Colors.white : colors.primary,
+                    elevation: provider.isReady ? 6 : 2,
                   ),
                 ),
               ),
+              SizedBox(width: f(12)),
+              Expanded(
+                child: ElevatedButton(
+                  key: const Key('host_start_button'),
+                  onPressed: canStart
+                      ? () => _handleStartPressed(
+                            context,
+                            provider,
+                            connectedHumans,
+                            maxPlayers,
+                          )
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding:
+                        EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
+                    backgroundColor: colors.primaryContainer,
+                    foregroundColor: colors.onPrimaryContainer,
+                    disabledBackgroundColor: AppColors.disabledBackground,
+                    disabledForegroundColor: AppColors.disabledForeground,
+                  ),
+                  child: Text(
+                    canStart
+                        ? 'Lancer'
+                        : 'Pret: ${provider.readyHumanCount}/$minPlayers',
+                    style: TextStyle(
+                      fontSize: f(14),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Non-hote: seulement bouton Pret
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            key: const Key('guest_ready_button'),
+            onPressed: () => provider.setReady(!provider.isReady),
+            icon: Icon(
+              provider.isReady
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              size: f(20),
             ),
-          ],
+            label: Text(provider.isReady ? 'Pret' : 'Passer pret'),
+            style: ElevatedButton.styleFrom(
+              padding:
+                  EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
+              backgroundColor:
+                  provider.isReady ? colors.tertiary : Colors.white,
+              foregroundColor:
+                  provider.isReady ? Colors.white : colors.primary,
+              elevation: provider.isReady ? 6 : 2,
+            ),
+          ),
         ),
-        if (!provider.isHost && !compact)
+        if (!compact)
           Padding(
             padding: EdgeInsets.only(top: f(8)),
             child: Text(
@@ -995,45 +1036,46 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   ) {
     final scale = _uiScale(context);
     double f(double size) => size * scale;
+    // Version plus compacte du bandeau de code
     return Container(
-      margin: EdgeInsets.symmetric(vertical: f(8)),
-      padding: EdgeInsets.all(f(16)),
+      key: const Key('room_code_card'),
+      margin: EdgeInsets.symmetric(vertical: f(4)),
+      padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(10)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(f(16)),
+        borderRadius: BorderRadius.circular(f(12)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.26),
-          width: f(1.2),
+          width: f(1),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            children: [
-              Text(
-                'Code',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: f(12),
-                ),
-              ),
-              SizedBox(height: f(4)),
-              Text(
-                provider.roomCode ?? '------',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: f(28),
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: f(4),
-                ),
-              ),
-            ],
+          Text(
+            'Code',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: f(11),
+            ),
           ),
-          SizedBox(width: f(16)),
+          SizedBox(width: f(12)),
+          Text(
+            provider.roomCode ?? '------',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f(22),
+              fontWeight: FontWeight.bold,
+              letterSpacing: f(3),
+            ),
+          ),
+          SizedBox(width: f(8)),
           IconButton(
-            icon: Icon(Icons.copy, color: Colors.white, size: f(20)),
+            icon: Icon(Icons.copy, color: AppColors.textSecondary, size: f(18)),
             tooltip: 'Copier',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
             onPressed: () {
               final code = provider.roomCode;
               if (code == null) return;
@@ -1061,13 +1103,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     final colors = Theme.of(context).colorScheme;
     final hasScores = provider.cumulativeScores.isNotEmpty;
     final scale = _uiScale(context);
+    final size = MediaQuery.of(context).size;
+    final isCompactLandscape = size.height < 400 && size.width > size.height;
     double f(double size) => size * scale;
 
     return Container(
-      padding: EdgeInsets.all(f(12)),
+      padding: EdgeInsets.all(f(isCompactLandscape ? 8 : 12)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(f(16)),
+        borderRadius: BorderRadius.circular(f(isCompactLandscape ? 12 : 16)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.24),
           width: f(1.2),
@@ -1078,7 +1122,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           // Si l'espace est trop petit, afficher un placeholder
           if (constraints.maxHeight < 50) {
             return const Center(
-              child: Text('...', style: TextStyle(color: Colors.white54)),
+              child: Text('...', style: TextStyle(color: AppColors.textDisabled)),
             );
           }
           return Column(
@@ -1087,17 +1131,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.people, size: f(20), color: Colors.white),
-                  SizedBox(width: f(8)),
+                  Icon(Icons.people, size: f(isCompactLandscape ? 16 : 20), color: Colors.white),
+                  SizedBox(width: f(6)),
                   Text(
                     'Joueurs ($connectedHumans/$maxPlayers)',
                     style: TextStyle(
-                      fontSize: f(16),
+                      fontSize: f(isCompactLandscape ? 13 : 16),
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
-                  if (hasScores) ...[
+                  if (hasScores && !isCompactLandscape) ...[
                     const Spacer(),
                     Container(
                       padding: EdgeInsets.symmetric(
@@ -1126,7 +1170,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   ],
                 ],
               ),
-              SizedBox(height: f(10)),
+              SizedBox(height: f(isCompactLandscape ? 6 : 10)),
               Expanded(
                 child: provider.playersInLobby.isEmpty
                     ? const Center(child: CircularProgressIndicator())
@@ -1154,6 +1198,67 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           final playerRank =
                               _getPlayerRank(provider, playerClientId);
 
+                          // Version compacte pour petit ecran paysage
+                          if (isCompactLandscape) {
+                            return Container(
+                              margin: EdgeInsets.only(bottom: f(4)),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: f(8),
+                                vertical: f(4),
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.94),
+                                borderRadius: BorderRadius.circular(f(8)),
+                              ),
+                              child: Row(
+                                children: [
+                                  // Avatar compact
+                                  CircleAvatar(
+                                    radius: f(12),
+                                    backgroundColor: colors.primary,
+                                    foregroundColor: colors.onPrimary,
+                                    child: Text(
+                                      (player['name'] ?? 'J')[0].toUpperCase(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: f(10),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: f(6)),
+                                  // Nom et tags
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            player['name'] ?? 'Joueur',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: f(11),
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isYou)
+                                          _buildMiniTag(context, 'Vous', colors.primary),
+                                        if (isHost)
+                                          _buildMiniTag(context, 'Hote', colors.secondary),
+                                      ],
+                                    ),
+                                  ),
+                                  // Indicateurs
+                                  if (isReady && !isSpectator)
+                                    Icon(Icons.check_circle, color: colors.tertiary, size: f(14)),
+                                  SizedBox(width: f(4)),
+                                  _presenceDot(presence),
+                                ],
+                              ),
+                            );
+                          }
+
+                          // Version normale
                           return Card(
                             margin: EdgeInsets.only(bottom: f(8)),
                             color: Colors.white.withValues(alpha: 0.94),
@@ -1672,7 +1777,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int maxPlayers,
     MultiplayerGameProvider provider,
   ) async {
-    int numberOfBots = maxPlayers - connectedHumans;
+    int numberOfBots = 0; // Par defaut 0 bots en multi
     bool useSBMM = true;
     int botDifficulty = 1; // Moyen par défaut
 

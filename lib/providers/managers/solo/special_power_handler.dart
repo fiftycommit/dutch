@@ -2,6 +2,7 @@ import '../../../models/playing_card.dart';
 import '../../../models/player.dart';
 import '../../../models/game_state.dart';
 import '../../../services/game/game_logic.dart';
+import '../../../services/logging/game_logger_service.dart';
 import '../../game_tracking_provider.dart';
 
 /// Handler dédié à la gestion des pouvoirs spéciaux
@@ -139,6 +140,17 @@ class SpecialPowerHandler {
 
     currentPlayer.knownCards[ownCardIndex] = false;
     targetPlayer.knownCards[targetCardIndex] = false;
+
+    // LOG : Échange Valet par l'humain
+    GameLoggerService.instance.logValetExchange(
+      bot: currentPlayer,
+      player1: currentPlayer,
+      player2: targetPlayer,
+      index1: ownCardIndex,
+      index2: targetCardIndex,
+      card1: myCard!,
+      card2: theirCard!,
+    );
 
     gameState.addToHistory(
         "🔄 ${currentPlayer.name} échange avec ${targetPlayer.name}");

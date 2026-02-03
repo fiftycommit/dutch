@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/game_state.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/ui_constants.dart';
 import '../shared/unified_memorization_screen.dart' as shared;
 import 'game_screen.dart';
 
@@ -78,7 +79,7 @@ class MemorizationScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.visibility_off, size: 60, color: Colors.white54),
+              Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
               SizedBox(height: 20),
               Text(
                 "VOUS ÊTES ÉLIMINÉ",
@@ -92,7 +93,7 @@ class MemorizationScreen extends StatelessWidget {
               SizedBox(height: 10),
               Text(
                 "Les bots continuent...",
-                style: TextStyle(color: Colors.white70, fontSize: 16),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
               ),
               SizedBox(height: 30),
               CircularProgressIndicator(color: Colors.amber),

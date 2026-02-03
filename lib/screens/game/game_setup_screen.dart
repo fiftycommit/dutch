@@ -30,6 +30,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Difficulty selectedBotDifficulty = Difficulty.medium;
   bool _isLoading = false;
   int selectedNumberOfPlayers = 4; // Par défaut 4 joueurs
+  HardcoreLevel? _hardcoreLevel; // null = mode normal
 
   @override
   Widget build(BuildContext context) {
@@ -39,12 +40,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.go('/'),
         ),
         title: Text(
-            widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie'),
+            widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1a3a28),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -73,6 +76,13 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               horizontal: f(50),
               vertical: f(15),
             );
+            
+            // Couleurs pour les segments
+            const unselectedBg = Color(0xFF2D4F3C);
+            const selectedBotBg = Colors.amber;
+            const selectedPlayerBg = Colors.green;
+            const segmentBorder = Color(0xFF4A7A5C);
+            
             final botSegmentStyle = ButtonStyle(
               visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
               tapTargetSize:
@@ -86,9 +96,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               backgroundColor:
                   WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return Colors.amber;
+                  return selectedBotBg;
                 }
-                return Colors.white10;
+                return unselectedBg;
               }),
               foregroundColor:
                   WidgetStateProperty.resolveWith<Color>((states) {
@@ -96,6 +106,25 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   return Colors.black;
                 }
                 return Colors.white;
+              }),
+              iconColor: WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.black;
+                }
+                return Colors.white;
+              }),
+              side: WidgetStateProperty.all(
+                const BorderSide(color: segmentBorder, width: 1),
+              ),
+              // Overlay transparent pour éviter effet de hover gris
+              overlayColor: WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.pressed)) {
+                  return Colors.white.withValues(alpha: 0.1);
+                }
+                if (states.contains(WidgetState.hovered)) {
+                  return Colors.white.withValues(alpha: 0.05);
+                }
+                return Colors.transparent;
               }),
             );
             final playerSegmentStyle = ButtonStyle(
@@ -111,16 +140,35 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               backgroundColor:
                   WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return Colors.green;
+                  return selectedPlayerBg;
                 }
-                return Colors.white10;
+                return unselectedBg;
               }),
               foregroundColor:
                   WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.white;
                 }
-                return Colors.white70;
+                return Colors.white;
+              }),
+              iconColor: WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return Colors.white;
+              }),
+              side: WidgetStateProperty.all(
+                const BorderSide(color: segmentBorder, width: 1),
+              ),
+              // Overlay transparent pour éviter effet de hover gris
+              overlayColor: WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.pressed)) {
+                  return Colors.white.withValues(alpha: 0.1);
+                }
+                if (states.contains(WidgetState.hovered)) {
+                  return Colors.white.withValues(alpha: 0.05);
+                }
+                return Colors.transparent;
               }),
             );
             final content = Column(
@@ -142,8 +190,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                       horizontal: f(40),
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.1),
-                      border: Border.all(color: Colors.amber),
+                      // Fond plus opaque pour meilleur contraste
+                      color: const Color(0xFF2a4a38),
+                      border: Border.all(color: Colors.amber, width: 1.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -166,45 +215,61 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         Text(
                           "Le niveau s'ajuste automatiquement à vos résultats.",
                           textAlign: TextAlign.center,
-                          style:
-                              TextStyle(color: Colors.white70, fontSize: f(12)),
+                          style: TextStyle(
+                            // Blanc pur pour lisibilité maximale
+                            color: Colors.white,
+                            fontSize: f(13),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ] else ...[
-                  SegmentedButton<Difficulty>(
-                    segments: [
-                      ButtonSegment(
-                        value: Difficulty.easy,
-                        label: const Text("Facile"),
-                        icon: Icon(Icons.sentiment_satisfied, size: f(18)),
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      segmentedButtonTheme: SegmentedButtonThemeData(
+                        style: botSegmentStyle,
                       ),
-                      ButtonSegment(
-                        value: Difficulty.medium,
-                        label: const Text("Moyen"),
-                        icon: Icon(Icons.sentiment_neutral, size: f(18)),
-                      ),
-                      ButtonSegment(
-                        value: Difficulty.hard,
-                        label: const Text("Difficile"),
-                        icon:
-                            Icon(Icons.sentiment_very_dissatisfied, size: f(18)),
-                      ),
-                      ButtonSegment(
-                        value: Difficulty.mix,
-                        label: const Text("Mix"),
-                        icon: Icon(Icons.shuffle, size: f(18)),
-                      ),
-                    ],
-                    selected: {selectedBotDifficulty},
-                    onSelectionChanged: (Set<Difficulty> newSelection) {
-                      setState(() {
-                        selectedBotDifficulty = newSelection.first;
-                      });
-                    },
-                    style: botSegmentStyle,
+                    ),
+                    child: SegmentedButton<Difficulty>(
+                      segments: [
+                        ButtonSegment(
+                          value: Difficulty.easy,
+                          label: const Text("Facile"),
+                          icon: Icon(Icons.sentiment_satisfied, size: f(18)),
+                        ),
+                        ButtonSegment(
+                          value: Difficulty.medium,
+                          label: const Text("Moyen"),
+                          icon: Icon(Icons.sentiment_neutral, size: f(18)),
+                        ),
+                        ButtonSegment(
+                          value: Difficulty.hard,
+                          label: const Text("Difficile"),
+                          icon:
+                              Icon(Icons.sentiment_very_dissatisfied, size: f(18)),
+                        ),
+                        ButtonSegment(
+                          value: Difficulty.mix,
+                          label: const Text("Mix"),
+                          icon: Icon(Icons.shuffle, size: f(18)),
+                        ),
+                      ],
+                      selected: {selectedBotDifficulty},
+                      onSelectionChanged: (Set<Difficulty> newSelection) {
+                        setState(() {
+                          selectedBotDifficulty = newSelection.first;
+                        });
+                      },
+                      style: botSegmentStyle,
+                    ),
                   ),
+                ],
+                SizedBox(height: spacingSmall),
+                // Mode Hardcore - UNIQUEMENT en mode manuel (pas en SBMM)
+                // En SBMM, le jeu décide automatiquement du niveau de difficulté
+                if (!useSBMM) ...[
+                  _buildHardcoreModeSelector(f, isCompact, unselectedBg, segmentBorder),
                 ],
                 SizedBox(height: spacingMedium),
                 Text(
@@ -216,26 +281,33 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   ),
                 ),
                 SizedBox(height: spacingSmall),
-                SegmentedButton<int>(
-                  segments: widget.isTournament
-                      ? const [
-                          ButtonSegment(value: 4, label: Text("4")),
-                          ButtonSegment(value: 6, label: Text("6")),
-                        ]
-                      : const [
-                          ButtonSegment(value: 2, label: Text("2")),
-                          ButtonSegment(value: 3, label: Text("3")),
-                          ButtonSegment(value: 4, label: Text("4")),
-                          ButtonSegment(value: 5, label: Text("5")),
-                          ButtonSegment(value: 6, label: Text("6")),
-                        ],
-                  selected: {selectedNumberOfPlayers},
-                  onSelectionChanged: (Set<int> newSelection) {
-                    setState(() {
-                      selectedNumberOfPlayers = newSelection.first;
-                    });
-                  },
-                  style: playerSegmentStyle,
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    segmentedButtonTheme: SegmentedButtonThemeData(
+                      style: playerSegmentStyle,
+                    ),
+                  ),
+                  child: SegmentedButton<int>(
+                    segments: widget.isTournament
+                        ? const [
+                            ButtonSegment(value: 4, label: Text("4")),
+                            ButtonSegment(value: 6, label: Text("6")),
+                          ]
+                        : const [
+                            ButtonSegment(value: 2, label: Text("2")),
+                            ButtonSegment(value: 3, label: Text("3")),
+                            ButtonSegment(value: 4, label: Text("4")),
+                            ButtonSegment(value: 5, label: Text("5")),
+                            ButtonSegment(value: 6, label: Text("6")),
+                          ],
+                    selected: {selectedNumberOfPlayers},
+                    onSelectionChanged: (Set<int> newSelection) {
+                      setState(() {
+                        selectedNumberOfPlayers = newSelection.first;
+                      });
+                    },
+                    style: playerSegmentStyle,
+                  ),
                 ),
                 SizedBox(height: spacingLarge),
                 ElevatedButton(
@@ -296,6 +368,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       reactionTimeMs: settings.reactionTimeMs,
       saveSlot: widget.saveSlot,
       useSBMM: useSBMM,
+      hardcoreLevel: _hardcoreLevel,
     );
 
     if (!mounted) return;
@@ -526,5 +599,152 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     
     _usedNames.add(name);
     return name;
+  }
+
+  /// Construit le sélecteur de mode hardcore
+  Widget _buildHardcoreModeSelector(
+    double Function(double) f,
+    bool isCompact,
+    Color unselectedBg,
+    Color segmentBorder,
+  ) {
+    return Column(
+      children: [
+        SizedBox(height: f(10)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.local_fire_department,
+              color: _hardcoreLevel != null ? Colors.red : Colors.grey,
+              size: f(20),
+            ),
+            SizedBox(width: f(8)),
+            Text(
+              "Mode Hardcore",
+              style: TextStyle(
+                color: _hardcoreLevel != null ? Colors.red : Colors.white70,
+                fontSize: f(16),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(width: f(8)),
+            Switch(
+              value: _hardcoreLevel != null,
+              onChanged: (enabled) {
+                setState(() {
+                  _hardcoreLevel = enabled ? HardcoreLevel.hard : null;
+                });
+              },
+              activeThumbColor: Colors.red,
+              activeTrackColor: Colors.red.withAlpha(100),
+            ),
+          ],
+        ),
+        if (_hardcoreLevel != null) ...[
+          SizedBox(height: f(12)),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(8)),
+            decoration: BoxDecoration(
+              color: Colors.red.withAlpha(30),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.withAlpha(100)),
+            ),
+            child: Column(
+              children: [
+                SegmentedButton<HardcoreLevel>(
+                  segments: [
+                    ButtonSegment(
+                      value: HardcoreLevel.hard,
+                      label: Text(
+                        "Hard",
+                        style: TextStyle(fontSize: f(11)),
+                      ),
+                      icon: Icon(Icons.whatshot, size: f(14)),
+                    ),
+                    ButtonSegment(
+                      value: HardcoreLevel.insane,
+                      label: Text(
+                        "Insane",
+                        style: TextStyle(fontSize: f(11)),
+                      ),
+                      icon: Icon(Icons.flash_on, size: f(14)),
+                    ),
+                    ButtonSegment(
+                      value: HardcoreLevel.nightmare,
+                      label: Text(
+                        "Nightmare",
+                        style: TextStyle(fontSize: f(11)),
+                      ),
+                      icon: Icon(Icons.dangerous, size: f(14)),
+                    ),
+                    ButtonSegment(
+                      value: HardcoreLevel.impossible,
+                      label: Text(
+                        "Boss",
+                        style: TextStyle(fontSize: f(11)),
+                      ),
+                      icon: Icon(Icons.local_fire_department, size: f(14)),
+                    ),
+                  ],
+                  selected: {_hardcoreLevel!},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _hardcoreLevel = selection.first;
+                    });
+                  },
+                  style: ButtonStyle(
+                    visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
+                    padding: WidgetStateProperty.all(
+                      EdgeInsets.symmetric(horizontal: f(6), vertical: f(4)),
+                    ),
+                    backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return _hardcoreLevel == HardcoreLevel.impossible 
+                            ? Colors.purple.shade900 
+                            : Colors.red;
+                      }
+                      return unselectedBg;
+                    }),
+                    foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return Colors.white;
+                      }
+                      return Colors.white70;
+                    }),
+                    side: WidgetStateProperty.all(
+                      BorderSide(color: Colors.red.withAlpha(150), width: 1),
+                    ),
+                  ),
+                ),
+                SizedBox(height: f(8)),
+                Text(
+                  _getHardcoreDescription(_hardcoreLevel!),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: f(11),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _getHardcoreDescription(HardcoreLevel level) {
+    switch (level) {
+      case HardcoreLevel.hard:
+        return "Bots agressifs avec excellente mémoire.\nPour joueurs expérimentés.";
+      case HardcoreLevel.insane:
+        return "Bots très dangereux, réactions rapides.\nPréparez-vous à souffrir.";
+      case HardcoreLevel.nightmare:
+        return "🔥 Mode CAUCHEMAR 🔥\n70-85% winrate - Un vrai défi!";
+      case HardcoreLevel.impossible:
+        return "💀 MODE BOSS 💀\nIA parfaite. Vous allez perdre.";
+    }
   }
 }

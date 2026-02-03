@@ -34,6 +34,11 @@ class Player {
   int consecutiveBadDraws;
   List<DutchAttempt> dutchHistory;
 
+  /// Mémoire des cartes espionnées chez les adversaires
+  /// Map: playerId -> Map<cardIndex, PlayingCard>
+  /// Permet au bot de se souvenir des cartes qu'il a vues chez les autres
+  Map<String, Map<int, PlayingCard>> spyMemory;
+
   Player({
     required this.id,
     required this.name,
@@ -48,10 +53,12 @@ class Player {
     List<PlayingCard?>? mentalMap,
     this.consecutiveBadDraws = 0,
     List<DutchAttempt>? dutchHistory,
+    Map<String, Map<int, PlayingCard>>? spyMemory,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
-        dutchHistory = dutchHistory ?? [];
+        dutchHistory = dutchHistory ?? [],
+        spyMemory = spyMemory ?? {};
 
   Player.clone(Player other)
       : id = other.id,
@@ -68,7 +75,8 @@ class Player {
         knownCards = List.from(other.knownCards),
         mentalMap = List.from(other.mentalMap),
         consecutiveBadDraws = other.consecutiveBadDraws,
-        dutchHistory = List.from(other.dutchHistory);
+        dutchHistory = List.from(other.dutchHistory),
+        spyMemory = Map.from(other.spyMemory);
 
   int calculateScore() {
     int score = 0;
@@ -84,31 +92,16 @@ class Player {
     }
 
     int estimatedScore = 0;
-    int knownCount = 0;
-    int knownSum = 0;
 
     for (int i = 0; i < hand.length; i++) {
       if (i < mentalMap.length && mentalMap[i] != null) {
-        int cardPoints = mentalMap[i]!.points;
-        estimatedScore += cardPoints;
-        knownSum += cardPoints;
-        knownCount++;
-      }
-    }
-
-    int unknownCount = hand.length - knownCount;
-
-    if (unknownCount > 0) {
-      int estimatePerUnknown;
-
-      if (knownCount >= 2) {
-        estimatePerUnknown = (knownSum / knownCount).round();
-        estimatePerUnknown = estimatePerUnknown.clamp(4, 7);
+        // Le bot CONNAÎT cette carte - utiliser sa vraie valeur
+        estimatedScore += mentalMap[i]!.points;
       } else {
-        estimatePerUnknown = 5;
+        // Le bot NE CONNAÎT PAS cette carte - assumer le PIRE (Roi noir = 13)
+        // Un bot intelligent ne Dutch jamais avec des cartes inconnues
+        estimatedScore += 13;
       }
-
-      estimatedScore += unknownCount * estimatePerUnknown;
     }
 
     return estimatedScore;
@@ -151,6 +144,52 @@ class Player {
     if (index >= 0 && index < knownCards.length) {
       knownCards[index] = false;
     }
+  }
+
+  /// Mémorise une carte espionnée chez un adversaire
+  void rememberSpiedCard(String opponentId, int cardIndex, PlayingCard card) {
+    spyMemory.putIfAbsent(opponentId, () => {});
+    spyMemory[opponentId]![cardIndex] = card;
+  }
+
+  /// Oublie les cartes espionnées d'un adversaire (après un Joker par exemple)
+  void forgetSpiedCards(String opponentId) {
+    spyMemory.remove(opponentId);
+  }
+
+  /// Invalide une carte espionnée (après un échange)
+  void invalidateSpiedCard(String opponentId, int cardIndex) {
+    if (spyMemory.containsKey(opponentId)) {
+      spyMemory[opponentId]!.remove(cardIndex);
+    }
+  }
+
+  /// Retourne le score estimé d'un adversaire basé sur les cartes espionnées
+  int getEstimatedOpponentScore(String opponentId, int opponentHandSize) {
+    if (!spyMemory.containsKey(opponentId)) {
+      // Aucune info → estimer avec valeur moyenne (6)
+      return opponentHandSize * 6;
+    }
+
+    final knownCards = spyMemory[opponentId]!;
+    int knownScore = 0;
+    int knownCount = 0;
+
+    for (final entry in knownCards.entries) {
+      if (entry.key < opponentHandSize) {
+        knownScore += entry.value.points;
+        knownCount++;
+      }
+    }
+
+    // Cartes inconnues → estimer avec valeur moyenne (6)
+    int unknownCount = opponentHandSize - knownCount;
+    return knownScore + (unknownCount * 6);
+  }
+
+  /// Retourne les cartes espionnées d'un adversaire
+  Map<int, PlayingCard>? getSpiedCards(String opponentId) {
+    return spyMemory[opponentId];
   }
 
   int get knownCardCount {
@@ -273,5 +312,36 @@ class Player {
       'knownCards': knownCards,
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas inclus
     };
+  }
+
+  /// Crée une copie du joueur avec des paramètres optionnellement modifiés.
+  /// Utilisé principalement pour injecter les paramètres appris du ML.
+  Player copyWith({
+    String? id,
+    String? name,
+    bool? isHuman,
+    BotBehavior? botBehavior,
+    BotSkillLevel? botSkillLevel,
+    Map<String, double>? aiParameters,
+    int? position,
+    bool? isSpectator,
+  }) {
+    return Player(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      isHuman: isHuman ?? this.isHuman,
+      botBehavior: botBehavior ?? this.botBehavior,
+      botSkillLevel: botSkillLevel ?? this.botSkillLevel,
+      aiParameters: aiParameters ?? (this.aiParameters != null 
+          ? Map<String, double>.from(this.aiParameters!)
+          : null),
+      position: position ?? this.position,
+      isSpectator: isSpectator ?? this.isSpectator,
+      hand: List.from(hand),
+      knownCards: List.from(knownCards),
+      mentalMap: List.from(mentalMap),
+      consecutiveBadDraws: consecutiveBadDraws,
+      dutchHistory: List.from(dutchHistory),
+    );
   }
 }

@@ -160,6 +160,7 @@ export class BotLearningService {
       case 'bronze': return 800;
       case 'silver': return 1200;
       case 'gold': return 1600;
+      case 'platinum': return 2000;
       default: return 1000;
     }
   }
@@ -249,6 +250,17 @@ export class BotLearningService {
         baseParams.powerDefensiveRate = 0.7;
         baseParams.powerOffensiveRate = 0.6;
         baseParams.adaptability = 0.7;
+        break;
+      case 'platinum':
+        baseParams.memoryAccuracy = 0.98;
+        baseParams.memoryRetention = 0.95;
+        baseParams.powerDefensiveRate = 0.85;
+        baseParams.powerOffensiveRate = 0.8;
+        baseParams.adaptability = 0.9;
+        baseParams.aggressiveness = 0.65;
+        baseParams.caution = 0.55;
+        baseParams.dutchThreshold = 12;
+        baseParams.dutchQuality = 0.85;
         break;
     }
 
@@ -365,25 +377,40 @@ export class BotLearningService {
       gradients.dutchThreshold = -1; // Aurait dû appeler Dutch plus tôt
     }
     
-    // Gradient pour l'utilisation des pouvoirs - PLUS AGRESSIF
+    // Gradient pour la qualité Dutch
+    if (record.calledDutch) {
+      if (record.wonDutch) {
+        gradients.dutchQuality = -0.3; // Améliorer (gradient négatif = augmenter)
+      } else {
+        gradients.dutchQuality = 0.2; // Réduire la confiance
+      }
+    }
+    
+    // Gradient pour l'utilisation des pouvoirs - mapper vers les bonnes clés
     const powerEfficiency = record.powerUsesCount > 0 ? 
       (record.goodDecisions / Math.max(1, record.powerUsesCount)) : 0.5;
-    gradients.powerUsageRate = (powerEfficiency - 0.5) * error * 2;
+    
+    // FIX: Utiliser les clés existantes (powerDefensiveRate, powerOffensiveRate)
+    gradients.powerOffensiveRate = (powerEfficiency - 0.5) * error * 2;
+    gradients.powerDefensiveRate = (powerEfficiency - 0.5) * error * 1.5;
     
     // Pénalité supplémentaire pour mauvaises décisions (ex: Joker sur 1 carte)
     if (record.badDecisions > 0) {
-      gradients.powerUsageRate += 0.3 * record.badDecisions; // Réduire l'utilisation des pouvoirs
+      gradients.powerOffensiveRate += 0.2 * record.badDecisions; // Réduire l'utilisation offensive
+      gradients.powerDefensiveRate += 0.1 * record.badDecisions;
     }
     
-    // Gradient pour la tolérance au risque - PLUS RAPIDE
+    // FIX: Remplacer riskTolerance par adaptability (comportement risqué)
     if (record.badDecisions > record.goodDecisions) {
-      gradients.riskTolerance = 0.6; // Réduire la prise de risque
+      gradients.adaptability = 0.4; // Réduire la prise de risque
+      gradients.aggressiveness += 0.2; // Réduire l'agressivité
     } else {
-      gradients.riskTolerance = -0.4; // Augmenter
+      gradients.adaptability = -0.3; // Augmenter
     }
     
     // Gradient pour la précision de mémorisation (toujours améliorer)
     gradients.memoryAccuracy = -0.2 * error;
+    gradients.memoryRetention = -0.15 * error;
     
     return gradients;
   }

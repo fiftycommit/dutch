@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
 import 'package:dutch_game/core/interfaces/i_stats_service.dart';
 import 'package:dutch_game/core/interfaces/i_bot_ai_service.dart';
+import 'package:dutch_game/services/game/bot/hardcore_bot_config.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/player.dart';
@@ -128,6 +129,14 @@ class MockStatsService implements IStatsService {
       'bestScore': 5,
     };
   }
+
+  // Télémétrie AI
+  List<Map<String, dynamic>> aiTelemetryRecords = [];
+
+  @override
+  Future<void> recordAiTelemetry(Map<String, dynamic> telemetry, {int slotId = 1}) async {
+    aiTelemetryRecords.add(telemetry);
+  }
 }
 
 /// Mock BotAIService for testing
@@ -142,6 +151,8 @@ class MockBotAIService implements IBotAIService {
     GameState gameState, {
     int? playerMMR,
     BuildContext? context,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     playBotTurnCount++;
   }
@@ -151,6 +162,8 @@ class MockBotAIService implements IBotAIService {
     GameState gameState,
     Player bot, {
     int? playerMMR,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     tryReactionMatchCount++;
     return reactionMatchResult;
@@ -161,6 +174,8 @@ class MockBotAIService implements IBotAIService {
     GameState gameState, {
     int? playerMMR,
     BuildContext? context,
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
   }) async {
     useBotSpecialPowerCount++;
   }

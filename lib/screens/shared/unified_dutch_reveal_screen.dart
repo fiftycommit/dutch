@@ -4,6 +4,7 @@ import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../widgets/game/card_widget.dart';
+import '../../utils/screen_utils.dart';
 
 /// Configuration pour l'écran de révélation Dutch
 class DutchRevealConfig {
@@ -38,9 +39,21 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  static const double cardHeight = 64.0;
-  static const double cardSpacing = 2.0;
-  static const double scrollStep = cardHeight + cardSpacing;
+  // Hauteur de base des cartes (correspond à CardSize.tiny et CardSize.small)
+  static const double _tinyBaseHeight = 34.0;
+  static const double _smallBaseHeight = 50.0;
+  static const double _cardSpacing = 8.0; // Espacement entre les cartes
+
+  /// Calcule la hauteur réelle d'une carte en tenant compte du scaling
+  double _scaledCardHeight(BuildContext context, bool isCompact) {
+    final baseHeight = isCompact ? _tinyBaseHeight : _smallBaseHeight;
+    return ScreenUtils.scale(context, baseHeight) * ScreenUtils.cardScaleFactor;
+  }
+
+  /// Calcule le pas de scroll (hauteur carte + espacement)
+  double _scrollStep(BuildContext context, bool isCompact) {
+    return _scaledCardHeight(context, isCompact) + _cardSpacing;
+  }
 
   int currentRevealIndex = -1;
   Map<String, int> currentScores = {};
@@ -52,6 +65,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   String? winnerId;
   String? eliminatedId;
   bool revealComplete = false;
+
+  // Stocke le scrollStep calculé pour l'utiliser dans _animateScroll
+  double _cachedScrollStep = 66.0; // Valeur par défaut
 
   GameState get gameState => widget.config.gameState;
 
@@ -112,8 +128,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   }
 
   Future<void> _animateScroll(int targetIndex, List<Player> players) async {
+    // Capture la valeur localement pour éviter les problèmes si l'orientation change
+    final step = _cachedScrollStep;
     List<Future> scrollAnimations = [];
-    double targetOffset = targetIndex * scrollStep;
+    double targetOffset = targetIndex * step;
 
     for (var player in players) {
       if (targetIndex <= player.hand.length) {
@@ -209,6 +227,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     final isCompact = screenHeight < 400;
     final players = _getOrderedPlayers();
 
+    // Calcule et met en cache le scrollStep pour l'animation
+    final computedScrollStep = _scrollStep(context, isCompact);
+    _cachedScrollStep = computedScrollStep;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -236,7 +258,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: players
-                      .map((p) => _buildPlayerColumn(p, isCompact))
+                      .map((p) =>
+                          _buildPlayerColumn(p, isCompact, computedScrollStep))
                       .toList(),
                 ),
               ),
@@ -248,7 +271,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 
-  Widget _buildPlayerColumn(Player player, bool isCompact) {
+  Widget _buildPlayerColumn(Player player, bool isCompact, double scrollStep) {
     bool isWinner = winnerId == player.id;
     bool isDutchCaller = gameState.dutchCallerId == player.id;
     bool isEliminated = revealComplete && eliminatedId == player.id;
@@ -267,7 +290,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
           borderRadius: BorderRadius.circular(12),
           border: isWinner
               ? Border.all(color: Colors.amber, width: 2)
-              : (isEliminated ? Border.all(color: Colors.redAccent, width: 2) : null),
+              : (isEliminated
+                  ? Border.all(color: Colors.redAccent, width: 2)
+                  : null),
           boxShadow: isEliminated
               ? [
                   BoxShadow(
@@ -291,26 +316,27 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
               ),
               overflow: TextOverflow.ellipsis,
             ),
-            if (isDutchCaller)
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: Colors.amber,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  "DUTCH",
-                  style: TextStyle(
-                    fontSize: isCompact ? 6 : 8,
-                    fontWeight: FontWeight.bold,
-                  ),
+            // Bandeau DUTCH ou espace invisible pour alignement
+            Container(
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: isDutchCaller ? Colors.amber : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                "DUTCH",
+                style: TextStyle(
+                  fontSize: isCompact ? 6 : 8,
+                  fontWeight: FontWeight.bold,
+                  color: isDutchCaller ? Colors.black : Colors.transparent,
                 ),
               ),
+            ),
             SizedBox(height: isCompact ? 4 : 10),
             Expanded(
               child: Stack(
+                clipBehavior: Clip.none, // Permet aux cartes de depasser
                 children: [
                   Positioned.fill(
                     child: ShaderMask(
@@ -322,17 +348,24 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                             Colors.transparent,
                             Colors.black,
                             Colors.black,
-                            Colors.transparent
+                            Colors.black, // Plus de zone visible en bas
                           ],
-                          stops: [0.0, 0.1, 0.8, 1.0],
+                          stops: [
+                            0.0,
+                            0.05,
+                            0.9,
+                            1.0
+                          ], // Moins de fade en haut et en bas
                         ).createShader(bounds);
                       },
                       blendMode: BlendMode.dstIn,
                       child: ListView.builder(
                         controller: _scrollControllers[player.id],
                         physics: const NeverScrollableScrollPhysics(),
+                        clipBehavior: Clip.none, // Evite le clipping des ombres
                         padding: EdgeInsets.only(
-                          top: isCompact ? scrollStep * 0.6 : scrollStep,
+                          top: scrollStep * 0.3,
+                          bottom: scrollStep * 0.3,
                         ),
                         itemCount: player.hand.length + 1,
                         itemBuilder: (context, index) {
@@ -343,7 +376,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                               duration: const Duration(milliseconds: 300),
                               opacity: showRedLine ? 1.0 : 0.0,
                               child: Container(
-                                height: isCompact ? scrollStep * 0.6 : scrollStep,
+                                height: scrollStep,
                                 alignment: Alignment.topCenter,
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Container(
@@ -354,7 +387,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                                     borderRadius: BorderRadius.circular(2),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.red.withValues(alpha: 0.5),
+                                        color:
+                                            Colors.red.withValues(alpha: 0.5),
                                         blurRadius: 4,
                                         spreadRadius: 1,
                                       )
@@ -371,7 +405,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                               : (shouldReveal ? 1.0 : 0.0);
 
                           return SizedBox(
-                            height: isCompact ? scrollStep * 0.6 : scrollStep,
+                            height: scrollStep,
                             child: Center(
                               child: _FlipCard(
                                 card: player.hand[index],

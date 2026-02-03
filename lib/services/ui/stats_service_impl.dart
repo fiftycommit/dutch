@@ -168,4 +168,34 @@ class StatsServiceImpl implements IStatsService {
   String getRankName(int mmr) {
     return RPCalculator.getRankName(mmr);
   }
+
+  @override
+  Future<void> recordAiTelemetry(Map<String, dynamic> telemetry, {int slotId = 1}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'ai_telemetry_slot_$slotId';
+    
+    // Récupérer l'historique existant
+    final existingJson = prefs.getString(key);
+    List<Map<String, dynamic>> history = [];
+    
+    if (existingJson != null) {
+      try {
+        final decoded = jsonDecode(existingJson);
+        if (decoded is List) {
+          history = decoded.cast<Map<String, dynamic>>();
+        }
+      } catch (_) {}
+    }
+    
+    // Ajouter la nouvelle entrée avec timestamp
+    telemetry['timestamp'] = DateTime.now().toIso8601String();
+    history.insert(0, telemetry);
+    
+    // Garder seulement les 50 dernières parties
+    if (history.length > 50) {
+      history = history.sublist(0, 50);
+    }
+    
+    await prefs.setString(key, jsonEncode(history));
+  }
 }

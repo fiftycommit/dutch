@@ -7,6 +7,7 @@ import '../../../providers/multiplayer_game_provider.dart';
 import '../../../services/game/rp_result_helper.dart';
 import '../../../services/multiplayer/competitive_service.dart';
 import '../../../utils/tournament_labels.dart';
+import '../../../utils/ui_constants.dart';
 import '../../shared/unified_results_screen.dart' as shared;
 
 /// Écran de résultats pour le mode multiplayer
@@ -150,7 +151,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           if (stageLabel != null)
             Text(
               "Éliminé en $stageLabel",
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
         ],
       ),
@@ -223,7 +224,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white70,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(width: 12),
@@ -232,7 +233,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
                   ? "En attente de la manche suivante..."
                   : "En attente de l'hôte...",
               style: const TextStyle(
-                color: Colors.white70,
+                color: AppColors.textSecondary,
                 fontSize: 16,
               ),
             ),

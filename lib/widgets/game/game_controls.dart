@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../../utils/screen_utils.dart';
+import '../../utils/ui_constants.dart';
 import 'game_action_button.dart';
 
 class GameControls extends StatelessWidget {
@@ -40,7 +41,7 @@ class GameControls extends StatelessWidget {
           Text(
             "Pouvoir spécial",
             style: TextStyle(
-              color: Colors.white70,
+              color: AppColors.textSecondary,
               fontSize: ScreenUtils.scaleFont(context, compact ? 11 : 13),
               fontWeight: FontWeight.bold,
             ),

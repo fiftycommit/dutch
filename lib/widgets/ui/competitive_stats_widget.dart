@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/multiplayer/competitive_service.dart';
+import '../../utils/ui_constants.dart';
 
 class CompetitiveStatsWidget extends StatelessWidget {
   final CompetitiveStats stats;
@@ -55,7 +56,7 @@ class CompetitiveStatsWidget extends StatelessWidget {
           Text(
             stats.tier,
             style: const TextStyle(
-              color: Colors.white70,
+              color: AppColors.textSecondary,
               fontSize: 12,
             ),
           ),
@@ -116,7 +117,7 @@ class CompetitiveStatsWidget extends StatelessWidget {
                       Text(
                         'Rang #${stats.rank}',
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                         ),
                       ),
@@ -147,7 +148,7 @@ class CompetitiveStatsWidget extends StatelessWidget {
                     const Text(
                       'MMR',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -227,7 +228,7 @@ class CompetitiveStatsWidget extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            color: Colors.white70,
+            color: AppColors.textSecondary,
             fontSize: 11,
           ),
           textAlign: TextAlign.center,
@@ -281,7 +282,7 @@ class CompetitiveMatchResult extends StatelessWidget {
               Text(
                 'MMR: ${newStats.mmr - mmrChange}',
                 style: const TextStyle(
-                  color: Colors.white70,
+                  color: AppColors.textSecondary,
                   fontSize: 18,
                 ),
               ),
@@ -323,7 +324,7 @@ class CompetitiveMatchResult extends StatelessWidget {
           Text(
             'Classement: $playerRank/$totalPlayers',
             style: const TextStyle(
-              color: Colors.white70,
+              color: AppColors.textSecondary,
               fontSize: 14,
             ),
           ),

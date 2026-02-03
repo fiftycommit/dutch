@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../../../models/playing_card.dart';
 import '../../../models/game_state.dart';
 import '../../../core/interfaces/i_bot_ai_service.dart';
+import '../../../services/game/bot/hardcore_bot_config.dart';
 
 /// Orchestrateur dédié à la gestion des actions des bots
 /// Principe GRASP: Pure Fabrication - Responsabilité unique d'orchestration des bots
@@ -29,8 +30,10 @@ class BotOrchestrator {
   Future<bool> simulateBotReaction(
     GameState gameState,
     int? playerMMR,
-    bool isPaused,
-  ) async {
+    bool isPaused, {
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
+  }) async {
     if (gameState.phase != GamePhase.reaction) return false;
     if (isPaused) return false;
 
@@ -41,7 +44,13 @@ class BotOrchestrator {
       if (gameState.phase != GamePhase.reaction) return false;
       if (isPaused) return false;
 
-      int delay = Random().nextInt(250) + 100;
+      // En mode hardcore, les bots réagissent plus vite
+      int delay;
+      if (hardcoreLevel != null) {
+        delay = HardcoreBotConfig.getReactionTime(hardcoreLevel, Random()) ~/ 3;
+      } else {
+        delay = Random().nextInt(250) + 100;
+      }
       await Future.delayed(Duration(milliseconds: delay));
 
       if (gameState.phase != GamePhase.reaction) return false;
@@ -50,6 +59,8 @@ class BotOrchestrator {
         gameState,
         bot,
         playerMMR: playerMMR,
+        hardcoreLevel: hardcoreLevel,
+        playerSkillEstimate: playerSkillEstimate,
       );
 
       if (matched) {
@@ -66,8 +77,10 @@ class BotOrchestrator {
     int? playerMMR,
     bool isPaused,
     BuildContext? context,
-    Function onCheckInstantEnd,
-  ) async {
+    Function onCheckInstantEnd, {
+    HardcoreLevel? hardcoreLevel,
+    int? playerSkillEstimate,
+  }) async {
     int loopCount = 0;
     
     while (!gameState.currentPlayer.isHuman &&
@@ -82,9 +95,10 @@ class BotOrchestrator {
       final shouldEnd = await onCheckInstantEnd();
       if (shouldEnd) return;
 
-      // Attendre un peu avant que le bot joue
+      // Attendre un peu avant que le bot joue (moins en hardcore)
       if (!isPaused) {
-        await Future.delayed(const Duration(milliseconds: 150));
+        final waitTime = hardcoreLevel != null ? 80 : 150;
+        await Future.delayed(Duration(milliseconds: waitTime));
       }
       if (isPaused) break;
 
@@ -95,6 +109,8 @@ class BotOrchestrator {
           gameState,
           playerMMR: playerMMR,
           context: context,
+          hardcoreLevel: hardcoreLevel,
+          playerSkillEstimate: playerSkillEstimate,
         );
         
         if (isPaused) break;
@@ -104,9 +120,10 @@ class BotOrchestrator {
         }
 
         if (gameState.isWaitingForSpecialPower) {
-          // Attendre avant d'utiliser le pouvoir
+          // Attendre avant d'utiliser le pouvoir (moins en hardcore)
           if (!isPaused) {
-            await Future.delayed(const Duration(milliseconds: 180));
+            final powerWait = hardcoreLevel != null ? 100 : 180;
+            await Future.delayed(Duration(milliseconds: powerWait));
           }
           if (isPaused) break;
           
@@ -114,6 +131,8 @@ class BotOrchestrator {
             gameState,
             playerMMR: playerMMR,
             context: context,
+            hardcoreLevel: hardcoreLevel,
+            playerSkillEstimate: playerSkillEstimate,
           );
           
           if (isPaused) break;

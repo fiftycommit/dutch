@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/multiplayer_game_provider.dart';
+import '../utils/ui_constants.dart';
 import '../screens/splash_screen.dart';
 import '../screens/menu/main_menu_screen.dart';
 import '../screens/game/game_setup_screen.dart';
@@ -246,7 +247,7 @@ class AppRouter {
               const SizedBox(height: 8),
               Text(
                 state.uri.toString(),
-                style: const TextStyle(color: Colors.white54),
+                style: const TextStyle(color: AppColors.textDisabled),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -347,7 +348,7 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
                   const SizedBox(height: 8),
                   Text(
                     _error ?? 'Erreur inconnue',
-                    style: const TextStyle(color: Colors.white54),
+                    style: const TextStyle(color: AppColors.textDisabled),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),

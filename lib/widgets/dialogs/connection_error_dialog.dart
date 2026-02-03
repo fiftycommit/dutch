@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'responsive_dialog.dart';
+import '../../utils/ui_constants.dart';
 
 /// A dialog shown when the player loses connection to the server.
 /// Provides "Retry" and "Return to Menu" options.
@@ -45,7 +46,7 @@ class ConnectionErrorDialog {
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white70,
+                color: AppColors.textSecondary,
                 fontSize: metrics.font(15),
               ),
             ),
@@ -60,13 +61,13 @@ class ConnectionErrorDialog {
                   },
                   icon: Icon(
                     Icons.home,
-                    color: Colors.white70,
+                    color: AppColors.textSecondary,
                     size: metrics.size(20),
                   ),
                   label: Text(
                     'Menu',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textSecondary,
                       fontSize: metrics.font(14),
                     ),
                   ),

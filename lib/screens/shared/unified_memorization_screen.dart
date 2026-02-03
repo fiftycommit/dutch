@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../../models/player.dart';
+import '../../utils/ui_constants.dart';
 import '../../widgets/game/card_widget.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/screen_utils.dart';
@@ -302,7 +303,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             child: Text(
                               "Mémorisez bien ces cartes !",
                               style: TextStyle(
-                                color: Colors.white70,
+                                color: AppColors.textSecondary,
                                 fontSize: subtitleSize,
                               ),
                               maxLines: 1,
@@ -343,7 +344,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                       child: Text(
                                         "${((1 - value) * 3).ceil()}s",
                                         style: TextStyle(
-                                          color: Colors.white54,
+                                          color: AppColors.textDisabled,
                                           fontSize: textSize,
                                         ),
                                       ),
@@ -418,7 +419,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.visibility_off, size: 60, color: Colors.white54),
+                const Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
                 const SizedBox(height: 20),
                 Text(
                   config.noPlayerTitle,
@@ -432,7 +433,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                 const SizedBox(height: 10),
                 Text(
                   config.noPlayerMessage,
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
                 ),
                 const SizedBox(height: 30),
                 const CircularProgressIndicator(color: Colors.amber),
@@ -487,7 +488,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.visibility, size: iconSize, color: Colors.white54),
+                    Icon(Icons.visibility, size: iconSize, color: AppColors.textDisabled),
                     SizedBox(height: verticalSpacing),
                     Text(
                       "MÉMORISATION",
@@ -523,7 +524,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                       "Clique sur 2 cartes pour les mémoriser.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.textSecondary,
                         fontSize: subtitleSize,
                       ),
                     ),

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../models/player.dart';
+import '../../../utils/ui_constants.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
 
@@ -192,7 +193,7 @@ class PowerSelectionWidgets {
                   onPressed: onCancel,
                   child: Text("ANNULER",
                       style: TextStyle(
-                          color: Colors.white54, fontSize: metrics.font(14))),
+                          color: AppColors.textDisabled, fontSize: metrics.font(14))),
                 ),
                 ElevatedButton(
                   onPressed: onConfirm,
@@ -252,7 +253,7 @@ class PowerSelectionWidgets {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: bodySize),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
             ),
             SizedBox(height: gapM),
             SizedBox(
@@ -287,7 +288,7 @@ class PowerSelectionWidgets {
               onPressed: onCancel,
               child: Text(
                 "ANNULER",
-                style: TextStyle(color: Colors.white54, fontSize: metrics.font(14)),
+                style: TextStyle(color: AppColors.textDisabled, fontSize: metrics.font(14)),
               ),
             ),
           ],
@@ -333,7 +334,7 @@ class PowerSelectionWidgets {
         Text(
           subtitle,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white70, fontSize: bodySize),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
         ),
         SizedBox(height: gapM),
         buildJokerPlayerSelection(
@@ -348,7 +349,7 @@ class PowerSelectionWidgets {
           onPressed: onCancel,
           child: Text(
             "ANNULER",
-            style: TextStyle(color: Colors.white54, fontSize: metrics.font(14)),
+            style: TextStyle(color: AppColors.textDisabled, fontSize: metrics.font(14)),
           ),
         ),
       ],

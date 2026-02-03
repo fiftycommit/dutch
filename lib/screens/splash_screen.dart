@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/ui_constants.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../main.dart';
@@ -131,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen>
                       Text(
                         'Jeu de Mémoire et Stratégie',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: ScreenUtils.scaleFont(context, 16),
                           letterSpacing: 2,
                         ),
@@ -176,7 +177,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     Text(
                                       _getLoadingText(_progressAnimation.value),
                                       style: TextStyle(
-                                        color: Colors.white60,
+                                        color: AppColors.textDisabled,
                                         fontSize:
                                             ScreenUtils.scaleFont(context, 14),
                                       ),

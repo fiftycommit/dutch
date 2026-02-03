@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/ui/stats_service.dart';
+import '../../utils/ui_constants.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -406,7 +407,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.person,
-                color: isSelected ? Colors.black : Colors.white70, size: 20),
+                color: isSelected ? Colors.black : AppColors.textSecondary, size: 20),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -422,14 +423,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   style: TextStyle(
                       color: isSelected ? Colors.black87 : rankColor,
                       fontWeight: FontWeight.bold,
-                      fontSize: 9)),
+                      fontSize: AppFontSizes.small)),
             ),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(rp,
                   style: TextStyle(
-                      color: isSelected ? Colors.black54 : Colors.white60,
-                      fontSize: 8)),
+                      color: isSelected ? Colors.black54 : AppColors.textDisabled,
+                      fontSize: AppFontSizes.small)),
             ),
           ],
         ),
@@ -469,7 +470,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     return IconButton(
       onPressed: onPressed,
       icon: Icon(icon, size: 22),
-      color: Colors.white70,
+      color: AppColors.textSecondary,
       style: IconButton.styleFrom(
         backgroundColor: const Color(0xFF1a3a28),
         padding: const EdgeInsets.all(8),
@@ -504,7 +505,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         child: Column(
           children: [
             Icon(Icons.person,
-                color: isSelected ? Colors.black : Colors.white70, size: 30),
+                color: isSelected ? Colors.black : AppColors.textSecondary, size: 30),
             const SizedBox(height: 4),
             Text(name,
                 style: TextStyle(
@@ -558,7 +559,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         IconButton(
           onPressed: onPressed,
           icon: Icon(icon, size: 28),
-          color: Colors.white70,
+          color: AppColors.textSecondary,
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFF1a3a28),
             padding: const EdgeInsets.all(12),
@@ -566,7 +567,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         const SizedBox(height: 4),
         Text(label,
-            style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ],
     );
   }

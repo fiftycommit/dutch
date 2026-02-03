@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
+import '../../../utils/ui_constants.dart';
 import '../../shared/unified_memorization_screen.dart' as shared;
 import 'multiplayer_game_screen.dart';
 
@@ -56,7 +57,7 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
                 .length;
             return Text(
               '$readyCount / $totalHumans prêts',
-              style: const TextStyle(color: Colors.white70),
+              style: const TextStyle(color: AppColors.textSecondary),
             );
           },
         ),
@@ -81,7 +82,7 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.visibility_off, size: 60, color: Colors.white54),
+              Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
               SizedBox(height: 20),
               Text(
                 "VOUS ÊTES SPECTATEUR",
@@ -95,7 +96,7 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
               SizedBox(height: 10),
               Text(
                 "La partie va commencer...",
-                style: TextStyle(color: Colors.white70, fontSize: 16),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
               ),
               SizedBox(height: 30),
               CircularProgressIndicator(color: Colors.amber),

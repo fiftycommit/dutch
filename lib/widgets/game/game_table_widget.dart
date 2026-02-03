@@ -5,6 +5,7 @@ import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/utils/screen_utils.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/widgets/game/game_layout_mixin.dart';
 import 'package:dutch_game/widgets/game/card_widget.dart';
 import 'package:dutch_game/widgets/game/player_hand.dart';
@@ -1601,7 +1602,7 @@ class _GameTableContentState extends State<_GameTableContent>
                   child: Text(
                     '${gs.deck.length}',
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),

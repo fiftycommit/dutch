@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../utils/ui_constants.dart';
 
 class MultiplayerModeSelectionScreen extends StatelessWidget {
   const MultiplayerModeSelectionScreen({super.key});
@@ -317,7 +318,7 @@ class _ModeCardState extends State<_ModeCard>
                         Text(
                           widget.description,
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: AppColors.textSecondary,
                             fontSize: isMobile ? 12 : 14,
                           ),
                         ),

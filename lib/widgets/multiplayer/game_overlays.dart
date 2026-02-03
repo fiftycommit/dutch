@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 
 /// Overlays réutilisables pour les écrans de jeu multiplayer
 class GameOverlays {
@@ -78,7 +79,7 @@ class GameOverlays {
             const SizedBox(height: 10),
             if (pausedByName != null)
               Text("Mis en pause par $pausedByName",
-                  style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16)),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: onResume,

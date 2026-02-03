@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import '../responsive_dialog.dart';
 
@@ -28,7 +29,7 @@ class MultiplayerDialogs {
               "L'hôte a fermé la partie.",
               textAlign: TextAlign.center,
               style:
-                  TextStyle(color: Colors.white70, fontSize: metrics.font(16)),
+                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
@@ -68,7 +69,7 @@ class MultiplayerDialogs {
               message ?? "Vous avez été exclu de la room.",
               textAlign: TextAlign.center,
               style:
-                  TextStyle(color: Colors.white70, fontSize: metrics.font(16)),
+                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
@@ -108,7 +109,7 @@ class MultiplayerDialogs {
               message ?? "Vous avez été banni de cette room.",
               textAlign: TextAlign.center,
               style:
-                  TextStyle(color: Colors.white70, fontSize: metrics.font(16)),
+                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(10)),
             Text(

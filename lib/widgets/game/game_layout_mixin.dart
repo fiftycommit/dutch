@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:dutch_game/models/game_state.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/utils/screen_utils.dart';
 import 'package:dutch_game/widgets/game/card_widget.dart';
@@ -602,7 +603,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Colors.white,
-                          fontSize: 8,
+                          fontSize: AppFontSizes.small,
                           fontWeight: FontWeight.bold)),
                 )
               : const SizedBox.shrink());
@@ -679,7 +680,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 8,
+                    fontSize: AppFontSizes.small,
                     fontWeight: FontWeight.bold)),
           ),
         if (!isMyTurn) SizedBox(width: sideButtonWidth),

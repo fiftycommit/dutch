@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/screen_utils.dart';
+import '../../utils/ui_constants.dart';
 
 class HapticButton extends StatefulWidget {
   final VoidCallback? onPressed;
@@ -89,7 +90,7 @@ class _HapticButtonState extends State<HapticButton>
               height: widget.height ?? ScreenUtils.buttonHeight(context),
               decoration: BoxDecoration(
                 color: isDisabled
-                    ? Colors.grey.shade600
+                    ? AppColors.buttonDisabledBackground
                     : (widget.backgroundColor ?? const Color(0xFF2d5f3e)),
                 borderRadius: BorderRadius.circular(
                   ScreenUtils.borderRadius(context, 12),
@@ -113,7 +114,7 @@ class _HapticButtonState extends State<HapticButton>
                           Icon(
                             widget.icon,
                             color: isDisabled
-                                ? Colors.grey.shade400
+                                ? AppColors.buttonDisabledForeground
                                 : (widget.foregroundColor ?? Colors.white),
                             size: ScreenUtils.scale(context, 20),
                           ),
@@ -122,7 +123,7 @@ class _HapticButtonState extends State<HapticButton>
                             widget.text,
                             style: TextStyle(
                               color: isDisabled
-                                  ? Colors.grey.shade400
+                                  ? AppColors.buttonDisabledForeground
                                   : (widget.foregroundColor ?? Colors.white),
                               fontSize: ScreenUtils.scaleFont(context, 18),
                               fontWeight: FontWeight.bold,
@@ -134,7 +135,7 @@ class _HapticButtonState extends State<HapticButton>
                         widget.text,
                         style: TextStyle(
                           color: isDisabled
-                              ? Colors.grey.shade400
+                              ? AppColors.buttonDisabledForeground
                               : (widget.foregroundColor ?? Colors.white),
                           fontSize: ScreenUtils.scaleFont(context, 18),
                           fontWeight: FontWeight.bold,

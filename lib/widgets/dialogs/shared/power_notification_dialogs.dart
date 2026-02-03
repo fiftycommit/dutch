@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../models/playing_card.dart';
+import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
@@ -186,7 +187,7 @@ class PowerNotificationDialogs {
               Text(
                 "$player1 carte #${card1 + 1} ↔ $player2 carte #${card2 + 1}",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: metrics.font(14)),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
               ),
               SizedBox(height: metrics.space(20)),
               PowerDialogWidgets.confirmButton(
@@ -240,7 +241,7 @@ class PowerNotificationDialogs {
                         ? "Vous ne savez plus où sont vos cartes !"
                         : "$targetName ne sait plus où sont ses cartes !"),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: metrics.font(14)),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
               ),
               if (byPlayerName != null) ...[
                 SizedBox(height: metrics.space(8)),
@@ -302,7 +303,7 @@ class PowerNotificationDialogs {
               Text(
                 "$byPlayerName a échangé une carte avec ${isMe ? "vous" : targetName} !",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: metrics.font(14)),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
               ),
               if (isMe) ...[
                 SizedBox(height: metrics.space(8)),
@@ -361,7 +362,7 @@ class PowerNotificationDialogs {
               Text(
                 "$byPlayerName espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: metrics.font(14)),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
               ),
               if (isMe) ...[
                 SizedBox(height: metrics.space(8)),

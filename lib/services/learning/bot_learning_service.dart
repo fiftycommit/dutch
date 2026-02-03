@@ -31,14 +31,17 @@ class BotLearningService implements ILearningService {
     final bot = player;
     if (bot.isHuman) return;
     
-    final botId = '${bot.botBehavior}_${bot.botSkillLevel}';
+    // FIX: Normaliser behavior et skillLevel pour matcher le format serveur
+    final behavior = bot.botBehavior.toString().split('.').last;
+    final skill = bot.botSkillLevel.toString().split('.').last;
+    final botId = '${behavior}_$skill';
     
     _activeGames[bot.id] = BotGameRecord(
       gameId: gameId,
       botId: botId,
       botName: bot.name,
-      botBehavior: bot.botBehavior.toString().split('.').last,
-      botSkillLevel: bot.botSkillLevel.toString().split('.').last,
+      botBehavior: behavior,
+      botSkillLevel: skill,
       startTime: DateTime.now(),
       numberOfPlayers: gameState.players.length,
       gameMode: gameState.gameMode.toString().split('.').last,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 import '../../models/playing_card.dart';
 import 'card_widget.dart';
 import 'svg_builder_provider.dart';
@@ -55,7 +56,7 @@ class DeckCardWidget extends StatelessWidget {
             child: Text(
               '$deckCount',
               style: TextStyle(
-                color: Colors.white70,
+                color: AppColors.textSecondary,
                 fontSize: isCompact ? 9 : 11,
                 fontWeight: FontWeight.bold,
               ),

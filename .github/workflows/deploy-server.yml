@@ -117,10 +117,17 @@ jobs:
               nginx -t && systemctl reload nginx
             fi
 
-            # Ensure sitemap.xml and robots.txt are served correctly (SEO)
+            # Ensure robots.txt is served correctly (SEO)
             if ! grep -q "location = /robots.txt" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for SEO files..."
-              sed -i '/location \/ {/i\    location = /sitemap.xml {\n        root /var/www/dutch/web;\n        default_type application/xml;\n        try_files /sitemap.xml =404;\n    }\n\n    location = /robots.txt {\n        root /var/www/dutch/web;\n        default_type text/plain;\n        try_files /robots.txt =404;\n    }\n' /etc/nginx/sites-available/dutch-server
+              echo "Updating Nginx configuration for robots.txt..."
+              sed -i '/location \/ {/i\    location = /robots.txt {\n        root /var/www/dutch/web;\n        default_type text/plain;\n        try_files /robots.txt =404;\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
+
+            # Ensure sitemap.xml is proxied to backend with static fallback
+            if ! grep -q "location = /sitemap.xml" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for sitemap.xml..."
+              sed -i '/location \/ {/i\    location = /sitemap.xml {\n        proxy_pass http://dutch_backend/sitemap.xml;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_intercept_errors on;\n        error_page 502 503 504 = @sitemap_fallback;\n    }\n\n    location @sitemap_fallback {\n        root /var/www/dutch/web;\n        try_files /sitemap-fallback.xml =404;\n    }\n' /etc/nginx/sites-available/dutch-server
               nginx -t && systemctl reload nginx
             fi
 
