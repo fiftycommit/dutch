@@ -143,6 +143,17 @@ class GameLogic {
     if (!player.isHuman) {
       player.updateMentalMap(cardIndex, newCard);
     }
+    
+    // FIX CRITIQUE : Invalider la SpyMemory des autres bots sur cette position
+    // Quand un joueur échange, la carte à cette position change !
+    for (final otherPlayer in gameState.players) {
+      if (otherPlayer.id != player.id && !otherPlayer.isHuman) {
+        final spyData = otherPlayer.spyMemory[player.id];
+        if (spyData != null && spyData.containsKey(cardIndex)) {
+          spyData.remove(cardIndex);
+        }
+      }
+    }
 
     gameState.discardPile.add(oldCard);
     // Message explicite : le joueur a GARDÉ la carte piochée

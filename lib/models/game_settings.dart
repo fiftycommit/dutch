@@ -1,6 +1,6 @@
 import 'game_state.dart';
 
-enum Difficulty { easy, medium, hard, mix }
+enum Difficulty { easy, medium, hard, platinum, mix }
 
 enum BotBehavior { 
   fast,

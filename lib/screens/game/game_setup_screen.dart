@@ -30,7 +30,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Difficulty selectedBotDifficulty = Difficulty.medium;
   bool _isLoading = false;
   int selectedNumberOfPlayers = 4; // Par défaut 4 joueurs
-  HardcoreLevel? _hardcoreLevel; // null = mode normal
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +249,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                               Icon(Icons.sentiment_very_dissatisfied, size: f(18)),
                         ),
                         ButtonSegment(
+                          value: Difficulty.platinum,
+                          label: const Text("Platine"),
+                          icon: Icon(Icons.diamond, size: f(18)),
+                        ),
+                        ButtonSegment(
                           value: Difficulty.mix,
                           label: const Text("Mix"),
                           icon: Icon(Icons.shuffle, size: f(18)),
@@ -266,10 +270,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   ),
                 ],
                 SizedBox(height: spacingSmall),
-                // Mode Hardcore - UNIQUEMENT en mode manuel (pas en SBMM)
-                // En SBMM, le jeu décide automatiquement du niveau de difficulté
-                if (!useSBMM) ...[
-                  _buildHardcoreModeSelector(f, isCompact, unselectedBg, segmentBorder),
+                // Description du niveau sélectionné (mode manuel uniquement)
+                if (!useSBMM && (selectedBotDifficulty == Difficulty.hard || selectedBotDifficulty == Difficulty.platinum)) ...[
+                  _buildDifficultyDescription(f, selectedBotDifficulty),
                 ],
                 SizedBox(height: spacingMedium),
                 Text(
@@ -361,6 +364,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
     if (!mounted) return;
 
+    // Déterminer le hardcoreLevel basé sur la difficulté sélectionnée
+    HardcoreLevel? hardcoreLevel;
+    if (selectedBotDifficulty == Difficulty.hard) {
+      hardcoreLevel = HardcoreLevel.nightmare; // Difficile = Gold + Nightmare
+    } else if (selectedBotDifficulty == Difficulty.platinum) {
+      hardcoreLevel = HardcoreLevel.impossible; // Platine = Gold + Boss
+    }
+
     gameProvider.createNewGame(
       players: players,
       gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
@@ -368,7 +379,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       reactionTimeMs: settings.reactionTimeMs,
       saveSlot: widget.saveSlot,
       useSBMM: useSBMM,
-      hardcoreLevel: _hardcoreLevel,
+      hardcoreLevel: hardcoreLevel,
     );
 
     if (!mounted) return;
@@ -569,6 +580,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         return BotSkillLevel.silver;
       case Difficulty.hard:
         return BotSkillLevel.gold;
+      case Difficulty.platinum:
+        return BotSkillLevel.platinum;
       case Difficulty.mix:
         return BotSkillLevel.silver; // Valeur par défaut, sera mélangé lors de la création
     }
@@ -601,150 +614,53 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     return name;
   }
 
-  /// Construit le sélecteur de mode hardcore
-  Widget _buildHardcoreModeSelector(
-    double Function(double) f,
-    bool isCompact,
-    Color unselectedBg,
-    Color segmentBorder,
-  ) {
-    return Column(
-      children: [
-        SizedBox(height: f(10)),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.local_fire_department,
-              color: _hardcoreLevel != null ? Colors.red : Colors.grey,
-              size: f(20),
-            ),
-            SizedBox(width: f(8)),
-            Text(
-              "Mode Hardcore",
-              style: TextStyle(
-                color: _hardcoreLevel != null ? Colors.red : Colors.white70,
-                fontSize: f(16),
-                fontWeight: FontWeight.bold,
+  /// Construit la description du niveau de difficulté
+  Widget _buildDifficultyDescription(double Function(double) f, Difficulty difficulty) {
+    final isPlatinum = difficulty == Difficulty.platinum;
+    final color = isPlatinum ? Colors.purple : Colors.red;
+    final icon = isPlatinum ? Icons.diamond : Icons.local_fire_department;
+    final title = isPlatinum ? "MODE PLATINE" : "MODE DIFFICILE";
+    final description = isPlatinum
+        ? "💀 IA parfaite. Vous allez perdre. 💀"
+        : "🔥 Bots experts avec 70-85% winrate 🔥";
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(10)),
+      margin: EdgeInsets.symmetric(horizontal: f(40)),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(100)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: f(18)),
+          SizedBox(width: f(8)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: f(13),
+                ),
               ),
-            ),
-            SizedBox(width: f(8)),
-            Switch(
-              value: _hardcoreLevel != null,
-              onChanged: (enabled) {
-                setState(() {
-                  _hardcoreLevel = enabled ? HardcoreLevel.hard : null;
-                });
-              },
-              activeThumbColor: Colors.red,
-              activeTrackColor: Colors.red.withAlpha(100),
-            ),
-          ],
-        ),
-        if (_hardcoreLevel != null) ...[
-          SizedBox(height: f(12)),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(8)),
-            decoration: BoxDecoration(
-              color: Colors.red.withAlpha(30),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.withAlpha(100)),
-            ),
-            child: Column(
-              children: [
-                SegmentedButton<HardcoreLevel>(
-                  segments: [
-                    ButtonSegment(
-                      value: HardcoreLevel.hard,
-                      label: Text(
-                        "Hard",
-                        style: TextStyle(fontSize: f(11)),
-                      ),
-                      icon: Icon(Icons.whatshot, size: f(14)),
-                    ),
-                    ButtonSegment(
-                      value: HardcoreLevel.insane,
-                      label: Text(
-                        "Insane",
-                        style: TextStyle(fontSize: f(11)),
-                      ),
-                      icon: Icon(Icons.flash_on, size: f(14)),
-                    ),
-                    ButtonSegment(
-                      value: HardcoreLevel.nightmare,
-                      label: Text(
-                        "Nightmare",
-                        style: TextStyle(fontSize: f(11)),
-                      ),
-                      icon: Icon(Icons.dangerous, size: f(14)),
-                    ),
-                    ButtonSegment(
-                      value: HardcoreLevel.impossible,
-                      label: Text(
-                        "Boss",
-                        style: TextStyle(fontSize: f(11)),
-                      ),
-                      icon: Icon(Icons.local_fire_department, size: f(14)),
-                    ),
-                  ],
-                  selected: {_hardcoreLevel!},
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _hardcoreLevel = selection.first;
-                    });
-                  },
-                  style: ButtonStyle(
-                    visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
-                    padding: WidgetStateProperty.all(
-                      EdgeInsets.symmetric(horizontal: f(6), vertical: f(4)),
-                    ),
-                    backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return _hardcoreLevel == HardcoreLevel.impossible 
-                            ? Colors.purple.shade900 
-                            : Colors.red;
-                      }
-                      return unselectedBg;
-                    }),
-                    foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return Colors.white;
-                      }
-                      return Colors.white70;
-                    }),
-                    side: WidgetStateProperty.all(
-                      BorderSide(color: Colors.red.withAlpha(150), width: 1),
-                    ),
-                  ),
+              Text(
+                description,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: f(11),
+                  fontStyle: FontStyle.italic,
                 ),
-                SizedBox(height: f(8)),
-                Text(
-                  _getHardcoreDescription(_hardcoreLevel!),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: f(11),
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
-      ],
+      ),
     );
-  }
-
-  String _getHardcoreDescription(HardcoreLevel level) {
-    switch (level) {
-      case HardcoreLevel.hard:
-        return "Bots agressifs avec excellente mémoire.\nPour joueurs expérimentés.";
-      case HardcoreLevel.insane:
-        return "Bots très dangereux, réactions rapides.\nPréparez-vous à souffrir.";
-      case HardcoreLevel.nightmare:
-        return "🔥 Mode CAUCHEMAR 🔥\n70-85% winrate - Un vrai défi!";
-      case HardcoreLevel.impossible:
-        return "💀 MODE BOSS 💀\nIA parfaite. Vous allez perdre.";
-    }
   }
 }

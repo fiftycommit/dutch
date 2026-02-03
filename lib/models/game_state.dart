@@ -397,6 +397,7 @@ class GameState {
       case Difficulty.medium:
         return SmartShuffleStrategy('medium');
       case Difficulty.hard:
+      case Difficulty.platinum:
         return SmartShuffleStrategy('hard');
       case Difficulty.mix:
         // Mix est utilisé ailleurs pour les bots; ici on le garde en mode expérimental.
@@ -412,6 +413,8 @@ class GameState {
         return 'Tactique';
       case Difficulty.hard:
         return 'Challenger';
+      case Difficulty.platinum:
+        return 'Boss';
       case Difficulty.mix:
         return 'ML (expérimental)';
     }

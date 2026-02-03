@@ -409,6 +409,12 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     if (!wasMyTurn && isNowMyTurn) HapticService.importantAction();
 
     _gameState = gameState;
+    
+    // Reset le flag de processing quand on reçoit une mise à jour du serveur
+    // Cela évite les blocages si une action n'a pas été confirmée
+    if (_isProcessingAction) {
+      _isProcessingAction = false;
+    }
 
     Player? me;
     try { me = gameState.players.firstWhere((p) => p.id == playerId); } catch (_) { me = null; }

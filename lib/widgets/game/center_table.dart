@@ -70,13 +70,15 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     final total = widget.reactionTimeTotalMs;
     final remaining = widget.gameState.reactionTimeRemaining;
     _currentProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 1.0;
+    _lastServerRemaining = remaining;
+    _lastServerUpdate = DateTime.now();
     if (widget.gameState.phase == GamePhase.reaction && !_progressController.isAnimating) {
       _progressController.repeat();
     }
   }
 
-  double _targetProgress = 1.0;
-  DateTime? _lastProgressUpdate;
+  DateTime? _lastServerUpdate;
+  int _lastServerRemaining = 0;
 
   void _onProgressTick() {
     if (!mounted) return;
@@ -84,37 +86,31 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
       return;
     }
     
-    // Calculer le progrès cible basé sur le temps restant
     final total = widget.reactionTimeTotalMs;
-    final remaining = widget.gameState.reactionTimeRemaining;
-    final newTarget = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
+    final serverRemaining = widget.gameState.reactionTimeRemaining;
     
-    // Mettre à jour la cible quand elle change significativement
-    if ((_targetProgress - newTarget).abs() > 0.01) {
-      _targetProgress = newTarget;
-      _lastProgressUpdate = DateTime.now();
+    // Détecter une nouvelle mise à jour du serveur
+    if (serverRemaining != _lastServerRemaining) {
+      _lastServerRemaining = serverRemaining;
+      _lastServerUpdate = DateTime.now();
     }
     
-    // Interpoler vers la cible pour une animation fluide
-    // Utiliser une interpolation linéaire avec un léger lissage
+    // Calculer le progrès en temps réel basé sur le dernier état serveur
+    // et le temps écoulé localement (interpolation continue)
     final now = DateTime.now();
-    if (_lastProgressUpdate != null) {
-      final elapsed = now.difference(_lastProgressUpdate!).inMilliseconds;
-      // Interpoler sur ~100ms pour lisser les mises à jour
-      final t = (elapsed / 100.0).clamp(0.0, 1.0);
-      final smoothProgress = _currentProgress + (_targetProgress - _currentProgress) * t;
-      
-      if ((_currentProgress - smoothProgress).abs() > 0.001) {
-        setState(() {
-          _currentProgress = smoothProgress;
-        });
-      }
-    } else {
-      if ((_currentProgress - newTarget).abs() > 0.001) {
-        setState(() {
-          _currentProgress = newTarget;
-        });
-      }
+    final localElapsedMs = _lastServerUpdate != null 
+        ? now.difference(_lastServerUpdate!).inMilliseconds 
+        : 0;
+    
+    // Estimer le temps restant réel = temps serveur - temps écoulé localement
+    final estimatedRemaining = (serverRemaining - localElapsedMs).clamp(0, total);
+    final smoothProgress = total > 0 ? (estimatedRemaining / total).clamp(0.0, 1.0) : 0.0;
+    
+    // Mettre à jour seulement si le changement est visible
+    if ((_currentProgress - smoothProgress).abs() > 0.002) {
+      setState(() {
+        _currentProgress = smoothProgress;
+      });
     }
   }
 
@@ -122,6 +118,8 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     // Démarrer/arrêter l'animation selon la phase
     if (widget.gameState.phase == GamePhase.reaction) {
       if (!_progressController.isAnimating) {
+        _lastServerUpdate = DateTime.now();
+        _lastServerRemaining = widget.gameState.reactionTimeRemaining;
         _progressController.repeat();
       }
     } else {
