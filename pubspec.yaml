@@ -33,6 +33,7 @@ dependencies:
 
   # Routing
   go_router: ^17.0.1
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

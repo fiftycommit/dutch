@@ -60,8 +60,14 @@ class DiscardTracker {
   // TRACKING
   // ═══════════════════════════════════════════════════════════════════════════
   
+  /// Type d'action effectuée
+  /// wasExchange = true → le joueur a gardé la carte piochée (échange)
+  /// wasExchange = false → le joueur a défaussé la carte piochée directement
+  final Map<String, bool> _lastActionWasExchange = {};
+  
   /// Enregistre une carte vue dans la défausse
-  void trackDiscard(PlayingCard card, {String? discardedBy}) {
+  /// [wasExchange] : true si le joueur a échangé (gardé la pioche), false si défausse directe
+  void trackDiscard(PlayingCard card, {String? discardedBy, bool wasExchange = false}) {
     final points = card.points;
     final value = card.value;
     
@@ -71,8 +77,12 @@ class DiscardTracker {
     if (discardedBy != null) {
       _playerDiscardHistory.putIfAbsent(discardedBy, () => []);
       _playerDiscardHistory[discardedBy]!.add(points);
+      _lastActionWasExchange[discardedBy] = wasExchange;
     }
   }
+  
+  /// Retourne true si la dernière action du joueur était un échange
+  bool lastActionWasExchange(String playerId) => _lastActionWasExchange[playerId] ?? false;
   
   /// Enregistre plusieurs cartes (ex: après un match)
   void trackMultipleDiscards(List<PlayingCard> cards, {String? discardedBy}) {
@@ -86,6 +96,7 @@ class DiscardTracker {
     _seenByPoints.clear();
     _seenByValue.clear();
     _playerDiscardHistory.clear();
+    _lastActionWasExchange.clear();
   }
   
   // ═══════════════════════════════════════════════════════════════════════════

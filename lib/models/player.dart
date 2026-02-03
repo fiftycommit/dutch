@@ -35,7 +35,7 @@ class Player {
   List<DutchAttempt> dutchHistory;
 
   /// Mémoire des cartes espionnées chez les adversaires
-  /// Map: playerId -> Map<cardIndex, PlayingCard>
+  /// Map: playerId -> Map[cardIndex, PlayingCard]
   /// Permet au bot de se souvenir des cartes qu'il a vues chez les autres
   Map<String, Map<int, PlayingCard>> spyMemory;
 

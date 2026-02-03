@@ -1,6 +1,7 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
 import 'dart:convert';
+import 'dart:typed_data';
 
 /// Implémentation web
 /// Utilise le téléchargement de fichier du navigateur
@@ -20,22 +21,24 @@ Future<void> appendToLogFile(String gameId, String content) async {
 Future<void> downloadLog(String filename, String content) async {
   // Créer un blob avec le contenu
   final bytes = utf8.encode(content);
-  final blob = html.Blob([bytes], 'text/plain');
+  final uint8List = Uint8List.fromList(bytes);
+  final jsArray = uint8List.toJS;
+  final blob = web.Blob([jsArray].toJS, web.BlobPropertyBag(type: 'text/plain'));
 
   // Créer une URL pour le blob
-  final url = html.Url.createObjectUrlFromBlob(blob);
+  final url = web.URL.createObjectURL(blob);
 
   // Créer un élément <a> pour déclencher le téléchargement
-  final anchor = html.AnchorElement()
-    ..href = url
-    ..download = filename
-    ..style.display = 'none';
+  final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
 
   // Ajouter au DOM, cliquer, puis retirer
-  html.document.body?.append(anchor);
+  web.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
 
   // Libérer l'URL
-  html.Url.revokeObjectUrl(url);
+  web.URL.revokeObjectURL(url);
 }

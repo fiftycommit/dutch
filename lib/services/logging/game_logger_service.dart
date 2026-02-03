@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../models/game_settings.dart';
 import '../game/bot/bot_dutch_strategy.dart';
-import '../game/bot/bot_threat_analyzer.dart';
-import '../game/bot/bot_difficulty.dart';
 
 // Imports conditionnels pour le web et natif
 import 'game_logger_native.dart' if (dart.library.html) 'game_logger_web.dart' as platform;
@@ -115,7 +114,7 @@ class GameLoggerService {
       final knownOwn = <String>[];
       for (int i = 0; i < player.hand.length; i++) {
         if (i < player.mentalMap.length && player.mentalMap[i] != null) {
-          knownOwn.add('${_cardToString(player.mentalMap[i]!)}');
+          knownOwn.add(_cardToString(player.mentalMap[i]!));
         } else {
           knownOwn.add('?');
         }
@@ -126,6 +125,30 @@ class GameLoggerService {
       // Score estimé par le bot
       final estimatedScore = player.getEstimatedScore();
       buffer.writeln('│ Score estimé par ${player.name}: ~$estimatedScore pts');
+      
+      // Comptage de cartes (pour bots Or/Platine/Hardcore uniquement)
+      final skillLevel = player.botSkillLevel;
+      final isSmartBot = skillLevel == BotSkillLevel.gold || 
+                         skillLevel == BotSkillLevel.platinum ||
+                         (player.aiParameters != null && player.aiParameters!['hardcoreMode'] == 1.0);
+      if (isSmartBot && allPlayers != null) {
+        final tracker = BotDutchStrategy.discardTracker;
+        final ratio = tracker.lowToHighRatio;
+        buffer.writeln('│ 📊 Comptage cartes:');
+        buffer.writeln('│   Ratio bonnes/mauvaises: ${ratio.toStringAsFixed(2)}');
+        buffer.writeln('│   Cartes 0-5pts restantes: ${tracker.remainingCount(0) + tracker.remainingCount(1) + tracker.remainingCount(2) + tracker.remainingCount(3) + tracker.remainingCount(4) + tracker.remainingCount(5)}');
+        buffer.writeln('│   Cartes 10+pts restantes: ${tracker.remainingCount(10) + tracker.remainingCount(11) + tracker.remainingCount(12) + tracker.remainingCount(13)}');
+        
+        // Estimations adversaires
+        for (final opponent in allPlayers) {
+          if (opponent.id != player.id && opponent.hand.isNotEmpty) {
+            final estimate = tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+            final lastWasExchange = tracker.lastActionWasExchange(opponent.id);
+            final actionInfo = lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
+            buffer.writeln('│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
+          }
+        }
+      }
       
       // Mémoire des adversaires (spyMemory)
       if (player.spyMemory.isNotEmpty && allPlayers != null) {

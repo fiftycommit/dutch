@@ -148,8 +148,8 @@ class SpecialPowerHandler {
       player2: targetPlayer,
       index1: ownCardIndex,
       index2: targetCardIndex,
-      card1: myCard!,
-      card2: theirCard!,
+      card1: myCard,
+      card2: theirCard,
     );
 
     gameState.addToHistory(
