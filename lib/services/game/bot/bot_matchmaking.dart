@@ -55,9 +55,6 @@ class BotMatchmaking {
     // Confusion sur swap : 25% à skill=0, 0% à skill=1
     final confusion = 0.25 * (1 - skill);
 
-    // Seuil Dutch : 10 à skill=0, 0 à skill=1
-    final dutchThreshold = (10 * (1 - skill)).round();
-
     // Vitesse de réaction : 0.5 à skill=0, 1.0 à skill=1
     final reactionSpeed = 0.5 + (0.5 * skill);
 
@@ -67,9 +64,6 @@ class BotMatchmaking {
     // Chance de réaction match : 0.3 à skill=0, 1.0 à skill=1
     final reactionMatchChance = 0.3 + (0.7 * skill);
 
-    // Seuil keep card : 8 à skill=0, 0 à skill=1
-    final keepCardThreshold = (8 * (1 - skill)).round();
-
     // Nom basé sur le rang (pour l'affichage uniquement)
     final rankName = _getRankName(mmr, botIndex);
 
@@ -77,11 +71,9 @@ class BotMatchmaking {
       name: rankName,
       forgetChancePerTurn: forgetChance,
       confusionOnSwap: confusion,
-      dutchThreshold: dutchThreshold,
       reactionSpeed: reactionSpeed,
       matchAccuracy: matchAccuracy,
       reactionMatchChance: reactionMatchChance,
-      keepCardThreshold: keepCardThreshold,
     );
   }
 

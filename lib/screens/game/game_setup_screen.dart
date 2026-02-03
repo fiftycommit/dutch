@@ -390,6 +390,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Future<List<Player>> _createSBMMBots(int numberOfBots) async {
     final botTrainingService = BotTrainingService();
     final ghostCloneService = GhostCloneService();
+    final forceBalanced = selectedBotDifficulty != Difficulty.easy;
 
     // Récupérer le profil joueur (une seule fois)
     final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
@@ -416,7 +417,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
-      final behavior = behaviors[i];
+      final behavior = forceBalanced ? BotBehavior.balanced : behaviors[i];
       final baseParams = botParamsList[i];
 
       // Récupérer le training state pour ce type de bot
@@ -465,13 +466,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final isMixMode = selectedBotDifficulty == Difficulty.mix;
     final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
     final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
+    final forceBalanced = selectedBotDifficulty != Difficulty.easy;
 
     final random = DateTime.now().millisecondsSinceEpoch;
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
       final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
-      final behavior = botBehaviors[behaviorIndex];
+      final behavior = forceBalanced ? BotBehavior.balanced : botBehaviors[behaviorIndex];
 
       final botSkill = isMixMode
           ? mixSkillLevels[(i + (random >> (i + 3))) % mixSkillLevels.length]

@@ -109,7 +109,7 @@ void main() {
         ];
 
         final estimated = player.getEstimatedScore();
-        expect(estimated, greaterThanOrEqualTo(5)); // Au moins la carte connue
+        expect(estimated, equals(5)); // Seulement les cartes connues
       });
     });
 

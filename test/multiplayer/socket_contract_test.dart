@@ -125,8 +125,8 @@ void main() {
       test('setReady émet payload avec ready boolean', () {
         emitter.setReady(true);
 
-        expect(mockSocket.lastEventWithAck, 'room:ready');
-        expect(mockSocket.lastPayloadWithAck, {
+        expect(mockSocket.lastEvent, 'room:ready');
+        expect(mockSocket.lastPayload, {
           'roomCode': testRoomCode,
           'ready': true,
         });
@@ -135,7 +135,7 @@ void main() {
       test('setReady false émet payload correct', () {
         emitter.setReady(false);
 
-        expect(mockSocket.lastPayloadWithAck!['ready'], false);
+        expect(mockSocket.lastPayload!['ready'], false);
       });
     });
 
@@ -188,6 +188,10 @@ class MockSocket implements io.Socket {
     lastPayloadWithAck = data as Map<String, dynamic>?;
     ack?.call(null);
   }
+
+  // Le getter connected doit être implémenté explicitement car il retourne un bool
+  @override
+  bool get connected => true;
 
   // Stubs pour les autres méthodes de io.Socket
   @override

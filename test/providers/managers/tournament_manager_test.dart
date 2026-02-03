@@ -177,26 +177,28 @@ void main() {
       });
 
       test('handles 6+ players', () {
-        // Add more players
+        // Initial: 4 players (human, bot1, bot2, bot3)
+        // Add 3 more = 7 total
         gameState.players.add(
-          Player(id: 'bot3', name: 'Bot 3', isHuman: false, position: 3)
+          Player(id: 'bot4', name: 'Bot 4', isHuman: false, position: 4)
             ..hand = [PlayingCard.create('clubs', '5')]
             ..knownCards = [false],
         );
         gameState.players.add(
-          Player(id: 'bot4', name: 'Bot 4', isHuman: false, position: 4)
+          Player(id: 'bot5', name: 'Bot 5', isHuman: false, position: 5)
             ..hand = [PlayingCard.create('spades', '6')]
             ..knownCards = [false],
         );
         gameState.players.add(
-          Player(id: 'bot5', name: 'Bot 5', isHuman: false, position: 5)
+          Player(id: 'bot6', name: 'Bot 6', isHuman: false, position: 6)
             ..hand = [PlayingCard.create('hearts', '7')]
             ..knownCards = [false],
         );
 
         final survivors = manager.prepareSurvivorsForNextRound(gameState);
 
-        expect(survivors.length, 5);
+        // 7 players - 1 eliminated = 6 survivors
+        expect(survivors.length, 6);
       });
     });
 
@@ -242,8 +244,8 @@ void main() {
         final humanResult = manager.finalRanking!.firstWhere(
           (r) => r.player.isHuman,
         );
-        // Position = 5 - round = 5 - 2 = 3
-        expect(humanResult.finalPosition, 3);
+        // Position finale = nombre de joueurs (l'humain finit dernier)
+        expect(humanResult.finalPosition, gameState.players.length); // 4
         expect(humanResult.eliminatedAtRound, 2);
       });
     });

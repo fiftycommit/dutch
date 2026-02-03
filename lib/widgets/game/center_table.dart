@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../utils/ui_constants.dart';
 import '../../models/game_state.dart';
@@ -53,6 +54,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
   int? _lastRedZoneHapticAtMs;
   late AnimationController _progressController;
   double _currentProgress = 1.0;
+  Timer? _progressTimer; // Timer fluide pour le refresh à 24ms
 
   @override
   void initState() {
@@ -72,9 +74,23 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     _currentProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 1.0;
     _lastServerRemaining = remaining;
     _lastServerUpdate = DateTime.now();
-    if (widget.gameState.phase == GamePhase.reaction && !_progressController.isAnimating) {
-      _progressController.repeat();
+    _startProgressTimer();
+  }
+  
+  /// Timer fluide à 24ms (~41fps) pour un refresh constant
+  void _startProgressTimer() {
+    _progressTimer?.cancel();
+    if (widget.gameState.phase == GamePhase.reaction) {
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
+        if (!mounted) return;
+        _onProgressTick();
+      });
     }
+  }
+  
+  void _stopProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
   }
 
   DateTime? _lastServerUpdate;
@@ -83,53 +99,62 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
   void _onProgressTick() {
     if (!mounted) return;
     if (widget.gameState.phase != GamePhase.reaction) {
+      _stopProgressTimer();
       return;
     }
     
     final total = widget.reactionTimeTotalMs;
     final serverRemaining = widget.gameState.reactionTimeRemaining;
     
-    // Détecter une nouvelle mise à jour du serveur
-    if (serverRemaining != _lastServerRemaining) {
+    // Détecter un changement significatif (pas juste le décompte normal)
+    // Un saut de plus de 500ms indique un reset ou une nouvelle phase
+    final diff = (serverRemaining - _lastServerRemaining).abs();
+    final now = DateTime.now();
+    // On ne recale le baseline que sur un saut important ou un reset
+    if (diff > 500 || serverRemaining > _lastServerRemaining || _lastServerUpdate == null) {
       _lastServerRemaining = serverRemaining;
-      _lastServerUpdate = DateTime.now();
+      _lastServerUpdate = now;
     }
     
-    // Calculer le progrès en temps réel basé sur le dernier état serveur
-    // et le temps écoulé localement (interpolation continue)
-    final now = DateTime.now();
+    // Calculer le progrès en temps réel basé sur le dernier baseline local
     final localElapsedMs = _lastServerUpdate != null 
         ? now.difference(_lastServerUpdate!).inMilliseconds 
         : 0;
     
-    // Estimer le temps restant réel = temps serveur - temps écoulé localement
-    final estimatedRemaining = (serverRemaining - localElapsedMs).clamp(0, total);
+    // Estimer le temps restant réel = baseline - temps écoulé localement
+    final estimatedRemaining = (_lastServerRemaining - localElapsedMs).clamp(0, total);
     final smoothProgress = total > 0 ? (estimatedRemaining / total).clamp(0.0, 1.0) : 0.0;
     
-    // Mettre à jour seulement si le changement est visible
-    if ((_currentProgress - smoothProgress).abs() > 0.002) {
-      setState(() {
-        _currentProgress = smoothProgress;
-      });
-    }
+    // Toujours mettre à jour pour une animation fluide
+    setState(() {
+      _currentProgress = smoothProgress;
+    });
   }
 
   void _updateProgressTarget() {
-    // Démarrer/arrêter l'animation selon la phase
+    // Démarrer/arrêter le timer selon la phase
     if (widget.gameState.phase == GamePhase.reaction) {
-      if (!_progressController.isAnimating) {
-        _lastServerUpdate = DateTime.now();
-        _lastServerRemaining = widget.gameState.reactionTimeRemaining;
-        _progressController.repeat();
+      if (_progressTimer == null || !_progressTimer!.isActive) {
+        // Seulement réinitialiser si c'est une NOUVELLE phase (pas un resume)
+        final serverRemaining = widget.gameState.reactionTimeRemaining;
+        final total = widget.reactionTimeTotalMs;
+        final isResume = serverRemaining < total * 0.95; // Moins de 95% = resume probable
+        
+        if (!isResume || _lastServerUpdate == null) {
+          _lastServerUpdate = DateTime.now();
+        }
+        _lastServerRemaining = serverRemaining;
+        _startProgressTimer();
       }
     } else {
-      _progressController.stop();
+      _stopProgressTimer();
       _currentProgress = 1.0;
     }
   }
 
   @override
   void dispose() {
+    _stopProgressTimer();
     _progressController.dispose();
     super.dispose();
   }

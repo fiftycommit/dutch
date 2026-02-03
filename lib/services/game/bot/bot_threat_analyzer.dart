@@ -130,7 +130,7 @@ class BotThreatAnalyzer {
       if (p.id == bot.id) continue;
 
       final cards = p.hand.length;
-      final score = p.getEstimatedScore();
+      final score = p.getKnownScore();
       
       totalCards += cards;
       totalScore += score;
@@ -314,7 +314,7 @@ class BotThreatAnalyzer {
     }
 
     // 2) Score estimé
-    final estimated = player.getEstimatedScore();
+    final estimated = player.getKnownScore();
     if (estimated <= 3) {
       score += 25.0;
     } else if (estimated <= 6) {
@@ -507,7 +507,7 @@ class BotThreatAnalyzer {
   /// Calcule la confiance du bot dans son avance
   /// Retourne un score de 0 (pas d'avance) à 1 (avance écrasante)
   static double calculateLeadConfidence(GameState gs, Player bot) {
-    final myScore = bot.getEstimatedScore();
+    final myScore = bot.getKnownScore();
     final report = analyzeOpponents(gs, bot);
     
     if (report.opponents.isEmpty) return 0.0;
@@ -524,7 +524,7 @@ class BotThreatAnalyzer {
 
   /// Détermine si le bot est en position de gagner
   static bool isInWinningPosition(GameState gs, Player bot) {
-    final myScore = bot.getEstimatedScore();
+    final myScore = bot.getKnownScore();
     final myCards = bot.hand.length;
     final report = analyzeOpponents(gs, bot);
 

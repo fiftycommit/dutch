@@ -7,6 +7,7 @@ import '../game_logic.dart';
 import 'bot_config.dart';
 import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
+import 'human_threat_tracker.dart';
 
 /// Stratégie de gestion des cartes
 /// Principe GRASP: Information Expert - Décide quoi faire avec les cartes
@@ -41,6 +42,17 @@ class BotCardStrategy {
     int replaceIdx = -1;
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 🎯 ANALYSE DE LA MENACE HUMAINE
+    // Les bots doivent réagir quand l'humain devient dangereux
+    // ═══════════════════════════════════════════════════════════════════════
+    final threatTracker = HumanThreatTracker();
+    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
+    
+    // En menace HIGH+, les bots deviennent plus conservateurs et stratégiques
+    final isHumanDangerous = humanThreatLevel == HumanThreatLevel.high || 
+                              humanThreatLevel == HumanThreatLevel.critical;
+
+    // ═══════════════════════════════════════════════════════════════════════
     // ANALYSE DU CONTEXTE DE TABLE
     // Quand tout le monde a peu de cartes OU qu'on a beaucoup joué → CONSERVATEUR
     // ═══════════════════════════════════════════════════════════════════════
@@ -63,13 +75,14 @@ class BotCardStrategy {
     // - Peu de cartes pour tout le monde OU
     // - Quelqu'un a ≤2 cartes OU  
     // - On a joué plus de 7 tours
+    // - 🎯 OU l'humain est dangereux (menace HIGH+)
     final isTenseEndgame = (myCards <= 2 && avgOthersCards <= 3) || 
                            minOthersCards <= 2 || 
-                           isLateGame;
+                           isLateGame ||
+                           isHumanDangerous;
     
-    // En endgame tendu, seuil d'échange beaucoup plus strict
-    // "Quand j'ai peu de cartes, j'échange que avec une bonne carte si les autres ont peu de cartes"
-    final conservativeThreshold = isTenseEndgame ? 3 : 5; // Seuil pour garder une carte inconnue
+    // Note: En endgame tendu ou si l'humain est dangereux,
+    // on désactive la stratégie doublons (voir ci-dessous)
 
     // ═══════════════════════════════════════════════════════════════════════
     // STRATÉGIE DOUBLONS (priorité haute) - Désactivée en endgame tendu
@@ -92,90 +105,51 @@ class BotCardStrategy {
       }
     }
 
-    // EXPLORATION : Remplacer une carte inconnue pour la découvrir
+    // EXPLORATION : Remplacer une carte inconnue systématiquement
+    // Règle demandée : si je ne connais pas une carte, je la remplace peu importe la valeur
     List<int> unknownIndices = BotMemoryManager.getUnknownIndices(bot);
-    
-    double exploreChance = difficulty.name == "Platine" ? 1.0 :
-                          difficulty.name == "Or" ? 1.0 :
-                          difficulty.name == "Argent" ? 0.80 : 0.50;
-
-    if (personality != null) {
-      final style = (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0);
-      exploreChance += style * 0.15;
-      exploreChance -= (personality.memoryAccuracy - 0.7) * 0.2;
-      exploreChance = exploreChance.clamp(0.2, 1.0);
-    }
-    
-    // BUGFIX: En endgame tendu, réduire drastiquement l'exploration aveugle
-    if (isTenseEndgame) {
-      exploreChance *= 0.3; // 70% moins d'exploration
-    }
-    
-    if (unknownIndices.isNotEmpty && _random.nextDouble() < exploreChance) {
+    if (unknownIndices.isNotEmpty) {
       replaceIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
-      
       bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
       if (!confused) {
         bot.updateMentalMap(replaceIdx, drawn);
       }
-      
       GameLogic.replaceCard(gs, replaceIdx);
+      bot.consecutiveBadDraws = 0;
       return;
     }
-    
-    // OPTIMIZATION : Chercher à améliorer le score
-    int keepThreshold = _getKeepThreshold(
-      bot.botBehavior,
-      difficulty,
-      phase,
-      personality: personality,
-    );
 
-    // Chercher la pire carte connue
+    // OPTIMIZATION : Aucun inconnu -> seule règle
+    // Ne pas prendre une carte au-dessus de toutes mes cartes connues
+    int maxKnownValue = -1;
     int worstKnownValue = -1;
+    int worstKnownIdx = -1;
+
     for (int i = 0; i < bot.mentalMap.length; i++) {
       if (bot.mentalMap[i] != null) {
-        int cardValue = bot.mentalMap[i]!.points;
-        if (cardValue > worstKnownValue && cardValue > drawnVal) {
+        final cardValue = bot.mentalMap[i]!.points;
+        if (cardValue > maxKnownValue) {
+          maxKnownValue = cardValue;
+        }
+        if (cardValue > worstKnownValue) {
           worstKnownValue = cardValue;
-          replaceIdx = i;
+          worstKnownIdx = i;
         }
       }
     }
 
     bool isBadDraw = false;
-    
-    // AMÉLIORATION : Logique de remplacement plus intelligente
-    // Le bot garde la carte si :
-    // 1. Elle est <= seuil (très bonne carte)
-    // 2. OU elle améliore significativement le score (diff >= 2)
-    // 3. OU on a des cartes inconnues et la pioche est meilleure que la moyenne
-    //    MAIS en endgame tendu, être plus strict (conservativeThreshold)
 
-    final hasUnknownCards = unknownIndices.isNotEmpty;
-    // BUGFIX: En endgame tendu, utiliser le seuil conservateur
-    final drawnIsBetterThanAverage = drawnVal <= conservativeThreshold;
-
-    if (replaceIdx != -1 && drawnVal <= keepThreshold) {
-      // Cas 1 : Très bonne carte, on la garde
-      _replaceCard(gs, bot, replaceIdx, drawn, difficulty);
-      bot.consecutiveBadDraws = 0;
-    } else if (replaceIdx != -1 && worstKnownValue > drawnVal) {
-      // Cas 2 : OPTIMISATION STRICTE - échanger si amélioration de 1+ point
-      // Comme un joueur humain : R(13) → D(12) = échange !
-      _replaceCard(gs, bot, replaceIdx, drawn, difficulty);
-      bot.consecutiveBadDraws = 0;
-    } else if (hasUnknownCards && drawnIsBetterThanAverage && replaceIdx == -1) {
-      // Cas 3 : Carte décente et on a des inconnues - explorer
-      // BUGFIX: En endgame tendu, on n'explore que si la carte est vraiment bonne (<=3)
-      int exploreIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
-      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
-      if (!confused) {
-        bot.updateMentalMap(exploreIdx, drawn);
-      }
-      GameLogic.replaceCard(gs, exploreIdx);
+    if (maxKnownValue >= 0 && drawnVal > maxKnownValue) {
+      // Carte piochée pire que toutes les cartes connues -> on défausse
+      GameLogic.discardDrawnCard(gs);
+      isBadDraw = true;
+    } else if (worstKnownIdx != -1 && drawnVal < worstKnownValue) {
+      // Sinon, on remplace la pire carte connue
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
       bot.consecutiveBadDraws = 0;
     } else {
+      // Pas d'amélioration -> on défausse
       GameLogic.discardDrawnCard(gs);
       isBadDraw = true;
     }
@@ -183,65 +157,6 @@ class BotCardStrategy {
     if (isBadDraw) {
       bot.consecutiveBadDraws++;
     }
-  }
-
-  static int _getKeepThreshold(
-    BotBehavior? behavior,
-    BotDifficulty difficulty,
-    BotGamePhase phase, {
-    BotPersonality? personality,
-  }) {
-    int keepThreshold = difficulty.keepCardThreshold;
-    
-    // HARDCORE FIX: Respecter le seuil de la difficulté, ne pas l'écraser
-    // Pour Platine/Or/Insane/Nightmare/Impossible, le comportement NE modifie PAS le seuil
-    final isHardcore = difficulty.name == "Platine" || 
-                       difficulty.name == "Or" ||
-                       difficulty.name == "Hard" ||
-                       difficulty.name == "Insane" ||
-                       difficulty.name == "Nightmare" ||
-                       difficulty.name == "Impossible" ||
-                       difficulty.name == "Impossible";
-    
-    if (!isHardcore) {
-      // Seuls les bots non-hardcore peuvent avoir leur seuil modifié par le comportement
-      switch (behavior) {
-        case BotBehavior.fast:
-          // Fast: légèrement plus permissif SAUF pour les difficultés hautes
-          keepThreshold += 2;
-          break;
-        case BotBehavior.aggressive:
-          keepThreshold += 1;
-          break;
-        case BotBehavior.balanced:
-          if (phase == BotGamePhase.endgame) {
-            keepThreshold = (keepThreshold + difficulty.keepCardThreshold) ~/ 2;
-          }
-          break;
-        default:
-          break;
-      }
-    }
-
-    // En endgame, tous les bots deviennent plus sélectifs
-    if (phase == BotGamePhase.endgame) {
-      keepThreshold -= 1;
-    }
-
-    // HARDCORE FIX: Ne PAS appliquer le clamp min 2 pour les hautes difficultés
-    if (personality != null && !isHardcore) {
-      final style = (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0);
-      keepThreshold += (style * 2).round(); // Réduit l'impact de 3 à 2
-      keepThreshold = keepThreshold.clamp(1, 10); // Min 1 au lieu de 2
-    } else if (personality != null && isHardcore) {
-      // Pour hardcore: style a un impact minimal
-      final style = (personality.aggressiveness - personality.caution).clamp(-1.0, 1.0);
-      keepThreshold += (style * 0.5).round();
-      // Clamp avec le minimum de la difficulté comme floor
-      keepThreshold = keepThreshold.clamp(difficulty.keepCardThreshold, 8);
-    }
-
-    return keepThreshold;
   }
 
   static void _replaceCard(GameState gs, Player bot, int replaceIdx, PlayingCard drawn, BotDifficulty difficulty) {
@@ -292,12 +207,8 @@ class BotCardStrategy {
             }
             await Future.delayed(Duration(milliseconds: reactionDelay));
             
-            bool success = GameLogic.matchCard(gameState, bot, i);
-            
-            if (success && i < bot.mentalMap.length) {
-              bot.mentalMap.removeAt(i);
-            }
-            return success;
+            // GameLogic.matchCard() gère déjà la suppression dans mentalMap
+            return GameLogic.matchCard(gameState, bot, i);
           }
         }
       }
@@ -331,6 +242,28 @@ class BotCardStrategy {
     BotPersonality? personality,
   }) {
     double matchChance = difficulty.reactionMatchChance;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🎯 BONUS ANTI-HUMAIN : Plus agressif quand l'humain menace
+    // ═══════════════════════════════════════════════════════════════════════
+    final threatTracker = HumanThreatTracker();
+    final humanThreatLevel = threatTracker.calculateThreatLevel(gameState);
+    
+    // Bonus de match basé sur la menace humaine
+    switch (humanThreatLevel) {
+      case HumanThreatLevel.critical:
+        matchChance += 0.35; // Très agressif - l'humain va gagner !
+        break;
+      case HumanThreatLevel.high:
+        matchChance += 0.20; // Agressif - l'humain est dangereux
+        break;
+      case HumanThreatLevel.medium:
+        matchChance += 0.10; // Légèrement plus attentif
+        break;
+      case HumanThreatLevel.low:
+        // Pas de bonus
+        break;
+    }
 
     // AMÉLIORATION : Bonus plus élevé pour beaucoup de cartes
     if (bot.hand.length >= 5) {
@@ -477,11 +410,8 @@ class BotCardStrategy {
       }
       await Future.delayed(Duration(milliseconds: reactionDelay));
       
-      bool success = GameLogic.matchCard(gameState, bot, blindIndex);
-      if (success && blindIndex < bot.mentalMap.length) {
-        bot.mentalMap.removeAt(blindIndex);
-      }
-      return success;
+      // GameLogic.matchCard() gère déjà la suppression dans mentalMap
+      return GameLogic.matchCard(gameState, bot, blindIndex);
     }
     
     return false;

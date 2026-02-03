@@ -42,8 +42,14 @@ void main() {
 
     group('getBotPhase', () {
       test('returns exploration when not all cards known', () {
-        // Bot knows only 2 cards initially
-        bot.mentalMap = [bot.hand[0], bot.hand[1], null, null];
+        // Bot knows only 2 cards with high values (score > 8 to avoid endgame trigger)
+        bot.hand = [
+          PlayingCard.create('hearts', '6'),   // 6 points
+          PlayingCard.create('diamonds', '7'), // 7 points
+          PlayingCard.create('clubs', '4'),    // 4 points
+          PlayingCard.create('spades', '5'),   // 5 points
+        ];
+        bot.mentalMap = [bot.hand[0], bot.hand[1], null, null]; // Score estimé = 6+7 = 13 > 8
 
         final phase = BotConfig.getBotPhase(bot, gameState);
 
@@ -223,14 +229,12 @@ void main() {
           'memoryAccuracy': 0.8,
           'riskTolerance': 0.6,
           'powerUsageRate': 0.7,
-          'caution': 0.4,
-          'dutchThreshold': 5.0,
         };
 
         final difficulty = BotConfig.difficultyFromParameters(params);
 
         expect(difficulty.name, 'SBMM');
-        expect(difficulty.dutchThreshold, 5);
+        expect(difficulty.reactionSpeed, greaterThan(0.5));
       });
 
       test('clamps values to valid range', () {
@@ -238,13 +242,12 @@ void main() {
           'memoryAccuracy': 1.5, // > 1.0
           'riskTolerance': -0.5, // < 0.0
           'powerUsageRate': 0.5,
-          'caution': 0.5,
-          'dutchThreshold': 50.0, // > 30
         };
 
         final difficulty = BotConfig.difficultyFromParameters(params);
 
-        expect(difficulty.dutchThreshold, 30); // Clamped to max
+        // memoryAccuracy clamped to 1.0 → forgetChancePerTurn = 0
+        expect(difficulty.forgetChancePerTurn, 0.0);
       });
 
       test('uses defaults for missing parameters', () {
@@ -253,7 +256,7 @@ void main() {
         final difficulty = BotConfig.difficultyFromParameters(params);
 
         expect(difficulty, isNotNull);
-        expect(difficulty.dutchThreshold, 6); // Default
+        expect(difficulty.reactionSpeed, greaterThan(0.5));
       });
 
       test('high memory accuracy reduces forget chance', () {

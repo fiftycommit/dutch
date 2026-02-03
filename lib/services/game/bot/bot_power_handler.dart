@@ -13,6 +13,7 @@ import '../../../providers/game_provider.dart';
 import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
 import 'bot_personality.dart';
+import 'human_threat_tracker.dart';
 
 /// Gestion des pouvoirs spéciaux des bots
 /// Principe GRASP: Controller - Orchestre l'utilisation des pouvoirs
@@ -380,6 +381,10 @@ class BotPowerHandler {
 
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
     final report = BotThreatAnalyzer.analyzeOpponents(gs, bot, isHardcoreMode: isHardcore);
+    
+    // 🎯 ANALYSE DE LA MENACE HUMAINE
+    final threatTracker = HumanThreatTracker();
+    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
 
     // ═══════════════════════════════════════════════════════════════════════
     // PHILOSOPHIE : Le but est que l'HUMAIN perde !
@@ -387,10 +392,26 @@ class BotPowerHandler {
     // Même si un bot est plus proche de Dutch, on préfère ruiner l'humain
     // ═══════════════════════════════════════════════════════════════════════
 
+    // 🎯 RÈGLE #0 (NOUVELLE) : Humain CRITICAL = cible ABSOLUE
+    // Peu importe ce que font les autres, on doit arrêter l'humain
+    if (humanThreatLevel == HumanThreatLevel.critical && report.humanPlayer != null) {
+      // Log dans l'historique du jeu
+      gs.addToHistory('🎯 ${bot.name} cible l\'humain (menace critique)');
+      return report.humanPlayer;
+    }
+
     // RÈGLE #1 (PRIORITÉ ABSOLUE) : L'humain avec peu de cartes = cible #1
     // Il est probablement prêt à Dutch → on ruine tout
     if (report.humanPlayer != null && report.humanPlayer!.hand.length <= 2) {
       return report.humanPlayer;
+    }
+    
+    // 🎯 RÈGLE #1.5 : Humain HIGH = cible prioritaire même avec plus de cartes
+    if (humanThreatLevel == HumanThreatLevel.high && report.humanPlayer != null) {
+      // L'humain progresse bien, on le mélange pour le ralentir
+      if (report.humanPlayer!.hand.length <= 3) {
+        return report.humanPlayer;
+      }
     }
 
     // RÈGLE #2 : L'humain sur le podium = on le mélange pour le déstabiliser
@@ -402,7 +423,7 @@ class BotPowerHandler {
     if (report.hasOpponentWithOneCard) {
       final oneCardBots = possibleTargets.where((p) => p.hand.length == 1 && !p.isHuman).toList();
       if (oneCardBots.isNotEmpty) {
-        oneCardBots.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+        oneCardBots.sort((a, b) => a.getKnownScore().compareTo(b.getKnownScore()));
         return oneCardBots.first;
       }
     }
@@ -413,7 +434,7 @@ class BotPowerHandler {
     }
 
     // Fallback : celui avec le meilleur score parmi les bots
-    possibleTargets.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+    possibleTargets.sort((a, b) => a.getKnownScore().compareTo(b.getKnownScore()));
     return possibleTargets.first;
   }
 

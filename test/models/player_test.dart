@@ -108,9 +108,8 @@ void main() {
       ];
       
       final estimated = bot.getEstimatedScore();
-      // Known: 1 + 5 = 6, Unknown: 2 cards * estimated ~5 = ~10
-      expect(estimated, greaterThanOrEqualTo(6));
-      expect(estimated, lessThan(bot.calculateScore())); // Actual is 29
+      // Connu seulement: 1 + 5 = 6 (aucune estimation sur les inconnues)
+      expect(estimated, equals(6));
     });
 
     test('bot with all known cards has accurate estimate', () {

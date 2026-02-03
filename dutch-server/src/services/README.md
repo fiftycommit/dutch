@@ -39,7 +39,6 @@ Définit les niveaux de difficulté des bots avec leurs paramètres :
 - `reactionSpeed` : Vitesse de réaction (0-1)
 - `matchAccuracy` : Précision pour matcher (0-1)
 - `reactionMatchChance` : Probabilité de tenter un match en réaction
-- `keepCardThreshold` : Seuil de points pour garder une carte piochée
 
 **Méthodes :**
 - `fromMMR(mmr)` - Obtient la difficulté selon le MMR du joueur

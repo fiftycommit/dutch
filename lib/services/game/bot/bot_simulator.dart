@@ -178,45 +178,44 @@ class BotSimulator {
     final hand = hands[playerIndex];
     final drawnCard = deck.removeLast();
     
-    // Décision simplifiée
-    final threshold = difficulty?.keepCardThreshold ?? 5;
-    
-    // Garder ou défausser
-    bool kept = drawnCard.points <= threshold;
+    // Décision simplifiée sans seuil
     TurnAction action;
-    
-    if (kept && hand.isNotEmpty) {
-      // Remplacer la pire carte
+    if (hand.isEmpty) {
+      action = TurnAction.discard;
+    } else {
       int worstIndex = 0;
       int worstValue = hand[0].points;
+      int maxValue = hand[0].points;
       for (int i = 1; i < hand.length; i++) {
-        if (hand[i].points > worstValue) {
-          worstValue = hand[i].points;
+        final v = hand[i].points;
+        if (v > worstValue) {
+          worstValue = v;
           worstIndex = i;
         }
+        if (v > maxValue) {
+          maxValue = v;
+        }
       }
-      
-      if (drawnCard.points < worstValue) {
+      if (drawnCard.points > maxValue) {
+        action = TurnAction.discard;
+      } else if (drawnCard.points < worstValue) {
         hand[worstIndex] = drawnCard;
         action = TurnAction.replace;
       } else {
         action = TurnAction.discard;
       }
-    } else {
-      action = TurnAction.discard;
     }
     
-    // Décision Dutch
-    final newHandSum = hand.fold(0, (sum, card) => sum + card.points);
-    final dutchThreshold = difficulty?.dutchThreshold ?? 6;
-    final shouldCallDutch = newHandSum <= dutchThreshold && turnCount >= 2;
+    // Décision Dutch (logique simplifiée pour simulation)
+    // Dutch si: peu de cartes ET plusieurs tours joués
+    final shouldCallDutch = hand.length <= 2 && turnCount >= 3;
     
     return TurnStats(
       playerIndex: playerIndex,
       action: action,
       calledDutch: shouldCallDutch,
       drawnCardValue: drawnCard.points,
-      keptCard: kept,
+      keptCard: action == TurnAction.replace,
     );
   }
 

@@ -33,7 +33,8 @@ void main() {
 
         final humanResult = ranking!.firstWhere((r) => r.player.isHuman);
         expect(humanResult.eliminatedAtRound, 2);
-        expect(humanResult.finalPosition, 3); // 5 - round = 5 - 2 = 3
+        // position finale = nombre de joueurs (l'humain est le dernier éliminé)
+        expect(humanResult.finalPosition, 4); // 4 joueurs -> position 4
       });
     });
 

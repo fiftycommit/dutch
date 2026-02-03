@@ -6,7 +6,6 @@ export interface BotDifficultyConfig {
   reactionSpeed: number;
   matchAccuracy: number;
   reactionMatchChance: number;
-  keepCardThreshold: number;
 }
 
 export class BotDifficulty {
@@ -18,7 +17,6 @@ export class BotDifficulty {
     reactionSpeed: 0.55,
     matchAccuracy: 0.75,
     reactionMatchChance: 0.35,
-    keepCardThreshold: 7,
   };
 
   static readonly silver: BotDifficultyConfig = {
@@ -29,7 +27,6 @@ export class BotDifficulty {
     reactionSpeed: 0.75,
     matchAccuracy: 0.85,
     reactionMatchChance: 0.55,
-    keepCardThreshold: 6,
   };
 
   static readonly gold: BotDifficultyConfig = {
@@ -40,7 +37,6 @@ export class BotDifficulty {
     reactionSpeed: 0.96,
     matchAccuracy: 0.97,
     reactionMatchChance: 0.9,
-    keepCardThreshold: 3,
   };
 
   static readonly platinum: BotDifficultyConfig = {
@@ -51,7 +47,6 @@ export class BotDifficulty {
     reactionSpeed: 1.0,
     matchAccuracy: 1.0,
     reactionMatchChance: 1.0,
-    keepCardThreshold: 1,
   };
 
   static fromMMR(mmr: number): BotDifficultyConfig {

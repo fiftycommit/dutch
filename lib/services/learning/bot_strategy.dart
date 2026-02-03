@@ -1,6 +1,9 @@
+import 'dart:math';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
+import '../game/bot/bot_config.dart';
 import '../game/bot/bot_difficulty.dart';
+import '../game/bot/bot_dutch_strategy.dart';
 
 /// Interface pour les stratégies de comportement des bots
 /// Principe SOLID: LSP - Les stratégies peuvent être substituées sans changer le comportement
@@ -33,17 +36,15 @@ class EasyBotStrategy implements BotStrategy {
     name: 'Easy',
     forgetChancePerTurn: 0.15,
     confusionOnSwap: 0.25,
-    dutchThreshold: 8,
     reactionSpeed: 0.6,
     matchAccuracy: 0.75,
     reactionMatchChance: 0.5,
-    keepCardThreshold: 5,
   );
 
   @override
   bool shouldCallDutch(Player bot, GameState gameState) {
-    final estimatedScore = bot.getEstimatedScore();
-    return estimatedScore <= difficulty.dutchThreshold;
+    final phase = BotConfig.getBotPhase(bot, gameState);
+    return BotDutchStrategy.shouldCallDutch(gameState, bot, difficulty, phase);
   }
 
   @override
@@ -54,7 +55,16 @@ class EasyBotStrategy implements BotStrategy {
 
   @override
   bool shouldKeepCard(Player bot, int cardValue, GameState gameState) {
-    return cardValue <= difficulty.keepCardThreshold;
+    final knownValues = <int>[];
+    for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+      final card = bot.mentalMap[i];
+      if (card != null) {
+        knownValues.add(card.points);
+      }
+    }
+    if (knownValues.isEmpty) return true;
+    final maxKnown = knownValues.reduce(max);
+    return cardValue < maxKnown;
   }
 }
 
@@ -65,17 +75,15 @@ class MediumBotStrategy implements BotStrategy {
     name: 'Medium',
     forgetChancePerTurn: 0.08,
     confusionOnSwap: 0.15,
-    dutchThreshold: 6,
     reactionSpeed: 0.75,
     matchAccuracy: 0.88,
     reactionMatchChance: 0.60,
-    keepCardThreshold: 4,
   );
 
   @override
   bool shouldCallDutch(Player bot, GameState gameState) {
-    final estimatedScore = bot.getEstimatedScore();
-    return estimatedScore <= difficulty.dutchThreshold;
+    final phase = BotConfig.getBotPhase(bot, gameState);
+    return BotDutchStrategy.shouldCallDutch(gameState, bot, difficulty, phase);
   }
 
   @override
@@ -86,7 +94,16 @@ class MediumBotStrategy implements BotStrategy {
 
   @override
   bool shouldKeepCard(Player bot, int cardValue, GameState gameState) {
-    return cardValue <= difficulty.keepCardThreshold;
+    final knownValues = <int>[];
+    for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+      final card = bot.mentalMap[i];
+      if (card != null) {
+        knownValues.add(card.points);
+      }
+    }
+    if (knownValues.isEmpty) return true;
+    final maxKnown = knownValues.reduce(max);
+    return cardValue < maxKnown;
   }
 }
 
@@ -97,18 +114,15 @@ class HardBotStrategy implements BotStrategy {
     name: 'Hard',
     forgetChancePerTurn: 0.02,
     confusionOnSwap: 0.03,
-    dutchThreshold: 3,
     reactionSpeed: 0.95,
     matchAccuracy: 0.98,
     reactionMatchChance: 0.90,
-    keepCardThreshold: 3,
   );
 
   @override
   bool shouldCallDutch(Player bot, GameState gameState) {
-    final estimatedScore = bot.getEstimatedScore();
-    // Bot difficile prend plus de risques
-    return estimatedScore <= difficulty.dutchThreshold;
+    final phase = BotConfig.getBotPhase(bot, gameState);
+    return BotDutchStrategy.shouldCallDutch(gameState, bot, difficulty, phase);
   }
 
   @override
@@ -119,7 +133,16 @@ class HardBotStrategy implements BotStrategy {
 
   @override
   bool shouldKeepCard(Player bot, int cardValue, GameState gameState) {
-    return cardValue <= difficulty.keepCardThreshold;
+    final knownValues = <int>[];
+    for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+      final card = bot.mentalMap[i];
+      if (card != null) {
+        knownValues.add(card.points);
+      }
+    }
+    if (knownValues.isEmpty) return true;
+    final maxKnown = knownValues.reduce(max);
+    return cardValue < maxKnown;
   }
 }
 

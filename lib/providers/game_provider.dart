@@ -9,6 +9,7 @@ import '../core/interfaces/i_stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
 import '../services/game/bot/hardcore_bot_config.dart';
+import '../services/game/bot/human_threat_tracker.dart';
 import '../services/learning/bot_learning_service.dart';
 import '../services/learning/ai_telemetry_service.dart';
 import '../services/logging/game_logger_service.dart';
@@ -173,6 +174,9 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     // Initialiser le tracking
     _trackingProvider.initTracking(_gameState!, useSBMM);
+    
+    // 🎯 HUMAN THREAT TRACKER : Réinitialiser pour cette nouvelle manche
+    HumanThreatTracker().initializeRound(_gameState!);
     
     // ═══════════════════════════════════════════════════════════════════════
     // TÉLÉMÉTRIE AI : Démarrer la collecte
@@ -349,6 +353,9 @@ class GameProvider with ChangeNotifier implements IGameController {
     Player player = forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
     if (cardIndex < 0 || cardIndex >= player.hand.length) return;
 
+    // 🎯 Capturer la valeur de la carte AVANT le match pour tracker les points économisés
+    final cardValue = player.hand[cardIndex].points;
+    
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
 
     if (player.isHuman) {
@@ -359,6 +366,11 @@ class GameProvider with ChangeNotifier implements IGameController {
         result: {'success': success, 'scoreChange': 0},
       );
       success ? _hapticService.cardTap() : _hapticService.error();
+      
+      // 🎯 HUMAN THREAT TRACKER : Enregistrer les matchs réussis de l'humain
+      if (success) {
+        HumanThreatTracker().recordHumanMatch(cardValue, _gameState!.actionCount);
+      }
     }
 
     if (!success) {
@@ -483,6 +495,10 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.lastSpiedCard = null;
     GameLogic.nextPlayer(_gameState!);
     _trackingProvider.incrementBotTurns(_gameState!);
+    
+    // 🎯 HUMAN THREAT TRACKER : Notifier le changement de tour
+    HumanThreatTracker().onNewTurn();
+    
     notifyListeners();
     if (!_gameState!.currentPlayer.isHuman && !_isPaused) _checkAndPlayBotTurn();
   }
@@ -504,7 +520,10 @@ class GameProvider with ChangeNotifier implements IGameController {
   }
 
   Future<void> _checkAndPlayBotTurn() async {
-    if (!_botOrchestrator.shouldBotPlay(_gameState, isProcessing, _isPaused)) return;
+    // Protection contre les appels concurrents (race condition)
+    // On vérifie ET on set isProcessing de façon atomique
+    if (isProcessing) return;
+    if (!_botOrchestrator.shouldBotPlay(_gameState, false, _isPaused)) return;
     if (_checkInstantEnd()) return;
 
     isProcessing = true;

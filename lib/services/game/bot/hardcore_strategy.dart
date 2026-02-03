@@ -155,10 +155,8 @@ class HardcoreStrategy {
     
     final combinedScore = valueScore * valueWeight + strategicScore * strategicWeight;
     
-    // Seuil basé sur la difficulté
-    double threshold = difficulty.keepCardThreshold.toDouble();
-    
-    return combinedScore <= threshold;
+    // Décision sans paramètre externe : garder si la qualité combinée est vraiment bonne
+    return combinedScore <= 4.5;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -282,7 +280,7 @@ class HardcoreStrategy {
       return EndgameKillerParams.disabled();
     }
     
-    final estimatedScore = bot.getEstimatedScore();
+    final estimatedScore = bot.getKnownScore();
     final avgOpponentScore = _getAvgOpponentScore(gs, bot);
     final advantage = avgOpponentScore - estimatedScore;
     
@@ -325,7 +323,7 @@ class HardcoreStrategy {
     int count = 0;
     for (final p in gs.players) {
       if (p.id != bot.id) {
-        sum += p.getEstimatedScore();
+        sum += p.getKnownScore();
         count++;
       }
     }
@@ -338,7 +336,7 @@ class HardcoreStrategy {
   
   /// Vérifie si le bot est en position de "stomp" (domine largement)
   static bool isBotStomping(GameState gs, Player bot) {
-    final botScore = bot.getEstimatedScore();
+    final botScore = bot.getKnownScore();
     final opponents = gs.players.where((p) => p.id != bot.id).toList();
     
     if (opponents.isEmpty) return false;
@@ -347,7 +345,7 @@ class HardcoreStrategy {
     // - Score du bot < 50% du meilleur adversaire
     // - OU bot a beaucoup moins de cartes que tout le monde
     
-    final bestOpponentScore = opponents.map((p) => p.getEstimatedScore()).reduce(min);
+    final bestOpponentScore = opponents.map((p) => p.getKnownScore()).reduce(min);
     final scoreRatio = botScore / max(1, bestOpponentScore);
     
     final botCards = bot.hand.length;

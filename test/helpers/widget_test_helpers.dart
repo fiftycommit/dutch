@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:dutch_game/widgets/game/svg_builder_provider.dart';
+import 'package:dutch_game/providers/settings_provider.dart';
 
 /// SVG builder for tests - returns a simple colored box instead of SVG
 Widget testSvgBuilder(String assetPath, double width, double height) {
@@ -20,7 +22,7 @@ class WidgetTestHelpers {
   /// Standard test screen size
   static const Size defaultSize = Size(1280, 720);
 
-  /// Wrapper complet pour tests de widgets avec SvgBuilderProvider
+  /// Wrapper complet pour tests de widgets avec SvgBuilderProvider et SettingsProvider
   /// Inclut MediaQuery, MaterialApp, Scaffold avec taille fixe
   static Widget wrapWithTestApp(Widget child, {Size? size, bool mockSvg = true}) {
     final screenSize = size ?? defaultSize;
@@ -45,6 +47,13 @@ class WidgetTestHelpers {
     if (mockSvg) {
       app = SvgBuilderProvider(svgBuilder: testSvgBuilder, child: app);
     }
+    
+    // Wrap with SettingsProvider
+    app = ChangeNotifierProvider<SettingsProvider>(
+      create: (_) => SettingsProvider(),
+      child: app,
+    );
+    
     return app;
   }
 

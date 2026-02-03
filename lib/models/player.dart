@@ -86,26 +86,39 @@ class Player {
     return score;
   }
 
-  int getEstimatedScore() {
+  /// Score des cartes CONNUES uniquement (pas d'estimation pour les inconnues)
+  /// Retourne la somme des points des cartes que le bot connaît vraiment
+  int getKnownScore() {
     if (isHuman) {
       return calculateScore();
     }
 
-    int estimatedScore = 0;
+    int knownScore = 0;
 
     for (int i = 0; i < hand.length; i++) {
       if (i < mentalMap.length && mentalMap[i] != null) {
-        // Le bot CONNAÎT cette carte - utiliser sa vraie valeur
-        estimatedScore += mentalMap[i]!.points;
-      } else {
-        // Le bot NE CONNAÎT PAS cette carte - assumer le PIRE (Roi noir = 13)
-        // Un bot intelligent ne Dutch jamais avec des cartes inconnues
-        estimatedScore += 13;
+        knownScore += mentalMap[i]!.points;
       }
     }
 
-    return estimatedScore;
+    return knownScore;
   }
+
+  /// Confiance de la mémoire (0.0 = rien connu, 1.0 = tout connu)
+  double getMemoryConfidence() {
+    if (isHuman) return 1.0;
+    if (hand.isEmpty) return 1.0;
+    return knownCardCount / hand.length;
+  }
+
+  /// Nombre de cartes inconnues dans la main
+  int get unknownCardCount => hand.length - knownCardCount;
+
+  /// Vérifie si le bot connaît TOUTES ses cartes
+  bool get knowsAllCards => unknownCardCount == 0;
+
+  /// @deprecated Utilisez getKnownScore() à la place
+  int getEstimatedScore() => getKnownScore();
 
   void initializeBotMemory() {
     if (isHuman) return;

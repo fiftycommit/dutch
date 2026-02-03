@@ -14,7 +14,6 @@ describe('BotDifficulty', () => {
       assert.strictEqual(bronze.reactionSpeed, 0.55);
       assert.strictEqual(bronze.matchAccuracy, 0.75);
       assert.strictEqual(bronze.reactionMatchChance, 0.35);
-      assert.strictEqual(bronze.keepCardThreshold, 7);
     });
 
     it('silver has correct values', () => {
@@ -27,7 +26,6 @@ describe('BotDifficulty', () => {
       assert.strictEqual(silver.reactionSpeed, 0.75);
       assert.strictEqual(silver.matchAccuracy, 0.85);
       assert.strictEqual(silver.reactionMatchChance, 0.55);
-      assert.strictEqual(silver.keepCardThreshold, 6);
     });
 
     it('gold has correct values', () => {
@@ -40,7 +38,6 @@ describe('BotDifficulty', () => {
       assert.strictEqual(gold.reactionSpeed, 0.96);
       assert.strictEqual(gold.matchAccuracy, 0.97);
       assert.strictEqual(gold.reactionMatchChance, 0.9);
-      assert.strictEqual(gold.keepCardThreshold, 3);
     });
 
     it('platinum has perfect values', () => {
@@ -53,7 +50,6 @@ describe('BotDifficulty', () => {
       assert.strictEqual(platinum.reactionSpeed, 1.0);
       assert.strictEqual(platinum.matchAccuracy, 1.0);
       assert.strictEqual(platinum.reactionMatchChance, 1.0);
-      assert.strictEqual(platinum.keepCardThreshold, 1);
     });
   });
 
@@ -163,13 +159,6 @@ describe('BotDifficulty', () => {
         );
       }
 
-      // keepCardThreshold should decrease (lower = keeps only better cards)
-      for (let i = 1; i < levels.length; i++) {
-        assert.ok(
-          levels[i].keepCardThreshold <= levels[i - 1].keepCardThreshold,
-          `keepCardThreshold should decrease: ${levels[i].name} vs ${levels[i - 1].name}`
-        );
-      }
     });
   });
 });

@@ -24,11 +24,11 @@ class BotConfig {
   static final Random random = Random();
 
   /// Détermine la phase de jeu du bot
+  /// Logique basée sur la CERTITUDE, pas sur des estimations de score
   static BotGamePhase getBotPhase(Player bot, GameState gameState) {
-    int knownCount = bot.knownCardCount;
-    int totalCards = bot.hand.length;
-    int estimatedScore = bot.getEstimatedScore();
-    
+    final knowsAll = bot.knowsAllCards;
+    final knownScore = bot.getKnownScore();
+
     // En tournoi, prendre en compte le score cumulé pour passer en endgame plus tôt
     if (gameState.gameMode == GameMode.tournament) {
       int cumulativeScore = gameState.getCumulativeScore(bot);
@@ -36,16 +36,24 @@ class BotConfig {
         return BotGamePhase.endgame;
       }
     }
-    
-    bool someoneClose = gameState.players.any((p) => p.hand.length <= 2);
-    if (estimatedScore <= 8 || someoneClose) {
+
+    // URGENCE : quelqu'un a ≤2 cartes → endgame (même si on ne connaît pas tout)
+    final someoneClose = gameState.players.any((p) => p.hand.length <= 2);
+    if (someoneClose) {
       return BotGamePhase.endgame;
     }
-    
-    if (knownCount < totalCards) {
+
+    // Si on ne connaît pas toutes ses cartes → exploration (priorité découverte)
+    if (!knowsAll) {
       return BotGamePhase.exploration;
     }
-    
+
+    // On connaît TOUT : décider entre optimization et endgame
+    // Endgame si score connu est bon (on peut se permettre de Dutch)
+    if (knownScore <= 8) {
+      return BotGamePhase.endgame;
+    }
+
     return BotGamePhase.optimization;
   }
 
@@ -115,25 +123,20 @@ class BotConfig {
     final memoryAccuracy = clamp01(numParam('memoryAccuracy', 0.7));
     final riskTolerance = clamp01(numParam('riskTolerance', 0.5));
     final powerUsageRate = clamp01(numParam('powerUsageRate', 0.5));
-    final caution = clamp01(numParam('caution', 0.5));
-    final dutchThreshold = numParam('dutchThreshold', 6.0).round().clamp(0, 30);
 
     final forgetChancePerTurn = (1.0 - memoryAccuracy) * 0.25;
     final confusionOnSwap = (1.0 - memoryAccuracy) * 0.20;
     final reactionSpeed = (0.6 + memoryAccuracy * 0.4).clamp(0.0, 1.0);
     final matchAccuracy = (0.75 + memoryAccuracy * 0.25).clamp(0.0, 1.0);
     final reactionMatchChance = (0.35 + (riskTolerance + powerUsageRate) * 0.3).clamp(0.0, 1.0);
-    final keepCardThreshold = (7 - (caution * 6)).round().clamp(0, 7);
 
     return BotDifficulty(
       name: 'SBMM',
       forgetChancePerTurn: forgetChancePerTurn,
       confusionOnSwap: confusionOnSwap,
-      dutchThreshold: dutchThreshold,
       reactionSpeed: reactionSpeed,
       matchAccuracy: matchAccuracy,
       reactionMatchChance: reactionMatchChance,
-      keepCardThreshold: keepCardThreshold,
     );
   }
 

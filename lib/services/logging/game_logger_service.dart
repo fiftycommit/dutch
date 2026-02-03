@@ -122,10 +122,16 @@ class GameLoggerService {
       final knownCount = player.mentalMap.where((c) => c != null).length;
       buffer.writeln('│ Ce que ${player.name} SAIT: [${knownOwn.join(', ')}] ($knownCount/${player.hand.length} connues)');
       
-      // Score estimé par le bot
-      final estimatedScore = player.getEstimatedScore();
-      buffer.writeln('│ Score estimé par ${player.name}: ~$estimatedScore pts');
-      
+      // Score connu et confiance du bot
+      final knownScore = player.getKnownScore();
+      final confidence = player.getMemoryConfidence();
+      final unknownCount = player.unknownCardCount;
+      if (unknownCount == 0) {
+        buffer.writeln('│ Score CERTAIN: $knownScore pts (confiance: 100%)');
+      } else {
+        buffer.writeln('│ Score connu: $knownScore pts + $unknownCount carte(s) inconnue(s) (confiance: ${(confidence * 100).toInt()}%)');
+      }
+
       // Comptage de cartes (pour bots Or/Platine/Hardcore uniquement)
       final skillLevel = player.botSkillLevel;
       final isSmartBot = skillLevel == BotSkillLevel.gold || 

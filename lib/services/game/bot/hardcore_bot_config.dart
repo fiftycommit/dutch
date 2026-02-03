@@ -24,49 +24,41 @@ class HardcoreBotConfig {
   /// Paramètres floor pour Hard
   static const BotDifficulty hardFloor = BotDifficulty(
     name: "Hard",
-    forgetChancePerTurn: 0.06,     // Max 6% oubli
-    confusionOnSwap: 0.05,         // Max 5% confusion
-    dutchThreshold: 4,             // Dutch à 4 points max
-    reactionSpeed: 0.85,           // Réaction rapide
-    matchAccuracy: 0.92,           // 92% précision
-    reactionMatchChance: 0.85,     // Réagit 85% du temps
-    keepCardThreshold: 3,          // Garde cartes ≤3
+    forgetChancePerTurn: 0.06,
+    confusionOnSwap: 0.05,
+    reactionSpeed: 0.85,
+    matchAccuracy: 0.92,
+    reactionMatchChance: 0.85,
   );
 
   /// Paramètres floor pour Insane
   static const BotDifficulty insaneFloor = BotDifficulty(
     name: "Insane",
-    forgetChancePerTurn: 0.03,     // Max 3% oubli
-    confusionOnSwap: 0.02,         // Max 2% confusion
-    dutchThreshold: 3,             // Dutch à 3 points max
-    reactionSpeed: 0.95,           // Réaction très rapide
-    matchAccuracy: 0.97,           // 97% précision
-    reactionMatchChance: 0.95,     // Réagit 95% du temps
-    keepCardThreshold: 2,          // Garde cartes ≤2
+    forgetChancePerTurn: 0.03,
+    confusionOnSwap: 0.02,
+    reactionSpeed: 0.95,
+    matchAccuracy: 0.97,
+    reactionMatchChance: 0.95,
   );
 
   /// Paramètres floor pour Nightmare (ajusté pour 70-85% winrate)
   static const BotDifficulty nightmareFloor = BotDifficulty(
     name: "Nightmare",
-    forgetChancePerTurn: 0.015,    // 1.5% oubli (pas parfait mais excellent)
-    confusionOnSwap: 0.01,         // 1% confusion (légères erreurs)
-    dutchThreshold: 2,             // Dutch à 2 points max
-    reactionSpeed: 0.97,           // Très rapide mais pas instantané
-    matchAccuracy: 0.98,           // 98% précision
-    reactionMatchChance: 0.97,     // Réagit 97% du temps
-    keepCardThreshold: 2,          // N'accepte que 0-2
+    forgetChancePerTurn: 0.015,
+    confusionOnSwap: 0.01,
+    reactionSpeed: 0.97,
+    matchAccuracy: 0.98,
+    reactionMatchChance: 0.97,
   );
 
   /// Paramètres floor pour Impossible (mode boss/debug)
   static const BotDifficulty impossibleFloor = BotDifficulty(
     name: "Impossible",
-    forgetChancePerTurn: 0.0,      // Mémoire parfaite
-    confusionOnSwap: 0.0,          // Ne se trompe jamais
-    dutchThreshold: 1,             // Dutch à 1 point seulement
-    reactionSpeed: 1.0,            // Instantané
-    matchAccuracy: 1.0,            // 100% précision
-    reactionMatchChance: 1.0,      // Réagit TOUJOURS
-    keepCardThreshold: 1,          // N'accepte que 0-1
+    forgetChancePerTurn: 0.0,
+    confusionOnSwap: 0.0,
+    reactionSpeed: 1.0,
+    matchAccuracy: 1.0,
+    reactionMatchChance: 1.0,
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -197,16 +189,14 @@ class HardcoreBotConfig {
   static BotDifficulty _paramsFromSkill(int skill) {
     // Normalisation: skill 800-2000 → 0-1
     final normalized = ((skill - 800) / 1200).clamp(0.0, 1.0);
-    
+
     return BotDifficulty(
       name: 'SkillBased',
       forgetChancePerTurn: (0.10 * (1 - normalized)).clamp(0.0, 0.10),
       confusionOnSwap: (0.10 * (1 - normalized)).clamp(0.0, 0.10),
-      dutchThreshold: (6 - (normalized * 5)).round().clamp(1, 6),
       reactionSpeed: (0.7 + normalized * 0.3).clamp(0.7, 1.0),
       matchAccuracy: (0.8 + normalized * 0.2).clamp(0.8, 1.0),
       reactionMatchChance: (0.7 + normalized * 0.3).clamp(0.7, 1.0),
-      keepCardThreshold: (5 - (normalized * 4)).round().clamp(1, 5),
     );
   }
 
@@ -221,14 +211,10 @@ class HardcoreBotConfig {
       // Plus bas = plus dur pour les chances d'erreur
       forgetChancePerTurn: min(floor.forgetChancePerTurn, skill.forgetChancePerTurn),
       confusionOnSwap: min(floor.confusionOnSwap, skill.confusionOnSwap),
-      // Plus bas = plus agressif pour Dutch
-      dutchThreshold: min(floor.dutchThreshold, skill.dutchThreshold),
       // Plus haut = plus rapide/précis
       reactionSpeed: max(floor.reactionSpeed, skill.reactionSpeed),
       matchAccuracy: max(floor.matchAccuracy, skill.matchAccuracy),
       reactionMatchChance: max(floor.reactionMatchChance, skill.reactionMatchChance),
-      // Plus bas = plus sélectif
-      keepCardThreshold: min(floor.keepCardThreshold, skill.keepCardThreshold),
     );
   }
 

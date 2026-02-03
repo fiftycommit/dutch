@@ -403,59 +403,33 @@ export class BotAI {
       }
     }
 
-    let keepThreshold = difficulty.keepCardThreshold;
-
-    const behavior = bot.botBehavior;
-    switch (behavior) {
-      case BotBehavior.fast:
-        keepThreshold = 5;
-        break;
-      case BotBehavior.aggressive:
-        keepThreshold += 1;
-        break;
-      case BotBehavior.balanced:
-        if (phase === BotGamePhase.endgame) {
-          keepThreshold = Math.floor((5 + difficulty.keepCardThreshold) / 2);
-        } else {
-          keepThreshold = difficulty.keepCardThreshold;
-        }
-        break;
-    }
-
-    if (
-      phase === BotGamePhase.endgame &&
-      behavior !== BotBehavior.fast &&
-      behavior !== BotBehavior.balanced
-    ) {
-      keepThreshold -= 1;
-    }
-
+    let maxKnownValue = -1;
     let worstKnownValue = -1;
+    let worstKnownIdx = -1;
+
     for (let i = 0; i < memory.mentalMap.length; i++) {
       if (memory.mentalMap[i] !== null) {
         const cardValue = memory.mentalMap[i]!.points;
-        if (cardValue > worstKnownValue && cardValue > drawnVal) {
+        if (cardValue > maxKnownValue) {
+          maxKnownValue = cardValue;
+        }
+        if (cardValue > worstKnownValue) {
           worstKnownValue = cardValue;
-          replaceIdx = i;
+          worstKnownIdx = i;
         }
       }
     }
 
-    if (replaceIdx !== -1 && drawnVal <= keepThreshold) {
+    if (maxKnownValue >= 0 && drawnVal > maxKnownValue) {
+      GameLogic.discardDrawnCard(gs);
+      isBadDraw = true;
+    } else if (worstKnownIdx !== -1 && drawnVal < worstKnownValue) {
       const confused = this.random() < difficulty.confusionOnSwap;
       if (!confused) {
-        this.updateMentalMap(bot, replaceIdx, drawn);
+        this.updateMentalMap(bot, worstKnownIdx, drawn);
       }
 
-      GameLogic.replaceCard(gs, replaceIdx);
-      memory.consecutiveBadDraws = 0;
-    } else if (replaceIdx !== -1 && worstKnownValue > drawnVal + 3) {
-      const confused = this.random() < difficulty.confusionOnSwap;
-      if (!confused) {
-        this.updateMentalMap(bot, replaceIdx, drawn);
-      }
-
-      GameLogic.replaceCard(gs, replaceIdx);
+      GameLogic.replaceCard(gs, worstKnownIdx);
       memory.consecutiveBadDraws = 0;
     } else {
       GameLogic.discardDrawnCard(gs);

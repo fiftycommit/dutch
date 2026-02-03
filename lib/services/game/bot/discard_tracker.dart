@@ -230,7 +230,7 @@ class DiscardTracker {
   /// Détermine si c'est un bon moment pour Dutch
   /// basé sur le comptage de cartes
   bool isGoodTimeForDutch(GameState gs, Player bot) {
-    final myScore = bot.getEstimatedScore();
+    final myScore = bot.getKnownScore();
     final bestOpponentEstimate = estimateBestOpponentScore(gs, bot);
     
     // Marge de sécurité basée sur le ratio low/high restant
