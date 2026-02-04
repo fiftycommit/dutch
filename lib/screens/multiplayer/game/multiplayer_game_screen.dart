@@ -38,6 +38,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   bool _hostClosedDialogShown = false;
   bool _kickedDialogShown = false;
   bool _bannedDialogShown = false;
+  bool _spiedCardDialogShown = false;
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
 
@@ -286,15 +287,23 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
         // Check for Spied Card Dialog (pouvoir 7 ou 10)
         if (gameProvider.showSpiedCardDialog &&
-            gameProvider.lastSpiedCard != null) {
+            gameProvider.lastSpiedCard != null &&
+            !_spiedCardDialogShown) {
+          _spiedCardDialogShown = true;
+          // Capturer la carte AVANT le callback pour éviter les race conditions
+          final spiedCard = gameProvider.lastSpiedCard!;
+          final targetName = gameProvider.spiedTargetName ?? 'Joueur';
+          
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Fermer le dialog flag dans le postFrameCallback pour éviter
+            // "setState() called during build"
+            gameProvider.closeSpiedCardDialog();
+            _spiedCardDialogShown = false;
+            
             if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              final targetName = gameProvider.spiedTargetName ?? 'Joueur';
               final title =
                   targetName == 'vous' ? 'VOTRE CARTE' : 'CARTE REVELEE';
-              UnifiedPowerDialogs.showCardRevealDialog(
-                      context, gameProvider.lastSpiedCard!, title: title)
-                  .then((_) => gameProvider.closeSpiedCardDialog());
+              UnifiedPowerDialogs.showCardRevealDialog(context, spiedCard, title: title);
             }
           });
         }
@@ -424,7 +433,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                                       gameState.tournamentRound,
                                       totalRounds: gameProvider.tournamentTotalRounds,
                                     )
-                                  : "Room: ${gameProvider.roomCode ?? '?'}",
+                                  // Masquer le code pour les parties publiques
+                                  : (gameProvider.roomSettings?.isPublic == true
+                                      ? "Partie publique"
+                                      : "Room: ${gameProvider.roomCode ?? '?'}"),
                               style: const TextStyle(
                                 color: Colors.amber,
                                 fontWeight: FontWeight.bold,

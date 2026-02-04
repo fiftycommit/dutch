@@ -10,13 +10,14 @@ import 'power_dialog_widgets.dart';
 /// Principe GRASP: Pure Fabrication - Regroupe les notifications UI communes
 class PowerNotificationDialogs {
   /// Affiche la révélation d'une carte
-  static void showCardRevealed(
+  /// Retourne un Future qui se complète quand l'utilisateur ferme le dialog
+  static Future<void> showCardRevealed(
     BuildContext context,
     PlayingCard card, {
     String title = "CARTE RÉVÉLÉE",
     String? valueOverride,
   }) {
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(

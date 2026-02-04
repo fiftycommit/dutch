@@ -44,6 +44,7 @@ class MultiplayerService {
 
   // Callbacks pour les événements
   Function(GameState)? onGameStateUpdate;
+  Function(PlayingCard?)? onPreloadedDeckCardUpdate;
   Function(String)? onError;
   Function(Map<String, dynamic>)? onPlayerJoined;
   Function(int)? onTimerUpdate;
@@ -450,7 +451,17 @@ class MultiplayerService {
     if (reactionTimeMs is int) onReactionTimeConfig?.call(reactionTimeMs);
 
     if (gameStateJson != null) {
-      try { onGameStateUpdate?.call(GameState.fromJson(gameStateJson)); } catch (_) {}
+      try { 
+        onGameStateUpdate?.call(GameState.fromJson(gameStateJson));
+        
+        // Extraire la carte préchargée pour optimiser l'affichage de la pioche
+        final preloadedCardJson = gameStateJson['preloadedDeckCard'] as Map<String, dynamic>?;
+        if (preloadedCardJson != null) {
+          onPreloadedDeckCardUpdate?.call(PlayingCard.fromJson(preloadedCardJson));
+        } else {
+          onPreloadedDeckCardUpdate?.call(null);
+        }
+      } catch (_) {}
     }
 
     if (updateType == 'TIMER_UPDATE') {

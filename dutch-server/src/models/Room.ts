@@ -9,6 +9,7 @@ export interface GameSettings {
   minPlayers: number;
   maxPlayers: number;
   fillBots: boolean;
+  isPublic?: boolean;
   useSBMM?: boolean;
   numberOfBots?: number;
   hostClientId?: string;

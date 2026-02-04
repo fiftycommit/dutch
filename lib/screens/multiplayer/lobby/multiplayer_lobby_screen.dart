@@ -192,12 +192,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         final heightScale = (size.height / 700).clamp(0.55, 1.0);
         final isCompactLandscape = isLandscape && heightScale < 0.85;
         final isPublicRoom = provider.roomSettings?.isPublic == true;
-        // Pour les rooms publiques: afficher badge "PUBLIQUE" et pas de code
-        // Pour les rooms privées: toujours afficher le code (même en mode rapide)
+        // Pour les rooms publiques: afficher badge "PUBLIQUE" et jamais de code
+        // (les joueurs rejoignent via matchmaking, pas via un code)
+        // Pour les rooms privées: toujours afficher le code
         final showPublicBadge = isPublicRoom;
-        // Ne pas montrer le code aux non-hôtes dans les rooms publiques
-        // (ils ont rejoint via matchmaking, pas besoin du code)
-        final showRoomCode = !isPublicRoom || provider.isHost;
+        final showRoomCode = !isPublicRoom;
         final sectionSpacing = 8.0 * heightScale;
         final contentSpacing = 12.0 * heightScale;
         final bottomSpacing = 16.0 * heightScale;
@@ -238,9 +237,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Column(
                             children: [
-                              // Pour les rooms publiques: afficher le badge pour tous
-                              // sauf l'hôte qui voit aussi le code
-                              if (showPublicBadge && !provider.isHost)
+                              // Pour les rooms publiques: afficher le badge "Salon Public"
+                              // Pour les rooms privées: afficher le code
+                              if (showPublicBadge)
                                 _buildPublicLobbyBadge()
                               else if (showRoomCode)
                                 _buildRoomCodeCard(context, provider, colors),
@@ -579,29 +578,38 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       ),
     );
 
-    _roomClosedDialogShown = false;
-
-    if (!mounted) return;
+    if (!mounted) {
+      _roomClosedDialogShown = false;
+      return;
+    }
 
     if (choice == 'become_host') {
       final success = await provider.becomeHost();
-      if (!mounted) return;
+      if (!mounted) {
+        _roomClosedDialogShown = false;
+        return;
+      }
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Vous êtes maintenant l\'hôte !')),
         );
+        // becomeHost() a déjà fait clearRoomClosedAfterBecomeHost() et notifyListeners()
+        // Le flag _roomClosedDialogShown reste true pour éviter tout re-trigger
+        // Il sera reset si on quitte la room plus tard
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Impossible de devenir hôte')),
         );
         provider.acknowledgeRoomClosed();
+        _roomClosedDialogShown = false;
         if (mounted) {
           context.go('/multiplayer');
         }
       }
     } else {
       provider.acknowledgeRoomClosed();
+      _roomClosedDialogShown = false;
       if (mounted) {
         context.go('/multiplayer');
       }

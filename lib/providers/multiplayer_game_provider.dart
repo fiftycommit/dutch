@@ -121,6 +121,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   bool _showSpiedCardDialog = false;
   bool get showSpiedCardDialog => _showSpiedCardDialog;
 
+  /// Carte préchargée du deck pour éliminer la latence lors de la pioche
+  PlayingCard? _preloadedDeckCard;
+
   final Set<String> _afkPlayerIds = {};
   Set<String> get afkPlayerIds => Set.unmodifiable(_afkPlayerIds);
 
@@ -277,6 +280,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   void _setupListeners() {
     _multiplayerService.onGameStateUpdate = _handleGameStateUpdate;
+    _multiplayerService.onPreloadedDeckCardUpdate = (card) {
+      _preloadedDeckCard = card;
+    };
     _multiplayerService.onTimerUpdate = (remaining) {
       if (_gameState != null) _timerManager.applyServerUpdate(remaining, _gameState);
     };
@@ -631,7 +637,19 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
-  void drawCard() { if (_gameState != null) _multiplayerService.drawCard(); }
+  void drawCard() { 
+    if (_gameState == null) return;
+    
+    // Optimisation: Utiliser la carte préchargée pour affichage instantané
+    // Le serveur confirmera la vraie carte mais l'affichage est immédiat
+    if (_preloadedDeckCard != null && _gameState!.drawnCard == null) {
+      _gameState!.drawnCard = _preloadedDeckCard;
+      _preloadedDeckCard = null; // Consommer la carte préchargée
+      notifyListeners(); // Afficher immédiatement
+    }
+    
+    _multiplayerService.drawCard();
+  }
   
   @override
   void replaceCard(int cardIndex) { if (_gameState != null) _multiplayerService.replaceCard(cardIndex); }

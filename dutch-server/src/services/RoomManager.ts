@@ -1644,6 +1644,19 @@ export class RoomManager {
 
     state.deck = state.deck.map(() => ({ hidden: true }));
 
+    // Précharger la prochaine carte du deck pour le joueur actuel
+    // Cela permet d'éliminer la latence perçue lors de la pioche
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer?.id === playerId && 
+        gameState.deck.length > 0 && 
+        gameState.phase === GamePhase.playing &&
+        !gameState.drawnCard) {
+      // Envoyer la carte du dessus du deck (celle qui sera piochée)
+      state.preloadedDeckCard = gameState.deck[gameState.deck.length - 1];
+    } else {
+      state.preloadedDeckCard = null;
+    }
+
     return state;
   }
 
@@ -1832,6 +1845,7 @@ export class RoomManager {
       maxPlayers = minPlayers;
     }
     const fillBots = settings?.fillBots !== false;
+    const isPublic = settings?.isPublic === true;
 
     return {
       gameMode,
@@ -1841,6 +1855,7 @@ export class RoomManager {
       minPlayers,
       maxPlayers,
       fillBots,
+      isPublic,
     };
   }
 

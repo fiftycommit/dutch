@@ -27,6 +27,10 @@ class PowerDialogConfig {
   
   /// Pour identifier le joueur local (solo: isHuman, multi: id == playerId)
   final bool Function(Player p) isLocalPlayer;
+  
+  /// En mode multijoueur, les cartes sont cachées côté client
+  /// Le serveur envoie la vraie carte via game:spied_card
+  final bool isMultiplayer;
 
   const PowerDialogConfig({
     required this.gameState,
@@ -37,6 +41,7 @@ class PowerDialogConfig {
     required this.onShuffleHand,
     required this.onSwapCards,
     required this.isLocalPlayer,
+    this.isMultiplayer = false,
   });
 
   List<Player> get opponents => allPlayers.where((p) => !isLocalPlayer(p) && p.hand.isNotEmpty).toList();
@@ -52,6 +57,7 @@ class PowerDialogConfig {
       localPlayer: human,
       allPlayers: gs.players,
       isLocalPlayer: (p) => p.isHuman,
+      isMultiplayer: false,
       onSkipPower: gp.skipSpecialPower,
       onLookAtCard: gp.executeLookAtCard,
       onShuffleHand: gp.executeJokerEffect,
@@ -99,6 +105,7 @@ class PowerDialogConfig {
       localPlayer: me,
       allPlayers: gs.players.where((p) => !p.isSpectator).toList(),
       isLocalPlayer: (p) => p.id == gp.playerId,
+      isMultiplayer: true,
       onSkipPower: gp.skipSpecialPower,
       onLookAtCard: (player, index) {
         // En multi, on envoie au serveur via les méthodes spécifiques
@@ -181,7 +188,11 @@ class UnifiedPowerDialogs {
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(ctx);
-                          _showCardRevealed(context, config.localPlayer, index, config.localPlayer.hand[index]);
+                          // En mode solo, afficher la carte immédiatement
+                          // En mode multijoueur, le serveur enverra la carte via game:spied_card
+                          if (!config.isMultiplayer) {
+                            _showCardRevealed(context, config.localPlayer, index, config.localPlayer.hand[index]);
+                          }
                           config.onLookAtCard(config.localPlayer, index);
                         },
                         child: Container(
@@ -359,7 +370,11 @@ class UnifiedPowerDialogs {
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(ctx);
-                          _showCardRevealed(context, opponent, index, opponent.hand[index]);
+                          // En mode solo, afficher la carte immédiatement
+                          // En mode multijoueur, le serveur enverra la carte via game:spied_card
+                          if (!config.isMultiplayer) {
+                            _showCardRevealed(context, opponent, index, opponent.hand[index]);
+                          }
                           config.onLookAtCard(opponent, index);
                         },
                         child: Container(
@@ -510,8 +525,8 @@ class UnifiedPowerDialogs {
   // ============================================================
   
   /// Notification quand une carte est révélée (pouvoir 7/10)
-  static Future<void> showCardRevealDialog(BuildContext context, PlayingCard card, {String title = "CARTE RÉVÉLÉE"}) async {
-    PowerNotificationDialogs.showCardRevealed(context, card, title: title);
+  static Future<void> showCardRevealDialog(BuildContext context, PlayingCard card, {String title = "CARTE RÉVÉLÉE"}) {
+    return PowerNotificationDialogs.showCardRevealed(context, card, title: title);
   }
 
   /// Notification quand un autre joueur utilise le Valet sur nous
