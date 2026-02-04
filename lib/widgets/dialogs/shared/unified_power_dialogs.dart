@@ -7,6 +7,7 @@ import '../../../models/player.dart';
 import '../../../models/game_state.dart';
 import '../../../providers/game_provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
+import '../../../services/logging/game_logger_service.dart';
 import '../../../utils/ui_constants.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
@@ -62,9 +63,26 @@ class PowerDialogConfig {
         player2.hand[c2] = temp;
         player1.knownCards[c1] = false;
         player2.knownCards[c2] = false;
+        // FIX: Invalider la mentalMap des bots après un swap
+        if (!player1.isHuman && c1 < player1.mentalMap.length) {
+          player1.mentalMap[c1] = null;
+        }
+        if (!player2.isHuman && c2 < player2.mentalMap.length) {
+          player2.mentalMap[c2] = null;
+        }
         String name1 = p1.isHuman ? "Vous" : p1.name;
         String name2 = p2.isHuman ? "Vous" : p2.name;
         gs.addToHistory("🔄 Échange : $name1 carte #${c1 + 1} ↔ $name2 carte #${c2 + 1}.");
+        // LOG: Échange VALET par l'humain
+        GameLoggerService.instance.logValetExchange(
+          bot: gs.currentPlayer,
+          player1: player1,
+          player2: player2,
+          index1: c1,
+          index2: c2,
+          card1: player2.hand[c2], // Après swap: card1 est maintenant chez player2
+          card2: player1.hand[c1], // Après swap: card2 est maintenant chez player1
+        );
         gp.skipSpecialPower();
       },
     );

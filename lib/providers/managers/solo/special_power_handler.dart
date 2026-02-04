@@ -141,6 +141,14 @@ class SpecialPowerHandler {
     currentPlayer.knownCards[ownCardIndex] = false;
     targetPlayer.knownCards[targetCardIndex] = false;
 
+    // FIX: Invalider la mentalMap des bots après un swap
+    if (!currentPlayer.isHuman && ownCardIndex < currentPlayer.mentalMap.length) {
+      currentPlayer.mentalMap[ownCardIndex] = null;
+    }
+    if (!targetPlayer.isHuman && targetCardIndex < targetPlayer.mentalMap.length) {
+      targetPlayer.mentalMap[targetCardIndex] = null;
+    }
+
     // LOG : Échange Valet par l'humain
     GameLoggerService.instance.logValetExchange(
       bot: currentPlayer,

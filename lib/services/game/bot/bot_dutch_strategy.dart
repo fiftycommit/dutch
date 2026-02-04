@@ -1,13 +1,10 @@
-import 'dart:math';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import 'bot_config.dart';
 import 'bot_difficulty.dart';
-import 'bot_threat_analyzer.dart';
 import 'bot_personality.dart';
 import 'bot_memory_manager.dart';
 import 'discard_tracker.dart';
-import 'human_threat_tracker.dart';
 
 /// Stratégie de décision pour appeler Dutch
 /// Logique multi‑paramètres (sans seuils de score fixes)
@@ -50,83 +47,78 @@ class BotDutchStrategy {
   }
 
   /// Décide si le bot DEVRAIT Dutch (conditions suffisantes)
-  /// Logique multi‑paramètres (pas de seuil de score fixe)
+  ///
+  /// RÈGLE DU JEU : Si tu Dutch et que tu n'as PAS le plus petit score,
+  /// tu es DERNIER. C'est un risque énorme → le bot doit être CONFIANT
+  /// qu'il a le plus petit score avant de Dutch.
   static bool _shouldDutchStateBased(
     GameState gs,
     Player bot,
     BotDifficulty difficulty,
     BotPersonality? personality,
   ) {
-    final myCards = bot.hand.length;
-    final report = BotThreatAnalyzer.analyzeOpponents(gs, bot);
-
-    final threatTracker = HumanThreatTracker();
-    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
-
-    // Ne Dutch pas si j'ai trop de cartes
-    if (myCards >= 4) return false;
+    final myScore = bot.getKnownScore();
 
     // Si je viens de rater un match ou de prendre une pénalité, ne Dutch pas
     if (_recentMatchFail(gs, bot) || _recentPenalty(gs, bot)) {
       return false;
     }
 
-    // Si un adversaire a 1 carte et moi > 1, prudence
-    if (report.hasOpponentWithOneCard && myCards > 1) {
+    // Estimer les scores de tous les adversaires
+    // et vérifier si le bot pense avoir le plus petit score
+    int lowestOpponentEstimate = 999;
+    for (final opponent in gs.players) {
+      if (opponent.id == bot.id) continue;
+      if (opponent.hand.isEmpty) continue;
+
+      final estimatedScore = _estimateOpponentScore(opponent);
+      if (estimatedScore < lowestOpponentEstimate) {
+        lowestOpponentEstimate = estimatedScore;
+      }
+    }
+
+    // RÈGLE FONDAMENTALE : ne Dutch que si on pense avoir le plus petit score
+    // Marge de sécurité : le bot veut être STRICTEMENT en dessous
+    // (car si on Dutch et qu'on a le même score, on perd aussi)
+    if (myScore >= lowestOpponentEstimate) {
       return false;
     }
 
-    final mostThreat = report.mostThreatening?.player ?? report.leader;
-    final mostThreatId = mostThreat?.id;
-    final mainExchanged = mostThreatId != null && discardTracker.lastActionWasExchange(mostThreatId);
-    final mainEstimate = (mostThreatId != null && mostThreat != null)
-        ? discardTracker.estimateOpponentHand(mostThreatId, mostThreat.hand.length)
-        : null;
-    final mainDiscardedGoodCard = mainEstimate != null &&
-        mainEstimate.confidence >= 0.4 &&
-        !discardTracker.lastActionWasExchange(mostThreatId!) &&
-        mainEstimate.avgDiscardedPoints <= 4;
+    // OK, le bot pense avoir le plus petit score.
+    // Maintenant, est-ce que l'écart est suffisant pour prendre le risque ?
+    // (les estimations peuvent être fausses)
+    final margin = lowestOpponentEstimate - myScore;
 
-    // Si l'adversaire principal a jeté une bonne carte sans échange, ne Dutch pas
-    if (mainDiscardedGoodCard) {
-      return false;
-    }
-
-    final anyOpponentPenalty = report.opponents.any((o) => _recentPenalty(gs, o.player));
-    final maxOpponentCards = report.opponents.isEmpty
-        ? myCards
-        : report.opponents.map((o) => o.cardsLeft).reduce(max);
-    final avgOpponentCards = report.avgOpponentCards;
-
-    // Anti‑humain critique : bloquer si l'humain est sur le point de gagner
-    if (humanThreatLevel == HumanThreatLevel.critical && myCards <= 3) {
-      gs.addToHistory('🎯 ${bot.name} Dutch préemptif (humain critique)');
+    // Score très bas (0-5) : Dutch si au moins 3 pts d'écart
+    if (myScore <= 5 && margin >= 3) {
       return true;
     }
 
-    // 1 carte : Dutch immédiat
-    if (myCards == 1) {
+    // Score moyen (6-10) : Dutch si au moins 5 pts d'écart
+    if (myScore <= 10 && margin >= 5) {
       return true;
     }
 
-    // 2 cartes : Dutch si pression ou avantage clair
-    if (myCards == 2) {
-      if (maxOpponentCards >= 5) return true;
-      if (avgOpponentCards >= myCards + 2) return true;
-      if (mainExchanged) return true;
-      if (anyOpponentPenalty) return true;
-      return false;
+    // Score élevé (11+) : Dutch seulement si très gros écart (8+ pts)
+    if (myScore <= 15 && margin >= 8) {
+      return true;
     }
 
-    // 3 cartes : Dutch seulement si gros écart ou pression (pénalité/échange)
-    if (myCards == 3) {
-      if (maxOpponentCards >= 5 && (mainExchanged || anyOpponentPenalty)) return true;
-      if (avgOpponentCards >= 5 && anyOpponentPenalty) return true;
-      if (mainExchanged && humanThreatLevel.index >= HumanThreatLevel.high.index) return true;
-      return false;
-    }
-
+    // Score > 15 : ne Dutch jamais, trop risqué
     return false;
+  }
+
+  /// Estime le score d'un adversaire
+  static int _estimateOpponentScore(Player opponent) {
+    if (opponent.isHuman) {
+      // Le score de l'humain est toujours réel
+      return opponent.getKnownScore();
+    }
+    // Estimer via le discard tracker
+    final estimate = discardTracker.estimateOpponentHand(
+      opponent.id, opponent.hand.length,
+    );
+    return estimate.estimatedScore.round();
   }
 
   static bool _recentMatchFail(GameState gs, Player player) {
