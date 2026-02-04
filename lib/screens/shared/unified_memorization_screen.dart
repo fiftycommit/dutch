@@ -612,6 +612,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               runSpacing: spacing,
               children: List.generate(config.localPlayer.hand.length, (index) {
                 final isSelected = _selectedCards.contains(index);
+                final card = config.localPlayer.hand[index];
 
                 return GestureDetector(
                   onTap: () => _onCardTap(index),
@@ -643,12 +644,13 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                           child: SizedBox(
                             width: cardWidth,
                             height: cardHeight,
-                            child: const FittedBox(
+                            child: FittedBox(
                               fit: BoxFit.contain,
+                              // Afficher la carte retournée si sélectionnée, sinon dos de carte
                               child: CardWidget(
-                                card: null,
+                                card: isSelected ? card : null,
                                 size: CardSize.large,
-                                isRevealed: false,
+                                isRevealed: isSelected,
                               ),
                             ),
                           ),

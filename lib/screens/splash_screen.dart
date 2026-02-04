@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../main.dart';
 import '../utils/screen_utils.dart';
+import '../services/ui/svg_precache_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -41,8 +42,11 @@ class _SplashScreenState extends State<SplashScreen>
     // Démarrer l'animation
     _progressController.forward();
 
-    // Initialiser l'application
-    await initializeApp();
+    // Initialiser l'application et précacher les SVG en parallèle
+    await Future.wait([
+      initializeApp(),
+      SvgPrecacheService().precacheCardSvgs(),
+    ]);
 
     // Attendre que l'animation soit terminée
     await _progressController.forward();
