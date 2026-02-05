@@ -130,23 +130,36 @@ class _SplashScreenState extends State<SplashScreen>
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final isShort = constraints.maxHeight < 420;
+                final logoWidth = ScreenUtils.scale(context, isShort ? 90 : 120);
+                final logoHeight = ScreenUtils.scale(context, isShort ? 126 : 168);
+                final titleSize = ScreenUtils.scaleFont(context, isShort ? 34 : 48);
+                final subtitleSize = ScreenUtils.scaleFont(context, isShort ? 12 : 16);
+                final spacingLarge = ScreenUtils.spacing(context, isShort ? 24 : 40);
+                final spacingSmall = ScreenUtils.spacing(context, isShort ? 6 : 8);
+                final progressHeight = ScreenUtils.scale(context, isShort ? 8 : 12);
+                final statusFont = ScreenUtils.scaleFont(context, isShort ? 12 : 14);
+                final horizontalPadding = isShort ? 40.0 : 60.0;
+                final titleSpacing = isShort ? 6.0 : 8.0;
+                final subtitleSpacing = isShort ? 1.5 : 2.0;
+
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       SvgPicture.asset(
                         'assets/images/cards/joker-rouge.svg',
-                        width: ScreenUtils.scale(context, 120),
-                        height: ScreenUtils.scale(context, 168),
+                        width: logoWidth,
+                        height: logoHeight,
                       ),
-                      SizedBox(height: ScreenUtils.spacing(context, 40)),
+                      SizedBox(height: spacingLarge),
                       Text(
                         'DUTCH',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: ScreenUtils.scaleFont(context, 48),
+                          fontSize: titleSize,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 8,
+                          letterSpacing: titleSpacing,
                           shadows: [
                             Shadow(
                               color: Colors.black.withValues(alpha: 0.5),
@@ -156,18 +169,21 @@ class _SplashScreenState extends State<SplashScreen>
                           ],
                         ),
                       ),
-                      SizedBox(height: ScreenUtils.spacing(context, 8)),
+                      SizedBox(height: spacingSmall),
                       Text(
                         'Jeu de Mémoire et Stratégie',
                         style: TextStyle(
                           color: AppColors.textSecondary,
-                          fontSize: ScreenUtils.scaleFont(context, 16),
-                          letterSpacing: 2,
+                          fontSize: subtitleSize,
+                          letterSpacing: subtitleSpacing,
                         ),
                       ),
-                      SizedBox(height: ScreenUtils.spacing(context, 40)),
+                      SizedBox(height: spacingLarge),
                       Padding(
-                        padding: ScreenUtils.adaptivePadding(context, horizontal: 60),
+                        padding: ScreenUtils.adaptivePadding(
+                          context,
+                          horizontal: horizontalPadding,
+                        ),
                         child: Column(
                           children: [
                             ClipRRect(
@@ -176,19 +192,19 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                               child: LinearProgressIndicator(
                                 value: null,
-                                minHeight: ScreenUtils.scale(context, 12),
+                                minHeight: progressHeight,
                                 backgroundColor: Colors.white.withValues(alpha: 0.2),
                                 valueColor: const AlwaysStoppedAnimation<Color>(
                                   Color(0xFF4CAF50),
                                 ),
                               ),
                             ),
-                            SizedBox(height: ScreenUtils.spacing(context, 16)),
+                            SizedBox(height: ScreenUtils.spacing(context, isShort ? 10 : 16)),
                             Text(
                               _statusText,
                               style: TextStyle(
                                 color: AppColors.textDisabled,
-                                fontSize: ScreenUtils.scaleFont(context, 14),
+                                fontSize: statusFont,
                               ),
                             ),
                           ],

@@ -24,6 +24,7 @@ dependencies:
   
   # Utils
   flutter_svg: ^2.0.9
+  vector_graphics: ^1.1.19
   shared_preferences: ^2.5.4
   path_provider: ^2.1.2
 

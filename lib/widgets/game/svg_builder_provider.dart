@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart';
 
 /// Builder function for SVG images - allows injection for testing
 typedef SvgBuilder = Widget Function(String assetPath, double width, double height);
@@ -11,6 +12,8 @@ Widget defaultSvgBuilder(String assetPath, double width, double height) {
     width: width,
     height: height,
     fit: BoxFit.contain,
+    renderingStrategy: RenderingStrategy.raster,
+    placeholderBuilder: (_) => SizedBox(width: width, height: height),
   );
 }
 

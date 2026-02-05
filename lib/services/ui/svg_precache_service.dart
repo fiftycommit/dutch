@@ -90,6 +90,11 @@ class SvgPrecacheService {
       return;
     }
 
+    final desiredCacheSize = _allCardSvgPaths.length + 20;
+    if (svg.cache.maximumSize < desiredCacheSize) {
+      svg.cache.maximumSize = desiredCacheSize;
+    }
+
     if (skipIfCached) {
       final wasPrecached = await _wasPrecachedPersisted();
       if (wasPrecached) {
