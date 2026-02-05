@@ -87,6 +87,8 @@ class _StatsScreenState extends State<StatsScreen> {
             const SizedBox(height: 20),
             _buildPieChartPlaceholder(stats),
             const SizedBox(height: 20),
+            _buildWinrateByPlayers(stats),
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -201,6 +203,89 @@ class _StatsScreenState extends State<StatsScreen> {
                   fontWeight: FontWeight.bold)),
           Text("$wins réussis sur $calls tentés",
               style: const TextStyle(color: Colors.white38, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWinrateByPlayers(Map<String, dynamic> stats) {
+    final rawHistory = stats['history'] ?? [];
+    final history = rawHistory is List ? rawHistory : <dynamic>[];
+    final buckets = <int, _WinrateBucket>{
+      2: _WinrateBucket(),
+      3: _WinrateBucket(),
+      4: _WinrateBucket(),
+      5: _WinrateBucket(),
+      6: _WinrateBucket(),
+    };
+
+    for (final match in history) {
+      if (match is! Map) continue;
+      final totalPlayersRaw = match['totalPlayers'];
+      if (totalPlayersRaw is! num) continue;
+      final totalPlayers = totalPlayersRaw.toInt();
+      final bucket = buckets[totalPlayers];
+      if (bucket == null) continue;
+      bucket.played += 1;
+      final rank = match['rank'];
+      if (rank == 1) {
+        bucket.won += 1;
+      }
+    }
+
+    final hasData = buckets.values.any((bucket) => bucket.played > 0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white10, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Winrate par nombre de joueurs",
+              style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          if (!hasData)
+            const Text("Pas encore assez de données",
+                style: TextStyle(color: Colors.white38, fontSize: 12))
+          else
+            ...buckets.entries.map((entry) {
+              final count = entry.key;
+              final bucket = entry.value;
+              if (bucket.played == 0) {
+                return const SizedBox.shrink();
+              }
+              final rate = bucket.winRate;
+              final rateLabel = "${(rate * 100).toStringAsFixed(1)}%";
+              final recordLabel = "${bucket.won}/${bucket.played}";
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("$count joueurs",
+                            style:
+                                const TextStyle(color: Colors.white70)),
+                        Text("$rateLabel · $recordLabel",
+                            style:
+                                const TextStyle(color: Colors.white54)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: rate,
+                      minHeight: 6,
+                      backgroundColor: Colors.white12,
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.green),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -776,6 +861,13 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
     );
   }
+}
+
+class _WinrateBucket {
+  int played = 0;
+  int won = 0;
+
+  double get winRate => played > 0 ? won / played : 0;
 }
 
 class _HistoryGroup {
