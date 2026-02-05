@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bot Learning Stats - Dutch Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -153,6 +154,16 @@
       background: rgba(255,255,255,0.3);
       transform: scale(1.05);
     }
+    .chart-caption {
+      opacity: 0.75;
+      font-size: 0.85em;
+      margin-top: 10px;
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      min-height: 280px;
+    }
   </style>
 </head>
 <body>
@@ -187,12 +198,22 @@
         <h2>📊 Parties Récentes</h2>
         <div id="recentGames"></div>
       </div>
+
+      <div class="leaderboard">
+        <h2>📈 Entraînement bots vs fantômes</h2>
+        <div class="chart-container">
+          <canvas id="trainingChart"></canvas>
+        </div>
+        <div class="chart-caption">Axe X: Date/Heure • Axe Y: Taux de victoire des bots (%)</div>
+      </div>
     </div>
   </div>
 
   <button class="refresh-btn" onclick="loadStats()">🔄 Rafraîchir</button>
 
   <script>
+    let trainingChart;
+
     async function loadStats() {
       try {
         const response = await fetch('/api/bot-learning/stats');
@@ -282,10 +303,68 @@
         }).join('');
         
         document.getElementById('recentGames').innerHTML = recentGamesHtml || '<p style="opacity: 0.7;">Aucune partie enregistrée pour le moment</p>';
+
+        await loadTrainingSeries();
         
       } catch (error) {
         console.error('Erreur chargement stats:', error);
         document.getElementById('loading').textContent = 'Erreur de chargement des données';
+      }
+    }
+
+    async function loadTrainingSeries() {
+      try {
+        const response = await fetch('/api/bot-learning/training-series');
+        const series = await response.json();
+        if (!Array.isArray(series)) return;
+
+        const labels = series.map(p => new Date(p.timestamp).toLocaleString('fr-FR'));
+        const values = series.map(p => Math.round((p.botWinRate || 0) * 100));
+
+        const ctx = document.getElementById('trainingChart').getContext('2d');
+        if (trainingChart) {
+          trainingChart.data.labels = labels;
+          trainingChart.data.datasets[0].data = values;
+          trainingChart.update();
+          return;
+        }
+
+        trainingChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Taux de victoire bots (%)',
+              data: values,
+              borderColor: '#FFD700',
+              backgroundColor: 'rgba(255,215,0,0.2)',
+              tension: 0.25,
+              fill: true,
+              pointRadius: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: { color: '#fff' },
+                title: { display: true, text: 'Taux de victoire (%)', color: '#fff' }
+              },
+              x: {
+                ticks: { color: '#fff', maxTicksLimit: 6 },
+                title: { display: true, text: 'Date/Heure', color: '#fff' }
+              }
+            },
+            plugins: {
+              legend: { labels: { color: '#fff' } }
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Erreur chargement training-series:', error);
       }
     }
     

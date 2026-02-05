@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { BotLearningService } from '../services/BotLearningService';
 import { PlayerCloningService } from '../services/PlayerCloningService';
 import { BotPersonalityService } from '../services/BotPersonalityService';
@@ -8,6 +10,7 @@ const router = Router();
 const botLearningService = new BotLearningService();
 const cloningService = new PlayerCloningService();
 const personalityService = new BotPersonalityService();
+const trainingSeriesPath = path.join(__dirname, '../../data/bot-learning/training-series.jsonl');
 
 /**
  * POST /api/bot-learning/record
@@ -205,6 +208,68 @@ router.get('/personalities', async (req: Request, res: Response) => {
     res.json(personalities);
   } catch (error) {
     console.error('Erreur récupération personnalités:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * POST /api/bot-learning/training-series
+ * Enregistre un point de suivi d'entraînement (bots vs fantômes)
+ */
+router.post('/training-series', async (req: Request, res: Response) => {
+  try {
+    const { timestamp, totalMatches, botWinRate } = req.body || {};
+
+    if (!timestamp || typeof totalMatches !== 'number' || typeof botWinRate !== 'number') {
+      return res.status(400).json({ error: 'Données invalides' });
+    }
+
+    await fs.mkdir(path.dirname(trainingSeriesPath), { recursive: true });
+    const entry = JSON.stringify({
+      timestamp,
+      totalMatches,
+      botWinRate,
+    });
+    await fs.appendFile(trainingSeriesPath, `${entry}\n`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur enregistrement training-series:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /api/bot-learning/training-series
+ * Retourne la série de suivi d'entraînement
+ */
+router.get('/training-series', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 200, 1000);
+
+    let content = '';
+    try {
+      content = await fs.readFile(trainingSeriesPath, 'utf-8');
+    } catch (_) {
+      return res.json([]);
+    }
+
+    const lines = content
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(line => {
+        try {
+          return JSON.parse(line);
+        } catch (_) {
+          return null;
+        }
+      })
+      .filter(Boolean) as Array<{ timestamp: string; totalMatches: number; botWinRate: number }>;
+
+    const sliced = lines.slice(-limit);
+    res.json(sliced);
+  } catch (error) {
+    console.error('Erreur récupération training-series:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

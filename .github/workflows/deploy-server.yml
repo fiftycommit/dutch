@@ -61,6 +61,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Deploy trainer code
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: dutch-game.me
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "tool/bot_training_runner.dart,lib/**,pubspec.yaml,pubspec.lock,analysis_options.yaml,assets/**"
+          target: "/var/www/dutch-trainer"
+          strip_components: 0
+          overwrite: true
+
       - name: Deploy server code
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -78,6 +89,53 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # -------- Trainer install / restart --------
+            if [ ! -d /opt/flutter ]; then
+              echo "📥 Installing Flutter..."
+              git clone https://github.com/flutter/flutter.git -b stable /opt/flutter
+              /opt/flutter/bin/flutter --version
+              /opt/flutter/bin/flutter config --no-analytics
+            else
+              echo "✅ Flutter already installed"
+            fi
+
+            # Ensure trainer folder exists
+            mkdir -p /var/www/dutch-trainer
+            chown -R dutch:dutch /var/www/dutch-trainer || true
+
+            cd /var/www/dutch-trainer
+            /opt/flutter/bin/flutter pub get
+
+            cat > /etc/systemd/system/dutch-bot-trainer.service << 'SERVICE'
+            [Unit]
+            Description=Dutch Bot Trainer
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=dutch
+            WorkingDirectory=/var/www/dutch-trainer
+            Environment=BOT_TRAIN_SERVER=https://dutch-game.me
+            Environment=BOT_TRAIN_START_HOUR=20
+            Environment=BOT_TRAIN_END_HOUR=12
+            Environment=BOT_TRAIN_BATCH=12
+            Environment=BOT_TRAIN_SLEEP_MS=200
+            Environment=BOT_TRAIN_MAX_TURNS=800
+            Environment=BOT_TRAIN_BALANCED_ONLY=false
+            Environment=PATH=/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            ExecStart=/opt/flutter/bin/flutter pub run tool/bot_training_runner.dart
+            Restart=always
+            RestartSec=10
+
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE
+
+            systemctl daemon-reload
+            systemctl enable dutch-bot-trainer
+            systemctl restart dutch-bot-trainer
+
+            # -------- Backend deploy --------
             cd /root/apps/dutch-server
             npm install
             npm run build

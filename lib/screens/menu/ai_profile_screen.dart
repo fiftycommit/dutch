@@ -73,6 +73,13 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
 
   double _clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
 
+  String _mmrTier(int mmr) {
+    if (mmr >= 900) return 'Platine';
+    if (mmr >= 600) return 'Or';
+    if (mmr >= 300) return 'Argent';
+    return 'Bronze';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,6 +126,28 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
       );
     }
 
+    final sbmmHistory = _history.where((g) => g.usedSBMM).toList();
+    if (sbmmHistory.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _ClientIdCard(clientId: _clientId),
+          const SizedBox(height: 12),
+          _InfoCard(
+            title: 'Slot',
+            value: 'J${widget.slotId}',
+            subtitle: '${profile.gamesAnalyzed} parties analysées',
+          ),
+          const SizedBox(height: 12),
+          const _InfoCard(
+            title: 'Profil SBMM',
+            value: 'Inactif',
+            subtitle: 'Lance une partie en mode SBMM pour activer le profil IA.',
+          ),
+        ],
+      );
+    }
+
     final params = profile.learnedParameters;
 
     final aggressiveness = _clamp01(_num(params, 'aggressiveness', 0.5));
@@ -132,7 +161,43 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
     final decisionSpeed = _num(params, 'decisionSpeed', 2000.0);
     final targetingStrategy = params['targetingStrategy'] ?? 'balanced';
 
-    final last10 = _history.take(10).toList().reversed.toList();
+    final last10 = sbmmHistory.take(10).toList().reversed.toList();
+    final lastRecord = sbmmHistory.isNotEmpty ? sbmmHistory.first : null;
+    final before = lastRecord?.profileBefore;
+    final after = lastRecord?.profileAfter;
+
+    final deltas = <_MetricDelta>[
+      _MetricDelta(
+        label: 'Agressif',
+        before: before == null ? null : _num(before, 'aggressiveness', 0.5),
+        after: after == null ? null : _num(after, 'aggressiveness', 0.5),
+        isPercent: true,
+      ),
+      _MetricDelta(
+        label: 'Prudent',
+        before: before == null ? null : _num(before, 'caution', 0.5),
+        after: after == null ? null : _num(after, 'caution', 0.5),
+        isPercent: true,
+      ),
+      _MetricDelta(
+        label: 'Mémoire',
+        before: before == null ? null : _num(before, 'memoryAccuracy', 0.7),
+        after: after == null ? null : _num(after, 'memoryAccuracy', 0.7),
+        isPercent: true,
+      ),
+      _MetricDelta(
+        label: 'Adaptabilité',
+        before: before == null ? null : _num(before, 'adaptability', 0.5),
+        after: after == null ? null : _num(after, 'adaptability', 0.5),
+        isPercent: true,
+      ),
+      _MetricDelta(
+        label: 'Pouvoirs off.',
+        before: before == null ? null : _num(before, 'powerOffensiveRate', 0.5),
+        after: after == null ? null : _num(after, 'powerOffensiveRate', 0.5),
+        isPercent: true,
+      ),
+    ];
 
     List<double> series(String key, double fallback) {
       return last10
@@ -152,6 +217,15 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
             title: 'Slot',
             value: 'J${widget.slotId}',
             subtitle: '${profile.gamesAnalyzed} parties analysées',
+          ),
+          const SizedBox(height: 12),
+          _AdaptationCard(
+            mmr: profile.mmr,
+            mmrTier: _mmrTier(profile.mmr),
+            usedSBMM: lastRecord?.usedSBMM,
+            lastUpdate: profile.lastUpdatedAt,
+            lastGameTime: lastRecord?.endTime,
+            deltas: deltas,
           ),
           const SizedBox(height: 12),
           _BarsCard(
@@ -195,7 +269,7 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
             },
           ),
           const SizedBox(height: 12),
-          _HistoryCard(history: _history),
+          _HistoryCard(history: sbmmHistory),
         ],
       ),
     );
@@ -343,6 +417,163 @@ class _BarsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _AdaptationCard extends StatelessWidget {
+  final int mmr;
+  final String mmrTier;
+  final bool? usedSBMM;
+  final DateTime? lastUpdate;
+  final DateTime? lastGameTime;
+  final List<_MetricDelta> deltas;
+
+  const _AdaptationCard({
+    required this.mmr,
+    required this.mmrTier,
+    required this.usedSBMM,
+    required this.lastUpdate,
+    required this.lastGameTime,
+    required this.deltas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasData = deltas.any((d) => d.before != null && d.after != null);
+    final sbmmLabel = usedSBMM == null ? 'n/a' : (usedSBMM! ? 'oui' : 'non');
+    final updateLabel = lastUpdate == null ? 'inconnu' : _fmt(lastUpdate!);
+    final gameLabel = lastGameTime == null ? 'inconnu' : _fmt(lastGameTime!);
+    final showDeltas = usedSBMM == true && hasData;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Adaptation des bots',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'MMR: $mmr ($mmrTier)  •  SBMM: $sbmmLabel',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'MAJ profil: $updateLabel  •  Dernière partie: $gameLabel',
+            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (showDeltas)
+            Column(
+              children: deltas.map((d) => _DeltaRow(delta: d)).toList(),
+            )
+          else if (usedSBMM != true)
+            const Text(
+              'Profil SBMM uniquement. Lance une partie en mode SBMM pour activer l’adaptation.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            )
+          else
+            const Text(
+              'Pas encore assez de données pour mesurer l’adaptation.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(DateTime dt) {
+    final local = dt.toLocal();
+    final d = local.day.toString().padLeft(2, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$d/$m $h:$min';
+  }
+}
+
+class _DeltaRow extends StatelessWidget {
+  final _MetricDelta delta;
+
+  const _DeltaRow({required this.delta});
+
+  @override
+  Widget build(BuildContext context) {
+    final before = delta.before;
+    final after = delta.after;
+    final change = delta.delta;
+    final hasValue = before != null && after != null;
+    final sign = (change ?? 0) >= 0 ? '+' : '';
+    final textColor = !hasValue
+        ? AppColors.textDisabled
+        : (change ?? 0) >= 0
+            ? Colors.lightGreenAccent
+            : Colors.redAccent;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              delta.label,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+          Text(
+            hasValue ? _fmtValue(before!, delta.isPercent) : '--',
+            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.arrow_forward, size: 12, color: Colors.white30),
+          const SizedBox(width: 8),
+          Text(
+            hasValue ? _fmtValue(after!, delta.isPercent) : '--',
+            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            hasValue ? '$sign${_fmtDelta(change!, delta.isPercent)}' : '--',
+            style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtValue(double v, bool percent) {
+    if (percent) return '${(v * 100).round()}%';
+    return v.toStringAsFixed(2);
+  }
+
+  String _fmtDelta(double v, bool percent) {
+    if (percent) return '${(v * 100).round()}%';
+    return v.toStringAsFixed(2);
+  }
+}
+
+class _MetricDelta {
+  final String label;
+  final double? before;
+  final double? after;
+  final bool isPercent;
+
+  const _MetricDelta({
+    required this.label,
+    required this.before,
+    required this.after,
+    required this.isPercent,
+  });
+
+  double? get delta {
+    if (before == null || after == null) return null;
+    return after! - before!;
   }
 }
 

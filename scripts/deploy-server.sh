@@ -15,6 +15,7 @@ NC='\033[0m'
 SERVER_IP="$1"
 ADMIN_EMAIL="${2:-admin@dutch-game.me}"
 DOMAIN="dutch-game.me"
+SKIP_TRAINER="${SKIP_TRAINER:-0}"
 
 if [ -z "$SERVER_IP" ]; then
     echo -e "${RED}❌ Usage: ./deploy-server.sh <ip_droplet> [email]${NC}"
@@ -32,6 +33,7 @@ echo ""
 echo -e "  📍 Serveur: ${YELLOW}$SERVER_IP${NC}"
 echo -e "  🌐 Domaine: ${YELLOW}$DOMAIN${NC}"
 echo -e "  📧 Email: ${YELLOW}$ADMIN_EMAIL${NC}"
+echo -e "  🤖 Trainer: ${YELLOW}$([ "$SKIP_TRAINER" -eq 1 ] && echo "SKIP" || echo "INSTALL")${NC}"
 echo ""
 
 # Créer le script d'installation côté serveur
@@ -323,6 +325,76 @@ if curl -s http://$SERVER_IP/health | grep -q "ok"; then
     echo -e "${GREEN}✓ Serveur répond correctement!${NC}"
 else
     echo -e "${RED}⚠️  Le serveur ne répond pas encore (peut prendre quelques secondes)${NC}"
+fi
+
+# Installer le trainer bots (Flutter) si demandé
+if [ "$SKIP_TRAINER" -ne 1 ]; then
+    echo -e "\n${YELLOW}🤖 Installation du Bot Trainer...${NC}"
+
+    # Créer l'archive minimale du projet Flutter (lib + tool + pubspec)
+    echo -e "${YELLOW}📦 Création de l'archive trainer...${NC}"
+    cd /Users/maxmbey/projets/dutch
+    COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -czf /tmp/dutch-trainer.tar.gz \
+      lib tool pubspec.yaml pubspec.lock analysis_options.yaml assets
+
+    echo -e "${YELLOW}📤 Upload du trainer...${NC}"
+    scp /tmp/dutch-trainer.tar.gz root@$SERVER_IP:/var/www/
+
+    echo -e "${YELLOW}⚙️  Installation trainer côté serveur...${NC}"
+    ssh root@$SERVER_IP << 'TRAINER_INSTALL'
+set -e
+
+# Installer Flutter si absent
+if [ ! -d /opt/flutter ]; then
+  echo "📥 Installation Flutter (stable)..."
+  git clone https://github.com/flutter/flutter.git -b stable /opt/flutter
+  /opt/flutter/bin/flutter --version
+  /opt/flutter/bin/flutter config --no-analytics
+else
+  echo "✅ Flutter déjà installé"
+fi
+
+mkdir -p /var/www/dutch-trainer
+rm -rf /var/www/dutch-trainer/*
+tar -xzf /var/www/dutch-trainer.tar.gz -C /var/www/dutch-trainer
+
+chown -R dutch:dutch /var/www/dutch-trainer
+
+# Récupérer les dépendances Flutter sous l'utilisateur dutch
+cd /var/www/dutch-trainer
+sudo -u dutch /opt/flutter/bin/flutter pub get
+
+# Service systemd
+cat > /etc/systemd/system/dutch-bot-trainer.service << 'SERVICE'
+[Unit]
+Description=Dutch Bot Trainer
+After=network.target
+
+[Service]
+Type=simple
+User=dutch
+WorkingDirectory=/var/www/dutch-trainer
+Environment=BOT_TRAIN_SERVER=https://dutch-game.me
+Environment=BOT_TRAIN_START_HOUR=20
+Environment=BOT_TRAIN_END_HOUR=12
+Environment=BOT_TRAIN_BATCH=12
+Environment=BOT_TRAIN_SLEEP_MS=200
+Environment=BOT_TRAIN_MAX_TURNS=800
+Environment=BOT_TRAIN_BALANCED_ONLY=false
+Environment=PATH=/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/flutter/bin/flutter pub run tool/bot_training_runner.dart
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable dutch-bot-trainer
+systemctl restart dutch-bot-trainer
+echo "✓ Bot Trainer installé et démarré"
+TRAINER_INSTALL
 fi
 
 # Vérifier le DNS

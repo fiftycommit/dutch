@@ -289,6 +289,36 @@ void main() {
         final history = await service.getHistory(slotId: 1);
         expect(history.length, 10);
       });
+
+      test('skips update and history when usedSBMM is false', () async {
+        service.startGame(gameId: 'game_manual');
+
+        service.recordAction(
+          gameId: 'game_manual',
+          actionType: 'draw',
+          turnNumber: 1,
+          gameState: gameState,
+          human: human,
+          actionDetails: {},
+        );
+
+        final profile = await service.endGame(
+          gameId: 'game_manual',
+          slotId: 1,
+          usedSBMM: false,
+          gameState: gameState,
+          human: human,
+          finalRank: 2,
+          finalScore: 15,
+          calledDutch: false,
+          wonDutch: false,
+        );
+
+        expect(profile.gamesAnalyzed, 0);
+
+        final history = await service.getHistory(slotId: 1);
+        expect(history, isEmpty);
+      });
     });
 
     group('isBadPowerDecision', () {

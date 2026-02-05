@@ -11,6 +11,9 @@ class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
   static const String _historyKeyPrefix = 'player_action_history_slot_';
   static const String _serverUrl = 'https://dutch-game.me/api/player-learning';
+  static const String _botLearningUrl = 'https://dutch-game.me/api/bot-learning';
+  static const String _cloneIdKeyPrefix = 'ghost_clone_id_slot_';
+  static const Duration _apiTimeout = Duration(seconds: 6);
 
   final Map<String, DateTime> _gameStart = {};
   final Map<String, List<PlayerAction>> _pendingActions = {};
@@ -158,6 +161,22 @@ class PlayerLearningService implements IPlayerLearningService {
       profileBefore: Map<String, dynamic>.from(profileBefore.learnedParameters),
     );
 
+    // Envoyer un fantôme si le joueur termine 1er ou 2e
+    if (finalRank <= 2) {
+      await _submitCloneCandidate(
+        slotId: slotId,
+        playerName: human.name,
+        record: record,
+      );
+    }
+
+    if (!usedSBMM) {
+      _gameStart.remove(gameId);
+      _pendingActions.remove(gameId);
+      _lastActionTimestamp.remove(gameId);
+      return profileBefore;
+    }
+
     final updated = _updateProfile(profileBefore, record);
     await _saveProfile(updated, slotId: slotId);
 
@@ -184,6 +203,97 @@ class PlayerLearningService implements IPlayerLearningService {
     _pendingActions.remove(gameId);
 
     return updated;
+  }
+
+  Future<void> _submitCloneCandidate({
+    required int slotId,
+    required String playerName,
+    required PlayerGameRecord record,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final clientId = prefs.getString('multiplayer_client_id');
+      if (clientId == null || clientId.isEmpty) return;
+
+      final cloneKey = '$_cloneIdKeyPrefix$slotId';
+      final existingCloneId = prefs.getString(cloneKey);
+      final payload = {'games': [_mapGhostGameRecord(record)]};
+
+      if (existingCloneId != null && existingCloneId.isNotEmpty) {
+        final uri = Uri.parse('$_botLearningUrl/clone/$existingCloneId');
+        final response = await http
+            .put(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            )
+            .timeout(_apiTimeout);
+
+        if (response.statusCode == 200) return;
+      }
+
+      final createBody = jsonEncode({
+        'playerId': clientId,
+        'playerName': playerName,
+        'games': [_mapGhostGameRecord(record)],
+      });
+
+      final uri = Uri.parse('$_botLearningUrl/clone-player');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: createBody,
+          )
+          .timeout(_apiTimeout);
+
+      if (response.statusCode != 200) return;
+      final json = jsonDecode(response.body);
+      if (json is! Map<String, dynamic>) return;
+      final cloneId = json['clonedBotId']?.toString();
+      if (cloneId != null && cloneId.isNotEmpty) {
+        await prefs.setString(cloneKey, cloneId);
+      }
+    } catch (_) {
+      // best-effort
+    }
+  }
+
+  Map<String, dynamic> _mapGhostGameRecord(PlayerGameRecord record) {
+    return {
+      'calledDutch': record.calledDutch,
+      'scoreAtDutch': record.calledDutch ? record.finalScore : 0,
+      'actions': record.actions.map(_mapGhostAction).toList(),
+    };
+  }
+
+  Map<String, dynamic> _mapGhostAction(PlayerAction action) {
+    String actionType = action.actionType;
+    if (actionType == 'draw') {
+      final source = action.actionDetails['source'];
+      actionType = source == 'discard' ? 'draw_from_discard' : 'draw_from_deck';
+    } else if (actionType == 'replace') {
+      actionType = 'replace_card';
+    } else if (actionType == 'power') {
+      actionType = 'use_power';
+    } else if (actionType == 'power_skip') {
+      actionType = 'skip_power';
+    }
+
+    final gameState = Map<String, dynamic>.from(action.gameState);
+    if (!gameState.containsKey('myScore')) {
+      final score = gameState['humanEstimatedScore'] ?? gameState['humanScore'];
+      if (score != null) {
+        gameState['myScore'] = score;
+      }
+    }
+
+    return {
+      'actionType': actionType,
+      'actionDetails': action.actionDetails,
+      'decisionTime': action.decisionTimeMs,
+      'gameState': gameState,
+    };
   }
 
   Future<void> _appendHistory(PlayerGameRecord record, {required int slotId}) async {

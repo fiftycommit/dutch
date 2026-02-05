@@ -63,6 +63,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   int get currentReactionTimeMs => _currentReactionTimeMs;
   int _currentSlotId = 1;
+  bool _useSBMM = false;
   
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
@@ -145,6 +146,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     
     _currentReactionTimeMs = reactionTimeMs;
     _currentSlotId = saveSlot;
+    _useSBMM = useSBMM;
     _lastMatchRpResult = null;
     
     // Mode hardcore
@@ -210,6 +212,9 @@ class GameProvider with ChangeNotifier implements IGameController {
     
     for (int i = 0; i < bots.length; i++) {
       final bot = bots[i];
+      if (bot.aiParameters != null && bot.aiParameters!.isNotEmpty) {
+        continue;
+      }
       if (bot.botBehavior == null || bot.botSkillLevel == null) continue;
       
       final behavior = bot.botBehavior.toString().split('.').last;
@@ -608,7 +613,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     _trackingProvider.endPlayerRecording(
       slotId: _currentSlotId,
-      usedSBMM: _playerMMR != null,
+      usedSBMM: _useSBMM,
       gameState: _gameState!,
       finalScore: _gameState!.getFinalScore(human),
       finalRank: playerRank,
@@ -626,7 +631,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       wonDutch: wonDutch,
       hasEmptyHand: human.hand.isEmpty,
       slotId: _currentSlotId,
-      isSBMM: _playerMMR != null,
+      isSBMM: _useSBMM,
       totalPlayers: _gameState!.players.length,
       isTournament: _gameState!.gameMode == GameMode.tournament,
       tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,

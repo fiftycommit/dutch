@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/bot_learning_data.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/learning/player_learning_service.dart';
+import '../../services/learning/bot_learning_service.dart';
 import '../../services/learning/bot_training_service.dart';
 import '../../services/learning/ghost_clone_service.dart';
 import '../../services/game/bot/bot_config.dart';
@@ -359,7 +361,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       players.addAll(await _createSBMMBots(numberOfBots));
     } else {
       // Mode manuel : difficulté fixe choisie par l'utilisateur
-      players.addAll(_createManualBots(numberOfBots));
+      players.addAll(await _createManualBots(numberOfBots));
     }
 
     if (!mounted) return;
@@ -461,35 +463,119 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   }
 
   /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
-  List<Player> _createManualBots(int numberOfBots) {
+  Future<List<Player>> _createManualBots(int numberOfBots) async {
+    if (numberOfBots <= 0) return [];
+
     final skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
     final isMixMode = selectedBotDifficulty == Difficulty.mix;
     final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
     final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
     final forceBalanced = selectedBotDifficulty != Difficulty.easy;
-
     final random = DateTime.now().millisecondsSinceEpoch;
+
+    final skillSequence = List<BotSkillLevel>.generate(numberOfBots, (i) {
+      if (isMixMode) {
+        return mixSkillLevels[i % mixSkillLevels.length];
+      }
+      return skillLevel;
+    });
+
+    final skillCounts = <BotSkillLevel, int>{};
+    for (final skill in skillSequence) {
+      skillCounts[skill] = (skillCounts[skill] ?? 0) + 1;
+    }
+
+    final botLearningService = BotLearningService();
+    final topBotsBySkill = <BotSkillLevel, List<BotProfile>>{};
+
+    for (final entry in skillCounts.entries) {
+      final skillName = _skillLevelToString(entry.key);
+      final topBots = await botLearningService.fetchTopBots(
+        skillLevel: skillName,
+        limit: entry.value,
+      );
+      topBotsBySkill[entry.key] = List<BotProfile>.from(topBots);
+    }
+
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
-      final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
-      final behavior = forceBalanced ? BotBehavior.balanced : botBehaviors[behaviorIndex];
+      final targetSkill = skillSequence[i];
+      final pool = topBotsBySkill[targetSkill] ?? [];
+      final profile = pool.isNotEmpty ? pool.removeAt(0) : null;
 
-      final botSkill = isMixMode
-          ? mixSkillLevels[(i + (random >> (i + 3))) % mixSkillLevels.length]
-          : skillLevel;
+      if (profile != null) {
+        final behavior = _parseBehavior(profile.behavior);
+        final parsedSkill = _parseSkillLevel(profile.skillLevel) ?? targetSkill;
+        final aiParams = _extractAiParams(profile.learnedParameters);
 
-      players.add(Player(
-        id: 'bot_$i',
-        name: _getBotName(behavior, botSkill),
-        isHuman: false,
-        botBehavior: behavior,
-        botSkillLevel: botSkill,
-        position: i + 1,
-      ));
+        players.add(Player(
+          id: 'bot_$i',
+          name: _getBotName(behavior, parsedSkill),
+          isHuman: false,
+          botBehavior: behavior,
+          botSkillLevel: parsedSkill,
+          aiParameters: aiParams.isNotEmpty ? aiParams : null,
+          position: i + 1,
+        ));
+      } else {
+        final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
+        final behavior = forceBalanced ? BotBehavior.balanced : botBehaviors[behaviorIndex];
+        final botSkill = targetSkill;
+
+        players.add(Player(
+          id: 'bot_$i',
+          name: _getBotName(behavior, botSkill),
+          isHuman: false,
+          botBehavior: behavior,
+          botSkillLevel: botSkill,
+          position: i + 1,
+        ));
+      }
     }
 
     return players;
+  }
+
+  BotBehavior _parseBehavior(String? raw) {
+    switch (raw) {
+      case 'fast':
+        return BotBehavior.fast;
+      case 'aggressive':
+        return BotBehavior.aggressive;
+      case 'balanced':
+      default:
+        return BotBehavior.balanced;
+    }
+  }
+
+  BotSkillLevel? _parseSkillLevel(String? raw) {
+    switch (raw) {
+      case 'bronze':
+        return BotSkillLevel.bronze;
+      case 'silver':
+        return BotSkillLevel.silver;
+      case 'gold':
+        return BotSkillLevel.gold;
+      case 'platinum':
+        return BotSkillLevel.platinum;
+      default:
+        return null;
+    }
+  }
+
+  String _skillLevelToString(BotSkillLevel level) {
+    return level.toString().split('.').last;
+  }
+
+  Map<String, double> _extractAiParams(Map<String, dynamic> raw) {
+    final params = <String, double>{};
+    raw.forEach((key, value) {
+      if (value is num) {
+        params[key] = value.toDouble();
+      }
+    });
+    return params;
   }
 
   /// Génère des comportements variés pour les bots basés sur le style du joueur

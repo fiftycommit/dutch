@@ -1,5 +1,6 @@
 import '../models/index.dart';
 import '../services/index.dart';
+import '../services/learning/ai_telemetry_service.dart';
 
 /// Provider dédié au tracking des données de jeu pour le ML
 /// Principe GRASP: Pure Fabrication - Responsabilité unique de tracking
@@ -67,6 +68,7 @@ class GameTrackingProvider {
       powerType: powerType,
       targetStrategy: targetStrategy,
     );
+    AiTelemetryService().onAction();
   }
 
   /// Mettre à jour le résultat de la dernière action du joueur
@@ -104,6 +106,7 @@ class GameTrackingProvider {
       powerType: powerType,
       targetStrategy: targetStrategy,
     );
+    AiTelemetryService().onAction();
     
     _playerLearningService.updateLastActionResult(
       gameId: _currentGameId!,
