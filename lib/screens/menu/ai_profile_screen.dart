@@ -509,6 +509,9 @@ class _DeltaRow extends StatelessWidget {
     final after = delta.after;
     final change = delta.delta;
     final hasValue = before != null && after != null;
+    final beforeValue = before ?? 0;
+    final afterValue = after ?? 0;
+    final changeValue = change ?? 0;
     final sign = (change ?? 0) >= 0 ? '+' : '';
     final textColor = !hasValue
         ? AppColors.textDisabled
@@ -527,19 +530,19 @@ class _DeltaRow extends StatelessWidget {
             ),
           ),
           Text(
-            hasValue ? _fmtValue(before!, delta.isPercent) : '--',
+            hasValue ? _fmtValue(beforeValue, delta.isPercent) : '--',
             style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
           ),
           const SizedBox(width: 8),
           const Icon(Icons.arrow_forward, size: 12, color: Colors.white30),
           const SizedBox(width: 8),
           Text(
-            hasValue ? _fmtValue(after!, delta.isPercent) : '--',
+            hasValue ? _fmtValue(afterValue, delta.isPercent) : '--',
             style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
           ),
           const SizedBox(width: 12),
           Text(
-            hasValue ? '$sign${_fmtDelta(change!, delta.isPercent)}' : '--',
+            hasValue ? '$sign${_fmtDelta(changeValue, delta.isPercent)}' : '--',
             style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         ],
