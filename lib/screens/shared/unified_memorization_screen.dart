@@ -195,7 +195,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   }
 
   Future<void> _showRevealedCardsDialog() async {
-    final revealedCards = _selectedCards.map((idx) => config.localPlayer.hand[idx]).toList();
+    // Toutes les cartes avec leurs indices
+    final allCards = config.localPlayer.hand;
 
     showDialog(
       context: context,
@@ -253,10 +254,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         final maxWidth = constraints.maxWidth;
                         final maxHeight = constraints.maxHeight;
                         final cardSpacing = math.min(
-                          math.max(maxWidth * 0.04, metrics.space(6)),
-                          metrics.space(14),
+                          math.max(maxWidth * 0.02, metrics.space(4)),
+                          metrics.space(10),
                         );
-                        final cardWidthByWidth = (maxWidth - cardSpacing) / 2;
+                        // 4 cartes côte à côte
+                        final cardWidthByWidth = (maxWidth - cardSpacing * 3) / 4;
                         final cardWidthByHeight = maxHeight / aspect;
                         final cardWidth = math.max(
                           0.0,
@@ -269,17 +271,18 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              for (int i = 0; i < revealedCards.length; i++) ...[
+                              for (int i = 0; i < allCards.length; i++) ...[
                                 if (i > 0) SizedBox(width: cardSpacing),
                                 SizedBox(
                                   width: cardWidth,
                                   height: cardHeight,
                                   child: FittedBox(
                                     fit: BoxFit.contain,
+                                    // Carte sélectionnée = face visible, sinon dos
                                     child: CardWidget(
-                                      card: revealedCards[i],
+                                      card: _selectedCards.contains(i) ? allCards[i] : null,
                                       size: CardSize.large,
-                                      isRevealed: true,
+                                      isRevealed: _selectedCards.contains(i),
                                     ),
                                   ),
                                 ),
@@ -612,7 +615,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               runSpacing: spacing,
               children: List.generate(config.localPlayer.hand.length, (index) {
                 final isSelected = _selectedCards.contains(index);
-                final card = config.localPlayer.hand[index];
 
                 return GestureDetector(
                   onTap: () => _onCardTap(index),
@@ -646,11 +648,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             height: cardHeight,
                             child: FittedBox(
                               fit: BoxFit.contain,
-                              // Afficher la carte retournée si sélectionnée, sinon dos de carte
+                              // Pendant la sélection, toutes les cartes restent dos visible
                               child: CardWidget(
-                                card: isSelected ? card : null,
+                                card: null,
                                 size: CardSize.large,
-                                isRevealed: isSelected,
+                                isRevealed: false,
                               ),
                             ),
                           ),
