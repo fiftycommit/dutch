@@ -167,6 +167,21 @@ export function startServer() {
     res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
   });
 
+  // SEO - Dynamic sitemap with real lastmod
+  app.get('/sitemap.xml', (req, res) => {
+    res.set('Content-Type', 'application/xml');
+    const lastMod = new Date().toISOString().split('T')[0];
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://dutch-game.me/</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+  });
+
   app.get('/version', (req, res) => {
     res.json({
       sha: process.env.GIT_SHA || null,

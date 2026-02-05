@@ -50,26 +50,28 @@ class CardWidget extends StatelessWidget {
     width = ScreenUtils.scale(context, width) * ScreenUtils.cardScaleFactor;
     height = ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          borderRadius:
-              BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 4,
-              offset: const Offset(2, 2),
-            )
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius:
-              BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
-          child: _buildCardImage(context, width, height),
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius:
+                BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 4,
+                offset: const Offset(2, 2),
+              )
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius:
+                BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
+            child: _buildCardImage(context, width, height),
+          ),
         ),
       ),
     );

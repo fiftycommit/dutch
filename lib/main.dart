@@ -45,9 +45,6 @@ Future<void> initializeApp() async {
   } catch (e) {
     debugPrint('Erreur Hive: $e');
   }
-
-  // Simuler un délai minimal pour l'écran de chargement
-  await Future.delayed(const Duration(milliseconds: 800));
 }
 
 class DutchGameApp extends StatefulWidget {

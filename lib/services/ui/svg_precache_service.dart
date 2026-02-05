@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service pour précacher tous les SVG de cartes au démarrage
 /// Cela évite le lag d'animation sur Safari mobile
@@ -10,6 +11,7 @@ class SvgPrecacheService {
 
   bool _isPrecached = false;
   bool get isPrecached => _isPrecached;
+  static const String _prefsKey = 'svg_precache_v1';
 
   /// Tous les SVGs de cartes
   static const List<String> _allCardSvgPaths = [
@@ -78,11 +80,29 @@ class SvgPrecacheService {
   ];
 
   /// Précache tous les SVGs de cartes
-  Future<void> precacheCardSvgs() async {
-    if (_isPrecached) return;
+  /// [onProgress] est appelé avec une valeur entre 0.0 et 1.0.
+  Future<void> precacheCardSvgs({
+    void Function(double progress)? onProgress,
+    bool skipIfCached = false,
+  }) async {
+    if (_isPrecached) {
+      onProgress?.call(1.0);
+      return;
+    }
+
+    if (skipIfCached) {
+      final wasPrecached = await _wasPrecachedPersisted();
+      if (wasPrecached) {
+        onProgress?.call(1.0);
+        debugPrint('ℹ️ SVG précache ignoré (déjà fait)');
+        return;
+      }
+    }
 
     final stopwatch = Stopwatch()..start();
+    final total = _allCardSvgPaths.length;
     int loaded = 0;
+    onProgress?.call(0.0);
 
     try {
       // Charger par batch de 10 pour paralléliser efficacement
@@ -92,6 +112,9 @@ class SvgPrecacheService {
           batch.map((path) async {
             await _loadSvg(path);
             loaded++;
+            if (onProgress != null) {
+              onProgress(loaded / total);
+            }
           }),
           eagerError: false,
         );
@@ -99,7 +122,8 @@ class SvgPrecacheService {
       
       stopwatch.stop();
       _isPrecached = true;
-      debugPrint('✅ SVG précachés: $loaded/${_allCardSvgPaths.length} en ${stopwatch.elapsedMilliseconds}ms');
+      await _setPrecachedPersisted();
+      onProgress?.call(1.0);
     } catch (e) {
       debugPrint('⚠️ Erreur précache SVG: $e');
     }
@@ -114,6 +138,24 @@ class SvgPrecacheService {
       );
     } catch (e) {
       // Ignorer les erreurs individuelles
+    }
+  }
+
+  Future<bool> _wasPrecachedPersisted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_prefsKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _setPrecachedPersisted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsKey, true);
+    } catch (_) {
+      // Ignorer si le stockage n'est pas dispo
     }
   }
 }

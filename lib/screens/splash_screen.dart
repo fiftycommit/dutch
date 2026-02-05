@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/ui_constants.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../main.dart';
 import '../utils/screen_utils.dart';
 import '../services/ui/svg_precache_service.dart';
+import 'web_splash_helper.dart' if (dart.library.io) 'web_splash_helper_stub.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,49 +18,89 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+  String _statusText = 'Initialisation...';
   late AnimationController _progressController;
-  late Animation<double> _progressAnimation;
+  int _lastSentProgress = -1;
+  final Stopwatch _stopwatch = Stopwatch();
 
   @override
   void initState() {
     super.initState();
-
-    // Animation de la barre de progression
+    _stopwatch.start();
+    
     _progressController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
       vsync: this,
+      duration: const Duration(milliseconds: 200),
+      lowerBound: 0.0,
+      upperBound: 1.0,
     );
-
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _progressController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
+    
+    _progressController.addListener(_onAnimationTick);
     _initializeAndNavigate();
   }
 
-  Future<void> _initializeAndNavigate() async {
-    // Démarrer l'animation
-    _progressController.forward();
+  String _timestamp() {
+    final ms = _stopwatch.elapsedMilliseconds;
+    final sec = ms ~/ 1000;
+    final millis = (ms % 1000).toString().padLeft(3, '0');
+    return '$sec:$millis';
+  }
 
-    // Initialiser l'application et précacher les SVG en parallèle
-    await Future.wait([
-      initializeApp(),
-      SvgPrecacheService().precacheCardSvgs(),
-    ]);
-
-    // Attendre que l'animation soit terminée
-    await _progressController.forward();
-
-    // Petit délai supplémentaire
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    // Naviguer vers le menu principal avec go_router
-    if (mounted) {
-      context.go('/');
+  void _onAnimationTick() {
+    final progress = (_progressController.value * 100).round();
+    if (progress != _lastSentProgress) {
+      _lastSentProgress = progress;
+      if (kIsWeb) {
+        WebSplashHelper.updateProgress(progress, _statusText);
+      }
     }
+  }
+
+  void _setProgress(double target, {Duration duration = Duration.zero, Curve curve = Curves.linear}) {
+    if (!mounted) return;
+    final clamped = target.clamp(0.0, 1.0).toDouble();
+    if (clamped <= _progressController.value + 0.001) return;
+    if (duration == Duration.zero) {
+      _progressController.value = clamped;
+    } else {
+      _progressController.animateTo(clamped, duration: duration, curve: curve);
+    }
+  }
+
+  void _setStatus(String status, {double? progress, Duration duration = Duration.zero, Curve curve = Curves.linear}) {
+    if (!mounted) return;
+    setState(() => _statusText = status);
+    if (progress != null) {
+      _setProgress(progress, duration: duration, curve: curve);
+    }
+  }
+
+  Future<void> _initializeAndNavigate() async {
+    if (kIsWeb) {
+      WebSplashHelper.flutterReady();
+    }
+
+    _setStatus('Initialisation...', progress: 0.02);
+
+    await initializeApp();
+    _setStatus('Chargement des cartes...', progress: 0.05);
+
+    await SvgPrecacheService().precacheCardSvgs(
+      skipIfCached: true,
+      onProgress: (progress) {
+        // 5% -> 95% pendant le précache des cartes
+        final weighted = 0.05 + (progress * 0.90);
+        _setProgress(weighted);
+      },
+    );
+    _setStatus('Préparation...', progress: 0.95);
+
+    _setStatus('Prêt !', progress: 1.0);
+    if (kIsWeb) {
+      WebSplashHelper.hideSplash();
+    }
+
+    if (mounted) context.go('/');
   }
 
   @override
@@ -68,10 +111,15 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
+    if (kIsWeb) {
+      return const SizedBox.shrink();
+    }
+
+    return AnimatedBuilder(
+      animation: _progressController,
+      builder: (context, _) => Scaffold(
+        body: Stack(
         children: [
-          // Fond qui occupe TOUT l'écran (ignore SafeArea)
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -87,32 +135,19 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ),
-          // Contenu dans SafeArea
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final content = Padding(
-                  padding: ScreenUtils.adaptivePadding(
-                    context,
-                    horizontal: 24,
-                    vertical: 24,
-                  ),
+                return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(height: ScreenUtils.spacing(context, 40)),
-
-                      // Logo ou icône du jeu (SVG d'une carte)
                       SvgPicture.asset(
                         'assets/images/cards/joker-rouge.svg',
                         width: ScreenUtils.scale(context, 120),
                         height: ScreenUtils.scale(context, 168),
                       ),
-
                       SizedBox(height: ScreenUtils.spacing(context, 40)),
-
-                      // Titre du jeu
                       Text(
                         'DUTCH',
                         style: TextStyle(
@@ -129,10 +164,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ],
                         ),
                       ),
-
                       SizedBox(height: ScreenUtils.spacing(context, 8)),
-
-                      // Sous-titre
                       Text(
                         'Jeu de Mémoire et Stratégie',
                         style: TextStyle(
@@ -141,76 +173,36 @@ class _SplashScreenState extends State<SplashScreen>
                           letterSpacing: 2,
                         ),
                       ),
-
                       SizedBox(height: ScreenUtils.spacing(context, 40)),
-
-                      // Barre de progression
                       Padding(
-                        padding: ScreenUtils.adaptivePadding(context,
-                            horizontal: 60),
+                        padding: ScreenUtils.adaptivePadding(context, horizontal: 60),
                         child: Column(
                           children: [
-                            AnimatedBuilder(
-                              animation: _progressAnimation,
-                              builder: (context, child) {
-                                return Column(
-                                  children: [
-                                    // Barre de progression
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        ScreenUtils.borderRadius(context, 8),
-                                      ),
-                                      child: LinearProgressIndicator(
-                                        value: _progressAnimation.value,
-                                        minHeight:
-                                            ScreenUtils.scale(context, 8),
-                                        backgroundColor:
-                                            Colors.white.withValues(alpha: 0.2),
-                                        valueColor:
-                                            const AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF4CAF50),
-                                        ),
-                                      ),
-                                    ),
-
-                                    SizedBox(
-                                        height:
-                                            ScreenUtils.spacing(context, 16)),
-
-                                    // Texte de chargement
-                                    Text(
-                                      _getLoadingText(_progressAnimation.value),
-                                      style: TextStyle(
-                                        color: AppColors.textDisabled,
-                                        fontSize:
-                                            ScreenUtils.scaleFont(context, 14),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                ScreenUtils.borderRadius(context, 8),
+                              ),
+                              child: LinearProgressIndicator(
+                                value: null,
+                                minHeight: ScreenUtils.scale(context, 12),
+                                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4CAF50),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: ScreenUtils.spacing(context, 16)),
+                            Text(
+                              _statusText,
+                              style: TextStyle(
+                                color: AppColors.textDisabled,
+                                fontSize: ScreenUtils.scaleFont(context, 14),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      SizedBox(height: ScreenUtils.spacing(context, 40)),
                     ],
-                  ),
-                );
-
-                return Center(
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: ConstrainedBox(
-                        constraints:
-                            BoxConstraints(maxWidth: constraints.maxWidth),
-                        child: content,
-                      ),
-                    ),
                   ),
                 );
               },
@@ -218,18 +210,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ],
       ),
+      ),
     );
-  }
-
-  String _getLoadingText(double progress) {
-    if (progress < 0.3) {
-      return 'Initialisation...';
-    } else if (progress < 0.6) {
-      return 'Chargement des cartes...';
-    } else if (progress < 0.9) {
-      return 'Préparation des bots...';
-    } else {
-      return 'Prêt !';
-    }
   }
 }

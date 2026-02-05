@@ -20,16 +20,29 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSelectedSlot();
-    _loadAllSlots();
+    _loadDataParallel();
   }
 
-  Future<void> _loadSelectedSlot() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedSlot = prefs.getInt('lastSelectedSlot') ?? 1;
+  /// Load all data in parallel for faster startup
+  Future<void> _loadDataParallel() async {
+    // Run all async operations in parallel
+    final results = await Future.wait([
+      SharedPreferences.getInstance(),
+      StatsService.getStats(slotId: 1),
+      StatsService.getStats(slotId: 2),
+      StatsService.getStats(slotId: 3),
+    ]);
+
     if (mounted) {
+      final prefs = results[0] as SharedPreferences;
       setState(() {
-        selectedSlot = savedSlot;
+        selectedSlot = prefs.getInt('lastSelectedSlot') ?? 1;
+        slotsData = {
+          1: results[1] as Map<String, dynamic>,
+          2: results[2] as Map<String, dynamic>,
+          3: results[3] as Map<String, dynamic>,
+        };
+        isLoading = false;
       });
     }
   }
@@ -37,19 +50,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Future<void> _saveSelectedSlot(int slotId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('lastSelectedSlot', slotId);
-  }
-
-  Future<void> _loadAllSlots() async {
-    final s1 = await StatsService.getStats(slotId: 1);
-    final s2 = await StatsService.getStats(slotId: 2);
-    final s3 = await StatsService.getStats(slotId: 3);
-
-    if (mounted) {
-      setState(() {
-        slotsData = {1: s1, 2: s2, 3: s3};
-        isLoading = false;
-      });
-    }
   }
 
   /// Naviguer vers le menu multijoueur

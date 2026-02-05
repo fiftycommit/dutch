@@ -1,37 +1,38 @@
 <!DOCTYPE html>
 <html style="background: #0d2818;">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-  <!-- iOS meta tags & icons -->
+  <!-- SEO -->
+  <title>Dutch Game — Jeu de cartes en ligne multijoueur</title>
+  <meta name="description" content="Dutch Game est un jeu de cartes stratégique jouable en ligne. Découvrez les règles, le gameplay et le mode multijoueur.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://dutch-game.me/">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Dutch Game — Jeu de cartes en ligne multijoueur">
+  <meta property="og:description" content="Dutch Game est un jeu de cartes stratégique jouable en ligne.">
+  <meta property="og:url" content="https://dutch-game.me/">
+  <meta property="og:type" content="website">
+
+  <!-- PWA / UI -->
+  <meta name="theme-color" content="#0d2818">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="dutch_game">
+  <meta name="apple-mobile-web-app-title" content="Dutch Game">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png">
 
-  <title>Dutch Card Game</title>
+  <!-- Manifest -->
   <link rel="manifest" href="manifest.json">
-  
+
   <style>
     html, body {
       margin: 0;
@@ -39,10 +40,140 @@
       background: #0d2818;
       overflow: hidden;
       height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    /* Native splash screen */
+    #splash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #2d5f3e, #1a472a, #0d2818);
+      z-index: 9999;
+      transition: opacity 0.3s ease-out;
+    }
+    
+    #splash.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    #splash-title {
+      color: white;
+      font-size: 48px;
+      font-weight: bold;
+      letter-spacing: 8px;
+      text-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      margin-bottom: 8px;
+    }
+    
+    #splash-subtitle {
+      color: rgba(255,255,255,0.6);
+      font-size: 14px;
+      letter-spacing: 2px;
+      margin-bottom: 40px;
+    }
+    
+    #splash-progress-container {
+      width: 220px;
+      height: 10px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    
+    #splash-progress {
+      position: relative;
+      height: 100%;
+      width: 100%;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    #splash-progress::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -35%;
+      width: 35%;
+      height: 100%;
+      border-radius: 5px;
+      background: linear-gradient(90deg, rgba(139, 195, 74, 0.0), #8BC34A, rgba(139, 195, 74, 0.0));
+    }
+    
+    #splash-progress.indeterminate::before {
+      animation: indeterminateProgress 1.1s ease-in-out infinite;
+    }
+    
+    @keyframes indeterminateProgress {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(400%); }
+    }
+    
+    #splash-status {
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      margin-top: 16px;
     }
   </style>
 </head>
 <body>
+  <!-- Native HTML splash (visible before Flutter loads) -->
+  <div id="splash">
+    <div id="splash-title">DUTCH</div>
+    <div id="splash-subtitle">Jeu de Mémoire et Stratégie</div>
+    <div id="splash-progress-container">
+      <div id="splash-progress" class="indeterminate"></div>
+    </div>
+    <div id="splash-status">Chargement...</div>
+  </div>
+
+  <noscript>
+    <h1>Dutch Game</h1>
+    <p>Jeu de cartes stratégique jouable en ligne. Retrouvez les règles, le gameplay et le mode multijoueur sur dutch-game.me.</p>
+  </noscript>
+
+  <script>
+    window.splashProgress = 0;
+    window.splashStatus = '';
+    window.flutterTookOver = false;
+    window._lastSplashLogAt = 0;
+    
+    window.updateSplash = function(progress, status) {
+      if (progress < window.splashProgress) return;
+      
+      window.splashProgress = progress;
+      window.splashStatus = status ?? '';
+      
+      var statusEl = document.getElementById('splash-status');
+      if (statusEl && status) statusEl.textContent = status;
+      
+    };
+    
+    window.hideSplash = function() {
+      var splash = document.getElementById('splash');
+      if (splash) {
+        splash.classList.add('hidden');
+        setTimeout(function() { splash.remove(); }, 300);
+      }
+    };
+    
+    window.flutterReady = function() {
+      window.flutterTookOver = true;
+    };
+  </script>
+
+  <script>
+    // Use HTML renderer on mobile for better performance
+    // CanvasKit is heavy (26MB) and causes lag on mobile browsers
+    window.flutterWebRenderer = "html";
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

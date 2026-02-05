@@ -85,27 +85,30 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Positioned(
-          left: _positionAnimation.value.dx,
-          top: _positionAnimation.value.dy,
-          child: IgnorePointer(
-            child: Transform.scale(
-              scale: _scaleAnimation.value,
-              child: Transform.rotate(
-                angle: _rotationAnimation.value,
-                child: CardWidget(
-                  card: widget.card,
-                  size: widget.size,
-                  isRevealed: widget.isRevealed,
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Positioned(
+            left: _positionAnimation.value.dx,
+            top: _positionAnimation.value.dy,
+            child: IgnorePointer(
+              child: Transform.scale(
+                scale: _scaleAnimation.value,
+                child: Transform.rotate(
+                  angle: _rotationAnimation.value,
+                  child: child!,
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+        child: CardWidget(
+          card: widget.card,
+          size: widget.size,
+          isRevealed: widget.isRevealed,
+        ),
+      ),
     );
   }
 }
