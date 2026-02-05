@@ -58,6 +58,9 @@ function renderHomePage(roomCount: number) {
           border-radius: 20px;
           font-weight: bold;
         }
+        .badge-idle { background: #ecc94b; color: #2d3748; }
+        .badge-offline { background: #f56565; }
+        .status-note { font-size: 0.85em; opacity: 0.75; margin-top: 6px; }
         .endpoint {
           background: rgba(0,0,0,0.3);
           padding: 10px;
@@ -85,6 +88,11 @@ function renderHomePage(roomCount: number) {
             <span>Version</span>
             <span>1.0.0</span>
           </div>
+          <div class="status-item">
+            <span>Trainer bots</span>
+            <span id="trainerBadge" class="badge badge-idle">⏳ CHECK...</span>
+          </div>
+          <div class="status-note" id="trainerNote">Dernier batch: n/a</div>
         </div>
 
         <h2>🤖 Intelligence Artificielle</h2>
@@ -109,6 +117,46 @@ function renderHomePage(roomCount: number) {
           Propulsé par Socket.IO • Node.js • TypeScript
         </p>
       </div>
+      <script>
+        (function () {
+          const badge = document.getElementById('trainerBadge');
+          const note = document.getElementById('trainerNote');
+          const THRESHOLD_MINUTES = 12;
+
+          function setBadge(text, cls) {
+            badge.textContent = text;
+            badge.className = 'badge ' + cls;
+          }
+
+          fetch('/api/bot-learning/training-series?limit=1')
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(data => {
+              if (!Array.isArray(data) || data.length === 0) {
+                setBadge('🟡 IDLE', 'badge-idle');
+                note.textContent = 'Dernier batch: aucun';
+                return;
+              }
+              const last = data[data.length - 1];
+              const ts = new Date(last.timestamp);
+              if (isNaN(ts.getTime())) {
+                setBadge('🟡 IDLE', 'badge-idle');
+                note.textContent = 'Dernier batch: inconnu';
+                return;
+              }
+              const diffMin = (Date.now() - ts.getTime()) / 60000;
+              if (diffMin <= THRESHOLD_MINUTES) {
+                setBadge('🟢 ACTIVE', '');
+              } else {
+                setBadge('🟡 IDLE', 'badge-idle');
+              }
+              note.textContent = 'Dernier batch: ' + ts.toLocaleString('fr-FR');
+            })
+            .catch(() => {
+              setBadge('🔴 OFFLINE', 'badge-offline');
+              note.textContent = 'Dernier batch: erreur';
+            });
+        })();
+      </script>
     </body>
     </html>
   `;
