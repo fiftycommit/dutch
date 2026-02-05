@@ -21,12 +21,10 @@ class _SplashScreenState extends State<SplashScreen>
   String _statusText = 'Initialisation...';
   late AnimationController _progressController;
   int _lastSentProgress = -1;
-  final Stopwatch _stopwatch = Stopwatch();
 
   @override
   void initState() {
     super.initState();
-    _stopwatch.start();
     
     _progressController = AnimationController(
       vsync: this,
@@ -37,13 +35,6 @@ class _SplashScreenState extends State<SplashScreen>
     
     _progressController.addListener(_onAnimationTick);
     _initializeAndNavigate();
-  }
-
-  String _timestamp() {
-    final ms = _stopwatch.elapsedMilliseconds;
-    final sec = ms ~/ 1000;
-    final millis = (ms % 1000).toString().padLeft(3, '0');
-    return '$sec:$millis';
   }
 
   void _onAnimationTick() {
