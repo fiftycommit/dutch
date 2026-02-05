@@ -345,11 +345,12 @@ if [ "$SKIP_TRAINER" -ne 1 ]; then
 set -e
 
 # Installer Flutter si absent
-if [ ! -d /opt/flutter ]; then
+if [ ! -d /home/dutch/flutter ]; then
   echo "📥 Installation Flutter (stable)..."
-  git clone https://github.com/flutter/flutter.git -b stable /opt/flutter
-  /opt/flutter/bin/flutter --version
-  /opt/flutter/bin/flutter config --no-analytics
+  git clone https://github.com/flutter/flutter.git -b stable /home/dutch/flutter
+  chown -R dutch:dutch /home/dutch/flutter
+  /home/dutch/flutter/bin/flutter --version
+  /home/dutch/flutter/bin/flutter config --no-analytics
 else
   echo "✅ Flutter déjà installé"
 fi
@@ -362,7 +363,7 @@ chown -R dutch:dutch /var/www/dutch-trainer
 
 # Récupérer les dépendances Flutter sous l'utilisateur dutch
 cd /var/www/dutch-trainer
-sudo -u dutch /opt/flutter/bin/flutter pub get
+sudo -u dutch /home/dutch/flutter/bin/flutter pub get
 
 # Service systemd
 cat > /etc/systemd/system/dutch-bot-trainer.service << 'SERVICE'
@@ -374,6 +375,7 @@ After=network.target
 Type=simple
 User=dutch
 WorkingDirectory=/var/www/dutch-trainer
+Environment=HOME=/home/dutch
 Environment=BOT_TRAIN_SERVER=https://dutch-game.me
 Environment=BOT_TRAIN_START_HOUR=20
 Environment=BOT_TRAIN_END_HOUR=12
@@ -381,8 +383,9 @@ Environment=BOT_TRAIN_BATCH=12
 Environment=BOT_TRAIN_SLEEP_MS=200
 Environment=BOT_TRAIN_MAX_TURNS=800
 Environment=BOT_TRAIN_BALANCED_ONLY=false
-Environment=PATH=/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/opt/flutter/bin/flutter pub run tool/bot_training_runner.dart
+Environment=PATH=/home/dutch/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStartPre=/usr/bin/git config --global --add safe.directory /home/dutch/flutter
+ExecStart=/home/dutch/flutter/bin/flutter pub run tool/bot_training_runner.dart
 Restart=always
 RestartSec=10
 
