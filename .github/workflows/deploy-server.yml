@@ -143,6 +143,13 @@ jobs:
               sed -i '/location \/health {/i\    location /status {\n        proxy_pass http://dutch_backend/status;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /rooms {\n        proxy_pass http://dutch_backend/rooms;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
               nginx -t && systemctl reload nginx
             fi
+
+            # Disable cache for main JS files to prevent stale versions
+            if ! grep -q "location = /main.dart.js" /etc/nginx/sites-available/dutch-server; then
+              echo "Updating Nginx configuration for cache control..."
+              sed -i '/location \/ {/i\    # No cache for main app files\n    location = /index.html {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n        add_header Pragma "no-cache";\n        add_header Expires "0";\n    }\n\n    location = /main.dart.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n        add_header Pragma "no-cache";\n        add_header Expires "0";\n    }\n\n    location = /flutter.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n    }\n\n    location = /flutter_service_worker.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n    }\n' /etc/nginx/sites-available/dutch-server
+              nginx -t && systemctl reload nginx
+            fi
             
             export GIT_SHA="${{ github.sha }}"
             export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

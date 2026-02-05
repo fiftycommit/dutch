@@ -245,8 +245,29 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    # Cache pour les assets statiques
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf)$ {
+    # Pas de cache pour index.html et main.dart.js (toujours frais)
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
+    location = /main.dart.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
+    location = /flutter.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    location = /flutter_service_worker.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # Cache long pour les assets statiques (images, fonts, etc.)
+    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|css)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
