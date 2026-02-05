@@ -145,6 +145,20 @@
     window.splashStatus = '';
     window.flutterTookOver = false;
     window._lastSplashLogAt = 0;
+
+    window.SPLASH_LOW_BANDWIDTH_DOWNLINK_Mbps = 1.5;
+    window.isLowBandwidth = function() {
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!conn) return false;
+      if (conn.saveData) return true;
+      var type = conn.effectiveType || '';
+      if (type === 'slow-2g' || type === '2g' || type === '3g') return true;
+      var downlink = conn.downlink;
+      if (typeof downlink === 'number' && downlink > 0 && downlink < window.SPLASH_LOW_BANDWIDTH_DOWNLINK_Mbps) {
+        return true;
+      }
+      return false;
+    };
     
     window.updateSplash = function(progress, status) {
       if (progress < window.splashProgress) return;

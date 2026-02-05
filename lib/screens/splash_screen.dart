@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/ui_constants.dart';
@@ -8,6 +7,7 @@ import '../main.dart';
 import '../utils/screen_utils.dart';
 import '../services/ui/svg_precache_service.dart';
 import 'web_splash_helper.dart' if (dart.library.io) 'web_splash_helper_stub.dart';
+import 'web_connection_helper.dart' if (dart.library.io) 'web_connection_helper_stub.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -74,23 +74,24 @@ class _SplashScreenState extends State<SplashScreen>
     _setStatus('Initialisation...', progress: 0.02);
 
     await initializeApp();
-    _setStatus('Chargement des cartes...', progress: 0.05);
+    final skipPrecache = kIsWeb && WebConnectionHelper.isLowBandwidth();
+    if (!skipPrecache) {
+      _setStatus('Chargement des cartes...', progress: 0.05);
 
-    await SvgPrecacheService().precacheCardSvgs(
-      skipIfCached: true,
-      onProgress: (progress) {
-        // 5% -> 95% pendant le précache des cartes
-        final weighted = 0.05 + (progress * 0.90);
-        _setProgress(weighted);
-      },
-    );
+      await SvgPrecacheService().precacheCardSvgs(
+        skipIfCached: true,
+        onProgress: (progress) {
+          // 5% -> 95% pendant le précache des cartes
+          final weighted = 0.05 + (progress * 0.90);
+          _setProgress(weighted);
+        },
+      );
+    } else {
+      _setStatus('Mode léger (connexion lente)', progress: 0.90);
+    }
     _setStatus('Préparation...', progress: 0.95);
 
     _setStatus('Prêt !', progress: 1.0);
-    if (kIsWeb) {
-      WebSplashHelper.hideSplash();
-    }
-
     if (mounted) context.go('/');
   }
 

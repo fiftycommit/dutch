@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/ui/stats_service.dart';
 import '../../utils/ui_constants.dart';
+import '../web_splash_helper.dart' if (dart.library.io) '../web_splash_helper_stub.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -20,6 +22,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WebSplashHelper.hideSplash();
+      });
+    }
     _loadDataParallel();
   }
 

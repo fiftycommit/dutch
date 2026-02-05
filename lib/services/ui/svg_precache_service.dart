@@ -94,7 +94,6 @@ class SvgPrecacheService {
       final wasPrecached = await _wasPrecachedPersisted();
       if (wasPrecached) {
         onProgress?.call(1.0);
-        debugPrint('ℹ️ SVG précache ignoré (déjà fait)');
         return;
       }
     }
