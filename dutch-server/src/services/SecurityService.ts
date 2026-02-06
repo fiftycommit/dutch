@@ -1,8 +1,22 @@
 import { rateLimit } from 'express-rate-limit';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { Socket } from 'socket.io';
+import type { Request } from 'express';
 
 export class SecurityService {
+    private static getRateLimitKey(req: Request): string {
+        // If proxy headers are present, use the first hop as client key.
+        // This avoids collapsing all users into one bucket behind Nginx.
+        const xff = req.headers['x-forwarded-for'];
+        if (typeof xff === 'string' && xff.trim().length > 0) {
+            return xff.split(',')[0].trim();
+        }
+        if (Array.isArray(xff) && xff.length > 0 && xff[0]) {
+            return xff[0].split(',')[0].trim();
+        }
+        return req.ip || req.socket.remoteAddress || 'unknown';
+    }
+
     // 1. Rate Limiting pour les requêtes HTTP (Express)
     // Limite: 500 requêtes par 15 minutes par IP (environ 33 req/min)
     // Protection basique contre le brute-force HTTP
@@ -11,7 +25,19 @@ export class SecurityService {
         max: 500,
         standardHeaders: true,
         legacyHeaders: false,
-        message: 'Trop de requêtes, veuillez réessayer plus tard.'
+        message: 'Trop de requêtes, veuillez réessayer plus tard.',
+        keyGenerator: (req) => this.getRateLimitKey(req),
+    });
+
+    // Rate limiting plus permissif pour les records de learning
+    // (les fins de parties + trainer peuvent générer des bursts légitimes).
+    static botLearningLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 6000,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: 'Trop de requêtes, veuillez réessayer plus tard.',
+        keyGenerator: (req) => this.getRateLimitKey(req),
     });
 
     // 2. Rate Limiting pour les connexions Socket.IO (Anti-Flood)

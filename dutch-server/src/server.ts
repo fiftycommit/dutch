@@ -166,9 +166,11 @@ export function startServer() {
   const app = express();
   const httpServer = createServer(app);
 
+  // Server is behind Nginx, trust one proxy hop for correct client IP.
+  app.set('trust proxy', 1);
+
   app.use(cors());
   app.use(express.json());
-  app.use(SecurityService.apiLimiter); // API Rate Limiting
 
   const io = new Server(httpServer, {
     cors: {
@@ -257,11 +259,9 @@ export function startServer() {
     res.json({ success: true, stats });
   });
 
-  // Routes pour l'apprentissage des bots
-  app.use('/api/bot-learning', botLearningRoutes);
-
-  // Routes pour l'apprentissage des joueurs (profil SBMM)
-  app.use('/api/player-learning', playerLearningRoutes);
+  // Routes API avec rate limiting spécifique
+  app.use('/api/bot-learning', SecurityService.botLearningLimiter, botLearningRoutes);
+  app.use('/api/player-learning', SecurityService.apiLimiter, playerLearningRoutes);
 
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
