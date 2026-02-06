@@ -264,15 +264,15 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
             child: _buildReactionProgress(),
           ),
           SizedBox(height: widget.isCompactMode ? 4 : 10),
+        ] else if (!widget.isMyTurn && gs.actionHistory.isNotEmpty) ...[
+          _buildLastBotAction(gs),
+          SizedBox(height: widget.isCompactMode ? 4 : 10),
         ],
         if (widget.isMyTurn && widget.hasDrawn && gs.drawnCard != null) ...[
           _buildDrawnCardDisplay(gs),
         ] else if (widget.showDeckAndDiscard) ...[
           _buildDeckAndDiscard(gs, cardSize, padding, deckCount),
         ],
-        // Afficher la dernière action d'un bot
-        if (!widget.isMyTurn && !isReaction && gs.actionHistory.isNotEmpty)
-          _buildLastBotAction(gs),
       ],
     );
   }
@@ -477,23 +477,18 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     );
   }
 
-  /// Affiche la dernière action d'un bot (échange ou défausse)
   Widget _buildLastBotAction(GameState gs) {
-    // Retirer le timestamp "[HH:mm] " du début
     final raw = gs.actionHistory.first;
     final text = raw.contains('] ') ? raw.substring(raw.indexOf('] ') + 2) : raw;
 
-    return Padding(
-      padding: EdgeInsets.only(top: widget.isCompactMode ? 4 : 8),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: widget.isCompactMode ? 11 : 13,
-          fontStyle: FontStyle.italic,
-          shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
-        ),
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: widget.isCompactMode ? 12 : 16,
+        fontWeight: FontWeight.bold,
+        shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
       ),
     );
   }
