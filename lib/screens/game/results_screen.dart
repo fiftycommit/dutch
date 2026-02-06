@@ -94,10 +94,10 @@ class ResultsScreen extends StatelessWidget {
               shared.ResultsActionButton(
                 label: (isTournament && !isTournamentOver) ? 'MANCHE SUIVANTE >>' : 'TERMINER',
                 backgroundColor: Colors.amber.shade700,
-                onPressed: () {
+                onPressed: () async {
                   if (isTournament && !isTournamentOver) {
-                    gameProvider.startNextTournamentRound();
-                    ctx.go('/solo/memorization');
+                    await gameProvider.startNextTournamentRound();
+                    if (ctx.mounted) ctx.go('/solo/memorization');
                   } else {
                     ctx.go('/');
                   }

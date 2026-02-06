@@ -346,46 +346,57 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   void _startGame(BuildContext context, bool useSBMM) async {
     setState(() => _isLoading = true);
 
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
-    final int numberOfBots = selectedNumberOfPlayers - 1;
+    try {
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      final settings = Provider.of<SettingsProvider>(context, listen: false);
+      final int numberOfBots = selectedNumberOfPlayers - 1;
 
-    List<Player> players = [
-      Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
-    ];
+      List<Player> players = [
+        Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
+      ];
 
-    if (useSBMM) {
-      // === NOUVEAU SYSTÈME DE MATCHMAKING ===
-      // Utilise le MMR du joueur pour calibrer les bots
-      // Le rang (Bronze/Argent/Or/Platine) est purement cosmétique
-      players.addAll(await _createSBMMBots(numberOfBots));
-    } else {
-      // Mode manuel : difficulté fixe choisie par l'utilisateur
-      players.addAll(await _createManualBots(numberOfBots));
+      if (useSBMM) {
+        players.addAll(await _createSBMMBots(numberOfBots)
+            .timeout(const Duration(seconds: 8)));
+      } else {
+        players.addAll(await _createManualBots(numberOfBots)
+            .timeout(const Duration(seconds: 8)));
+      }
+
+      if (!mounted) return;
+
+      // Déterminer le hardcoreLevel basé sur la difficulté sélectionnée
+      HardcoreLevel? hardcoreLevel;
+      if (selectedBotDifficulty == Difficulty.hard) {
+        hardcoreLevel = HardcoreLevel.nightmare;
+      } else if (selectedBotDifficulty == Difficulty.platinum) {
+        hardcoreLevel = HardcoreLevel.impossible;
+      }
+
+      await gameProvider.createNewGame(
+        players: players,
+        gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
+        difficulty: settings.luckDifficulty,
+        reactionTimeMs: settings.reactionTimeMs,
+        saveSlot: widget.saveSlot,
+        useSBMM: useSBMM,
+        hardcoreLevel: hardcoreLevel,
+      );
+
+      if (!mounted) return;
+      context.go('/solo/memorization');
+    } catch (e) {
+      debugPrint('❌ Erreur démarrage partie: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erreur de connexion. Réessayez.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
-
-    if (!mounted) return;
-
-    // Déterminer le hardcoreLevel basé sur la difficulté sélectionnée
-    HardcoreLevel? hardcoreLevel;
-    if (selectedBotDifficulty == Difficulty.hard) {
-      hardcoreLevel = HardcoreLevel.nightmare; // Difficile = Gold + Nightmare
-    } else if (selectedBotDifficulty == Difficulty.platinum) {
-      hardcoreLevel = HardcoreLevel.impossible; // Platine = Gold + Boss
-    }
-
-    gameProvider.createNewGame(
-      players: players,
-      gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
-      difficulty: settings.luckDifficulty,
-      reactionTimeMs: settings.reactionTimeMs,
-      saveSlot: widget.saveSlot,
-      useSBMM: useSBMM,
-      hardcoreLevel: hardcoreLevel,
-    );
-
-    if (!mounted) return;
-    context.go('/solo/memorization');
   }
 
   /// Crée les bots en mode SBMM (matchmaking adaptatif basé sur le MMR)

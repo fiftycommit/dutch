@@ -123,7 +123,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   // CRÉATION ET GESTION DU JEU
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void createNewGame({
+  Future<void> createNewGame({
     required List<Player> players,
     required GameMode gameMode,
     required Difficulty difficulty,
@@ -701,7 +701,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   int getTournamentRP(int finalPosition) => _tournamentManager.calculateRP(finalPosition);
 
-  void startNextTournamentRound() {
+  Future<void> startNextTournamentRound() async {
     if (_gameState == null) return;
     _gameState!.updateCumulativeScores();
     _tournamentManager.updateCumulativeScores(_gameState!);
@@ -710,11 +710,11 @@ class GameProvider with ChangeNotifier implements IGameController {
         _gameState!.tournamentRound >= tournamentTotalRounds) {
       return;
     }
-    
+
     List<Player> survivors = _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
     if (survivors.length < 2) return;
 
-    createNewGame(
+    await createNewGame(
       players: survivors,
       gameMode: GameMode.tournament,
       difficulty: _gameState!.difficulty,
