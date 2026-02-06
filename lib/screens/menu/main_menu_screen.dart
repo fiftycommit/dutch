@@ -127,7 +127,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'réalisé par Max et EL Roy',
+                  'réalisé par Max, Irfat et EL Roy',
                   style: TextStyle(
                     fontSize: 13,
                     letterSpacing: 2,

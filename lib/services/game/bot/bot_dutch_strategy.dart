@@ -59,6 +59,9 @@ class BotDutchStrategy {
   ) {
     final myScore = bot.getKnownScore();
 
+    // Main vide = score 0, Dutch garanti gagnant
+    if (bot.hand.isEmpty) return true;
+
     // Si je viens de rater un match ou de prendre une pénalité, ne Dutch pas
     if (_recentMatchFail(gs, bot) || _recentPenalty(gs, bot)) {
       return false;
@@ -78,9 +81,8 @@ class BotDutchStrategy {
     }
 
     // RÈGLE FONDAMENTALE : ne Dutch que si on pense avoir le plus petit score
-    // Marge de sécurité : le bot veut être STRICTEMENT en dessous
-    // (car si on Dutch et qu'on a le même score, on perd aussi)
-    if (myScore >= lowestOpponentEstimate) {
+    // Si même score, celui qui Dutch gagne → on autorise l'égalité
+    if (myScore > lowestOpponentEstimate) {
       return false;
     }
 
