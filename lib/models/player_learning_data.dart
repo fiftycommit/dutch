@@ -96,6 +96,14 @@ class PlayerProfile {
         'aggressiveness_losing': 0.5,
         'caution_winning': 0.5,
         'caution_losing': 0.5,
+        // MMR adaptatif
+        'winStreak': 0,
+        'loseStreak': 0,
+        'recentResults': <int>[],
+        'recentScores': <int>[],
+        'performanceAccumulator': 0.5,
+        'dominanceScore': 0.0,
+        'consistencyScore': 0.5,
       },
     );
   }

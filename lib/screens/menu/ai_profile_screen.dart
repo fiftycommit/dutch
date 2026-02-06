@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/player_learning_data.dart';
 import '../../services/learning/player_learning_service.dart';
+import '../../services/ui/stats_service.dart';
 import '../../utils/ui_constants.dart';
 
 class AiProfileScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
   PlayerProfile? _profile;
   List<PlayerGameRecord> _history = const [];
   String? _clientId;
+  int _rp = 0;
 
   Timer? _refreshTimer;
   bool _loading = true;
@@ -50,11 +52,14 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
       final clientId = prefs.getString('multiplayer_client_id');
       final profile = await _service.getProfile(slotId: widget.slotId);
       final history = await _service.getHistory(slotId: widget.slotId);
+      final stats = await StatsService.getStats(slotId: widget.slotId);
+      final rp = (stats['mmr'] ?? 0) as int;
       if (!mounted) return;
       setState(() {
         _clientId = clientId;
         _profile = profile;
         _history = history;
+        _rp = rp;
         _loading = false;
       });
     } catch (_) {
@@ -220,8 +225,8 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
           ),
           const SizedBox(height: 12),
           _AdaptationCard(
-            mmr: profile.mmr,
-            mmrTier: _mmrTier(profile.mmr),
+            mmr: _rp,
+            mmrTier: _mmrTier(_rp),
             usedSBMM: lastRecord?.usedSBMM,
             lastUpdate: profile.lastUpdatedAt,
             lastGameTime: lastRecord?.endTime,

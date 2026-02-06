@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show exp;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../models/game_state.dart';
@@ -516,11 +517,23 @@ class PlayerLearningService implements IPlayerLearningService {
     params['caution_winning'] = clamp01(newCautionWinning);
     params['caution_losing'] = clamp01(newCautionLosing);
 
-    // Calcul du MMR selon le nombre de joueurs et le classement final
+    // Calcul du MMR adaptatif multi-facteurs
     final int newMMR = _calculateMMRChange(
       currentMMR: profile.mmr,
+      gamesAnalyzed: profile.gamesAnalyzed,
       finalRank: record.finalRank,
+      finalScore: record.finalScore,
       numberOfPlayers: record.numberOfPlayers,
+      calledDutch: record.calledDutch,
+      wonDutch: record.wonDutch,
+      matchAccuracyObserved: matchAccuracyObserved,
+      defensiveRateObserved: defensiveRateObserved,
+      offensiveRateObserved: offensiveRateObserved,
+      riskyRateObserved: riskyRateObserved,
+      memoryRetentionObserved: memoryRetentionObserved,
+      adaptabilityObserved: adaptabilityObserved,
+      avgDecisionTime: avgDecisionTime,
+      params: params,
     );
 
     return PlayerProfile(
@@ -555,34 +568,234 @@ class PlayerLearningService implements IPlayerLearningService {
     };
   }
 
-  /// Calcule le changement de MMR selon le classement final et le nombre de joueurs
-  /// Plus il y a de joueurs, plus les gains/pertes sont importants
+  /// Algorithme adaptatif multi-facteurs pour le calcul du MMR.
+  ///
+  /// Architecture :
+  ///   MMR_new = MMR_old + K * (placementScore + performanceBonus) * streakMultiplier + anchorPull
+  ///
+  /// K (facteur dynamique) varie selon :
+  ///   - Le nombre de parties jouees (plus eleve pour les nouveaux)
+  ///   - L'ecart entre performance et MMR actuel (auto-correction)
+  ///   - Le nombre de joueurs dans la partie
+  ///
+  /// Le placementScore est base sur le classement normalise [-1, +1]
+  /// Le performanceBonus est base sur la qualite du jeu [-0.15, +0.30]
+  /// Le streakMultiplier accelere si le joueur est clairement mal place [0.85, 1.5]
   int _calculateMMRChange({
     required int currentMMR,
+    required int gamesAnalyzed,
     required int finalRank,
+    required int finalScore,
     required int numberOfPlayers,
+    required bool calledDutch,
+    required bool wonDutch,
+    required double matchAccuracyObserved,
+    required double defensiveRateObserved,
+    required double offensiveRateObserved,
+    required double riskyRateObserved,
+    required double memoryRetentionObserved,
+    required double adaptabilityObserved,
+    required double avgDecisionTime,
+    required Map<String, dynamic> params,
   }) {
-    // Multiplicateur selon le nombre de joueurs (2-6 joueurs)
-    // 2 joueurs: x1.0, 3: x1.2, 4: x1.4, 5: x1.6, 6: x1.8
-    final double playerMultiplier = 1.0 + (numberOfPlayers - 2) * 0.2;
-    
-    // Points de base selon le classement
-    // 1er: +30, 2e: +10, 3e: 0, 4e: -10, 5e: -20, 6e: -30
-    final int basePoints = {
-      1: 30,
-      2: 10,
-      3: 0,
-      4: -10,
-      5: -20,
-      6: -30,
-    }[finalRank] ?? 0;
-    
-    // Appliquer le multiplicateur
-    final int mmrChange = (basePoints * playerMultiplier).round();
-    
-    // Nouveau MMR (minimum 0)
-    final int newMMR = (currentMMR + mmrChange).clamp(0, 9999);
-    
+    // --- Helpers ---
+    double getNum(String key, double fallback) {
+      final v = params[key];
+      if (v is num) return v.toDouble();
+      return fallback;
+    }
+
+    List<int> getIntList(String key) {
+      final v = params[key];
+      if (v is List) return v.whereType<int>().toList();
+      return <int>[];
+    }
+
+    // ============================================================
+    // STEP 1 : Mise a jour des streaks et de l'historique
+    // ============================================================
+    final bool isWin = finalRank == 1;
+    final bool isBottomHalf = finalRank > (numberOfPlayers / 2).ceil();
+
+    int winStreak = (params['winStreak'] as int?) ?? 0;
+    int loseStreak = (params['loseStreak'] as int?) ?? 0;
+
+    if (isWin) {
+      winStreak += 1;
+      loseStreak = 0;
+    } else if (isBottomHalf) {
+      loseStreak += 1;
+      winStreak = 0;
+    } else {
+      // Milieu de tableau : on reset les deux
+      winStreak = 0;
+      loseStreak = 0;
+    }
+    params['winStreak'] = winStreak;
+    params['loseStreak'] = loseStreak;
+
+    // Derniers resultats (10 max)
+    List<int> recentResults = getIntList('recentResults');
+    recentResults.insert(0, finalRank);
+    if (recentResults.length > 10) recentResults = recentResults.sublist(0, 10);
+    params['recentResults'] = recentResults;
+
+    List<int> recentScores = getIntList('recentScores');
+    recentScores.insert(0, finalScore);
+    if (recentScores.length > 10) recentScores = recentScores.sublist(0, 10);
+    params['recentScores'] = recentScores;
+
+    // ============================================================
+    // STEP 2 : Score de placement [-1.0, +1.0] (zero-sum)
+    // ============================================================
+    // 1er parmi N => +1.0, dernier => -1.0
+    final double placementScore =
+        1.0 - 2.0 * (finalRank - 1) / (numberOfPlayers - 1).clamp(1, 5);
+
+    // ============================================================
+    // STEP 3 : Bonus de marge de score [-0.15, +0.15]
+    // ============================================================
+    double scoreMarginBonus = 0.0;
+    if (isWin) {
+      // Score bas en gagnant = domination
+      scoreMarginBonus = 0.15 * (1.0 - (finalScore / 15.0)).clamp(-0.33, 1.0);
+    } else if (finalRank == numberOfPlayers) {
+      // Dernier avec gros score = penalite supplementaire
+      scoreMarginBonus = -0.10 * ((finalScore - 20) / 30.0).clamp(0.0, 1.0);
+    }
+
+    // ============================================================
+    // STEP 4 : Qualite de la performance [0.0, 1.0]
+    // ============================================================
+    double performanceQuality = 0.0;
+    double weightSum = 0.0;
+
+    // Precision memoire (poids 2.0)
+    performanceQuality += matchAccuracyObserved.clamp(0.0, 1.0) * 2.0;
+    weightSum += 2.0;
+
+    // Retention memoire (poids 1.5)
+    performanceQuality += memoryRetentionObserved.clamp(0.0, 1.0) * 1.5;
+    weightSum += 1.5;
+
+    // Intelligence d'utilisation des pouvoirs (poids 1.5)
+    final powerUsageQuality =
+        ((defensiveRateObserved + offensiveRateObserved) / 2.0).clamp(0.0, 1.0);
+    performanceQuality += powerUsageQuality * 1.5;
+    weightSum += 1.5;
+
+    // Succes Dutch (poids 2.0, seulement si appele)
+    if (calledDutch) {
+      performanceQuality += (wonDutch ? 1.0 : 0.0) * 2.0;
+      weightSum += 2.0;
+    }
+
+    // Vitesse de decision (poids 1.0) - 500ms=rapide(1.0), 5000ms=lent(0.0)
+    final speedScore = (1.0 - (avgDecisionTime - 500) / 4500).clamp(0.0, 1.0);
+    performanceQuality += speedScore * 1.0;
+    weightSum += 1.0;
+
+    // Adaptabilite positionnelle (poids 1.0)
+    performanceQuality += adaptabilityObserved.clamp(0.0, 1.0) * 1.0;
+    weightSum += 1.0;
+
+    // Normaliser [0, 1]
+    performanceQuality = weightSum > 0 ? performanceQuality / weightSum : 0.5;
+
+    // Accumulateur EMA (alpha = 0.15)
+    final double prevPerfAcc = getNum('performanceAccumulator', 0.5);
+    params['performanceAccumulator'] = prevPerfAcc * 0.85 + performanceQuality * 0.15;
+
+    // ============================================================
+    // STEP 5 : Bonus de performance [-0.15, +0.30]
+    // ============================================================
+    final double perfDeviation = performanceQuality - 0.5;
+    double performanceBonus;
+    if (placementScore > 0) {
+      // Gagne : bonne perf amplifie, mauvaise amortit
+      performanceBonus = perfDeviation * 0.4;
+    } else {
+      // Perdu : bonne perf adoucit, mauvaise amplifie
+      performanceBonus = perfDeviation * 0.2;
+    }
+    performanceBonus += scoreMarginBonus;
+    performanceBonus = performanceBonus.clamp(-0.15, 0.30);
+
+    // ============================================================
+    // STEP 6 : K-factor dynamique (type Elo)
+    // ============================================================
+    // 6a. Newcomer : K eleve pour les nouveaux, decroit avec l'experience
+    //     K_base = 25 + 35 * exp(-parties/15) → ~60 au debut, ~25 a 50+ parties
+    final int totalGames = gamesAnalyzed + 1;
+    final double kNewcomer = 25.0 + 35.0 * exp(-totalGames / 15.0);
+
+    // 6b. Mismatch : boost si le joueur est clairement mal place
+    double recentWinRate = 0.5;
+    if (recentResults.length >= 3) {
+      final topHalfCount = recentResults
+          .where((r) => r <= (numberOfPlayers / 2).ceil())
+          .length;
+      recentWinRate = topHalfCount / recentResults.length;
+    }
+    final double mismatchDeviation = (recentWinRate - 0.5).abs();
+    final double kMismatch = 1.0 + mismatchDeviation * 1.2;
+
+    // 6c. Nombre de joueurs
+    final double kPlayerCount = 1.0 + (numberOfPlayers - 2) * 0.08;
+
+    final double kFactor = kNewcomer * kMismatch * kPlayerCount;
+
+    // ============================================================
+    // STEP 7 : Multiplicateur de streak [0.85, 1.5]
+    // ============================================================
+    double streakMultiplier = 1.0;
+    if (winStreak >= 2) {
+      streakMultiplier = (1.0 + (winStreak - 1) * 0.1).clamp(1.0, 1.5);
+    } else if (loseStreak >= 2) {
+      streakMultiplier = (1.0 + (loseStreak - 1) * 0.1).clamp(1.0, 1.4);
+    } else if (winStreak == 0 && loseStreak == 0) {
+      // Milieu de tableau : on amortit
+      streakMultiplier = 0.85;
+    }
+
+    // ============================================================
+    // STEP 8 : Anchor pull (auto-correction aux extremes)
+    // ============================================================
+    double anchorPull = 0.0;
+    if (currentMMR < 200) {
+      anchorPull = (200 - currentMMR) / 200.0 * 5.0;
+    } else if (currentMMR > 1300) {
+      anchorPull = (-(currentMMR - 1300) / 200.0 * 5.0).clamp(-8.0, 0.0);
+    }
+
+    // ============================================================
+    // STEP 9 : Calcul final
+    // ============================================================
+    final double rawScore = placementScore + performanceBonus;
+    final double mmrDelta = kFactor * rawScore * streakMultiplier + anchorPull;
+    final int newMMR = (currentMMR + mmrDelta.round()).clamp(0, 9999);
+
+    // ============================================================
+    // STEP 10 : Metriques derivees
+    // ============================================================
+    // Dominance : EMA de la qualite de victoire
+    double dominanceRaw = 0.0;
+    if (isWin) {
+      dominanceRaw = (1.0 - finalScore / 30.0).clamp(0.0, 1.0);
+    }
+    final double prevDominance = getNum('dominanceScore', 0.0);
+    params['dominanceScore'] = prevDominance * 0.85 + dominanceRaw * 0.15;
+
+    // Consistance : inverse de la variance des rangs recents
+    if (recentResults.length >= 3) {
+      final mean = recentResults.reduce((a, b) => a + b) / recentResults.length;
+      final variance = recentResults
+              .map((r) => (r - mean) * (r - mean))
+              .reduce((a, b) => a + b) /
+          recentResults.length;
+      params['consistencyScore'] = (1.0 - variance / 4.0).clamp(0.0, 1.0);
+    }
+
     return newMMR;
   }
 
