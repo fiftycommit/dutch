@@ -40,7 +40,6 @@ BotDifficulty.bronze = {
     reactionSpeed: 0.55,
     matchAccuracy: 0.75,
     reactionMatchChance: 0.35,
-    keepCardThreshold: 7,
 };
 BotDifficulty.silver = {
     name: 'Argent',
@@ -50,7 +49,6 @@ BotDifficulty.silver = {
     reactionSpeed: 0.75,
     matchAccuracy: 0.85,
     reactionMatchChance: 0.55,
-    keepCardThreshold: 6,
 };
 BotDifficulty.gold = {
     name: 'Or',
@@ -60,7 +58,6 @@ BotDifficulty.gold = {
     reactionSpeed: 0.96,
     matchAccuracy: 0.97,
     reactionMatchChance: 0.9,
-    keepCardThreshold: 3,
 };
 BotDifficulty.platinum = {
     name: 'Platine',
@@ -70,5 +67,4 @@ BotDifficulty.platinum = {
     reactionSpeed: 1.0,
     matchAccuracy: 1.0,
     reactionMatchChance: 1.0,
-    keepCardThreshold: 1,
 };

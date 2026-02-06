@@ -11,6 +11,7 @@ import 'providers/game_tracking_provider.dart';
 import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
 import 'router/app_router.dart';
+import 'services/multiplayer/client_id_service.dart';
 
 /// Global navigator key for legacy code compatibility (bot_ai.dart)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -34,6 +35,9 @@ void main() async {
     SystemUiMode.immersiveSticky,
     overlays: [],
   );
+
+  // Ensure a persistent client identity exists for learning/cloning uploads.
+  await ClientIdService.ensureClientId();
 
   runApp(const DutchGameApp());
 }

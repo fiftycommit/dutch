@@ -147,9 +147,9 @@ class RoomManager {
         }
         this.pruneWaitingRoom(room);
         this.ensureHost(room);
-        // Vérifier si le joueur a été kické
-        if (clientId && room.kickedClientIds?.has(clientId)) {
-            return { error: 'Vous avez été exclu de cette room' };
+        // Vérifier si le joueur a été BANNI (pas juste kické)
+        if (clientId && room.bannedClientIds?.has(clientId)) {
+            return { error: 'Vous avez été banni de cette room' };
         }
         if (clientId) {
             const existing = room.players.find((p) => p.clientId === clientId);
@@ -262,7 +262,12 @@ class RoomManager {
         if (!room)
             return false;
         this.pruneWaitingRoom(room);
-        room.players = room.players.filter((p) => !p.isHuman || p.connected !== false);
+        // Ne garder que les joueurs PRÊTS (humains connectés et prêts, ou bots)
+        room.players = room.players.filter((p) => {
+            if (!p.isHuman)
+                return true; // Garder les bots
+            return p.connected !== false && p.ready; // Humains: connectés ET prêts
+        });
         this.reindexPlayers(room);
         this.ensureHost(room);
         const minPlayers = typeof room.settings?.minPlayers === 'number'
@@ -528,6 +533,7 @@ class RoomManager {
     }
     /**
      * Redémarre une partie (rematch) - garde les joueurs et scores cumulés
+     * En mode tournoi: élimine le dernier du classement
      */
     restartGame(roomCode, requesterId) {
         const room = this.rooms.get(roomCode);
@@ -539,9 +545,52 @@ class RoomManager {
         // La partie doit être terminée
         if (room.status !== Room_1.RoomStatus.ended)
             return false;
-        // Reset room state for new game
+        // En mode tournoi, gérer l'élimination
+        let eliminatedPlayerId = null;
+        if (room.gameMode === GameState_1.GameMode.tournament && room.gameState) {
+            // Calculer le classement final (score le plus bas = meilleur)
+            const ranking = [...room.gameState.players]
+                .filter(p => !room.gameState.eliminatedPlayerIds.includes(p.id))
+                .sort((a, b) => (0, Player_1.calculateScore)(a) - (0, Player_1.calculateScore)(b));
+            // S'il reste plus de 2 joueurs, éliminer le dernier
+            if (ranking.length > 2) {
+                const eliminated = ranking[ranking.length - 1];
+                eliminatedPlayerId = eliminated.id;
+                console.log(`🏆 Tournoi ${roomCode}: ${eliminated.name} éliminé (score: ${(0, Player_1.calculateScore)(eliminated)})`);
+            }
+            else if (ranking.length <= 2) {
+                // C'était la finale, le tournoi est terminé
+                console.log(`🏆 Tournoi ${roomCode} terminé! Gagnant: ${ranking[0]?.name}`);
+            }
+        }
         // Remove bots so we can refill them or play just humans
-        room.players = room.players.filter((p) => p.isHuman);
+        // En mode tournoi, aussi retirer le joueur éliminé
+        room.players = room.players.filter((p) => {
+            if (!p.isHuman)
+                return false; // Toujours retirer les bots
+            if (room.gameMode === GameState_1.GameMode.tournament && p.id === eliminatedPlayerId) {
+                // Notifier le joueur éliminé
+                this.io.to(p.id).emit('tournament:eliminated', {
+                    roomCode,
+                    message: 'Vous avez été éliminé du tournoi !',
+                    finalRank: room.players.filter(pl => pl.isHuman).length,
+                });
+                return false; // Retirer le joueur éliminé
+            }
+            return true;
+        });
+        // Vérifier qu'il reste assez de joueurs pour continuer
+        const humanCount = room.players.filter(p => p.isHuman).length;
+        if (room.gameMode === GameState_1.GameMode.tournament && humanCount < 2) {
+            // Pas assez de joueurs, le tournoi est terminé
+            this.io.to(roomCode).emit('tournament:ended', {
+                roomCode,
+                message: 'Tournoi terminé !',
+                winner: room.players[0]?.name || 'Inconnu',
+            });
+            // Ne pas relancer, garder le status 'ended'
+            return false;
+        }
         room.status = Room_1.RoomStatus.waiting;
         room.gameState = null;
         room.players.forEach(p => {
@@ -560,8 +609,12 @@ class RoomManager {
         this.broadcastPresence(roomCode);
         this.io.to(roomCode).emit('room:restarted', {
             roomCode,
-            message: 'Nouvelle partie !',
+            message: room.gameMode === GameState_1.GameMode.tournament
+                ? `Manche ${room.tournamentRound} !`
+                : 'Nouvelle partie !',
             cumulativeScores: this.getCumulativeScoresArray(room),
+            tournamentRound: room.tournamentRound,
+            eliminatedPlayerId,
         });
         return true;
     }
@@ -583,17 +636,49 @@ class RoomManager {
         // On ne peut pas se kick soi-même
         if (target.id === hostId)
             return false;
-        // Notifier le joueur qu'il est kicked
+        // Notifier le joueur qu'il est kické (peut revenir)
         this.io.to(target.id).emit('room:kicked', {
             roomCode,
             message: "Vous avez été exclu de la room par l'hôte",
+            canRejoin: true, // Le joueur PEUT revenir
         });
-        // Ajouter le clientId à la liste des kickés pour empêcher le rejoin
+        // Retirer le joueur (mais ne pas le bannir - il peut revenir)
+        room.players.splice(targetIndex, 1);
+        this.reindexPlayers(room);
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+        return true;
+    }
+    /**
+     * Bannir un joueur définitivement (hôte uniquement)
+     */
+    banPlayer(roomCode, hostId, targetClientId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        // Seul l'hôte peut bannir
+        if (room.hostPlayerId !== hostId)
+            return false;
+        // Trouver le joueur à bannir par clientId
+        const targetIndex = room.players.findIndex((p) => p.clientId === targetClientId);
+        if (targetIndex < 0)
+            return false;
+        const target = room.players[targetIndex];
+        // On ne peut pas se bannir soi-même
+        if (target.id === hostId)
+            return false;
+        // Notifier le joueur qu'il est banni (ne peut PAS revenir)
+        this.io.to(target.id).emit('room:banned', {
+            roomCode,
+            message: "Vous avez été banni de cette room par l'hôte",
+            canRejoin: false,
+        });
+        // Ajouter le clientId à la liste des bannis
         if (target.clientId) {
-            if (!room.kickedClientIds) {
-                room.kickedClientIds = new Set();
+            if (!room.bannedClientIds) {
+                room.bannedClientIds = new Set();
             }
-            room.kickedClientIds.add(target.clientId);
+            room.bannedClientIds.add(target.clientId);
         }
         // Retirer le joueur
         room.players.splice(targetIndex, 1);
@@ -1318,6 +1403,19 @@ class RoomManager {
             };
         });
         state.deck = state.deck.map(() => ({ hidden: true }));
+        // Précharger la prochaine carte du deck pour le joueur actuel
+        // Cela permet d'éliminer la latence perçue lors de la pioche
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        if (currentPlayer?.id === playerId &&
+            gameState.deck.length > 0 &&
+            gameState.phase === GameState_1.GamePhase.playing &&
+            !gameState.drawnCard) {
+            // Envoyer la carte du dessus du deck (celle qui sera piochée)
+            state.preloadedDeckCard = gameState.deck[gameState.deck.length - 1];
+        }
+        else {
+            state.preloadedDeckCard = null;
+        }
         return state;
     }
     generateRoomCode() {
@@ -1473,6 +1571,7 @@ class RoomManager {
             maxPlayers = minPlayers;
         }
         const fillBots = settings?.fillBots !== false;
+        const isPublic = settings?.isPublic === true;
         return {
             gameMode,
             botDifficulty,
@@ -1481,6 +1580,7 @@ class RoomManager {
             minPlayers,
             maxPlayers,
             fillBots,
+            isPublic,
         };
     }
     parseGameMode(value) {

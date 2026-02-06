@@ -62,6 +62,9 @@ function renderHomePage(roomCount) {
           border-radius: 20px;
           font-weight: bold;
         }
+        .badge-idle { background: #ecc94b; color: #2d3748; }
+        .badge-offline { background: #f56565; }
+        .status-note { font-size: 0.85em; opacity: 0.75; margin-top: 6px; }
         .endpoint {
           background: rgba(0,0,0,0.3);
           padding: 10px;
@@ -89,6 +92,11 @@ function renderHomePage(roomCount) {
             <span>Version</span>
             <span>1.0.0</span>
           </div>
+          <div class="status-item">
+            <span>Trainer bots</span>
+            <span id="trainerBadge" class="badge badge-idle">⏳ CHECK...</span>
+          </div>
+          <div class="status-note" id="trainerNote">Dernier batch: n/a</div>
         </div>
 
         <h2>🤖 Intelligence Artificielle</h2>
@@ -113,6 +121,46 @@ function renderHomePage(roomCount) {
           Propulsé par Socket.IO • Node.js • TypeScript
         </p>
       </div>
+      <script>
+        (function () {
+          const badge = document.getElementById('trainerBadge');
+          const note = document.getElementById('trainerNote');
+          const THRESHOLD_MINUTES = 12;
+
+          function setBadge(text, cls) {
+            badge.textContent = text;
+            badge.className = 'badge ' + cls;
+          }
+
+          fetch('/api/bot-learning/training-series?limit=1')
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(data => {
+              if (!Array.isArray(data) || data.length === 0) {
+                setBadge('🟡 IDLE', 'badge-idle');
+                note.textContent = 'Dernier batch: aucun';
+                return;
+              }
+              const last = data[data.length - 1];
+              const ts = new Date(last.timestamp);
+              if (isNaN(ts.getTime())) {
+                setBadge('🟡 IDLE', 'badge-idle');
+                note.textContent = 'Dernier batch: inconnu';
+                return;
+              }
+              const diffMin = (Date.now() - ts.getTime()) / 60000;
+              if (diffMin <= THRESHOLD_MINUTES) {
+                setBadge('🟢 ACTIVE', '');
+              } else {
+                setBadge('🟡 IDLE', 'badge-idle');
+              }
+              note.textContent = 'Dernier batch: ' + ts.toLocaleString('fr-FR');
+            })
+            .catch(() => {
+              setBadge('🔴 OFFLINE', 'badge-offline');
+              note.textContent = 'Dernier batch: erreur';
+            });
+        })();
+      </script>
     </body>
     </html>
   `;
@@ -120,9 +168,10 @@ function renderHomePage(roomCount) {
 function startServer() {
     const app = (0, express_1.default)();
     const httpServer = (0, http_1.createServer)(app);
+    // Server is behind Nginx, trust one proxy hop for correct client IP.
+    app.set('trust proxy', 1);
     app.use((0, cors_1.default)());
     app.use(express_1.default.json());
-    app.use(SecurityService_1.SecurityService.apiLimiter); // API Rate Limiting
     const io = new socket_io_1.Server(httpServer, {
         cors: {
             origin: '*',
@@ -163,6 +212,20 @@ function startServer() {
     app.get('/health', (req, res) => {
         res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
     });
+    // SEO - Dynamic sitemap with real lastmod
+    app.get('/sitemap.xml', (req, res) => {
+        res.set('Content-Type', 'application/xml');
+        const lastMod = new Date().toISOString().split('T')[0];
+        res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://dutch-game.me/</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+    });
     app.get('/version', (req, res) => {
         res.json({
             sha: process.env.GIT_SHA || null,
@@ -185,10 +248,9 @@ function startServer() {
         const stats = publicRoomService_1.publicRoomService.getStats();
         res.json({ success: true, stats });
     });
-    // Routes pour l'apprentissage des bots
-    app.use('/api/bot-learning', botLearningRoutes_1.default);
-    // Routes pour l'apprentissage des joueurs (profil SBMM)
-    app.use('/api/player-learning', playerLearningRoutes_1.default);
+    // Routes API avec rate limiting spécifique
+    app.use('/api/bot-learning', SecurityService_1.SecurityService.botLearningLimiter, botLearningRoutes_1.default);
+    app.use('/api/player-learning', SecurityService_1.SecurityService.apiLimiter, playerLearningRoutes_1.default);
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
         res.sendFile(path_1.default.join(__dirname, '../public/bot-stats.html'));

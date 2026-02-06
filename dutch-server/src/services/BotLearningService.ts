@@ -493,18 +493,42 @@ export class BotLearningService {
         .sort((a, b) => b.mmr - a.mmr)
         .slice(0, 10);
       
-      // Récupérer les 10 dernières parties
-      const recentGameFiles = gameFiles
-        .filter(f => f.endsWith('.json'))
-        .sort()
-        .reverse()
-        .slice(0, 10);
-      
-      const recentGames: BotGameRecord[] = [];
-      for (const file of recentGameFiles) {
-        const data = await fs.readFile(path.join(gamesDir, file), 'utf-8');
-        recentGames.push(JSON.parse(data));
+      // Récupérer les parties récentes valides (tri par timestamp réel, pas par nom de fichier)
+      const parsedGames: BotGameRecord[] = [];
+      for (const file of gameFiles.filter(f => f.endsWith('.json'))) {
+        try {
+          const data = await fs.readFile(path.join(gamesDir, file), 'utf-8');
+          const game = JSON.parse(data) as Partial<BotGameRecord>;
+
+          // Garde-fou: ignorer les enregistrements incomplets / tests invalides
+          if (
+            !game ||
+            typeof game.botName !== 'string' ||
+            typeof game.startTime !== 'string' ||
+            typeof game.gameMode !== 'string' ||
+            typeof game.numberOfPlayers !== 'number' ||
+            typeof game.finalRank !== 'number' ||
+            typeof game.finalScore !== 'number'
+          ) {
+            continue;
+          }
+
+          parsedGames.push(game as BotGameRecord);
+        } catch (_) {
+          // ignorer les fichiers corrompus
+        }
       }
+
+      const ts = (g: BotGameRecord) => {
+        const end = g.endTime ? Date.parse(g.endTime) : NaN;
+        if (Number.isFinite(end)) return end;
+        const start = Date.parse(g.startTime);
+        return Number.isFinite(start) ? start : 0;
+      };
+
+      const recentGames = parsedGames
+        .sort((a, b) => ts(b) - ts(a))
+        .slice(0, 10);
       
       return {
         totalGames,

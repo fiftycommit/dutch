@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/bot_learning_data.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
@@ -13,6 +12,7 @@ import '../../services/learning/bot_learning_service.dart';
 import '../../services/learning/bot_training_service.dart';
 import '../../services/learning/ghost_clone_service.dart';
 import '../../services/game/bot/bot_config.dart';
+import '../../services/multiplayer/client_id_service.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isTournament;
@@ -398,8 +398,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
 
     // Infos pour le ghost clone
-    final prefs = await SharedPreferences.getInstance();
-    final ghostPlayerId = prefs.getString('multiplayer_client_id') ?? 'slot_${widget.saveSlot}';
+    final ghostPlayerId = await ClientIdService.ensureClientId();
     final ghostPlayerName = profile.profileId;
 
     // Générer les paramètres des bots via le nouveau MatchmakingService

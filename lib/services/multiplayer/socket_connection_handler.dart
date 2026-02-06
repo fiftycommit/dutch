@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'client_id_service.dart';
 
 /// État de la connexion Socket.IO
 enum SocketConnectionState {
@@ -49,17 +49,9 @@ class SocketConnectionHandler {
 
   Future<String> ensureClientId() async {
     if (_clientId != null) return _clientId!;
-    final prefs = await SharedPreferences.getInstance();
-    final existing = prefs.getString('multiplayer_client_id');
-    if (existing != null && existing.isNotEmpty) {
-      _clientId = existing;
-      return existing;
-    }
-    final random = Random();
-    final newId = '${DateTime.now().millisecondsSinceEpoch}-${random.nextInt(1 << 30)}';
-    await prefs.setString('multiplayer_client_id', newId);
-    _clientId = newId;
-    return newId;
+    final ensured = await ClientIdService.ensureClientId();
+    _clientId = ensured;
+    return ensured;
   }
 
   Future<void> connect(void Function(io.Socket) setupListeners) async {

@@ -87,8 +87,10 @@ function setupRoomHandler(socket, roomManager) {
                 });
                 return;
             }
+            // Utiliser fillBots des settings de la room par défaut, sauf si explicitement spécifié
+            const fillBots = data.fillBots !== undefined ? data.fillBots === true : room.settings?.fillBots !== false;
             const started = roomManager.startGame(roomCode, {
-                fillBots: data.fillBots === true,
+                fillBots,
             });
             callback({ success: started });
             if (!started)
@@ -218,7 +220,7 @@ function setupRoomHandler(socket, roomManager) {
             callback({ success: false, error: error.message });
         }
     });
-    // Kick un joueur (hôte uniquement)
+    // Kick un joueur (hôte uniquement) - le joueur PEUT revenir
     socket.on('room:kick', (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
@@ -229,12 +231,49 @@ function setupRoomHandler(socket, roomManager) {
             }
             const success = roomManager.kickPlayer(roomCode, socket.id, targetClientId);
             if (success) {
-                console.log(`Player ${targetClientId} kicked from ${roomCode}`);
+                console.log(`Player ${targetClientId} kicked from ${roomCode} (can rejoin)`);
             }
             callback({ success });
         }
         catch (error) {
             console.error('Error kicking player:', error);
+            callback({ success: false, error: error.message });
+        }
+    });
+    // Envoyer un emote à tous les joueurs de la room
+    socket.on('game:emote', (data) => {
+        try {
+            const roomCode = data.roomCode?.toString().toUpperCase();
+            if (!roomCode)
+                return;
+            // Broadcast l'emote à tous les joueurs de la room (y compris l'envoyeur)
+            socket.to(roomCode).emit('game:emote', {
+                emoji: data.emoji,
+                playerName: data.playerName,
+                playerId: socket.id,
+            });
+        }
+        catch (error) {
+            console.error('Error sending emote:', error);
+        }
+    });
+    // Bannir un joueur définitivement (hôte uniquement) - le joueur NE PEUT PAS revenir
+    socket.on('room:ban', (data, callback) => {
+        try {
+            const roomCode = data.roomCode?.toString().toUpperCase();
+            const targetClientId = data.clientId?.toString();
+            if (!targetClientId) {
+                callback({ success: false, error: 'clientId requis' });
+                return;
+            }
+            const success = roomManager.banPlayer(roomCode, socket.id, targetClientId);
+            if (success) {
+                console.log(`Player ${targetClientId} BANNED from ${roomCode}`);
+            }
+            callback({ success });
+        }
+        catch (error) {
+            console.error('Error banning player:', error);
             callback({ success: false, error: error.message });
         }
     });

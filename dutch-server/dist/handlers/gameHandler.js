@@ -151,6 +151,11 @@ function setupGameHandler(socket, roomManager) {
         try {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
+            // Rate limit spécifique pour éviter le spam de matchs (500ms entre chaque)
+            if (!await SecurityService_1.SecurityService.checkMatchRateLimit(socket.id)) {
+                console.log(`[MATCH] Rate limited for ${socket.id} - too many match attempts`);
+                return;
+            }
             const room = roomManager.getRoom(data.roomCode);
             if (!room || !room.gameState)
                 return;

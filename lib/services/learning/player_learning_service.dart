@@ -6,6 +6,7 @@ import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../models/player_learning_data.dart';
 import '../../core/interfaces/i_learning_service.dart';
+import '../multiplayer/client_id_service.dart';
 
 class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
@@ -212,8 +213,7 @@ class PlayerLearningService implements IPlayerLearningService {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final clientId = prefs.getString('multiplayer_client_id');
-      if (clientId == null || clientId.isEmpty) return;
+      final clientId = await ClientIdService.ensureClientId();
 
       final cloneKey = '$_cloneIdKeyPrefix$slotId';
       final existingCloneId = prefs.getString(cloneKey);
@@ -311,9 +311,7 @@ class PlayerLearningService implements IPlayerLearningService {
     required PlayerProfile profile,
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final clientId = prefs.getString('multiplayer_client_id');
-      if (clientId == null || clientId.isEmpty) return;
+      final clientId = await ClientIdService.ensureClientId();
 
       final history = await getHistory(slotId: slotId);
 
