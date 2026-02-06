@@ -166,13 +166,6 @@ jobs:
             npm run build
             npm prune --production
 
-            # Sync runtime artifacts to the directory used by PM2 (/var/www/dutch-server)
-            mkdir -p /var/www/dutch-server
-            rm -rf /var/www/dutch-server/dist
-            rm -rf /var/www/dutch-server/public
-            cp -R dist /var/www/dutch-server/dist
-            cp -R public /var/www/dutch-server/public
-            
             # Create ML data directories
             echo "Creating ML data directories..."
             mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
@@ -236,6 +229,27 @@ jobs:
             
             export GIT_SHA="${{ github.sha }}"
             export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            pm2 restart dutch-server --update-env || pm2 start dist/index.js --name dutch-server --update-env
+            cat > ecosystem.config.cjs << 'PM2CFG'
+            module.exports = {
+              apps: [
+                {
+                  name: 'dutch-server',
+                  cwd: '/root/apps/dutch-server',
+                  script: 'dist/index.js',
+                  instances: 1,
+                  exec_mode: 'fork',
+                  env: {
+                    NODE_ENV: 'production',
+                    PORT: 3000,
+                    GIT_SHA: process.env.GIT_SHA,
+                    BUILD_TIME: process.env.BUILD_TIME,
+                  },
+                  max_memory_restart: '700M',
+                },
+              ],
+            };
+            PM2CFG
+            pm2 startOrReload ecosystem.config.cjs --only dutch-server --update-env
+            pm2 save
             echo "✅ Backend deployed successfully!"
             echo "🤖 ML Dashboard: https://dutch-game.me/bot-stats"
