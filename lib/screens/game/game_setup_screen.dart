@@ -488,14 +488,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final botLearningService = BotLearningService();
     final topBotsBySkill = <BotSkillLevel, List<BotProfile>>{};
 
-    for (final entry in skillCounts.entries) {
+    await Future.wait(skillCounts.entries.map((entry) async {
       final skillName = _skillLevelToString(entry.key);
       final topBots = await botLearningService.fetchTopBots(
         skillLevel: skillName,
         limit: entry.value,
       );
       topBotsBySkill[entry.key] = List<BotProfile>.from(topBots);
-    }
+    }));
 
     final players = <Player>[];
 

@@ -49,10 +49,10 @@ Définies dans `dutch-bot-trainer.service` :
 - `BOT_TRAIN_SERVER` (défaut `https://dutch-game.me`)
 - `BOT_TRAIN_START_HOUR` (défaut `20`)
 - `BOT_TRAIN_END_HOUR` (défaut `12`)
-- `BOT_TRAIN_BATCH` (défaut `12`)
-- `BOT_TRAIN_SLEEP_MS` (défaut `200`)
-- `BOT_TRAIN_MAX_TURNS` (défaut `800`)
-- `BOT_TRAIN_BALANCED_ONLY` (défaut `false`)
+- `BOT_TRAIN_BATCH` (défaut `4`)
+- `BOT_TRAIN_SLEEP_MS` (défaut `1500`)
+- `BOT_TRAIN_MAX_TURNS` (défaut `500`)
+- `BOT_TRAIN_BALANCED_ONLY` (défaut `true`)
 
 ## Graphique de suivi
 Le trainer pousse des points de suivi via `POST /api/bot-learning/training-series`.

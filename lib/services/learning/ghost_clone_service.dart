@@ -22,7 +22,7 @@ class GhostCloneService {
   static const String _serverUrl = 'https://dutch-game.me/api/bot-learning';
   static const String _cloneKeyPrefix = 'ghost_clone_id_slot_';
   static const String _offlineClonePrefix = 'offline_ghost_slot_';
-  static const Duration _apiTimeout = Duration(seconds: 5);
+  static const Duration _apiTimeout = Duration(seconds: 2);
 
   /// Récupère ou crée un profil ghost pour le joueur
   ///
@@ -40,6 +40,8 @@ class GhostCloneService {
     if (existingId != null && existingId.isNotEmpty) {
       final fetched = await _fetchClone(existingId);
       if (fetched != null) return fetched;
+      // Si le fetch échoue, basculer directement en offline pour éviter le double délai.
+      return _generateOfflineProfile(slotId: slotId, playerId: playerId);
     }
 
     // Essayer de créer un nouveau clone sur le serveur

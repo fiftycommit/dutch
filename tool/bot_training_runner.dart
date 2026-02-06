@@ -6,8 +6,12 @@ import 'dart:math';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/player.dart';
-import 'package:dutch_game/services/game/bot_ai.dart';
 import 'package:dutch_game/services/game/game_logic.dart';
+import 'package:dutch_game/services/game/bot/bot_card_strategy.dart';
+import 'package:dutch_game/services/game/bot/bot_config.dart';
+import 'package:dutch_game/services/game/bot/bot_dutch_strategy.dart';
+import 'package:dutch_game/services/game/bot/bot_memory_manager.dart';
+import 'package:dutch_game/services/game/bot/bot_personality.dart';
 import 'package:dutch_game/services/learning/bot_learning_service.dart';
 import 'package:http/http.dart' as http;
 
@@ -120,6 +124,67 @@ class BotTrainer {
 
   final TrainingConfig config;
   final Random _random = Random();
+
+  Future<void> _playBotTurnHeadless(GameState gameState) async {
+    final bot = gameState.currentPlayer;
+    if (bot.isHuman) return;
+
+    final difficulty = BotConfig.getDifficulty(bot, null);
+    final phase = BotConfig.getBotPhase(bot, gameState);
+    final personality = BotPersonality.fromBot(bot);
+
+    BotMemoryManager.applyMemoryDecay(
+      bot,
+      difficulty,
+      personality: personality,
+    );
+
+    if (BotDutchStrategy.shouldCallDutch(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    )) {
+      GameLogic.callDutch(gameState);
+      return;
+    }
+
+    GameLogic.drawCard(gameState);
+    if (gameState.drawnCard == null) return;
+
+    await BotCardStrategy.decideCardAction(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    );
+
+    if (gameState.isWaitingForSpecialPower) {
+      // Trainer mode is headless: skip UI-dependent power handling.
+      gameState.isWaitingForSpecialPower = false;
+      gameState.specialCardToActivate = null;
+    }
+  }
+
+  Future<void> _tryReactionMatchHeadless(
+    GameState gameState,
+    Player bot,
+  ) async {
+    if (bot.isHuman) return;
+    final difficulty = BotConfig.getDifficulty(bot, null);
+    final phase = BotConfig.getBotPhase(bot, gameState);
+    final personality = BotPersonality.fromBot(bot);
+
+    await BotCardStrategy.tryReactionMatch(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      personality: personality,
+    );
+  }
 
   bool _withinWindow(DateTime now) {
     if (config.startHour == config.endHour) return true;
@@ -268,20 +333,14 @@ class BotTrainer {
         guard < config.maxTurnsPerMatch) {
       guard++;
 
-      await BotAI.playBotTurn(gameState);
-
-      if (gameState.isWaitingForSpecialPower) {
-        await BotAI.useBotSpecialPower(gameState);
-        gameState.isWaitingForSpecialPower = false;
-        gameState.specialCardToActivate = null;
-      }
+      await _playBotTurnHeadless(gameState);
 
       if (gameState.phase == GamePhase.dutchCalled) break;
 
       gameState.phase = GamePhase.reaction;
       for (final bot in gameState.players.where((p) => !p.isHuman)) {
         if (gameState.phase != GamePhase.reaction) break;
-        await BotAI.tryReactionMatch(gameState, bot);
+        await _tryReactionMatchHeadless(gameState, bot);
       }
       gameState.phase = GamePhase.playing;
       gameState.lastSpiedCard = null;

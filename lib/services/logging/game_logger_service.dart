@@ -1,11 +1,15 @@
-import 'package:flutter/foundation.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../models/game_settings.dart';
 import '../game/bot/bot_dutch_strategy.dart';
 
-// Imports conditionnels pour le web et natif
-import 'game_logger_native.dart' if (dart.library.html) 'game_logger_web.dart' as platform;
+// Fallback headless pour `dart run` (sans Flutter UI / dart:ui),
+// puis spécialisations web et Flutter.
+import 'game_logger_headless.dart'
+    if (dart.library.html) 'game_logger_web.dart'
+    if (dart.library.ui) 'game_logger_native.dart' as platform;
+
+const bool _isWeb = bool.fromEnvironment('dart.library.js_util');
 
 /// Service de logging pour enregistrer toutes les actions de jeu
 /// Fonctionne sur toutes les plateformes (web, mobile, desktop)
@@ -58,7 +62,7 @@ class GameLoggerService {
     _logBuffer.writeln('');
 
     // Sur les plateformes natives, aussi sauvegarder dans un fichier
-    if (!kIsWeb) {
+    if (!_isWeb) {
       await platform.initLogFile(_currentGameId!, _logBuffer.toString());
     }
   }
@@ -398,7 +402,7 @@ class GameLoggerService {
 
   /// Ajoute du texte au fichier de log (plateformes natives uniquement)
   Future<void> _appendToFile(String text) async {
-    if (kIsWeb || _currentGameId == null) return;
+    if (_isWeb || _currentGameId == null) return;
     await platform.appendToLogFile(_currentGameId!, text);
   }
 

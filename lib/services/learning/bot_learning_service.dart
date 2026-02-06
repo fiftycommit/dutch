@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../models/bot_learning_data.dart';
 import '../../models/game_state.dart';
@@ -10,6 +9,7 @@ import '../../core/interfaces/i_learning_service.dart';
 /// Service pour enregistrer et envoyer les données d'apprentissage des bots
 class BotLearningService implements ILearningService {
   static const String _serverUrl = 'https://dutch-game.me/api/bot-learning';
+  static const Duration _apiTimeout = Duration(seconds: 2);
   
   // Enregistrement de la partie en cours
   final Map<String, BotGameRecord> _activeGames = {};
@@ -19,6 +19,12 @@ class BotLearningService implements ILearningService {
   final Map<String, int> _turnCounters = {};
   final Map<String, List<int>> _discardsPerRound = {};
   final Map<String, List<Map<String, dynamic>>> _triageDecisions = {};
+
+  static void _log(String message) {
+    // Keep trainer-compatible logging without Flutter dependency.
+    // ignore: avoid_print
+    print(message);
+  }
   
   /// Démarre l'enregistrement d'une partie pour un bot
   @override
@@ -68,7 +74,7 @@ class BotLearningService implements ILearningService {
     _discardsPerRound[bot.id] = [];
     _triageDecisions[bot.id] = [];
     
-    debugPrint('🤖 Démarrage enregistrement pour bot ${bot.name} (ID: $botId)');
+    _log('🤖 Démarrage enregistrement pour bot ${bot.name} (ID: $botId)');
   }
   
   /// Enregistre une action d'un bot
@@ -221,7 +227,7 @@ class BotLearningService implements ILearningService {
     _discardsPerRound.remove(botPlayerId);
     _triageDecisions.remove(botPlayerId);
     
-    debugPrint('🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
+    _log('🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
   }
   
   /// Capture l'état du jeu pour analyse
@@ -334,12 +340,12 @@ class BotLearningService implements ILearningService {
       );
       
       if (response.statusCode == 200) {
-        debugPrint('✅ Données bot envoyées au serveur');
+        _log('✅ Données bot envoyées au serveur');
       } else {
-        debugPrint('❌ Erreur envoi données bot: ${response.statusCode}');
+        _log('❌ Erreur envoi données bot: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('❌ Exception envoi données bot: $e');
+      _log('❌ Exception envoi données bot: $e');
     }
   }
   
@@ -357,14 +363,14 @@ class BotLearningService implements ILearningService {
       };
       
       final uri = Uri.parse('$_serverUrl/top-bots').replace(queryParameters: queryParams);
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(_apiTimeout);
       
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => BotProfile.fromJson(json)).toList();
       }
     } catch (e) {
-      debugPrint('❌ Erreur récupération top bots: $e');
+      _log('❌ Erreur récupération top bots: $e');
     }
     
     return [];
@@ -377,13 +383,13 @@ class BotLearningService implements ILearningService {
   }) async {
     try {
       final uri = Uri.parse('$_serverUrl/parameters/$behavior/$skillLevel');
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(_apiTimeout);
       
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (e) {
-      debugPrint('❌ Erreur récupération paramètres bot: $e');
+      _log('❌ Erreur récupération paramètres bot: $e');
     }
     
     return null;

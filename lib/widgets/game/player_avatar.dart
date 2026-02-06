@@ -243,8 +243,12 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                       Colors.amber.shade700,
                     ]
                   : [
-                      widget.player.avatarColor,
-                      Color.lerp(widget.player.avatarColor, Colors.black, 0.4)!,
+                      Color(widget.player.avatarColorValue),
+                      Color.lerp(
+                        Color(widget.player.avatarColorValue),
+                        Colors.black,
+                        0.4,
+                      )!,
                     ],
             ),
             border: Border.all(

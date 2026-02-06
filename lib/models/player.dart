@@ -1,4 +1,3 @@
-import 'package:flutter/painting.dart';
 import 'playing_card.dart';
 import 'game_settings.dart';
 
@@ -279,13 +278,24 @@ class Player {
     return avatars[hash % avatars.length];
   }
 
-  Color get avatarColor {
-    if (!isHuman) return const Color(0xFF2d5f3e);
+  int get avatarColorValue {
+    if (!isHuman) return 0xFF2D5F3E;
 
-    // Generate consistent color based on ID
+    const palette = <int>[
+      0xFF42A5F5,
+      0xFF26A69A,
+      0xFF66BB6A,
+      0xFFFFCA28,
+      0xFFFF7043,
+      0xFFAB47BC,
+      0xFF7E57C2,
+      0xFFEC407A,
+      0xFF29B6F6,
+      0xFFFFA726,
+    ];
+
     final hash = id.hashCode.abs();
-    final hue = (hash % 360).toDouble();
-    return HSVColor.fromAHSV(1.0, hue, 0.7, 0.8).toColor();
+    return palette[hash % palette.length];
   }
 
   // Sérialisation JSON pour multijoueur

@@ -107,10 +107,23 @@ jobs:
             cd /var/www/dutch-trainer
             /home/dutch/flutter/bin/flutter pub get
 
+            # Ensure swap exists on low-memory droplets (1GB) to avoid trainer OOM loops
+            if ! swapon --show | grep -q '/swapfile'; then
+              if [ ! -f /swapfile ]; then
+                fallocate -l 2G /swapfile
+              fi
+              chmod 600 /swapfile
+              mkswap -f /swapfile
+              swapon /swapfile
+              grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+            fi
+
             cat > /etc/systemd/system/dutch-bot-trainer.service << 'SERVICE'
             [Unit]
             Description=Dutch Bot Trainer
             After=network.target
+            StartLimitIntervalSec=600
+            StartLimitBurst=3
 
             [Service]
             Type=simple
@@ -120,23 +133,32 @@ jobs:
             Environment=BOT_TRAIN_SERVER=https://dutch-game.me
             Environment=BOT_TRAIN_START_HOUR=20
             Environment=BOT_TRAIN_END_HOUR=12
-            Environment=BOT_TRAIN_BATCH=12
-            Environment=BOT_TRAIN_SLEEP_MS=200
-            Environment=BOT_TRAIN_MAX_TURNS=800
-            Environment=BOT_TRAIN_BALANCED_ONLY=false
+            Environment=BOT_TRAIN_BATCH=4
+            Environment=BOT_TRAIN_SLEEP_MS=1500
+            Environment=BOT_TRAIN_MAX_TURNS=500
+            Environment=BOT_TRAIN_BALANCED_ONLY=true
             Environment=PATH=/home/dutch/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             ExecStartPre=/usr/bin/git config --global --add safe.directory /home/dutch/flutter
-            ExecStart=/home/dutch/flutter/bin/flutter pub run tool/bot_training_runner.dart
+            ExecStart=/home/dutch/flutter/bin/cache/dart-sdk/bin/dart run tool/bot_training_runner.dart
             Restart=always
-            RestartSec=10
+            RestartSec=120
+            Nice=10
+            IOSchedulingClass=idle
+            CPUQuota=45%
+            OOMScoreAdjust=500
 
             [Install]
             WantedBy=multi-user.target
             SERVICE
 
             systemctl daemon-reload
-            systemctl enable dutch-bot-trainer
-            systemctl restart dutch-bot-trainer
+            if systemctl restart dutch-bot-trainer; then
+              systemctl enable dutch-bot-trainer
+            else
+              echo "⚠️ Trainer failed to start, keeping it disabled to protect production."
+              systemctl stop dutch-bot-trainer || true
+              systemctl disable dutch-bot-trainer || true
+            fi
 
             # -------- Backend deploy --------
             cd /root/apps/dutch-server
