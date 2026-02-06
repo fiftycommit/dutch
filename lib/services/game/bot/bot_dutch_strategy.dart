@@ -80,7 +80,12 @@ class BotDutchStrategy {
     int lowestOpponentEstimate = 999;
     for (final opponent in gs.players) {
       if (opponent.id == bot.id) continue;
-      if (opponent.hand.isEmpty) continue;
+
+      // Main vide = score 0 garanti
+      if (opponent.hand.isEmpty) {
+        lowestOpponentEstimate = 0;
+        continue;
+      }
 
       final estimatedScore = _estimateOpponentScore(opponent);
       if (estimatedScore < lowestOpponentEstimate) {

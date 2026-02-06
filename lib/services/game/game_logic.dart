@@ -103,8 +103,12 @@ class GameLogic {
     gameState.discardPile.add(card);
     gameState.drawnCard = null;
     // Message explicite : le joueur n'a PAS gardé la carte piochée
-    gameState.addToHistory(
-        "${gameState.currentPlayer.name} défausse directement sa pioche.");
+    final currentName = gameState.currentPlayer.name;
+    if (gameState.currentPlayer.isHuman) {
+      gameState.addToHistory("$currentName défausse directement sa pioche.");
+    } else {
+      gameState.addToHistory("$currentName défausse ${card.displayName} (pas intéressé).");
+    }
 
     // Tracker la défausse (wasExchange = false : pas d'échange)
     BotDutchStrategy.discardTracker.trackDiscard(
@@ -157,7 +161,11 @@ class GameLogic {
 
     gameState.discardPile.add(oldCard);
     // Message explicite : le joueur a GARDÉ la carte piochée
-    gameState.addToHistory("${player.name} garde sa pioche et défausse une carte.");
+    if (player.isHuman) {
+      gameState.addToHistory("${player.name} garde sa pioche et défausse une carte.");
+    } else {
+      gameState.addToHistory("${player.name} échange et défausse ${oldCard.displayName}.");
+    }
 
     // Tracker la défausse (wasExchange = true : il a gardé la pioche)
     BotDutchStrategy.discardTracker.trackDiscard(
