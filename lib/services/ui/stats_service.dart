@@ -143,6 +143,9 @@ class StatsService {
   static Future<void> resetStats({int slotId = 1}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_getKey(slotId));
+    // Also reset the AI profile data so MMR stays in sync
+    await prefs.remove('player_profile_slot_$slotId');
+    await prefs.remove('player_action_history_slot_$slotId');
   }
 
   static Future<Difficulty> getRecommendedDifficulty({int slotId = 1}) async {
