@@ -270,6 +270,9 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
         ] else if (widget.showDeckAndDiscard) ...[
           _buildDeckAndDiscard(gs, cardSize, padding, deckCount),
         ],
+        // Afficher la dernière action d'un bot
+        if (!widget.isMyTurn && !isReaction && gs.actionHistory.isNotEmpty)
+          _buildLastBotAction(gs),
       ],
     );
   }
@@ -470,6 +473,27 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
           SizedBox(width: widget.isCompactMode ? 10 : 20),
           discardWidgetWithKey,
         ],
+      ),
+    );
+  }
+
+  /// Affiche la dernière action d'un bot (échange ou défausse)
+  Widget _buildLastBotAction(GameState gs) {
+    // Retirer le timestamp "[HH:mm] " du début
+    final raw = gs.actionHistory.first;
+    final text = raw.contains('] ') ? raw.substring(raw.indexOf('] ') + 2) : raw;
+
+    return Padding(
+      padding: EdgeInsets.only(top: widget.isCompactMode ? 4 : 8),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white70,
+          fontSize: widget.isCompactMode ? 11 : 13,
+          fontStyle: FontStyle.italic,
+          shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+        ),
       ),
     );
   }
