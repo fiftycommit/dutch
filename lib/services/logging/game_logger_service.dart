@@ -56,6 +56,25 @@ class GameLoggerService {
       final p = players[i];
       final type = p.isHuman ? 'HUMAIN' : 'BOT (${p.botBehavior?.name ?? "unknown"})';
       _logBuffer.writeln('  [${i + 1}] ${p.name} - $type');
+      if (!p.isHuman) {
+        final skill = p.botSkillLevel?.name ?? '?';
+        final hasAI = p.aiParameters != null && p.aiParameters!.isNotEmpty;
+        final src = hasAI ? 'SERVEUR' : 'LOCAL';
+        if (hasAI) {
+          final ai = p.aiParameters!;
+          final mmr = ai['serverMMR']?.toInt() ?? '?';
+          final vsHuman = ai['serverWinRateVsHuman'] != null
+              ? '${(ai['serverWinRateVsHuman']! * 100).toStringAsFixed(0)}%'
+              : '?';
+          _logBuffer.writeln('        Skill: $skill | Params: $src | MMR: $mmr | Vs humain: $vsHuman');
+          final mem = ai['memoryAccuracy']?.toStringAsFixed(2) ?? '?';
+          final dutch = ai['dutchThreshold']?.toStringAsFixed(1) ?? '?';
+          final agg = ai['aggressiveness']?.toStringAsFixed(2) ?? '?';
+          _logBuffer.writeln('        memoryAccuracy=$mem dutchThreshold=$dutch aggressiveness=$agg');
+        } else {
+          _logBuffer.writeln('        Skill: $skill | Params: $src');
+        }
+      }
     }
     _logBuffer.writeln('');
     _logBuffer.writeln('═══════════════════════════════════════════════════════════════');

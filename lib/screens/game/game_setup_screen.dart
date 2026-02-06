@@ -515,6 +515,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         final behavior = _parseBehavior(profile.behavior);
         final parsedSkill = _parseSkillLevel(profile.skillLevel) ?? targetSkill;
         final aiParams = _extractAiParams(profile.learnedParameters);
+        aiParams['serverMMR'] = profile.mmr.toDouble();
+        aiParams['serverWinRateVsHuman'] = profile.avgPBeatHuman;
 
         players.add(Player(
           id: 'bot_$i',
@@ -550,15 +552,33 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final botLearningService = BotLearningService();
     final targetSkill = _difficultyToSkillLevel(selectedBotDifficulty);
 
-    // Récupérer les top bots SANS filtre (tous les meilleurs absolus)
-    // et trier par taux de victoire contre les humains
-    final topBots = await botLearningService.fetchTopBots(limit: 10);
+    // Récupérer tous les top bots du serveur
+    final allBots = await botLearningService.fetchTopBots(limit: 20);
 
-    // Trier par avgPBeatHuman décroissant (meilleur winrate vs humains en premier)
-    topBots.sort((a, b) => b.avgPBeatHuman.compareTo(a.avgPBeatHuman));
+    // Score élite = moyenne winRate et vsHuman
+    double eliteScore(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
 
-    // Prendre le meilleur bot et le dupliquer pour tous les slots
-    final bestBot = topBots.isNotEmpty ? topBots.first : null;
+    // Filtrer par le skill level ciblé d'abord
+    final targetSkillName = _skillLevelToString(targetSkill);
+    final filteredBots = allBots.where((b) => b.skillLevel == targetSkillName).toList();
+
+    // Debug
+    for (final bot in allBots) {
+      final marker = bot.skillLevel == targetSkillName ? '→' : ' ';
+      debugPrint('$marker 🤖 ${bot.botId} | MMR: ${bot.mmr} | Vs humain: ${(bot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bot.winRate * 100).toStringAsFixed(0)}% | Score: ${(eliteScore(bot) * 100).toStringAsFixed(0)}%');
+    }
+
+    // Trier les bots du bon skill level par score élite
+    filteredBots.sort((a, b) => eliteScore(b).compareTo(eliteScore(a)));
+
+    // Prendre le meilleur du skill ciblé, sinon fallback sur le meilleur global
+    final bestBot = filteredBots.isNotEmpty ? filteredBots.first : (allBots.isNotEmpty ? allBots.first : null);
+
+    if (bestBot != null) {
+      debugPrint('⭐ Bot élite sélectionné: ${bestBot.botId} | MMR: ${bestBot.mmr} | Vs humain: ${(bestBot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bestBot.winRate * 100).toStringAsFixed(0)}% | Dupliqué x$numberOfBots');
+    } else {
+      debugPrint('⚠️ Aucun bot récupéré du serveur, fallback local');
+    }
 
     final players = <Player>[];
 
@@ -566,6 +586,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       if (bestBot != null) {
         final behavior = _parseBehavior(bestBot.behavior);
         final aiParams = _extractAiParams(bestBot.learnedParameters);
+        // Stocker le MMR et winrate du bot source pour les logs
+        aiParams['serverMMR'] = bestBot.mmr.toDouble();
+        aiParams['serverWinRateVsHuman'] = bestBot.avgPBeatHuman;
 
         players.add(Player(
           id: 'bot_$i',
