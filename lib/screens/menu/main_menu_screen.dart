@@ -271,7 +271,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     ),
                   ),
                   Text(
-                    'réalisé par Max et EL Roy',
+                    'réalisé par Max, Irfat et EL Roy',
                     style: TextStyle(
                       fontSize: isLargeScreen ? 16 : 14,
                       letterSpacing: isLargeScreen ? 4 : 2,
