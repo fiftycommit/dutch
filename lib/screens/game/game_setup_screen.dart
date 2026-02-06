@@ -473,82 +473,187 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   }
 
   /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
+  /// Bronze/Silver/Gold : sélection par winrate moyen cible
+  /// Platinum : meilleurs bots absolus de la catégorie
   Future<List<Player>> _createManualBots(int numberOfBots) async {
     if (numberOfBots <= 0) return [];
 
-    // Silver, Gold, Platinum : récupérer le bot avec le meilleur taux de
-    // victoire contre les humains et le dupliquer pour tous les slots
-    if (selectedBotDifficulty == Difficulty.medium ||
-        selectedBotDifficulty == Difficulty.hard ||
-        selectedBotDifficulty == Difficulty.platinum) {
+    // Platinum : logique élite (meilleurs absolus)
+    if (selectedBotDifficulty == Difficulty.platinum) {
       return _createEliteBots(numberOfBots);
     }
 
-    // Bronze et Mix : logique originale par skill level
-    final skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
-    final isMixMode = selectedBotDifficulty == Difficulty.mix;
-    final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
-    final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
-    final random = DateTime.now().millisecondsSinceEpoch;
-
-    final skillSequence = List<BotSkillLevel>.generate(numberOfBots, (i) {
-      if (isMixMode) {
-        return mixSkillLevels[i % mixSkillLevels.length];
-      }
-      return skillLevel;
-    });
-
-    final skillCounts = <BotSkillLevel, int>{};
-    for (final skill in skillSequence) {
-      skillCounts[skill] = (skillCounts[skill] ?? 0) + 1;
+    // Mix : logique spéciale (mélange de niveaux)
+    if (selectedBotDifficulty == Difficulty.mix) {
+      return _createMixBots(numberOfBots);
     }
 
+    // Bronze / Silver / Gold : sélection par tranche de winrate
+    return _createWinrateBots(numberOfBots);
+  }
+
+  /// Winrate minimum par difficulté (pas de max, on prend les plus proches du min)
+  double _winrateMin() {
+    switch (selectedBotDifficulty) {
+      case Difficulty.easy:   return 0.0;  // Bronze : tous les bots, triés du plus faible
+      case Difficulty.medium: return 0.50; // Argent : minimum 50%
+      case Difficulty.hard:   return 0.70; // Or : minimum 70%
+      default:                return 0.0;
+    }
+  }
+
+  /// Sélectionne les bots dont le winrate moyen tombe dans la tranche cible
+  Future<List<Player>> _createWinrateBots(int numberOfBots) async {
     final botLearningService = BotLearningService();
-    final topBotsBySkill = <BotSkillLevel, List<BotProfile>>{};
+    final allBots = await botLearningService.fetchTopBots(limit: 50);
+    final targetSkill = _difficultyToSkillLevel(selectedBotDifficulty);
 
-    await Future.wait(skillCounts.entries.map((entry) async {
-      final skillName = _skillLevelToString(entry.key);
-      final topBots = await botLearningService.fetchTopBots(
-        skillLevel: skillName,
-        limit: entry.value,
-      );
-      topBotsBySkill[entry.key] = List<BotProfile>.from(topBots);
-    }));
+    double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
+    final minWr = _winrateMin();
+    final isBronze = selectedBotDifficulty == Difficulty.easy;
 
+    // Filtrer par winrate minimum strict
+    var candidates = allBots.where((b) => avgWinrate(b) >= minWr).toList();
+
+    // Bronze : trier du plus faible au plus fort (on veut les plus nuls)
+    // Argent/Or : trier du plus fort au plus faible (on veut les meilleurs au-dessus du min)
+    if (isBronze) {
+      candidates.sort((a, b) => avgWinrate(a).compareTo(avgWinrate(b)));
+    } else {
+      candidates.sort((a, b) => avgWinrate(b).compareTo(avgWinrate(a)));
+    }
+
+    debugPrint('🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
+    for (final bot in candidates) {
+      debugPrint('  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
+    }
+
+    final isGold = selectedBotDifficulty == Difficulty.hard;
+    final players = <Player>[];
+
+    if (isGold) {
+      // Or : 2/3 #1 + 1/3 #2 (duplication des meilleurs)
+      final bestBot = candidates.isNotEmpty ? candidates.first : null;
+      final secondBot = candidates.length >= 2 ? candidates[1] : bestBot;
+
+      if (bestBot != null) {
+        debugPrint('⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
+      }
+      if (secondBot != null && secondBot != bestBot) {
+        debugPrint('⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
+      }
+
+      final secondBotCount = (numberOfBots / 3).ceil();
+      final firstBotCount = numberOfBots - secondBotCount;
+
+      for (int i = 0; i < numberOfBots; i++) {
+        final source = i < firstBotCount ? bestBot : secondBot;
+        if (source != null) {
+          final behavior = _parseBehavior(source.behavior);
+          final aiParams = _extractAiParams(source.learnedParameters);
+          aiParams['serverMMR'] = source.mmr.toDouble();
+          aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
+
+          players.add(Player(
+            id: 'bot_$i',
+            name: _getBotName(behavior, targetSkill),
+            isHuman: false,
+            botBehavior: behavior,
+            botSkillLevel: targetSkill,
+            aiParameters: aiParams.isNotEmpty ? aiParams : null,
+            position: i + 1,
+          ));
+        } else {
+          players.add(Player(
+            id: 'bot_$i',
+            name: _getBotName(BotBehavior.balanced, targetSkill),
+            isHuman: false,
+            botBehavior: BotBehavior.balanced,
+            botSkillLevel: targetSkill,
+            position: i + 1,
+          ));
+        }
+      }
+    } else {
+      // Bronze / Argent : bots tous différents
+      for (int i = 0; i < numberOfBots; i++) {
+        final source = i < candidates.length ? candidates[i] : null;
+        if (source != null) {
+          debugPrint('⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
+          final behavior = _parseBehavior(source.behavior);
+          final aiParams = _extractAiParams(source.learnedParameters);
+          aiParams['serverMMR'] = source.mmr.toDouble();
+          aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
+
+          players.add(Player(
+            id: 'bot_$i',
+            name: _getBotName(behavior, targetSkill),
+            isHuman: false,
+            botBehavior: behavior,
+            botSkillLevel: targetSkill,
+            aiParameters: aiParams.isNotEmpty ? aiParams : null,
+            position: i + 1,
+          ));
+        } else {
+          players.add(Player(
+            id: 'bot_$i',
+            name: _getBotName(BotBehavior.balanced, targetSkill),
+            isHuman: false,
+            botBehavior: BotBehavior.balanced,
+            botSkillLevel: targetSkill,
+            position: i + 1,
+          ));
+        }
+      }
+    }
+
+    return players;
+  }
+
+  /// Mode Mix : un bot de chaque tranche de winrate
+  Future<List<Player>> _createMixBots(int numberOfBots) async {
+    final botLearningService = BotLearningService();
+    final allBots = await botLearningService.fetchTopBots(limit: 50);
+
+    double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
+
+    final mixTargets = [0.25, 0.50, 0.75];
+    final mixSkills = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
-      final targetSkill = skillSequence[i];
-      final pool = topBotsBySkill[targetSkill] ?? [];
-      final profile = pool.isNotEmpty ? pool.removeAt(0) : null;
+      final target = mixTargets[i % mixTargets.length];
+      final skill = mixSkills[i % mixSkills.length];
 
-      if (profile != null) {
-        final behavior = _parseBehavior(profile.behavior);
-        final parsedSkill = _parseSkillLevel(profile.skillLevel) ?? targetSkill;
-        final aiParams = _extractAiParams(profile.learnedParameters);
-        aiParams['serverMMR'] = profile.mmr.toDouble();
-        aiParams['serverWinRateVsHuman'] = profile.avgPBeatHuman;
+      // Trouver le bot le plus proche du winrate cible
+      final sorted = List<BotProfile>.from(allBots)
+        ..sort((a, b) =>
+            (avgWinrate(a) - target).abs().compareTo((avgWinrate(b) - target).abs()));
+
+      final source = sorted.isNotEmpty ? sorted.first : null;
+
+      if (source != null) {
+        final behavior = _parseBehavior(source.behavior);
+        final aiParams = _extractAiParams(source.learnedParameters);
+        aiParams['serverMMR'] = source.mmr.toDouble();
+        aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
 
         players.add(Player(
           id: 'bot_$i',
-          name: _getBotName(behavior, parsedSkill),
+          name: _getBotName(behavior, skill),
           isHuman: false,
           botBehavior: behavior,
-          botSkillLevel: parsedSkill,
+          botSkillLevel: skill,
           aiParameters: aiParams.isNotEmpty ? aiParams : null,
           position: i + 1,
         ));
       } else {
-        final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
-        final behavior = botBehaviors[behaviorIndex];
-        final botSkill = targetSkill;
-
         players.add(Player(
           id: 'bot_$i',
-          name: _getBotName(behavior, botSkill),
+          name: _getBotName(BotBehavior.balanced, skill),
           isHuman: false,
-          botBehavior: behavior,
-          botSkillLevel: botSkill,
+          botBehavior: BotBehavior.balanced,
+          botSkillLevel: skill,
           position: i + 1,
         ));
       }
@@ -633,21 +738,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       case 'balanced':
       default:
         return BotBehavior.balanced;
-    }
-  }
-
-  BotSkillLevel? _parseSkillLevel(String? raw) {
-    switch (raw) {
-      case 'bronze':
-        return BotSkillLevel.bronze;
-      case 'silver':
-        return BotSkillLevel.silver;
-      case 'gold':
-        return BotSkillLevel.gold;
-      case 'platinum':
-        return BotSkillLevel.platinum;
-      default:
-        return null;
     }
   }
 
