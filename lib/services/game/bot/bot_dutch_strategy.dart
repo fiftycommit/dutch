@@ -59,8 +59,16 @@ class BotDutchStrategy {
   ) {
     final myScore = bot.getKnownScore();
 
-    // Main vide = score 0, Dutch garanti gagnant
-    if (bot.hand.isEmpty) return true;
+    // Score 0 (main vide ou toutes les cartes à 0 pts) = Dutch garanti gagnant
+    if (myScore == 0) return true;
+
+    // Score <= 2 et tous les adversaires ont 3+ cartes = quasi impossible qu'ils aient moins
+    if (myScore <= 2) {
+      final allOpponentsHaveMany = gs.players
+          .where((p) => p.id != bot.id)
+          .every((p) => p.hand.length >= 3);
+      if (allOpponentsHaveMany) return true;
+    }
 
     // Si je viens de rater un match ou de prendre une pénalité, ne Dutch pas
     if (_recentMatchFail(gs, bot) || _recentPenalty(gs, bot)) {
