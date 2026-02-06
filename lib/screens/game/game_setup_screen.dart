@@ -465,17 +465,19 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Future<List<Player>> _createManualBots(int numberOfBots) async {
     if (numberOfBots <= 0) return [];
 
-    // Mode Platine : récupérer les bots avec le plus gros MMR absolu
-    // (toutes catégories confondues) pour une difficulté maximale
-    if (selectedBotDifficulty == Difficulty.platinum) {
-      return _createPlatinumBots(numberOfBots);
+    // Silver, Gold, Platinum : récupérer le bot avec le meilleur taux de
+    // victoire contre les humains et le dupliquer pour tous les slots
+    if (selectedBotDifficulty == Difficulty.medium ||
+        selectedBotDifficulty == Difficulty.hard ||
+        selectedBotDifficulty == Difficulty.platinum) {
+      return _createEliteBots(numberOfBots);
     }
 
+    // Bronze et Mix : logique originale par skill level
     final skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
     final isMixMode = selectedBotDifficulty == Difficulty.mix;
     final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
     final botBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
-    final forceBalanced = selectedBotDifficulty != Difficulty.easy;
     final random = DateTime.now().millisecondsSinceEpoch;
 
     final skillSequence = List<BotSkillLevel>.generate(numberOfBots, (i) {
@@ -525,7 +527,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         ));
       } else {
         final behaviorIndex = (i + (random >> i)) % botBehaviors.length;
-        final behavior = forceBalanced ? BotBehavior.balanced : botBehaviors[behaviorIndex];
+        final behavior = botBehaviors[behaviorIndex];
         final botSkill = targetSkill;
 
         players.add(Player(
@@ -542,29 +544,35 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     return players;
   }
 
-  /// Crée les bots pour le mode Platine : les meilleurs MMR absolus du serveur
-  Future<List<Player>> _createPlatinumBots(int numberOfBots) async {
+  /// Crée les bots élite pour Silver/Gold/Platinum :
+  /// Récupère le bot avec le meilleur winrate vs humains et le duplique
+  Future<List<Player>> _createEliteBots(int numberOfBots) async {
     final botLearningService = BotLearningService();
+    final targetSkill = _difficultyToSkillLevel(selectedBotDifficulty);
 
-    // Récupérer les top bots SANS filtre de skill level = plus gros MMR absolu
-    final topBots = await botLearningService.fetchTopBots(
-      limit: numberOfBots,
-    );
+    // Récupérer les top bots SANS filtre (tous les meilleurs absolus)
+    // et trier par taux de victoire contre les humains
+    final topBots = await botLearningService.fetchTopBots(limit: 10);
+
+    // Trier par avgPBeatHuman décroissant (meilleur winrate vs humains en premier)
+    topBots.sort((a, b) => b.avgPBeatHuman.compareTo(a.avgPBeatHuman));
+
+    // Prendre le meilleur bot et le dupliquer pour tous les slots
+    final bestBot = topBots.isNotEmpty ? topBots.first : null;
 
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
-      if (i < topBots.length) {
-        final profile = topBots[i];
-        final behavior = _parseBehavior(profile.behavior);
-        final aiParams = _extractAiParams(profile.learnedParameters);
+      if (bestBot != null) {
+        final behavior = _parseBehavior(bestBot.behavior);
+        final aiParams = _extractAiParams(bestBot.learnedParameters);
 
         players.add(Player(
           id: 'bot_$i',
-          name: _getBotName(behavior, BotSkillLevel.platinum),
+          name: _getBotName(behavior, targetSkill),
           isHuman: false,
           botBehavior: behavior,
-          botSkillLevel: BotSkillLevel.platinum,
+          botSkillLevel: targetSkill,
           aiParameters: aiParams.isNotEmpty ? aiParams : null,
           position: i + 1,
         ));
@@ -572,10 +580,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         // Fallback si le serveur ne répond pas
         players.add(Player(
           id: 'bot_$i',
-          name: _getBotName(BotBehavior.balanced, BotSkillLevel.platinum),
+          name: _getBotName(BotBehavior.balanced, targetSkill),
           isHuman: false,
           botBehavior: BotBehavior.balanced,
-          botSkillLevel: BotSkillLevel.platinum,
+          botSkillLevel: targetSkill,
           position: i + 1,
         ));
       }

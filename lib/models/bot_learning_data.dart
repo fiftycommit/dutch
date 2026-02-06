@@ -201,11 +201,14 @@ class BotProfile {
   final double avgRank;
   final int totalDutchCalls;
   final int successfulDutchCalls;
-  
+
+  // Taux de victoire contre les humains (0.0 - 1.0)
+  final double avgPBeatHuman;
+
   // MMR et évolution
   final int mmr;
   final List<int> mmrHistory;
-  
+
   // Paramètres appris
   final Map<String, dynamic> learnedParameters;
 
@@ -223,6 +226,7 @@ class BotProfile {
     required this.avgRank,
     required this.totalDutchCalls,
     required this.successfulDutchCalls,
+    this.avgPBeatHuman = 0.5,
     required this.mmr,
     required this.mmrHistory,
     required this.learnedParameters,
@@ -242,6 +246,7 @@ class BotProfile {
         'avgRank': avgRank,
         'totalDutchCalls': totalDutchCalls,
         'successfulDutchCalls': successfulDutchCalls,
+        'avgPBeatHuman': avgPBeatHuman,
         'mmr': mmr,
         'mmrHistory': mmrHistory,
         'learnedParameters': learnedParameters,
@@ -261,6 +266,7 @@ class BotProfile {
         avgRank: json['avgRank'],
         totalDutchCalls: json['totalDutchCalls'],
         successfulDutchCalls: json['successfulDutchCalls'],
+        avgPBeatHuman: (json['avgPBeatHuman'] as num?)?.toDouble() ?? 0.5,
         mmr: json['mmr'],
         mmrHistory: List<int>.from(json['mmrHistory']),
         learnedParameters: json['learnedParameters'],
