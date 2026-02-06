@@ -465,6 +465,12 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Future<List<Player>> _createManualBots(int numberOfBots) async {
     if (numberOfBots <= 0) return [];
 
+    // Mode Platine : récupérer les bots avec le plus gros MMR absolu
+    // (toutes catégories confondues) pour une difficulté maximale
+    if (selectedBotDifficulty == Difficulty.platinum) {
+      return _createPlatinumBots(numberOfBots);
+    }
+
     final skillLevel = _difficultyToSkillLevel(selectedBotDifficulty);
     final isMixMode = selectedBotDifficulty == Difficulty.mix;
     final mixSkillLevels = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
@@ -528,6 +534,48 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
           isHuman: false,
           botBehavior: behavior,
           botSkillLevel: botSkill,
+          position: i + 1,
+        ));
+      }
+    }
+
+    return players;
+  }
+
+  /// Crée les bots pour le mode Platine : les meilleurs MMR absolus du serveur
+  Future<List<Player>> _createPlatinumBots(int numberOfBots) async {
+    final botLearningService = BotLearningService();
+
+    // Récupérer les top bots SANS filtre de skill level = plus gros MMR absolu
+    final topBots = await botLearningService.fetchTopBots(
+      limit: numberOfBots,
+    );
+
+    final players = <Player>[];
+
+    for (int i = 0; i < numberOfBots; i++) {
+      if (i < topBots.length) {
+        final profile = topBots[i];
+        final behavior = _parseBehavior(profile.behavior);
+        final aiParams = _extractAiParams(profile.learnedParameters);
+
+        players.add(Player(
+          id: 'bot_$i',
+          name: _getBotName(behavior, BotSkillLevel.platinum),
+          isHuman: false,
+          botBehavior: behavior,
+          botSkillLevel: BotSkillLevel.platinum,
+          aiParameters: aiParams.isNotEmpty ? aiParams : null,
+          position: i + 1,
+        ));
+      } else {
+        // Fallback si le serveur ne répond pas
+        players.add(Player(
+          id: 'bot_$i',
+          name: _getBotName(BotBehavior.balanced, BotSkillLevel.platinum),
+          isHuman: false,
+          botBehavior: BotBehavior.balanced,
+          botSkillLevel: BotSkillLevel.platinum,
           position: i + 1,
         ));
       }
