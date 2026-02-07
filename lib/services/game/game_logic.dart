@@ -104,11 +104,12 @@ class GameLogic {
     gameState.drawnCard = null;
     // Message explicite : le joueur n'a PAS gardé la carte piochée
     final currentName = gameState.currentPlayer.name;
-    if (gameState.currentPlayer.isHuman) {
-      gameState.addToHistory("$currentName défausse directement sa pioche.");
-    } else {
-      gameState.addToHistory("$currentName défausse ${card.displayName} (pas intéressé).");
-    }
+    final isHuman = currentName == "Vous";
+    final cardName = card.displayName == 'e Dame' ? ' Dame' : card.displayName;
+    final verb = isHuman ? "ne gardez pas" : "ne garde pas";
+
+    gameState.addToHistory("$currentName $verb la carte$cardName (pas intéressé)");
+    
 
     // Tracker la défausse (wasExchange = false : pas d'échange)
     BotDutchStrategy.discardTracker.trackDiscard(
@@ -161,10 +162,13 @@ class GameLogic {
 
     gameState.discardPile.add(oldCard);
     // Message explicite : le joueur a GARDÉ la carte piochée
+    final isDame = oldCard.displayName == 'e Dame';
+    final cardName = isDame ? 'Dame' : oldCard.displayName.trimLeft();
     if (player.isHuman) {
-      gameState.addToHistory("${player.name} garde sa pioche et défausse une carte.");
+      gameState.addToHistory("Vous remplacez votre $cardName par la carte piochée");
     } else {
-      gameState.addToHistory("${player.name} échange et défausse ${oldCard.displayName}.");
+      final possessif = isDame ? 'sa' : 'son';
+      gameState.addToHistory("${player.name} remplace $possessif $cardName par la carte piochée");
     }
 
     // Tracker la défausse (wasExchange = true : il a gardé la pioche)
@@ -225,8 +229,13 @@ class GameLogic {
         }
       }
 
-      gameState.addToHistory(
-          "MATCH ! ${player.name} pose ${playerCard.displayName} !");
+      String textMatch = "MATCH ! - ${player.name} pose un${playerCard.displayName} !";
+
+      if (player.name == "Vous") {
+        textMatch = "MATCH ! - Vous avez posé un${playerCard.displayName} !";
+      }
+
+      gameState.addToHistory(textMatch);
 
       // Log
       GameLoggerService.instance.logMatch(

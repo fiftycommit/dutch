@@ -69,7 +69,9 @@ class ResultsScreen extends StatelessWidget {
         }
         final showRP = gameProvider.playerMMR != null;
 
-        return shared.ResultsScreen(
+        return PopScope(
+          canPop: false,
+          child: shared.ResultsScreen(
           config: shared.ResultsConfig(
             gameState: gameState,
             localPlayerId: humanPlayer.id,
@@ -108,6 +110,7 @@ class ResultsScreen extends StatelessWidget {
                 ? (player, rank) => _calculateRP(gameProvider, player, rank, gameState)
                 : null,
           ),
+        ),
         );
       },
     );

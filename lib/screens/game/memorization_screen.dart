@@ -30,7 +30,9 @@ class MemorizationScreen extends StatelessWidget {
       return _buildEliminatedScreen();
     }
 
-    return shared.MemorizationScreen(
+    return PopScope(
+      canPop: false,
+      child: shared.MemorizationScreen(
       config: shared.MemorizationConfig(
         localPlayer: humanPlayer,
         onMemorizationComplete: (selectedIndices) async {
@@ -61,6 +63,7 @@ class MemorizationScreen extends StatelessWidget {
         noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
         noPlayerMessage: "Les bots continuent...",
       ),
+    ),
     );
   }
 

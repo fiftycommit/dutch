@@ -34,35 +34,38 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
         .where((event) => event.type == GameEventType.gameStarted)
         .map((_) {});
 
-    return shared.MemorizationScreen(
-      config: shared.MemorizationConfig(
-        localPlayer: localPlayer,
-        onMemorizationComplete: (selectedIndices) async {
-          // En multiplayer, pas besoin de modifier l'état local
-          // Le serveur gère tout
-        },
-        buildGameScreen: (context) => const MultiplayerGameScreen(),
-        navigateToGame: (context) => context.go('/multiplayer/game'),
-        countdownSeconds: 15,
-        showWaitingScreen: true,
-        gameStartStream: gameStartStream,
-        onMarkReady: () => provider.markReady(),
-        buildReadyInfo: (context) => Consumer<MultiplayerGameProvider>(
-          builder: (context, provider, child) {
-            final state = provider.gameState;
-            if (state == null) return const SizedBox();
-            final readyCount = state.readyPlayerIds.length;
-            final totalHumans = state.players
-                .where((p) => p.isHuman && !p.isSpectator)
-                .length;
-            return Text(
-              '$readyCount / $totalHumans prêts',
-              style: const TextStyle(color: AppColors.textSecondary),
-            );
+    return PopScope(
+      canPop: false,
+      child: shared.MemorizationScreen(
+        config: shared.MemorizationConfig(
+          localPlayer: localPlayer,
+          onMemorizationComplete: (selectedIndices) async {
+            // En multiplayer, pas besoin de modifier l'état local
+            // Le serveur gère tout
           },
+          buildGameScreen: (context) => const MultiplayerGameScreen(),
+          navigateToGame: (context) => context.go('/multiplayer/game'),
+          countdownSeconds: 15,
+          showWaitingScreen: true,
+          gameStartStream: gameStartStream,
+          onMarkReady: () => provider.markReady(),
+          buildReadyInfo: (context) => Consumer<MultiplayerGameProvider>(
+            builder: (context, provider, child) {
+              final state = provider.gameState;
+              if (state == null) return const SizedBox();
+              final readyCount = state.readyPlayerIds.length;
+              final totalHumans = state.players
+                  .where((p) => p.isHuman && !p.isSpectator)
+                  .length;
+              return Text(
+                '$readyCount / $totalHumans prêts',
+                style: const TextStyle(color: AppColors.textSecondary),
+              );
+            },
+          ),
+          noPlayerTitle: "VOUS ÊTES SPECTATEUR",
+          noPlayerMessage: "La partie va commencer...",
         ),
-        noPlayerTitle: "VOUS ÊTES SPECTATEUR",
-        noPlayerMessage: "La partie va commencer...",
       ),
     );
   }

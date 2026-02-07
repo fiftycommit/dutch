@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html style="background: #0d2818;">
+<html style="background: #0d2818; overscroll-behavior-x: none; touch-action: pan-y;">
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
@@ -188,6 +188,13 @@
     // Use HTML renderer on mobile for better performance
     // CanvasKit is heavy (26MB) and causes lag on mobile browsers
     window.flutterWebRenderer = "html";
+  </script>
+  <script>
+    // Block browser back/forward navigation
+    history.pushState(null, '', location.href);
+    window.addEventListener('popstate', function(e) {
+      history.pushState(null, '', location.href);
+    });
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

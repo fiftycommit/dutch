@@ -21,12 +21,15 @@ class DutchRevealScreen extends StatelessWidget {
       );
     }
 
-    return shared.DutchRevealScreen(
-      config: shared.DutchRevealConfig(
-        gameState: gameProvider.gameState!,
-        buildResultsScreen: (context) => const ResultsScreen(),
-        navigateToResults: (context) => context.go('/solo/results'),
-        orderPlayers: shared.orderPlayersForSolo,
+    return PopScope(
+      canPop: false,
+      child: shared.DutchRevealScreen(
+        config: shared.DutchRevealConfig(
+          gameState: gameProvider.gameState!,
+          buildResultsScreen: (context) => const ResultsScreen(),
+          navigateToResults: (context) => context.go('/solo/results'),
+          orderPlayers: shared.orderPlayersForSolo,
+        ),
       ),
     );
   }

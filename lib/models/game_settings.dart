@@ -24,6 +24,7 @@ class GameSettings {
   bool fillBots;
 
   int reactionTimeMs;
+  int actionTextDisplayMs;
   bool useSBMM;
   String cardBackStyle;
 
@@ -44,6 +45,7 @@ class GameSettings {
     this.maxPlayers = 6,
     this.fillBots = true,
     this.reactionTimeMs = 3000,
+    this.actionTextDisplayMs = 1500,
     this.useSBMM = true,
     this.cardBackStyle = 'classic',
     this.soundEnabled = true,
@@ -63,6 +65,7 @@ class GameSettings {
     int? maxPlayers,
     bool? fillBots,
     int? reactionTimeMs,
+    int? actionTextDisplayMs,
     bool? useSBMM,
     String? cardBackStyle,
     bool? soundEnabled,
@@ -81,6 +84,7 @@ class GameSettings {
       maxPlayers: maxPlayers ?? this.maxPlayers,
       fillBots: fillBots ?? this.fillBots,
       reactionTimeMs: reactionTimeMs ?? this.reactionTimeMs,
+      actionTextDisplayMs: actionTextDisplayMs ?? this.actionTextDisplayMs,
       useSBMM: useSBMM ?? this.useSBMM,
       cardBackStyle: cardBackStyle ?? this.cardBackStyle,
       soundEnabled: soundEnabled ?? this.soundEnabled,
@@ -102,6 +106,7 @@ class GameSettings {
       maxPlayers: json['maxPlayers'] ?? 4,
       fillBots: json['fillBots'] ?? true,
       reactionTimeMs: json['reactionTimeMs'] ?? 3000,
+      actionTextDisplayMs: json['actionTextDisplayMs'] ?? 1500,
       useSBMM: json['useSBMM'] ?? true,
       cardBackStyle: json['cardBackStyle'] ?? 'classic',
       soundEnabled: json['soundEnabled'] ?? true,
@@ -123,6 +128,7 @@ class GameSettings {
       'maxPlayers': maxPlayers,
       'fillBots': fillBots,
       'reactionTimeMs': reactionTimeMs,
+      'actionTextDisplayMs': actionTextDisplayMs,
       'useSBMM': useSBMM,
       'cardBackStyle': cardBackStyle,
       'soundEnabled': soundEnabled,

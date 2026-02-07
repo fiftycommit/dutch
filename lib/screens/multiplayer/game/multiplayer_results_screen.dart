@@ -75,7 +75,9 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
         : 0;
     final isTournamentWinner = isTournament && isFinalRound && localRank == 1;
 
-    return shared.ResultsScreen(
+    return PopScope(
+      canPop: false,
+      child: shared.ResultsScreen(
       config: shared.ResultsConfig(
         gameState: gameState,
         localPlayerId: widget.localPlayerId,
@@ -99,6 +101,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
         buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider, isTournament: isTournament, isTournamentOver: isTournamentOver),
         rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
       ),
+    ),
     );
   }
 

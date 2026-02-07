@@ -220,7 +220,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   @override
   Widget build(BuildContext context) {
     // Consume MultiplayerGameProvider
-    return Consumer<MultiplayerGameProvider>(
+    return PopScope(
+      canPop: false,
+      child: Consumer<MultiplayerGameProvider>(
       builder: (context, gameProvider, child) {
         final gameState = gameProvider.gameState;
 
@@ -553,6 +555,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           ),
         );
       },
+    ),
     );
   }
 

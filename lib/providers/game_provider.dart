@@ -62,6 +62,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   int _currentReactionTimeMs = 3000;
   @override
   int get currentReactionTimeMs => _currentReactionTimeMs;
+  int _currentActionTextDisplayMs = 1500;
   int _currentSlotId = 1;
   bool _useSBMM = false;
   
@@ -128,6 +129,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     required GameMode gameMode,
     required Difficulty difficulty,
     required int reactionTimeMs,
+    int actionTextDisplayMs = 1500,
     int tournamentRound = 1,
     int saveSlot = 1,
     bool useSBMM = false,
@@ -145,6 +147,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.tournamentCumulativeScores = Map.from(_tournamentManager.cumulativeScores);
     
     _currentReactionTimeMs = reactionTimeMs;
+    _currentActionTextDisplayMs = actionTextDisplayMs;
     _currentSlotId = saveSlot;
     _useSBMM = useSBMM;
     _lastMatchRpResult = null;
@@ -551,7 +554,14 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     isProcessing = false;
     notifyListeners();
-    if (_gameState?.phase == GamePhase.playing) startReactionPhase();
+    if (_gameState?.phase == GamePhase.playing) {
+      if (_currentActionTextDisplayMs > 0) {
+        await Future.delayed(Duration(milliseconds: _currentActionTextDisplayMs));
+        if (_gameState == null || _isPaused) return;
+        if (_gameState!.phase != GamePhase.playing) return;
+      }
+      startReactionPhase();
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -719,6 +729,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       gameMode: GameMode.tournament,
       difficulty: _gameState!.difficulty,
       reactionTimeMs: _currentReactionTimeMs,
+      actionTextDisplayMs: _currentActionTextDisplayMs,
       tournamentRound: _gameState!.tournamentRound + 1,
       saveSlot: _currentSlotId,
       useSBMM: _playerMMR != null,

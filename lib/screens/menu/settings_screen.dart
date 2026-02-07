@@ -73,6 +73,37 @@ class SettingsScreen extends StatelessWidget {
                     "Temps disponible pour jouer une carte sur la défausse.",
                     style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Affichage action bot",
+                          style: TextStyle(color: Colors.white, fontSize: 16)),
+                      Text(
+                          settings.actionTextDisplayMs == 0
+                              ? "Désactivé"
+                              : "${(settings.actionTextDisplayMs / 1000).toStringAsFixed(1)} s",
+                          style: const TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                    ],
+                  ),
+                  Slider(
+                    value: settings.actionTextDisplayMs.toDouble(),
+                    min: 0,
+                    max: 10000,
+                    divisions: 20,
+                    activeColor: Colors.amber,
+                    inactiveColor: Colors.white24,
+                    onChanged: (value) {
+                      settings.setActionTextDisplayTime(value.toInt());
+                    },
+                  ),
+                  const Text(
+                    "Durée d'affichage de l'action des bots avant la réaction. 0 = désactivé.",
+                    style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
+                  ),
                 ],
               ),
             ),

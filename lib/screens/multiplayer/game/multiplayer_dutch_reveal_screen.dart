@@ -21,17 +21,20 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
       );
     }
 
-    return shared.DutchRevealScreen(
-      config: shared.DutchRevealConfig(
-        gameState: provider.gameState!,
-        buildResultsScreen: (context) => MultiplayerResultsScreen(
+    return PopScope(
+      canPop: false,
+      child: shared.DutchRevealScreen(
+        config: shared.DutchRevealConfig(
           gameState: provider.gameState!,
-          localPlayerId: provider.playerId,
+          buildResultsScreen: (context) => MultiplayerResultsScreen(
+            gameState: provider.gameState!,
+            localPlayerId: provider.playerId,
+          ),
+          navigateToResults: (context) => context.go('/multiplayer/results'),
+          shouldRedirectToLobby: () => 
+            provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
+          navigateToLobbyRedirect: (context) => context.go('/lobby'),
         ),
-        navigateToResults: (context) => context.go('/multiplayer/results'),
-        shouldRedirectToLobby: () => 
-          provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
-        navigateToLobbyRedirect: (context) => context.go('/lobby'),
       ),
     );
   }

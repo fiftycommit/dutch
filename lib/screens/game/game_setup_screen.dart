@@ -378,6 +378,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
         difficulty: settings.luckDifficulty,
         reactionTimeMs: settings.reactionTimeMs,
+        actionTextDisplayMs: settings.actionTextDisplayMs,
         saveSlot: widget.saveSlot,
         useSBMM: useSBMM,
         hardcoreLevel: hardcoreLevel,

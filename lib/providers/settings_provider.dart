@@ -24,6 +24,7 @@ class SettingsProvider with ChangeNotifier {
 
   Difficulty get botDifficulty => _settings.botDifficulty;
   int get reactionTimeMs => _settings.reactionTimeMs;
+  int get actionTextDisplayMs => _settings.actionTextDisplayMs;
 
   void toggleSound(bool value) {
     _settings = _settings.copyWith(soundEnabled: value);
@@ -66,6 +67,12 @@ class SettingsProvider with ChangeNotifier {
 
   void setReactionTime(int ms) {
     _settings = _settings.copyWith(reactionTimeMs: ms);
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setActionTextDisplayTime(int ms) {
+    _settings = _settings.copyWith(actionTextDisplayMs: ms);
     _saveSettings();
     notifyListeners();
   }

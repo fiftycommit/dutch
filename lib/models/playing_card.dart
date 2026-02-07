@@ -132,13 +132,7 @@ class PlayingCard {
   }
 
   String get displayName {
-    if (value == 'R') {
-      if (suit == 'hearts' || suit == 'diamonds') {
-        return ' Roi Rouge';
-      } else {
-        return ' Roi Noir';
-      }
-    }
+    if (value == 'R') return ' Roi';
 
     if (value == 'JOKER') return ' Joker';
     if (value == 'A') return ' A';

@@ -79,7 +79,9 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
       });
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       backgroundColor: const Color(0xFF1a472a),
       body: Consumer<GameProvider>(
         builder: (context, gameProvider, child) {
@@ -189,6 +191,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
           );
         },
       ),
+    ),
     );
   }
 
