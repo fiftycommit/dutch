@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +28,36 @@ class GameSetupScreen extends StatefulWidget {
 class _GameSetupScreenState extends State<GameSetupScreen> {
   Difficulty selectedBotDifficulty = Difficulty.medium;
   bool _isLoading = false;
-  int selectedNumberOfPlayers = 4; // Par défaut 4 joueurs
+  int selectedNumberOfPlayers = 4;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersistedPrefs();
+  }
+
+  Future<void> _loadPersistedPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        selectedNumberOfPlayers = prefs.getInt('lastNumberOfPlayers') ?? 4;
+        final diffIndex = prefs.getInt('lastBotDifficulty');
+        if (diffIndex != null && diffIndex < Difficulty.values.length) {
+          selectedBotDifficulty = Difficulty.values[diffIndex];
+        }
+      });
+    }
+  }
+
+  Future<void> _saveNumberOfPlayers(int count) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastNumberOfPlayers', count);
+  }
+
+  Future<void> _saveBotDifficulty(Difficulty diff) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastBotDifficulty', diff.index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,6 +288,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         setState(() {
                           selectedBotDifficulty = newSelection.first;
                         });
+                        _saveBotDifficulty(newSelection.first);
                       },
                       style: botSegmentStyle,
                     ),
@@ -302,6 +333,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                       setState(() {
                         selectedNumberOfPlayers = newSelection.first;
                       });
+                      _saveNumberOfPlayers(newSelection.first);
                     },
                     style: playerSegmentStyle,
                   ),

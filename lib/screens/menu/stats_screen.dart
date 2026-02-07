@@ -9,7 +9,9 @@ import 'stats_helpers.dart';
 import 'stats_widgets.dart';
 
 class StatsScreen extends StatefulWidget {
-  const StatsScreen({super.key});
+  final int initialSlot;
+
+  const StatsScreen({super.key, this.initialSlot = 1});
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -21,6 +23,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final double topPadding = MediaQuery.of(context).padding.top;
 
     return DefaultTabController(
+      initialIndex: (widget.initialSlot - 1).clamp(0, 2),
       length: 3, // 3 Slots
       child: Scaffold(
         appBar: AppBar(
@@ -56,6 +59,7 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ),
           child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildStatsPage(1, topPadding),
               _buildStatsPage(2, topPadding),

@@ -108,12 +108,18 @@ class AppRouter {
         GoRoute(
           path: '/settings',
           name: 'settings',
-          builder: (context, state) => const SettingsScreen(),
+          builder: (context, state) {
+            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            return SettingsScreen(initialSlot: slot);
+          },
         ),
         GoRoute(
           path: '/stats',
           name: 'stats',
-          builder: (context, state) => const StatsScreen(),
+          builder: (context, state) {
+            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            return StatsScreen(initialSlot: slot);
+          },
         ),
 
         GoRoute(

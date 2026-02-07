@@ -5,35 +5,68 @@ import '../../providers/settings_provider.dart';
 import '../../models/game_settings.dart';
 import '../../utils/ui_constants.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  final int initialSlot;
 
+  const SettingsScreen({super.key, this.initialSlot = 1});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsProvider>(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('RÉGLAGES',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.backgroundMedium,
-        iconTheme: const IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/'),
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
+    return DefaultTabController(
+      initialIndex: (widget.initialSlot - 1).clamp(0, 2),
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('RÉGLAGES',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          backgroundColor: AppColors.backgroundMedium,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => context.go('/'),
+          ),
+          bottom: const TabBar(
+            indicatorColor: Colors.amber,
+            labelColor: Colors.amber,
+            unselectedLabelColor: AppColors.textDisabled,
+            tabs: [
+              Tab(text: "Profil 1"),
+              Tab(text: "Profil 2"),
+              Tab(text: "Profil 3"),
+            ],
           ),
         ),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
+            ),
+          ),
+          child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
+            children: List.generate(3, (index) => _buildSettingsPage(settings)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsPage(SettingsProvider settings) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
             _buildSectionHeader("MÉCANIQUE DE JEU"),
             Container(
               padding: const EdgeInsets.all(16),
@@ -165,9 +198,7 @@ class SettingsScreen extends StatelessWidget {
               settings.useSBMM,
               (val) => settings.toggleSBMM(val),
             ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 

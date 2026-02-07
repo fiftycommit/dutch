@@ -23,6 +23,69 @@ class AiProfileScreen extends StatefulWidget {
 }
 
 class _AiProfileScreenState extends State<AiProfileScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      initialIndex: (widget.slotId - 1).clamp(0, 2),
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'MON PROFIL IA',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppColors.backgroundMedium,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => context.go('/'),
+          ),
+          bottom: const TabBar(
+            indicatorColor: Colors.amber,
+            labelColor: Colors.amber,
+            unselectedLabelColor: AppColors.textDisabled,
+            tabs: [
+              Tab(text: "Profil 1"),
+              Tab(text: "Profil 2"),
+              Tab(text: "Profil 3"),
+            ],
+          ),
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
+            ),
+          ),
+          child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _AiProfileTab(slotId: 1),
+              _AiProfileTab(slotId: 2),
+              _AiProfileTab(slotId: 3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Widget interne pour chaque onglet de profil IA
+class _AiProfileTab extends StatefulWidget {
+  final int slotId;
+  const _AiProfileTab({required this.slotId});
+
+  @override
+  State<_AiProfileTab> createState() => _AiProfileTabState();
+}
+
+class _AiProfileTabState extends State<_AiProfileTab> {
   final PlayerLearningService _service = PlayerLearningService();
 
   PlayerProfile? _profile;
@@ -87,40 +150,12 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'MON PROFIL IA',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: AppColors.backgroundMedium,
-        iconTheme: const IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/'),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _load,
-            icon: const Icon(Icons.refresh, color: Colors.white),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
-          ),
-        ),
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.amber),
-              )
-            : _buildContent(context),
-      ),
-    );
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.amber),
+      );
+    }
+    return _buildContent(context);
   }
 
   Widget _buildContent(BuildContext context) {

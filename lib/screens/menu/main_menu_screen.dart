@@ -336,7 +336,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       LabeledIconButton(
                         icon: Icons.settings,
                         label: 'Réglages',
-                        onPressed: () => context.go('/settings'),
+                        onPressed: () => context.go('/settings?slot=$selectedSlot'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
@@ -348,7 +348,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       LabeledIconButton(
                         icon: Icons.bar_chart,
                         label: 'Stats',
-                        onPressed: () => context.go('/stats'),
+                        onPressed: () => context.go('/stats?slot=$selectedSlot'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
