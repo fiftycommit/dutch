@@ -23,12 +23,13 @@ class _StatsScreenState extends State<StatsScreen> {
     return DefaultTabController(
       length: 3, // 3 Slots
       child: Scaffold(
-        extendBodyBehindAppBar: true,
         appBar: AppBar(
           title: const Text('Statistiques',
               style:
                   TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.backgroundMedium,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.white),
           leading: IconButton(
@@ -84,7 +85,7 @@ class _StatsScreenState extends State<StatsScreen> {
         final stats = snapshot.data ?? {};
 
         return ListView(
-          padding: EdgeInsets.fromLTRB(16, topPadding + 100, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
           children: [
             SummaryCards(stats: stats),
             const SizedBox(height: 20),
