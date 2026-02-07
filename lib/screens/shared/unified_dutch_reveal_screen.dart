@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../models/game_state.dart';
 import '../../models/player.dart';
-import '../../models/playing_card.dart';
 import '../../widgets/game/card_widget.dart';
-import '../../utils/screen_utils.dart';
+import '../../widgets/game/flip_card_widget.dart';
+import '../../utils/ui_constants.dart';
 
 /// Configuration pour l'écran de révélation Dutch
 class DutchRevealConfig {
@@ -39,35 +39,19 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  // Hauteur de base des cartes (correspond à CardSize.tiny et CardSize.small)
-  static const double _tinyBaseHeight = 34.0;
-  static const double _smallBaseHeight = 50.0;
-  static const double _cardSpacing = 8.0; // Espacement entre les cartes
-
-  /// Calcule la hauteur réelle d'une carte en tenant compte du scaling
-  double _scaledCardHeight(BuildContext context, bool isCompact) {
-    final baseHeight = isCompact ? _tinyBaseHeight : _smallBaseHeight;
-    return ScreenUtils.scale(context, baseHeight) * ScreenUtils.cardScaleFactor;
-  }
-
-  /// Calcule le pas de scroll (hauteur carte + espacement)
-  double _scrollStep(BuildContext context, bool isCompact) {
-    return _scaledCardHeight(context, isCompact) + _cardSpacing;
-  }
-
-  int currentRevealIndex = -1;
-  Map<String, int> currentScores = {};
+  int _currentRevealIndex = -1;
+  final Map<String, int> _currentScores = {};
 
   late AnimationController _flipController;
   late AnimationController _scorePopController;
-  final Map<String, ScrollController> _scrollControllers = {};
+  final ScrollController _gridScrollController = ScrollController();
 
-  String? winnerId;
-  String? eliminatedId;
-  bool revealComplete = false;
+  String? _winnerId;
+  String? _eliminatedId;
+  bool _revealComplete = false;
 
-  // Stocke le scrollStep calculé pour l'utiliser dans _animateScroll
-  double _cachedScrollStep = 66.0; // Valeur par défaut
+  // Clé pour mesurer la zone scrollable
+  final GlobalKey _scrollAreaKey = GlobalKey();
 
   GameState get gameState => widget.config.gameState;
 
@@ -86,8 +70,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
 
     for (var player in gameState.players) {
-      currentScores[player.id] = 0;
-      _scrollControllers[player.id] = ScrollController();
+      _currentScores[player.id] = 0;
     }
 
     Future.delayed(const Duration(milliseconds: 800), _startRevealSequence);
@@ -97,9 +80,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   void dispose() {
     _flipController.dispose();
     _scorePopController.dispose();
-    for (var controller in _scrollControllers.values) {
-      controller.dispose();
-    }
+    _gridScrollController.dispose();
     super.dispose();
   }
 
@@ -108,15 +89,17 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     int maxCards = players.map((p) => p.hand.length).reduce(math.max);
 
     for (int waveIndex = 0; waveIndex < maxCards; waveIndex++) {
-      await _animateScroll(waveIndex, players);
+      setState(() => _currentRevealIndex = waveIndex);
 
-      setState(() => currentRevealIndex = waveIndex);
+      // Scroll si le rang courant dépasse la zone visible
+      await _ensureRowVisible(waveIndex);
+
       await _flipController.forward(from: 0.0);
       setState(() {
         for (var player in players) {
           if (waveIndex < player.hand.length) {
-            currentScores[player.id] =
-                (currentScores[player.id] ?? 0) + player.hand[waveIndex].points;
+            _currentScores[player.id] =
+                (_currentScores[player.id] ?? 0) + player.hand[waveIndex].points;
           }
         }
       });
@@ -127,35 +110,39 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     _highlightWinner();
   }
 
-  Future<void> _animateScroll(int targetIndex, List<Player> players) async {
-    // Capture la valeur localement pour éviter les problèmes si l'orientation change
-    final step = _cachedScrollStep;
-    List<Future> scrollAnimations = [];
-    double targetOffset = targetIndex * step;
+  Future<void> _ensureRowVisible(int rowIndex) async {
+    if (!_gridScrollController.hasClients) return;
 
-    for (var player in players) {
-      if (targetIndex <= player.hand.length) {
-        if (_scrollControllers.containsKey(player.id) &&
-            _scrollControllers[player.id]!.hasClients) {
-          scrollAnimations.add(
-            _scrollControllers[player.id]!.animateTo(
-              targetOffset,
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeInOutCubic,
-            ),
-          );
-        }
-      }
-    }
+    final scrollArea = _scrollAreaKey.currentContext;
+    if (scrollArea == null) return;
+    final viewportHeight = scrollArea.size?.height ?? 0;
+    if (viewportHeight <= 0) return;
 
-    if (scrollAnimations.isNotEmpty) {
-      await Future.wait(scrollAnimations);
+    // Estimer la position du bas du rang courant
+    final maxOffset = _gridScrollController.position.maxScrollExtent;
+    final players = gameState.players;
+    final maxCards = players.map((p) => p.hand.length).reduce(math.max);
+    if (maxCards <= 0) return;
+
+    // Hauteur totale du contenu scrollable
+    final totalContentHeight = _gridScrollController.position.maxScrollExtent + viewportHeight;
+    final rowHeight = totalContentHeight / maxCards;
+    final rowBottom = (rowIndex + 1) * rowHeight;
+    final currentBottom = _gridScrollController.offset + viewportHeight;
+
+    if (rowBottom > currentBottom) {
+      final targetOffset = (rowBottom - viewportHeight).clamp(0.0, maxOffset);
+      await _gridScrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
+      );
     }
   }
 
   void _highlightWinner() async {
-    int minScore = currentScores.values.reduce((a, b) => a < b ? a : b);
-    List<String> winners = currentScores.entries
+    int minScore = _currentScores.values.reduce((a, b) => a < b ? a : b);
+    List<String> winners = _currentScores.entries
         .where((e) => e.value == minScore)
         .map((e) => e.key)
         .toList();
@@ -175,9 +162,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     }
 
     setState(() {
-      winnerId = finalWinnerId;
-      eliminatedId = finalEliminatedId;
-      revealComplete = true;
+      _winnerId = finalWinnerId;
+      _eliminatedId = finalEliminatedId;
+      _revealComplete = true;
     });
 
     await Future.delayed(const Duration(milliseconds: 2000));
@@ -226,44 +213,89 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     final screenHeight = MediaQuery.of(context).size.height;
     final isCompact = screenHeight < 400;
     final players = _getOrderedPlayers();
-
-    // Calcule et met en cache le scrollStep pour l'animation
-    final computedScrollStep = _scrollStep(context, isCompact);
-    _cachedScrollStep = computedScrollStep;
+    final maxCards = players.map((p) => p.hand.length).reduce(math.max);
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-          ),
-        ),
+        decoration: AppDecorations.pageBackground,
         child: SafeArea(
           child: Column(
             children: [
-              SizedBox(height: isCompact ? 5 : 20),
+              SizedBox(height: isCompact ? 5 : 12),
               Text(
                 "DUTCH !",
                 style: TextStyle(
                   fontFamily: 'Rye',
-                  fontSize: isCompact ? 24 : 40,
+                  fontSize: isCompact ? 24 : 36,
                   color: Colors.amber,
                 ),
               ),
-              SizedBox(height: isCompact ? 5 : 20),
+              SizedBox(height: isCompact ? 5 : 10),
+
+              // En-têtes joueurs (fixes)
+              _buildPlayerHeaders(players, isCompact),
+              SizedBox(height: isCompact ? 4 : 8),
+
+              // Grille de cartes avec fonds de colonnes
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: players
-                      .map((p) =>
-                          _buildPlayerColumn(p, isCompact, computedScrollStep))
-                      .toList(),
+                key: _scrollAreaKey,
+                child: Stack(
+                  children: [
+                    // Fonds de colonnes (alternance + highlight gagnant/perdant)
+                    Row(
+                      children: List.generate(players.length, (i) {
+                        final player = players[i];
+                        final isWinner = _winnerId == player.id;
+                        final isEliminated = _revealComplete && _eliminatedId == player.id;
+                        Color bgColor;
+                        if (isWinner) {
+                          bgColor = Colors.amber.withValues(alpha: 0.2);
+                        } else if (isEliminated) {
+                          bgColor = Colors.red.withValues(alpha: 0.15);
+                        } else {
+                          bgColor = i.isEven
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.black.withValues(alpha: 0.08);
+                        }
+                        return Expanded(
+                          child: Container(
+                            margin: EdgeInsets.symmetric(horizontal: isCompact ? 2 : 3),
+                            decoration: BoxDecoration(
+                              color: bgColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: isWinner
+                                  ? Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 1.5)
+                                  : (isEliminated
+                                      ? Border.all(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.5)
+                                      : null),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    // Grille de cartes scrollable par rang
+                    AnimatedBuilder(
+                      animation: _flipController,
+                      builder: (context, _) {
+                        return SingleChildScrollView(
+                          controller: _gridScrollController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: Column(
+                            children: List.generate(maxCards, (rowIndex) {
+                              return _buildCardRow(players, rowIndex, isCompact);
+                            }),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: isCompact ? 5 : 20),
+              SizedBox(height: isCompact ? 4 : 8),
+
+              // Scores (fixes en bas)
+              _buildScoreRow(players, isCompact),
+              SizedBox(height: isCompact ? 5 : 12),
             ],
           ),
         ),
@@ -271,242 +303,177 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 
-  Widget _buildPlayerColumn(Player player, bool isCompact, double scrollStep) {
-    bool isWinner = winnerId == player.id;
-    bool isDutchCaller = gameState.dutchCallerId == player.id;
-    bool isEliminated = revealComplete && eliminatedId == player.id;
-    int score = currentScores[player.id] ?? 0;
-
-    return Expanded(
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: isCompact ? 2 : 4),
-        padding: EdgeInsets.all(isCompact ? 4 : 8),
-        decoration: BoxDecoration(
-          color: isWinner
-              ? Colors.amber.withValues(alpha: 0.2)
-              : (isEliminated
-                  ? Colors.red.withValues(alpha: 0.18)
-                  : Colors.black12),
-          borderRadius: BorderRadius.circular(12),
-          border: isWinner
-              ? Border.all(color: Colors.amber, width: 2)
-              : (isEliminated
-                  ? Border.all(color: Colors.redAccent, width: 2)
-                  : null),
-          boxShadow: isEliminated
-              ? [
-                  BoxShadow(
-                    color: Colors.red.withValues(alpha: 0.5),
-                    blurRadius: isCompact ? 8 : 12,
-                    spreadRadius: isCompact ? 1 : 2,
-                  )
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            Text(player.displayAvatar,
-                style: TextStyle(fontSize: isCompact ? 20 : 32)),
-            Text(
-              player.name,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isCompact ? 9 : 12,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-            // Bandeau DUTCH ou espace invisible pour alignement
-            Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+  Widget _buildPlayerHeaders(List<Player> players, bool isCompact) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 4 : 8),
+      child: Row(
+        children: players.map((player) {
+          final isDutchCaller = gameState.dutchCallerId == player.id;
+          final isWinner = _winnerId == player.id;
+          final isEliminated = _revealComplete && _eliminatedId == player.id;
+          return Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: isCompact ? 2 : 4),
               decoration: BoxDecoration(
-                color: isDutchCaller ? Colors.amber : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(8),
+                color: isWinner
+                    ? Colors.amber.withValues(alpha: 0.15)
+                    : (isEliminated
+                        ? Colors.red.withValues(alpha: 0.12)
+                        : Colors.transparent),
               ),
-              child: Text(
-                "DUTCH",
-                style: TextStyle(
-                  fontSize: isCompact ? 6 : 8,
-                  fontWeight: FontWeight.bold,
-                  color: isDutchCaller ? Colors.black : Colors.transparent,
-                ),
-              ),
-            ),
-            SizedBox(height: isCompact ? 4 : 10),
-            Expanded(
-              child: Stack(
-                clipBehavior: Clip.none, // Permet aux cartes de depasser
+              child: Column(
                 children: [
-                  Positioned.fill(
-                    child: ShaderMask(
-                      shaderCallback: (Rect bounds) {
-                        return const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black,
-                            Colors.black,
-                            Colors.black, // Plus de zone visible en bas
-                          ],
-                          stops: [
-                            0.0,
-                            0.05,
-                            0.9,
-                            1.0
-                          ], // Moins de fade en haut et en bas
-                        ).createShader(bounds);
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: ListView.builder(
-                        controller: _scrollControllers[player.id],
-                        physics: const NeverScrollableScrollPhysics(),
-                        clipBehavior: Clip.none, // Evite le clipping des ombres
-                        padding: EdgeInsets.only(
-                          top: scrollStep * 0.3,
-                          bottom: scrollStep * 0.3,
-                        ),
-                        itemCount: player.hand.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == player.hand.length) {
-                            bool showRedLine =
-                                currentRevealIndex >= player.hand.length;
-                            return AnimatedOpacity(
-                              duration: const Duration(milliseconds: 300),
-                              opacity: showRedLine ? 1.0 : 0.0,
-                              child: Container(
-                                height: scrollStep,
-                                alignment: Alignment.topCenter,
-                                padding: const EdgeInsets.only(top: 10),
-                                child: Container(
-                                  width: isCompact ? 30 : 40,
-                                  height: isCompact ? 3 : 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent,
-                                    borderRadius: BorderRadius.circular(2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            Colors.red.withValues(alpha: 0.5),
-                                        blurRadius: 4,
-                                        spreadRadius: 1,
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          bool shouldReveal = index <= currentRevealIndex;
-                          double animValue = (index == currentRevealIndex)
-                              ? _flipController.value
-                              : (shouldReveal ? 1.0 : 0.0);
-
-                          return SizedBox(
-                            height: scrollStep,
-                            child: Center(
-                              child: _FlipCard(
-                                card: player.hand[index],
-                                isRevealed: shouldReveal,
-                                animationValue: animValue,
-                                isCompact: isCompact,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                  Text(
+                    player.displayAvatar,
+                    style: TextStyle(fontSize: isCompact ? 18 : 28),
                   ),
+                  Text(
+                    player.name,
+                    style: TextStyle(
+                      color: isWinner
+                          ? Colors.amber
+                          : (isEliminated ? Colors.redAccent : Colors.white),
+                      fontSize: isCompact ? 9 : 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (isDutchCaller)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.amber,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        "DUTCH",
+                        style: TextStyle(
+                          fontSize: isCompact ? 6 : 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(height: isCompact ? 11 : 15),
                 ],
               ),
             ),
-            SizedBox(height: isCompact ? 4 : 10),
-            AnimatedBuilder(
-              animation: _scorePopController,
-              builder: (context, child) {
-                double scale = 1.0;
-                if (_scorePopController.value < 0.5) {
-                  scale = 1.0 + (_scorePopController.value * 0.4);
-                } else {
-                  scale = 1.2 - ((_scorePopController.value - 0.5) * 0.4);
-                }
+          );
+        }).toList(),
+      ),
+    );
+  }
 
-                return Transform.scale(
-                  scale: scale,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isCompact ? 10 : 16,
-                      vertical: isCompact ? 4 : 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isWinner ? Colors.amber : Colors.black45,
-                      borderRadius: BorderRadius.circular(isCompact ? 8 : 12),
-                    ),
-                    child: Text(
-                      "$score",
-                      style: TextStyle(
-                        fontSize: isCompact ? 16 : 24,
-                        fontWeight: FontWeight.bold,
-                        color: isWinner ? Colors.black : Colors.amber,
-                      ),
-                    ),
-                  ),
-                );
-              },
+  Widget _buildCardRow(List<Player> players, int rowIndex, bool isCompact) {
+    final bool shouldReveal = rowIndex <= _currentRevealIndex;
+    final bool isCurrentRow = rowIndex == _currentRevealIndex;
+    final double animValue = isCurrentRow
+        ? _flipController.value
+        : (shouldReveal ? 1.0 : 0.0);
+    final cardSize = isCompact ? CardSize.tiny : CardSize.small;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 4 : 8,
+        vertical: isCompact ? 3 : 5,
+      ),
+      child: Row(
+        children: players.map((player) {
+          final hasCard = rowIndex < player.hand.length;
+          return Expanded(
+            child: Center(
+              child: hasCard
+                  ? FlipCardWidget(
+                      card: player.hand[rowIndex],
+                      isRevealed: shouldReveal,
+                      animationValue: animValue,
+                      cardSize: cardSize,
+                    )
+                  : const SizedBox(),
             ),
-            if (isWinner && revealComplete)
-              Padding(
-                padding: EdgeInsets.only(top: isCompact ? 4.0 : 8.0),
-                child: Icon(
-                  Icons.emoji_events,
-                  color: Colors.amber,
-                  size: isCompact ? 16 : 24,
-                ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildScoreRow(List<Player> players, bool isCompact) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 4 : 8),
+      child: Row(
+        children: players.map((player) {
+          final isWinner = _winnerId == player.id;
+          final isEliminated = _revealComplete && _eliminatedId == player.id;
+          final score = _currentScores[player.id] ?? 0;
+
+          return Expanded(
+            child: Center(
+              child: AnimatedBuilder(
+                animation: _scorePopController,
+                builder: (context, child) {
+                  double scale = 1.0;
+                  if (_scorePopController.value < 0.5) {
+                    scale = 1.0 + (_scorePopController.value * 0.4);
+                  } else {
+                    scale = 1.2 - ((_scorePopController.value - 0.5) * 0.4);
+                  }
+
+                  return Transform.scale(
+                    scale: scale,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 8 : 14,
+                            vertical: isCompact ? 3 : 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isWinner
+                                ? Colors.amber
+                                : (isEliminated
+                                    ? Colors.red.withValues(alpha: 0.7)
+                                    : Colors.black45),
+                            borderRadius: BorderRadius.circular(isCompact ? 6 : 10),
+                            border: isEliminated
+                                ? Border.all(color: Colors.redAccent, width: 2)
+                                : null,
+                          ),
+                          child: Text(
+                            "$score",
+                            style: TextStyle(
+                              fontSize: isCompact ? 14 : 22,
+                              fontWeight: FontWeight.bold,
+                              color: isWinner ? Colors.black : Colors.amber,
+                            ),
+                          ),
+                        ),
+                        if (isWinner && _revealComplete)
+                          Padding(
+                            padding: EdgeInsets.only(top: isCompact ? 2.0 : 4.0),
+                            child: Icon(
+                              Icons.emoji_events,
+                              color: Colors.amber,
+                              size: isCompact ? 14 : 20,
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
               ),
-          ],
-        ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 }
 
-class _FlipCard extends StatelessWidget {
-  final PlayingCard card;
-  final bool isRevealed;
-  final double animationValue;
-  final bool isCompact;
-
-  const _FlipCard({
-    required this.card,
-    required this.isRevealed,
-    required this.animationValue,
-    this.isCompact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final angle = animationValue * math.pi;
-    final transform = Matrix4.identity()
-      ..setEntry(3, 2, 0.001)
-      ..rotateY(angle);
-    bool showFront = animationValue > 0.5;
-    final cardSize = isCompact ? CardSize.tiny : CardSize.small;
-
-    return Transform(
-      transform: transform,
-      alignment: Alignment.center,
-      child: showFront && isRevealed
-          ? Transform(
-              transform: Matrix4.rotationY(math.pi),
-              alignment: Alignment.center,
-              child: CardWidget(card: card, size: cardSize, isRevealed: true),
-            )
-          : CardWidget(card: null, size: cardSize, isRevealed: false),
-    );
-  }
-}
 
 /// Helper pour ordonner les joueurs en mode solo (humain au centre)
 List<Player> orderPlayersForSolo(List<Player> allPlayers) {

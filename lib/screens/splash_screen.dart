@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/ui_constants.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import '../main.dart';
 import '../utils/screen_utils.dart';
 import '../services/ui/svg_precache_service.dart';
 import 'web_splash_helper.dart' if (dart.library.io) 'web_splash_helper_stub.dart';
@@ -73,7 +72,6 @@ class _SplashScreenState extends State<SplashScreen>
 
     _setStatus('Initialisation...', progress: 0.02);
 
-    await initializeApp();
     final skipPrecache = kIsWeb && WebConnectionHelper.isLowBandwidth();
     if (!skipPrecache) {
       _setStatus('Chargement des cartes...', progress: 0.05);
@@ -92,7 +90,11 @@ class _SplashScreenState extends State<SplashScreen>
     _setStatus('Préparation...', progress: 0.95);
 
     _setStatus('Prêt !', progress: 1.0);
-    if (mounted) context.go('/');
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go('/');
+      });
+    }
   }
 
   @override
@@ -119,9 +121,9 @@ class _SplashScreenState extends State<SplashScreen>
                   center: Alignment.center,
                   radius: 1.2,
                   colors: [
-                    Color(0xFF2d5f3e),
-                    Color(0xFF1a472a),
-                    Color(0xFF0d2818),
+                    AppColors.buttonSecondary,
+                    AppColors.gradientBottom,
+                    AppColors.gradientTop,
                   ],
                 ),
               ),

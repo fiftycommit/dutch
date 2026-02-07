@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../core/interfaces/i_haptic_service.dart';
 
@@ -54,7 +55,7 @@ class HapticServiceImpl implements IHapticService {
           break;
       }
     } catch (e) {
-      // Certains appareils ne supportent pas le haptique
+      if (kDebugMode) debugPrint('⚠️ Haptic non supporté: $e');
     }
   }
 

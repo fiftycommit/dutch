@@ -41,6 +41,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   bool _spiedCardDialogShown = false;
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
+  MultiplayerGameProvider? _cachedProvider;
 
   @override
   void initState() {
@@ -51,7 +52,133 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupEventListeners();
       _setupEmoteListener();
+      _setupProviderListener();
     });
+  }
+
+  void _setupProviderListener() {
+    _cachedProvider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    _cachedProvider!.addListener(_onProviderChanged);
+  }
+
+  void _onProviderChanged() {
+    if (!mounted) return;
+    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    final gameState = provider.gameState;
+    if (gameState == null) return;
+
+    // Handle Host Left
+    if (provider.roomClosedByHost && !_hostClosedDialogShown) {
+      _hostClosedDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          MultiplayerDialogs.showHostClosedDialog(context);
+        }
+      });
+    }
+
+    // Handle Disconnection
+    if (provider.connectionState == SocketConnectionState.disconnected &&
+        provider.errorMessage != null &&
+        provider.errorMessage!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          _showConnectionErrorDialog(context, provider);
+        }
+      });
+    }
+
+    // Handle Kicked (AFK or manually)
+    if (provider.wasKicked && !_kickedDialogShown) {
+      _kickedDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          provider.acknowledgeKicked();
+          MultiplayerDialogs.showKickedDialog(context, provider.kickedMessage);
+        }
+      });
+    }
+
+    // Handle Banned
+    if (provider.wasBanned && !_bannedDialogShown) {
+      _bannedDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          provider.acknowledgeBanned();
+          MultiplayerDialogs.showBannedDialog(context, provider.bannedMessage);
+        }
+      });
+    }
+
+    // Navigate if ended
+    if (gameState.phase == GamePhase.ended) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryNavigateToEnd(gameState);
+      });
+    }
+
+    // Check for Spied Card Dialog (pouvoir 7 ou 10)
+    if (provider.showSpiedCardDialog &&
+        provider.lastSpiedCard != null &&
+        !_spiedCardDialogShown) {
+      _spiedCardDialogShown = true;
+      final spiedCard = provider.lastSpiedCard!;
+      final targetName = provider.spiedTargetName ?? 'Joueur';
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        provider.closeSpiedCardDialog();
+        _spiedCardDialogShown = false;
+
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          final title = targetName == 'vous' ? 'VOTRE CARTE' : 'CARTE REVELEE';
+          UnifiedPowerDialogs.showCardRevealDialog(context, spiedCard, title: title);
+        }
+      });
+    }
+
+    // Notification Valet : notre carte a ete echangee par un autre joueur
+    if (provider.pendingSwapNotification != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          final data = provider.pendingSwapNotification!;
+          UnifiedPowerDialogs.showSwapNotificationDialog(
+            context,
+            data['byPlayerName'] ?? 'Un joueur',
+            data['cardIndex'] ?? 0,
+          );
+          provider.clearSwapNotification();
+        }
+      });
+    }
+
+    // Notification Joker : nos cartes ont ete melangees par un autre joueur
+    if (provider.pendingJokerNotification != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          final data = provider.pendingJokerNotification!;
+          UnifiedPowerDialogs.showJokerNotificationDialog(
+            context,
+            data['byPlayerName'] ?? 'Un joueur',
+          );
+          provider.clearJokerNotification();
+        }
+      });
+    }
+
+    // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
+    if (provider.pendingSpyNotification != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent == true && mounted) {
+          final data = provider.pendingSpyNotification!;
+          UnifiedPowerDialogs.showSpyNotificationDialog(
+            context,
+            data['byPlayerName'] ?? 'Un joueur',
+            data['cardIndex'] ?? 0,
+          );
+          provider.clearSpyNotification();
+        }
+      });
+    }
   }
 
   void _setupEmoteListener() {
@@ -151,6 +278,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
   @override
   void dispose() {
+    _cachedProvider?.removeListener(_onProviderChanged);
     unlockOrientation();
     _eventSubscription?.cancel();
     _emoteSubscription?.cancel();
@@ -228,130 +356,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
         if (gameState == null) {
           return const Scaffold(
-            backgroundColor: Color(0xFF1a472a),
+            backgroundColor: AppColors.gradientBottom,
             body: Center(child: CircularProgressIndicator(color: Colors.amber)),
           );
         }
 
-        // Handle Host Left
-        if (gameProvider.roomClosedByHost && !_hostClosedDialogShown) {
-          _hostClosedDialogShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              MultiplayerDialogs.showHostClosedDialog(context);
-            }
-          });
-          return const Scaffold(backgroundColor: Color(0xFF1a472a));
+        // Early returns pour états bloquants (dialogs déclenchés par le listener)
+        if (gameProvider.roomClosedByHost && _hostClosedDialogShown) {
+          return Scaffold(backgroundColor: AppColors.gradientBottom);
         }
-
-        // Handle Disconnection
-        if (gameProvider.connectionState ==
-                SocketConnectionState.disconnected &&
-            gameProvider.errorMessage != null &&
-            gameProvider.errorMessage!.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              _showConnectionErrorDialog(context, gameProvider);
-            }
-          });
+        if (gameProvider.wasKicked && _kickedDialogShown) {
+          return Scaffold(backgroundColor: AppColors.gradientBottom);
         }
-
-        // Handle Kicked (AFK or manually) - peut revenir
-        if (gameProvider.wasKicked && !_kickedDialogShown) {
-          _kickedDialogShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              gameProvider.acknowledgeKicked();
-              MultiplayerDialogs.showKickedDialog(context, gameProvider.kickedMessage);
-            }
-          });
-          return const Scaffold(backgroundColor: Color(0xFF1a472a));
-        }
-
-        // Handle Banned - définitif
-        if (gameProvider.wasBanned && !_bannedDialogShown) {
-          _bannedDialogShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              gameProvider.acknowledgeBanned();
-              MultiplayerDialogs.showBannedDialog(context, gameProvider.bannedMessage);
-            }
-          });
-          return const Scaffold(backgroundColor: Color(0xFF1a472a));
-        }
-
-        // Navigate if ended
-        if (gameState.phase == GamePhase.ended) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _tryNavigateToEnd(gameState);
-          });
-        }
-
-        // Check for Spied Card Dialog (pouvoir 7 ou 10)
-        if (gameProvider.showSpiedCardDialog &&
-            gameProvider.lastSpiedCard != null &&
-            !_spiedCardDialogShown) {
-          _spiedCardDialogShown = true;
-          // Capturer la carte AVANT le callback pour éviter les race conditions
-          final spiedCard = gameProvider.lastSpiedCard!;
-          final targetName = gameProvider.spiedTargetName ?? 'Joueur';
-          
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Fermer le dialog flag dans le postFrameCallback pour éviter
-            // "setState() called during build"
-            gameProvider.closeSpiedCardDialog();
-            _spiedCardDialogShown = false;
-            
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              final title =
-                  targetName == 'vous' ? 'VOTRE CARTE' : 'CARTE REVELEE';
-              UnifiedPowerDialogs.showCardRevealDialog(context, spiedCard, title: title);
-            }
-          });
-        }
-
-        // Notification Valet : notre carte a ete echangee par un autre joueur
-        if (gameProvider.pendingSwapNotification != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              final data = gameProvider.pendingSwapNotification!;
-              UnifiedPowerDialogs.showSwapNotificationDialog(
-                context,
-                data['byPlayerName'] ?? 'Un joueur',
-                data['cardIndex'] ?? 0,
-              );
-              gameProvider.clearSwapNotification();
-            }
-          });
-        }
-
-        // Notification Joker : nos cartes ont ete melangees par un autre joueur
-        if (gameProvider.pendingJokerNotification != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              final data = gameProvider.pendingJokerNotification!;
-              UnifiedPowerDialogs.showJokerNotificationDialog(
-                context,
-                data['byPlayerName'] ?? 'Un joueur',
-              );
-              gameProvider.clearJokerNotification();
-            }
-          });
-        }
-
-        // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
-        if (gameProvider.pendingSpyNotification != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ModalRoute.of(context)?.isCurrent == true && mounted) {
-              final data = gameProvider.pendingSpyNotification!;
-              UnifiedPowerDialogs.showSpyNotificationDialog(
-                context,
-                data['byPlayerName'] ?? 'Un joueur',
-                data['cardIndex'] ?? 0,
-              );
-              gameProvider.clearSpyNotification();
-            }
-          });
+        if (gameProvider.wasBanned && _bannedDialogShown) {
+          return Scaffold(backgroundColor: AppColors.gradientBottom);
         }
 
         final size = MediaQuery.of(context).size;
@@ -368,7 +386,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
             }
           },
           child: Scaffold(
-            backgroundColor: const Color(0xFF1a472a),
+            backgroundColor: AppColors.gradientBottom,
             body: Stack(
               children: [
                 GameTableWidget(

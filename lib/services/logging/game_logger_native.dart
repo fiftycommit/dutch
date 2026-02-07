@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Implémentation native (iOS, Android, macOS, Windows, Linux)
@@ -14,7 +15,7 @@ Future<void> initLogFile(String gameId, String initialContent) async {
     await file.writeAsString(initialContent);
     _logFiles[gameId] = file;
   } catch (e) {
-    // Silently fail
+    if (kDebugMode) debugPrint('⚠️ initLogFile error: $e');
   }
 }
 
@@ -26,7 +27,7 @@ Future<void> appendToLogFile(String gameId, String content) async {
       await file.writeAsString(content, mode: FileMode.append);
     }
   } catch (e) {
-    // Silently fail
+    if (kDebugMode) debugPrint('⚠️ appendToLogFile error: $e');
   }
 }
 
@@ -39,7 +40,7 @@ Future<void> downloadLog(String filename, String content) async {
     // Sur native, le fichier est déjà sauvegardé
     // On pourrait ouvrir le dossier ici si nécessaire
   } catch (e) {
-    // Silently fail
+    if (kDebugMode) debugPrint('⚠️ downloadLog error: $e');
   }
 }
 

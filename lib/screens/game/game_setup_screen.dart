@@ -1,18 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../models/bot_learning_data.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
-import '../../services/learning/player_learning_service.dart';
-import '../../services/learning/bot_learning_service.dart';
-import '../../services/learning/bot_training_service.dart';
-import '../../services/learning/ghost_clone_service.dart';
-import '../../services/game/bot/bot_config.dart';
-import '../../services/multiplayer/client_id_service.dart';
+import '../../services/game/bot_factory.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isTournament;
@@ -47,16 +43,12 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         title: Text(
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie',
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1a3a28), Color(0xFF0d1f15)],
-          ),
+        decoration: BoxDecoration(
+          gradient: AppDecorations.darkGradient,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -351,16 +343,22 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       final settings = Provider.of<SettingsProvider>(context, listen: false);
       final int numberOfBots = selectedNumberOfPlayers - 1;
 
+      BotFactory.resetUsedNames();
       List<Player> players = [
         Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
       ];
 
       if (useSBMM) {
-        players.addAll(await _createSBMMBots(numberOfBots)
-            .timeout(const Duration(seconds: 8)));
+        players.addAll(await BotFactory.createSBMMBots(
+          numberOfBots: numberOfBots,
+          saveSlot: widget.saveSlot,
+          isTournament: widget.isTournament,
+        ).timeout(const Duration(seconds: 8)));
       } else {
-        players.addAll(await _createManualBots(numberOfBots)
-            .timeout(const Duration(seconds: 8)));
+        players.addAll(await BotFactory.createManualBots(
+          numberOfBots: numberOfBots,
+          difficulty: selectedBotDifficulty,
+        ).timeout(const Duration(seconds: 8)));
       }
 
       if (!mounted) return;
@@ -387,7 +385,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       if (!mounted) return;
       context.go('/solo/memorization');
     } catch (e) {
-      debugPrint('❌ Erreur démarrage partie: $e');
+      if (kDebugMode) debugPrint('❌ Erreur démarrage partie: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -398,445 +396,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         );
       }
     }
-  }
-
-  /// Crée les bots en mode SBMM (vrai matchmaking adaptatif)
-  ///
-  /// Les bots sont des "miroirs" du joueur : mêmes paramètres avec petite
-  /// variance aléatoire. Pas de seuils MMR, pas de multiplicateur de skill.
-  Future<List<Player>> _createSBMMBots(int numberOfBots) async {
-    final botTrainingService = BotTrainingService();
-    final ghostCloneService = GhostCloneService();
-
-    // Récupérer le profil joueur (une seule fois)
-    final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
-
-    // Infos pour le ghost clone
-    final ghostPlayerId = await ClientIdService.ensureClientId();
-    final ghostPlayerName = profile.profileId;
-
-    // Vrai SBMM : copier les params du joueur avec petite variance par bot
-    final botParamsList = BotConfig.generateMatchmakingBotParams(
-      playerProfile: profile,
-      botCount: numberOfBots,
-      forceChallenge: widget.isTournament,
-    );
-
-    // Ghost profile (chargé une seule fois si nécessaire)
-    GhostProfile? ghostProfile;
-
-    final players = <Player>[];
-    final skillLevel = _mmrToSkillLevel(profile.mmr);
-
-    for (int i = 0; i < numberOfBots; i++) {
-      final baseParams = botParamsList[i];
-
-      // Récupérer le training state pour ce type de bot
-      final botKey = BotTrainingService.buildBotKey(
-        behavior: BotBehavior.balanced,
-        skillLevel: skillLevel,
-      );
-      final trainingState = await botTrainingService.getStateForBot(
-        botKey,
-        consumeTrainingGame: true,
-      );
-
-      // Charger le ghost profile si nécessaire (une seule fois)
-      if (trainingState.ghostInfluence > 0 && ghostProfile == null) {
-        ghostProfile = await ghostCloneService.getGhostProfile(
-          slotId: widget.saveSlot,
-          playerId: ghostPlayerId,
-          playerName: ghostPlayerName,
-        );
-      }
-
-      // Appliquer le ghost blending sur les paramètres de base
-      final aiParameters = _applyGhostBlending(
-        baseParams: baseParams,
-        ghostProfile: ghostProfile,
-        trainingState: trainingState,
-      );
-
-      players.add(Player(
-        id: 'bot_$i',
-        name: _getBotName(BotBehavior.balanced, skillLevel),
-        isHuman: false,
-        botBehavior: BotBehavior.balanced,
-        botSkillLevel: skillLevel,
-        aiParameters: aiParameters,
-        position: i + 1,
-      ));
-    }
-
-    return players;
-  }
-
-  /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
-  /// Bronze/Silver/Gold : sélection par winrate moyen cible
-  /// Platinum : meilleurs bots absolus de la catégorie
-  Future<List<Player>> _createManualBots(int numberOfBots) async {
-    if (numberOfBots <= 0) return [];
-
-    // Platinum : logique élite (meilleurs absolus)
-    if (selectedBotDifficulty == Difficulty.platinum) {
-      return _createEliteBots(numberOfBots);
-    }
-
-    // Mix : logique spéciale (mélange de niveaux)
-    if (selectedBotDifficulty == Difficulty.mix) {
-      return _createMixBots(numberOfBots);
-    }
-
-    // Bronze / Silver / Gold : sélection par tranche de winrate
-    return _createWinrateBots(numberOfBots);
-  }
-
-  /// Winrate minimum par difficulté (pas de max, on prend les plus proches du min)
-  double _winrateMin() {
-    switch (selectedBotDifficulty) {
-      case Difficulty.easy:   return 0.0;  // Bronze : tous les bots, triés du plus faible
-      case Difficulty.medium: return 0.50; // Argent : minimum 50%
-      case Difficulty.hard:   return 0.70; // Or : minimum 70%
-      default:                return 0.0;
-    }
-  }
-
-  /// Sélectionne les bots dont le winrate moyen tombe dans la tranche cible
-  Future<List<Player>> _createWinrateBots(int numberOfBots) async {
-    final botLearningService = BotLearningService();
-    final allBots = await botLearningService.fetchTopBots(limit: 50);
-    final targetSkill = _difficultyToSkillLevel(selectedBotDifficulty);
-
-    double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
-    final minWr = _winrateMin();
-    final isBronze = selectedBotDifficulty == Difficulty.easy;
-
-    // Filtrer par winrate minimum strict
-    var candidates = allBots.where((b) => avgWinrate(b) >= minWr).toList();
-
-    // Bronze : trier du plus faible au plus fort (on veut les plus nuls)
-    // Argent/Or : trier du plus fort au plus faible (on veut les meilleurs au-dessus du min)
-    if (isBronze) {
-      candidates.sort((a, b) => avgWinrate(a).compareTo(avgWinrate(b)));
-    } else {
-      candidates.sort((a, b) => avgWinrate(b).compareTo(avgWinrate(a)));
-    }
-
-    debugPrint('🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
-    for (final bot in candidates) {
-      debugPrint('  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
-    }
-
-    final isGold = selectedBotDifficulty == Difficulty.hard;
-    final players = <Player>[];
-
-    if (isGold) {
-      // Or : 2/3 #1 + 1/3 #2 (duplication des meilleurs)
-      final bestBot = candidates.isNotEmpty ? candidates.first : null;
-      final secondBot = candidates.length >= 2 ? candidates[1] : bestBot;
-
-      if (bestBot != null) {
-        debugPrint('⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
-      }
-      if (secondBot != null && secondBot != bestBot) {
-        debugPrint('⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
-      }
-
-      final secondBotCount = (numberOfBots / 3).ceil();
-      final firstBotCount = numberOfBots - secondBotCount;
-
-      for (int i = 0; i < numberOfBots; i++) {
-        final source = i < firstBotCount ? bestBot : secondBot;
-        if (source != null) {
-          final behavior = _parseBehavior(source.behavior);
-          final aiParams = _extractAiParams(source.learnedParameters);
-          aiParams['serverMMR'] = source.mmr.toDouble();
-          aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
-
-          players.add(Player(
-            id: 'bot_$i',
-            name: _getBotName(behavior, targetSkill),
-            isHuman: false,
-            botBehavior: behavior,
-            botSkillLevel: targetSkill,
-            aiParameters: aiParams.isNotEmpty ? aiParams : null,
-            position: i + 1,
-          ));
-        } else {
-          players.add(Player(
-            id: 'bot_$i',
-            name: _getBotName(BotBehavior.balanced, targetSkill),
-            isHuman: false,
-            botBehavior: BotBehavior.balanced,
-            botSkillLevel: targetSkill,
-            position: i + 1,
-          ));
-        }
-      }
-    } else {
-      // Bronze / Argent : bots tous différents
-      for (int i = 0; i < numberOfBots; i++) {
-        final source = i < candidates.length ? candidates[i] : null;
-        if (source != null) {
-          debugPrint('⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
-          final behavior = _parseBehavior(source.behavior);
-          final aiParams = _extractAiParams(source.learnedParameters);
-          aiParams['serverMMR'] = source.mmr.toDouble();
-          aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
-
-          players.add(Player(
-            id: 'bot_$i',
-            name: _getBotName(behavior, targetSkill),
-            isHuman: false,
-            botBehavior: behavior,
-            botSkillLevel: targetSkill,
-            aiParameters: aiParams.isNotEmpty ? aiParams : null,
-            position: i + 1,
-          ));
-        } else {
-          players.add(Player(
-            id: 'bot_$i',
-            name: _getBotName(BotBehavior.balanced, targetSkill),
-            isHuman: false,
-            botBehavior: BotBehavior.balanced,
-            botSkillLevel: targetSkill,
-            position: i + 1,
-          ));
-        }
-      }
-    }
-
-    return players;
-  }
-
-  /// Mode Mix : un bot de chaque tranche de winrate
-  Future<List<Player>> _createMixBots(int numberOfBots) async {
-    final botLearningService = BotLearningService();
-    final allBots = await botLearningService.fetchTopBots(limit: 50);
-
-    double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
-
-    final mixTargets = [0.25, 0.50, 0.75];
-    final mixSkills = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
-    final players = <Player>[];
-
-    for (int i = 0; i < numberOfBots; i++) {
-      final target = mixTargets[i % mixTargets.length];
-      final skill = mixSkills[i % mixSkills.length];
-
-      // Trouver le bot le plus proche du winrate cible
-      final sorted = List<BotProfile>.from(allBots)
-        ..sort((a, b) =>
-            (avgWinrate(a) - target).abs().compareTo((avgWinrate(b) - target).abs()));
-
-      final source = sorted.isNotEmpty ? sorted.first : null;
-
-      if (source != null) {
-        final behavior = _parseBehavior(source.behavior);
-        final aiParams = _extractAiParams(source.learnedParameters);
-        aiParams['serverMMR'] = source.mmr.toDouble();
-        aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
-
-        players.add(Player(
-          id: 'bot_$i',
-          name: _getBotName(behavior, skill),
-          isHuman: false,
-          botBehavior: behavior,
-          botSkillLevel: skill,
-          aiParameters: aiParams.isNotEmpty ? aiParams : null,
-          position: i + 1,
-        ));
-      } else {
-        players.add(Player(
-          id: 'bot_$i',
-          name: _getBotName(BotBehavior.balanced, skill),
-          isHuman: false,
-          botBehavior: BotBehavior.balanced,
-          botSkillLevel: skill,
-          position: i + 1,
-        ));
-      }
-    }
-
-    return players;
-  }
-
-  /// Crée les bots élite pour Silver/Gold/Platinum :
-  /// 3/4 = meilleur bot de la catégorie, 1/4 = second meilleur
-  Future<List<Player>> _createEliteBots(int numberOfBots) async {
-    final botLearningService = BotLearningService();
-    final targetSkill = _difficultyToSkillLevel(selectedBotDifficulty);
-
-    final allBots = await botLearningService.fetchTopBots(limit: 20);
-
-    double eliteScore(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
-
-    final targetSkillName = _skillLevelToString(targetSkill);
-    final filteredBots = allBots.where((b) => b.skillLevel == targetSkillName).toList();
-
-    for (final bot in allBots) {
-      final marker = bot.skillLevel == targetSkillName ? '→' : ' ';
-      debugPrint('$marker 🤖 ${bot.botId} | MMR: ${bot.mmr} | Vs humain: ${(bot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bot.winRate * 100).toStringAsFixed(0)}% | Score: ${(eliteScore(bot) * 100).toStringAsFixed(0)}%');
-    }
-
-    filteredBots.sort((a, b) => eliteScore(b).compareTo(eliteScore(a)));
-
-    final bestBot = filteredBots.isNotEmpty ? filteredBots.first : (allBots.isNotEmpty ? allBots.first : null);
-    final secondBot = filteredBots.length >= 2 ? filteredBots[1] : bestBot;
-
-    if (bestBot != null) {
-      debugPrint('⭐ #1: ${bestBot.botId} | MMR: ${bestBot.mmr} | Score: ${(eliteScore(bestBot) * 100).toStringAsFixed(0)}%');
-    }
-    if (secondBot != null && secondBot != bestBot) {
-      debugPrint('⭐ #2: ${secondBot.botId} | MMR: ${secondBot.mmr} | Score: ${(eliteScore(secondBot) * 100).toStringAsFixed(0)}%');
-    }
-
-    final players = <Player>[];
-    // 2/3 avec le #1, 1/3 avec le #2
-    final secondBotCount = (numberOfBots / 3).ceil();
-    final firstBotCount = numberOfBots - secondBotCount;
-
-    for (int i = 0; i < numberOfBots; i++) {
-      final source = i < firstBotCount ? bestBot : secondBot;
-      if (source != null) {
-        final behavior = _parseBehavior(source.behavior);
-        final aiParams = _extractAiParams(source.learnedParameters);
-        aiParams['serverMMR'] = source.mmr.toDouble();
-        aiParams['serverWinRateVsHuman'] = source.avgPBeatHuman;
-
-        players.add(Player(
-          id: 'bot_$i',
-          name: _getBotName(behavior, targetSkill),
-          isHuman: false,
-          botBehavior: behavior,
-          botSkillLevel: targetSkill,
-          aiParameters: aiParams.isNotEmpty ? aiParams : null,
-          position: i + 1,
-        ));
-      } else {
-        players.add(Player(
-          id: 'bot_$i',
-          name: _getBotName(BotBehavior.balanced, targetSkill),
-          isHuman: false,
-          botBehavior: BotBehavior.balanced,
-          botSkillLevel: targetSkill,
-          position: i + 1,
-        ));
-      }
-    }
-
-    return players;
-  }
-
-  BotBehavior _parseBehavior(String? raw) {
-    switch (raw) {
-      case 'fast':
-        return BotBehavior.fast;
-      case 'aggressive':
-        return BotBehavior.aggressive;
-      case 'balanced':
-      default:
-        return BotBehavior.balanced;
-    }
-  }
-
-  String _skillLevelToString(BotSkillLevel level) {
-    return level.toString().split('.').last;
-  }
-
-  Map<String, double> _extractAiParams(Map<String, dynamic> raw) {
-    final params = <String, double>{};
-    raw.forEach((key, value) {
-      if (value is num) {
-        params[key] = value.toDouble();
-      }
-    });
-    return params;
-  }
-
-  /// Applique le ghost blending sur les paramètres de base
-  Map<String, double> _applyGhostBlending({
-    required Map<String, double> baseParams,
-    GhostProfile? ghostProfile,
-    required BotTrainingState trainingState,
-  }) {
-    final ghostParams = ghostProfile?.params ?? const <String, double>{};
-    final ghostInfluence = trainingState.ghostInfluence;
-
-    double blend(String key, double baseValue) {
-      final ghostValue = ghostParams[key];
-      if (ghostValue == null || ghostInfluence <= 0) return baseValue;
-      return baseValue + (ghostValue - baseValue) * ghostInfluence;
-    }
-
-    // Copier les paramètres de base et appliquer le blending
-    final result = Map<String, double>.from(baseParams);
-
-    // Appliquer le ghost blending sur les paramètres clés
-    result['aggressiveness'] = blend('aggressiveness', result['aggressiveness'] ?? 0.5);
-    result['caution'] = blend('caution', result['caution'] ?? 0.5);
-    result['riskTolerance'] = blend('riskTolerance', result['riskTolerance'] ?? 0.5);
-    result['powerUsageRate'] = blend('powerUsageRate', result['powerUsageRate'] ?? 0.5);
-    result['decisionSpeed'] = blend('decisionSpeed', result['decisionSpeed'] ?? 2000.0).clamp(500.0, 10000.0);
-    result['dutchThreshold'] = blend('dutchThreshold', result['dutchThreshold'] ?? 15.0).clamp(5.0, 30.0);
-
-    // Ajouter les paramètres de training
-    result['ghostInfluence'] = ghostInfluence;
-    result['ghostDutchThreshold'] = ghostParams['dutchThreshold'] ?? result['dutchThreshold']!;
-    result['rankPenalty'] = trainingState.rankPenalty;
-
-    return result;
-  }
-
-  /// Convertit un MMR en BotSkillLevel (pour affichage/nom uniquement)
-  BotSkillLevel _mmrToSkillLevel(int mmr) {
-    if (mmr >= 900) return BotSkillLevel.platinum;
-    if (mmr >= 600) return BotSkillLevel.gold;
-    if (mmr >= 300) return BotSkillLevel.silver;
-    return BotSkillLevel.bronze;
-  }
-
-
-  BotSkillLevel _difficultyToSkillLevel(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return BotSkillLevel.bronze;
-      case Difficulty.medium:
-        return BotSkillLevel.silver;
-      case Difficulty.hard:
-        return BotSkillLevel.gold;
-      case Difficulty.platinum:
-        return BotSkillLevel.platinum;
-      case Difficulty.mix:
-        return BotSkillLevel.silver; // Valeur par défaut, sera mélangé lors de la création
-    }
-  }
-
-
-  // Liste de prénoms pour les bots
-  static final List<String> _botNames = [
-    'Max', 'Yanis', 'Rohi', 'Millie', 'Kellinho', 'Kifa', 'Zoe', 'VR6',
-    'Ruben', 'Lisa', 'Clara', 'Frizou', 'Tony', 'Leon', 'Elodie', '2T',
-    'Guy2', 'Poppa', 'Messboal', 'Bersa', 'Juwa', 'Manboy', 'Bramsou', 'Lil Uzi'
-  ];
-  
-  static final Set<String> _usedNames = {};
-
-  String _getBotName(BotBehavior behavior, BotSkillLevel level) {
-    // Réinitialiser les noms utilisés si on a tout utilisé
-    if (_usedNames.length >= _botNames.length) {
-      _usedNames.clear();
-    }
-    
-    // Trouver un nom non utilisé
-    String name;
-    do {
-      final randomIndex = DateTime.now().millisecondsSinceEpoch % _botNames.length;
-      name = _botNames[randomIndex];
-    } while (_usedNames.contains(name));
-    
-    _usedNames.add(name);
-    return name;
   }
 
   /// Construit la description du niveau de difficulté

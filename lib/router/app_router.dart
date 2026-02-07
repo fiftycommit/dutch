@@ -237,7 +237,7 @@ class AppRouter {
 
       // Gestion des erreurs de navigation
       errorBuilder: (context, state) => Scaffold(
-        backgroundColor: const Color(0xFF1a472a),
+        backgroundColor: AppColors.gradientBottom,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -325,7 +325,7 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1a472a),
+      backgroundColor: AppColors.gradientBottom,
       body: Center(
         child: _isJoining
             ? Column(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'utils/ui_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'core/service_locator.dart';
 import 'core/interfaces/i_haptic_service.dart';
 import 'core/interfaces/i_stats_service.dart';
@@ -42,15 +42,6 @@ void main() async {
   runApp(const DutchGameApp());
 }
 
-Future<void> initializeApp() async {
-  // Initialiser Hive pour la sauvegarde (sans bloquer le démarrage)
-  try {
-    await Hive.initFlutter();
-  } catch (e) {
-    debugPrint('Erreur Hive: $e');
-  }
-}
-
 class DutchGameApp extends StatefulWidget {
   const DutchGameApp({super.key});
 
@@ -89,7 +80,7 @@ class _DutchGameAppState extends State<DutchGameApp> {
             theme: ThemeData(
               primarySwatch: Colors.green,
               scaffoldBackgroundColor:
-                  const Color(0xFF1a472a), // Vert foncé poker
+                  AppColors.gradientBottom, // Vert foncé poker
               fontFamily: 'Roboto',
               textTheme: const TextTheme(
                 headlineLarge: TextStyle(
@@ -104,7 +95,7 @@ class _DutchGameAppState extends State<DutchGameApp> {
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2d5f3e),
+                  backgroundColor: AppColors.buttonSecondary,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 32, vertical: 16),

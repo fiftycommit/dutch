@@ -76,7 +76,7 @@ class CompetitiveStatsWidget extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF1a472a),
+            AppColors.gradientBottom,
             tierColor.withValues(alpha: 0.2),
           ],
         ),
@@ -260,7 +260,7 @@ class CompetitiveMatchResult extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: tierColor, width: 2),
       ),

@@ -4,6 +4,9 @@ import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/tournament_labels.dart';
 import '../../utils/ui_constants.dart';
+import 'stats_models.dart';
+import 'stats_helpers.dart';
+import 'stats_widgets.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -48,7 +51,7 @@ class _StatsScreenState extends State<StatsScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1a3a28), Color(0xFF0d1f15)],
+              colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
             ),
           ),
           child: TabBarView(
@@ -83,11 +86,11 @@ class _StatsScreenState extends State<StatsScreen> {
         return ListView(
           padding: EdgeInsets.fromLTRB(16, topPadding + 100, 16, 20),
           children: [
-            _buildSummaryCards(stats),
+            SummaryCards(stats: stats),
             const SizedBox(height: 20),
-            _buildPieChartPlaceholder(stats),
+            DutchEfficiencyCard(stats: stats),
             const SizedBox(height: 20),
-            _buildWinrateByPlayers(stats),
+            WinrateByPlayersCard(stats: stats),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -113,184 +116,6 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildSummaryCards(Map<String, dynamic> stats) {
-    int played = stats['gamesPlayed'] ?? 0;
-    int won = stats['gamesWon'] ?? 0;
-    int best = stats['bestScore'] ?? 999;
-    if (best == 999 && stats['bestScore'] == null) best = 0;
-    int winStreak = stats['winStreak'] ?? 0;
-    int bestWinStreak = stats['bestWinStreak'] ?? 0;
-
-    double winRate = played > 0 ? (won / played * 100) : 0;
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-                child: _StatCard(
-                    title: "Parties",
-                    value: "$played",
-                    icon: Icons.sports_esports,
-                    color: Colors.blue)),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _StatCard(
-                    title: "Victoires",
-                    value: "$won",
-                    icon: Icons.emoji_events,
-                    color: Colors.amber)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-                child: _StatCard(
-                    title: "Win Rate",
-                    value: "${winRate.toStringAsFixed(1)}%",
-                    icon: Icons.pie_chart,
-                    color: Colors.green)),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _StatCard(
-                    title: "Meilleur Score",
-                    value: "$best",
-                    icon: Icons.star,
-                    color: Colors.purple)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-                child: _StatCard(
-                    title: "Série",
-                    value: "$winStreak",
-                    icon: Icons.local_fire_department,
-                    color: Colors.deepOrange)),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _StatCard(
-                    title: "Record Série",
-                    value: "$bestWinStreak",
-                    icon: Icons.whatshot,
-                    color: Colors.orange)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPieChartPlaceholder(Map<String, dynamic> stats) {
-    int calls = stats['dutchCalls'] ?? 0;
-    int wins = stats['dutchWins'] ?? 0;
-    double successRate = calls > 0 ? (wins / calls * 100) : 0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        children: [
-          const Text("Efficacité DUTCH",
-              style: TextStyle(color: AppColors.textSecondary)),
-          const SizedBox(height: 10),
-          Text("${successRate.toStringAsFixed(1)}%",
-              style: const TextStyle(
-                  color: Colors.amber,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold)),
-          Text("$wins réussis sur $calls tentés",
-              style: const TextStyle(color: Colors.white38, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWinrateByPlayers(Map<String, dynamic> stats) {
-    final rawHistory = stats['history'] ?? [];
-    final history = rawHistory is List ? rawHistory : <dynamic>[];
-    final buckets = <int, _WinrateBucket>{
-      2: _WinrateBucket(),
-      3: _WinrateBucket(),
-      4: _WinrateBucket(),
-      5: _WinrateBucket(),
-      6: _WinrateBucket(),
-    };
-
-    for (final match in history) {
-      if (match is! Map) continue;
-      final totalPlayersRaw = match['totalPlayers'];
-      if (totalPlayersRaw is! num) continue;
-      final totalPlayers = totalPlayersRaw.toInt();
-      final bucket = buckets[totalPlayers];
-      if (bucket == null) continue;
-      bucket.played += 1;
-      final rank = match['rank'];
-      if (rank == 1) {
-        bucket.won += 1;
-      }
-    }
-
-    final hasData = buckets.values.any((bucket) => bucket.played > 0);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Winrate par nombre de joueurs",
-              style: TextStyle(color: AppColors.textSecondary)),
-          const SizedBox(height: 12),
-          if (!hasData)
-            const Text("Pas encore assez de données",
-                style: TextStyle(color: Colors.white38, fontSize: 12))
-          else
-            ...buckets.entries.map((entry) {
-              final count = entry.key;
-              final bucket = entry.value;
-              if (bucket.played == 0) {
-                return const SizedBox.shrink();
-              }
-              final rate = bucket.winRate;
-              final rateLabel = "${(rate * 100).toStringAsFixed(1)}%";
-              final recordLabel = "${bucket.won}/${bucket.played}";
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("$count joueurs",
-                            style:
-                                const TextStyle(color: Colors.white70)),
-                        Text("$rateLabel · $recordLabel",
-                            style:
-                                const TextStyle(color: Colors.white54)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    LinearProgressIndicator(
-                      value: rate,
-                      minHeight: 6,
-                      backgroundColor: Colors.white12,
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.green),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
   Widget _buildHistoryList(List<dynamic> history) {
     if (history.isEmpty) {
       return const Center(
@@ -300,180 +125,37 @@ class _StatsScreenState extends State<StatsScreen> {
                   style: TextStyle(color: Colors.white38))));
     }
 
-    final groups = _groupHistory(history);
+    final groups = StatsHelpers.groupHistory(history);
     return Column(
       children: groups.map((group) {
         if (group.isTournament) {
-          return _buildTournamentHistoryTile(group);
+          return TournamentHistoryTile(
+            group: group,
+            onTap: () => _showTournamentDetails(group),
+          );
         }
-        return _buildMatchHistoryTile(
-          group.matches.first,
+        return MatchHistoryTile(
+          match: group.matches.first,
           onTap: () => _showMatchHistory(group.matches.first),
         );
       }).toList(),
     );
   }
 
-  Widget _buildMatchHistoryTile(Map<String, dynamic> match,
-      {VoidCallback? onTap, String? subtitleOverride}) {
-    final rank = match['rank'] ?? 4;
-    final outcome = _outcomeForRank(rank);
-    final score = match['score'] ?? 0;
-    final mmrChange = match['mmrChange'] ?? 0;
-    final streakBonus = match['streakBonus'] ?? 0;
-    final streakMultiplierRaw = match['streakMultiplier'] ?? 1.0;
-    final streakMultiplier =
-        streakMultiplierRaw is num ? streakMultiplierRaw.toDouble() : 1.0;
-    final date = _parseDate(match);
-    final dateStr = subtitleOverride ?? _formatDate(date);
-    final rpDisplay = _rpDisplay(mmrChange);
-    final isWin = rank == 1;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-          color: isWin
-              ? Colors.green.withValues(alpha: 0.2)
-              : Colors.red.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: isWin
-                  ? Colors.green.withValues(alpha: 0.5)
-                  : Colors.red.withValues(alpha: 0.5))),
-      child: ListTile(
-        onTap: onTap,
-        leading: Icon(outcome.icon, color: outcome.color),
-        title: Row(
-          children: [
-            Text(outcome.label,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: outcome.color.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                "#$rank",
-                style: TextStyle(
-                  color: outcome.color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        subtitle: Text(dateStr,
-            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
-        trailing: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              "$score pts",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                height: 1.0,
-              ),
-            ),
-            Text(
-              rpDisplay.text,
-              style: TextStyle(
-                color: rpDisplay.color,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                height: 1.0,
-              ),
-            ),
-            if (streakBonus > 0 && streakMultiplier > 1.0)
-              Text(
-                "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)",
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  height: 1.0,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTournamentHistoryTile(_HistoryGroup group) {
-    final finalPosition = _tournamentFinalPosition(group.matches);
-    final outcome = _outcomeForRank(finalPosition == 0 ? 4 : finalPosition);
-    final dateStr = _formatDate(group.date);
-    final roundsLabel = "${group.matches.length} manches";
-    final subtitle = "$dateStr • $roundsLabel";
-    final isWin = finalPosition == 1;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-          color: isWin
-              ? Colors.green.withValues(alpha: 0.2)
-              : Colors.red.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: isWin
-                  ? Colors.green.withValues(alpha: 0.5)
-                  : Colors.red.withValues(alpha: 0.5))),
-      child: ListTile(
-        onTap: () => _showTournamentDetails(group),
-        leading: Icon(outcome.icon, color: outcome.color),
-        title: Row(
-          children: [
-            const Text("Tournoi",
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: outcome.color.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                "#$finalPosition",
-                style: TextStyle(
-                  color: outcome.color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textDisabled)),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textDisabled),
-      ),
-    );
-  }
-
-  void _showTournamentDetails(_HistoryGroup group) {
+  void _showTournamentDetails(HistoryGroup group) {
     final matches = List<Map<String, dynamic>>.from(group.matches);
     matches.sort((a, b) =>
         (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
-    final totalRounds = _tournamentTotalRounds(matches);
+    final totalRounds = StatsHelpers.tournamentTotalRounds(matches);
 
-    final finalPosition = _tournamentFinalPosition(matches);
+    final finalPosition = StatsHelpers.tournamentFinalPosition(matches);
     final title =
         finalPosition > 0 ? "Tournoi • Classement #$finalPosition" : "Tournoi";
 
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final maxHeight = metrics.contentHeight * 0.7;
 
@@ -491,12 +173,12 @@ class _StatsScreenState extends State<StatsScreen> {
                   itemCount: matches.length,
                   itemBuilder: (context, index) {
                     final match = matches[index];
-                    final round = _roundValue(match['tournamentRound'], index + 1);
-                    final dateStr = _formatDate(_parseDate(match));
+                    final round = StatsHelpers.roundValue(match['tournamentRound'], index + 1);
+                    final dateStr = StatsHelpers.formatDate(StatsHelpers.parseDate(match));
                     final subtitle =
                         "${tournamentStageLabel(round, totalRounds: totalRounds)} • $dateStr";
-                    return _buildMatchHistoryTile(
-                      match,
+                    return MatchHistoryTile(
+                      match: match,
                       subtitleOverride: subtitle,
                       onTap: () => _showMatchHistory(match, round: round, totalRounds: totalRounds),
                     );
@@ -533,7 +215,7 @@ class _StatsScreenState extends State<StatsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final maxHeight = metrics.contentHeight * 0.6;
 
@@ -579,137 +261,11 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  List<_HistoryGroup> _groupHistory(List<dynamic> history) {
-    final matches = history
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    final tournamentGroups = <String, List<Map<String, dynamic>>>{};
-    final groups = <_HistoryGroup>[];
-
-    for (final match in matches) {
-      final isTournament = match['gameMode'] == 'tournament' ||
-          match['isTournament'] == true ||
-          match['tournamentId'] != null ||
-          match['tournamentRound'] != null;
-      if (isTournament) {
-        final id = (match['tournamentId'] ?? match['date']).toString();
-        tournamentGroups.putIfAbsent(id, () => []).add(match);
-      } else {
-        groups.add(_HistoryGroup(
-          isTournament: false,
-          tournamentId: null,
-          matches: [match],
-          date: _parseDate(match),
-        ));
-      }
-    }
-
-    for (final entry in tournamentGroups.entries) {
-      final groupMatches = List<Map<String, dynamic>>.from(entry.value);
-      groupMatches.sort((a, b) =>
-          (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
-      final date =
-          groupMatches.map(_parseDate).reduce((a, b) => a.isAfter(b) ? a : b);
-      groups.add(_HistoryGroup(
-        isTournament: true,
-        tournamentId: entry.key,
-        matches: groupMatches,
-        date: date,
-      ));
-    }
-
-    groups.sort((a, b) => b.date.compareTo(a.date));
-    return groups;
-  }
-
-  DateTime _parseDate(Map<String, dynamic> match) {
-    return DateTime.tryParse(match['date'] ?? "") ?? DateTime.now();
-  }
-
-  String _formatDate(DateTime date) {
-    return "${date.day}/${date.month} ${date.hour}h${date.minute.toString().padLeft(2, '0')}";
-  }
-
-  _OutcomeStyle _outcomeForRank(int rank) {
-    switch (rank) {
-      case 1:
-        return const _OutcomeStyle(
-          icon: Icons.emoji_events,
-          color: Colors.amber,
-          label: "Victoire",
-        );
-      case 2:
-        return const _OutcomeStyle(
-          icon: Icons.sentiment_satisfied,
-          color: Colors.lightGreenAccent,
-          label: "2ème place",
-        );
-      case 3:
-        return const _OutcomeStyle(
-          icon: Icons.sentiment_neutral,
-          color: Colors.orange,
-          label: "3ème place",
-        );
-      default:
-        return const _OutcomeStyle(
-          icon: Icons.sentiment_dissatisfied,
-          color: Colors.redAccent,
-          label: "Défaite",
-        );
-    }
-  }
-
-  _RpDisplay _rpDisplay(int mmrChange) {
-    if (mmrChange == 0) {
-      return const _RpDisplay(text: "Mode Manuel", color: AppColors.textDisabled);
-    }
-    final text = mmrChange > 0 ? "+$mmrChange RP" : "$mmrChange RP";
-    final color = mmrChange > 0 ? Colors.greenAccent : Colors.redAccent;
-    return _RpDisplay(text: text, color: color);
-  }
-
-  int _tournamentFinalPosition(List<Map<String, dynamic>> matches) {
-    if (matches.isEmpty) return 0;
-    final sorted = List<Map<String, dynamic>>.from(matches)
-      ..sort((a, b) =>
-          (a['tournamentRound'] ?? 1).compareTo(b['tournamentRound'] ?? 1));
-    final lastRankRaw = sorted.last['rank'] ?? 0;
-    final lastRank = lastRankRaw is num ? lastRankRaw.toInt() : 0;
-    return lastRank;
-  }
-
-  int _tournamentTotalRounds(List<Map<String, dynamic>> matches) {
-    if (matches.isEmpty) return 1;
-    final playerCounts = matches
-        .map((m) => m['totalPlayers'])
-        .whereType<num>()
-        .map((n) => n.toInt())
-        .toList();
-    int initialPlayers;
-    if (playerCounts.isNotEmpty) {
-      initialPlayers = playerCounts.reduce((a, b) => a > b ? a : b);
-    } else {
-      final maxRound = matches
-          .map((m) => _roundValue(m['tournamentRound'], 1))
-          .reduce((a, b) => a > b ? a : b);
-      initialPlayers = maxRound + 1;
-    }
-    if (initialPlayers < 2) return 1;
-    return initialPlayers - 1;
-  }
-
-  int _roundValue(dynamic raw, int fallback) {
-    if (raw is num) return raw.toInt();
-    if (raw is String) return int.tryParse(raw) ?? fallback;
-    return fallback;
-  }
-
   void _confirmReset(BuildContext context, int slotId) {
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final titleSize = metrics.font(18);
           final bodySize = metrics.font(14);
@@ -858,88 +414,6 @@ class _StatsScreenState extends State<StatsScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _WinrateBucket {
-  int played = 0;
-  int won = 0;
-
-  double get winRate => played > 0 ? won / played : 0;
-}
-
-class _HistoryGroup {
-  final bool isTournament;
-  final String? tournamentId;
-  final List<Map<String, dynamic>> matches;
-  final DateTime date;
-
-  const _HistoryGroup({
-    required this.isTournament,
-    required this.tournamentId,
-    required this.matches,
-    required this.date,
-  });
-}
-
-class _OutcomeStyle {
-  final IconData icon;
-  final Color color;
-  final String label;
-
-  const _OutcomeStyle({
-    required this.icon,
-    required this.color,
-    required this.label,
-  });
-}
-
-class _RpDisplay {
-  final String text;
-  final Color color;
-
-  const _RpDisplay({
-    required this.text,
-    required this.color,
-  });
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard(
-      {required this.title,
-      required this.value,
-      required this.icon,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold)),
-          Text(title,
-              style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
-        ],
       ),
     );
   }

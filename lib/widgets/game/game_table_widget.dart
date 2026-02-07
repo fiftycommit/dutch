@@ -5,11 +5,12 @@ import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/utils/screen_utils.dart';
-import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/widgets/game/game_layout_mixin.dart';
 import 'package:dutch_game/widgets/game/card_widget.dart';
 import 'package:dutch_game/widgets/game/player_hand.dart';
 import 'package:dutch_game/widgets/game/animated_card_transition.dart';
+import 'package:dutch_game/widgets/game/game_table_animation_models.dart';
+import 'package:dutch_game/widgets/game/side_accessories.dart';
 import 'package:dutch_game/widgets/game/center_table.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/providers/settings_provider.dart';
@@ -155,18 +156,18 @@ class _GameTableContentState extends State<_GameTableContent>
   final Map<String, int> _lastHandCounts = {};
   final Map<String, Set<int>> _hiddenCardIndexByPlayer = {};
   final Map<String, Set<String>> _hiddenCardIdsByPlayer = {};
-  final List<_PenaltyAnimation> _penaltyAnimations = [];
+  final List<PenaltyAnimation> _penaltyAnimations = [];
   int _nextPenaltyAnimationId = 0;
   final Map<String, List<PlayingCard>> _lastHandCards = {};
   int _lastDiscardPileSize = 0;
   PlayingCard? _lastTopDiscardCard;
-  final List<_DiscardAnimation> _discardAnimations = [];
+  final List<DiscardAnimation> _discardAnimations = [];
   int _nextDiscardAnimationId = 0;
   PlayingCard? _discardOverrideCard;
   int _discardOverrideCount = 0;
   PlayingCard? _lastDrawnCard;
   Offset? _lastDrawnCardCenter;
-  final List<_DrawnToHandAnimation> _drawnToHandAnimations = [];
+  final List<DrawnToHandAnimation> _drawnToHandAnimations = [];
   int _nextDrawnToHandAnimationId = 0;
   String? _pendingSpecialPowerCardId;
 
@@ -567,7 +568,7 @@ class _GameTableContentState extends State<_GameTableContent>
       final start = startGlobal - stackOrigin - halfCard;
       final end = endGlobal - stackOrigin - halfCard;
 
-      final anim = _PenaltyAnimation(
+      final anim = PenaltyAnimation(
         id: _nextPenaltyAnimationId++,
         playerId: player.id,
         hiddenIndex: hiddenIndex,
@@ -629,7 +630,7 @@ class _GameTableContentState extends State<_GameTableContent>
           ? endGlobal - stackOrigin - halfCard
           : (stackRender.size.center(Offset.zero) - halfCard);
 
-      final anim = _DiscardAnimation(
+      final anim = DiscardAnimation(
         id: _nextDiscardAnimationId++,
         card: card,
         start: start,
@@ -715,7 +716,7 @@ class _GameTableContentState extends State<_GameTableContent>
       final start = startGlobal - stackOrigin - halfCard;
       final end = endGlobal - stackOrigin - halfCard;
 
-      final anim = _DrawnToHandAnimation(
+      final anim = DrawnToHandAnimation(
         id: _nextDrawnToHandAnimationId++,
         playerId: player.id,
         hiddenIndex: cardIndex,
@@ -775,7 +776,7 @@ class _GameTableContentState extends State<_GameTableContent>
           ? endGlobal - stackOrigin - halfCard
           : (stackRender.size.center(Offset.zero) - halfCard);
 
-      final anim = _DiscardAnimation(
+      final anim = DiscardAnimation(
         id: _nextDiscardAnimationId++,
         card: card,
         start: start,
@@ -1030,7 +1031,12 @@ class _GameTableContentState extends State<_GameTableContent>
                   top: topBandHeight,
                   bottom: bottomBandHeight,
                   width: sideAccessoryWidth,
-                  child: _buildSideDeck(context, sideAccessoryWidth, centerHeight),
+                  child: SideDeckWidget(
+                    gameState: gs,
+                    canDraw: _isMyTurn && !_hasDrawn && gs.phase == GamePhase.playing,
+                    onDrawCard: callbacks.onDrawCard,
+                    deckKey: _deckKey,
+                  ),
                 ),
 
               // Défausse à droite (entre centre et adversaires droite)
@@ -1040,7 +1046,21 @@ class _GameTableContentState extends State<_GameTableContent>
                   top: topBandHeight,
                   bottom: bottomBandHeight,
                   width: sideAccessoryWidth,
-                  child: _buildSideDiscard(context, sideAccessoryWidth, centerHeight),
+                  child: SideDiscardWidget(
+                    gameState: gs,
+                    canTakeDiscard: callbacks.onTakeFromDiscard != null &&
+                        _isMyTurn &&
+                        !_hasDrawn &&
+                        gs.phase == GamePhase.playing &&
+                        gs.discardPile.isNotEmpty,
+                    onTakeFromDiscard: callbacks.onTakeFromDiscard,
+                    onShowDiscardPile: callbacks.onShowDiscardPile,
+                    discardCard: (gs.phase == GamePhase.playing
+                            ? _discardOverrideCard
+                            : null) ??
+                        gs.topDiscardCard,
+                    discardKey: _discardKey,
+                  ),
                 ),
 
               // Disposition adversaires (2-4 joueurs personnalisée, 5-6 inchangé)
@@ -1235,7 +1255,7 @@ class _GameTableContentState extends State<_GameTableContent>
                   right: sideBandWidth,
                   bottom: outerGap,
                   height: 60,
-                  child: _buildSpectatorBanner(context),
+                  child: const SpectatorBanner(),
                 ),
 
               ..._penaltyAnimations.map((anim) {
@@ -1560,177 +1580,4 @@ class _GameTableContentState extends State<_GameTableContent>
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
     );
   }
-
-  Widget _buildSideDeck(BuildContext context, double maxWidth, double maxHeight) {
-    final canDraw = _isMyTurn && !_hasDrawn && gs.phase == GamePhase.playing;
-    const padding = 8.0;
-
-    return Center(
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Container(
-          padding: const EdgeInsets.all(padding),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12, width: 1.5),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Opacity(
-                opacity: canDraw ? 1.0 : 0.6,
-                child: GestureDetector(
-                  onTap: canDraw ? callbacks.onDrawCard : null,
-                  child: CardWidget(
-                    key: _deckKey,
-                    card: null,
-                    size: CardSize.medium,
-                    isRevealed: false,
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: -2,
-                right: -2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${gs.deck.length}',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSideDiscard(BuildContext context, double maxWidth, double maxHeight) {
-    final canTakeDiscard = callbacks.onTakeFromDiscard != null &&
-        _isMyTurn &&
-        !_hasDrawn &&
-        gs.phase == GamePhase.playing &&
-        gs.discardPile.isNotEmpty;
-    final discardCard = (gs.phase == GamePhase.playing
-            ? _discardOverrideCard
-            : null) ??
-        gs.topDiscardCard;
-    const padding = 8.0;
-
-    return Center(
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Container(
-          padding: const EdgeInsets.all(padding),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12, width: 1.5),
-          ),
-          child: GestureDetector(
-            onTap: canTakeDiscard
-                ? callbacks.onTakeFromDiscard
-                : callbacks.onShowDiscardPile,
-            child: CardWidget(
-              key: _discardKey,
-              card: discardCard,
-              size: CardSize.medium,
-              isRevealed: true,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSpectatorBanner(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.visibility, color: Colors.amber, size: 24),
-            SizedBox(width: 12),
-            Text(
-              "Mode Spectateur",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PenaltyAnimation {
-  final int id;
-  final String playerId;
-  final int hiddenIndex;
-  final Offset start;
-  final Offset end;
-  final CardSize size;
-
-  _PenaltyAnimation({
-    required this.id,
-    required this.playerId,
-    required this.hiddenIndex,
-    required this.start,
-    required this.end,
-    required this.size,
-  });
-}
-
-class _DiscardAnimation {
-  final int id;
-  final PlayingCard card;
-  final Offset start;
-  final Offset end;
-  final CardSize size;
-
-  _DiscardAnimation({
-    required this.id,
-    required this.card,
-    required this.start,
-    required this.end,
-    required this.size,
-  });
-}
-
-class _DrawnToHandAnimation {
-  final int id;
-  final String playerId;
-  final int hiddenIndex;
-  final PlayingCard card;
-  final Offset start;
-  final Offset end;
-  final CardSize size;
-
-  _DrawnToHandAnimation({
-    required this.id,
-    required this.playerId,
-    required this.hiddenIndex,
-    required this.card,
-    required this.start,
-    required this.end,
-    required this.size,
-  });
 }

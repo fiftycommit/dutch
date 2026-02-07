@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -129,7 +129,7 @@ class SvgPrecacheService {
       await _setPrecachedPersisted();
       onProgress?.call(1.0);
     } catch (e) {
-      debugPrint('⚠️ Erreur précache SVG: $e');
+      if (kDebugMode) debugPrint('⚠️ Erreur précache SVG: $e');
     }
   }
 
@@ -141,7 +141,7 @@ class SvgPrecacheService {
         () => loader.loadBytes(null),
       );
     } catch (e) {
-      // Ignorer les erreurs individuelles
+      if (kDebugMode) debugPrint('⚠️ SVG precache individuel: $e');
     }
   }
 

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
+import 'game_sub_states.dart';
 import '../services/game/shuffle_strategy.dart';
 
 enum GameMode { quick, tournament }
@@ -10,72 +11,110 @@ enum GamePhase { setup, playing, reaction, dutchCalled, ended }
 
 class GameState {
   List<Player> players;
-  List<PlayingCard> deck;
-  List<PlayingCard> discardPile;
-
-  int currentPlayerIndex;
   GameMode gameMode;
   GamePhase phase;
   final Difficulty difficulty;
 
-  int tournamentRound;
-  List<String> eliminatedPlayerIds;
-  PlayingCard? drawnCard;
-  bool isWaitingForSpecialPower;
-  PlayingCard? specialCardToActivate;
-  String? dutchCallerId;
-  DateTime? reactionStartTime;
-  List<String> actionHistory;
+  /// Sous-objets structurés
+  final DeckState deckState;
+  final TurnState turnState;
+  final TournamentState tournamentState;
 
-  int reactionTimeRemaining = 0;
-  PlayingCard? lastSpiedCard;
-  Map<String, dynamic>? pendingSwap;
+  // === Forwarding getters/setters pour compatibilité ===
+  List<PlayingCard> get deck => deckState.deck;
+  set deck(List<PlayingCard> v) => deckState.deck = v;
+  List<PlayingCard> get discardPile => deckState.discardPile;
+  set discardPile(List<PlayingCard> v) => deckState.discardPile = v;
+  PlayingCard? get drawnCard => deckState.drawnCard;
+  set drawnCard(PlayingCard? v) => deckState.drawnCard = v;
 
-  /// Scores cumulés du tournoi par joueur (id -> score total)
-  Map<String, int> tournamentCumulativeScores;
+  int get currentPlayerIndex => turnState.currentPlayerIndex;
+  set currentPlayerIndex(int v) => turnState.currentPlayerIndex = v;
+  bool get isWaitingForSpecialPower => turnState.isWaitingForSpecialPower;
+  set isWaitingForSpecialPower(bool v) => turnState.isWaitingForSpecialPower = v;
+  PlayingCard? get specialCardToActivate => turnState.specialCardToActivate;
+  set specialCardToActivate(PlayingCard? v) => turnState.specialCardToActivate = v;
+  String? get dutchCallerId => turnState.dutchCallerId;
+  set dutchCallerId(String? v) => turnState.dutchCallerId = v;
+  DateTime? get reactionStartTime => turnState.reactionStartTime;
+  set reactionStartTime(DateTime? v) => turnState.reactionStartTime = v;
+  int get reactionTimeRemaining => turnState.reactionTimeRemaining;
+  set reactionTimeRemaining(int v) => turnState.reactionTimeRemaining = v;
+  PlayingCard? get lastSpiedCard => turnState.lastSpiedCard;
+  set lastSpiedCard(PlayingCard? v) => turnState.lastSpiedCard = v;
+  Map<String, dynamic>? get pendingSwap => turnState.pendingSwap;
+  set pendingSwap(Map<String, dynamic>? v) => turnState.pendingSwap = v;
+  int? get turnStartTime => turnState.turnStartTime;
+  set turnStartTime(int? v) => turnState.turnStartTime = v;
+  int get turnTimeoutMs => turnState.turnTimeoutMs;
+  set turnTimeoutMs(int v) => turnState.turnTimeoutMs = v;
+  List<String> get readyPlayerIds => turnState.readyPlayerIds;
+  set readyPlayerIds(List<String> v) => turnState.readyPlayerIds = v;
+  int get turnCount => turnState.turnCount;
+  set turnCount(int v) => turnState.turnCount = v;
+  int get actionCount => turnState.actionCount;
+  set actionCount(int v) => turnState.actionCount = v;
+  List<String> get actionHistory => turnState.actionHistory;
+  set actionHistory(List<String> v) => turnState.actionHistory = v;
 
-  /// Timer de tour pour l'affichage visuel
-  int? turnStartTime; // Timestamp en ms
-  int turnTimeoutMs; // Durée max du tour en ms (25s par défaut)
-
-  /// Joueurs prêts (phase de mémorisation)
-  List<String> readyPlayerIds;
-
-  /// Compteur de tours complets (une rotation de tous les joueurs = 1 tour)
-  int turnCount;
-
-  /// Compteur d'actions individuelles (chaque fois qu'un joueur joue)
-  int actionCount;
+  int get tournamentRound => tournamentState.tournamentRound;
+  set tournamentRound(int v) => tournamentState.tournamentRound = v;
+  List<String> get eliminatedPlayerIds => tournamentState.eliminatedPlayerIds;
+  set eliminatedPlayerIds(List<String> v) => tournamentState.eliminatedPlayerIds = v;
+  Map<String, int> get tournamentCumulativeScores => tournamentState.tournamentCumulativeScores;
+  set tournamentCumulativeScores(Map<String, int> v) => tournamentState.tournamentCumulativeScores = v;
 
   GameState({
     required this.players,
-    required this.deck,
-    required this.discardPile,
-    this.currentPlayerIndex = 0,
+    required List<PlayingCard> deck,
+    required List<PlayingCard> discardPile,
+    int currentPlayerIndex = 0,
     this.gameMode = GameMode.quick,
     this.phase = GamePhase.setup,
-    this.tournamentRound = 1,
+    int tournamentRound = 1,
     this.difficulty = Difficulty.medium,
     List<String>? eliminatedPlayerIds,
-    this.drawnCard,
-    this.isWaitingForSpecialPower = false,
-    this.specialCardToActivate,
-    this.dutchCallerId,
-    this.reactionStartTime,
+    PlayingCard? drawnCard,
+    bool isWaitingForSpecialPower = false,
+    PlayingCard? specialCardToActivate,
+    String? dutchCallerId,
+    DateTime? reactionStartTime,
     List<String>? actionHistory,
-    this.reactionTimeRemaining = 0,
-    this.lastSpiedCard,
-    this.pendingSwap,
+    int reactionTimeRemaining = 0,
+    PlayingCard? lastSpiedCard,
+    Map<String, dynamic>? pendingSwap,
     Map<String, int>? tournamentCumulativeScores,
-    this.turnStartTime,
-    this.turnTimeoutMs = 25000,
+    int? turnStartTime,
+    int turnTimeoutMs = 25000,
     List<String>? readyPlayerIds,
-    this.turnCount = 0,
-    this.actionCount = 0,
-  })  : eliminatedPlayerIds = eliminatedPlayerIds ?? [],
-        actionHistory = actionHistory ?? [],
-        tournamentCumulativeScores = tournamentCumulativeScores ?? {},
-        readyPlayerIds = readyPlayerIds ?? [];
+    int turnCount = 0,
+    int actionCount = 0,
+  })  : deckState = DeckState(
+          deck: deck,
+          discardPile: discardPile,
+          drawnCard: drawnCard,
+        ),
+        turnState = TurnState(
+          currentPlayerIndex: currentPlayerIndex,
+          isWaitingForSpecialPower: isWaitingForSpecialPower,
+          specialCardToActivate: specialCardToActivate,
+          dutchCallerId: dutchCallerId,
+          reactionStartTime: reactionStartTime,
+          reactionTimeRemaining: reactionTimeRemaining,
+          lastSpiedCard: lastSpiedCard,
+          pendingSwap: pendingSwap,
+          turnStartTime: turnStartTime,
+          turnTimeoutMs: turnTimeoutMs,
+          readyPlayerIds: readyPlayerIds,
+          turnCount: turnCount,
+          actionCount: actionCount,
+          actionHistory: actionHistory,
+        ),
+        tournamentState = TournamentState(
+          tournamentRound: tournamentRound,
+          eliminatedPlayerIds: eliminatedPlayerIds,
+          tournamentCumulativeScores: tournamentCumulativeScores,
+        );
 
   Player get currentPlayer => players[currentPlayerIndex];
   PlayingCard? get topDiscardCard =>

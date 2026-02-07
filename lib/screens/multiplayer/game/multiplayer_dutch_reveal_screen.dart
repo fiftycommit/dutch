@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
@@ -15,8 +16,8 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
     final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
     
     if (!provider.isPlaying || provider.gameState == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1a472a),
+      return Scaffold(
+        backgroundColor: AppColors.gradientBottom,
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }

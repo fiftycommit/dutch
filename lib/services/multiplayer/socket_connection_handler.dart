@@ -89,7 +89,7 @@ class SocketConnectionHandler {
       _reconnectAttempts = 0;
       _setConnectionState(SocketConnectionState.connected);
       _startPingLoop();
-      debugPrint('✅ Connecté au serveur - ID: $_playerId');
+      if (kDebugMode) debugPrint('✅ Connecté au serveur - ID: $_playerId');
     } catch (e) {
       _setConnectionState(SocketConnectionState.disconnected);
       _socket?.disconnect();
@@ -109,7 +109,7 @@ class SocketConnectionHandler {
   }
 
   void handleDisconnect(String reason, void Function(io.Socket) setupListeners) {
-    debugPrint('❌ Déconnecté du serveur: $reason');
+    if (kDebugMode) debugPrint('❌ Déconnecté du serveur: $reason');
     _stopPingLoop();
     _latencyMs = 0;
     _serverTimeOffsetMs = 0;
@@ -121,7 +121,7 @@ class SocketConnectionHandler {
 
   Future<void> _attemptReconnect(void Function(io.Socket) setupListeners) async {
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
+      if (kDebugMode) debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
       _setConnectionState(SocketConnectionState.disconnected);
       onError?.call('Connexion perdue. Veuillez réessayer.');
       return;
@@ -144,17 +144,17 @@ class SocketConnectionHandler {
         await connect(setupListeners);
 
         if (isConnected && lastRoomCode != null && lastPlayerName != null) {
-          debugPrint('🔄 Tentative de rejoindre la room $lastRoomCode...');
+          if (kDebugMode) debugPrint('🔄 Tentative de rejoindre la room $lastRoomCode...');
           try {
             await onReconnectToRoom?.call(lastRoomCode!, lastPlayerName!);
-            debugPrint('✅ Room rejointe après reconnexion');
+            if (kDebugMode) debugPrint('✅ Room rejointe après reconnexion');
             flushPendingActions();
           } catch (e) {
-            debugPrint('⚠️ Impossible de rejoindre la room: $e');
+            if (kDebugMode) debugPrint('⚠️ Impossible de rejoindre la room: $e');
           }
         }
       } catch (e) {
-        debugPrint('❌ Échec de la reconnexion: $e');
+        if (kDebugMode) debugPrint('❌ Échec de la reconnexion: $e');
         _attemptReconnect(setupListeners);
       }
     });
@@ -163,7 +163,7 @@ class SocketConnectionHandler {
   void flushPendingActions() {
     if (pendingActions.isEmpty) return;
 
-    debugPrint('📤 Envoi de ${pendingActions.length} action(s) en attente...');
+    if (kDebugMode) debugPrint('📤 Envoi de ${pendingActions.length} action(s) en attente...');
 
     for (final action in pendingActions) {
       final event = action['event'] as String;
@@ -202,7 +202,7 @@ class SocketConnectionHandler {
   }
 
   void disconnect() {
-    debugPrint('👋 Déconnexion du serveur');
+    if (kDebugMode) debugPrint('👋 Déconnexion du serveur');
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _reconnectAttempts = 0;

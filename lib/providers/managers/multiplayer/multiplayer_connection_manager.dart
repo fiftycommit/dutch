@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import '../../../services/multiplayer/multiplayer_service.dart';
 
@@ -40,7 +40,7 @@ class MultiplayerConnectionManager {
     List<Map<String, dynamic>> playersInLobby,
     String? playerId,
   ) {
-    debugPrint('🔌 Connection state: $state');
+    if (kDebugMode) debugPrint('🔌 Connection state: $state');
     _connectionState = state;
 
     // Gestion de la reconnexion silencieuse
@@ -52,7 +52,7 @@ class MultiplayerConnectionManager {
         previousState == SocketConnectionState.disconnected) {
       _cancelSilentReconnection();
       if (_isSilentReconnecting) {
-        debugPrint('✅ Reconnexion silencieuse réussie');
+        if (kDebugMode) debugPrint('✅ Reconnexion silencieuse réussie');
         _isSilentReconnecting = false;
       }
     }
@@ -70,13 +70,13 @@ class MultiplayerConnectionManager {
   ) {
     if (_isSilentReconnecting) return;
 
-    debugPrint('🔄 Démarrage de la reconnexion silencieuse...');
+    if (kDebugMode) debugPrint('🔄 Démarrage de la reconnexion silencieuse...');
     _isSilentReconnecting = true;
 
     // Annuler après 3 secondes si pas reconnecté
     _reconnectionTimer = Timer(const Duration(seconds: 3), () {
       if (_connectionState != SocketConnectionState.connected) {
-        debugPrint('❌ Reconnexion silencieuse échouée après 3s');
+        if (kDebugMode) debugPrint('❌ Reconnexion silencieuse échouée après 3s');
         _isSilentReconnecting = false;
         if (_disconnectionTime != null) {
           final elapsed = DateTime.now().difference(_disconnectionTime!);
@@ -125,7 +125,7 @@ class MultiplayerConnectionManager {
         await onReconnect(roomCode, savedPlayerName);
       }
     } catch (e) {
-      debugPrint('❌ Erreur lors de la reconnexion silencieuse: $e');
+      if (kDebugMode) debugPrint('❌ Erreur lors de la reconnexion silencieuse: $e');
     }
   }
 

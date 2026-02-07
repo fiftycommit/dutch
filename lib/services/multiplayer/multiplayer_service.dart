@@ -82,7 +82,7 @@ class MultiplayerService {
       final response = await http.get(uri).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('⚠️ Server health check failed: $e');
+      if (kDebugMode) debugPrint('⚠️ Server health check failed: $e');
       return false;
     }
   }
@@ -145,7 +145,7 @@ class MultiplayerService {
     final clientId = await _connectionHandler.ensureClientId();
     _connectionHandler.lastPlayerName = playerName;
 
-    debugPrint('🎲 Création d\'une room...');
+    if (kDebugMode) debugPrint('🎲 Création d\'une room...');
 
     socket!.emitWithAck('room:create', {
       'settings': settings.toJson(),
@@ -186,6 +186,7 @@ class MultiplayerService {
         }
       });
     } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ fetchPublicRooms error: $e');
       completer.complete([]);
     }
 
@@ -367,7 +368,7 @@ class MultiplayerService {
 
   void _setupEventListeners(io.Socket socket) {
     socket.on('connect', (_) {
-      debugPrint('📡 Connecté au serveur Socket.IO');
+      if (kDebugMode) debugPrint('📡 Connecté au serveur Socket.IO');
     });
 
     socket.on('disconnect', (reason) {

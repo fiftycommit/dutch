@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/game_state.dart';
@@ -10,16 +11,48 @@ import '../../utils/tournament_labels.dart';
 
 /// Écran de résultats pour le mode solo
 /// Utilise la version unifiée avec configuration spécifique
-class ResultsScreen extends StatelessWidget {
+class ResultsScreen extends StatefulWidget {
   const ResultsScreen({super.key});
+
+  @override
+  State<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends State<ResultsScreen> {
+  bool _tournamentFinishTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeTriggerTournamentFinish();
+    });
+  }
+
+  void _maybeTriggerTournamentFinish() {
+    if (!mounted || _tournamentFinishTriggered) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (!gameProvider.hasActiveGame) return;
+    final gameState = gameProvider.gameState!;
+    final isTournament = gameState.gameMode == GameMode.tournament;
+    if (!isTournament) return;
+    final totalRounds = gameProvider.tournamentTotalRounds;
+    final remainingRounds = (totalRounds - gameState.tournamentRound).clamp(0, totalRounds).toInt();
+    final isFinalRound = remainingRounds == 0 || gameState.players.length <= 2;
+    final isHumanEliminated = gameProvider.isHumanEliminatedInTournament();
+    if (isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
+      _tournamentFinishTriggered = true;
+      gameProvider.finishTournamentForHuman();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<GameProvider>(
       builder: (context, gameProvider, child) {
         if (!gameProvider.hasActiveGame) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF1a472a),
+          return Scaffold(
+            backgroundColor: AppColors.gradientBottom,
             body: Center(child: Text('Pas de résultats', style: TextStyle(color: Colors.white))),
           );
         }
@@ -61,12 +94,6 @@ class ResultsScreen extends StatelessWidget {
         }();
         final isTournamentWinner = isTournament && isFinalRound && humanRank == 1;
 
-        // Déclencher la simulation du classement final si nécessaire
-        if (isTournament && isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            gameProvider.finishTournamentForHuman();
-          });
-        }
         final showRP = gameProvider.playerMMR != null;
 
         return PopScope(

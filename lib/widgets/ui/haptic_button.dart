@@ -91,7 +91,7 @@ class _HapticButtonState extends State<HapticButton>
               decoration: BoxDecoration(
                 color: isDisabled
                     ? AppColors.buttonDisabledBackground
-                    : (widget.backgroundColor ?? const Color(0xFF2d5f3e)),
+                    : (widget.backgroundColor ?? AppColors.buttonSecondary),
                 borderRadius: BorderRadius.circular(
                   ScreenUtils.borderRadius(context, 12),
                 ),

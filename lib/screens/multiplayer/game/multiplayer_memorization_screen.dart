@@ -18,7 +18,7 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
 
     if (gameState == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0d2818),
+        backgroundColor: AppColors.gradientTop,
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
@@ -72,15 +72,9 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
 
   Widget _buildSpectatorScreen() {
     return Scaffold(
-      backgroundColor: const Color(0xFF0d2818),
+      backgroundColor: AppColors.gradientTop,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-          ),
-        ),
+        decoration: AppDecorations.pageBackground,
         child: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

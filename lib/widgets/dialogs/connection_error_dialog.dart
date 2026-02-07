@@ -18,7 +18,7 @@ class ConnectionErrorDialog {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a472a),
+        backgroundColor: AppColors.gradientBottom,
         builder: (context, metrics) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [

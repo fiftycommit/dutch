@@ -19,6 +19,7 @@ import 'managers/solo/reaction_timer_manager.dart';
 import 'managers/solo/special_power_handler.dart';
 import 'managers/solo/bot_orchestrator.dart';
 import '../services/game/rp_calculator.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 export 'managers/solo/tournament_manager.dart' show TournamentResult;
@@ -244,12 +245,12 @@ class GameProvider with ChangeNotifier implements IGameController {
             final botIndex = _gameState!.players.indexOf(bot);
             if (botIndex >= 0) {
               _gameState!.players[botIndex] = bot.copyWith(aiParameters: aiParams);
-              debugPrint('✅ Bot $behavior/$skillLevel hydraté avec ${aiParams.length} paramètres ML');
+              if (kDebugMode) debugPrint('✅ Bot $behavior/$skillLevel hydraté avec ${aiParams.length} paramètres ML');
             }
           }
         }
       } catch (e) {
-        debugPrint('⚠️ Impossible de charger les paramètres ML pour $behavior/$skillLevel: $e');
+        if (kDebugMode) debugPrint('⚠️ Impossible de charger les paramètres ML pour $behavior/$skillLevel: $e');
         // Continue avec les paramètres par défaut - pas critique
       }
     }
@@ -660,8 +661,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     // Stocker le résumé pour analyse SBMM
     _statsService.recordAiTelemetry(aiSummary.toJson(), slotId: _currentSlotId);
 
-    // Debug log (TODO: supprimer en prod)
-    debugPrint(aiSummary.toString());
+    if (kDebugMode) debugPrint(aiSummary.toString());
 
     // ═══════════════════════════════════════════════════════════════════════
     // LOGGING : Enregistrer la fin de partie

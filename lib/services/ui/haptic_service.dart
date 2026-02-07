@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 enum HapticIntensity {
@@ -49,7 +50,7 @@ class HapticService {
           break;
       }
     } catch (e) {
-      // Certains appareils ne supportent pas le haptique
+      if (kDebugMode) debugPrint('⚠️ Haptic non supporté: $e');
     }
   }
 

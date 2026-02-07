@@ -48,6 +48,57 @@ class AppColors {
   static const Color backgroundDark = Color(0xFF0d1f15);
   static const Color backgroundMedium = Color(0xFF1a3a28);
   static const Color cardBackground = Color(0xFF2a4a38);
+
+  // === Couleurs de gradient ===
+  static const Color gradientTop = Color(0xFF0d2818);
+  static const Color gradientBottom = Color(0xFF1a472a);
+
+  // === Couleurs de surface ===
+  static const Color buttonSecondary = Color(0xFF2d5f3e);
+  static const Color dialogBackground = Color(0xFF1a3a28);
+  static const Color dialogDanger = Color(0xFF2d1a1a);
+}
+
+/// Gradients et décorations réutilisables
+class AppDecorations {
+  AppDecorations._();
+
+  /// Gradient principal de fond (utilisé par la plupart des écrans)
+  static const LinearGradient backgroundGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [AppColors.gradientTop, AppColors.gradientBottom],
+  );
+
+  /// Gradient plus sombre (splash, loading)
+  static const LinearGradient darkGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
+  );
+
+  /// Gradient diagonal (lobby, multiplayer screens)
+  static const LinearGradient diagonalGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [AppColors.gradientTop, AppColors.gradientBottom],
+  );
+
+  /// Fond de page standard
+  static const BoxDecoration pageBackground = BoxDecoration(
+    gradient: backgroundGradient,
+  );
+
+  /// Fond de page diagonal
+  static const BoxDecoration pageDiagonalBackground = BoxDecoration(
+    gradient: diagonalGradient,
+  );
+
+  /// Fond de carte semi-transparent
+  static BoxDecoration cardDecoration = BoxDecoration(
+    color: Colors.white.withValues(alpha: 0.1),
+    borderRadius: BorderRadius.circular(12),
+  );
 }
 
 /// Tailles de police minimales pour l'accessibilité

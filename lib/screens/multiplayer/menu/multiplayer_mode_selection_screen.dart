@@ -14,8 +14,8 @@ class MultiplayerModeSelectionScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF0d2818),
-              Color(0xFF1a472a),
+              AppColors.gradientTop,
+              AppColors.gradientBottom,
             ],
           ),
         ),

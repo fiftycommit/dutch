@@ -16,7 +16,7 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('RÉGLAGES',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         iconTheme: const IconThemeData(color: Colors.white),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -28,7 +28,7 @@ class SettingsScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF1a3a28), Color(0xFF0d1f15)],
+            colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
           ),
         ),
         child: ListView(

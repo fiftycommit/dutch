@@ -23,6 +23,7 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen>, GameScreenMixin<GameScreen> {
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
+  GameProvider? _gameProvider;
 
   @override
   void initState() {
@@ -31,15 +32,28 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
     lockLandscapeOrientation();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      gameProvider.setContext(context);
-      _tryNavigateToEnd(gameProvider.gameState);
+      _gameProvider = Provider.of<GameProvider>(context, listen: false);
+      _gameProvider!.setContext(context);
+      _gameProvider!.addListener(_onProviderChanged);
+      _tryNavigateToEnd(_gameProvider!.gameState);
       _checkAndStartBotTurn();
     });
   }
 
+  void _onProviderChanged() {
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final gameState = gameProvider.gameState;
+    if (gameState != null && gameState.phase == GamePhase.ended) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryNavigateToEnd(gameState);
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _gameProvider?.removeListener(_onProviderChanged);
     unlockOrientation();
     super.dispose();
   }
@@ -71,18 +85,10 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
 
   @override
   Widget build(BuildContext context) {
-    final gameState = context.watch<GameProvider>().gameState;
-
-    if (gameState != null && gameState.phase == GamePhase.ended) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _tryNavigateToEnd(gameState);
-      });
-    }
-
     return PopScope(
       canPop: false,
       child: Scaffold(
-      backgroundColor: const Color(0xFF1a472a),
+      backgroundColor: AppColors.gradientBottom,
       body: Consumer<GameProvider>(
         builder: (context, gameProvider, child) {
           if (!gameProvider.hasActiveGame) {
@@ -208,11 +214,9 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
     if (gs.currentPlayer.isHuman && gs.isWaitingForSpecialPower) {
       playerWithPower = gs.currentPlayer;
     } else {
-      try {
-        playerWithPower = gs.players.firstWhere((p) => p.isHuman);
-      } catch (e) {
-        return const SizedBox();
-      }
+      final humans = gs.players.where((p) => p.isHuman);
+      if (humans.isEmpty) return const SizedBox();
+      playerWithPower = humans.first;
     }
 
     if (!playerWithPower.isHuman) return const SizedBox();
@@ -347,7 +351,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
 
   Widget _buildRotateScreenOverlay() {
     return Container(
-      color: const Color(0xFF1a472a),
+      color: AppColors.gradientBottom,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

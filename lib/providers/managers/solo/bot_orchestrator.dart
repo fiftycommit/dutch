@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../../../models/playing_card.dart';
 import '../../../models/game_state.dart';
@@ -141,6 +142,7 @@ class BotOrchestrator {
           gameState.specialCardToActivate = null;
         }
       } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Bot turn error: $e');
         // En cas d'erreur, défausser la carte tirée si elle existe
         if (gameState.drawnCard != null) {
           gameState.discardPile.add(gameState.drawnCard!);

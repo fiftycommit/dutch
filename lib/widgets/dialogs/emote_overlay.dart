@@ -85,7 +85,7 @@ class _EmoteOverlayState extends State<EmoteOverlay>
                 padding: EdgeInsets.all(isCompact ? 12 : 20),
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1a472a),
+                  color: AppColors.gradientBottom,
                   borderRadius: BorderRadius.circular(isCompact ? 14 : 20),
                   border: Border.all(color: Colors.amber, width: 2),
                   boxShadow: [

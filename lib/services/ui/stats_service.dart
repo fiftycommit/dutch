@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../models/game_settings.dart';
 import '../game/rp_calculator.dart';
@@ -19,6 +20,7 @@ class StatsService {
     try {
       return jsonDecode(statsJson);
     } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Stats JSON decode error: $e');
       return _getEmptyStats();
     }
   }

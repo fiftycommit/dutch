@@ -91,13 +91,7 @@ class ResultsScreen extends StatelessWidget {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-          ),
-        ),
+        decoration: AppDecorations.pageBackground,
         child: SafeArea(
           child: Column(
             children: [

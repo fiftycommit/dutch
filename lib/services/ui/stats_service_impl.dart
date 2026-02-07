@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/interfaces/i_stats_service.dart';
 import '../../models/game_settings.dart';
@@ -23,6 +24,7 @@ class StatsServiceImpl implements IStatsService {
     try {
       return jsonDecode(statsJson);
     } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Stats JSON decode error: $e');
       return _getEmptyStats();
     }
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/player.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/game/card_widget.dart';
+import '../../widgets/game/flip_card_widget.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/screen_utils.dart';
 
@@ -278,12 +279,19 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                   height: cardHeight,
                                   child: FittedBox(
                                     fit: BoxFit.contain,
-                                    // Carte sélectionnée = face visible, sinon dos
-                                    child: CardWidget(
-                                      card: _selectedCards.contains(i) ? allCards[i] : null,
-                                      size: CardSize.large,
-                                      isRevealed: _selectedCards.contains(i),
-                                    ),
+                                    child: _selectedCards.contains(i)
+                                        ? AnimatedFlipCard(
+                                            card: allCards[i],
+                                            isRevealed: true,
+                                            cardSize: CardSize.large,
+                                            delay: Duration(milliseconds: 200 + i * 150),
+                                            duration: const Duration(milliseconds: 500),
+                                          )
+                                        : CardWidget(
+                                            card: null,
+                                            size: CardSize.large,
+                                            isRevealed: false,
+                                          ),
                                   ),
                                 ),
                               ],
@@ -409,15 +417,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     // No player / spectator screen
     if (config.localPlayer.isSpectator) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0d2818),
+        backgroundColor: AppColors.gradientTop,
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-            ),
-          ),
+          decoration: AppDecorations.pageBackground,
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -467,17 +469,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final cardAreaHeight = usableHeight * (isLandscape ? 0.5 : 0.38);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0d2818),
+      backgroundColor: AppColors.gradientTop,
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0d2818), Color(0xFF1a472a)],
-          ),
-        ),
+        decoration: AppDecorations.pageBackground,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(

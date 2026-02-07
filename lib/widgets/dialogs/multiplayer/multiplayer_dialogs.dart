@@ -12,7 +12,7 @@ class MultiplayerDialogs {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a472a),
+        backgroundColor: AppColors.gradientBottom,
         builder: (ctx, metrics) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -52,7 +52,7 @@ class MultiplayerDialogs {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a472a),
+        backgroundColor: AppColors.gradientBottom,
         builder: (ctx, metrics) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -92,7 +92,7 @@ class MultiplayerDialogs {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a472a),
+        backgroundColor: AppColors.gradientBottom,
         builder: (ctx, metrics) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [

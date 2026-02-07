@@ -13,7 +13,7 @@ class GameDialogs {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final titleSize = metrics.font(18);
           final bodySize = metrics.font(14);
@@ -57,7 +57,7 @@ class GameDialogs {
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final titleSize = metrics.font(18);
           final gap = metrics.space(12);
@@ -109,7 +109,7 @@ class GameDialogs {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => ResponsiveDialog(
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         builder: (context, metrics) {
           final titleSize = metrics.font(18);
           final bodySize = metrics.font(14);

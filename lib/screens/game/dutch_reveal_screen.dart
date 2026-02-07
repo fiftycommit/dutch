@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/game_provider.dart';
@@ -15,8 +16,8 @@ class DutchRevealScreen extends StatelessWidget {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     
     if (!gameProvider.hasActiveGame) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1a472a),
+      return Scaffold(
+        backgroundColor: AppColors.gradientBottom,
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }

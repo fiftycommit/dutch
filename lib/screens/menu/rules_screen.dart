@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/screen_utils.dart';
+import '../../utils/ui_constants.dart';
 
 class RulesScreen extends StatelessWidget {
   const RulesScreen({super.key});
@@ -8,10 +9,10 @@ class RulesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0d2818),
+      backgroundColor: AppColors.gradientTop,
       appBar: AppBar(
         title: const Text('Règles du jeu'),
-        backgroundColor: const Color(0xFF1a3a28),
+        backgroundColor: AppColors.backgroundMedium,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => context.go('/'),
@@ -102,9 +103,9 @@ class RulesScreen extends StatelessWidget {
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
       padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2d5f3e)),
+        border: Border.all(color: AppColors.buttonSecondary),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,9 +148,9 @@ class RulesScreen extends StatelessWidget {
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
       padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2d5f3e)),
+        border: Border.all(color: AppColors.buttonSecondary),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,9 +220,9 @@ class RulesScreen extends StatelessWidget {
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
       padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2d5f3e)),
+        border: Border.all(color: AppColors.buttonSecondary),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,9 +281,9 @@ class RulesScreen extends StatelessWidget {
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
       padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2d5f3e)),
+        border: Border.all(color: AppColors.buttonSecondary),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,9 +373,9 @@ class RulesScreen extends StatelessWidget {
       margin: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 16)),
       padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a472a),
+        color: AppColors.gradientBottom,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2d5f3e)),
+        border: Border.all(color: AppColors.buttonSecondary),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 
 class JoinModeSelectionScreen extends StatelessWidget {
@@ -12,10 +13,7 @@ class JoinModeSelectionScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0d2818),
-              Color(0xFF1a472a),
-            ],
+            colors: [AppColors.gradientTop, AppColors.gradientBottom],
           ),
         ),
         child: SafeArea(
