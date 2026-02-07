@@ -26,7 +26,7 @@ class CompetitiveStats {
 
   factory CompetitiveStats.fromJson(Map<String, dynamic> json) {
     return CompetitiveStats(
-      mmr: json['mmr'] ?? 1000,
+      mmr: json['mmr'] ?? 0,
       wins: json['wins'] ?? 0,
       losses: json['losses'] ?? 0,
       gamesPlayed: json['gamesPlayed'] ?? 0,

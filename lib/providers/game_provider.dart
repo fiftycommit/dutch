@@ -154,7 +154,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     if (useSBMM || hardcoreLevel != null) {
       final stats = await _statsService.getStats(slotId: saveSlot);
-      _playerMMR = stats['mmr'] ?? 1000;
+      _playerMMR = stats['mmr'] ?? 0;
       _playerWinStreak = stats['winStreak'] ?? 0;
       
       // Initialiser l'estimateur de skill avec le MMR actuel

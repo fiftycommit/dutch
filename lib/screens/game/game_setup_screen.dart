@@ -399,11 +399,13 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     }
   }
 
-  /// Crée les bots en mode SBMM (matchmaking adaptatif basé sur le MMR)
+  /// Crée les bots en mode SBMM (vrai matchmaking adaptatif)
+  ///
+  /// Les bots sont des "miroirs" du joueur : mêmes paramètres avec petite
+  /// variance aléatoire. Pas de seuils MMR, pas de multiplicateur de skill.
   Future<List<Player>> _createSBMMBots(int numberOfBots) async {
     final botTrainingService = BotTrainingService();
     final ghostCloneService = GhostCloneService();
-    final forceBalanced = selectedBotDifficulty != Difficulty.easy;
 
     // Récupérer le profil joueur (une seule fois)
     final profile = await PlayerLearningService().getProfile(slotId: widget.saveSlot);
@@ -412,30 +414,26 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final ghostPlayerId = await ClientIdService.ensureClientId();
     final ghostPlayerName = profile.profileId;
 
-    // Générer les paramètres des bots via le nouveau MatchmakingService
-    // Ceci prend en compte : MMR, progression vers le palier, distribution auto
+    // Vrai SBMM : copier les params du joueur avec petite variance par bot
     final botParamsList = BotConfig.generateMatchmakingBotParams(
       playerProfile: profile,
       botCount: numberOfBots,
       forceChallenge: widget.isTournament,
     );
 
-    // Déterminer les comportements variés pour chaque bot
-    final behaviors = _generateBotBehaviors(numberOfBots, profile.learnedParameters);
-
     // Ghost profile (chargé une seule fois si nécessaire)
     GhostProfile? ghostProfile;
 
     final players = <Player>[];
+    final skillLevel = _mmrToSkillLevel(profile.mmr);
 
     for (int i = 0; i < numberOfBots; i++) {
-      final behavior = forceBalanced ? BotBehavior.balanced : behaviors[i];
       final baseParams = botParamsList[i];
 
       // Récupérer le training state pour ce type de bot
       final botKey = BotTrainingService.buildBotKey(
-        behavior: behavior,
-        skillLevel: _mmrToSkillLevel(profile.mmr),
+        behavior: BotBehavior.balanced,
+        skillLevel: skillLevel,
       );
       final trainingState = await botTrainingService.getStateForBot(
         botKey,
@@ -460,10 +458,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
       players.add(Player(
         id: 'bot_$i',
-        name: _getBotName(behavior, _mmrToSkillLevel(profile.mmr)),
+        name: _getBotName(BotBehavior.balanced, skillLevel),
         isHuman: false,
-        botBehavior: behavior,
-        botSkillLevel: _mmrToSkillLevel(profile.mmr),
+        botBehavior: BotBehavior.balanced,
+        botSkillLevel: skillLevel,
         aiParameters: aiParameters,
         position: i + 1,
       ));
@@ -753,45 +751,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       }
     });
     return params;
-  }
-
-  /// Génère des comportements variés pour les bots basés sur le style du joueur
-  List<BotBehavior> _generateBotBehaviors(int count, Map<String, dynamic> playerParams) {
-    double numParam(String key, double fallback) {
-      final v = playerParams[key];
-      if (v is num) return v.toDouble();
-      return fallback;
-    }
-
-    final aggressiveness = numParam('aggressiveness', 0.5);
-    final caution = numParam('caution', 0.5);
-    final riskTolerance = numParam('riskTolerance', 0.5);
-
-    // Déterminer le style dominant du joueur
-    BotBehavior primaryBehavior;
-    if (aggressiveness >= 0.65 || riskTolerance >= 0.65) {
-      primaryBehavior = BotBehavior.aggressive;
-    } else if (caution >= 0.65 && riskTolerance <= 0.45) {
-      primaryBehavior = BotBehavior.fast;
-    } else {
-      primaryBehavior = BotBehavior.balanced;
-    }
-
-    // Créer une distribution variée autour du style du joueur
-    final behaviors = <BotBehavior>[];
-    final allBehaviors = [BotBehavior.fast, BotBehavior.aggressive, BotBehavior.balanced];
-
-    for (int i = 0; i < count; i++) {
-      if (i == 0) {
-        // Premier bot : même style que le joueur
-        behaviors.add(primaryBehavior);
-      } else {
-        // Autres bots : varier les styles
-        behaviors.add(allBehaviors[i % allBehaviors.length]);
-      }
-    }
-
-    return behaviors;
   }
 
   /// Applique le ghost blending sur les paramètres de base

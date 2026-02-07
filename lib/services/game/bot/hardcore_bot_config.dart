@@ -381,8 +381,8 @@ class PlayerSkillEstimator {
     _roundsWonVsBot = 0;
     _roundsLostVsBot = 0;
     _recentDeltas = [];
-    _estimatedSkill = initialMMR ?? 1000;
-    _rawSkillEstimate = initialMMR ?? 1000;
+    _estimatedSkill = initialMMR ?? 0;
+    _rawSkillEstimate = initialMMR ?? 0;
   }
 
   /// Enregistre une décision du joueur

@@ -69,7 +69,7 @@ class PlayerProfile {
     required this.createdAt,
     required this.lastUpdatedAt,
     required this.gamesAnalyzed,
-    this.mmr = 1000,
+    this.mmr = 0,
     required this.learnedParameters,
   });
 
@@ -79,7 +79,7 @@ class PlayerProfile {
       createdAt: DateTime.now(),
       lastUpdatedAt: DateTime.now(),
       gamesAnalyzed: 0,
-      mmr: 1000,
+      mmr: 0,
       learnedParameters: {
         'aggressiveness': 0.5,
         'caution': 0.5,
@@ -124,7 +124,7 @@ class PlayerProfile {
       lastUpdatedAt:
           DateTime.tryParse(json['lastUpdatedAt'] ?? '') ?? DateTime.now(),
       gamesAnalyzed: json['gamesAnalyzed'] ?? 0,
-      mmr: json['mmr'] ?? 1000,
+      mmr: json['mmr'] ?? 0,
       learnedParameters:
           Map<String, dynamic>.from(json['learnedParameters'] ?? {}),
     );

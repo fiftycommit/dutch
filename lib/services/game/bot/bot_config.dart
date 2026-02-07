@@ -3,7 +3,6 @@ import '../../../models/game_state.dart';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import '../../../models/player_learning_data.dart';
-import '../../matchmaking/matchmaking_service.dart';
 import 'bot_difficulty.dart';
 import 'bot_personality.dart';
 import 'hardcore_bot_config.dart';
@@ -168,7 +167,7 @@ class BotConfig {
     if (hardcoreLevel != null) {
       return HardcoreBotConfig.getHardcoreDifficulty(
         level: hardcoreLevel,
-        playerSkillEstimate: playerSkillEstimate ?? playerMMR ?? 1000,
+        playerSkillEstimate: playerSkillEstimate ?? playerMMR ?? 0,
       );
     }
     
@@ -187,43 +186,84 @@ class BotConfig {
     return getSkillDifficulty(bot.botSkillLevel);
   }
 
-  /// Génère les configurations de bots basées sur le matchmaking adaptatif
+  /// Vrai SBMM : copie les paramètres du joueur avec petite variance
   ///
-  /// Le rang (Bronze/Argent/Or/Platine) est purement cosmétique.
-  /// La vraie difficulté est calculée à partir du MMR du joueur :
-  /// - Un joueur fort en Bronze aura des bots plus difficiles
-  ///   qu'un joueur faible en Platine
-  /// - Plus on se rapproche d'un palier de rang, plus les bots sont forts
+  /// Au lieu de scaler les params via un multiplicateur basé sur des seuils MMR,
+  /// on copie directement les learnedParameters du joueur avec une variance
+  /// aléatoire par paramètre. Chaque bot est un "miroir" du joueur,
+  /// légèrement différent pour la diversité.
   static List<Map<String, double>> generateMatchmakingBotParams({
     required PlayerProfile playerProfile,
     required int botCount,
     bool forceChallenge = false,
   }) {
-    final profiles = MatchmakingService.generateBotProfiles(
-      playerProfile: playerProfile,
-      botCount: botCount,
-      forceChallenge: forceChallenge,
-    );
+    final base = playerProfile.learnedParameters;
+    final result = <Map<String, double>>[];
 
-    return profiles.map((p) => p.adjustedParameters).toList();
+    double getNum(String key, double fallback) {
+      final v = base[key];
+      if (v is num) return v.toDouble();
+      return fallback;
+    }
+
+    for (int i = 0; i < botCount; i++) {
+      final botParams = <String, double>{};
+
+      // Copier chaque paramètre du joueur avec variance aléatoire
+      for (final entry in _sbmmParamConfig.entries) {
+        final playerValue = getNum(entry.key, entry.value[0]);
+        final variance = entry.value[1];
+        final minVal = entry.value[2];
+        final maxVal = entry.value[3];
+
+        final noise = (random.nextDouble() - 0.5) * 2 * variance;
+        botParams[entry.key] = (playerValue + noise).clamp(minVal, maxVal);
+      }
+
+      // Paramètres dérivés (calculés, pas trackés directement)
+      botParams['riskTolerance'] =
+          ((botParams['aggressiveness']! + (1.0 - botParams['caution']!)) / 2)
+              .clamp(0.0, 1.0);
+      botParams['powerUsageRate'] =
+          ((botParams['powerDefensiveRate']! + botParams['powerOffensiveRate']!) / 2)
+              .clamp(0.0, 1.0);
+      botParams['scoreGapWeight'] = 0.7;
+      botParams['rankPenalty'] = 0.0;
+      botParams['ghostInfluence'] = 0.0;
+      botParams['ghostDutchThreshold'] = botParams['dutchThreshold']!;
+
+      // Ciblage : copier la stratégie du joueur (catégoriel)
+      final targetStrat = base['targetingStrategy'];
+      if (targetStrat == 'leader') {
+        botParams['targetingStrategy'] = 0.0;
+      } else if (targetStrat == 'weak') {
+        botParams['targetingStrategy'] = 1.0;
+      } else {
+        botParams['targetingStrategy'] = 2.0; // random/balanced
+      }
+
+      result.add(botParams);
+    }
+
+    return result;
   }
 
-  /// Crée une BotDifficulty à partir d'un profil de matchmaking
-  static BotDifficulty difficultyFromMatchmakingProfile(
-    BotMatchmakingProfile profile,
-  ) {
-    return difficultyFromParameters(profile.adjustedParameters);
-  }
-
-  /// Retourne des informations de debug sur le matchmaking pour un joueur
-  static Map<String, dynamic> getMatchmakingDebugInfo(int playerMMR) {
-    return {
-      'playerMMR': playerMMR,
-      'cosmenticRank': MatchmakingService.getRankName(playerMMR),
-      'palierProgress': MatchmakingService.getPalierProgress(playerMMR),
-      'palierBoost': MatchmakingService.getPalierBoost(playerMMR),
-      'nextRankMMR': MatchmakingService.getNextRankMMR(playerMMR),
-      'progressPercent': MatchmakingService.getRankProgressPercent(playerMMR),
-    };
-  }
+  // Config SBMM : [default, variance, min, max] par paramètre
+  // Variance = bruit aléatoire ± autour de la valeur du joueur
+  static const Map<String, List<double>> _sbmmParamConfig = {
+    'aggressiveness':        [0.5,  0.08, 0.0, 1.0],
+    'caution':               [0.5,  0.08, 0.0, 1.0],
+    'dutchThreshold':        [15.0, 2.5,  5.0, 30.0],
+    'dutchQuality':          [0.5,  0.08, 0.0, 1.0],
+    'powerDefensiveRate':    [0.5,  0.08, 0.0, 1.0],
+    'powerOffensiveRate':    [0.5,  0.08, 0.0, 1.0],
+    'memoryAccuracy':        [0.7,  0.06, 0.3, 1.0],
+    'memoryRetention':       [0.7,  0.05, 0.3, 1.0],
+    'adaptability':          [0.5,  0.08, 0.0, 1.0],
+    'decisionSpeed':         [2000, 300,  500, 10000],
+    'aggressiveness_winning':[0.5,  0.08, 0.0, 1.0],
+    'aggressiveness_losing': [0.5,  0.08, 0.0, 1.0],
+    'caution_winning':       [0.5,  0.08, 0.0, 1.0],
+    'caution_losing':        [0.5,  0.08, 0.0, 1.0],
+  };
 }

@@ -354,7 +354,7 @@ class SimulationConfig {
     if (hardcoreLevel != null) {
       return HardcoreBotConfig.getHardcoreDifficulty(
         level: hardcoreLevel!,
-        playerSkillEstimate: simulatedPlayerSkill ?? 1000,
+        playerSkillEstimate: simulatedPlayerSkill ?? 0,
       );
     }
     // Difficulté Gold par défaut pour les simulations
