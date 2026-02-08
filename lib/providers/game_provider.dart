@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/playing_card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
+import '../models/player_learning_data.dart';
 import '../services/game/game_logic.dart';
 import '../core/interfaces/i_haptic_service.dart';
 import '../core/interfaces/i_stats_service.dart';
@@ -686,7 +689,83 @@ class GameProvider with ChangeNotifier implements IGameController {
       winner: ranking.first,
     );
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // BOT MATCHUP : Sauvegarder les stats joueur vs bots
+    // ═══════════════════════════════════════════════════════════════════════
+    _saveBotMatchup(
+      ranking: ranking,
+      human: human,
+      playerRank: playerRank,
+    );
+
     notifyListeners();
+  }
+
+  /// Sauvegarde les stats de matchup joueur vs bots (fire-and-forget).
+  void _saveBotMatchup({
+    required List<Player> ranking,
+    required Player human,
+    required int playerRank,
+  }) {
+    // Fire-and-forget pour ne pas bloquer notifyListeners
+    _saveBotMatchupAsync(ranking: ranking, human: human, playerRank: playerRank);
+  }
+
+  Future<void> _saveBotMatchupAsync({
+    required List<Player> ranking,
+    required Player human,
+    required int playerRank,
+  }) async {
+    try {
+      final bots = _gameState!.players.where((p) => !p.isHuman).toList();
+      if (bots.isEmpty) return;
+
+      final difficultyName = _gameState!.difficulty.toString().split('.').last;
+
+      final botEntries = <BotMatchupEntry>[];
+      for (final bot in bots) {
+        final params = bot.aiParameters ?? <String, double>{};
+        final botRank = ranking.indexWhere((p) => p.id == bot.id) + 1;
+        final keyParams = <String, double>{};
+        for (final key in ['memoryAccuracy', 'memoryRetention', 'dutchThreshold', 'dutchQuality', 'aggressiveness', 'decisionSpeed']) {
+          final v = params[key];
+          if (v != null) keyParams[key] = v;
+        }
+
+        botEntries.add(BotMatchupEntry(
+          botId: bot.botBehavior?.toString().split('.').last ?? 'unknown',
+          botMMR: (params['serverMMR'] as num?)?.toInt() ?? 0,
+          botWinRateVsHuman: (params['serverWinRateVsHuman'] as num?)?.toDouble() ?? 0.0,
+          botScore: _gameState!.getFinalScore(bot),
+          botRank: botRank,
+          botParams: keyParams,
+        ));
+      }
+
+      final hasBoosted = bots.any((b) => (b.aiParameters?['isBoostedSBMM'] ?? 0) == 1.0);
+
+      final record = BotMatchupRecord(
+        gameId: '${DateTime.now().millisecondsSinceEpoch}',
+        timestamp: DateTime.now(),
+        playerMMR: _playerMMR ?? 0,
+        playerRank: playerRank,
+        playerScore: _gameState!.getFinalScore(human),
+        numberOfPlayers: _gameState!.players.length,
+        difficulty: difficultyName,
+        wasBoostedSBMM: hasBoosted,
+        bots: botEntries,
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'bot_matchup_history_slot_$_currentSlotId';
+      final rawList = prefs.getStringList(key) ?? [];
+      rawList.insert(0, jsonEncode(record.toJson()));
+      // Garder max 20 entrées
+      if (rawList.length > 20) rawList.removeRange(20, rawList.length);
+      await prefs.setStringList(key, rawList);
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Erreur sauvegarde bot matchup: $e');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

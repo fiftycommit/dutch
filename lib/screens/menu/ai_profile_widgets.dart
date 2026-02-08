@@ -547,3 +547,212 @@ class HistoryCard extends StatelessWidget {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOT MATCHUP CARD
+// ═══════════════════════════════════════════════════════════════════════════
+
+class BotMatchupCard extends StatelessWidget {
+  final List<BotMatchupRecord> matchups;
+
+  const BotMatchupCard({
+    super.key,
+    required this.matchups,
+  });
+
+  static const _diffLabels = {
+    'hard': 'Or',
+    'platinum': 'Platine',
+    'easy': 'Bronze',
+    'medium': 'Argent',
+    'mix': 'Mix',
+  };
+
+  static const _diffColors = {
+    'hard': Colors.orange,
+    'platinum': Colors.purple,
+    'easy': Colors.brown,
+    'medium': Colors.grey,
+    'mix': Colors.teal,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.sports_kabaddi, color: Colors.amber, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Performance vs Bots',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (matchups.isEmpty)
+            const Text('Aucune donnée. Joue des parties pour voir tes stats vs bots.',
+                style: TextStyle(color: AppColors.textDisabled, fontSize: 12))
+          else ...[
+            // Résumé global
+            _buildSummary(),
+            const SizedBox(height: 12),
+            // Winrate par difficulté
+            _buildPerDifficultyStats(),
+            const SizedBox(height: 12),
+            // 5 dernières parties
+            const Text('Derniers matchups',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            const SizedBox(height: 6),
+            ...matchups.take(5).map(_buildMatchupRow),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummary() {
+    final total = matchups.length;
+    final wins = matchups.where((m) => m.playerWon).length;
+    final winRate = total > 0 ? (wins / total * 100).round() : 0;
+    final boostedCount = matchups.where((m) => m.wasBoostedSBMM).length;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$winRate% winrate',
+                style: TextStyle(
+                  color: winRate >= 50 ? Colors.lightGreenAccent : Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                '$wins/$total parties gagnées',
+                style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        if (boostedCount > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              '$boostedCount boosté${boostedCount > 1 ? 's' : ''}',
+              style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPerDifficultyStats() {
+    // Grouper par difficulté
+    final byDiff = <String, List<BotMatchupRecord>>{};
+    for (final m in matchups) {
+      byDiff.putIfAbsent(m.difficulty, () => []).add(m);
+    }
+
+    if (byDiff.length <= 1) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: byDiff.entries.map((e) {
+        final diff = e.key;
+        final records = e.value;
+        final wins = records.where((m) => m.playerWon).length;
+        final wr = (wins / records.length * 100).round();
+        final color = _diffColors[diff] ?? Colors.white;
+        final label = _diffLabels[diff] ?? diff;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$label: $wr% ($wins/${records.length})',
+            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMatchupRow(BotMatchupRecord m) {
+    final date = m.timestamp.toLocal();
+    final dateStr = '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+    final diffLabel = _diffLabels[m.difficulty] ?? m.difficulty;
+    final diffColor = _diffColors[m.difficulty] ?? Colors.white;
+    final won = m.playerWon;
+    final bestBotScore = m.bots.isNotEmpty
+        ? m.bots.map((b) => b.botScore).reduce((a, b) => a < b ? a : b)
+        : 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            child: Text(dateStr,
+                style: const TextStyle(color: AppColors.textDisabled, fontSize: 10)),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: diffColor.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(diffLabel,
+                style: TextStyle(color: diffColor, fontSize: 9, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            won ? Icons.emoji_events : Icons.close,
+            color: won ? Colors.amber : Colors.redAccent,
+            size: 14,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${m.playerRank}/${m.numberOfPlayers}',
+            style: TextStyle(
+              color: won ? Colors.lightGreenAccent : Colors.redAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '${m.playerScore} vs $bestBotScore',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+          ),
+          if (m.wasBoostedSBMM) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.bolt, color: Colors.orange, size: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}

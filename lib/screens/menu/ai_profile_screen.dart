@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -90,6 +91,7 @@ class _AiProfileTabState extends State<_AiProfileTab> {
 
   PlayerProfile? _profile;
   List<PlayerGameRecord> _history = const [];
+  List<BotMatchupRecord> _matchups = const [];
   String? _clientId;
   int _rp = 0;
 
@@ -117,11 +119,23 @@ class _AiProfileTabState extends State<_AiProfileTab> {
       final history = await _service.getHistory(slotId: widget.slotId);
       final stats = await StatsService.getStats(slotId: widget.slotId);
       final rp = (stats['mmr'] ?? 0) as int;
+
+      // Charger l'historique des matchups vs bots
+      final matchupKey = 'bot_matchup_history_slot_${widget.slotId}';
+      final rawMatchups = prefs.getStringList(matchupKey) ?? [];
+      final matchups = <BotMatchupRecord>[];
+      for (final raw in rawMatchups) {
+        try {
+          matchups.add(BotMatchupRecord.fromJson(jsonDecode(raw)));
+        } catch (_) {}
+      }
+
       if (!mounted) return;
       setState(() {
         _clientId = clientId;
         _profile = profile;
         _history = history;
+        _matchups = matchups;
         _rp = rp;
         _loading = false;
       });
@@ -310,6 +324,8 @@ class _AiProfileTabState extends State<_AiProfileTab> {
           ),
           const SizedBox(height: 12),
           HistoryCard(history: sbmmHistory),
+          const SizedBox(height: 12),
+          BotMatchupCard(matchups: _matchups),
         ],
       ),
     );

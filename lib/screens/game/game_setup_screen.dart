@@ -390,7 +390,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         players.addAll(await BotFactory.createManualBots(
           numberOfBots: numberOfBots,
           difficulty: selectedBotDifficulty,
-        ).timeout(const Duration(seconds: 8)));
+          saveSlot: widget.saveSlot,
+        ).timeout(const Duration(seconds: 10)));
       }
 
       if (!mounted) return;

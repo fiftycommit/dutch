@@ -213,3 +213,104 @@ class PlayerGameRecord {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOT MATCHUP TRACKING
+// ═══════════════════════════════════════════════════════════════════════════
+
+class BotMatchupEntry {
+  final String botId;
+  final int botMMR;
+  final double botWinRateVsHuman;
+  final int botScore;
+  final int botRank;
+  final Map<String, double> botParams;
+
+  BotMatchupEntry({
+    required this.botId,
+    required this.botMMR,
+    required this.botWinRateVsHuman,
+    required this.botScore,
+    required this.botRank,
+    required this.botParams,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'botId': botId,
+        'botMMR': botMMR,
+        'botWinRateVsHuman': botWinRateVsHuman,
+        'botScore': botScore,
+        'botRank': botRank,
+        'botParams': botParams,
+      };
+
+  factory BotMatchupEntry.fromJson(Map<String, dynamic> json) {
+    final rawParams = json['botParams'] ?? {};
+    final params = <String, double>{};
+    (rawParams as Map).forEach((k, v) {
+      if (v is num) params[k.toString()] = v.toDouble();
+    });
+    return BotMatchupEntry(
+      botId: json['botId'] ?? '',
+      botMMR: json['botMMR'] ?? 0,
+      botWinRateVsHuman: (json['botWinRateVsHuman'] as num?)?.toDouble() ?? 0.5,
+      botScore: json['botScore'] ?? 0,
+      botRank: json['botRank'] ?? 0,
+      botParams: params,
+    );
+  }
+}
+
+class BotMatchupRecord {
+  final String gameId;
+  final DateTime timestamp;
+  final int playerMMR;
+  final int playerRank;
+  final int playerScore;
+  final int numberOfPlayers;
+  final String difficulty;
+  final bool wasBoostedSBMM;
+  final List<BotMatchupEntry> bots;
+
+  BotMatchupRecord({
+    required this.gameId,
+    required this.timestamp,
+    required this.playerMMR,
+    required this.playerRank,
+    required this.playerScore,
+    required this.numberOfPlayers,
+    required this.difficulty,
+    required this.wasBoostedSBMM,
+    required this.bots,
+  });
+
+  bool get playerWon => playerRank == 1;
+
+  Map<String, dynamic> toJson() => {
+        'gameId': gameId,
+        'timestamp': timestamp.toIso8601String(),
+        'playerMMR': playerMMR,
+        'playerRank': playerRank,
+        'playerScore': playerScore,
+        'numberOfPlayers': numberOfPlayers,
+        'difficulty': difficulty,
+        'wasBoostedSBMM': wasBoostedSBMM,
+        'bots': bots.map((b) => b.toJson()).toList(),
+      };
+
+  factory BotMatchupRecord.fromJson(Map<String, dynamic> json) {
+    return BotMatchupRecord(
+      gameId: json['gameId'] ?? '',
+      timestamp: DateTime.tryParse(json['timestamp'] ?? '') ?? DateTime.now(),
+      playerMMR: json['playerMMR'] ?? 0,
+      playerRank: json['playerRank'] ?? 0,
+      playerScore: json['playerScore'] ?? 0,
+      numberOfPlayers: json['numberOfPlayers'] ?? 4,
+      difficulty: json['difficulty'] ?? 'unknown',
+      wasBoostedSBMM: json['wasBoostedSBMM'] ?? false,
+      bots: (json['bots'] as List? ?? [])
+          .map((b) => BotMatchupEntry.fromJson(Map<String, dynamic>.from(b)))
+          .toList(),
+    );
+  }
+}

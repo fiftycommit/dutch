@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'utils/ui_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -50,6 +51,8 @@ class DutchGameApp extends StatefulWidget {
 }
 
 class _DutchGameAppState extends State<DutchGameApp> {
+  GoRouter? _router;
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -67,11 +70,11 @@ class _DutchGameAppState extends State<DutchGameApp> {
       ],
       child: Builder(
         builder: (context) {
-          // Créer le router après que les providers soient disponibles
-          final router = AppRouter.createRouter(context);
+          // Créer le router une seule fois pour éviter de reset la navigation
+          _router ??= AppRouter.createRouter(context);
 
           return MaterialApp.router(
-            routerConfig: router,
+            routerConfig: _router!,
             title: 'Dutch Card Game',
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
