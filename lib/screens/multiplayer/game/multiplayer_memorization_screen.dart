@@ -13,17 +13,19 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    final provider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gameState = provider.gameState;
 
     if (gameState == null) {
       return const Scaffold(
-        backgroundColor: AppColors.gradientTop,
+        backgroundColor: AppColors.gradientBottom,
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
 
-    final localPlayer = gameState.players.where((p) => p.id == provider.playerId).firstOrNull;
+    final localPlayer =
+        gameState.players.where((p) => p.id == provider.playerId).firstOrNull;
 
     if (localPlayer == null) {
       return _buildSpectatorScreen();
@@ -72,14 +74,15 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
 
   Widget _buildSpectatorScreen() {
     return Scaffold(
-      backgroundColor: AppColors.gradientTop,
+      backgroundColor: AppColors.gradientBottom,
       body: Container(
-        decoration: AppDecorations.pageBackground,
+        color: AppColors.gradientBottom,
         child: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
+              Icon(Icons.visibility_off,
+                  size: 60, color: AppColors.textDisabled),
               SizedBox(height: 20),
               Text(
                 "VOUS ÊTES SPECTATEUR",

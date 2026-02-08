@@ -65,6 +65,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final bool useSBMM = settings.useSBMM;
 
     return Scaffold(
+      backgroundColor: AppColors.gradientBottom,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -72,14 +73,13 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         ),
         title: Text(
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.backgroundMedium,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.gradientBottom,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: AppDecorations.darkGradient,
-        ),
+        color: AppColors.gradientBottom,
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (_isLoading) {
@@ -99,32 +99,32 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               horizontal: f(50),
               vertical: f(15),
             );
-            
+
             // Couleurs pour les segments
             const unselectedBg = Color(0xFF2D4F3C);
             const selectedBotBg = Colors.amber;
             const selectedPlayerBg = Colors.green;
             const segmentBorder = Color(0xFF4A7A5C);
-            
+
             final botSegmentStyle = ButtonStyle(
-              visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
-              tapTargetSize:
-                  isCompact ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
+              visualDensity:
+                  isCompact ? VisualDensity.compact : VisualDensity.standard,
+              tapTargetSize: isCompact
+                  ? MaterialTapTargetSize.shrinkWrap
+                  : MaterialTapTargetSize.padded,
               padding: WidgetStateProperty.all(
                 EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
               ),
               textStyle: WidgetStateProperty.all(
                 TextStyle(fontSize: f(13), fontWeight: FontWeight.w600),
               ),
-              backgroundColor:
-                  WidgetStateProperty.resolveWith<Color>((states) {
+              backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
                   return selectedBotBg;
                 }
                 return unselectedBg;
               }),
-              foregroundColor:
-                  WidgetStateProperty.resolveWith<Color>((states) {
+              foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.black;
                 }
@@ -151,24 +151,24 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               }),
             );
             final playerSegmentStyle = ButtonStyle(
-              visualDensity: isCompact ? VisualDensity.compact : VisualDensity.standard,
-              tapTargetSize:
-                  isCompact ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
+              visualDensity:
+                  isCompact ? VisualDensity.compact : VisualDensity.standard,
+              tapTargetSize: isCompact
+                  ? MaterialTapTargetSize.shrinkWrap
+                  : MaterialTapTargetSize.padded,
               padding: WidgetStateProperty.all(
                 EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
               ),
               textStyle: WidgetStateProperty.all(
                 TextStyle(fontSize: f(13), fontWeight: FontWeight.w600),
               ),
-              backgroundColor:
-                  WidgetStateProperty.resolveWith<Color>((states) {
+              backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
                   return selectedPlayerBg;
                 }
                 return unselectedBg;
               }),
-              foregroundColor:
-                  WidgetStateProperty.resolveWith<Color>((states) {
+              foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.white;
                 }
@@ -214,7 +214,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                     ),
                     decoration: BoxDecoration(
                       // Fond plus opaque pour meilleur contraste
-                      color: const Color(0xFF2a4a38),
+                      color: Colors.black.withValues(alpha: 0.2),
                       border: Border.all(color: Colors.amber, width: 1.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -269,8 +269,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         ButtonSegment(
                           value: Difficulty.hard,
                           label: const Text("Difficile"),
-                          icon:
-                              Icon(Icons.sentiment_very_dissatisfied, size: f(18)),
+                          icon: Icon(Icons.sentiment_very_dissatisfied,
+                              size: f(18)),
                         ),
                         ButtonSegment(
                           value: Difficulty.platinum,
@@ -296,7 +296,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                 ],
                 SizedBox(height: spacingSmall),
                 // Description du niveau sélectionné (mode manuel uniquement)
-                if (!useSBMM && (selectedBotDifficulty == Difficulty.hard || selectedBotDifficulty == Difficulty.platinum)) ...[
+                if (!useSBMM &&
+                    (selectedBotDifficulty == Difficulty.hard ||
+                        selectedBotDifficulty == Difficulty.platinum)) ...[
                   _buildDifficultyDescription(f, selectedBotDifficulty),
                 ],
                 SizedBox(height: spacingMedium),
@@ -432,7 +434,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   }
 
   /// Construit la description du niveau de difficulté
-  Widget _buildDifficultyDescription(double Function(double) f, Difficulty difficulty) {
+  Widget _buildDifficultyDescription(
+      double Function(double) f, Difficulty difficulty) {
     final isPlatinum = difficulty == Difficulty.platinum;
     final color = isPlatinum ? Colors.purple : Colors.red;
     final icon = isPlatinum ? Icons.diamond : Icons.local_fire_department;

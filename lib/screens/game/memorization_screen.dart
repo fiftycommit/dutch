@@ -19,7 +19,7 @@ class MemorizationScreen extends StatelessWidget {
 
     if (gameState == null) {
       return const Scaffold(
-        backgroundColor: AppColors.gradientTop,
+        backgroundColor: AppColors.gradientBottom,
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
@@ -33,50 +33,51 @@ class MemorizationScreen extends StatelessWidget {
     return PopScope(
       canPop: false,
       child: shared.MemorizationScreen(
-      config: shared.MemorizationConfig(
-        localPlayer: humanPlayer,
-        onMemorizationComplete: (selectedIndices) async {
-          // Marquer les cartes comme connues
-          for (int index in selectedIndices) {
-            humanPlayer.knownCards[index] = true;
-          }
-
-          // Réinitialiser les cartes connues de tous les joueurs
-          for (var p in gameState.players) {
-            for (int i = 0; i < p.hand.length; i++) {
-              p.knownCards[i] = false;
+        config: shared.MemorizationConfig(
+          localPlayer: humanPlayer,
+          onMemorizationComplete: (selectedIndices) async {
+            // Marquer les cartes comme connues
+            for (int index in selectedIndices) {
+              humanPlayer.knownCards[index] = true;
             }
-          }
 
-          // Démarrer la phase de jeu
-          gameState.phase = GamePhase.playing;
-          gameState.isWaitingForSpecialPower = false;
-          gameState.specialCardToActivate = null;
+            // Réinitialiser les cartes connues de tous les joueurs
+            for (var p in gameState.players) {
+              for (int i = 0; i < p.hand.length; i++) {
+                p.knownCards[i] = false;
+              }
+            }
 
-          // Démarrer le tour des bots après un court délai
-          Future.delayed(const Duration(milliseconds: 300), () {
-            gameProvider.checkIfBotShouldPlay();
-          });
-        },
-        buildGameScreen: (context) => const GameScreen(),
-        navigateToGame: (context) => context.go('/solo/game'),
-        noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
-        noPlayerMessage: "Les bots continuent...",
+            // Démarrer la phase de jeu
+            gameState.phase = GamePhase.playing;
+            gameState.isWaitingForSpecialPower = false;
+            gameState.specialCardToActivate = null;
+
+            // Démarrer le tour des bots après un court délai
+            Future.delayed(const Duration(milliseconds: 300), () {
+              gameProvider.checkIfBotShouldPlay();
+            });
+          },
+          buildGameScreen: (context) => const GameScreen(),
+          navigateToGame: (context) => context.go('/solo/game'),
+          noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
+          noPlayerMessage: "Les bots continuent...",
+        ),
       ),
-    ),
     );
   }
 
   Widget _buildEliminatedScreen() {
     return Scaffold(
-      backgroundColor: AppColors.gradientTop,
+      backgroundColor: AppColors.gradientBottom,
       body: Container(
-        decoration: AppDecorations.pageBackground,
+        color: AppColors.gradientBottom,
         child: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
+              Icon(Icons.visibility_off,
+                  size: 60, color: AppColors.textDisabled),
               SizedBox(height: 20),
               Text(
                 "VOUS ÊTES ÉLIMINÉ",

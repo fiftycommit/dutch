@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/ui/stats_service.dart';
 import '../../utils/ui_constants.dart';
 import 'main_menu_widgets.dart';
-import '../web_splash_helper.dart' if (dart.library.io) '../web_splash_helper_stub.dart';
+import '../web_splash_helper.dart'
+    if (dart.library.io) '../web_splash_helper_stub.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -72,19 +73,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     final isSmallLandscape = isLandscape && screenSize.height < 500;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: AppDecorations.pageBackground,
-            ),
-          ),
-          SafeArea(
-            child: isSmallLandscape
-                ? _buildLandscapeLayout(context)
-                : _buildPortraitLayout(context),
-          ),
-        ],
+      backgroundColor: AppColors.gradientBottom,
+      body: SafeArea(
+        child: isSmallLandscape
+            ? _buildLandscapeLayout(context)
+            : _buildPortraitLayout(context),
       ),
     );
   }
@@ -238,7 +231,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         final spacing4 = isLargeScreen ? 16.0 : 12.0;
         final iconSize = isLargeScreen ? 80.0 : 60.0;
         final titleSize = isLargeScreen ? 60.0 : 48.0;
-        
+
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -336,7 +329,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       LabeledIconButton(
                         icon: Icons.settings,
                         label: 'Réglages',
-                        onPressed: () => context.go('/settings?slot=$selectedSlot'),
+                        onPressed: () =>
+                            context.go('/settings?slot=$selectedSlot'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
@@ -348,7 +342,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       LabeledIconButton(
                         icon: Icons.bar_chart,
                         label: 'Stats',
-                        onPressed: () => context.go('/stats?slot=$selectedSlot'),
+                        onPressed: () =>
+                            context.go('/stats?slot=$selectedSlot'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
@@ -368,5 +363,4 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       },
     );
   }
-
 }

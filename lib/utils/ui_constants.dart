@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
+  /// Couleur unique de fond du jeu (référence visuelle globale)
+  static const Color gameBackground = Color(0xFF1A472A);
+
   // === Couleurs de texte sur fond sombre ===
   /// Texte secondaire lisible (remplace Colors.white70)
   /// Ratio de contraste ~7:1 sur fond #1a3a28
@@ -45,17 +48,17 @@ class AppColors {
   static const Color warning = Color(0xFFFF9800);
 
   // === Fonds de l'app ===
-  static const Color backgroundDark = Color(0xFF0d1f15);
-  static const Color backgroundMedium = Color(0xFF1a3a28);
-  static const Color cardBackground = Color(0xFF2a4a38);
+  static const Color backgroundDark = gameBackground;
+  static const Color backgroundMedium = gameBackground;
+  static const Color cardBackground = gameBackground;
 
   // === Couleurs de gradient ===
-  static const Color gradientTop = Color(0xFF0d2818);
-  static const Color gradientBottom = Color(0xFF1a472a);
+  static const Color gradientTop = gameBackground;
+  static const Color gradientBottom = gameBackground;
 
   // === Couleurs de surface ===
   static const Color buttonSecondary = Color(0xFF2d5f3e);
-  static const Color dialogBackground = Color(0xFF1a3a28);
+  static const Color dialogBackground = gameBackground;
   static const Color dialogDanger = Color(0xFF2d1a1a);
 }
 

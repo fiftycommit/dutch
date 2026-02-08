@@ -13,34 +13,34 @@ import '../../utils/screen_utils.dart';
 class MemorizationConfig {
   /// Le joueur local qui doit mémoriser ses cartes
   final Player localPlayer;
-  
+
   /// Callback quand la mémorisation est terminée
   final Future<void> Function(Set<int> selectedIndices) onMemorizationComplete;
-  
+
   /// Widget de l'écran de jeu vers lequel naviguer
   final Widget Function(BuildContext context) buildGameScreen;
 
   /// Navigation vers l'écran de jeu (optionnel)
   final void Function(BuildContext context)? navigateToGame;
-  
+
   /// Durée du timer en secondes (null = pas de timer)
   final int? countdownSeconds;
-  
+
   /// Afficher l'écran d'attente après confirmation (multiplayer)
   final bool showWaitingScreen;
-  
+
   /// Stream d'événements pour démarrer le jeu (multiplayer)
   final Stream<void>? gameStartStream;
-  
+
   /// Callback pour marquer le joueur comme prêt (multiplayer)
   final VoidCallback? onMarkReady;
-  
+
   /// Builder pour l'info de joueurs prêts (multiplayer)
   final Widget Function(BuildContext context)? buildReadyInfo;
-  
+
   /// Message quand le joueur n'existe pas
   final String noPlayerMessage;
-  
+
   /// Titre du message quand le joueur n'existe pas
   final String noPlayerTitle;
 
@@ -75,7 +75,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   bool _isRevealing = false;
   bool _isWaiting = false;
   late AnimationController _pulseController;
-  
+
   Timer? _countdownTimer;
   int _remainingSeconds = 0;
   StreamSubscription? _gameStartSubscription;
@@ -133,9 +133,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
     // Auto-select random cards if not enough selected
     if (_selectedCards.length < 2) {
-      final availableIndices = List.generate(config.localPlayer.hand.length, (i) => i)
-          .where((i) => !_selectedCards.contains(i))
-          .toList();
+      final availableIndices =
+          List.generate(config.localPlayer.hand.length, (i) => i)
+              .where((i) => !_selectedCards.contains(i))
+              .toList();
       availableIndices.shuffle();
 
       int needed = 2 - _selectedCards.length;
@@ -259,7 +260,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                           metrics.space(10),
                         );
                         // 4 cartes côte à côte
-                        final cardWidthByWidth = (maxWidth - cardSpacing * 3) / 4;
+                        final cardWidthByWidth =
+                            (maxWidth - cardSpacing * 3) / 4;
                         final cardWidthByHeight = maxHeight / aspect;
                         final cardWidth = math.max(
                           0.0,
@@ -284,8 +286,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                             card: allCards[i],
                                             isRevealed: true,
                                             cardSize: CardSize.large,
-                                            delay: Duration(milliseconds: 200 + i * 150),
-                                            duration: const Duration(milliseconds: 500),
+                                            delay: Duration(
+                                                milliseconds: 200 + i * 150),
+                                            duration: const Duration(
+                                                milliseconds: 500),
                                           )
                                         : CardWidget(
                                             card: null,
@@ -329,7 +333,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final height = constraints.maxHeight;
-                        final barHeight = math.max(2.0, math.min(6.0, height * 0.18));
+                        final barHeight =
+                            math.max(2.0, math.min(6.0, height * 0.18));
                         final gap = height * 0.16;
                         final textSize = height * 0.34;
 
@@ -389,7 +394,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     // Waiting screen (multiplayer)
     if (_isWaiting) {
       return Scaffold(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: AppColors.gradientBottom,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -417,14 +422,15 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     // No player / spectator screen
     if (config.localPlayer.isSpectator) {
       return Scaffold(
-        backgroundColor: AppColors.gradientTop,
+        backgroundColor: AppColors.gradientBottom,
         body: Container(
-          decoration: AppDecorations.pageBackground,
+          color: AppColors.gradientBottom,
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.visibility_off, size: 60, color: AppColors.textDisabled),
+                const Icon(Icons.visibility_off,
+                    size: 60, color: AppColors.textDisabled),
                 const SizedBox(height: 20),
                 Text(
                   config.noPlayerTitle,
@@ -438,7 +444,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                 const SizedBox(height: 10),
                 Text(
                   config.noPlayerMessage,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 16),
                 ),
                 const SizedBox(height: 30),
                 const CircularProgressIndicator(color: Colors.amber),
@@ -452,15 +459,22 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final canConfirm = _selectedCards.length == 2;
     final screenSize = MediaQuery.of(context).size;
     final isCompact = screenSize.height < 500 || screenSize.width < 600;
-    final isMedium = !isCompact && (screenSize.height < 700 || screenSize.width < 900);
+    final isMedium =
+        !isCompact && (screenSize.height < 700 || screenSize.width < 900);
     final profile = ScreenUtils.getDeviceProfile(context);
     final isIphoneLandscape = profile == DeviceProfile.iPhoneLandscape;
 
     final iconSize = isIphoneLandscape ? 36.0 : (isCompact ? 44.0 : 64.0);
-    final titleSize = isIphoneLandscape ? 24.0 : (isCompact ? 28.0 : (isMedium ? 34.0 : 40.0));
-    final subtitleSize = isIphoneLandscape ? 12.0 : (isCompact ? 14.0 : (isMedium ? 16.0 : 18.0));
-    final verticalSpacing = isIphoneLandscape ? 4.0 : (isCompact ? 6.0 : (isMedium ? 12.0 : 18.0));
-    final horizontalPadding = isIphoneLandscape ? 8.0 : (isCompact ? 4.0 : 24.0);
+    final titleSize = isIphoneLandscape
+        ? 24.0
+        : (isCompact ? 28.0 : (isMedium ? 34.0 : 40.0));
+    final subtitleSize = isIphoneLandscape
+        ? 12.0
+        : (isCompact ? 14.0 : (isMedium ? 16.0 : 18.0));
+    final verticalSpacing =
+        isIphoneLandscape ? 4.0 : (isCompact ? 6.0 : (isMedium ? 12.0 : 18.0));
+    final horizontalPadding =
+        isIphoneLandscape ? 8.0 : (isCompact ? 4.0 : 24.0);
     final verticalPadding = isIphoneLandscape ? 4.0 : (isCompact ? 4.0 : 24.0);
     final usableHeight = ScreenUtils.usableHeight(context);
     final isLandscape = ScreenUtils.isLandscape(context);
@@ -469,11 +483,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final cardAreaHeight = usableHeight * (isLandscape ? 0.5 : 0.38);
 
     return Scaffold(
-      backgroundColor: AppColors.gradientTop,
+      backgroundColor: AppColors.gradientBottom,
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: AppDecorations.pageBackground,
+        color: AppColors.gradientBottom,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -487,7 +501,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.visibility, size: iconSize, color: AppColors.textDisabled),
+                    Icon(Icons.visibility,
+                        size: iconSize, color: AppColors.textDisabled),
                     SizedBox(height: verticalSpacing),
                     Text(
                       "MÉMORISATION",
@@ -506,18 +521,22 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ],
                       ),
                     ),
-                    SizedBox(height: isIphoneLandscape ? 2 : (isCompact ? 2 : 10)),
+                    SizedBox(
+                        height: isIphoneLandscape ? 2 : (isCompact ? 2 : 10)),
                     // Countdown timer (multiplayer)
                     if (config.countdownSeconds != null) ...[
                       Text(
                         "Temps restant: $_remainingSeconds s",
                         style: TextStyle(
-                          color: _remainingSeconds <= 5 ? Colors.redAccent : Colors.amberAccent,
+                          color: _remainingSeconds <= 5
+                              ? Colors.redAccent
+                              : Colors.amberAccent,
                           fontSize: subtitleSize * 1.2,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: isIphoneLandscape ? 2 : (isCompact ? 2 : 5)),
+                      SizedBox(
+                          height: isIphoneLandscape ? 2 : (isCompact ? 2 : 5)),
                     ],
                     Text(
                       "Clique sur 2 cartes pour les mémoriser.",
@@ -542,7 +561,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
                         duration: const Duration(milliseconds: 300),
                         child: ElevatedButton(
-                          onPressed: canConfirm && !_isRevealing ? _confirmAndStart : null,
+                          onPressed: canConfirm && !_isRevealing
+                              ? _confirmAndStart
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.amber,
                             foregroundColor: Colors.black,
@@ -591,12 +612,15 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         final maxWidth = constraints.maxWidth;
         final maxHeight = constraints.maxHeight;
         final spacing = (maxWidth * 0.03).clamp(6.0, 12.0);
-        final widthLimit = (maxWidth - (cardColumns - 1) * spacing) / cardColumns;
+        final widthLimit =
+            (maxWidth - (cardColumns - 1) * spacing) / cardColumns;
         const liftFactor = 0.08;
         const maxScale = 1.05;
         const extraTopFactor = liftFactor + ((maxScale - 1.0) / 2);
-        final heightLimit = (maxHeight - (cardRows - 1) * spacing) / (cardRows + extraTopFactor);
-        final cardWidth = math.max(0.0, math.min(widthLimit, heightLimit / aspect));
+        final heightLimit = (maxHeight - (cardRows - 1) * spacing) /
+            (cardRows + extraTopFactor);
+        final cardWidth =
+            math.max(0.0, math.min(widthLimit, heightLimit / aspect));
         final cardHeight = cardWidth * aspect;
         final lift = cardHeight * liftFactor;
         final topInset = cardHeight * extraTopFactor;
@@ -618,21 +642,27 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                     animation: _pulseController,
                     builder: (context, child) {
                       return Transform.scale(
-                        scale: isSelected ? 1.0 + (_pulseController.value * 0.05) : 1.0,
+                        scale: isSelected
+                            ? 1.0 + (_pulseController.value * 0.05)
+                            : 1.0,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
-                          transform: Matrix4.translationValues(0, isSelected ? -lift : 0, 0),
+                          transform: Matrix4.translationValues(
+                              0, isSelected ? -lift : 0, 0),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(
                               ScreenUtils.borderRadius(context, 8),
                             ),
                             border: isSelected
-                                ? Border.all(color: Colors.amber, width: isCompact ? 2 : 3)
+                                ? Border.all(
+                                    color: Colors.amber,
+                                    width: isCompact ? 2 : 3)
                                 : null,
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: Colors.amber.withValues(alpha: 0.5),
+                                      color:
+                                          Colors.amber.withValues(alpha: 0.5),
                                       blurRadius: isCompact ? 10 : 15,
                                       spreadRadius: isCompact ? 2 : 3,
                                     )
