@@ -11,19 +11,28 @@ enum BotGamePhase {
 }
 
 interface DutchAttempt {
-  estimatedScore: number;
+  knownScoreAtDutch: number;
   actualScore: number;
   won: boolean;
   opponentsCount: number;
+}
+
+interface SpiedCard {
+  playerId: string;
+  cardPoints: number;
+  cardIndex: number;
+  turnNumber: number;
 }
 
 interface BotMemory {
   mentalMap: (PlayingCard | null)[];
   consecutiveBadDraws: number;
   dutchHistory: DutchAttempt[];
+  spiedCards: SpiedCard[];
+  turnCounter: number;
+  minTurnsBeforeDutch: number; // Bronze: 5-9, Argent: 2-5, Or/Platine: 0
 }
 
-// Map pour stocker la mémoire des bots (clé: playerId)
 const botMemories = new Map<string, BotMemory>();
 
 export class BotAI {
@@ -31,12 +40,18 @@ export class BotAI {
     return Math.random();
   }
 
+  // ============================================================
+  // MÉMOIRE
+  // ============================================================
+
   private static getBotMemory(player: Player): BotMemory {
     if (!botMemories.has(player.id)) {
       botMemories.set(player.id, {
         mentalMap: new Array(player.hand.length).fill(null),
         consecutiveBadDraws: 0,
         dutchHistory: [],
+        spiedCards: [],
+        turnCounter: 0,
       });
     }
     return botMemories.get(player.id)!;
@@ -47,8 +62,16 @@ export class BotAI {
 
     const memory = this.getBotMemory(player);
     memory.mentalMap = new Array(player.hand.length).fill(null);
-    memory.mentalMap[0] = player.hand[0];
-    memory.mentalMap[1] = player.hand[1];
+
+    // Choisir 2 positions aléatoires parmi les cartes disponibles
+    const indices = Array.from({ length: player.hand.length }, (_, i) => i);
+    const idx1 = indices.splice(Math.floor(this.random() * indices.length), 1)[0];
+    const idx2 = indices[Math.floor(this.random() * indices.length)];
+
+    memory.mentalMap[idx1] = player.hand[idx1];
+    memory.mentalMap[idx2] = player.hand[idx2];
+    player.knownCards[idx1] = true;
+    player.knownCards[idx2] = true;
   }
 
   private static updateMentalMap(player: Player, index: number, card: PlayingCard): void {
@@ -73,64 +96,159 @@ export class BotAI {
     const memory = this.getBotMemory(player);
     memory.mentalMap = new Array(player.hand.length).fill(null);
     player.knownCards = new Array(player.hand.length).fill(false);
+    // Si 1 seule carte, on la connaît encore (une seule position possible)
+    if (player.hand.length === 1) {
+      memory.mentalMap[0] = player.hand[0];
+      player.knownCards[0] = true;
+    }
   }
 
-  private static getEstimatedScore(player: Player): number {
-    if (player.isHuman) {
-      return player.hand.reduce((sum, card) => sum + card.points, 0);
+  // Oubli contextuel — le cerveau est occupé ailleurs
+  private static applyContextualForget(
+    bot: Player,
+    difficulty: BotDifficultyConfig,
+    context: 'valet' | 'spy' | 'joker_self'
+  ): void {
+    if (context === 'joker_self') {
+      this.resetMentalMap(bot);
+      return;
     }
 
-    const memory = this.getBotMemory(player);
-    let estimatedScore = 0;
-    let knownCount = 0;
-    let knownSum = 0;
+    let forgetChance: number;
+    if (context === 'valet') {
+      forgetChance =
+        difficulty.name === 'Bronze' ? 0.40 :
+        difficulty.name === 'Argent' ? 0.20 :
+        difficulty.name === 'Or' ? 0.05 : 0.0;
+    } else {
+      // spy
+      forgetChance =
+        difficulty.name === 'Bronze' ? 0.25 :
+        difficulty.name === 'Argent' ? 0.10 :
+        difficulty.name === 'Or' ? 0.02 : 0.0;
+    }
 
-    for (let i = 0; i < player.hand.length; i++) {
+    if (forgetChance > 0 && this.random() < forgetChance) {
+      // Oublier 1 carte connue au hasard
+      const memory = this.getBotMemory(bot);
+      const knownIndices: number[] = [];
+      for (let i = 0; i < bot.hand.length; i++) {
+        if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
+          knownIndices.push(i);
+        }
+      }
+      if (knownIndices.length > 0) {
+        const idx = knownIndices[Math.floor(this.random() * knownIndices.length)];
+        this.forgetCard(bot, idx);
+      }
+    }
+  }
+
+  // ============================================================
+  // SCORE & CONNAISSANCE
+  // ============================================================
+
+  private static getKnownScore(bot: Player): number {
+    const memory = this.getBotMemory(bot);
+    let score = 0;
+    for (let i = 0; i < bot.hand.length; i++) {
       if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
-        const cardPoints = memory.mentalMap[i]!.points;
-        estimatedScore += cardPoints;
-        knownSum += cardPoints;
-        knownCount++;
+        score += memory.mentalMap[i]!.points;
+      } else if (i < bot.knownCards.length && bot.knownCards[i]) {
+        score += bot.hand[i].points;
       }
     }
-
-    const unknownCount = player.hand.length - knownCount;
-
-    if (unknownCount > 0) {
-      let estimatePerUnknown: number;
-
-      if (knownCount >= 2) {
-        estimatePerUnknown = Math.round(knownSum / knownCount);
-        estimatePerUnknown = Math.max(4, Math.min(7, estimatePerUnknown));
-      } else {
-        estimatePerUnknown = 5;
-      }
-
-      estimatedScore += unknownCount * estimatePerUnknown;
-    }
-
-    return estimatedScore;
+    return score;
   }
 
-  private static getKnownCardCount(player: Player): number {
-    const memory = this.getBotMemory(player);
+  private static knowsAllCards(bot: Player): boolean {
+    const memory = this.getBotMemory(bot);
+    for (let i = 0; i < bot.hand.length; i++) {
+      const inMental = i < memory.mentalMap.length && memory.mentalMap[i] !== null;
+      const inKnown = i < bot.knownCards.length && bot.knownCards[i];
+      if (!inMental && !inKnown) return false;
+    }
+    return true;
+  }
+
+  private static getKnownCardValue(bot: Player, index: number): number | null {
+    const memory = this.getBotMemory(bot);
+    if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
+      return memory.mentalMap[index]!.points;
+    }
+    if (index < bot.knownCards.length && bot.knownCards[index]) {
+      return bot.hand[index].points;
+    }
+    return null;
+  }
+
+  private static getKnownCard(bot: Player, index: number): PlayingCard | null {
+    const memory = this.getBotMemory(bot);
+    if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
+      return memory.mentalMap[index]!;
+    }
+    if (index < bot.knownCards.length && bot.knownCards[index]) {
+      return bot.hand[index];
+    }
+    return null;
+  }
+
+  private static getKnownCardCount(bot: Player): number {
     let count = 0;
-    for (let i = 0; i < memory.mentalMap.length && i < player.hand.length; i++) {
-      if (memory.mentalMap[i] !== null) count++;
+    for (let i = 0; i < bot.hand.length; i++) {
+      if (this.getKnownCard(bot, i) !== null) count++;
     }
     return count;
+  }
+
+  // ============================================================
+  // OBSERVATION — données tirées de l'historique visible
+  // ============================================================
+
+  private static getDiscardRate(gs: GameState, player: Player): number {
+    let discards = 0;
+    let swaps = 0;
+    for (const entry of gs.actionHistory) {
+      if (entry.includes(player.name)) {
+        if (entry.includes('défausse sa pioche')) {
+          discards++;
+        } else if (entry.includes('échange une carte')) {
+          swaps++;
+        }
+      }
+    }
+    const total = discards + swaps;
+    if (total === 0) return 0;
+    return discards / total;
+  }
+
+  private static getFailedMatchCount(gs: GameState, player: Player): number {
+    let count = 0;
+    for (const entry of gs.actionHistory) {
+      if (entry.includes(player.name) && entry.includes('rate son match')) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private static getHumanTarget(opponents: Player[]): Player | null {
+    return opponents.find((p) => p.isHuman) || null;
   }
 
   private static getCumulativeScore(gameState: GameState, player: Player): number {
     return gameState.tournamentCumulativeScores[player.id] || 0;
   }
 
-  private static getBotPhase(bot: Player, gameState: GameState): BotGamePhase {
-    const knownCount = this.getKnownCardCount(bot);
-    const totalCards = bot.hand.length;
-    const estimatedScore = this.getEstimatedScore(bot);
+  // ============================================================
+  // PHASES DE JEU
+  // ============================================================
 
-    // En tournoi, prendre en compte le score cumulé
+  private static getBotPhase(bot: Player, gameState: GameState): BotGamePhase {
+    if (!this.knowsAllCards(bot)) {
+      return BotGamePhase.exploration;
+    }
+
     if (gameState.gameMode === GameMode.tournament) {
       const cumulativeScore = this.getCumulativeScore(gameState, bot);
       if (cumulativeScore >= 70) {
@@ -138,17 +256,47 @@ export class BotAI {
       }
     }
 
-    const someoneClose = gameState.players.some((p) => p.hand.length <= 2);
-    if (estimatedScore <= 8 || someoneClose) {
+    const someoneClose = gameState.players.some((p) => p.id !== bot.id && p.hand.length <= 2);
+    if (someoneClose) {
       return BotGamePhase.endgame;
-    }
-
-    if (knownCount < totalCards) {
-      return BotGamePhase.exploration;
     }
 
     return BotGamePhase.optimization;
   }
+
+  // ============================================================
+  // DOUBLONS
+  // ============================================================
+
+  private static findDuplicateInHand(bot: Player, drawnCard: PlayingCard): number | null {
+    for (let i = 0; i < bot.hand.length; i++) {
+      const known = this.getKnownCard(bot, i);
+      if (known && cardMatches(known, drawnCard)) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  private static findDoublonPairInHand(bot: Player): [number, number] | null {
+    const knownCards: { idx: number; card: PlayingCard }[] = [];
+    for (let i = 0; i < bot.hand.length; i++) {
+      const card = this.getKnownCard(bot, i);
+      if (card) knownCards.push({ idx: i, card });
+    }
+    for (let a = 0; a < knownCards.length; a++) {
+      for (let b = a + 1; b < knownCards.length; b++) {
+        if (cardMatches(knownCards[a].card, knownCards[b].card)) {
+          return [knownCards[a].idx, knownCards[b].idx];
+        }
+      }
+    }
+    return null;
+  }
+
+  // ============================================================
+  // TOUR PRINCIPAL
+  // ============================================================
 
   static async playBotTurn(gameState: GameState, playerMMR?: number): Promise<void> {
     const bot = getCurrentPlayer(gameState);
@@ -158,12 +306,17 @@ export class BotAI {
       ? BotDifficulty.fromMMR(playerMMR)
       : this.getSkillDifficulty(bot.botSkillLevel);
 
+    const memory = this.getBotMemory(bot);
+    memory.turnCounter++;
+
     const phase = this.getBotPhase(bot, gameState);
 
-    this.applyMemoryDecay(bot, difficulty);
-
-    const thinkingTime = this.getThinkingTime(bot.botBehavior, difficulty, gameState);
-    await this.delay(thinkingTime);
+    // Délai de réflexion (max 600ms)
+    const thinkDelay =
+      difficulty.name === 'Bronze' ? 500 :
+      difficulty.name === 'Argent' ? 400 :
+      difficulty.name === 'Or' ? 300 : 200;
+    await this.delay(thinkDelay);
 
     if (this.shouldCallDutch(gameState, bot, difficulty, phase)) {
       GameLogic.callDutch(gameState);
@@ -172,9 +325,13 @@ export class BotAI {
 
     GameLogic.drawCard(gameState);
 
-    await this.delay(1000);
+    await this.delay(300);
     await this.decideCardAction(gameState, bot, difficulty, phase);
   }
+
+  // ============================================================
+  // DUTCH — algorithme contextuel
+  // ============================================================
 
   private static shouldCallDutch(
     gs: GameState,
@@ -182,190 +339,175 @@ export class BotAI {
     difficulty: BotDifficultyConfig,
     phase: BotGamePhase
   ): boolean {
-    const estimatedScore = this.getEstimatedScore(bot);
-    const behavior = bot.botBehavior;
-
+    // Jamais en exploration — on ne connaît pas toutes nos cartes
     if (phase === BotGamePhase.exploration) {
       return false;
     }
 
-    const audacityBonus = this.calculateAudacity(gs, bot, difficulty);
-    const confidence = this.calculateDutchConfidence(bot);
+    // 0 cartes → Dutch immédiat
+    if (bot.hand.length === 0) {
+      return true;
+    }
 
-    let tournamentPressure = 0.0;
+    // On doit connaître toutes nos cartes
+    if (!this.knowsAllCards(bot)) {
+      return false;
+    }
+
+    const knownScore = this.getKnownScore(bot);
+
+    // Score = 0 → Dutch immédiat
+    if (knownScore === 0) {
+      return true;
+    }
+
+    const opponents = gs.players.filter((p) => p.id !== bot.id && !p.isSpectator);
+
+    // Mode tournoi : ULTRA PRUDENT
     if (gs.gameMode === GameMode.tournament) {
-      const cumulativeScore = this.getCumulativeScore(gs, bot);
-      if (cumulativeScore >= 80) {
-        tournamentPressure = 3.0;
-      } else if (cumulativeScore >= 60) {
-        tournamentPressure = 2.0;
-      } else if (cumulativeScore >= 40) {
-        tournamentPressure = 1.0;
-      } else if (cumulativeScore <= 20) {
-        tournamentPressure = -1.0;
-      }
+      return this.shouldCallDutchTournament(gs, bot, knownScore, opponents, difficulty);
     }
 
-    let threshold: number;
-
-    if (phase === BotGamePhase.endgame) {
-      switch (behavior) {
-        case BotBehavior.fast:
-          threshold =
-            difficulty.name === 'Bronze' ? 7 :
-            difficulty.name === 'Argent' ? 6 :
-            difficulty.name === 'Or' ? 3 : 2;
-          break;
-
-        case BotBehavior.aggressive:
-          threshold =
-            difficulty.name === 'Bronze' ? 6 :
-            difficulty.name === 'Argent' ? 5 :
-            difficulty.name === 'Or' ? 2 : 1;
-
-          if (this.isHumanThreatening(gs)) {
-            threshold += 1;
-          }
-          break;
-
-        case BotBehavior.balanced:
-          if (difficulty.name === 'Bronze') {
-            threshold = 6;
-          } else if (difficulty.name === 'Argent') {
-            threshold = 5;
-          } else if (difficulty.name === 'Or') {
-            threshold = 2;
-            if (this.random() < 0.50) {
-              for (const p of gs.players) {
-                if (p.id !== bot.id) {
-                  const opponentScore = this.getEstimatedScore(p);
-                  if (opponentScore <= estimatedScore + 1) {
-                    return false;
-                  }
-                }
-              }
-            }
-          } else {
-            threshold = 1;
-            for (const p of gs.players) {
-              if (p.id !== bot.id) {
-                const opponentScore = this.getEstimatedScore(p);
-                if (opponentScore <= estimatedScore) {
-                  return false;
-                }
-              }
-            }
-          }
-          break;
-
-        default:
-          threshold = difficulty.dutchThreshold + 1;
-      }
-    } else {
-      // En optimization
-      switch (behavior) {
-        case BotBehavior.fast:
-          threshold =
-            difficulty.name === 'Bronze' ? 6 :
-            difficulty.name === 'Argent' ? 4 :
-            difficulty.name === 'Or' ? 1 : 1;
-          break;
-
-        case BotBehavior.aggressive:
-          threshold =
-            difficulty.name === 'Bronze' ? 4 :
-            difficulty.name === 'Argent' ? 3 :
-            difficulty.name === 'Or' ? 1 : 0;
-          break;
-
-        case BotBehavior.balanced:
-          threshold =
-            difficulty.name === 'Bronze' ? 5 :
-            difficulty.name === 'Argent' ? 4 :
-            difficulty.name === 'Or' ? 1 : 0;
-          break;
-
-        default:
-          threshold = difficulty.dutchThreshold;
-      }
-    }
-
-    const adjustedThreshold = threshold + audacityBonus + confidence * 2 + tournamentPressure;
-    return estimatedScore <= Math.round(adjustedThreshold);
+    // Mode partie rapide : analyse contextuelle
+    return this.shouldCallDutchQuick(gs, bot, knownScore, opponents, difficulty);
   }
 
-  private static calculateAudacity(
+  private static shouldCallDutchTournament(
     gs: GameState,
     bot: Player,
+    knownScore: number,
+    opponents: Player[],
     difficulty: BotDifficultyConfig
-  ): number {
-    let audacity = 0.0;
+  ): boolean {
+    // En tournoi, Dutch raté = éliminé. Tant qu'on n'est pas dernier, on reste en course.
 
-    const cardCount = bot.hand.length;
-    if (cardCount === 1) {
-      audacity += 3.0;
-    } else if (cardCount === 2) {
-      audacity += 2.0;
-    } else if (cardCount === 3) {
-      audacity += 1.0;
+    // Score = 1 ET tous les adversaires ont >= 3 cartes → Dutch
+    if (knownScore === 1) {
+      const allHaveMany = opponents.every((p) => p.hand.length >= 3);
+      if (allHaveMany) return true;
     }
 
-    const memory = this.getBotMemory(bot);
-    if (memory.consecutiveBadDraws >= 3) {
-      const badDrawBonus = (memory.consecutiveBadDraws - 2) * 0.5;
-      audacity += badDrawBonus;
+    // Pression extrême : score cumulé >= 90 → se permettre de Dutch avec score <= 2
+    const cumulativeScore = this.getCumulativeScore(gs, bot);
+    if (cumulativeScore >= 90 && knownScore <= 2) {
+      const noDangerousOpponent = opponents.every((p) => p.hand.length >= 2);
+      if (noDangerousOpponent) return true;
     }
 
-    let dangerousOpponents = 0;
-    for (const p of gs.players) {
-      if (p.id !== bot.id && p.hand.length <= 2) {
-        dangerousOpponents++;
+    // Espion intel en tournoi aussi
+    if (this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
+      return true;
+    }
+
+    // Sinon → ne PAS Dutch en tournoi
+    return false;
+  }
+
+  private static shouldCallDutchQuick(
+    gs: GameState,
+    bot: Player,
+    knownScore: number,
+    opponents: Player[],
+    difficulty: BotDifficultyConfig
+  ): boolean {
+    // Espion intel : si j'ai vu une carte adverse plus grosse que mon score
+    if (this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
+      return true;
+    }
+
+    // Vérifier les menaces
+    for (const opp of opponents) {
+      // Adversaire avec 0 carte = score 0 garanti → ne Dutch que si notre score = 0
+      if (opp.hand.length === 0) {
+        return false; // knownScore > 0 ici, donc on ne peut pas battre un 0
+      }
+      // Adversaire avec 1 carte = très dangereux
+      if (opp.hand.length === 1 && knownScore > 2) {
+        return false;
       }
     }
-    if (dangerousOpponents > 0) {
-      const cautionPenalty = dangerousOpponents * 0.5;
-      audacity -= cautionPenalty;
+
+    // Seuil de base par difficulté
+    const baseThreshold =
+      difficulty.name === 'Bronze' ? 7 :
+      difficulty.name === 'Argent' ? 5 :
+      difficulty.name === 'Or' ? 4 : 3;
+
+    if (knownScore > baseThreshold) {
+      return false;
     }
 
-    if (bot.botBehavior === BotBehavior.aggressive) {
-      audacity += 1.0;
-    } else if (bot.botBehavior === BotBehavior.balanced) {
-      audacity -= 1.0;
+    // Évaluer si les adversaires sont en difficulté
+    let opponentsInTrouble = 0;
+    for (const opp of opponents) {
+      const failedMatches = this.getFailedMatchCount(gs, opp);
+      const hasMany = opp.hand.length >= 5;
+      if (failedMatches >= 2 || hasMany) {
+        opponentsInTrouble++;
+      }
     }
 
-    if (difficulty.name === 'Bronze') {
-      audacity *= 0.5;
-    } else if (difficulty.name === 'Platine') {
-      audacity *= 1.2;
+    // Si la majorité des adversaires sont en difficulté → Dutch
+    if (opponentsInTrouble >= Math.ceil(opponents.length / 2)) {
+      return true;
     }
 
-    return Math.max(-3.0, Math.min(5.0, audacity));
-  }
+    // Si on a un très bon score ET pas de menace directe → Dutch
+    if (knownScore <= 2) {
+      return true;
+    }
 
-  private static calculateDutchConfidence(bot: Player): number {
+    // Vérifier le taux de défausse des adversaires
+    const dangerousDiscardRate = opponents.some((opp) => this.getDiscardRate(gs, opp) > 0.6);
+    if (dangerousDiscardRate && knownScore > 3) {
+      return false; // Un adversaire a probablement une bonne main
+    }
+
+    // Historique Dutch : confiance basée sur les résultats passés
     const memory = this.getBotMemory(bot);
-    if (memory.dutchHistory.length === 0) {
-      return 0.0;
+    if (memory.dutchHistory.length >= 2) {
+      const recentWins = memory.dutchHistory.slice(-3).filter((a) => a.won).length;
+      if (recentWins >= 2) {
+        return true; // Confiance élevée
+      }
     }
 
-    const recentAttempts =
-      memory.dutchHistory.length > 5
-        ? memory.dutchHistory.slice(-5)
-        : memory.dutchHistory;
-
-    const wins = recentAttempts.filter((a) => a.won).length;
-    const winRate = wins / recentAttempts.length;
-
-    const avgAccuracy =
-      recentAttempts.reduce((sum, a) => {
-        const accuracy = Math.abs(a.estimatedScore - a.actualScore) <= 2 ? 1.0 : 0.5;
-        return sum + accuracy;
-      }, 0) / recentAttempts.length;
-
-    const confidence = winRate * 0.7 + avgAccuracy * 0.3 - 0.5;
-
-    return Math.max(-1.0, Math.min(1.0, confidence));
+    return false;
   }
+
+  // Utiliser l'intelligence du 10 (espion) pour décider Dutch
+  private static canDutchFromSpyIntel(
+    gs: GameState,
+    bot: Player,
+    knownScore: number,
+    opponents: Player[]
+  ): boolean {
+    const memory = this.getBotMemory(bot);
+    if (memory.spiedCards.length === 0) return false;
+
+    for (const spy of memory.spiedCards) {
+      // Info trop ancienne (plus de 3 tours) → obsolète
+      if (memory.turnCounter - spy.turnNumber > 3) continue;
+
+      const target = opponents.find((p) => p.id === spy.playerId);
+      if (!target) continue;
+
+      // La carte vue est plus grosse que notre score → on a de bonnes chances
+      if (spy.cardPoints > knownScore) {
+        // Vérifier que l'adversaire n'a pas échangé depuis (il a défaussé sa pioche = main intacte)
+        const lastAction = gs.actionHistory.find((e) => e.includes(target.name));
+        if (lastAction && lastAction.includes('défausse sa pioche')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // ============================================================
+  // ACTION APRÈS PIOCHE
+  // ============================================================
 
   private static async decideCardAction(
     gs: GameState,
@@ -377,69 +519,94 @@ export class BotAI {
     if (!drawn) return;
 
     const drawnVal = drawn.points;
-    let replaceIdx = -1;
-    let isBadDraw = false;
-
     const memory = this.getBotMemory(bot);
 
+    // === EXPLORATION : doublon-aware ===
     if (phase === BotGamePhase.exploration) {
+      // D'abord vérifier les doublons (même en exploration)
+      const duplicateIdx = this.findDuplicateInHand(bot, drawn);
+      if (duplicateIdx !== null) {
+        // Défausser la pioche → réaction → matcher le doublon en main
+        GameLogic.discardDrawnCard(gs);
+        memory.consecutiveBadDraws = 0;
+        return;
+      }
+
+      // Pas de doublon : échanger contre une carte inconnue pour apprendre
       const unknownIndices: number[] = [];
       for (let i = 0; i < bot.hand.length; i++) {
         if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) {
-          unknownIndices.push(i);
+          if (i >= bot.knownCards.length || !bot.knownCards[i]) {
+            unknownIndices.push(i);
+          }
         }
       }
 
       if (unknownIndices.length > 0) {
-        replaceIdx = unknownIndices[Math.floor(this.random() * unknownIndices.length)];
-
+        const replaceIdx = unknownIndices[Math.floor(this.random() * unknownIndices.length)];
         const confused = this.random() < difficulty.confusionOnSwap;
         if (!confused) {
           this.updateMentalMap(bot, replaceIdx, drawn);
         }
-
         GameLogic.replaceCard(gs, replaceIdx);
         return;
       }
     }
 
-    let maxKnownValue = -1;
-    let worstKnownValue = -1;
-    let worstKnownIdx = -1;
+    // === OPTIMIZATION / ENDGAME ===
 
-    for (let i = 0; i < memory.mentalMap.length; i++) {
-      if (memory.mentalMap[i] !== null) {
-        const cardValue = memory.mentalMap[i]!.points;
-        if (cardValue > maxKnownValue) {
-          maxKnownValue = cardValue;
+    // Tactique 1 : doublon pioche/main → défausser la pioche, matcher en réaction
+    const duplicateIdx = this.findDuplicateInHand(bot, drawn);
+    if (duplicateIdx !== null) {
+      GameLogic.discardDrawnCard(gs);
+      memory.consecutiveBadDraws = 0;
+      return;
+    }
+
+    // Tactique 2 : doublon en main, pioche meilleure → échanger + matcher l'autre
+    const doublonPair = this.findDoublonPairInHand(bot);
+    if (doublonPair) {
+      const [idx1, idx2] = doublonPair;
+      const val1 = this.getKnownCardValue(bot, idx1);
+      if (val1 !== null && drawnVal < val1) {
+        const confused = this.random() < difficulty.confusionOnSwap;
+        if (!confused) {
+          this.updateMentalMap(bot, idx1, drawn);
         }
-        if (cardValue > worstKnownValue) {
-          worstKnownValue = cardValue;
-          worstKnownIdx = i;
-        }
+        GameLogic.replaceCard(gs, idx1);
+        memory.consecutiveBadDraws = 0;
+        return;
       }
     }
 
-    if (maxKnownValue >= 0 && drawnVal > maxKnownValue) {
-      GameLogic.discardDrawnCard(gs);
-      isBadDraw = true;
-    } else if (worstKnownIdx !== -1 && drawnVal < worstKnownValue) {
+    // Standard : si pioche < pire carte connue → échanger
+    let worstKnownValue = -1;
+    let worstKnownIdx = -1;
+
+    for (let i = 0; i < bot.hand.length; i++) {
+      const val = this.getKnownCardValue(bot, i);
+      if (val !== null && val > worstKnownValue) {
+        worstKnownValue = val;
+        worstKnownIdx = i;
+      }
+    }
+
+    if (worstKnownIdx !== -1 && drawnVal < worstKnownValue) {
       const confused = this.random() < difficulty.confusionOnSwap;
       if (!confused) {
         this.updateMentalMap(bot, worstKnownIdx, drawn);
       }
-
       GameLogic.replaceCard(gs, worstKnownIdx);
       memory.consecutiveBadDraws = 0;
     } else {
       GameLogic.discardDrawnCard(gs);
-      isBadDraw = true;
-    }
-
-    if (isBadDraw) {
       memory.consecutiveBadDraws++;
     }
   }
+
+  // ============================================================
+  // RÉACTION / MATCH — déterministe
+  // ============================================================
 
   static async tryReactionMatch(
     gameState: GameState,
@@ -454,95 +621,38 @@ export class BotAI {
       ? BotDifficulty.fromMMR(playerMMR)
       : this.getSkillDifficulty(bot.botSkillLevel);
 
-    const phase = this.getBotPhase(bot, gameState);
-    let matchChance = difficulty.reactionMatchChance;
-
-    if (bot.hand.length >= 5) {
-      matchChance += 0.15;
-    } else if (bot.hand.length >= 4) {
-      matchChance += 0.10;
-    }
-
-    if (bot.botBehavior === BotBehavior.fast && phase === BotGamePhase.endgame) {
-      matchChance = 1.0;
-    } else if (bot.botBehavior === BotBehavior.balanced && phase === BotGamePhase.endgame) {
-      matchChance = (matchChance + 1.0) / 2;
-    }
-
-    if (gameState.gameMode === GameMode.tournament) {
-      const cumulativeScore = this.getCumulativeScore(gameState, bot);
-      if (cumulativeScore >= 70) {
-        matchChance += 0.20;
-      }
-    }
-
-    matchChance = Math.max(0.0, Math.min(1.0, matchChance));
-
-    if (this.random() > matchChance) {
-      return false;
-    }
-
     const topDiscard = gameState.discardPile[gameState.discardPile.length - 1];
     const memory = this.getBotMemory(bot);
 
-    // Chercher une carte connue qui match
+    // Parcourir la mentalMap : est-ce que je CONNAIS une carte qui matche ?
     for (let i = 0; i < bot.hand.length; i++) {
-      if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
-        const knownCard = memory.mentalMap[i]!;
+      const knownCard = (i < memory.mentalMap.length && memory.mentalMap[i] !== null)
+        ? memory.mentalMap[i]!
+        : (i < bot.knownCards.length && bot.knownCards[i]) ? bot.hand[i] : null;
 
-        if (cardMatches(knownCard, topDiscard)) {
-          if (this.random() < difficulty.matchAccuracy) {
-            const reactionDelay = Math.round(500 * (1 - difficulty.reactionSpeed)) + 200;
-            await this.delay(reactionDelay);
+      if (knownCard && cardMatches(knownCard, topDiscard)) {
+        // Je connais cette carte et elle matche → match immédiat
+        const reactionDelay =
+          difficulty.name === 'Platine' ? 150 :
+          difficulty.name === 'Or' ? 250 :
+          difficulty.name === 'Argent' ? 350 : 400;
+        await this.delay(reactionDelay);
 
-            const success = GameLogic.matchCard(gameState, bot, i);
-
-            if (success) {
-              if (i < memory.mentalMap.length) {
-                memory.mentalMap.splice(i, 1);
-              }
-              return true;
-            } else {
-              return false;
-            }
-          }
+        const success = GameLogic.matchCard(gameState, bot, i);
+        if (success && i < memory.mentalMap.length) {
+          memory.mentalMap.splice(i, 1);
         }
+        return success;
       }
     }
 
-    // Match à l'aveugle pour Or/Platine
-    if (difficulty.name === 'Or' || difficulty.name === 'Platine') {
-      const blindMatchChance = difficulty.name === 'Platine' ? 0.80 : 0.50;
-      if (this.random() < blindMatchChance) {
-        const unknownIndices: number[] = [];
-        for (let i = 0; i < bot.hand.length; i++) {
-          if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) {
-            unknownIndices.push(i);
-          }
-        }
-
-        if (unknownIndices.length > 0) {
-          const blindIndex = unknownIndices[Math.floor(this.random() * unknownIndices.length)];
-          const blindCard = bot.hand[blindIndex];
-
-          if (cardMatches(blindCard, topDiscard)) {
-            const reactionDelay = Math.round(400 * (1 - difficulty.reactionSpeed)) + 150;
-            await this.delay(reactionDelay);
-
-            const success = GameLogic.matchCard(gameState, bot, blindIndex);
-            if (success) {
-              if (blindIndex < memory.mentalMap.length) {
-                memory.mentalMap.splice(blindIndex, 1);
-              }
-            }
-            return success;
-          }
-        }
-      }
-    }
-
+    // Je ne connais aucune carte qui matche → ne rien faire (ZERO match aveugle)
     return false;
   }
+
+  // ============================================================
+  // POUVOIRS SPÉCIAUX
+  // ============================================================
 
   static async useBotSpecialPower(gameState: GameState, playerMMR?: number): Promise<void> {
     if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) return;
@@ -554,29 +664,20 @@ export class BotAI {
       ? BotDifficulty.fromMMR(playerMMR)
       : this.getSkillDifficulty(bot.botSkillLevel);
 
-    await this.delay(1000);
+    const phase = this.getBotPhase(bot, gameState);
+
+    await this.delay(400);
 
     const val = card.value;
 
     if (val === '7') {
-      const idx = this.chooseCardToLook(bot, difficulty);
-      GameLogic.lookAtCard(gameState, bot, idx);
-      this.updateMentalMap(bot, idx, bot.hand[idx]);
+      this.usePower7(gameState, bot, difficulty);
     } else if (val === '10') {
-      const target = this.chooseSpyTarget(gameState, bot, difficulty);
-      if (target && target.hand.length > 0) {
-        let idx: number;
-        if ((difficulty.name === 'Or' || difficulty.name === 'Platine') && this.random() < 0.7) {
-          idx = this.random() < 0.5 ? 0 : target.hand.length - 1;
-        } else {
-          idx = Math.floor(this.random() * target.hand.length);
-        }
-        GameLogic.lookAtCard(gameState, target, idx);
-      }
+      this.usePower10(gameState, bot, difficulty, phase);
     } else if (val === 'V') {
-      await this.executeValetStrategy(gameState, bot, difficulty);
+      this.usePowerValet(gameState, bot, difficulty);
     } else if (val === 'JOKER') {
-      await this.executeJokerStrategy(gameState, bot, difficulty);
+      this.usePowerJoker(gameState, bot, difficulty);
     }
 
     gameState.isWaitingForSpecialPower = false;
@@ -584,46 +685,197 @@ export class BotAI {
     addToHistory(gameState, `${bot.name} a utilisé son pouvoir.`);
   }
 
-  private static applyMemoryDecay(bot: Player, difficulty: BotDifficultyConfig): void {
-    if (bot.knownCards.length === 0) return;
-
-    for (let i = 0; i < bot.knownCards.length; i++) {
-      if (bot.knownCards[i] && this.random() < difficulty.forgetChancePerTurn) {
-        this.forgetCard(bot, i);
-      }
-    }
+  // Carte 7 : regarder sa propre carte — toujours utile
+  private static usePower7(gs: GameState, bot: Player, difficulty: BotDifficultyConfig): void {
+    const idx = this.chooseCardToLook(bot, difficulty);
+    GameLogic.lookAtCard(gs, bot, idx);
+    this.updateMentalMap(bot, idx, bot.hand[idx]);
   }
 
-  private static getThinkingTime(
-    behavior: BotBehavior | undefined,
+  // Carte 10 : espionner un adversaire — décision par phase
+  private static usePower10(
+    gs: GameState,
+    bot: Player,
     difficulty: BotDifficultyConfig,
-    gameState: GameState
-  ): number {
-    if (behavior === undefined) return 800;
+    phase: BotGamePhase
+  ): void {
+    const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
+    if (opponents.length === 0) {
+      GameLogic.skipSpecialPower(gs);
+      return;
+    }
 
-    if (behavior === BotBehavior.balanced) {
-      const criticalMoment = gameState.players.some((p) => p.hand.length <= 2);
+    // Cas spécial duel : 2 joueurs, chacun avec 1 carte → TOUJOURS espionner
+    const activePlayers = gs.players.filter((p) => !p.isSpectator && p.hand.length > 0);
+    const duelMode = activePlayers.length === 2 && bot.hand.length <= 1;
+    if (duelMode) {
+      const target = opponents[0];
+      const idx = Math.floor(this.random() * target.hand.length);
+      GameLogic.lookAtCard(gs, target, idx);
+      // Stocker l'info espionnée
+      const memory = this.getBotMemory(bot);
+      memory.spiedCards.push({
+        playerId: target.id,
+        cardPoints: target.hand[idx].points,
+        cardIndex: idx,
+        turnNumber: memory.turnCounter,
+      });
+      this.applyContextualForget(bot, difficulty, 'spy');
+      return;
+    }
 
-      switch (difficulty.name) {
-        case 'Bronze':
-          return criticalMoment ? 1000 : 800;
-        case 'Argent':
-          return criticalMoment ? 1400 : 1000;
-        case 'Or':
-          return criticalMoment ? 1800 : 1200;
-        case 'Platine':
-          return criticalMoment ? 2000 : 1400;
-        default:
-          return 1000;
+    // Platine/Or en exploration : skip (pas utile quand on ne connaît pas ses propres cartes)
+    if (phase === BotGamePhase.exploration) {
+      if (difficulty.name === 'Platine' || difficulty.name === 'Or') {
+        GameLogic.skipSpecialPower(gs);
+        return;
+      }
+      // Argent : skip si on ne connaît que 0-1 de nos cartes
+      if (difficulty.name === 'Argent') {
+        const knownCount = this.getKnownCardCount(bot);
+        if (knownCount <= 1) {
+          GameLogic.skipSpecialPower(gs);
+          return;
+        }
+      }
+      // Bronze : utilise toujours (ne réfléchit pas)
+    }
+
+    // Choisir la cible : priorité humain, sinon joueur dangereux
+    let target: Player;
+    const human = this.getHumanTarget(opponents);
+    if (human) {
+      target = human;
+    } else {
+      // Le joueur avec le moins de cartes (menace potentielle)
+      opponents.sort((a, b) => a.hand.length - b.hand.length);
+      target = opponents[0];
+    }
+
+    const idx = Math.floor(this.random() * target.hand.length);
+    GameLogic.lookAtCard(gs, target, idx);
+
+    // Stocker l'info espionnée
+    const memory = this.getBotMemory(bot);
+    memory.spiedCards.push({
+      playerId: target.id,
+      cardPoints: target.hand[idx].points,
+      cardIndex: idx,
+      turnNumber: memory.turnCounter,
+    });
+
+    this.applyContextualForget(bot, difficulty, 'spy');
+  }
+
+  // Carte V (Valet) : déstabiliser les AUTRES
+  private static usePowerValet(
+    gs: GameState,
+    bot: Player,
+    difficulty: BotDifficultyConfig
+  ): void {
+    const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
+
+    if (opponents.length === 0) {
+      GameLogic.skipSpecialPower(gs);
+      return;
+    }
+
+    if (opponents.length >= 2) {
+      // >= 2 adversaires : échanger entre eux, le bot ne perd rien
+      const targets = this.chooseValetTargets(gs, bot, opponents);
+      const idx1 = Math.floor(this.random() * targets[0].hand.length);
+      const idx2 = Math.floor(this.random() * targets[1].hand.length);
+      GameLogic.swapCards(gs, targets[0], idx1, targets[1], idx2);
+    } else {
+      // 1 seul adversaire
+      const opponent = opponents[0];
+
+      if (opponent.hand.length <= 2) {
+        // Adversaire avec 1-2 cartes = forte probabilité de bonne carte
+        // Échanger notre pire carte contre la sienne
+        const myCardIdx = this.chooseBadCard(bot);
+        const targetIdx = Math.floor(this.random() * opponent.hand.length);
+        this.forgetCard(bot, myCardIdx);
+        GameLogic.swapCards(gs, bot, myCardIdx, opponent, targetIdx);
+      } else {
+        // Adversaire avec >= 3 cartes : pas intéressant → passer
+        GameLogic.skipSpecialPower(gs);
+        return;
       }
     }
 
-    if (behavior === BotBehavior.aggressive) {
-      return difficulty.name === 'Or' || difficulty.name === 'Platine' ? 600 : 500;
+    this.applyContextualForget(bot, difficulty, 'valet');
+  }
+
+  // Choisir 2 cibles pour le Valet parmi les adversaires
+  private static chooseValetTargets(
+    gs: GameState,
+    bot: Player,
+    opponents: Player[]
+  ): [Player, Player] {
+    // Priorité : humain + joueur le plus dangereux
+    const human = this.getHumanTarget(opponents);
+
+    if (human) {
+      // L'humain + l'autre adversaire le plus dangereux
+      const others = opponents.filter((p) => p.id !== human.id);
+      if (others.length > 0) {
+        // Joueur avec le moins de cartes (dangereux) ou taux de défausse élevé
+        others.sort((a, b) => a.hand.length - b.hand.length);
+        return [human, others[0]];
+      }
     }
 
-    return 900;
+    // Pas d'humain ou humain seul : les deux joueurs les plus dangereux
+    const sorted = [...opponents].sort((a, b) => a.hand.length - b.hand.length);
+    return [sorted[0], sorted[1]];
   }
+
+  // Carte Joker : mélanger un adversaire — ciblage intelligent
+  private static usePowerJoker(
+    gs: GameState,
+    bot: Player,
+    difficulty: BotDifficultyConfig
+  ): void {
+    // Filtrer cibles valides : adversaires avec >= 2 cartes (mélanger 0 ou 1 = inutile)
+    const validTargets = gs.players.filter(
+      (p) => p.id !== bot.id && p.hand.length >= 2
+    );
+
+    if (validTargets.length === 0) {
+      // Aucune cible valide → passer le pouvoir
+      GameLogic.skipSpecialPower(gs);
+      return;
+    }
+
+    // Priorité : humain
+    const human = this.getHumanTarget(validTargets);
+    if (human) {
+      GameLogic.jokerEffect(gs, human);
+      return;
+    }
+
+    // Sinon : joueur avec le moins de cartes (>= 2) → connaissait sa main
+    validTargets.sort((a, b) => a.hand.length - b.hand.length);
+    const target = validTargets[0];
+
+    // Ou le joueur avec le taux de défausse le plus élevé (main stable)
+    let bestTarget = target;
+    let bestRate = this.getDiscardRate(gs, target);
+    for (const t of validTargets) {
+      const rate = this.getDiscardRate(gs, t);
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestTarget = t;
+      }
+    }
+
+    GameLogic.jokerEffect(gs, bestTarget);
+  }
+
+  // ============================================================
+  // UTILITAIRES
+  // ============================================================
 
   private static chooseCardToLook(bot: Player, difficulty: BotDifficultyConfig): number {
     const memory = this.getBotMemory(bot);
@@ -639,455 +891,16 @@ export class BotAI {
       return unknown[Math.floor(this.random() * unknown.length)];
     }
 
-    if (
-      bot.botBehavior === BotBehavior.balanced &&
-      (difficulty.name === 'Or' || difficulty.name === 'Platine')
-    ) {
-      let worstIdx = 0;
-      let worstVal = -1;
-      for (let i = 0; i < memory.mentalMap.length; i++) {
-        if (memory.mentalMap[i] !== null && memory.mentalMap[i]!.points > worstVal) {
-          worstVal = memory.mentalMap[i]!.points;
-          worstIdx = i;
-        }
-      }
-      return worstIdx;
-    }
-
-    return Math.floor(this.random() * bot.hand.length);
-  }
-
-  private static chooseSpyTarget(
-    gs: GameState,
-    bot: Player,
-    difficulty: BotDifficultyConfig
-  ): Player | null {
-    const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
-    if (opponents.length === 0) return null;
-
-    const behavior = bot.botBehavior;
-
-    if (
-      difficulty.name === 'Or' ||
-      difficulty.name === 'Platine' ||
-      behavior === BotBehavior.balanced
-    ) {
-      opponents.sort((a, b) => this.getEstimatedScore(a) - this.getEstimatedScore(b));
-
-      if (this.random() < 0.80) {
-        return opponents[0];
+    // Toutes connues : re-vérifier la pire (rafraîchir la mémoire)
+    let worstIdx = 0;
+    let worstVal = -1;
+    for (let i = 0; i < memory.mentalMap.length; i++) {
+      if (memory.mentalMap[i] !== null && memory.mentalMap[i]!.points > worstVal) {
+        worstVal = memory.mentalMap[i]!.points;
+        worstIdx = i;
       }
     }
-
-    return opponents[Math.floor(this.random() * opponents.length)];
-  }
-
-  private static async executeValetStrategy(
-    gs: GameState,
-    bot: Player,
-    difficulty: BotDifficultyConfig
-  ): Promise<void> {
-    const behavior = bot.botBehavior;
-
-    const target = this.chooseValetTarget(gs, bot, difficulty);
-    if (!target || target.hand.length === 0) return;
-
-    const myCardIdx = this.chooseBadCard(bot);
-    const targetIdx = this.chooseValetTargetCardIndex(target, difficulty, behavior);
-
-    const confused = this.random() < difficulty.confusionOnSwap;
-
-    if (!confused) {
-      this.forgetCard(bot, myCardIdx);
-    }
-
-    GameLogic.swapCards(gs, bot, myCardIdx, target, targetIdx);
-  }
-
-  private static chooseValetTarget(
-    gs: GameState,
-    bot: Player,
-    difficulty: BotDifficultyConfig
-  ): Player | null {
-    const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
-    if (opponents.length === 0) return null;
-
-    const behavior = bot.botBehavior;
-
-    if (difficulty.name === 'Bronze') {
-      if (this.random() < 0.25) {
-        return this.selectValetTargetWeighted(opponents, difficulty, gs);
-      }
-      return opponents[Math.floor(this.random() * opponents.length)];
-    }
-
-    if (behavior === BotBehavior.fast) {
-      opponents.sort((a, b) => b.hand.length - a.hand.length);
-      return opponents[0];
-    }
-
-    if (behavior === BotBehavior.aggressive) {
-      const human = opponents.find((p) => p.isHuman);
-      if (human) {
-        let humanBias: number;
-        if (difficulty.name === 'Platine') {
-          humanBias = 0.85;
-        } else if (difficulty.name === 'Or') {
-          humanBias = 0.75;
-        } else if (difficulty.name === 'Argent') {
-          humanBias = 0.55;
-        } else {
-          humanBias = 0.35;
-        }
-        if (this.random() < humanBias) {
-          return human;
-        }
-      }
-
-      const lowCardTargets = opponents.filter((p) => p.hand.length <= 3);
-      if (lowCardTargets.length > 0 && this.random() < 0.80) {
-        return lowCardTargets[Math.floor(this.random() * lowCardTargets.length)];
-      }
-      return this.selectValetTargetWeighted(opponents, difficulty, gs);
-    }
-
-    if (behavior === BotBehavior.balanced) {
-      if (difficulty.name === 'Bronze' || difficulty.name === 'Argent') {
-        if (this.random() < 0.80) {
-          return this.selectValetTargetWeighted(opponents, difficulty, gs);
-        }
-        return opponents[Math.floor(this.random() * opponents.length)];
-      }
-
-      // Or/Platine : hybride
-      if (this.random() < 0.35) {
-        opponents.sort((a, b) => b.hand.length - a.hand.length);
-        return opponents[0];
-      } else {
-        const human = opponents.find((p) => p.isHuman);
-        if (human) {
-          const humanBias = difficulty.name === 'Platine' ? 0.75 : 0.65;
-          if (this.random() < humanBias) {
-            return human;
-          }
-        }
-        return this.selectValetTargetWeighted(opponents, difficulty, gs);
-      }
-    }
-
-    return opponents[Math.floor(this.random() * opponents.length)];
-  }
-
-  private static chooseValetTargetCardIndex(
-    target: Player,
-    difficulty: BotDifficultyConfig,
-    behavior: BotBehavior | undefined
-  ): number {
-    if (target.hand.length === 0) return 0;
-    if (target.hand.length === 1) return 0;
-
-    const indices = target.hand.map((_, i) => i);
-    indices.sort((a, b) => target.hand[a].points - target.hand[b].points);
-
-    const bestIdx = indices[0];
-    const secondIdx = indices.length > 1 ? indices[1] : bestIdx;
-
-    let smartChance: number;
-    if (difficulty.name === 'Bronze') {
-      smartChance = 0.25;
-    } else if (difficulty.name === 'Argent') {
-      smartChance = 0.50;
-    } else if (difficulty.name === 'Or') {
-      smartChance = 0.80;
-    } else {
-      smartChance = 1.0;
-    }
-
-    if (behavior === BotBehavior.aggressive) {
-      smartChance += 0.10;
-    } else if (behavior === BotBehavior.fast) {
-      smartChance -= 0.10;
-    }
-
-    if (target.isHuman) {
-      smartChance += 0.10;
-    }
-
-    smartChance = Math.max(0.0, Math.min(1.0, smartChance));
-
-    if (this.random() < smartChance) {
-      return bestIdx;
-    }
-
-    const secondChance = difficulty.name === 'Bronze' ? 0.35 : 0.55;
-    if (this.random() < secondChance) {
-      return secondIdx;
-    }
-
-    return Math.floor(this.random() * target.hand.length);
-  }
-
-  private static selectValetTargetWeighted(
-    opponents: Player[],
-    difficulty: BotDifficultyConfig,
-    gameState: GameState
-  ): Player {
-    const threatScores = new Map<Player, number>();
-
-    for (const player of opponents) {
-      let score = 0.0;
-
-      if (player.isHuman) {
-        if (difficulty.name === 'Platine') {
-          score += 60.0;
-        } else if (difficulty.name === 'Or') {
-          score += 50.0;
-        } else if (difficulty.name === 'Argent') {
-          score += 35.0;
-        } else {
-          score += 20.0;
-        }
-      }
-
-      const cardCount = player.hand.length;
-      if (cardCount === 1) {
-        score += 130.0;
-      } else if (cardCount === 2) {
-        score += 90.0;
-      } else if (cardCount === 3) {
-        score += 55.0;
-      } else if (cardCount === 4) {
-        score += 25.0;
-      } else {
-        score += 10.0;
-      }
-
-      const estimatedScore = this.getEstimatedScore(player);
-      if (estimatedScore <= 5) {
-        score += 35.0;
-      } else if (estimatedScore <= 10) {
-        score += 22.0;
-      } else if (estimatedScore <= 15) {
-        score += 12.0;
-      }
-
-      const bestPoints = this.minPointsInHand(player);
-      if (difficulty.name === 'Platine') {
-        score += (13 - bestPoints) * 4.0;
-      } else if (difficulty.name === 'Or') {
-        score += (13 - bestPoints) * 3.0;
-      } else if (difficulty.name === 'Argent') {
-        score += (13 - bestPoints) * 2.0;
-      } else {
-        score += (13 - bestPoints) * 1.0;
-      }
-
-      if (gameState.gameMode === GameMode.tournament) {
-        const cumulativeScore = this.getCumulativeScore(gameState, player);
-        if (cumulativeScore <= 20) {
-          score += 25.0;
-        } else if (cumulativeScore <= 40) {
-          score += 15.0;
-        } else if (cumulativeScore >= 80) {
-          score -= 20.0;
-        }
-      }
-
-      const randomBonus = this.random() * 30.0;
-
-      if (difficulty.name === 'Or' || difficulty.name === 'Platine') {
-        score += randomBonus * 0.3;
-      } else {
-        score += randomBonus * 1.0;
-      }
-
-      threatScores.set(player, score);
-    }
-
-    let selectedTarget = opponents[0];
-    let maxScore = 0.0;
-
-    threatScores.forEach((score, player) => {
-      if (score > maxScore) {
-        maxScore = score;
-        selectedTarget = player;
-      }
-    });
-
-    return selectedTarget;
-  }
-
-  private static async executeJokerStrategy(
-    gs: GameState,
-    bot: Player,
-    difficulty: BotDifficultyConfig
-  ): Promise<void> {
-    const behavior = bot.botBehavior;
-
-    let possibleTargets = gs.players.filter((p) => p.id !== bot.id);
-
-    if (possibleTargets.length === 0) {
-      possibleTargets = [bot];
-    }
-
-    let target: Player;
-
-    if (behavior === BotBehavior.fast) {
-      possibleTargets.sort((a, b) => this.getEstimatedScore(a) - this.getEstimatedScore(b));
-      target = possibleTargets[0];
-    } else if (behavior === BotBehavior.aggressive) {
-      const human = possibleTargets.find((p) => p.isHuman);
-
-      if (human) {
-        let humanBias: number;
-        if (difficulty.name === 'Platine') {
-          humanBias = 0.85;
-        } else if (difficulty.name === 'Or') {
-          humanBias = 0.75;
-        } else if (difficulty.name === 'Argent') {
-          humanBias = 0.55;
-        } else {
-          humanBias = 0.35;
-        }
-        if (this.random() < humanBias) {
-          target = human;
-        }
-      }
-
-      if (!target!) {
-        if (difficulty.name !== 'Bronze' && this.random() < 0.75) {
-          target = this.selectJokerTargetWeighted(possibleTargets, difficulty, gs);
-        } else {
-          target = possibleTargets[Math.floor(this.random() * possibleTargets.length)];
-        }
-      }
-    } else if (behavior === BotBehavior.balanced) {
-      if (difficulty.name === 'Bronze' || difficulty.name === 'Argent') {
-        if (difficulty.name === 'Bronze') {
-          if (this.random() < 0.25) {
-            target = this.selectJokerTargetWeighted(possibleTargets, difficulty, gs);
-          } else {
-            target = possibleTargets[Math.floor(this.random() * possibleTargets.length)];
-          }
-        } else {
-          target = this.selectJokerTargetWeighted(possibleTargets, difficulty, gs);
-        }
-      } else {
-        if (this.random() < 0.35) {
-          possibleTargets.sort((a, b) => this.getEstimatedScore(a) - this.getEstimatedScore(b));
-          target = possibleTargets[0];
-        } else {
-          const human = possibleTargets.find((p) => p.isHuman);
-          if (human) {
-            const humanBias = difficulty.name === 'Platine' ? 0.80 : 0.70;
-            if (this.random() < humanBias) {
-              target = human;
-            }
-          }
-          if (!target!) {
-            target = this.selectJokerTargetWeighted(possibleTargets, difficulty, gs);
-          }
-        }
-      }
-    } else {
-      if (difficulty.name !== 'Bronze' && this.random() < 0.3) {
-        target = this.selectJokerTargetWeighted(possibleTargets, difficulty, gs);
-      } else {
-        target = possibleTargets[Math.floor(this.random() * possibleTargets.length)];
-      }
-    }
-
-    GameLogic.jokerEffect(gs, target!);
-
-    if (target!.id === bot.id) {
-      this.resetMentalMap(bot);
-    }
-  }
-
-  private static selectJokerTargetWeighted(
-    targets: Player[],
-    difficulty: BotDifficultyConfig,
-    gameState: GameState
-  ): Player {
-    const threatScores = new Map<Player, number>();
-
-    for (const player of targets) {
-      let score = 0.0;
-
-      if (player.isHuman) {
-        if (difficulty.name === 'Platine') {
-          score += 65.0;
-        } else if (difficulty.name === 'Or') {
-          score += 55.0;
-        } else if (difficulty.name === 'Argent') {
-          score += 40.0;
-        } else {
-          score += 25.0;
-        }
-      }
-
-      const knownCount = this.getKnownCardCount(player);
-      if (knownCount >= 4) {
-        score += 24.0;
-      } else if (knownCount >= 2) {
-        score += 16.0;
-      } else if (knownCount >= 1) {
-        score += 8.0;
-      }
-
-      const cardCount = player.hand.length;
-      if (cardCount <= 2) {
-        score += 65.0;
-      } else if (cardCount === 3) {
-        score += 40.0;
-      } else if (cardCount === 4) {
-        score += 20.0;
-      }
-
-      const estimatedScore = this.getEstimatedScore(player);
-      if (estimatedScore <= 5) {
-        score += 28.0;
-      } else if (estimatedScore <= 10) {
-        score += 16.0;
-      } else if (estimatedScore <= 15) {
-        score += 8.0;
-      }
-
-      if (gameState.gameMode === GameMode.tournament) {
-        const cumulativeScore = this.getCumulativeScore(gameState, player);
-        if (cumulativeScore <= 20) {
-          score += 20.0;
-        } else if (cumulativeScore <= 40) {
-          score += 10.0;
-        } else if (cumulativeScore >= 80) {
-          score -= 15.0;
-        }
-      }
-
-      const randomFactor = this.random() * 20.0;
-
-      if (difficulty.name === 'Or' || difficulty.name === 'Platine') {
-        score += randomFactor * 0.3;
-      } else if (difficulty.name === 'Argent') {
-        score += randomFactor * 1.0;
-      } else {
-        score += randomFactor * 2.0;
-      }
-
-      threatScores.set(player, score);
-    }
-
-    let selectedTarget = targets[0];
-    let maxScore = 0.0;
-
-    threatScores.forEach((score, player) => {
-      if (score > maxScore) {
-        maxScore = score;
-        selectedTarget = player;
-      }
-    });
-
-    return selectedTarget;
+    return worstIdx;
   }
 
   private static chooseBadCard(bot: Player): number {
@@ -1126,18 +939,6 @@ export class BotAI {
     return 0;
   }
 
-  private static minPointsInHand(player: Player): number {
-    if (player.hand.length === 0) return 0;
-    let minPoints = player.hand[0].points;
-    for (let i = 1; i < player.hand.length; i++) {
-      const points = player.hand[i].points;
-      if (points < minPoints) {
-        minPoints = points;
-      }
-    }
-    return minPoints;
-  }
-
   private static getSkillDifficulty(level: BotSkillLevel | undefined): BotDifficultyConfig {
     if (level === undefined) return BotDifficulty.silver;
 
@@ -1155,25 +956,14 @@ export class BotAI {
     }
   }
 
-  private static isHumanThreatening(gs: GameState): boolean {
-    try {
-      const human = gs.players.find((p) => p.isHuman);
-      return human ? human.hand.length <= 3 : false;
-    } catch (e) {
-      return false;
-    }
-  }
-
   private static delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // Méthode pour nettoyer la mémoire d'un bot (utile lors du reset d'un jeu)
   static clearBotMemory(playerId: string): void {
     botMemories.delete(playerId);
   }
 
-  // Méthode pour nettoyer toutes les mémoires
   static clearAllBotMemories(): void {
     botMemories.clear();
   }

@@ -19,9 +19,9 @@ class BotFactory {
   static final math.Random _nameRandom = math.Random();
 
   static final List<String> _botNames = [
-    'Max', 'Yanis', 'Rohi', 'Millie', 'Kellinho', 'Kifa', 'Zoe', 'VR6',
-    'Ruben', 'Lisa', 'Clara', 'Frizou', 'Tony', 'Leon', 'Elodie', '2T',
-    'Guy2', 'Poppa', 'Messboal', 'Bersa', 'Juwa', 'Manboy', 'Bramsou', 'Lil Uzi'
+    'Max', 'Yanis', 'Rohino', 'Millie', 'Kellinho', 'Kifa', 'Nessa', 'VR6',
+    'Kanan Stark', 'Mucong', 'Irfat', 'Frizou', 'Tony', 'Leon', '2004 Boosté', '2T',
+    'Guy2', 'Avon Barksdale', 'Messball', 'Bersa', 'Marlo Stanfield', 'Manboy', 'Bramsou', 'Keyser Söze'
   ];
 
   static final Set<String> _usedNames = {};
