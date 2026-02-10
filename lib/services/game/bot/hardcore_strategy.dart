@@ -3,6 +3,7 @@ import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import '../../../models/playing_card.dart';
 import 'bot_difficulty.dart';
+import 'bot_dutch_strategy.dart';
 import 'hardcore_bot_config.dart';
 
 /// Stratégies avancées pour les bots hardcore
@@ -323,7 +324,11 @@ class HardcoreStrategy {
     int count = 0;
     for (final p in gs.players) {
       if (p.id != bot.id) {
-        sum += p.getKnownScore();
+        final est = BotDutchStrategy.discardTracker.estimateOpponentHand(p.id, p.hand.length);
+        sum += p.getEstimatedScoreForOpponent(
+          avgDiscardedPoints: est.avgDiscardedPoints > 0 ? est.avgDiscardedPoints : null,
+          discardCount: BotDutchStrategy.discardTracker.getDiscardCount(p.id),
+        );
         count++;
       }
     }
@@ -345,7 +350,13 @@ class HardcoreStrategy {
     // - Score du bot < 50% du meilleur adversaire
     // - OU bot a beaucoup moins de cartes que tout le monde
     
-    final bestOpponentScore = opponents.map((p) => p.getKnownScore()).reduce(min);
+    final bestOpponentScore = opponents.map((p) {
+      final est = BotDutchStrategy.discardTracker.estimateOpponentHand(p.id, p.hand.length);
+      return p.getEstimatedScoreForOpponent(
+        avgDiscardedPoints: est.avgDiscardedPoints > 0 ? est.avgDiscardedPoints : null,
+        discardCount: BotDutchStrategy.discardTracker.getDiscardCount(p.id),
+      );
+    }).reduce(min);
     final scoreRatio = botScore / max(1, bestOpponentScore);
     
     final botCards = bot.hand.length;

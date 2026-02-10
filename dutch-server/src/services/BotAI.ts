@@ -263,8 +263,6 @@ export class BotAI {
     for (let i = 0; i < bot.hand.length; i++) {
       if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
         score += memory.mentalMap[i]!.points;
-      } else if (i < bot.knownCards.length && bot.knownCards[i]) {
-        score += bot.hand[i].points;
       }
     }
     return score;
@@ -273,9 +271,7 @@ export class BotAI {
   private static knowsAllCards(bot: Player): boolean {
     const memory = this.getBotMemory(bot);
     for (let i = 0; i < bot.hand.length; i++) {
-      const inMental = i < memory.mentalMap.length && memory.mentalMap[i] !== null;
-      const inKnown = i < bot.knownCards.length && bot.knownCards[i];
-      if (!inMental && !inKnown) return false;
+      if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) return false;
     }
     return true;
   }
@@ -285,9 +281,6 @@ export class BotAI {
     if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
       return memory.mentalMap[index]!.points;
     }
-    if (index < bot.knownCards.length && bot.knownCards[index]) {
-      return bot.hand[index].points;
-    }
     return null;
   }
 
@@ -295,9 +288,6 @@ export class BotAI {
     const memory = this.getBotMemory(bot);
     if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
       return memory.mentalMap[index]!;
-    }
-    if (index < bot.knownCards.length && bot.knownCards[index]) {
-      return bot.hand[index];
     }
     return null;
   }
@@ -343,6 +333,73 @@ export class BotAI {
 
   private static getHumanTarget(opponents: Player[]): Player | null {
     return opponents.find((p) => p.isHuman) || null;
+  }
+
+  /**
+   * Calcule un score de menace contextuel pour un joueur.
+   * Critères : nombre de cartes, taux de défausse (main stable), cartes espionnées, tournoi.
+   * L'humain reçoit un léger tiebreaker (+3) : à menace égale, on préfère le cibler.
+   */
+  private static calculateThreatScore(gs: GameState, bot: Player, target: Player): number {
+    let score = 0;
+
+    // 1) Nombre de cartes (le plus important)
+    const cards = target.hand.length;
+    if (cards === 1) score += 50;
+    else if (cards === 2) score += 30;
+    else if (cards === 3) score += 15;
+    else if (cards === 4) score += 5;
+
+    // 2) Taux de défausse élevé = main probablement bonne (il rejette les pioches)
+    const discardRate = this.getDiscardRate(gs, target);
+    if (discardRate > 0.7) score += 20;
+    else if (discardRate > 0.5) score += 12;
+    else if (discardRate > 0.3) score += 5;
+
+    // 3) Intel espionnage : si on connaît des cartes basses chez lui
+    const memory = this.getBotMemory(bot);
+    let knownLowCards = 0;
+    for (const spy of memory.spiedCards) {
+      if (spy.playerId === target.id && memory.turnCounter - spy.turnNumber <= 5) {
+        if (spy.cardPoints <= 3) knownLowCards++;
+      }
+    }
+    if (knownLowCards >= 2) score += 15;
+    else if (knownLowCards >= 1) score += 8;
+
+    // 4) Tournoi : score cumulé bas = menaçant
+    if (gs.gameMode === GameMode.tournament) {
+      const cumul = this.getCumulativeScore(gs, target);
+      if (cumul <= 20) score += 15;
+      else if (cumul <= 40) score += 8;
+      else if (cumul >= 80) score -= 10;
+    }
+
+    // 5) Tiebreaker humain : à menace égale, préférer cibler l'humain
+    if (target.isHuman) {
+      score += 3;
+    }
+
+    return score;
+  }
+
+  /**
+   * Choisit la cible la plus menaçante parmi les adversaires.
+   * Si l'humain est dans le top 2, il est ciblé.
+   */
+  private static pickMostThreateningTarget(gs: GameState, bot: Player, candidates: Player[]): Player {
+    const scored = candidates.map(p => ({
+      player: p,
+      threat: this.calculateThreatScore(gs, bot, p),
+    }));
+    scored.sort((a, b) => b.threat - a.threat);
+
+    // Si l'humain est dans le top 2, le cibler
+    const top2 = scored.slice(0, 2);
+    const humanInTop2 = top2.find(s => s.player.isHuman);
+    if (humanInTop2) return humanInTop2.player;
+
+    return scored[0].player;
   }
 
   private static getCumulativeScore(gameState: GameState, player: Player): number {
@@ -802,9 +859,7 @@ export class BotAI {
       const unknownIndices: number[] = [];
       for (let i = 0; i < bot.hand.length; i++) {
         if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) {
-          if (i >= bot.knownCards.length || !bot.knownCards[i]) {
-            unknownIndices.push(i);
-          }
+          unknownIndices.push(i);
         }
       }
 
@@ -1017,7 +1072,7 @@ export class BotAI {
     for (let i = 0; i < bot.hand.length; i++) {
       const knownCard = (i < memory.mentalMap.length && memory.mentalMap[i] !== null)
         ? memory.mentalMap[i]!
-        : (i < bot.knownCards.length && bot.knownCards[i]) ? bot.hand[i] : null;
+        : null;
 
       if (knownCard && cardMatches(knownCard, topDiscard)) {
         // Je connais cette carte et elle matche → match immédiat
@@ -1171,15 +1226,8 @@ export class BotAI {
       return;
     }
 
-    // Choisir la cible : priorité humain, sinon joueur dangereux
-    let target: Player;
-    const human = this.getHumanTarget(opponents);
-    if (human) {
-      target = human;
-    } else {
-      opponents.sort((a, b) => a.hand.length - b.hand.length);
-      target = opponents[0];
-    }
+    // Choisir la cible via l'analyse de menace contextuelle
+    const target = this.pickMostThreateningTarget(gs, bot, opponents);
 
     const idx = Math.floor(this.random() * target.hand.length);
     GameLogic.lookAtCard(gs, target, idx);
@@ -1331,27 +1379,28 @@ export class BotAI {
   }
 
   // Choisir 2 cibles pour le Valet parmi les adversaires
+  // Algorithme contextuel : cible les 2 joueurs les plus menaçants
+  // Si l'humain est dans le top 2, il est inclus
   private static chooseValetTargets(
     gs: GameState,
     bot: Player,
     opponents: Player[]
   ): [Player, Player] {
-    // Priorité : humain + joueur le plus dangereux
-    const human = this.getHumanTarget(opponents);
+    const scored = opponents.map(p => ({
+      player: p,
+      threat: this.calculateThreatScore(gs, bot, p),
+    }));
+    scored.sort((a, b) => b.threat - a.threat);
 
-    if (human) {
-      // L'humain + l'autre adversaire le plus dangereux
-      const others = opponents.filter((p) => p.id !== human.id);
-      if (others.length > 0) {
-        // Joueur avec le moins de cartes (dangereux) ou taux de défausse élevé
-        others.sort((a, b) => a.hand.length - b.hand.length);
-        return [human, others[0]];
-      }
+    // Si l'humain est dans le top 2, s'assurer qu'il est inclus
+    const top2 = scored.slice(0, 2);
+    const humanInTop2 = top2.find(s => s.player.isHuman);
+    if (humanInTop2) {
+      const other = top2.find(s => !s.player.isHuman);
+      if (other) return [humanInTop2.player, other.player];
     }
 
-    // Pas d'humain ou humain seul : les deux joueurs les plus dangereux
-    const sorted = [...opponents].sort((a, b) => a.hand.length - b.hand.length);
-    return [sorted[0], sorted[1]];
+    return [scored[0].player, scored[1].player];
   }
 
   // Carte Joker : mélanger un adversaire — par niveau
@@ -1385,7 +1434,7 @@ export class BotAI {
       return;
     }
 
-    // --- Or / Platine : ciblage intelligent ---
+    // --- Or / Platine : ciblage intelligent via analyse de menace ---
     const validTargets = gs.players.filter(
       (p) => p.id !== bot.id && p.hand.length >= 2
     );
@@ -1395,26 +1444,9 @@ export class BotAI {
       return;
     }
 
-    // Priorité : humain
-    const human = this.getHumanTarget(validTargets);
-    if (human) {
-      GameLogic.jokerEffect(gs, human);
-      return;
-    }
-
-    // Sinon : joueur avec le taux de défausse le plus élevé (main stable)
-    validTargets.sort((a, b) => a.hand.length - b.hand.length);
-    let bestTarget = validTargets[0];
-    let bestRate = this.getDiscardRate(gs, bestTarget);
-    for (const t of validTargets) {
-      const rate = this.getDiscardRate(gs, t);
-      if (rate > bestRate) {
-        bestRate = rate;
-        bestTarget = t;
-      }
-    }
-
-    GameLogic.jokerEffect(gs, bestTarget);
+    // Cibler le joueur le plus menaçant (humain préféré si top 2)
+    const target = this.pickMostThreateningTarget(gs, bot, validTargets);
+    GameLogic.jokerEffect(gs, target);
   }
 
   // ============================================================

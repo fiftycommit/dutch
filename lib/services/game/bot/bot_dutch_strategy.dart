@@ -123,13 +123,10 @@ class BotDutchStrategy {
     return false;
   }
 
-  /// Estime le score d'un adversaire
+  /// Estime le score d'un adversaire (humain ou bot)
+  /// Le bot ne connaît PAS le vrai score des autres joueurs
+  /// Il utilise le discard tracker (info publique) pour estimer
   static int _estimateOpponentScore(Player opponent) {
-    if (opponent.isHuman) {
-      // Le score de l'humain est toujours réel
-      return opponent.getKnownScore();
-    }
-    // Estimer via le discard tracker
     final estimate = discardTracker.estimateOpponentHand(
       opponent.id, opponent.hand.length,
     );

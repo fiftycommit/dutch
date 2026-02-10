@@ -13,7 +13,6 @@ import '../../../providers/game_provider.dart';
 import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
 import 'bot_personality.dart';
-import 'human_threat_tracker.dart';
 
 /// Gestion des pouvoirs spéciaux des bots
 /// Principe GRASP: Controller - Orchestre l'utilisation des pouvoirs
@@ -184,8 +183,7 @@ class BotPowerHandler {
     if (target.isHuman && context != null) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
-      UnifiedPowerDialogs.showBotSpyNotification(context, bot, target.name, idx);
-      await Future.delayed(const Duration(milliseconds: 1400));
+      await UnifiedPowerDialogs.showBotSpyNotification(context, bot, target.name, idx);
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
@@ -199,20 +197,8 @@ class BotPowerHandler {
     List<Player> opponents = gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.isEmpty) return null;
 
-    // 🔥 HARDCORE : En mode impitoyable, cibler l'humain prioritairement
+    // Utiliser le système de ciblage unifié basé sur la menace réelle
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
-    
-    if (isHardcore) {
-      // Utiliser denyHumanPodium pour cibler l'humain sur le podium
-      final humanTarget = BotThreatAnalyzer.pickBestTarget(
-        gs, bot, TargetMode.denyHumanPodium, 
-        difficulty: difficulty,
-        isHardcoreMode: true,
-      );
-      if (humanTarget != null) return humanTarget;
-    }
-
-    // Utiliser le nouveau système de ciblage unifié
     final target = BotThreatAnalyzer.pickBestTarget(
       gs, bot, TargetMode.gatherInfo, 
       difficulty: difficulty,
@@ -253,23 +239,35 @@ class BotPowerHandler {
     // Effectuer l'échange entre les deux AUTRES joueurs
     GameLogic.swapCards(gs, target1, idx1, target2, idx2);
 
-    // Notifier si l'humain est impliqué
+    // Notifier si l'humain est impliqué — le jeu attend que l'humain clique OK
     if (target1.isHuman && context != null) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
-      UnifiedPowerDialogs.showBotSwapNotification(context, bot, target1.name, idx1);
-      await Future.delayed(const Duration(milliseconds: 1400));
+      // L'humain est target1 : sa carte #idx1 a été échangée avec target2
+      // Après le swap, target1.hand[idx1] = ancienne carte de target2
+      await UnifiedPowerDialogs.showBotSwapNotification(
+        context, bot, target1.name, idx1,
+        swapPartnerName: target2.name,
+        receivedCardPosition: idx2 + 1,
+      );
       gameProvider.resumeReactionTimerAfterNotification();
     } else if (target2.isHuman && context != null) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
-      UnifiedPowerDialogs.showBotSwapNotification(context, bot, target2.name, idx2);
-      await Future.delayed(const Duration(milliseconds: 1400));
+      // L'humain est target2 : sa carte #idx2 a été échangée avec target1
+      await UnifiedPowerDialogs.showBotSwapNotification(
+        context, bot, target2.name, idx2,
+        swapPartnerName: target1.name,
+        receivedCardPosition: idx1 + 1,
+      );
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
   /// Choisit DEUX cibles pour le pouvoir Valet (pas le bot lui-même)
+  /// Algorithme contextuel : cible les 2 joueurs les plus menaçants
+  /// Si l'humain est dans le top 2 menace, il est inclus
+  /// À menace égale, l'humain est préféré
   static (Player, Player)? _chooseValetTargets(
     GameState gs,
     Player bot,
@@ -282,62 +280,22 @@ class BotPowerHandler {
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
     final report = BotThreatAnalyzer.analyzeOpponents(gs, bot, isHardcoreMode: isHardcore);
 
-    // PRIORITÉ : L'humain doit TOUJOURS être impliqué si possible
-    // Cela déstabilise sa mémoire
-    Player? humanPlayer = report.humanPlayer;
-    Player? otherTarget;
-
-    if (humanPlayer != null && humanPlayer.hand.isNotEmpty) {
-      // Trouver un autre joueur (pas l'humain, pas le bot)
-      final otherOpponents = opponents.where((p) => p.id != humanPlayer.id).toList();
-      if (otherOpponents.isNotEmpty) {
-        // Choisir celui avec le moins de cartes (plus impactant)
-        otherOpponents.sort((a, b) => a.hand.length.compareTo(b.hand.length));
-        otherTarget = otherOpponents.first;
-        return (humanPlayer, otherTarget);
-      }
+    // Trier par menace décroissante (le tiebreaker +3 pour l'humain est déjà inclus)
+    final sorted = report.sortedByThreat;
+    if (sorted.length >= 2) {
+      return (sorted[0].player, sorted[1].player);
     }
 
-    // Pas d'humain ou un seul adversaire : échanger entre les deux bots
-    if (opponents.length >= 2) {
-      // Trier par nombre de cartes croissant (cibler ceux avec peu de cartes)
-      opponents.sort((a, b) => a.hand.length.compareTo(b.hand.length));
-      return (opponents[0], opponents[1]);
-    }
-
-    return null;
+    // Fallback
+    return (opponents[0], opponents[1]);
   }
 
   static int _chooseValetTargetCardIndex(Player target, BotDifficulty difficulty, BotBehavior? behavior) {
     if (target.hand.isEmpty) return 0;
     if (target.hand.length == 1) return 0;
 
-    final indices = List<int>.generate(target.hand.length, (i) => i);
-    indices.sort((a, b) => target.hand[a].points.compareTo(target.hand[b].points));
-
-    int bestIdx = indices.first;
-    int secondIdx = indices.length > 1 ? indices[1] : bestIdx;
-
-    double smartChance = difficulty.name == "Bronze" ? 0.25 :
-                        difficulty.name == "Argent" ? 0.50 :
-                        difficulty.name == "Or" ? 0.80 : 1.0;
-
-    if (behavior == BotBehavior.aggressive) {
-      smartChance += 0.10;
-    } else if (behavior == BotBehavior.fast) {
-      smartChance -= 0.10;
-    }
-    if (target.isHuman) {
-      smartChance += 0.10;
-    }
-
-    smartChance = smartChance.clamp(0.0, 1.0);
-
-    if (_random.nextDouble() < smartChance) return bestIdx;
-
-    double secondChance = difficulty.name == "Bronze" ? 0.35 : 0.55;
-    if (_random.nextDouble() < secondChance) return secondIdx;
-
+    // Le bot ne voit PAS les cartes cachées de la cible
+    // Il choisit un index aléatoire (comme un humain le ferait)
     return _random.nextInt(target.hand.length);
   }
 
@@ -364,78 +322,47 @@ class BotPowerHandler {
     if (target.isHuman && context != null) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       gameProvider.pauseReactionTimerForNotification();
-      UnifiedPowerDialogs.showBotJokerNotification(context, bot, target.name);
-      await Future.delayed(const Duration(milliseconds: 1700));
+      await UnifiedPowerDialogs.showBotJokerNotification(context, bot, target.name);
       gameProvider.resumeReactionTimerAfterNotification();
     }
   }
 
+  /// Choisit la cible du Joker selon l'analyse de menace contextuelle
+  /// Règles :
+  /// 1. Le joueur le plus menaçant selon le score de menace unifié
+  /// 2. À menace égale, l'humain est préféré (via tiebreaker +3)
+  /// 3. Si l'humain est dans le top 2 menace, il est ciblé
+  /// 4. Ne cible que les joueurs avec >= 2 cartes (mélanger 1 carte est inutile)
   static Player? _chooseJokerTarget(
     GameState gs,
     Player bot,
     BotDifficulty difficulty, {
     BotPersonality? personality,
   }) {
-    List<Player> possibleTargets = gs.players.where((p) => p.id != bot.id).toList();
+    List<Player> possibleTargets = gs.players
+        .where((p) => p.id != bot.id && p.hand.length >= 2)
+        .toList();
     if (possibleTargets.isEmpty) return null;
 
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
     final report = BotThreatAnalyzer.analyzeOpponents(gs, bot, isHardcoreMode: isHardcore);
-    
-    // 🎯 ANALYSE DE LA MENACE HUMAINE
-    final threatTracker = HumanThreatTracker();
-    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // PHILOSOPHIE : Le but est que l'HUMAIN perde !
-    // Le Joker mélange = ruine sa mémoire et sa stratégie
-    // Même si un bot est plus proche de Dutch, on préfère ruiner l'humain
-    // ═══════════════════════════════════════════════════════════════════════
+    // Filtrer les menaces pour ne garder que ceux avec >= 2 cartes
+    final validThreats = report.sortedByThreat
+        .where((o) => o.cardsLeft >= 2)
+        .toList();
 
-    // 🎯 RÈGLE #0 (NOUVELLE) : Humain CRITICAL = cible ABSOLUE
-    // Peu importe ce que font les autres, on doit arrêter l'humain
-    if (humanThreatLevel == HumanThreatLevel.critical && report.humanPlayer != null) {
-      // Log dans l'historique du jeu
-      gs.addToHistory('🎯 ${bot.name} cible l\'humain (menace critique)');
-      return report.humanPlayer;
+    if (validThreats.isEmpty) return null;
+
+    // RÈGLE : Si l'humain est dans le top 2 des menaces, le cibler
+    final humanInTop2 = validThreats.take(2).any((o) => o.isHuman);
+    if (humanInTop2) {
+      final humanThreat = validThreats.firstWhere((o) => o.isHuman);
+      return humanThreat.player;
     }
 
-    // RÈGLE #1 (PRIORITÉ ABSOLUE) : L'humain avec peu de cartes = cible #1
-    // Il est probablement prêt à Dutch → on ruine tout
-    if (report.humanPlayer != null && report.humanPlayer!.hand.length <= 2) {
-      return report.humanPlayer;
-    }
-    
-    // 🎯 RÈGLE #1.5 : Humain HIGH = cible prioritaire même avec plus de cartes
-    if (humanThreatLevel == HumanThreatLevel.high && report.humanPlayer != null) {
-      // L'humain progresse bien, on le mélange pour le ralentir
-      if (report.humanPlayer!.hand.length <= 3) {
-        return report.humanPlayer;
-      }
-    }
-
-    // RÈGLE #2 : L'humain sur le podium = on le mélange pour le déstabiliser
-    if (report.humanOnPodium && report.humanPlayer != null) {
-      return report.humanPlayer;
-    }
-
-    // RÈGLE #3 : Si un bot a 1 carte et peut Dutch avant nous, le cibler
-    if (report.hasOpponentWithOneCard) {
-      final oneCardBots = possibleTargets.where((p) => p.hand.length == 1 && !p.isHuman).toList();
-      if (oneCardBots.isNotEmpty) {
-        oneCardBots.sort((a, b) => a.getKnownScore().compareTo(b.getKnownScore()));
-        return oneCardBots.first;
-      }
-    }
-
-    // RÈGLE #4 : Par défaut, cibler l'humain (chaos total)
-    if (report.humanPlayer != null) {
-      return report.humanPlayer;
-    }
-
-    // Fallback : celui avec le meilleur score parmi les bots
-    possibleTargets.sort((a, b) => a.getKnownScore().compareTo(b.getKnownScore()));
-    return possibleTargets.first;
+    // Sinon : cibler le joueur le plus menaçant
+    return validThreats.first.player;
   }
 
   static void _skipPower(GameState gameState, Player bot) {

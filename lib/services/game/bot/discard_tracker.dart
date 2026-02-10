@@ -25,6 +25,9 @@ class DiscardTracker {
   /// Permet d'estimer la qualité de leur main
   final Map<String, List<int>> _playerDiscardHistory = {};
   
+  /// Nombre de défausses observées pour un joueur
+  int getDiscardCount(String playerId) => _playerDiscardHistory[playerId]?.length ?? 0;
+  
   /// Cartes totales dans le jeu par points
   /// 0 pts: 6 (4 As + 2 Jokers) si rouge, sinon 4 As
   /// 1-10: 4 chacun

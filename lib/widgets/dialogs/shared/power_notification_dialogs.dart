@@ -170,35 +170,37 @@ class PowerNotificationDialogs {
       builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.purple.shade900,
         builder: (context, metrics) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "ÉCHANGE EFFECTUÉ",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: metrics.font(20),
-                  fontWeight: FontWeight.bold,
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
+                SizedBox(height: metrics.space(12)),
+                Text(
+                  "ÉCHANGE EFFECTUÉ",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: metrics.font(20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "$player1 carte #${card1 + 1} ↔ $player2 carte #${card2 + 1}",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
-              ),
-              SizedBox(height: metrics.space(20)),
-              PowerDialogWidgets.confirmButton(
-                label: "OK",
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.purple.shade900,
-                onPressed: () => Navigator.pop(ctx),
-                metrics: metrics,
-              ),
-            ],
+                SizedBox(height: metrics.space(12)),
+                Text(
+                  "$player1 carte #${card1 + 1} ↔ $player2 carte #${card2 + 1}",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                ),
+                SizedBox(height: metrics.space(20)),
+                PowerDialogWidgets.confirmButton(
+                  label: "OK",
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.purple.shade900,
+                  onPressed: () => Navigator.pop(ctx),
+                  metrics: metrics,
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -206,189 +208,264 @@ class PowerNotificationDialogs {
   }
 
   /// Notification de mélange (Joker)
-  static void showShuffleNotification(
+  /// [autoCloseSeconds] : si > 0, ferme automatiquement après ce délai
+  static Future<void> showShuffleNotification(
     BuildContext context, {
     required String targetName,
     required bool isMe,
     String? byPlayerName,
+    int autoCloseSeconds = 0,
   }) {
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ResponsiveDialog(
-        backgroundColor: Colors.red.shade900,
-        builder: (context, metrics) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.shuffle, color: Colors.white, size: metrics.size(50)),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                isMe
-                    ? "VOS CARTES ONT ÉTÉ MÉLANGÉES !"
-                    : "CARTES DE ${targetName.toUpperCase()} MÉLANGÉES !",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: metrics.font(20),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                byPlayerName != null
-                    ? "$byPlayerName a utilisé le Joker !"
-                    : (isMe
-                        ? "Vous ne savez plus où sont vos cartes !"
-                        : "$targetName ne sait plus où sont ses cartes !"),
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
-              ),
-              if (byPlayerName != null) ...[
-                SizedBox(height: metrics.space(8)),
-                Text(
-                  isMe
-                      ? "Vous ne savez plus où sont vos cartes !"
-                      : "$targetName ne sait plus où sont ses cartes !",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.amber,
-                    fontSize: metrics.font(12),
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        if (autoCloseSeconds > 0) {
+          Future.delayed(Duration(seconds: autoCloseSeconds), () {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+          });
+        }
+        return ResponsiveDialog(
+          backgroundColor: Colors.red.shade900,
+          builder: (context, metrics) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.shuffle, color: Colors.white, size: metrics.size(50)),
+                  SizedBox(height: metrics.space(12)),
+                  Text(
+                    isMe
+                        ? "VOS CARTES ONT ÉTÉ MÉLANGÉES !"
+                        : "CARTES DE ${targetName.toUpperCase()} MÉLANGÉES !",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: metrics.font(20),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-              SizedBox(height: metrics.space(20)),
-              PowerDialogWidgets.confirmButton(
-                label: "OK",
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.red.shade900,
-                onPressed: () => Navigator.pop(ctx),
-                metrics: metrics,
+                  SizedBox(height: metrics.space(12)),
+                  Text(
+                    byPlayerName != null
+                        ? "$byPlayerName a utilisé le Joker !"
+                        : (isMe
+                            ? "Vous ne savez plus où sont vos cartes !"
+                            : "$targetName ne sait plus où sont ses cartes !"),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                  ),
+                  if (byPlayerName != null) ...[
+                    SizedBox(height: metrics.space(8)),
+                    Text(
+                      isMe
+                          ? "Vous ne savez plus où sont vos cartes !"
+                          : "$targetName ne sait plus où sont ses cartes !",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: metrics.font(12),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: metrics.space(16)),
+                  PowerDialogWidgets.confirmButton(
+                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.red.shade900,
+                    onPressed: () => Navigator.pop(ctx),
+                    metrics: metrics,
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   /// Notification d'échange par un bot/autre joueur
-  static void showSwapByOtherNotification(
+  /// [swapPartnerName] : nom du joueur avec qui la carte a été échangée
+  /// [receivedCardPosition] : numéro (1-based) de la carte reçue chez le partenaire
+  /// [autoCloseSeconds] : si > 0, ferme automatiquement après ce délai
+  static Future<void> showSwapByOtherNotification(
     BuildContext context, {
     required String byPlayerName,
     required String targetName,
     required int targetCardIndex,
+    String? swapPartnerName,
+    int? receivedCardPosition,
+    int autoCloseSeconds = 0,
   }) {
     final isMe = targetName == "Vous" || targetName == "vous";
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ResponsiveDialog(
-        backgroundColor: Colors.purple.shade900,
-        builder: (context, metrics) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "🤵 VALET !",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: metrics.font(20),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "$byPlayerName a échangé une carte avec ${isMe ? "vous" : targetName} !",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
-              ),
-              if (isMe) ...[
-                SizedBox(height: metrics.space(8)),
-                Text(
-                  "Votre carte #${targetCardIndex + 1} a été échangée",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.amber,
-                    fontSize: metrics.font(12),
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        // Auto-close timer
+        if (autoCloseSeconds > 0) {
+          Future.delayed(Duration(seconds: autoCloseSeconds), () {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+          });
+        }
+        return ResponsiveDialog(
+          backgroundColor: Colors.purple.shade900,
+          builder: (context, metrics) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
+                  SizedBox(height: metrics.space(12)),
+                  Text(
+                    "🤵 VALET !",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: metrics.font(20),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-              SizedBox(height: metrics.space(20)),
-              PowerDialogWidgets.confirmButton(
-                label: "OK",
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.purple.shade900,
-                onPressed: () => Navigator.pop(ctx),
-                metrics: metrics,
+                  SizedBox(height: metrics.space(8)),
+                  Text(
+                    "$byPlayerName a utilisé le Valet",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                  ),
+                  if (isMe) ...[
+                    SizedBox(height: metrics.space(10)),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.space(12),
+                        vertical: metrics.space(8),
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            "Votre carte #${targetCardIndex + 1} a été échangée",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.amber,
+                              fontSize: metrics.font(13),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (swapPartnerName != null) ...[
+                            SizedBox(height: metrics.space(4)),
+                            Text(
+                              "↔ avec $swapPartnerName",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: metrics.font(12),
+                              ),
+                            ),
+                          ],
+                          if (receivedCardPosition != null) ...[
+                            SizedBox(height: metrics.space(4)),
+                            Text(
+                              "Vous avez reçu sa $receivedCardPosition${receivedCardPosition == 1 ? 'ère' : 'ème'} carte",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: metrics.font(12),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: metrics.space(16)),
+                  PowerDialogWidgets.confirmButton(
+                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.purple.shade900,
+                    onPressed: () => Navigator.pop(ctx),
+                    metrics: metrics,
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   /// Notification d'espionnage par un bot/autre joueur
-  static void showSpyByOtherNotification(
+  /// [autoCloseSeconds] : si > 0, ferme automatiquement après ce délai
+  static Future<void> showSpyByOtherNotification(
     BuildContext context, {
     required String byPlayerName,
     required int cardIndex,
     required bool isMe,
+    int autoCloseSeconds = 0,
   }) {
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ResponsiveDialog(
-        backgroundColor: Colors.blue.shade900,
-        builder: (context, metrics) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.remove_red_eye, color: Colors.white, size: metrics.size(50)),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "👁️ ESPIONNAGE !",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: metrics.font(20),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: metrics.space(12)),
-              Text(
-                "$byPlayerName espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
-              ),
-              if (isMe) ...[
-                SizedBox(height: metrics.space(8)),
-                Text(
-                  "Un joueur connaît maintenant votre carte",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.amber,
-                    fontSize: metrics.font(12),
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        if (autoCloseSeconds > 0) {
+          Future.delayed(Duration(seconds: autoCloseSeconds), () {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+          });
+        }
+        return ResponsiveDialog(
+          backgroundColor: Colors.blue.shade900,
+          builder: (context, metrics) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.remove_red_eye, color: Colors.white, size: metrics.size(50)),
+                  SizedBox(height: metrics.space(12)),
+                  Text(
+                    "👁️ ESPIONNAGE !",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: metrics.font(20),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-              SizedBox(height: metrics.space(20)),
-              PowerDialogWidgets.confirmButton(
-                label: "OK",
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.blue.shade900,
-                onPressed: () => Navigator.pop(ctx),
-                metrics: metrics,
+                  SizedBox(height: metrics.space(12)),
+                  Text(
+                    "$byPlayerName espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                  ),
+                  if (isMe) ...[
+                    SizedBox(height: metrics.space(8)),
+                    Text(
+                      "Un joueur connaît maintenant votre carte",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: metrics.font(12),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: metrics.space(16)),
+                  PowerDialogWidgets.confirmButton(
+                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.blue.shade900,
+                    onPressed: () => Navigator.pop(ctx),
+                    metrics: metrics,
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }

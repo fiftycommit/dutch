@@ -81,35 +81,6 @@ void main() {
       });
     });
 
-    group('minPointsInHand', () {
-      test('returns 0 for empty hand', () {
-        bot.hand = [];
-        
-        final min = BotMemoryManager.minPointsInHand(bot);
-        
-        expect(min, 0);
-      });
-
-      test('returns minimum points in hand', () {
-        // Hand: A(1), 5(5), 8(8), R(13)
-        final min = BotMemoryManager.minPointsInHand(bot);
-        
-        expect(min, 1);
-      });
-
-      test('handles hand with all same value', () {
-        bot.hand = [
-          PlayingCard.create('hearts', '5'),
-          PlayingCard.create('diamonds', '5'),
-          PlayingCard.create('clubs', '5'),
-        ];
-        
-        final min = BotMemoryManager.minPointsInHand(bot);
-        
-        expect(min, 5);
-      });
-    });
-
     group('chooseBadCard', () {
       test('returns worst known card index', () {
         bot.mentalMap[0] = PlayingCard.create('hearts', 'A');   // 1 point

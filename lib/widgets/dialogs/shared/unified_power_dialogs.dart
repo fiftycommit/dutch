@@ -530,38 +530,88 @@ class UnifiedPowerDialogs {
   }
 
   /// Notification quand un autre joueur utilise le Valet sur nous
-  static void showSwapNotificationDialog(BuildContext context, String byPlayerName, int cardIndex) {
-    PowerNotificationDialogs.showSwapByOtherNotification(context, byPlayerName: byPlayerName, targetName: "Vous", targetCardIndex: cardIndex);
+  static Future<void> showSwapNotificationDialog(
+    BuildContext context,
+    String byPlayerName,
+    int cardIndex, {
+    String? swapPartnerName,
+    int? receivedCardPosition,
+    int autoCloseSeconds = 0,
+  }) {
+    return PowerNotificationDialogs.showSwapByOtherNotification(
+      context,
+      byPlayerName: byPlayerName,
+      targetName: "Vous",
+      targetCardIndex: cardIndex,
+      swapPartnerName: swapPartnerName,
+      receivedCardPosition: receivedCardPosition,
+      autoCloseSeconds: autoCloseSeconds,
+    );
   }
 
   /// Notification quand un autre joueur nous espionne (pouvoir 10)
-  static void showSpyNotificationDialog(BuildContext context, String byPlayerName, int cardIndex) {
-    PowerNotificationDialogs.showSpyByOtherNotification(context, byPlayerName: byPlayerName, cardIndex: cardIndex, isMe: true);
+  static Future<void> showSpyNotificationDialog(
+    BuildContext context,
+    String byPlayerName,
+    int cardIndex, {
+    int autoCloseSeconds = 0,
+  }) {
+    return PowerNotificationDialogs.showSpyByOtherNotification(
+      context,
+      byPlayerName: byPlayerName,
+      cardIndex: cardIndex,
+      isMe: true,
+      autoCloseSeconds: autoCloseSeconds,
+    );
   }
 
   /// Notification quand un autre joueur utilise le Joker sur nous
-  static void showJokerNotificationDialog(BuildContext context, String byPlayerName) {
-    PowerNotificationDialogs.showShuffleNotification(context, targetName: "Vous", isMe: true, byPlayerName: byPlayerName);
+  static Future<void> showJokerNotificationDialog(
+    BuildContext context,
+    String byPlayerName, {
+    int autoCloseSeconds = 0,
+  }) {
+    return PowerNotificationDialogs.showShuffleNotification(
+      context,
+      targetName: "Vous",
+      isMe: true,
+      byPlayerName: byPlayerName,
+      autoCloseSeconds: autoCloseSeconds,
+    );
   }
 
-  /// Notification bot swap (solo)
-  static void showBotSwapNotification(BuildContext context, Player bot, String targetName, int targetCardIndex) {
+  /// Notification bot swap (solo) - attend que le joueur clique OK
+  static Future<void> showBotSwapNotification(
+    BuildContext context,
+    Player bot,
+    String targetName,
+    int targetCardIndex, {
+    String? swapPartnerName,
+    int? receivedCardPosition,
+  }) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final index = gp.gameState?.players.indexWhere((p) => p.id == bot.id) ?? -1;
-    PowerNotificationDialogs.showSwapByOtherNotification(context, byPlayerName: bot.getPositionDisplay(index), targetName: targetName, targetCardIndex: targetCardIndex);
+    return PowerNotificationDialogs.showSwapByOtherNotification(
+      context,
+      byPlayerName: bot.getPositionDisplay(index),
+      targetName: targetName,
+      targetCardIndex: targetCardIndex,
+      swapPartnerName: swapPartnerName,
+      receivedCardPosition: receivedCardPosition,
+    );
   }
 
-  /// Notification bot joker (solo)
-  static void showBotJokerNotification(BuildContext context, Player bot, String targetName) {
+  /// Notification bot joker (solo) - attend que le joueur clique OK
+  static Future<void> showBotJokerNotification(BuildContext context, Player bot, String targetName) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final index = gp.gameState?.players.indexWhere((p) => p.id == bot.id) ?? -1;
-    PowerNotificationDialogs.showShuffleNotification(context, targetName: targetName, isMe: targetName == "Vous", byPlayerName: bot.getPositionDisplay(index));
+    return PowerNotificationDialogs.showShuffleNotification(context, targetName: targetName, isMe: targetName == "Vous", byPlayerName: bot.getPositionDisplay(index));
   }
 
-  /// Notification bot spy (solo)
-  static void showBotSpyNotification(BuildContext context, Player bot, String targetName, int cardIndex) {
+  /// Notification bot spy (solo) - attend que le joueur clique OK
+  static Future<void> showBotSpyNotification(BuildContext context, Player bot, String targetName, int cardIndex) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final index = gp.gameState?.players.indexWhere((p) => p.id == bot.id) ?? -1;
-    PowerNotificationDialogs.showSpyByOtherNotification(context, byPlayerName: bot.getPositionDisplay(index), cardIndex: cardIndex, isMe: targetName == "Vous");
+    return PowerNotificationDialogs.showSpyByOtherNotification(context, byPlayerName: bot.getPositionDisplay(index), cardIndex: cardIndex, isMe: targetName == "Vous");
   }
 }

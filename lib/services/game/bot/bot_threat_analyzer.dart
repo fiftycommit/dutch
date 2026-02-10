@@ -3,6 +3,7 @@ import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import '../../learning/ai_telemetry_service.dart';
 import 'bot_difficulty.dart';
+import 'bot_dutch_strategy.dart';
 import 'bot_memory_manager.dart';
 
 /// Mode de ciblage pour les pouvoirs
@@ -130,7 +131,12 @@ class BotThreatAnalyzer {
       if (p.id == bot.id) continue;
 
       final cards = p.hand.length;
-      final score = p.getKnownScore();
+      // Estimer le score via l'algorithme entonnoir (défausses observées)
+      final estimate = BotDutchStrategy.discardTracker.estimateOpponentHand(p.id, cards);
+      final score = p.getEstimatedScoreForOpponent(
+        avgDiscardedPoints: estimate.avgDiscardedPoints > 0 ? estimate.avgDiscardedPoints : null,
+        discardCount: BotDutchStrategy.discardTracker.getDiscardCount(p.id),
+      );
       
       totalCards += cards;
       totalScore += score;
@@ -268,16 +274,17 @@ class BotThreatAnalyzer {
   }
 
   /// Calcule le score attendu du bot avec pénalité d'incertitude
+  /// Utilise la mentalMap (ce que le bot croit savoir), pas les vraies cartes
   static double _calculateBotExpectedScore(Player bot) {
     double score = 0;
     int unknownCount = 0;
     
     for (int i = 0; i < bot.hand.length; i++) {
-      final card = bot.hand[i];
       final known = i < bot.knownCards.length && bot.knownCards[i];
+      final mentalCard = i < bot.mentalMap.length ? bot.mentalMap[i] : null;
       
-      if (known) {
-        score += card.points;
+      if (known && mentalCard != null) {
+        score += mentalCard.points;
       } else {
         // Pénalité d'incertitude : on suppose une carte moyenne (5-6)
         score += 5.5;
@@ -313,8 +320,12 @@ class BotThreatAnalyzer {
       score += 5.0;
     }
 
-    // 2) Score estimé
-    final estimated = player.getKnownScore();
+    // 2) Score estimé (via entonnoir)
+    final opEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(player.id, cards);
+    final estimated = player.getEstimatedScoreForOpponent(
+      avgDiscardedPoints: opEstimate.avgDiscardedPoints > 0 ? opEstimate.avgDiscardedPoints : null,
+      discardCount: BotDutchStrategy.discardTracker.getDiscardCount(player.id),
+    );
     if (estimated <= 3) {
       score += 25.0;
     } else if (estimated <= 6) {
@@ -323,24 +334,10 @@ class BotThreatAnalyzer {
       score += 8.0;
     }
 
-    // 3) Bonus humain - TOUJOURS prioritaire !
-    // AMÉLIORATION : Les bots doivent TOUJOURS cibler l'humain en priorité
-    // C'est le joueur qu'ils doivent battre, pas les autres bots
+    // 3) Tiebreaker humain : à menace égale, préférer l'humain
+    // C'est le vrai adversaire, mais il ne reçoit plus de bonus massif
     if (player.isHuman) {
-      if (isHardcoreMode) {
-        // 🔥 HARDCORE : L'humain est LA cible prioritaire
-        // "Je ne peux pas gagner, mais toi non plus"
-        score += 60.0; // Bonus massif
-      } else {
-        // Mode normal : bonus significatif quand même
-        // Les bots se coordonnent contre l'humain
-        score += 35.0; // Augmenté de 15 à 35
-      }
-
-      // Bonus supplémentaire si l'humain a peu de cartes
-      if (cards <= 2) {
-        score += 25.0; // Urgence : l'humain va Dutch
-      }
+      score += 3.0; // Léger avantage pour départager les ex-aequo
     }
 
     // 4) Cartes connues (info = danger)
@@ -432,8 +429,8 @@ class BotThreatAnalyzer {
 
   /// Cible pour punir un joueur rapide
   static Player? _pickPunishFastTarget(ThreatReport report) {
-    // Prioriser les humains (souvent plus rapides) ou ceux avec peu de cartes
-    final candidates = report.opponents.where((o) => o.isHuman || o.hasFewCards).toList();
+    // Prioriser ceux avec peu de cartes (les plus dangereux)
+    final candidates = report.opponents.where((o) => o.hasFewCards).toList();
     
     if (candidates.isNotEmpty) {
       candidates.sort((a, b) => b.threatScore.compareTo(a.threatScore));
@@ -471,15 +468,9 @@ class BotThreatAnalyzer {
     return report.leader ?? report.mostThreatening?.player;
   }
 
-  /// 🔥 HARDCORE : Cible pour empêcher l'humain d'être sur le podium
-  /// "Je ne peux pas gagner, mais toi non plus"
+  /// Cible pour empêcher le leader d'être sur le podium
   static Player? _pickDenyHumanPodiumTarget(ThreatReport report) {
-    // Si l'humain est sur le podium, c'est LUI la cible prioritaire
-    if (report.humanOnPodium && report.humanPlayer != null) {
-      return report.humanPlayer;
-    }
-    
-    // Sinon on utilise la stratégie normale (bloquer le leader)
+    // Cibler le joueur le plus menaçant (indépendamment du fait qu'il soit humain)
     if (report.hasOpponentWithOneCard) {
       final oneCardPlayers = report.opponents.where((o) => o.cardsLeft == 1).toList();
       if (oneCardPlayers.isNotEmpty) {
@@ -558,15 +549,15 @@ class BotThreatAnalyzer {
                           difficulty.name == "Or" ? 0.80 :
                           difficulty.name == "Argent" ? 0.60 : 0.30;
     
-    // Bonus si l'humain est en danger
-    if (report.opponents.any((o) => o.isHuman && o.hasFewCards)) {
+    // Bonus si un adversaire est en danger
+    if (report.opponents.any((o) => o.hasFewCards)) {
       counterChance += 0.10;
     }
     
     return _random.nextDouble() < counterChance;
   }
 
-  /// Détermine si les bots devraient coordonner une attaque contre l'humain
+  /// Détermine si les bots devraient coordonner une attaque contre le leader
   static bool shouldCoordinateAttack(GameState gs, Player bot, BotDifficulty difficulty) {
     if (difficulty.name != "Or" && difficulty.name != "Platine" &&
         difficulty.name != "Hard" && difficulty.name != "Insane" &&
@@ -575,12 +566,12 @@ class BotThreatAnalyzer {
     }
     
     final report = analyzeOpponents(gs, bot);
-    final humanThreat = report.opponents.where((o) => o.isHuman).firstOrNull;
+    final topThreat = report.mostThreatening;
     
-    if (humanThreat == null) return false;
+    if (topThreat == null) return false;
     
-    // Si l'humain est dangereux
-    if (humanThreat.hasFewCards || humanThreat.estimatedScore <= 8) {
+    // Si le leader est dangereux (peu de cartes ou score bas)
+    if (topThreat.hasFewCards || topThreat.estimatedScore <= 8) {
       double coordChance = difficulty.name == "Platine" || difficulty.name == "Impossible" ? 0.85 :
                           difficulty.name == "Nightmare" ? 0.80 :
                           difficulty.name == "Insane" ? 0.75 : 0.70;

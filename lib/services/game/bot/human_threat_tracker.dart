@@ -1,5 +1,6 @@
 import '../../../models/player.dart';
 import '../../../models/game_state.dart';
+import 'bot_dutch_strategy.dart';
 
 /// Niveau de menace de l'humain
 enum HumanThreatLevel {
@@ -67,8 +68,12 @@ class HumanThreatTracker {
     reset();
     final human = gs.players.where((p) => p.isHuman).firstOrNull;
     if (human != null) {
-      // Pour l'humain, getKnownScore() = score réel (il connaît toutes ses cartes)
-      _initialHumanScore = human.getKnownScore();
+      // Estimer le score initial via l'entonnoir
+      final estimate = BotDutchStrategy.discardTracker.estimateOpponentHand(human.id, human.hand.length);
+      _initialHumanScore = human.getEstimatedScoreForOpponent(
+        avgDiscardedPoints: estimate.avgDiscardedPoints > 0 ? estimate.avgDiscardedPoints : null,
+        discardCount: BotDutchStrategy.discardTracker.getDiscardCount(human.id),
+      );
       _initialHumanCards = human.hand.length;
     }
   }
@@ -99,8 +104,12 @@ class HumanThreatTracker {
     final human = gs.players.where((p) => p.isHuman).firstOrNull;
     if (human == null) return HumanThreatLevel.low;
 
-    // Pour l'humain, c'est son vrai score (il connaît toutes ses cartes)
-    final currentScore = human.getKnownScore();
+    // Estimer le score de l'humain via l'entonnoir
+    final humanEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(human.id, human.hand.length);
+    final currentScore = human.getEstimatedScoreForOpponent(
+      avgDiscardedPoints: humanEstimate.avgDiscardedPoints > 0 ? humanEstimate.avgDiscardedPoints : null,
+      discardCount: BotDutchStrategy.discardTracker.getDiscardCount(human.id),
+    );
     final currentCards = human.hand.length;
     
     // Score de menace (0-100)
@@ -202,13 +211,17 @@ class HumanThreatTracker {
     // L'humain a très peu de cartes et un bon score
     // Le bot devrait Dutch même avec un score "ok" pour le bloquer
     //
-    // IMPORTANT: humanScore = vrai score, botScore = cartes connues seulement
+    // Les deux scores sont des estimations
     // Le bot ne devrait Dutch préventif que s'il connaît TOUTES ses cartes
     if (!bot.knowsAllCards) {
       return false; // Trop risqué de Dutch sans certitude
     }
 
-    final humanScore = human.getKnownScore(); // Vrai score de l'humain
+    final hEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(human.id, human.hand.length);
+    final humanScore = human.getEstimatedScoreForOpponent(
+      avgDiscardedPoints: hEstimate.avgDiscardedPoints > 0 ? hEstimate.avgDiscardedPoints : null,
+      discardCount: BotDutchStrategy.discardTracker.getDiscardCount(human.id),
+    );
     final botScore = bot.getKnownScore();     // Score certain du bot
 
     // Si l'humain a <= 2 cartes et un meilleur score,

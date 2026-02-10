@@ -214,23 +214,10 @@ class BotCardStrategy {
       }
     }
 
-    // Match à l'aveugle pour Or/Platine et niveaux hardcore
-    final isHardcore = difficulty.name == "Or" || 
-                       difficulty.name == "Platine" ||
-                       difficulty.name == "Hard" ||
-                       difficulty.name == "Insane" ||
-                       difficulty.name == "Nightmare";
-    
-    if (isHardcore) {
-      return await _tryBlindMatch(
-        gameState,
-        bot,
-        difficulty,
-        topDiscard,
-        personality: personality,
-      );
-    }
-
+    // Pas de match à l'aveugle : le bot ne tente un match que
+    // sur les cartes qu'il connaît via sa mentalMap.
+    // Si sa mémoire est altérée (oubli/confusion), il peut se tromper
+    // et recevoir une pénalité — c'est le risque naturel du jeu.
     return false;
   }
 
@@ -301,119 +288,5 @@ class BotCardStrategy {
     }
 
     return matchChance.clamp(0.0, 1.0);
-  }
-
-  static Future<bool> _tryBlindMatch(
-    GameState gameState,
-    Player bot,
-    BotDifficulty difficulty,
-    PlayingCard topDiscard, {
-    BotPersonality? personality,
-  }) async {
-    // === NOUVELLE RÈGLE : PAS DE MATCH À L'AVEUGLE ===
-    // Un match à l'aveugle a seulement 4/52 = 7.7% de chances de réussir
-    // C'est un move "clownesque" qu'aucun humain réaliste ne ferait
-    // 
-    // On ne tente un match que si :
-    // 1. La carte cible est connue (déjà géré dans tryReactionMatch)
-    // 2. OU la probabilité dépasse un seuil réaliste (35-45%)
-    //
-    // Pour dépasser ce seuil, il faut avoir réduit l'espace des possibles
-    // via beaucoup d'informations (pouvoirs, mémoire, etc.)
-    
-    List<int> unknownIndices = BotMemoryManager.getUnknownIndices(bot);
-    if (unknownIndices.isEmpty) return false;
-
-    // Calculer la probabilité réelle de match
-    // Dans un jeu standard: 4 cartes du même rang sur 52
-    // Mais on peut affiner si on a des infos sur les cartes déjà vues
-    
-    // Compter combien de cartes du même rang on a déjà vues
-    final targetRank = topDiscard.value;
-    int cardsOfRankSeen = 0;
-    
-    // Cartes dans la défausse
-    for (var card in gameState.discardPile) {
-      if (card.value == targetRank) {
-        cardsOfRankSeen++;
-      }
-    }
-    
-    // Cartes que le bot connaît dans sa main
-    for (var card in bot.mentalMap) {
-      if (card != null && card.value == targetRank) {
-        cardsOfRankSeen++;
-      }
-    }
-    
-    // Calcul de probabilité
-    // Si on a vu X cartes du rang, il en reste (4-X) quelque part
-    // Probabilité = (4-X) / (52 - cartes vues)
-    final cardsRemaining = 4 - cardsOfRankSeen;
-    if (cardsRemaining <= 0) return false; // Toutes les cartes de ce rang sont visibles
-    
-    // Estimation grossière des cartes restantes dans le jeu
-    final totalSeenCards = gameState.discardPile.length + 
-                           bot.mentalMap.where((c) => c != null).length;
-    final cardsInPlay = 52 - totalSeenCards;
-    
-    if (cardsInPlay <= 0) return false;
-    
-    final matchProbability = cardsRemaining / cardsInPlay;
-    
-    // Seuil minimum pour tenter un match à l'aveugle
-    // Un humain rationnel n'essaie que si la proba est raisonnable
-    double minProbabilityThreshold;
-    switch (difficulty.name) {
-      case "Impossible":
-        minProbabilityThreshold = 0.30; // Boss peut prendre plus de risques calculés
-        break;
-      case "Nightmare":
-        minProbabilityThreshold = 0.35;
-        break;
-      case "Insane":
-        minProbabilityThreshold = 0.38;
-        break;
-      case "Hard":
-        minProbabilityThreshold = 0.40;
-        break;
-      case "Platine":
-        minProbabilityThreshold = 0.35;
-        break;
-      default:
-        minProbabilityThreshold = 0.45; // Or et moins : plus prudent
-    }
-    
-    // Ajustement personnalité
-    if (personality != null) {
-      // Les personnalités risk-taker peuvent baisser légèrement le seuil
-      minProbabilityThreshold -= (personality.riskTolerance - 0.5) * 0.10;
-      minProbabilityThreshold = minProbabilityThreshold.clamp(0.25, 0.55);
-    }
-    
-    // Si la probabilité est trop faible, ne pas tenter
-    if (matchProbability < minProbabilityThreshold) {
-      return false;
-    }
-
-    // OK, la probabilité est acceptable, on peut tenter
-    int blindIndex = unknownIndices[_random.nextInt(unknownIndices.length)];
-    PlayingCard blindCard = bot.hand[blindIndex];
-    
-    if (blindCard.matches(topDiscard)) {
-      int reactionDelay = (320 * (1 - difficulty.reactionSpeed)).round() + 120;
-      if (personality != null) {
-        reactionDelay =
-            (reactionDelay * (personality.decisionSpeedMs / 2000.0))
-                .round()
-                .clamp(120, 850);
-      }
-      await Future.delayed(Duration(milliseconds: reactionDelay));
-      
-      // GameLogic.matchCard() gère déjà la suppression dans mentalMap
-      return GameLogic.matchCard(gameState, bot, blindIndex);
-    }
-    
-    return false;
   }
 }

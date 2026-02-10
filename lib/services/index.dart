@@ -23,4 +23,3 @@ export 'ui/emote_service.dart';
 export 'ui/haptic_service.dart';
 export 'ui/sound_service.dart';
 export 'ui/stats_service.dart';
-export 'ui/web_orientation_service.dart';

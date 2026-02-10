@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dutch_game/models/game_state.dart';
-import 'package:dutch_game/services/ui/web_orientation_service.dart';
+import 'package:dutch_game/services/ui/web_orientation_stub.dart'
+    if (dart.library.js_interop) 'package:dutch_game/services/ui/web_orientation_service.dart';
 
 // Re-export des classes de layout pour compatibilité
 export 'package:dutch_game/widgets/game/game_layout_mixin.dart';

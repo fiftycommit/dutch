@@ -138,44 +138,49 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
     // Notification Valet : notre carte a ete echangee par un autre joueur
     if (provider.pendingSwapNotification != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
           final data = provider.pendingSwapNotification!;
-          UnifiedPowerDialogs.showSwapNotificationDialog(
+          provider.clearSwapNotification();
+          await UnifiedPowerDialogs.showSwapNotificationDialog(
             context,
             data['byPlayerName'] ?? 'Un joueur',
             data['cardIndex'] ?? 0,
+            swapPartnerName: data['swapPartnerName'],
+            receivedCardPosition: data['receivedCardPosition'],
+            autoCloseSeconds: 15,
           );
-          provider.clearSwapNotification();
         }
       });
     }
 
     // Notification Joker : nos cartes ont ete melangees par un autre joueur
     if (provider.pendingJokerNotification != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
           final data = provider.pendingJokerNotification!;
-          UnifiedPowerDialogs.showJokerNotificationDialog(
+          provider.clearJokerNotification();
+          await UnifiedPowerDialogs.showJokerNotificationDialog(
             context,
             data['byPlayerName'] ?? 'Un joueur',
+            autoCloseSeconds: 15,
           );
-          provider.clearJokerNotification();
         }
       });
     }
 
     // Notification Espionnage : quelqu'un regarde notre carte (pouvoir 10)
     if (provider.pendingSpyNotification != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
           final data = provider.pendingSpyNotification!;
-          UnifiedPowerDialogs.showSpyNotificationDialog(
+          provider.clearSpyNotification();
+          await UnifiedPowerDialogs.showSpyNotificationDialog(
             context,
             data['byPlayerName'] ?? 'Un joueur',
             data['cardIndex'] ?? 0,
+            autoCloseSeconds: 15,
           );
-          provider.clearSpyNotification();
         }
       });
     }

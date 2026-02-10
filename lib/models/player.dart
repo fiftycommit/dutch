@@ -86,7 +86,9 @@ class Player {
   }
 
   /// Score des cartes CONNUES uniquement (pas d'estimation pour les inconnues)
-  /// Retourne la somme des points des cartes que le bot connaît vraiment
+  /// Retourne la somme des points des cartes que le joueur connaît vraiment
+  /// Pour un humain : score réel (il connaît toutes ses cartes)
+  /// Pour un bot qui s'évalue lui-même : utilise sa mentalMap
   int getKnownScore() {
     if (isHuman) {
       return calculateScore();
@@ -101,6 +103,54 @@ class Player {
     }
 
     return knownScore;
+  }
+
+  /// Score estimé de ce joueur vu par un adversaire (algorithme entonnoir)
+  /// L'estimation se précise au fil de la partie via les défausses observées :
+  /// - Début de partie : estimation large (nb cartes × moyenne théorique)
+  /// - Au fil des défausses : si l'adversaire défausse des hautes, il garde des basses
+  /// - Fin de partie : estimation précise basée sur l'historique de défausse
+  /// [avgDiscardedPoints] : moyenne des points défaussés par ce joueur (null si inconnu)
+  /// [discardCount] : nombre de défausses observées
+  int getEstimatedScoreForOpponent({
+    double? avgDiscardedPoints,
+    int discardCount = 0,
+  }) {
+    final cardCount = hand.length;
+    if (cardCount == 0) return 0;
+
+    // Aucune observation → estimation large (moyenne théorique)
+    if (discardCount == 0 || avgDiscardedPoints == null) {
+      return (cardCount * 6.5).round();
+    }
+
+    // Confiance : monte progressivement avec le nombre d'observations
+    // 1 défausse = 20% confiance, 5+ = 100%
+    final confidence = (discardCount / 5.0).clamp(0.0, 1.0);
+
+    // Estimation basée sur les défausses (entonnoir)
+    // Principe : si un joueur défausse des cartes hautes, il garde des basses
+    double estimatedAvgCard;
+    if (avgDiscardedPoints >= 10) {
+      estimatedAvgCard = 3.0; // Défausse très haut → garde très bas
+    } else if (avgDiscardedPoints >= 8) {
+      estimatedAvgCard = 4.0;
+    } else if (avgDiscardedPoints >= 6) {
+      estimatedAvgCard = 5.5;
+    } else if (avgDiscardedPoints >= 4) {
+      estimatedAvgCard = 7.0;
+    } else if (avgDiscardedPoints >= 2) {
+      estimatedAvgCard = 8.5;
+    } else {
+      estimatedAvgCard = 10.0; // Défausse très bas → garde du lourd
+    }
+
+    // Interpolation entre estimation neutre et estimation informée
+    final neutralEstimate = 6.5;
+    final informedEstimate = estimatedAvgCard;
+    final blendedAvg = neutralEstimate * (1 - confidence) + informedEstimate * confidence;
+
+    return (cardCount * blendedAvg).round();
   }
 
   /// Confiance de la mémoire (0.0 = rien connu, 1.0 = tout connu)

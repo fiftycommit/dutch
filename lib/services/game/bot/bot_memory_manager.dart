@@ -121,19 +121,6 @@ class BotMemoryManager {
     return worstIdx;
   }
 
-  /// Retourne le minimum de points dans la main d'un joueur
-  static int minPointsInHand(Player player) {
-    if (player.hand.isEmpty) return 0;
-    int minPoints = player.hand.first.points;
-    for (int i = 1; i < player.hand.length; i++) {
-      int points = player.hand[i].points;
-      if (points < minPoints) {
-        minPoints = points;
-      }
-    }
-    return minPoints;
-  }
-
   /// Compte les cartes connues d'un joueur
   static int countKnownCards(Player player) {
     int count = 0;

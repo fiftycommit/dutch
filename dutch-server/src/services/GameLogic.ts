@@ -304,7 +304,7 @@ export class GameLogic {
     }
   ): {
     spiedCard?: PlayingCard;
-    affectedPlayers?: Array<{ playerId: string; playerName: string; cardIndex: number }>;
+    affectedPlayers?: Array<{ playerId: string; playerName: string; cardIndex: number; swapPartnerName: string; receivedCardPosition: number }>;
     shuffledPlayer?: { playerId: string; playerName: string };
   } {
     if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) {
@@ -365,14 +365,18 @@ export class GameLogic {
             result.affectedPlayers.push({
               playerId: p1.id,
               playerName: p1.name,
-              cardIndex: card1Index
+              cardIndex: card1Index,
+              swapPartnerName: p2.name,
+              receivedCardPosition: card2Index + 1, // position (1-based) chez p2
             });
           }
           if (p2.id !== currentPlayer.id) {
             result.affectedPlayers.push({
               playerId: p2.id,
               playerName: p2.name,
-              cardIndex: card2Index
+              cardIndex: card2Index,
+              swapPartnerName: p1.name,
+              receivedCardPosition: card1Index + 1, // position (1-based) chez p1
             });
           }
         }
