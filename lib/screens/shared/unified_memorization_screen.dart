@@ -86,7 +86,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1200), //animation pulsation cartes
+      duration: const Duration(milliseconds: 900), //animation pulsation cartes
       vsync: this,
     )..repeat(reverse: true);
 
@@ -287,9 +287,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                             isRevealed: true,
                                             cardSize: CardSize.large,
                                             delay: Duration(
-                                                milliseconds: 100 + i * 50),
+                                                milliseconds: 200 + i * 150),
                                             duration: const Duration(
-                                                milliseconds: 300),
+                                                milliseconds: 500),
                                           )
                                         : CardWidget(
                                             card: null,
@@ -343,7 +343,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             width: constraints.maxWidth,
                             child: TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0.0, end: 1.0),
-                              duration: const Duration(seconds: 3),
+                              duration: const Duration(seconds: 4),
                               builder: (context, value, child) {
                                 return Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -358,7 +358,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                     FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Text(
-                                        "${((1 - value) * 3).ceil()}s",
+                                        "${((1 - value) * 4).ceil()}s",
                                         style: TextStyle(
                                           color: AppColors.textDisabled,
                                           fontSize: textSize,
@@ -382,7 +382,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       ),
     );
 
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 4));
 
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop();
