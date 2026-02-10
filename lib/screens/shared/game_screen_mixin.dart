@@ -28,24 +28,14 @@ mixin GameScreenMixin<T extends StatefulWidget> on State<T> {
   /// Retourne true si la navigation a été effectuée
   bool maybeNavigateToEnd({
     required GameState gameState,
-    String? routeLocation,
-    Widget? destination,
+    required String routeLocation,
   }) {
-    assert(routeLocation != null || destination != null,
-        'routeLocation or destination must be provided');
     if (_hasNavigatedToEndMixin) return false;
     if (gameState.phase != GamePhase.ended) return false;
     if (ModalRoute.of(context)?.isCurrent != true || !mounted) return false;
 
     _hasNavigatedToEndMixin = true;
-    if (routeLocation != null) {
-      context.go(routeLocation);
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => destination!),
-      );
-    }
+    context.go(routeLocation);
     return true;
   }
 

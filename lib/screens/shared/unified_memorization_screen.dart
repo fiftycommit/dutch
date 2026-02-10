@@ -17,11 +17,8 @@ class MemorizationConfig {
   /// Callback quand la mémorisation est terminée
   final Future<void> Function(Set<int> selectedIndices) onMemorizationComplete;
 
-  /// Widget de l'écran de jeu vers lequel naviguer
-  final Widget Function(BuildContext context) buildGameScreen;
-
-  /// Navigation vers l'écran de jeu (optionnel)
-  final void Function(BuildContext context)? navigateToGame;
+  /// Navigation vers l'écran de jeu via GoRouter
+  final void Function(BuildContext context) navigateToGame;
 
   /// Durée du timer en secondes (null = pas de timer)
   final int? countdownSeconds;
@@ -47,8 +44,7 @@ class MemorizationConfig {
   const MemorizationConfig({
     required this.localPlayer,
     required this.onMemorizationComplete,
-    required this.buildGameScreen,
-    this.navigateToGame,
+    required this.navigateToGame,
     this.countdownSeconds,
     this.showWaitingScreen = false,
     this.gameStartStream,
@@ -186,14 +182,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   }
 
   void _navigateToGame() {
-    if (config.navigateToGame != null) {
-      config.navigateToGame!(context);
-      return;
-    }
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: config.buildGameScreen),
-    );
+    config.navigateToGame(context);
   }
 
   Future<void> _showRevealedCardsDialog() async {

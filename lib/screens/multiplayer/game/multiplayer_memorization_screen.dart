@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../providers/multiplayer_game_provider.dart';
 import '../../../utils/ui_constants.dart';
 import '../../shared/unified_memorization_screen.dart' as shared;
-import 'multiplayer_game_screen.dart';
 
 /// Écran de mémorisation pour le mode multiplayer
 /// Utilise la version unifiée avec configuration spécifique
@@ -45,7 +44,6 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
             // En multiplayer, pas besoin de modifier l'état local
             // Le serveur gère tout
           },
-          buildGameScreen: (context) => const MultiplayerGameScreen(),
           navigateToGame: (context) => context.go('/multiplayer/game'),
           countdownSeconds: 15,
           showWaitingScreen: true,

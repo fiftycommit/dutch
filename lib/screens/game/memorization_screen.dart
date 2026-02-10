@@ -5,7 +5,6 @@ import '../../models/game_state.dart';
 import '../../providers/game_provider.dart';
 import '../../utils/ui_constants.dart';
 import '../shared/unified_memorization_screen.dart' as shared;
-import 'game_screen.dart';
 
 /// Écran de mémorisation pour le mode solo
 /// Utilise la version unifiée avec configuration spécifique
@@ -58,7 +57,6 @@ class MemorizationScreen extends StatelessWidget {
               gameProvider.checkIfBotShouldPlay();
             });
           },
-          buildGameScreen: (context) => const GameScreen(),
           navigateToGame: (context) => context.go('/solo/game'),
           noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
           noPlayerMessage: "Les bots continuent...",
