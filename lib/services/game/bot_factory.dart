@@ -8,10 +8,9 @@ import '../../models/player_learning_data.dart';
 import '../../models/game_settings.dart';
 import '../learning/player_learning_service.dart';
 import '../learning/bot_learning_service.dart';
-import '../learning/bot_training_service.dart';
-import '../learning/ghost_clone_service.dart';
 import 'bot/bot_config.dart';
 import '../multiplayer/client_id_service.dart';
+import '../matchmaking/sbmm_client_service.dart';
 
 /// Fabrique de bots — extrait de GameSetupScreen pour respecter SRP.
 /// Gère la création des bots en mode SBMM, manuel, élite et mix.
@@ -42,79 +41,69 @@ class BotFactory {
   // SBMM BOTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Crée les bots en mode SBMM (vrai matchmaking adaptatif)
+  /// Crée les bots en mode SBMM (matchmaking adaptatif serveur)
   ///
-  /// Les bots sont des "miroirs" du joueur : mêmes paramètres avec petite
-  /// variance aléatoire. Pas de seuils MMR, pas de multiplicateur de skill.
+  /// Appelle le serveur pour obtenir le mix optimal de BotSkillLevel
+  /// basé sur le MMR et l'historique du joueur. Fallback local si serveur
+  /// indisponible.
   static Future<List<Player>> createSBMMBots({
     required int numberOfBots,
     required int saveSlot,
     required bool isTournament,
   }) async {
-    final botTrainingService = BotTrainingService();
-    final ghostCloneService = GhostCloneService();
+    // Appel serveur pour obtenir le mix de niveaux de bots
+    final sbmmResult = await SBMMClientService.getBotMix(botCount: numberOfBots);
 
-    // Récupérer le profil joueur (une seule fois)
-    final profile = await PlayerLearningService().getProfile(slotId: saveSlot);
+    if (sbmmResult != null) {
+      // Stocker les niveaux pour les passer au serveur via les settings
+      _lastSBMMBotLevels = sbmmResult.botLevels;
 
-    // Infos pour le ghost clone
-    final ghostPlayerId = await ClientIdService.ensureClientId();
-    final ghostPlayerName = profile.profileId;
-
-    // Vrai SBMM : copier les params du joueur avec petite variance par bot
-    final botParamsList = BotConfig.generateMatchmakingBotParams(
-      playerProfile: profile,
-      botCount: numberOfBots,
-      forceChallenge: isTournament,
-    );
-
-    // Ghost profile (chargé une seule fois si nécessaire)
-    GhostProfile? ghostProfile;
-
-    final players = <Player>[];
-    final skillLevel = _mmrToSkillLevel(profile.mmr);
-
-    for (int i = 0; i < numberOfBots; i++) {
-      final baseParams = botParamsList[i];
-
-      // Récupérer le training state pour ce type de bot
-      final botKey = BotTrainingService.buildBotKey(
-        behavior: BotBehavior.balanced,
-        skillLevel: skillLevel,
-      );
-      final trainingState = await botTrainingService.getStateForBot(
-        botKey,
-        consumeTrainingGame: true,
-      );
-
-      // Charger le ghost profile si nécessaire (une seule fois)
-      if (trainingState.ghostInfluence > 0 && ghostProfile == null) {
-        ghostProfile = await ghostCloneService.getGhostProfile(
-          slotId: saveSlot,
-          playerId: ghostPlayerId,
-          playerName: ghostPlayerName,
-        );
-      }
-
-      // Appliquer le ghost blending sur les paramètres de base
-      final aiParameters = _applyGhostBlending(
-        baseParams: baseParams,
-        ghostProfile: ghostProfile,
-        trainingState: trainingState,
-      );
-
-      players.add(Player(
-        id: 'bot_$i',
-        name: getBotName(BotBehavior.balanced, skillLevel),
-        isHuman: false,
-        botBehavior: BotBehavior.balanced,
-        botSkillLevel: skillLevel,
-        aiParameters: aiParameters,
-        position: i + 1,
-      ));
+      return _buildBotsFromLevels(sbmmResult.botLevels, numberOfBots);
     }
 
-    return players;
+    // Fallback : utiliser le MMR local pour déterminer le niveau
+    if (kDebugMode) debugPrint('⚠️ SBMM fallback local');
+    final profile = await PlayerLearningService().getProfile(slotId: saveSlot);
+    final skillLevel = _mmrToSkillLevel(profile.mmr);
+    _lastSBMMBotLevels = List.generate(numberOfBots, (_) => skillLevel.name);
+
+    return List.generate(numberOfBots, (i) => Player(
+      id: 'bot_$i',
+      name: getBotName(BotBehavior.balanced, skillLevel),
+      isHuman: false,
+      botBehavior: BotBehavior.balanced,
+      botSkillLevel: skillLevel,
+      position: i + 1,
+    ));
+  }
+
+  /// Derniers niveaux SBMM retournés par le serveur (pour les passer dans les settings)
+  static List<String>? _lastSBMMBotLevels;
+  static List<String>? get lastSBMMBotLevels => _lastSBMMBotLevels;
+
+  /// Convertit une liste de noms de niveaux en Players
+  static List<Player> _buildBotsFromLevels(List<String> levels, int count) {
+    return List.generate(count, (i) {
+      final level = i < levels.length ? _parseSkillLevel(levels[i]) : BotSkillLevel.silver;
+      return Player(
+        id: 'bot_$i',
+        name: getBotName(BotBehavior.balanced, level),
+        isHuman: false,
+        botBehavior: BotBehavior.balanced,
+        botSkillLevel: level,
+        position: i + 1,
+      );
+    });
+  }
+
+  static BotSkillLevel _parseSkillLevel(String raw) {
+    switch (raw) {
+      case 'bronze': return BotSkillLevel.bronze;
+      case 'gold': return BotSkillLevel.gold;
+      case 'platinum': return BotSkillLevel.platinum;
+      case 'silver':
+      default: return BotSkillLevel.silver;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -582,40 +571,6 @@ class BotFactory {
       }
     });
     return params;
-  }
-
-  /// Applique le ghost blending sur les paramètres de base
-  static Map<String, double> _applyGhostBlending({
-    required Map<String, double> baseParams,
-    GhostProfile? ghostProfile,
-    required BotTrainingState trainingState,
-  }) {
-    final ghostParams = ghostProfile?.params ?? const <String, double>{};
-    final ghostInfluence = trainingState.ghostInfluence;
-
-    double blend(String key, double baseValue) {
-      final ghostValue = ghostParams[key];
-      if (ghostValue == null || ghostInfluence <= 0) return baseValue;
-      return baseValue + (ghostValue - baseValue) * ghostInfluence;
-    }
-
-    // Copier les paramètres de base et appliquer le blending
-    final result = Map<String, double>.from(baseParams);
-
-    // Appliquer le ghost blending sur les paramètres clés
-    result['aggressiveness'] = blend('aggressiveness', result['aggressiveness'] ?? 0.5);
-    result['caution'] = blend('caution', result['caution'] ?? 0.5);
-    result['riskTolerance'] = blend('riskTolerance', result['riskTolerance'] ?? 0.5);
-    result['powerUsageRate'] = blend('powerUsageRate', result['powerUsageRate'] ?? 0.5);
-    result['decisionSpeed'] = blend('decisionSpeed', result['decisionSpeed'] ?? 2000.0).clamp(500.0, 10000.0);
-    result['dutchThreshold'] = blend('dutchThreshold', result['dutchThreshold'] ?? 15.0).clamp(5.0, 30.0);
-
-    // Ajouter les paramètres de training
-    result['ghostInfluence'] = ghostInfluence;
-    result['ghostDutchThreshold'] = ghostParams['dutchThreshold'] ?? result['dutchThreshold']!;
-    result['rankPenalty'] = trainingState.rankPenalty;
-
-    return result;
   }
 
   /// Convertit un MMR en BotSkillLevel (pour affichage/nom uniquement)

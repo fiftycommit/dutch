@@ -15,6 +15,7 @@ import '../services/game/bot/hardcore_bot_config.dart';
 import '../services/game/bot/human_threat_tracker.dart';
 import '../services/learning/bot_learning_service.dart';
 import '../services/learning/ai_telemetry_service.dart';
+import '../services/matchmaking/sbmm_client_service.dart';
 import '../services/logging/game_logger_service.dart';
 import 'game_tracking_provider.dart';
 import 'managers/solo/tournament_manager.dart';
@@ -698,6 +699,19 @@ class GameProvider with ChangeNotifier implements IGameController {
       playerRank: playerRank,
     );
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // SBMM : Enregistrer le résultat sur le serveur (fire-and-forget)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (_useSBMM) {
+      _recordSBMMGame(
+        ranking: ranking,
+        human: human,
+        playerRank: playerRank,
+        calledDutch: calledDutch,
+        wonDutch: wonDutch,
+      );
+    }
+
     notifyListeners();
   }
 
@@ -765,6 +779,64 @@ class GameProvider with ChangeNotifier implements IGameController {
       await prefs.setStringList(key, rawList);
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Erreur sauvegarde bot matchup: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SBMM RECORD-GAME (fire-and-forget)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _recordSBMMGame({
+    required List<Player> ranking,
+    required Player human,
+    required int playerRank,
+    required bool calledDutch,
+    required bool wonDutch,
+  }) {
+    _recordSBMMGameAsync(
+      ranking: ranking,
+      human: human,
+      playerRank: playerRank,
+      calledDutch: calledDutch,
+      wonDutch: wonDutch,
+    );
+  }
+
+  Future<void> _recordSBMMGameAsync({
+    required List<Player> ranking,
+    required Player human,
+    required int playerRank,
+    required bool calledDutch,
+    required bool wonDutch,
+  }) async {
+    try {
+      final bots = _gameState!.players.where((p) => !p.isHuman).toList();
+      if (bots.isEmpty) return;
+
+      final botResults = bots.map((bot) {
+        final botRank = ranking.indexWhere((p) => p.id == bot.id) + 1;
+        final botDutchCalled = _gameState!.dutchCallerId == bot.id;
+        final botDutchWon = botDutchCalled && botRank == 1;
+        return SBMMBotResult(
+          level: bot.botSkillLevel?.name ?? 'silver',
+          rank: botRank,
+          score: _gameState!.getFinalScore(bot),
+          dutchCalled: botDutchCalled,
+          dutchWon: botDutchWon,
+        );
+      }).toList();
+
+      await SBMMClientService.recordGame(
+        gameId: '${DateTime.now().millisecondsSinceEpoch}',
+        rank: playerRank,
+        score: _gameState!.getFinalScore(human),
+        botResults: botResults,
+        totalPlayers: _gameState!.players.length,
+        dutchCalled: calledDutch,
+        dutchWon: wonDutch,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ SBMM record-game error: $e');
     }
   }
 

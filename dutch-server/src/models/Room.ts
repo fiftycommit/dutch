@@ -13,6 +13,7 @@ export interface GameSettings {
   useSBMM?: boolean;
   numberOfBots?: number;
   hostClientId?: string;
+  sbmmBotLevels?: number[]; // BotSkillLevel[] pour chaque bot (SBMM per-bot)
 }
 
 export enum RoomStatus {

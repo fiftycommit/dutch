@@ -12,6 +12,7 @@ import { setupPublicRoomHandlers } from './handlers/publicRoomHandlers';
 import { publicRoomService } from './services/publicRoomService';
 import botLearningRoutes from './routes/botLearningRoutes';
 import playerLearningRoutes from './routes/playerLearningRoutes';
+import sbmmRoutes from './routes/sbmmRoutes';
 
 const startedAt = new Date().toISOString();
 
@@ -90,11 +91,11 @@ function renderHomePage(roomCount: number) {
         <h2>🤖 Intelligence Artificielle</h2>
         <div style="text-align: center; margin: 20px 0;">
           <a href="/bot-stats" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: transform 0.2s;">
-            📊 Voir l'évolution des bots
+            📊 Centre d'entraînement — Stats des bots
           </a>
         </div>
         <p style="text-align: center; opacity: 0.8; margin-top: 10px;">
-          Suis en temps réel l'apprentissage automatique des bots, leurs statistiques et leurs personnalités !
+          Consulte les performances des bots par niveau de difficulté et l'équilibrage du SBMM !
         </p>
 
         <h2>📡 Endpoints</h2>
@@ -214,6 +215,9 @@ export function startServer() {
 
   // Routes pour l'apprentissage des joueurs (profil SBMM)
   app.use('/api/player-learning', playerLearningRoutes);
+
+  // Routes SBMM (nouveau système de matchmaking)
+  app.use('/api/sbmm', sbmmRoutes);
 
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
