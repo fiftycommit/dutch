@@ -17,7 +17,6 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(bronze.reactionSpeed, 0.55);
             node_assert_1.default.strictEqual(bronze.matchAccuracy, 0.75);
             node_assert_1.default.strictEqual(bronze.reactionMatchChance, 0.35);
-            node_assert_1.default.strictEqual(bronze.keepCardThreshold, 7);
         });
         (0, node_test_1.it)('silver has correct values', () => {
             const silver = BotDifficulty_1.BotDifficulty.silver;
@@ -28,7 +27,6 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(silver.reactionSpeed, 0.75);
             node_assert_1.default.strictEqual(silver.matchAccuracy, 0.85);
             node_assert_1.default.strictEqual(silver.reactionMatchChance, 0.55);
-            node_assert_1.default.strictEqual(silver.keepCardThreshold, 6);
         });
         (0, node_test_1.it)('gold has correct values', () => {
             const gold = BotDifficulty_1.BotDifficulty.gold;
@@ -39,7 +37,6 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(gold.reactionSpeed, 0.96);
             node_assert_1.default.strictEqual(gold.matchAccuracy, 0.97);
             node_assert_1.default.strictEqual(gold.reactionMatchChance, 0.9);
-            node_assert_1.default.strictEqual(gold.keepCardThreshold, 3);
         });
         (0, node_test_1.it)('platinum has perfect values', () => {
             const platinum = BotDifficulty_1.BotDifficulty.platinum;
@@ -50,7 +47,6 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(platinum.reactionSpeed, 1.0);
             node_assert_1.default.strictEqual(platinum.matchAccuracy, 1.0);
             node_assert_1.default.strictEqual(platinum.reactionMatchChance, 1.0);
-            node_assert_1.default.strictEqual(platinum.keepCardThreshold, 1);
         });
     });
     (0, node_test_1.describe)('fromMMR', () => {
@@ -124,10 +120,6 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             // reactionMatchChance should increase (higher = more likely to match)
             for (let i = 1; i < levels.length; i++) {
                 node_assert_1.default.ok(levels[i].reactionMatchChance >= levels[i - 1].reactionMatchChance, `reactionMatchChance should increase: ${levels[i].name} vs ${levels[i - 1].name}`);
-            }
-            // keepCardThreshold should decrease (lower = keeps only better cards)
-            for (let i = 1; i < levels.length; i++) {
-                node_assert_1.default.ok(levels[i].keepCardThreshold <= levels[i - 1].keepCardThreshold, `keepCardThreshold should decrease: ${levels[i].name} vs ${levels[i - 1].name}`);
             }
         });
     });

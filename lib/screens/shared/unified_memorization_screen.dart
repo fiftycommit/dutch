@@ -86,7 +86,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1200), //animation pulsation cartes
       vsync: this,
     )..repeat(reverse: true);
 
@@ -287,9 +287,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                             isRevealed: true,
                                             cardSize: CardSize.large,
                                             delay: Duration(
-                                                milliseconds: 200 + i * 150),
+                                                milliseconds: 100 + i * 50),
                                             duration: const Duration(
-                                                milliseconds: 500),
+                                                milliseconds: 300),
                                           )
                                         : CardWidget(
                                             card: null,

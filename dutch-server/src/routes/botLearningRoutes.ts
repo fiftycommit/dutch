@@ -596,4 +596,39 @@ router.get('/shuffle-stats', async (req, res) => {
   }
 });
 
+// ========== Contrôles Dashboard ==========
+
+/**
+ * GET /api/bot-learning/learning-status
+ * Retourne le statut de l'apprentissage (actif ou en pause)
+ */
+router.get('/learning-status', async (req: Request, res: Response) => {
+  const pendingCount = await botLearningService.getPendingCount();
+  res.json({ paused: botLearningService.isPaused(), pendingCount });
+});
+
+/**
+ * POST /api/bot-learning/pause
+ * Met en pause ou reprend l'apprentissage
+ */
+router.post('/pause', (req: Request, res: Response) => {
+  const { paused } = req.body;
+  botLearningService.setPaused(!!paused);
+  res.json({ success: true, paused: botLearningService.isPaused() });
+});
+
+/**
+ * POST /api/bot-learning/reset
+ * Réinitialise toutes les données d'apprentissage
+ */
+router.post('/reset', async (req: Request, res: Response) => {
+  try {
+    const result = await botLearningService.resetAll();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erreur reset learning:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 export default router;

@@ -13,5 +13,5 @@
     "moduleResolution": "node"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/__tests__/**/*"]
+  "exclude": ["node_modules", "src/__tests__/neuralNetwork.test.ts", "src/__tests__/playerCloning.test.ts", "src/__tests__/qlearning.test.ts"]
 }

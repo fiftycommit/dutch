@@ -211,13 +211,95 @@
       text-align: center;
       padding: 12px;
     }
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      border: 2px solid rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1em;
+      font-weight: bold;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+    .ctrl-btn.pause-active {
+      background: rgba(255,165,0,0.3);
+      border-color: #FFA500;
+      color: #FFD700;
+    }
+    .ctrl-btn.danger { border-color: #EF4444; }
+    .ctrl-btn.danger:hover { background: rgba(239,68,68,0.3); }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.active { background: #22C55E; box-shadow: 0 0 6px #22C55E; }
+    .status-dot.paused { background: #FFA500; box-shadow: 0 0 6px #FFA500; }
+    .confirm-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .confirm-box {
+      background: #1e1e2e;
+      border: 2px solid #EF4444;
+      border-radius: 16px;
+      padding: 30px;
+      max-width: 400px;
+      text-align: center;
+    }
+    .confirm-box h3 { margin-bottom: 12px; font-size: 1.4em; color: #EF4444; }
+    .confirm-box p { opacity: 0.8; margin-bottom: 20px; }
+    .confirm-box .actions { display: flex; gap: 12px; justify-content: center; }
+    .confirm-box button {
+      padding: 10px 24px; border-radius: 8px; border: none;
+      cursor: pointer; font-weight: bold; font-size: 1em;
+    }
+    .confirm-box .cancel { background: rgba(255,255,255,0.2); color: white; }
+    .confirm-box .cancel:hover { background: rgba(255,255,255,0.3); }
+    .confirm-box .confirm { background: #EF4444; color: white; }
+    .confirm-box .confirm:hover { background: #DC2626; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🤖 Bot Learning Dashboard</h1>
     <p class="subtitle">Statistiques d'apprentissage automatique des bots</p>
-    
+
+    <div class="controls">
+      <button id="pauseBtn" class="ctrl-btn" onclick="togglePause()">
+        <span class="status-dot active" id="statusDot"></span>
+        <span id="pauseLabel">Actif</span>
+      </button>
+      <button class="ctrl-btn danger" onclick="showResetConfirm()">
+        Reinitialiser
+      </button>
+    </div>
+
+    <div id="resetOverlay" class="confirm-overlay" style="display:none;">
+      <div class="confirm-box">
+        <h3>Reinitialiser l'apprentissage ?</h3>
+        <p>Toutes les donnees seront supprimees : profils, parties, Q-Table, reseau de neurones, training series.</p>
+        <div class="actions">
+          <button class="cancel" onclick="hideResetConfirm()">Annuler</button>
+          <button class="confirm" onclick="confirmReset()">Supprimer tout</button>
+        </div>
+      </div>
+    </div>
+
     <div id="loading" class="loading">Chargement des données...</div>
     
     <div id="content" style="display: none;">
@@ -288,6 +370,69 @@
     let skillBarChart;
     let outcomePieChart;
     let currentWindow = '24h';
+    let isPaused = false;
+    let pendingCount = 0;
+
+    async function loadLearningStatus() {
+      try {
+        const res = await fetch('/api/bot-learning/learning-status');
+        const data = await res.json();
+        isPaused = data.paused;
+        pendingCount = data.pendingCount || 0;
+        updatePauseUI();
+      } catch (_) {}
+    }
+
+    function updatePauseUI() {
+      const btn = document.getElementById('pauseBtn');
+      const dot = document.getElementById('statusDot');
+      const label = document.getElementById('pauseLabel');
+      if (isPaused) {
+        btn.classList.add('pause-active');
+        dot.className = 'status-dot paused';
+        label.textContent = pendingCount > 0 ? `En pause (${pendingCount} en attente)` : 'En pause';
+      } else {
+        btn.classList.remove('pause-active');
+        dot.className = 'status-dot active';
+        label.textContent = 'Actif';
+      }
+    }
+
+    async function togglePause() {
+      try {
+        const res = await fetch('/api/bot-learning/pause', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paused: !isPaused }),
+        });
+        const data = await res.json();
+        isPaused = data.paused;
+        updatePauseUI();
+      } catch (err) {
+        console.error('Erreur pause:', err);
+      }
+    }
+
+    function showResetConfirm() {
+      document.getElementById('resetOverlay').style.display = 'flex';
+    }
+
+    function hideResetConfirm() {
+      document.getElementById('resetOverlay').style.display = 'none';
+    }
+
+    async function confirmReset() {
+      hideResetConfirm();
+      try {
+        const res = await fetch('/api/bot-learning/reset', { method: 'POST' });
+        const data = await res.json();
+        alert(`Reset termine : ${data.deletedProfiles} profils et ${data.deletedGames} parties supprimes.`);
+        loadStats();
+      } catch (err) {
+        console.error('Erreur reset:', err);
+        alert('Erreur lors du reset');
+      }
+    }
 
     function windowToMs(windowKey) {
       if (windowKey === '1h') return 60 * 60 * 1000;
@@ -652,10 +797,12 @@
     }
     
     // Charger au démarrage
+    loadLearningStatus();
     loadStats();
-    
+
     // Auto-refresh toutes les 30 secondes
     setInterval(loadStats, 30000);
+    setInterval(loadLearningStatus, 10000);
   </script>
 </body>
 </html>

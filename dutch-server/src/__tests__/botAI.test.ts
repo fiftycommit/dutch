@@ -66,6 +66,8 @@ describe('BotAI', () => {
         testState.currentPlayerIndex = 1; // Bot
 
         // Give bot very low cards (score = 2) to encourage Dutch
+        // Use platinum to avoid minTurnsBeforeDutch delay
+        testState.players[1].botSkillLevel = BotSkillLevel.platinum;
         testState.players[1].hand = [
           createCard('hearts', 'A'), // 1 pt
           createCard('diamonds', 'A'), // 1 pt

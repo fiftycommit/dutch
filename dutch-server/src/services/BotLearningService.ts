@@ -16,6 +16,7 @@ export class BotLearningService {
   private genetic: GeneticAlgorithmService;
   private adaptive: AdaptiveDifficultyService;
   private leaderboard: LeaderboardService;
+  private paused: boolean = false;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning');
@@ -26,6 +27,123 @@ export class BotLearningService {
     this.genetic = new GeneticAlgorithmService();
     this.adaptive = new AdaptiveDifficultyService();
     this.leaderboard = new LeaderboardService();
+  }
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  async getPendingCount(): Promise<number> {
+    try {
+      const gamesDir = path.join(this.dataDir, 'games');
+      const files = await fs.readdir(gamesDir);
+      let count = 0;
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const raw = await fs.readFile(path.join(gamesDir, file), 'utf-8');
+          if (raw.includes('"_pending":true') || raw.includes('"_pending": true')) count++;
+        } catch (_) {}
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  setPaused(value: boolean): void {
+    const wasPaused = this.paused;
+    this.paused = value;
+    console.log(`🤖 Bot Learning ${value ? 'PAUSED' : 'RESUMED'}`);
+
+    // À la reprise, traiter les parties en attente
+    if (wasPaused && !value) {
+      this.processPendingGames().catch((err) =>
+        console.error('❌ Erreur traitement parties en attente:', err)
+      );
+    }
+  }
+
+  async processPendingGames(): Promise<number> {
+    const gamesDir = path.join(this.dataDir, 'games');
+    let processed = 0;
+
+    try {
+      const files = await fs.readdir(gamesDir);
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        const filepath = path.join(gamesDir, file);
+        try {
+          const raw = await fs.readFile(filepath, 'utf-8');
+          const record = JSON.parse(raw);
+          if (!record._pending) continue;
+
+          // Traiter la partie
+          delete record._pending;
+          await this.updateBotProfile(record);
+          await this.qLearning.trainFromGame(record);
+          await this.neuralNet.trainFromGame(record);
+          this.qLearning.decayEpsilon();
+
+          // Réécrire sans le flag _pending
+          await fs.writeFile(filepath, JSON.stringify(record, null, 2));
+          processed++;
+        } catch (_) { /* skip malformed files */ }
+      }
+
+      if (processed > 0) {
+        console.log(`✅ ${processed} parties en attente traitées`);
+      }
+    } catch (_) { /* dir may not exist */ }
+
+    return processed;
+  }
+
+  async resetAll(): Promise<{ deletedProfiles: number; deletedGames: number }> {
+    let deletedProfiles = 0;
+    let deletedGames = 0;
+
+    // Supprimer les profils
+    try {
+      const profilesDir = path.join(this.dataDir, 'profiles');
+      const profileFiles = await fs.readdir(profilesDir);
+      for (const file of profileFiles) {
+        await fs.unlink(path.join(profilesDir, file));
+        deletedProfiles++;
+      }
+    } catch (_) { /* dir may not exist */ }
+
+    // Supprimer les parties enregistrées
+    try {
+      const gamesDir = path.join(this.dataDir, 'games');
+      const gameFiles = await fs.readdir(gamesDir);
+      for (const file of gameFiles) {
+        await fs.unlink(path.join(gamesDir, file));
+        deletedGames++;
+      }
+    } catch (_) { /* dir may not exist */ }
+
+    // Supprimer la training series
+    try {
+      await fs.unlink(path.join(this.dataDir, 'training-series.jsonl'));
+    } catch (_) { /* file may not exist */ }
+
+    // Supprimer la Q-Table
+    try {
+      await fs.unlink(path.join(this.dataDir, 'qlearning', 'qtable.json'));
+    } catch (_) { /* file may not exist */ }
+
+    // Supprimer le réseau de neurones
+    try {
+      await fs.unlink(path.join(this.dataDir, 'neural', 'network.json'));
+    } catch (_) { /* file may not exist */ }
+
+    // Réinitialiser les services en mémoire
+    this.qLearning = new QLearningService();
+    this.neuralNet = new NeuralNetworkService();
+
+    console.log(`🗑️ Reset complet : ${deletedProfiles} profils, ${deletedGames} parties supprimés`);
+    return { deletedProfiles, deletedGames };
   }
 
   private async ensureDataDirectory() {
@@ -45,17 +163,26 @@ export class BotLearningService {
     try {
       const filename = `${record.gameId}_${record.botId}_${Date.now()}.json`;
       const filepath = path.join(this.dataDir, 'games', filename);
-      
-      await fs.writeFile(filepath, JSON.stringify(record, null, 2));
-      
+
+      // Toujours sauvegarder la partie sur disque
+      const recordToSave = this.paused
+        ? { ...record, _pending: true }
+        : record;
+      await fs.writeFile(filepath, JSON.stringify(recordToSave, null, 2));
+
+      if (this.paused) {
+        console.log(`⏸️ Partie enregistrée (en attente): ${filename}`);
+        return;
+      }
+
       // Mettre à jour le profil du bot
       await this.updateBotProfile(record);
-      
+
       // Entraîner les modèles ML
       await this.qLearning.trainFromGame(record);
       await this.neuralNet.trainFromGame(record);
       this.qLearning.decayEpsilon();
-      
+
       console.log(`✅ Partie bot enregistrée: ${filename}`);
     } catch (error) {
       console.error('❌ Erreur sauvegarde partie bot:', error);

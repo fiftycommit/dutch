@@ -28,23 +28,55 @@ class BotAI {
                 dutchHistory: [],
                 spiedCards: [],
                 turnCounter: 0,
+                minTurnsBeforeDutch: 0,
             });
         }
         return botMemories.get(player.id);
     }
-    static initializeBotMemory(player) {
+    static initializeBotMemory(player, difficulty) {
         if (player.isHuman || player.hand.length < 2)
             return;
         const memory = this.getBotMemory(player);
         memory.mentalMap = new Array(player.hand.length).fill(null);
+        // Minimum de tours avant Dutch
+        if (difficulty.name === 'Bronze') {
+            memory.minTurnsBeforeDutch = 5 + Math.floor(this.random() * 5); // 5-9
+        }
+        else if (difficulty.name === 'Argent') {
+            memory.minTurnsBeforeDutch = 2 + Math.floor(this.random() * 4); // 2-5
+        }
+        else {
+            memory.minTurnsBeforeDutch = 0;
+        }
         // Choisir 2 positions aléatoires parmi les cartes disponibles
         const indices = Array.from({ length: player.hand.length }, (_, i) => i);
         const idx1 = indices.splice(Math.floor(this.random() * indices.length), 1)[0];
         const idx2 = indices[Math.floor(this.random() * indices.length)];
-        memory.mentalMap[idx1] = player.hand[idx1];
-        memory.mentalMap[idx2] = player.hand[idx2];
-        player.knownCards[idx1] = true;
-        player.knownCards[idx2] = true;
+        // Bronze : 30% ne retient qu'1 carte, 15% inverse les 2 positions
+        // Argent : 15% ne retient qu'1 carte, 8% inverse les 2 positions
+        const forgetSecond = difficulty.name === 'Bronze' ? 0.30 :
+            difficulty.name === 'Argent' ? 0.15 : 0;
+        const swapPositions = difficulty.name === 'Bronze' ? 0.15 :
+            difficulty.name === 'Argent' ? 0.08 : 0;
+        if (forgetSecond > 0 && this.random() < forgetSecond) {
+            // N'enregistre qu'1 carte
+            memory.mentalMap[idx1] = player.hand[idx1];
+            player.knownCards[idx1] = true;
+        }
+        else if (swapPositions > 0 && this.random() < swapPositions) {
+            // Inverse les 2 positions dans sa tête (croit que carte de gauche est à droite)
+            memory.mentalMap[idx1] = player.hand[idx2]; // pense que idx1 contient la carte de idx2
+            memory.mentalMap[idx2] = player.hand[idx1]; // et vice-versa
+            player.knownCards[idx1] = true;
+            player.knownCards[idx2] = true;
+        }
+        else {
+            // Mémorisation parfaite
+            memory.mentalMap[idx1] = player.hand[idx1];
+            memory.mentalMap[idx2] = player.hand[idx2];
+            player.knownCards[idx1] = true;
+            player.knownCards[idx2] = true;
+        }
     }
     static updateMentalMap(player, index, card) {
         const memory = this.getBotMemory(player);
@@ -70,6 +102,48 @@ class BotAI {
         if (player.hand.length === 1) {
             memory.mentalMap[0] = player.hand[0];
             player.knownCards[0] = true;
+        }
+    }
+    // Confusion passive — distrait par les défausses des autres
+    static applyPassiveConfusion(bot, gs, difficulty) {
+        // Or/Platine : pas affecté
+        if (difficulty.name === 'Or' || difficulty.name === 'Platine')
+            return;
+        const memory = this.getBotMemory(bot);
+        const knownIndices = [];
+        for (let i = 0; i < bot.hand.length; i++) {
+            if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
+                knownIndices.push(i);
+            }
+        }
+        if (knownIndices.length < 2)
+            return;
+        // Compter les défausses récentes dans l'historique (les 10 dernières entrées)
+        let recentDiscards = 0;
+        const recentHistory = gs.actionHistory.slice(0, 10);
+        for (const entry of recentHistory) {
+            if (entry.includes('défausse')) {
+                recentDiscards++;
+            }
+        }
+        const confuseChance = difficulty.name === 'Bronze' ? 0.30 : 0.15;
+        const forgetChance = difficulty.name === 'Bronze' ? 0.20 : 0.10;
+        // >= 3 défausses récentes : chance de confondre 2 positions
+        if (recentDiscards >= 3 && this.random() < confuseChance) {
+            const a = knownIndices[Math.floor(this.random() * knownIndices.length)];
+            let b = a;
+            while (b === a && knownIndices.length > 1) {
+                b = knownIndices[Math.floor(this.random() * knownIndices.length)];
+            }
+            // Swap les 2 entrées dans mentalMap (le bot confond les positions)
+            const tmp = memory.mentalMap[a];
+            memory.mentalMap[a] = memory.mentalMap[b];
+            memory.mentalMap[b] = tmp;
+        }
+        // >= 4 défausses : chance supplémentaire d'oublier 1 carte
+        if (recentDiscards >= 4 && this.random() < forgetChance) {
+            const idx = knownIndices[Math.floor(this.random() * knownIndices.length)];
+            this.forgetCard(bot, idx);
         }
     }
     // Oubli contextuel — le cerveau est occupé ailleurs
@@ -256,6 +330,12 @@ class BotAI {
             : this.getSkillDifficulty(bot.botSkillLevel);
         const memory = this.getBotMemory(bot);
         memory.turnCounter++;
+        // Premier tour : initialiser la mémoire avec erreurs selon le niveau
+        if (memory.turnCounter === 1) {
+            this.initializeBotMemory(bot, difficulty);
+        }
+        // Confusion passive (Bronze/Argent : distraits par les défausses)
+        this.applyPassiveConfusion(bot, gameState, difficulty);
         const phase = this.getBotPhase(bot, gameState);
         // Délai de réflexion (max 600ms)
         const thinkDelay = difficulty.name === 'Bronze' ? 500 :
@@ -274,13 +354,31 @@ class BotAI {
     // DUTCH — algorithme contextuel
     // ============================================================
     static shouldCallDutch(gs, bot, difficulty, phase) {
+        // 0 cartes → Dutch immédiat (tous niveaux)
+        if (bot.hand.length === 0) {
+            return true;
+        }
+        // Bronze/Argent : minimum de tours avant Dutch
+        const memory = this.getBotMemory(bot);
+        if (memory.minTurnsBeforeDutch > 0 && memory.turnCounter < memory.minTurnsBeforeDutch) {
+            return false;
+        }
+        // Bronze : Dutch impulsif, aucune analyse
+        if (difficulty.name === 'Bronze') {
+            return this.shouldCallDutchBronze(bot);
+        }
+        // Argent en endgame : se concentre → stratégie Platine avec seuil 4
+        if (difficulty.name === 'Argent' && phase === BotGamePhase.endgame) {
+            return this.shouldCallDutchArgentEndgame(gs, bot, difficulty);
+        }
+        // Argent en mode normal : Dutch basique
+        if (difficulty.name === 'Argent') {
+            return this.shouldCallDutchArgent(gs, bot);
+        }
+        // --- Or / Platine : algorithme complet ---
         // Jamais en exploration — on ne connaît pas toutes nos cartes
         if (phase === BotGamePhase.exploration) {
             return false;
-        }
-        // 0 cartes → Dutch immédiat
-        if (bot.hand.length === 0) {
-            return true;
         }
         // On doit connaître toutes nos cartes
         if (!this.knowsAllCards(bot)) {
@@ -299,6 +397,71 @@ class BotAI {
         // Mode partie rapide : analyse contextuelle
         return this.shouldCallDutchQuick(gs, bot, knownScore, opponents, difficulty);
     }
+    // Bronze : "j'ai un petit score, j'y vais" — sans regarder les autres
+    static shouldCallDutchBronze(bot) {
+        if (!this.knowsAllCards(bot))
+            return false;
+        const knownScore = this.getKnownScore(bot);
+        if (knownScore === 0)
+            return true;
+        return knownScore <= 7;
+    }
+    // Argent normal : score + 1 menace basique
+    static shouldCallDutchArgent(gs, bot) {
+        if (!this.knowsAllCards(bot))
+            return false;
+        const knownScore = this.getKnownScore(bot);
+        if (knownScore === 0)
+            return true;
+        if (knownScore > 5)
+            return false;
+        // Vérifie UNE menace : adversaire avec 0 carte
+        const opponents = gs.players.filter((p) => p.id !== bot.id && !p.isSpectator);
+        for (const opp of opponents) {
+            if (opp.hand.length === 0)
+                return false;
+        }
+        return true;
+    }
+    // Argent en endgame : se concentre → analyse complète avec seuil 4
+    static shouldCallDutchArgentEndgame(gs, bot, difficulty) {
+        if (!this.knowsAllCards(bot))
+            return false;
+        const knownScore = this.getKnownScore(bot);
+        if (knownScore === 0)
+            return true;
+        const opponents = gs.players.filter((p) => p.id !== bot.id && !p.isSpectator);
+        // Mode tournoi
+        if (gs.gameMode === GameState_1.GameMode.tournament) {
+            return this.shouldCallDutchTournament(gs, bot, knownScore, opponents, difficulty);
+        }
+        // Analyse complète (comme Platine) mais seuil = 4
+        if (this.canDutchFromSpyIntel(gs, bot, knownScore, opponents))
+            return true;
+        for (const opp of opponents) {
+            if (opp.hand.length === 0)
+                return false;
+            if (opp.hand.length === 1 && knownScore > 2)
+                return false;
+        }
+        if (knownScore > 4)
+            return false;
+        // Évaluer adversaires en difficulté
+        let opponentsInTrouble = 0;
+        for (const opp of opponents) {
+            const failedMatches = this.getFailedMatchCount(gs, opp);
+            if (failedMatches >= 2 || opp.hand.length >= 5)
+                opponentsInTrouble++;
+        }
+        if (opponentsInTrouble >= Math.ceil(opponents.length / 2))
+            return true;
+        if (knownScore <= 2)
+            return true;
+        const dangerousDiscardRate = opponents.some((opp) => this.getDiscardRate(gs, opp) > 0.6);
+        if (dangerousDiscardRate && knownScore > 3)
+            return false;
+        return false;
+    }
     static shouldCallDutchTournament(gs, bot, knownScore, opponents, difficulty) {
         // En tournoi, Dutch raté = éliminé. Tant qu'on n'est pas dernier, on reste en course.
         // Score = 1 ET tous les adversaires ont >= 3 cartes → Dutch
@@ -314,16 +477,16 @@ class BotAI {
             if (noDangerousOpponent)
                 return true;
         }
-        // Espion intel en tournoi aussi
-        if (this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
+        // Espion intel en tournoi : Platine uniquement
+        if (difficulty.name === 'Platine' && this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
             return true;
         }
         // Sinon → ne PAS Dutch en tournoi
         return false;
     }
     static shouldCallDutchQuick(gs, bot, knownScore, opponents, difficulty) {
-        // Espion intel : si j'ai vu une carte adverse plus grosse que mon score
-        if (this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
+        // Espion intel : Platine uniquement (Or n'utilise pas le spy intel)
+        if (difficulty.name === 'Platine' && this.canDutchFromSpyIntel(gs, bot, knownScore, opponents)) {
             return true;
         }
         // Vérifier les menaces
@@ -408,17 +571,19 @@ class BotAI {
             return;
         const drawnVal = drawn.points;
         const memory = this.getBotMemory(bot);
-        // === EXPLORATION : doublon-aware ===
+        // === EXPLORATION : doublon-aware (Or/Platine toujours, Argent 50%, Bronze jamais) ===
         if (phase === BotGamePhase.exploration) {
-            // D'abord vérifier les doublons (même en exploration)
-            const duplicateIdx = this.findDuplicateInHand(bot, drawn);
-            if (duplicateIdx !== null) {
-                // Défausser la pioche → réaction → matcher le doublon en main
-                GameLogic_1.GameLogic.discardDrawnCard(gs);
-                memory.consecutiveBadDraws = 0;
-                return;
+            const checksDoublons = difficulty.name === 'Bronze' ? false :
+                difficulty.name === 'Argent' ? this.random() < 0.5 : true;
+            if (checksDoublons) {
+                const duplicateIdx = this.findDuplicateInHand(bot, drawn);
+                if (duplicateIdx !== null) {
+                    GameLogic_1.GameLogic.discardDrawnCard(gs);
+                    memory.consecutiveBadDraws = 0;
+                    return;
+                }
             }
-            // Pas de doublon : échanger contre une carte inconnue pour apprendre
+            // Pas de doublon trouvé : échanger contre une carte inconnue pour apprendre
             const unknownIndices = [];
             for (let i = 0; i < bot.hand.length; i++) {
                 if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) {
@@ -438,26 +603,30 @@ class BotAI {
             }
         }
         // === OPTIMIZATION / ENDGAME ===
-        // Tactique 1 : doublon pioche/main → défausser la pioche, matcher en réaction
-        const duplicateIdx = this.findDuplicateInHand(bot, drawn);
-        if (duplicateIdx !== null) {
-            GameLogic_1.GameLogic.discardDrawnCard(gs);
-            memory.consecutiveBadDraws = 0;
-            return;
-        }
-        // Tactique 2 : doublon en main, pioche meilleure → échanger + matcher l'autre
-        const doublonPair = this.findDoublonPairInHand(bot);
-        if (doublonPair) {
-            const [idx1, idx2] = doublonPair;
-            const val1 = this.getKnownCardValue(bot, idx1);
-            if (val1 !== null && drawnVal < val1) {
-                const confused = this.random() < difficulty.confusionOnSwap;
-                if (!confused) {
-                    this.updateMentalMap(bot, idx1, drawn);
-                }
-                GameLogic_1.GameLogic.replaceCard(gs, idx1);
+        // Tactique 1 : doublon pioche/main (Argent/Or/Platine, pas Bronze)
+        if (difficulty.name !== 'Bronze') {
+            const duplicateIdx = this.findDuplicateInHand(bot, drawn);
+            if (duplicateIdx !== null) {
+                GameLogic_1.GameLogic.discardDrawnCard(gs);
                 memory.consecutiveBadDraws = 0;
                 return;
+            }
+        }
+        // Tactique 2 : doublon en main, pioche meilleure (Or/Platine uniquement)
+        if (difficulty.name === 'Or' || difficulty.name === 'Platine') {
+            const doublonPair = this.findDoublonPairInHand(bot);
+            if (doublonPair) {
+                const [idx1, idx2] = doublonPair;
+                const val1 = this.getKnownCardValue(bot, idx1);
+                if (val1 !== null && drawnVal < val1) {
+                    const confused = this.random() < difficulty.confusionOnSwap;
+                    if (!confused) {
+                        this.updateMentalMap(bot, idx1, drawn);
+                    }
+                    GameLogic_1.GameLogic.replaceCard(gs, idx1);
+                    memory.consecutiveBadDraws = 0;
+                    return;
+                }
             }
         }
         // Standard : si pioche < pire carte connue → échanger
@@ -509,9 +678,22 @@ class BotAI {
                     difficulty.name === 'Or' ? 250 :
                         difficulty.name === 'Argent' ? 350 : 400;
                 await this.delay(reactionDelay);
-                const success = GameLogic_1.GameLogic.matchCard(gameState, bot, i);
-                if (success && i < memory.mentalMap.length) {
-                    memory.mentalMap.splice(i, 1);
+                // Erreur de position : "c'est celle d'à côté"
+                let matchIdx = i;
+                const positionError = difficulty.name === 'Bronze' ? 0.25 :
+                    difficulty.name === 'Argent' ? 0.10 :
+                        difficulty.name === 'Or' ? 0.02 : 0;
+                if (positionError > 0 && this.random() < positionError) {
+                    // Décaler de ±1
+                    const offset = this.random() < 0.5 ? -1 : 1;
+                    const wrongIdx = i + offset;
+                    if (wrongIdx >= 0 && wrongIdx < bot.hand.length) {
+                        matchIdx = wrongIdx;
+                    }
+                }
+                const success = GameLogic_1.GameLogic.matchCard(gameState, bot, matchIdx);
+                if (success && matchIdx < memory.mentalMap.length) {
+                    memory.mentalMap.splice(matchIdx, 1);
                 }
                 return success;
             }
@@ -555,13 +737,39 @@ class BotAI {
         GameLogic_1.GameLogic.lookAtCard(gs, bot, idx);
         this.updateMentalMap(bot, idx, bot.hand[idx]);
     }
-    // Carte 10 : espionner un adversaire — décision par phase
+    // Carte 10 : espionner un adversaire — décision par phase et niveau
     static usePower10(gs, bot, difficulty, phase) {
         const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
         if (opponents.length === 0) {
             GameLogic_1.GameLogic.skipSpecialPower(gs);
             return;
         }
+        // Bronze : toujours utiliser, cible aléatoire, pas de stockage
+        if (difficulty.name === 'Bronze') {
+            const target = opponents[Math.floor(this.random() * opponents.length)];
+            const idx = Math.floor(this.random() * target.hand.length);
+            GameLogic_1.GameLogic.lookAtCard(gs, target, idx);
+            // Bronze ne retient pas l'info
+            this.applyContextualForget(bot, difficulty, 'spy');
+            return;
+        }
+        // Argent : toujours utiliser, 50% humain sinon aléatoire, pas de stockage
+        if (difficulty.name === 'Argent') {
+            let target;
+            const human = this.getHumanTarget(opponents);
+            if (human && this.random() < 0.5) {
+                target = human;
+            }
+            else {
+                target = opponents[Math.floor(this.random() * opponents.length)];
+            }
+            const idx = Math.floor(this.random() * target.hand.length);
+            GameLogic_1.GameLogic.lookAtCard(gs, target, idx);
+            // Argent ne retient pas l'info
+            this.applyContextualForget(bot, difficulty, 'spy');
+            return;
+        }
+        // --- Or / Platine : logique intelligente ---
         // Cas spécial duel : 2 joueurs, chacun avec 1 carte → TOUJOURS espionner
         const activePlayers = gs.players.filter((p) => !p.isSpectator && p.hand.length > 0);
         const duelMode = activePlayers.length === 2 && bot.hand.length <= 1;
@@ -569,7 +777,6 @@ class BotAI {
             const target = opponents[0];
             const idx = Math.floor(this.random() * target.hand.length);
             GameLogic_1.GameLogic.lookAtCard(gs, target, idx);
-            // Stocker l'info espionnée
             const memory = this.getBotMemory(bot);
             memory.spiedCards.push({
                 playerId: target.id,
@@ -580,21 +787,10 @@ class BotAI {
             this.applyContextualForget(bot, difficulty, 'spy');
             return;
         }
-        // Platine/Or en exploration : skip (pas utile quand on ne connaît pas ses propres cartes)
+        // Or/Platine en exploration : skip
         if (phase === BotGamePhase.exploration) {
-            if (difficulty.name === 'Platine' || difficulty.name === 'Or') {
-                GameLogic_1.GameLogic.skipSpecialPower(gs);
-                return;
-            }
-            // Argent : skip si on ne connaît que 0-1 de nos cartes
-            if (difficulty.name === 'Argent') {
-                const knownCount = this.getKnownCardCount(bot);
-                if (knownCount <= 1) {
-                    GameLogic_1.GameLogic.skipSpecialPower(gs);
-                    return;
-                }
-            }
-            // Bronze : utilise toujours (ne réfléchit pas)
+            GameLogic_1.GameLogic.skipSpecialPower(gs);
+            return;
         }
         // Choisir la cible : priorité humain, sinon joueur dangereux
         let target;
@@ -603,13 +799,12 @@ class BotAI {
             target = human;
         }
         else {
-            // Le joueur avec le moins de cartes (menace potentielle)
             opponents.sort((a, b) => a.hand.length - b.hand.length);
             target = opponents[0];
         }
         const idx = Math.floor(this.random() * target.hand.length);
         GameLogic_1.GameLogic.lookAtCard(gs, target, idx);
-        // Stocker l'info espionnée
+        // Stocker l'info espionnée (Or/Platine uniquement)
         const memory = this.getBotMemory(bot);
         memory.spiedCards.push({
             playerId: target.id,
@@ -619,33 +814,71 @@ class BotAI {
         });
         this.applyContextualForget(bot, difficulty, 'spy');
     }
-    // Carte V (Valet) : déstabiliser les AUTRES
+    // Carte V (Valet) : déstabiliser les AUTRES — par niveau
     static usePowerValet(gs, bot, difficulty) {
         const opponents = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
         if (opponents.length === 0) {
             GameLogic_1.GameLogic.skipSpecialPower(gs);
             return;
         }
+        // Bronze : 50/50 entre échanger entre 2 autres OU inclure soi-même
+        if (difficulty.name === 'Bronze') {
+            if (opponents.length >= 2 && this.random() < 0.5) {
+                // Échange entre 2 adversaires aléatoires (pas de ciblage)
+                const t1 = opponents[Math.floor(this.random() * opponents.length)];
+                let t2 = t1;
+                while (t2 === t1) {
+                    t2 = opponents[Math.floor(this.random() * opponents.length)];
+                }
+                const idx1 = Math.floor(this.random() * t1.hand.length);
+                const idx2 = Math.floor(this.random() * t2.hand.length);
+                GameLogic_1.GameLogic.swapCards(gs, t1, idx1, t2, idx2);
+            }
+            else {
+                // Échange sa propre carte (index aléatoire, PAS la pire) avec un adversaire aléatoire
+                const myIdx = Math.floor(this.random() * bot.hand.length);
+                const target = opponents[Math.floor(this.random() * opponents.length)];
+                const targetIdx = Math.floor(this.random() * target.hand.length);
+                this.forgetCard(bot, myIdx);
+                GameLogic_1.GameLogic.swapCards(gs, bot, myIdx, target, targetIdx);
+            }
+            this.applyContextualForget(bot, difficulty, 'valet');
+            return;
+        }
+        // Argent : échange entre 2 autres mais cibles aléatoires (pas de priorité humain)
+        if (difficulty.name === 'Argent') {
+            if (opponents.length >= 2) {
+                const shuffled = [...opponents].sort(() => this.random() - 0.5);
+                const idx1 = Math.floor(this.random() * shuffled[0].hand.length);
+                const idx2 = Math.floor(this.random() * shuffled[1].hand.length);
+                GameLogic_1.GameLogic.swapCards(gs, shuffled[0], idx1, shuffled[1], idx2);
+            }
+            else {
+                // 1 seul adversaire : échange aléatoire avec soi
+                const myIdx = Math.floor(this.random() * bot.hand.length);
+                const targetIdx = Math.floor(this.random() * opponents[0].hand.length);
+                this.forgetCard(bot, myIdx);
+                GameLogic_1.GameLogic.swapCards(gs, bot, myIdx, opponents[0], targetIdx);
+            }
+            this.applyContextualForget(bot, difficulty, 'valet');
+            return;
+        }
+        // --- Or / Platine : stratégie intelligente ---
         if (opponents.length >= 2) {
-            // >= 2 adversaires : échanger entre eux, le bot ne perd rien
             const targets = this.chooseValetTargets(gs, bot, opponents);
             const idx1 = Math.floor(this.random() * targets[0].hand.length);
             const idx2 = Math.floor(this.random() * targets[1].hand.length);
             GameLogic_1.GameLogic.swapCards(gs, targets[0], idx1, targets[1], idx2);
         }
         else {
-            // 1 seul adversaire
             const opponent = opponents[0];
             if (opponent.hand.length <= 2) {
-                // Adversaire avec 1-2 cartes = forte probabilité de bonne carte
-                // Échanger notre pire carte contre la sienne
                 const myCardIdx = this.chooseBadCard(bot);
                 const targetIdx = Math.floor(this.random() * opponent.hand.length);
                 this.forgetCard(bot, myCardIdx);
                 GameLogic_1.GameLogic.swapCards(gs, bot, myCardIdx, opponent, targetIdx);
             }
             else {
-                // Adversaire avec >= 3 cartes : pas intéressant → passer
                 GameLogic_1.GameLogic.skipSpecialPower(gs);
                 return;
             }
@@ -669,12 +902,33 @@ class BotAI {
         const sorted = [...opponents].sort((a, b) => a.hand.length - b.hand.length);
         return [sorted[0], sorted[1]];
     }
-    // Carte Joker : mélanger un adversaire — ciblage intelligent
+    // Carte Joker : mélanger un adversaire — par niveau
     static usePowerJoker(gs, bot, difficulty) {
-        // Filtrer cibles valides : adversaires avec >= 2 cartes (mélanger 0 ou 1 = inutile)
+        // Bronze : cible n'importe qui avec des cartes (pas de filtre >= 2)
+        if (difficulty.name === 'Bronze') {
+            const targets = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
+            if (targets.length === 0) {
+                GameLogic_1.GameLogic.skipSpecialPower(gs);
+                return;
+            }
+            const target = targets[Math.floor(this.random() * targets.length)];
+            GameLogic_1.GameLogic.jokerEffect(gs, target);
+            return;
+        }
+        // Argent : filtre >= 2 cartes, cible aléatoire (pas de priorité humain)
+        if (difficulty.name === 'Argent') {
+            const validTargets = gs.players.filter((p) => p.id !== bot.id && p.hand.length >= 2);
+            if (validTargets.length === 0) {
+                GameLogic_1.GameLogic.skipSpecialPower(gs);
+                return;
+            }
+            const target = validTargets[Math.floor(this.random() * validTargets.length)];
+            GameLogic_1.GameLogic.jokerEffect(gs, target);
+            return;
+        }
+        // --- Or / Platine : ciblage intelligent ---
         const validTargets = gs.players.filter((p) => p.id !== bot.id && p.hand.length >= 2);
         if (validTargets.length === 0) {
-            // Aucune cible valide → passer le pouvoir
             GameLogic_1.GameLogic.skipSpecialPower(gs);
             return;
         }
@@ -684,12 +938,10 @@ class BotAI {
             GameLogic_1.GameLogic.jokerEffect(gs, human);
             return;
         }
-        // Sinon : joueur avec le moins de cartes (>= 2) → connaissait sa main
+        // Sinon : joueur avec le taux de défausse le plus élevé (main stable)
         validTargets.sort((a, b) => a.hand.length - b.hand.length);
-        const target = validTargets[0];
-        // Ou le joueur avec le taux de défausse le plus élevé (main stable)
-        let bestTarget = target;
-        let bestRate = this.getDiscardRate(gs, target);
+        let bestTarget = validTargets[0];
+        let bestRate = this.getDiscardRate(gs, bestTarget);
         for (const t of validTargets) {
             const rate = this.getDiscardRate(gs, t);
             if (rate > bestRate) {

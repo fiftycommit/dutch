@@ -295,12 +295,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   ),
                 ],
                 SizedBox(height: spacingSmall),
+                /*
                 // Description du niveau sélectionné (mode manuel uniquement)
                 if (!useSBMM &&
                     (selectedBotDifficulty == Difficulty.hard ||
                         selectedBotDifficulty == Difficulty.platinum)) ...[
                   _buildDifficultyDescription(f, selectedBotDifficulty),
                 ],
+                */
                 SizedBox(height: spacingMedium),
                 Text(
                   "Nombre de joueurs",
@@ -433,6 +435,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     }
   }
 
+  /*
   /// Construit la description du niveau de difficulté
   Widget _buildDifficultyDescription(
       double Function(double) f, Difficulty difficulty) {
@@ -483,4 +486,5 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       ),
     );
   }
+  */
 }
