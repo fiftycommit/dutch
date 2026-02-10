@@ -1,14 +1,56 @@
-/// Service pour gérer l'orientation de l'écran sur le web
-/// Sur les plateformes natives (iOS, Android), ces fonctions ne font rien
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
+
+/// Service pour gérer l'orientation et le fullscreen sur le web
+/// Utilise les API Screen Orientation et Fullscreen du navigateur
 class WebOrientationService {
-  /// Tente de verrouiller l'écran en mode paysage sur le web
+  /// Passe en fullscreen puis verrouille l'écran en mode paysage
   static void lockLandscape() {
-    // Cette fonctionnalité n'est disponible que sur le web
-    // Sur iOS/Android, l'orientation est gérée par SystemChrome
+    try {
+      final doc = web.document;
+      final element = doc.documentElement;
+      if (element == null) return;
+
+      // Si déjà fullscreen, verrouiller l'orientation directement
+      if (doc.fullscreenElement != null) {
+        _lockOrientation();
+        return;
+      }
+
+      // Passer en fullscreen d'abord, puis verrouiller l'orientation
+      element
+          .requestFullscreen()
+          .toDart
+          .then((_) => _lockOrientation())
+          .catchError((_) {});
+    } catch (_) {
+      // API non disponible sur certains navigateurs
+    }
   }
-  
-  /// Déverrouille l'orientation de l'écran
+
+  /// Verrouille l'orientation en paysage
+  static void _lockOrientation() {
+    try {
+      web.window.screen.orientation
+          .lock('landscape')
+          .toDart
+          .then((_) {})
+          .catchError((_) {});
+    } catch (_) {}
+  }
+
+  /// Déverrouille l'orientation et quitte le fullscreen
   static void unlock() {
-    // Cette fonctionnalité n'est disponible que sur le web
+    try {
+      web.window.screen.orientation.unlock();
+    } catch (_) {}
+
+    try {
+      if (web.document.fullscreenElement != null) {
+        web.document.exitFullscreen().toDart.then((_) {}).catchError((_) {});
+      }
+    } catch (_) {
+      // API non disponible sur certains navigateurs
+    }
   }
 }

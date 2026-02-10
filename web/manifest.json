@@ -7,7 +7,7 @@
     "background_color": "#1a472a",
     "theme_color": "#1a472a",
     "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
