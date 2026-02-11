@@ -221,13 +221,15 @@ class BotFactory {
       candidates.sort((a, b) => avgWinrate(b).compareTo(avgWinrate(a)));
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint(
           '🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
+    }
     for (final bot in candidates) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
+      }
     }
 
     final isGold = difficulty == Difficulty.hard;
@@ -239,14 +241,16 @@ class BotFactory {
       final secondBot = candidates.length >= 2 ? candidates[1] : bestBot;
 
       if (bestBot != null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
               '⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
+        }
       }
       if (secondBot != null && secondBot != bestBot) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
               '⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
+        }
       }
 
       final secondBotCount = (numberOfBots / 3).ceil();
@@ -261,9 +265,10 @@ class BotFactory {
       for (int i = 0; i < numberOfBots; i++) {
         final source = i < candidates.length ? candidates[i] : null;
         if (source != null) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint(
                 '⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
+          }
         }
         players.add(_playerFromBotProfile(source, i, targetSkill));
       }
@@ -333,9 +338,10 @@ class BotFactory {
 
     for (final bot in allBots) {
       final marker = bot.skillLevel == targetSkillName ? '→' : ' ';
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '$marker 🤖 ${bot.botId} | MMR: ${bot.mmr} | Vs humain: ${(bot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bot.winRate * 100).toStringAsFixed(0)}% | Score: ${(eliteScore(bot) * 100).toStringAsFixed(0)}%');
+      }
     }
 
     filteredBots.sort((a, b) => eliteScore(b).compareTo(eliteScore(a)));
@@ -346,14 +352,16 @@ class BotFactory {
     final secondBot = filteredBots.length >= 2 ? filteredBots[1] : bestBot;
 
     if (bestBot != null) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '⭐ #1: ${bestBot.botId} | MMR: ${bestBot.mmr} | Score: ${(eliteScore(bestBot) * 100).toStringAsFixed(0)}%');
+      }
     }
     if (secondBot != null && secondBot != bestBot) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '⭐ #2: ${secondBot.botId} | MMR: ${secondBot.mmr} | Score: ${(eliteScore(secondBot) * 100).toStringAsFixed(0)}%');
+      }
     }
 
     final players = <Player>[];
@@ -402,15 +410,17 @@ class BotFactory {
     // Vérifier si les bots actuels passent la validation
     if (_botsPassValidation(
         bots: serverBots, minMMR: minMMR, minPBeatHuman: minPBeatHuman)) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '✅ Bots serveur validés pour $difficulty (playerMMR: $playerMMR)');
+      }
       return serverBots;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint(
           '⚠️ Bots serveur trop faibles pour le joueur (MMR: $playerMMR). Retry avec filtres plus larges...');
+    }
 
     // Retry avec filtres plus larges
     final retryBots = await _retryWithBroaderFilters(
@@ -425,8 +435,9 @@ class BotFactory {
       return retryBots;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint('⚠️ Aucun bot serveur assez fort. Fallback SBMM boosté');
+    }
     return _createBoostedSBMMBots(
       numberOfBots: numberOfBots,
       difficulty: difficulty,

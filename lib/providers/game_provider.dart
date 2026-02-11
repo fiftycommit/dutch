@@ -342,8 +342,9 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void drawCard() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) {
       return;
+    }
 
     // LOG : État de l'humain au début de son tour
     GameLoggerService.instance.logTurnStart(
@@ -374,7 +375,9 @@ class GameProvider with ChangeNotifier implements IGameController {
   void replaceCard(int cardIndex) {
     if (_gameState == null ||
         !_gameState!.currentPlayer.isHuman ||
-        _gameState!.drawnCard == null) return;
+        _gameState!.drawnCard == null) {
+      return;
+    }
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
@@ -401,7 +404,9 @@ class GameProvider with ChangeNotifier implements IGameController {
   void discardDrawnCard() {
     if (_gameState == null ||
         !_gameState!.currentPlayer.isHuman ||
-        _gameState!.drawnCard == null) return;
+        _gameState!.drawnCard == null) {
+      return;
+    }
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
@@ -465,8 +470,9 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void takeFromDiscard() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) {
       return;
+    }
     if (_gameState!.discardPile.isEmpty) return;
 
     final human = _gameState!.currentPlayer;
@@ -490,8 +496,9 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void callDutch() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) {
       return;
+    }
 
     final human = _gameState!.currentPlayer;
     _trackingProvider.recordPlayerAction(
@@ -592,8 +599,9 @@ class GameProvider with ChangeNotifier implements IGameController {
     HumanThreatTracker().onNewTurn();
 
     notifyListeners();
-    if (!_gameState!.currentPlayer.isHuman && !_isPaused)
+    if (!_gameState!.currentPlayer.isHuman && !_isPaused) {
       _checkAndPlayBotTurn();
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -663,8 +671,9 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void resumeGame() {
     _isPaused = false;
-    if (_gameState?.phase == GamePhase.reaction)
+    if (_gameState?.phase == GamePhase.reaction) {
       _timerManager.resumeTimer(_gameState!, _isPaused);
+    }
     notifyListeners();
     if (_gameState != null &&
         !_gameState!.currentPlayer.isHuman &&
@@ -1067,8 +1076,9 @@ class GameProvider with ChangeNotifier implements IGameController {
       won: dutchCallerRank == 1,
       opponentsCount: _gameState!.players.length - 1,
     ));
-    if (dutchCaller.dutchHistory.length > 10)
+    if (dutchCaller.dutchHistory.length > 10) {
       dutchCaller.dutchHistory.removeAt(0);
+    }
   }
 
   void _logFinalRanking(List<Player> ranking) {

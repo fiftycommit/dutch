@@ -504,9 +504,10 @@ class PlayerLearningService implements IPlayerLearningService {
     for (final action in record.actions) {
       if (action.actionType == 'power' && action.powerType == '7') {
         final cardSeen = action.result['cardSeen'];
-        if (cardSeen != null)
+        if (cardSeen != null) {
           seenCards.add(
               '${action.actionDetails['targetPlayerId']}_${action.actionDetails['cardIndex']}');
+        }
       }
       if (action.actionType == 'power' && action.powerType == '9') {
         memoryTests++;

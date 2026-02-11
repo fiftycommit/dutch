@@ -51,11 +51,14 @@ class SBMMClientService {
         );
       }
 
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('⚠️ SBMM bot-mix erreur: ${response.statusCode}');
+      }
       return null;
     } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ SBMM bot-mix exception: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ SBMM bot-mix exception: $e');
+      }
       return null;
     }
   }
