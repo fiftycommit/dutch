@@ -238,6 +238,8 @@ function setupGameHandler(socket, roomManager) {
                         io.to(affected.playerId).emit('special_power:swap_notification', {
                             byPlayerName: currentPlayer.name,
                             cardIndex: affected.cardIndex,
+                            swapPartnerName: affected.swapPartnerName,
+                            receivedCardPosition: affected.receivedCardPosition,
                             roomCode: data.roomCode,
                         });
                     }

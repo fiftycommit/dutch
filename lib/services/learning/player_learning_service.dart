@@ -8,14 +8,17 @@ import '../../models/playing_card.dart';
 import '../../models/player_learning_data.dart';
 import '../../core/interfaces/i_learning_service.dart';
 import '../multiplayer/client_id_service.dart';
+import '../network/network_probe_service.dart';
 
 class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
   static const String _historyKeyPrefix = 'player_action_history_slot_';
   static const String _serverUrl = 'https://dutch-game.me/api/player-learning';
-  static const String _botLearningUrl = 'https://dutch-game.me/api/bot-learning';
+  static const String _botLearningUrl =
+      'https://dutch-game.me/api/bot-learning';
   static const String _cloneIdKeyPrefix = 'ghost_clone_id_slot_';
   static const Duration _apiTimeout = Duration(seconds: 6);
+  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
 
   final Map<String, DateTime> _gameStart = {};
   final Map<String, List<PlayerAction>> _pendingActions = {};
@@ -23,6 +26,10 @@ class PlayerLearningService implements IPlayerLearningService {
 
   String _profileKey(int slotId) => '$_profileKeyPrefix$slotId';
   String _historyKey(int slotId) => '$_historyKeyPrefix$slotId';
+
+  Future<bool> _canReachBackendQuickly() {
+    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
+  }
 
   Future<PlayerProfile> getProfile({required int slotId}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,7 +48,8 @@ class PlayerLearningService implements IPlayerLearningService {
     }
   }
 
-  Future<void> _saveProfile(PlayerProfile profile, {required int slotId}) async {
+  Future<void> _saveProfile(PlayerProfile profile,
+      {required int slotId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_profileKey(slotId), profile.toJsonString());
   }
@@ -54,7 +62,8 @@ class PlayerLearningService implements IPlayerLearningService {
     for (final item in raw) {
       try {
         final decoded = jsonDecode(item);
-        records.add(PlayerGameRecord.fromJson(Map<String, dynamic>.from(decoded)));
+        records
+            .add(PlayerGameRecord.fromJson(Map<String, dynamic>.from(decoded)));
       } catch (_) {
         // ignore malformed history item
       }
@@ -87,11 +96,14 @@ class PlayerLearningService implements IPlayerLearningService {
 
     final now = DateTime.now();
     final lastActionTime = _lastActionTimestamp[gameId];
-    final decisionTimeMs = lastActionTime != null ? now.difference(lastActionTime).inMilliseconds : null;
+    final decisionTimeMs = lastActionTime != null
+        ? now.difference(lastActionTime).inMilliseconds
+        : null;
     _lastActionTimestamp[gameId] = now;
 
     final currentRank = _calculateCurrentRank(gameState, human);
-    final isRiskyAction = _isRiskyAction(actionType, actionDetails, gameState, human);
+    final isRiskyAction =
+        _isRiskyAction(actionType, actionDetails, gameState, human);
 
     list.add(PlayerAction(
       actionType: actionType,
@@ -213,12 +225,17 @@ class PlayerLearningService implements IPlayerLearningService {
     required PlayerGameRecord record,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return;
+
       final prefs = await SharedPreferences.getInstance();
       final clientId = await ClientIdService.ensureClientId();
 
       final cloneKey = '$_cloneIdKeyPrefix$slotId';
       final existingCloneId = prefs.getString(cloneKey);
-      final payload = {'games': [_mapGhostGameRecord(record)]};
+      final payload = {
+        'games': [_mapGhostGameRecord(record)]
+      };
 
       if (existingCloneId != null && existingCloneId.isNotEmpty) {
         final uri = Uri.parse('$_botLearningUrl/clone/$existingCloneId');
@@ -297,7 +314,8 @@ class PlayerLearningService implements IPlayerLearningService {
     };
   }
 
-  Future<void> _appendHistory(PlayerGameRecord record, {required int slotId}) async {
+  Future<void> _appendHistory(PlayerGameRecord record,
+      {required int slotId}) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_historyKey(slotId)) ?? [];
 
@@ -312,6 +330,9 @@ class PlayerLearningService implements IPlayerLearningService {
     required PlayerProfile profile,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return;
+
       final clientId = await ClientIdService.ensureClientId();
 
       final history = await getHistory(slotId: slotId);
@@ -320,26 +341,30 @@ class PlayerLearningService implements IPlayerLearningService {
         'clientId': clientId,
         'slotId': slotId,
         'profile': profile.toJson(),
-        'history': history.map((g) => {
-              'gameId': g.gameId,
-              'startTime': g.startTime.toIso8601String(),
-              'endTime': g.endTime.toIso8601String(),
-              'usedSBMM': g.usedSBMM,
-              'numberOfPlayers': g.numberOfPlayers,
-              'finalRank': g.finalRank,
-              'finalScore': g.finalScore,
-              'calledDutch': g.calledDutch,
-              'wonDutch': g.wonDutch,
-              'profileBefore': g.profileBefore,
-              'profileAfter': g.profileAfter,
-            }).toList(),
+        'history': history
+            .map((g) => {
+                  'gameId': g.gameId,
+                  'startTime': g.startTime.toIso8601String(),
+                  'endTime': g.endTime.toIso8601String(),
+                  'usedSBMM': g.usedSBMM,
+                  'numberOfPlayers': g.numberOfPlayers,
+                  'finalRank': g.finalRank,
+                  'finalScore': g.finalScore,
+                  'calledDutch': g.calledDutch,
+                  'wonDutch': g.wonDutch,
+                  'profileBefore': g.profileBefore,
+                  'profileAfter': g.profileAfter,
+                })
+            .toList(),
       };
 
-      await http.post(
-        Uri.parse('$_serverUrl/upload'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
+      await http
+          .post(
+            Uri.parse('$_serverUrl/upload'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(_apiTimeout);
     } catch (_) {
       // best-effort
     }
@@ -347,14 +372,18 @@ class PlayerLearningService implements IPlayerLearningService {
 
   int _calculateCurrentRank(GameState gameState, Player human) {
     final players = List<Player>.from(gameState.players);
-    players.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+    players
+        .sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
     return players.indexOf(human) + 1;
   }
 
-  bool _isRiskyAction(String actionType, Map<String, dynamic> actionDetails, GameState gameState, Player human) {
+  bool _isRiskyAction(String actionType, Map<String, dynamic> actionDetails,
+      GameState gameState, Player human) {
     if (actionType == 'replace') {
       final cardIndex = actionDetails['cardIndex'] as int?;
-      if (cardIndex != null && cardIndex < human.hand.length && cardIndex < human.knownCards.length) {
+      if (cardIndex != null &&
+          cardIndex < human.hand.length &&
+          cardIndex < human.knownCards.length) {
         final isKnown = human.knownCards[cardIndex];
         if (isKnown) {
           final card = human.hand[cardIndex];
@@ -394,21 +423,28 @@ class PlayerLearningService implements IPlayerLearningService {
     final cautionWinning = getNum('caution_winning', 0.5);
     final cautionLosing = getNum('caution_losing', 0.5);
 
-    final defensivePowerActions = record.actions.where((a) => 
-        (a.actionType == 'power' || a.actionType == 'power_skip') && 
+    final defensivePowerActions = record.actions.where((a) =>
+        (a.actionType == 'power' || a.actionType == 'power_skip') &&
         (a.powerType == '7' || a.powerType == '8'));
-    final offensivePowerActions = record.actions.where((a) => 
-        (a.actionType == 'power' || a.actionType == 'power_skip') && 
-        (a.powerType == '9' || a.powerType == '10' || a.powerType == 'jack' || a.powerType == 'joker'));
-    
-    final usedDefensive = defensivePowerActions.where((a) => a.actionType == 'power').length;
-    final usedOffensive = offensivePowerActions.where((a) => a.actionType == 'power').length;
+    final offensivePowerActions = record.actions.where((a) =>
+        (a.actionType == 'power' || a.actionType == 'power_skip') &&
+        (a.powerType == '9' ||
+            a.powerType == '10' ||
+            a.powerType == 'jack' ||
+            a.powerType == 'joker'));
+
+    final usedDefensive =
+        defensivePowerActions.where((a) => a.actionType == 'power').length;
+    final usedOffensive =
+        offensivePowerActions.where((a) => a.actionType == 'power').length;
     final defensiveOpps = defensivePowerActions.length;
     final offensiveOpps = offensivePowerActions.length;
-    
-    final defensiveRateObserved = defensiveOpps == 0 ? powerDefensiveRate : usedDefensive / defensiveOpps;
-    final offensiveRateObserved = offensiveOpps == 0 ? powerOffensiveRate : usedOffensive / offensiveOpps;
-    
+
+    final defensiveRateObserved =
+        defensiveOpps == 0 ? powerDefensiveRate : usedDefensive / defensiveOpps;
+    final offensiveRateObserved =
+        offensiveOpps == 0 ? powerOffensiveRate : usedOffensive / offensiveOpps;
+
     final badPower = record.actions
         .where((a) => a.actionType == 'power')
         .where((a) => (a.result['isBadDecision'] ?? false) == true)
@@ -425,25 +461,42 @@ class PlayerLearningService implements IPlayerLearningService {
     final dutchSucceeded = record.calledDutch && record.wonDutch;
     final dutchFailed = record.calledDutch && !record.wonDutch;
 
-    final riskyActions = record.actions.where((a) => a.isRiskyAction == true).length;
+    final riskyActions =
+        record.actions.where((a) => a.isRiskyAction == true).length;
     final totalActions = record.actions.length;
-    final riskyRateObserved = totalActions == 0 ? 0.5 : riskyActions / totalActions;
+    final riskyRateObserved =
+        totalActions == 0 ? 0.5 : riskyActions / totalActions;
 
     final targetingCounts = <String, int>{'leader': 0, 'weak': 0, 'random': 0};
-    for (final action in record.actions.where((a) => a.targetStrategy != null)) {
+    for (final action
+        in record.actions.where((a) => a.targetStrategy != null)) {
       final strat = action.targetStrategy!;
       targetingCounts[strat] = (targetingCounts[strat] ?? 0) + 1;
     }
-    final dominantStrategy = targetingCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+    final dominantStrategy =
+        targetingCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 
-    final winningActions = record.actions.where((a) => (a.currentRank ?? 99) <= 2);
-    final losingActions = record.actions.where((a) => (a.currentRank ?? 1) >= 3);
-    final winningRiskyRate = winningActions.isEmpty ? 0.5 : winningActions.where((a) => a.isRiskyAction == true).length / winningActions.length;
-    final losingRiskyRate = losingActions.isEmpty ? 0.5 : losingActions.where((a) => a.isRiskyAction == true).length / losingActions.length;
+    final winningActions =
+        record.actions.where((a) => (a.currentRank ?? 99) <= 2);
+    final losingActions =
+        record.actions.where((a) => (a.currentRank ?? 1) >= 3);
+    final winningRiskyRate = winningActions.isEmpty
+        ? 0.5
+        : winningActions.where((a) => a.isRiskyAction == true).length /
+            winningActions.length;
+    final losingRiskyRate = losingActions.isEmpty
+        ? 0.5
+        : losingActions.where((a) => a.isRiskyAction == true).length /
+            losingActions.length;
     final adaptabilityObserved = (winningRiskyRate - losingRiskyRate).abs();
 
-    final decisionTimes = record.actions.where((a) => a.decisionTimeMs != null).map((a) => a.decisionTimeMs!.toDouble()).toList();
-    final avgDecisionTime = decisionTimes.isEmpty ? decisionSpeed : decisionTimes.reduce((a, b) => a + b) / decisionTimes.length;
+    final decisionTimes = record.actions
+        .where((a) => a.decisionTimeMs != null)
+        .map((a) => a.decisionTimeMs!.toDouble())
+        .toList();
+    final avgDecisionTime = decisionTimes.isEmpty
+        ? decisionSpeed
+        : decisionTimes.reduce((a, b) => a + b) / decisionTimes.length;
 
     final seenCards = <String>{};
     int memoryTests = 0;
@@ -451,19 +504,25 @@ class PlayerLearningService implements IPlayerLearningService {
     for (final action in record.actions) {
       if (action.actionType == 'power' && action.powerType == '7') {
         final cardSeen = action.result['cardSeen'];
-        if (cardSeen != null) seenCards.add('${action.actionDetails['targetPlayerId']}_${action.actionDetails['cardIndex']}');
+        if (cardSeen != null)
+          seenCards.add(
+              '${action.actionDetails['targetPlayerId']}_${action.actionDetails['cardIndex']}');
       }
       if (action.actionType == 'power' && action.powerType == '9') {
         memoryTests++;
         if (action.result['wasOptimal'] == true) memoryCorrect++;
       }
     }
-    final memoryRetentionObserved = memoryTests == 0 ? memoryRetention : memoryCorrect / memoryTests;
+    final memoryRetentionObserved =
+        memoryTests == 0 ? memoryRetention : memoryCorrect / memoryTests;
 
     double newDutchQuality = dutchQuality;
     if (record.calledDutch && record.actions.isNotEmpty) {
-      final dutchAction = record.actions.where((a) => a.actionType == 'dutch').lastOrNull;
-      final estimatedScore = (dutchAction ?? record.actions.last).gameState['estimatedScore'] ?? record.finalScore;
+      final dutchAction =
+          record.actions.where((a) => a.actionType == 'dutch').lastOrNull;
+      final estimatedScore =
+          (dutchAction ?? record.actions.last).gameState['estimatedScore'] ??
+              record.finalScore;
       final error = (estimatedScore - record.finalScore).abs() / 30.0;
       newDutchQuality = dutchQuality * 0.9 + (1.0 - error) * 0.1;
     }
@@ -474,23 +533,32 @@ class PlayerLearningService implements IPlayerLearningService {
     double newAgg = aggressiveness + lr * (riskyRateObserved - aggressiveness);
     double newCaution = caution + lr * ((1.0 - riskyRateObserved) - caution);
 
-    double newPowerDefensive = powerDefensiveRate + lr * (defensiveRateObserved - powerDefensiveRate);
-    double newPowerOffensive = powerOffensiveRate + lr * (offensiveRateObserved - powerOffensiveRate);
+    double newPowerDefensive =
+        powerDefensiveRate + lr * (defensiveRateObserved - powerDefensiveRate);
+    double newPowerOffensive =
+        powerOffensiveRate + lr * (offensiveRateObserved - powerOffensiveRate);
     if (badPower > 0) {
       newPowerDefensive -= lr * 0.2 * badPower;
       newPowerOffensive -= lr * 0.2 * badPower;
     }
 
-    double newMemory = memoryAccuracy + lr * (matchAccuracyObserved - memoryAccuracy);
-    double newMemoryRetention = memoryRetention + lr * (memoryRetentionObserved - memoryRetention);
+    double newMemory =
+        memoryAccuracy + lr * (matchAccuracyObserved - memoryAccuracy);
+    double newMemoryRetention =
+        memoryRetention + lr * (memoryRetentionObserved - memoryRetention);
 
-    double newAdaptability = adaptability + lr * (adaptabilityObserved - adaptability);
+    double newAdaptability =
+        adaptability + lr * (adaptabilityObserved - adaptability);
     double newDecisionSpeed = decisionSpeed * 0.9 + avgDecisionTime * 0.1;
 
-    double newAggWinning = aggressivenessWinning + lr * (winningRiskyRate - aggressivenessWinning);
-    double newAggLosing = aggressivenessLosing + lr * (losingRiskyRate - aggressivenessLosing);
-    double newCautionWinning = cautionWinning + lr * ((1.0 - winningRiskyRate) - cautionWinning);
-    double newCautionLosing = cautionLosing + lr * ((1.0 - losingRiskyRate) - cautionLosing);
+    double newAggWinning =
+        aggressivenessWinning + lr * (winningRiskyRate - aggressivenessWinning);
+    double newAggLosing =
+        aggressivenessLosing + lr * (losingRiskyRate - aggressivenessLosing);
+    double newCautionWinning =
+        cautionWinning + lr * ((1.0 - winningRiskyRate) - cautionWinning);
+    double newCautionLosing =
+        cautionLosing + lr * ((1.0 - losingRiskyRate) - cautionLosing);
 
     double newDutchThreshold = dutchThreshold;
     if (dutchSucceeded) {
@@ -704,7 +772,8 @@ class PlayerLearningService implements IPlayerLearningService {
 
     // Accumulateur EMA (alpha = 0.15)
     final double prevPerfAcc = getNum('performanceAccumulator', 0.5);
-    params['performanceAccumulator'] = prevPerfAcc * 0.85 + performanceQuality * 0.15;
+    params['performanceAccumulator'] =
+        prevPerfAcc * 0.85 + performanceQuality * 0.15;
 
     // ============================================================
     // STEP 5 : Bonus de performance [-0.15, +0.30]
@@ -732,9 +801,8 @@ class PlayerLearningService implements IPlayerLearningService {
     // 6b. Mismatch : boost si le joueur est clairement mal place
     double recentWinRate = 0.5;
     if (recentResults.length >= 3) {
-      final topHalfCount = recentResults
-          .where((r) => r <= (numberOfPlayers / 2).ceil())
-          .length;
+      final topHalfCount =
+          recentResults.where((r) => r <= (numberOfPlayers / 2).ceil()).length;
       recentWinRate = topHalfCount / recentResults.length;
     }
     final double mismatchDeviation = (recentWinRate - 0.5).abs();

@@ -28,6 +28,9 @@ export interface BotGameRecord {
   triageDecisions?: Array<Record<string, any>>;
   actions: BotAction[];
   initialHandSize: number;
+  initialHandScore?: number;
+  initialHandRank?: number;
+  initialHandRankFromWorst?: number;
   finalScore: number;
   finalRank: number;
   calledDutch: boolean;

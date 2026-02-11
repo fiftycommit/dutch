@@ -52,30 +52,33 @@ class BotGameRecord {
   final int? humanFinalHandSize;
   final int? botFinalHandSize;
   final double? pBeatHuman;
-  
+
   // Tracking expérimental pour analyse de triage
   final List<Map<String, dynamic>>? initialDeck;
   final int? turnsBeforeDutch;
   final List<int>? discardsPerRound;
   final List<Map<String, dynamic>>? triageDecisions;
-  
+
   // Données de la partie
   final List<BotAction> actions;
   final int initialHandSize;
+  final int? initialHandScore;
+  final int? initialHandRank;
+  final int? initialHandRankFromWorst;
   final int finalScore;
   final int finalRank; // 1 = winner, 2 = second, etc.
   final bool calledDutch;
   final bool wonDutch;
   final int cardsAtDutch;
   final int scoreAtDutch;
-  
+
   // Métriques de performance
   final int totalTurns;
   final double avgDecisionTime; // en ms
   final int powerUsesCount;
   final int goodDecisions; // Décisions qui ont amélioré le score
   final int badDecisions; // Décisions qui ont empiré le score
-  
+
   // Contexte des adversaires
   final List<Map<String, dynamic>> opponents;
 
@@ -100,6 +103,9 @@ class BotGameRecord {
     this.triageDecisions,
     required this.actions,
     required this.initialHandSize,
+    this.initialHandScore,
+    this.initialHandRank,
+    this.initialHandRankFromWorst,
     required this.finalScore,
     required this.finalRank,
     required this.calledDutch,
@@ -135,6 +141,9 @@ class BotGameRecord {
         'triageDecisions': triageDecisions,
         'actions': actions.map((a) => a.toJson()).toList(),
         'initialHandSize': initialHandSize,
+        'initialHandScore': initialHandScore,
+        'initialHandRank': initialHandRank,
+        'initialHandRankFromWorst': initialHandRankFromWorst,
         'finalScore': finalScore,
         'finalRank': finalRank,
         'calledDutch': calledDutch,
@@ -156,20 +165,34 @@ class BotGameRecord {
         botBehavior: json['botBehavior'],
         botSkillLevel: json['botSkillLevel'],
         startTime: DateTime.parse(json['startTime']),
-        endTime: json['endTime'] != null ? DateTime.parse(json['endTime']) : null,
+        endTime:
+            json['endTime'] != null ? DateTime.parse(json['endTime']) : null,
         numberOfPlayers: json['numberOfPlayers'],
         gameMode: json['gameMode'],
         usedSBMM: json['usedSBMM'],
         humanFinalScore: json['humanFinalScore'],
         humanFinalHandSize: json['humanFinalHandSize'],
         botFinalHandSize: json['botFinalHandSize'],
-        pBeatHuman: (json['pBeatHuman'] is num) ? (json['pBeatHuman'] as num).toDouble() : null,
-        initialDeck: json['initialDeck'] != null ? List<Map<String, dynamic>>.from(json['initialDeck']) : null,
+        pBeatHuman: (json['pBeatHuman'] is num)
+            ? (json['pBeatHuman'] as num).toDouble()
+            : null,
+        initialDeck: json['initialDeck'] != null
+            ? List<Map<String, dynamic>>.from(json['initialDeck'])
+            : null,
         turnsBeforeDutch: json['turnsBeforeDutch'],
-        discardsPerRound: json['discardsPerRound'] != null ? List<int>.from(json['discardsPerRound']) : null,
-        triageDecisions: json['triageDecisions'] != null ? List<Map<String, dynamic>>.from(json['triageDecisions']) : null,
-        actions: (json['actions'] as List).map((a) => BotAction.fromJson(a)).toList(),
+        discardsPerRound: json['discardsPerRound'] != null
+            ? List<int>.from(json['discardsPerRound'])
+            : null,
+        triageDecisions: json['triageDecisions'] != null
+            ? List<Map<String, dynamic>>.from(json['triageDecisions'])
+            : null,
+        actions: (json['actions'] as List)
+            .map((a) => BotAction.fromJson(a))
+            .toList(),
         initialHandSize: json['initialHandSize'],
+        initialHandScore: json['initialHandScore'],
+        initialHandRank: json['initialHandRank'],
+        initialHandRankFromWorst: json['initialHandRankFromWorst'],
         finalScore: json['finalScore'],
         finalRank: json['finalRank'],
         calledDutch: json['calledDutch'],
@@ -191,7 +214,7 @@ class BotProfile {
   final String skillLevel;
   final DateTime createdAt;
   final DateTime lastPlayedAt;
-  
+
   // Statistiques globales
   final int totalGames;
   final int wins;

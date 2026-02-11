@@ -1,11 +1,9 @@
 import '../service_locator.dart';
 import '../interfaces/i_learning_service.dart';
-import '../interfaces/i_tracking_service.dart';
 import '../interfaces/i_validation_service.dart';
 import '../interfaces/i_bot_ai_service.dart';
 import '../../services/learning/bot_learning_service.dart';
 import '../../services/learning/player_learning_service.dart';
-import '../../services/learning/game_tracking_service.dart';
 import '../../services/game/game_state_validator.dart';
 import '../../services/game/bot/bot_ai_service_impl.dart';
 import '../../providers/game_tracking_provider.dart';
@@ -19,10 +17,6 @@ void registerGameServices(ServiceLocator locator) {
 
   locator.register<ILearningService>(botLearningService);
   locator.register<IPlayerLearningService>(playerLearningService);
-
-  // Service de tracking (dépend de ILearningService)
-  final trackingService = GameTrackingService(botLearningService);
-  locator.register<ITrackingService>(trackingService);
 
   // Service de validation
   final validationService = GameStateValidator();

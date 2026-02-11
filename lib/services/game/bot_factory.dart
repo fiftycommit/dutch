@@ -1,26 +1,46 @@
-import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../../models/bot_learning_data.dart';
 import '../../models/player.dart';
 import '../../models/player_learning_data.dart';
 import '../../models/game_settings.dart';
 import '../learning/player_learning_service.dart';
 import '../learning/bot_learning_service.dart';
+import '../network/network_probe_service.dart';
 import 'bot/bot_config.dart';
-import '../multiplayer/client_id_service.dart';
 import '../matchmaking/sbmm_client_service.dart';
 
 /// Fabrique de bots — extrait de GameSetupScreen pour respecter SRP.
 /// Gère la création des bots en mode SBMM, manuel, élite et mix.
 class BotFactory {
   static final math.Random _nameRandom = math.Random();
+  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
 
   static final List<String> _botNames = [
-    'Max', 'Yanis', 'Rohino', 'Millie', 'Kellinho', 'Kifa', 'Nessa', 'VR6',
-    'Kanan Stark', 'Mucong', 'Irfat', 'Frizou', 'Tony', 'Leon', '2004 Boosté', '2T',
-    'Guy2', 'Avon Barksdale', 'Messball', 'Bersa', 'Marlo Stanfield', 'Manboy', 'Bramsou', 'Keyser Söze'
+    'Max',
+    'Yanis',
+    'Rohino',
+    'Millie',
+    'Kellinho',
+    'Ikfa',
+    'Nessa',
+    'VR6',
+    'Kanan Stark',
+    'Mucong',
+    'Irfat',
+    'Frizou',
+    'Tony',
+    'Leon',
+    '2004 Boosté',
+    '2T',
+    'Guy2',
+    'Avon Barksdale',
+    'Messball',
+    'Bersa',
+    'Marlo Stanfield',
+    'Manboy',
+    'Bramsou',
+    'Keyser Söze'
   ];
 
   static final Set<String> _usedNames = {};
@@ -51,8 +71,10 @@ class BotFactory {
     required int saveSlot,
     required bool isTournament,
   }) async {
-    // Appel serveur pour obtenir le mix de niveaux de bots
-    final sbmmResult = await SBMMClientService.getBotMix(botCount: numberOfBots);
+    final isOnline = await _canReachBackendQuickly();
+    final sbmmResult = isOnline
+        ? await SBMMClientService.getBotMix(botCount: numberOfBots)
+        : null;
 
     if (sbmmResult != null) {
       // Stocker les niveaux pour les passer au serveur via les settings
@@ -62,19 +84,25 @@ class BotFactory {
     }
 
     // Fallback : utiliser le MMR local pour déterminer le niveau
-    if (kDebugMode) debugPrint('⚠️ SBMM fallback local');
+    if (kDebugMode) {
+      debugPrint(isOnline
+          ? '⚠️ SBMM fallback local (bot-mix indisponible)'
+          : '⚠️ SBMM offline détecté, fallback local immédiat');
+    }
     final profile = await PlayerLearningService().getProfile(slotId: saveSlot);
     final skillLevel = _mmrToSkillLevel(profile.mmr);
     _lastSBMMBotLevels = List.generate(numberOfBots, (_) => skillLevel.name);
 
-    return List.generate(numberOfBots, (i) => Player(
-      id: 'bot_$i',
-      name: getBotName(BotBehavior.balanced, skillLevel),
-      isHuman: false,
-      botBehavior: BotBehavior.balanced,
-      botSkillLevel: skillLevel,
-      position: i + 1,
-    ));
+    return List.generate(
+        numberOfBots,
+        (i) => Player(
+              id: 'bot_$i',
+              name: getBotName(BotBehavior.balanced, skillLevel),
+              isHuman: false,
+              botBehavior: BotBehavior.balanced,
+              botSkillLevel: skillLevel,
+              position: i + 1,
+            ));
   }
 
   /// Derniers niveaux SBMM retournés par le serveur (pour les passer dans les settings)
@@ -84,7 +112,9 @@ class BotFactory {
   /// Convertit une liste de noms de niveaux en Players
   static List<Player> _buildBotsFromLevels(List<String> levels, int count) {
     return List.generate(count, (i) {
-      final level = i < levels.length ? _parseSkillLevel(levels[i]) : BotSkillLevel.silver;
+      final level = i < levels.length
+          ? _parseSkillLevel(levels[i])
+          : BotSkillLevel.silver;
       return Player(
         id: 'bot_$i',
         name: getBotName(BotBehavior.balanced, level),
@@ -98,11 +128,15 @@ class BotFactory {
 
   static BotSkillLevel _parseSkillLevel(String raw) {
     switch (raw) {
-      case 'bronze': return BotSkillLevel.bronze;
-      case 'gold': return BotSkillLevel.gold;
-      case 'platinum': return BotSkillLevel.platinum;
+      case 'bronze':
+        return BotSkillLevel.bronze;
+      case 'gold':
+        return BotSkillLevel.gold;
+      case 'platinum':
+        return BotSkillLevel.platinum;
       case 'silver':
-      default: return BotSkillLevel.silver;
+      default:
+        return BotSkillLevel.silver;
     }
   }
 
@@ -112,7 +146,7 @@ class BotFactory {
 
   /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
   /// Bronze/Silver/Gold : sélection par winrate moyen cible
-  /// Platinum : meilleurs bots absolus de la catégorie
+  /// Platinum : meilleurs bots absolus de la catégorie (filtrés platinum)
   static Future<List<Player>> createManualBots({
     required int numberOfBots,
     required Difficulty difficulty,
@@ -141,25 +175,43 @@ class BotFactory {
   /// Winrate minimum par difficulté (pas de max, on prend les plus proches du min)
   static double _winrateMin(Difficulty difficulty) {
     switch (difficulty) {
-      case Difficulty.easy:   return 0.0;  // Bronze : tous les bots, triés du plus faible
-      case Difficulty.medium: return 0.50; // Argent : minimum 50%
-      case Difficulty.hard:   return 0.70; // Or : minimum 70%
-      default:                return 0.0;
+      case Difficulty.easy:
+        return 0.0; // Bronze : tous les bots, triés du plus faible
+      case Difficulty.medium:
+        return 0.50; // Argent : minimum 50%
+      case Difficulty.hard:
+        return 0.70; // Or : minimum 70%
+      default:
+        return 0.0;
     }
   }
 
   /// Sélectionne les bots dont le winrate moyen tombe dans la tranche cible
-  static Future<List<Player>> _createWinrateBots(int numberOfBots, Difficulty difficulty, {int? saveSlot}) async {
+  static Future<List<Player>> _createWinrateBots(
+      int numberOfBots, Difficulty difficulty,
+      {int? saveSlot}) async {
     final botLearningService = BotLearningService();
-    final allBots = await botLearningService.fetchTopBots(limit: 50);
+    final allBots = await _fetchTopBotsOfflineFirst(
+      botLearningService: botLearningService,
+      limit: 50,
+    );
     final targetSkill = difficultyToSkillLevel(difficulty);
 
     double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
     final minWr = _winrateMin(difficulty);
     final isBronze = difficulty == Difficulty.easy;
+    final targetSkillName = targetSkill.toString().split('.').last;
 
     // Filtrer par winrate minimum strict
     var candidates = allBots.where((b) => avgWinrate(b) >= minWr).toList();
+
+    // Prioriser les bots du niveau cible (bronze/silver/gold) quand disponibles.
+    // Fallback implicite: si aucun bot du niveau cible admissible, on garde les meilleurs globaux.
+    final sameSkillCandidates =
+        candidates.where((b) => b.skillLevel == targetSkillName).toList();
+    if (sameSkillCandidates.isNotEmpty) {
+      candidates = sameSkillCandidates;
+    }
 
     // Bronze : trier du plus faible au plus fort (on veut les plus nuls)
     // Argent/Or : trier du plus fort au plus faible (on veut les meilleurs au-dessus du min)
@@ -169,9 +221,13 @@ class BotFactory {
       candidates.sort((a, b) => avgWinrate(b).compareTo(avgWinrate(a)));
     }
 
-    if (kDebugMode) debugPrint('🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
+    if (kDebugMode)
+      debugPrint(
+          '🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
     for (final bot in candidates) {
-      if (kDebugMode) debugPrint('  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
+      if (kDebugMode)
+        debugPrint(
+            '  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
     }
 
     final isGold = difficulty == Difficulty.hard;
@@ -183,10 +239,14 @@ class BotFactory {
       final secondBot = candidates.length >= 2 ? candidates[1] : bestBot;
 
       if (bestBot != null) {
-        if (kDebugMode) debugPrint('⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
+        if (kDebugMode)
+          debugPrint(
+              '⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
       }
       if (secondBot != null && secondBot != bestBot) {
-        if (kDebugMode) debugPrint('⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
+        if (kDebugMode)
+          debugPrint(
+              '⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
       }
 
       final secondBotCount = (numberOfBots / 3).ceil();
@@ -201,7 +261,9 @@ class BotFactory {
       for (int i = 0; i < numberOfBots; i++) {
         final source = i < candidates.length ? candidates[i] : null;
         if (source != null) {
-          if (kDebugMode) debugPrint('⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
+          if (kDebugMode)
+            debugPrint(
+                '⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
         }
         players.add(_playerFromBotProfile(source, i, targetSkill));
       }
@@ -218,12 +280,19 @@ class BotFactory {
   /// Mode Mix : un bot de chaque tranche de winrate
   static Future<List<Player>> _createMixBots(int numberOfBots) async {
     final botLearningService = BotLearningService();
-    final allBots = await botLearningService.fetchTopBots(limit: 50);
+    final allBots = await _fetchTopBotsOfflineFirst(
+      botLearningService: botLearningService,
+      limit: 50,
+    );
 
     double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
 
     final mixTargets = [0.25, 0.50, 0.75];
-    final mixSkills = [BotSkillLevel.bronze, BotSkillLevel.silver, BotSkillLevel.gold];
+    final mixSkills = [
+      BotSkillLevel.bronze,
+      BotSkillLevel.silver,
+      BotSkillLevel.gold
+    ];
     final players = <Player>[];
 
     for (int i = 0; i < numberOfBots; i++) {
@@ -232,8 +301,9 @@ class BotFactory {
 
       // Trouver le bot le plus proche du winrate cible
       final sorted = List<BotProfile>.from(allBots)
-        ..sort((a, b) =>
-            (avgWinrate(a) - target).abs().compareTo((avgWinrate(b) - target).abs()));
+        ..sort((a, b) => (avgWinrate(a) - target)
+            .abs()
+            .compareTo((avgWinrate(b) - target).abs()));
 
       final source = sorted.isNotEmpty ? sorted.first : null;
       players.add(_playerFromBotProfile(source, i, skill));
@@ -244,32 +314,46 @@ class BotFactory {
 
   /// Crée les bots élite pour Silver/Gold/Platinum :
   /// 3/4 = meilleur bot de la catégorie, 1/4 = second meilleur
-  static Future<List<Player>> _createEliteBots(int numberOfBots, Difficulty difficulty, {int? saveSlot}) async {
+  static Future<List<Player>> _createEliteBots(
+      int numberOfBots, Difficulty difficulty,
+      {int? saveSlot}) async {
     final botLearningService = BotLearningService();
     final targetSkill = difficultyToSkillLevel(difficulty);
 
-    final allBots = await botLearningService.fetchTopBots(limit: 20);
+    final allBots = await _fetchTopBotsOfflineFirst(
+      botLearningService: botLearningService,
+      limit: 20,
+    );
 
     double eliteScore(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
 
     final targetSkillName = targetSkill.toString().split('.').last;
-    final filteredBots = allBots.where((b) => b.skillLevel == targetSkillName).toList();
+    final filteredBots =
+        allBots.where((b) => b.skillLevel == targetSkillName).toList();
 
     for (final bot in allBots) {
       final marker = bot.skillLevel == targetSkillName ? '→' : ' ';
-      if (kDebugMode) debugPrint('$marker 🤖 ${bot.botId} | MMR: ${bot.mmr} | Vs humain: ${(bot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bot.winRate * 100).toStringAsFixed(0)}% | Score: ${(eliteScore(bot) * 100).toStringAsFixed(0)}%');
+      if (kDebugMode)
+        debugPrint(
+            '$marker 🤖 ${bot.botId} | MMR: ${bot.mmr} | Vs humain: ${(bot.avgPBeatHuman * 100).toStringAsFixed(0)}% | WinRate: ${(bot.winRate * 100).toStringAsFixed(0)}% | Score: ${(eliteScore(bot) * 100).toStringAsFixed(0)}%');
     }
 
     filteredBots.sort((a, b) => eliteScore(b).compareTo(eliteScore(a)));
 
-    final bestBot = filteredBots.isNotEmpty ? filteredBots.first : (allBots.isNotEmpty ? allBots.first : null);
+    final bestBot = filteredBots.isNotEmpty
+        ? filteredBots.first
+        : (allBots.isNotEmpty ? allBots.first : null);
     final secondBot = filteredBots.length >= 2 ? filteredBots[1] : bestBot;
 
     if (bestBot != null) {
-      if (kDebugMode) debugPrint('⭐ #1: ${bestBot.botId} | MMR: ${bestBot.mmr} | Score: ${(eliteScore(bestBot) * 100).toStringAsFixed(0)}%');
+      if (kDebugMode)
+        debugPrint(
+            '⭐ #1: ${bestBot.botId} | MMR: ${bestBot.mmr} | Score: ${(eliteScore(bestBot) * 100).toStringAsFixed(0)}%');
     }
     if (secondBot != null && secondBot != bestBot) {
-      if (kDebugMode) debugPrint('⭐ #2: ${secondBot.botId} | MMR: ${secondBot.mmr} | Score: ${(eliteScore(secondBot) * 100).toStringAsFixed(0)}%');
+      if (kDebugMode)
+        debugPrint(
+            '⭐ #2: ${secondBot.botId} | MMR: ${secondBot.mmr} | Score: ${(eliteScore(secondBot) * 100).toStringAsFixed(0)}%');
     }
 
     final players = <Player>[];
@@ -316,12 +400,17 @@ class BotFactory {
     final minPBeatHuman = isGold ? 0.45 : 0.55;
 
     // Vérifier si les bots actuels passent la validation
-    if (_botsPassValidation(bots: serverBots, minMMR: minMMR, minPBeatHuman: minPBeatHuman)) {
-      if (kDebugMode) debugPrint('✅ Bots serveur validés pour $difficulty (playerMMR: $playerMMR)');
+    if (_botsPassValidation(
+        bots: serverBots, minMMR: minMMR, minPBeatHuman: minPBeatHuman)) {
+      if (kDebugMode)
+        debugPrint(
+            '✅ Bots serveur validés pour $difficulty (playerMMR: $playerMMR)');
       return serverBots;
     }
 
-    if (kDebugMode) debugPrint('⚠️ Bots serveur trop faibles pour le joueur (MMR: $playerMMR). Retry avec filtres plus larges...');
+    if (kDebugMode)
+      debugPrint(
+          '⚠️ Bots serveur trop faibles pour le joueur (MMR: $playerMMR). Retry avec filtres plus larges...');
 
     // Retry avec filtres plus larges
     final retryBots = await _retryWithBroaderFilters(
@@ -333,12 +422,11 @@ class BotFactory {
 
     if (retryBots != null) {
       if (kDebugMode) debugPrint('✅ Retry a trouvé des bots assez forts');
-      _signalNeedStrongerBots(playerMMR: playerMMR, difficulty: difficulty);
       return retryBots;
     }
 
-    if (kDebugMode) debugPrint('⚠️ Aucun bot serveur assez fort. Fallback SBMM boosté');
-    _signalNeedStrongerBots(playerMMR: playerMMR, difficulty: difficulty);
+    if (kDebugMode)
+      debugPrint('⚠️ Aucun bot serveur assez fort. Fallback SBMM boosté');
     return _createBoostedSBMMBots(
       numberOfBots: numberOfBots,
       difficulty: difficulty,
@@ -378,13 +466,16 @@ class BotFactory {
     required double minPBeatHuman,
   }) async {
     try {
-      final allBots = await BotLearningService().fetchTopBots(limit: 100);
+      final allBots = await _fetchTopBotsOfflineFirst(
+        botLearningService: BotLearningService(),
+        limit: 100,
+      );
 
       double eliteScore(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
 
-      final strongBots = allBots.where((b) =>
-        b.mmr >= minMMR && b.avgPBeatHuman >= minPBeatHuman
-      ).toList();
+      final strongBots = allBots
+          .where((b) => b.mmr >= minMMR && b.avgPBeatHuman >= minPBeatHuman)
+          .toList();
 
       if (strongBots.length < 2) return null;
 
@@ -404,7 +495,8 @@ class BotFactory {
       }
 
       // Valider le résultat du retry
-      final valid = _botsPassValidation(bots: players, minMMR: minMMR, minPBeatHuman: minPBeatHuman);
+      final valid = _botsPassValidation(
+          bots: players, minMMR: minMMR, minPBeatHuman: minPBeatHuman);
       return valid ? players : null;
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Retry broader fetch failed: $e');
@@ -447,11 +539,14 @@ class BotFactory {
       params['dutchQuality'] = isGold ? 0.76 : 0.95;
 
       // Agressivité
-      params['aggressiveness'] = _boostParam(params['aggressiveness'] ?? 0.5, isGold ? 0.60 : 0.68);
+      params['aggressiveness'] =
+          _boostParam(params['aggressiveness'] ?? 0.5, isGold ? 0.60 : 0.68);
 
       // Pouvoirs
-      params['powerDefensiveRate'] = _boostParam(params['powerDefensiveRate'] ?? 0.5, isGold ? 0.64 : 0.78);
-      params['powerOffensiveRate'] = _boostParam(params['powerOffensiveRate'] ?? 0.5, isGold ? 0.60 : 0.73);
+      params['powerDefensiveRate'] = _boostParam(
+          params['powerDefensiveRate'] ?? 0.5, isGold ? 0.64 : 0.78);
+      params['powerOffensiveRate'] = _boostParam(
+          params['powerOffensiveRate'] ?? 0.5, isGold ? 0.60 : 0.73);
 
       // Vitesse de décision : plus rapide
       final currentSpeed = params['decisionSpeed'] ?? 2000.0;
@@ -477,7 +572,8 @@ class BotFactory {
       debugPrint('🔥 Créé $numberOfBots bots SBMM boostés pour $difficulty');
       for (final p in players) {
         final pr = p.aiParameters!;
-        debugPrint('  🤖 ${p.name} | mem: ${(pr['memoryAccuracy']! * 100).toStringAsFixed(0)}% '
+        debugPrint(
+            '  🤖 ${p.name} | mem: ${(pr['memoryAccuracy']! * 100).toStringAsFixed(0)}% '
             '| dutch: ${pr['dutchThreshold']!.toStringAsFixed(0)} '
             '| speed: ${pr['decisionSpeed']!.toStringAsFixed(0)}ms');
       }
@@ -491,40 +587,30 @@ class BotFactory {
     return math.max(current, target);
   }
 
-  /// Signale au serveur que le client a besoin de bots plus forts.
-  /// Fire-and-forget : ne bloque pas, ne crash pas.
-  static void _signalNeedStrongerBots({
-    required int playerMMR,
-    required Difficulty difficulty,
-  }) {
-    _sendStrongerBotsSignal(playerMMR, difficulty);
+  static Future<bool> _canReachBackendQuickly() {
+    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
   }
 
-  static Future<void> _sendStrongerBotsSignal(int playerMMR, Difficulty difficulty) async {
-    try {
-      final clientId = await ClientIdService.ensureClientId();
-      final difficultyName = difficulty.toString().split('.').last;
-
-      await http.post(
-        Uri.parse('https://dutch-game.me/api/bot-learning/need-stronger-bots'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'clientId': clientId,
-          'playerMMR': playerMMR,
-          'requestedDifficulty': difficultyName,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      ).timeout(const Duration(seconds: 3));
-    } catch (_) {
-      // Best-effort, silently fail
+  static Future<List<BotProfile>> _fetchTopBotsOfflineFirst({
+    required BotLearningService botLearningService,
+    required int limit,
+  }) async {
+    final isOnline = await _canReachBackendQuickly();
+    if (!isOnline) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Offline détecté, skip fetchTopBots (fallback local)');
+      }
+      return [];
     }
+    return botLearningService.fetchTopBots(limit: limit);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Player _playerFromBotProfile(BotProfile? source, int index, BotSkillLevel targetSkill) {
+  static Player _playerFromBotProfile(
+      BotProfile? source, int index, BotSkillLevel targetSkill) {
     if (source != null) {
       final behavior = _parseBehavior(source.behavior);
       final aiParams = _extractAiParams(source.learnedParameters);

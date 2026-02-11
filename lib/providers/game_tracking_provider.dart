@@ -9,15 +9,16 @@ class GameTrackingProvider {
   final BotLearningService _botLearningService;
   final PlayerLearningService _playerLearningService;
   final BotTrainingService _botTrainingService;
-  
+
   String? _currentGameId;
   int _humanActionCounter = 0;
-  
+
   GameTrackingProvider({
     BotLearningService? botLearningService,
     PlayerLearningService? playerLearningService,
   })  : _botLearningService = botLearningService ?? BotLearningService(),
-        _playerLearningService = playerLearningService ?? PlayerLearningService(),
+        _playerLearningService =
+            playerLearningService ?? PlayerLearningService(),
         _botTrainingService = BotTrainingService();
 
   /// Démarrer l'enregistrement d'une partie
@@ -28,10 +29,10 @@ class GameTrackingProvider {
   }) {
     _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
     _humanActionCounter = 0;
-    
+
     // Démarrer le tracking pour le joueur humain
     _playerLearningService.startGame(gameId: _currentGameId!);
-    
+
     // Démarrer le tracking pour tous les bots
     for (var player in gameState.players) {
       if (!player.isHuman) {
@@ -55,9 +56,9 @@ class GameTrackingProvider {
     String? targetStrategy,
   }) {
     if (_currentGameId == null) return;
-    
+
     final human = gameState.players.firstWhere((p) => p.isHuman);
-    
+
     _playerLearningService.recordAction(
       gameId: _currentGameId!,
       actionType: actionType,
@@ -76,7 +77,7 @@ class GameTrackingProvider {
     required Map<String, dynamic> result,
   }) {
     if (_currentGameId == null) return;
-    
+
     _playerLearningService.updateLastActionResult(
       gameId: _currentGameId!,
       result: result,
@@ -93,9 +94,9 @@ class GameTrackingProvider {
     String? targetStrategy,
   }) {
     if (_currentGameId == null) return;
-    
+
     final human = gameState.players.firstWhere((p) => p.isHuman);
-    
+
     _playerLearningService.recordAction(
       gameId: _currentGameId!,
       actionType: actionType,
@@ -107,7 +108,7 @@ class GameTrackingProvider {
       targetStrategy: targetStrategy,
     );
     AiTelemetryService().onAction();
-    
+
     _playerLearningService.updateLastActionResult(
       gameId: _currentGameId!,
       result: result,
@@ -188,9 +189,9 @@ class GameTrackingProvider {
   void initTracking(GameState gameState, bool useSBMM) {
     _currentGameId = DateTime.now().millisecondsSinceEpoch.toString();
     _humanActionCounter = 0;
-    
+
     _playerLearningService.startGame(gameId: _currentGameId!);
-    
+
     for (var player in gameState.players.where((p) => !p.isHuman)) {
       _botLearningService.startGameRecording(
         gameId: _currentGameId!,
@@ -205,10 +206,10 @@ class GameTrackingProvider {
   /// Finaliser l'enregistrement de tous les bots en fin de partie
   Future<void> finalizeBotRecordings(GameState gameState) async {
     if (_currentGameId == null) return;
-    
+
     final players = List<Player>.from(gameState.players);
     players.sort((a, b) => a.calculateScore().compareTo(b.calculateScore()));
-    
+
     final human = gameState.players.firstWhere((p) => p.isHuman);
     final humanFinalScore = gameState.getFinalScore(human);
     final humanFinalHandSize = human.hand.length;
@@ -217,7 +218,15 @@ class GameTrackingProvider {
       final rank = players.indexOf(player) + 1;
       final calledDutch = gameState.dutchCallerId == player.id;
       final wonDutch = calledDutch && rank == 1;
-      
+
+      _trackBotDecisionSnapshot(
+        gameState: gameState,
+        bot: player,
+        finalRank: rank,
+        calledDutch: calledDutch,
+        wonDutch: wonDutch,
+      );
+
       await _botLearningService.endGameRecording(
         botPlayerId: player.id,
         finalScore: player.calculateScore(),
@@ -242,6 +251,48 @@ class GameTrackingProvider {
         botFinalScore: player.calculateScore(),
       );
     }
+  }
+
+  void _trackBotDecisionSnapshot({
+    required GameState gameState,
+    required Player bot,
+    required int finalRank,
+    required bool calledDutch,
+    required bool wonDutch,
+  }) {
+    final scores = gameState.players.map((p) => p.calculateScore()).toList();
+    if (scores.isEmpty) return;
+
+    final botScore = bot.calculateScore();
+    final bestScore = scores.reduce((a, b) => a < b ? a : b);
+    final worstScore = scores.reduce((a, b) => a > b ? a : b);
+    final scoreGapToBest = botScore - bestScore;
+    final scoreGapToWorst = worstScore - botScore;
+
+    _botLearningService.recordAction(
+      botPlayerId: bot.id,
+      actionType: calledDutch ? 'dutch_call' : 'endgame_evaluation',
+      turnNumber: gameState.turnCount,
+      gameState: gameState,
+      actionDetails: {
+        'calledDutch': calledDutch,
+        'scoreGapToBest': scoreGapToBest,
+        'scoreGapToWorst': scoreGapToWorst,
+        'botHandSize': bot.hand.length,
+        'playersCount': gameState.players.length,
+      },
+    );
+
+    _botLearningService.updateLastActionResult(
+      botPlayerId: bot.id,
+      result: {
+        'wonDutch': wonDutch,
+        'finalRank': finalRank,
+        'finalScore': botScore,
+        'dutchOutcome':
+            calledDutch ? (wonDutch ? 'success' : 'failed') : 'not_called',
+      },
+    );
   }
 
   /// Réinitialiser le tracking

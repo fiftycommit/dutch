@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../network/network_probe_service.dart';
 import '../multiplayer/client_id_service.dart';
 
 /// Client pour le nouveau système SBMM serveur.
@@ -9,17 +10,28 @@ import '../multiplayer/client_id_service.dart';
 class SBMMClientService {
   static const String _baseUrl = 'https://dutch-game.me/api/sbmm';
   static const Duration _timeout = Duration(seconds: 5);
+  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
+
+  static Future<bool> _canReachBackendQuickly() {
+    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
+  }
 
   /// Demande au serveur le mix de BotSkillLevel pour ce joueur.
   /// Retourne une liste de niveaux de bots (ex: ['bronze', 'silver', 'silver']).
   /// En cas d'erreur, retourne null (le caller doit fallback).
   static Future<SBMMBotMixResult?> getBotMix({required int botCount}) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return null;
+
       final playerId = await ClientIdService.ensureClientId();
 
-      final response = await http.get(
-        Uri.parse('$_baseUrl/bot-mix?playerId=$playerId&botCount=$botCount'),
-      ).timeout(_timeout);
+      final response = await http
+          .get(
+            Uri.parse(
+                '$_baseUrl/bot-mix?playerId=$playerId&botCount=$botCount'),
+          )
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -28,7 +40,8 @@ class SBMMClientService {
         final mmr = (data['mmr'] as num).toInt();
 
         if (kDebugMode) {
-          debugPrint('🎯 SBMM bot-mix: $botLevels (cursor: ${cursor.toStringAsFixed(2)}, MMR: $mmr)');
+          debugPrint(
+              '🎯 SBMM bot-mix: $botLevels (cursor: ${cursor.toStringAsFixed(2)}, MMR: $mmr)');
         }
 
         return SBMMBotMixResult(
@@ -38,7 +51,8 @@ class SBMMClientService {
         );
       }
 
-      if (kDebugMode) debugPrint('⚠️ SBMM bot-mix erreur: ${response.statusCode}');
+      if (kDebugMode)
+        debugPrint('⚠️ SBMM bot-mix erreur: ${response.statusCode}');
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ SBMM bot-mix exception: $e');
@@ -58,6 +72,9 @@ class SBMMClientService {
     required bool dutchWon,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return;
+
       final playerId = await ClientIdService.ensureClientId();
 
       final body = {
@@ -71,16 +88,19 @@ class SBMMClientService {
         'dutchWon': dutchWon,
       };
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/record-game'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(_timeout);
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/record-game'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
 
       if (kDebugMode) {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          debugPrint('✅ SBMM record-game: newMMR=${data['newMMR']}, newCursor=${data['newCursor']}');
+          debugPrint(
+              '✅ SBMM record-game: newMMR=${data['newMMR']}, newCursor=${data['newCursor']}');
         } else {
           debugPrint('⚠️ SBMM record-game erreur: ${response.statusCode}');
         }
@@ -121,10 +141,10 @@ class SBMMBotResult {
   });
 
   Map<String, dynamic> toJson() => {
-    'level': level,
-    'rank': rank,
-    'score': score,
-    'dutchCalled': dutchCalled,
-    'dutchWon': dutchWon,
-  };
+        'level': level,
+        'rank': rank,
+        'score': score,
+        'dutchCalled': dutchCalled,
+        'dutchWon': dutchWon,
+      };
 }

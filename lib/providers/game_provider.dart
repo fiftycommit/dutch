@@ -17,6 +17,7 @@ import '../services/learning/bot_learning_service.dart';
 import '../services/learning/ai_telemetry_service.dart';
 import '../services/matchmaking/sbmm_client_service.dart';
 import '../services/logging/game_logger_service.dart';
+import '../services/network/network_probe_service.dart';
 import 'game_tracking_provider.dart';
 import 'managers/solo/tournament_manager.dart';
 import 'managers/solo/reaction_timer_manager.dart';
@@ -40,37 +41,38 @@ class GameProvider with ChangeNotifier implements IGameController {
   GameState? get gameState => _gameState;
   @override
   bool get hasActiveGame => _gameState != null;
-  
+
   BuildContext? _currentContext;
   @override
   bool isProcessing = false;
   String? statusMessage;
   @override
   Set<int> shakingCardIndices = {};
-  
+
   bool _isPaused = false;
   @override
   bool get isPaused => _isPaused;
-  
+
   @override
-  Player? get localPlayer => _gameState?.players.where((p) => p.isHuman).firstOrNull;
-  
+  Player? get localPlayer =>
+      _gameState?.players.where((p) => p.isHuman).firstOrNull;
+
   @override
   bool get isLocalPlayerTurn => _gameState?.currentPlayer.isHuman ?? false;
-  
+
   @override
-  bool get canLocalPlayerAct => 
-    _gameState != null && 
-    isLocalPlayerTurn && 
-    _gameState!.phase == GamePhase.playing;
-  
+  bool get canLocalPlayerAct =>
+      _gameState != null &&
+      isLocalPlayerTurn &&
+      _gameState!.phase == GamePhase.playing;
+
   int _currentReactionTimeMs = 3000;
   @override
   int get currentReactionTimeMs => _currentReactionTimeMs;
   int _currentActionTextDisplayMs = 1500;
   int _currentSlotId = 1;
   bool _useSBMM = false;
-  
+
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
   int _playerWinStreak = 0;
@@ -85,7 +87,8 @@ class GameProvider with ChangeNotifier implements IGameController {
   int get playerSkillEstimate => _skillEstimator.estimatedSkill;
 
   // Flag ML hydration - bloque les bots jusqu'à ce que les params soient chargés
-  bool _botsHydrated = true; // true par défaut (pas de bots = pas besoin d'attendre)
+  bool _botsHydrated =
+      true; // true par défaut (pas de bots = pas besoin d'attendre)
 
   // Services injectés (Principe SOLID: DIP)
   final IHapticService _hapticService;
@@ -100,12 +103,15 @@ class GameProvider with ChangeNotifier implements IGameController {
   late final BotOrchestrator _botOrchestrator;
 
   // Délégation au TournamentManager
-  List<TournamentResult>? get tournamentFinalRanking => _tournamentManager.finalRanking;
+  List<TournamentResult>? get tournamentFinalRanking =>
+      _tournamentManager.finalRanking;
   int get tournamentTotalRounds {
     if (_gameState == null) return 1;
     return _tournamentManager.getTotalRounds(_gameState!);
   }
-  ValueNotifier<int> get reactionTimeRemaining => _timerManager.reactionTimeRemaining;
+
+  ValueNotifier<int> get reactionTimeRemaining =>
+      _timerManager.reactionTimeRemaining;
 
   GameProvider({
     required IHapticService hapticService,
@@ -142,21 +148,26 @@ class GameProvider with ChangeNotifier implements IGameController {
   }) async {
     // Initialiser le tournoi via le manager
     if (gameMode == GameMode.tournament) {
-      _tournamentManager.initializeTournament(tournamentRound, playerCount: players.length);
+      _tournamentManager.initializeTournament(tournamentRound,
+          playerCount: players.length);
     } else {
       _tournamentManager.resetTournament();
     }
 
     _gameState = GameLogic.initializeGame(
-        players: players, gameMode: gameMode, difficulty: difficulty, tournamentRound: tournamentRound);
-    _gameState!.tournamentCumulativeScores = Map.from(_tournamentManager.cumulativeScores);
-    
+        players: players,
+        gameMode: gameMode,
+        difficulty: difficulty,
+        tournamentRound: tournamentRound);
+    _gameState!.tournamentCumulativeScores =
+        Map.from(_tournamentManager.cumulativeScores);
+
     _currentReactionTimeMs = reactionTimeMs;
     _currentActionTextDisplayMs = actionTextDisplayMs;
     _currentSlotId = saveSlot;
     _useSBMM = useSBMM;
     _lastMatchRpResult = null;
-    
+
     // Mode hardcore
     _hardcoreLevel = hardcoreLevel;
 
@@ -164,7 +175,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       final stats = await _statsService.getStats(slotId: saveSlot);
       _playerMMR = stats['mmr'] ?? 0;
       _playerWinStreak = stats['winStreak'] ?? 0;
-      
+
       // Initialiser l'estimateur de skill avec le MMR actuel
       _skillEstimator.reset(initialMMR: _playerMMR);
     } else {
@@ -184,10 +195,10 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     // Initialiser le tracking
     _trackingProvider.initTracking(_gameState!, useSBMM);
-    
+
     // 🎯 HUMAN THREAT TRACKER : Réinitialiser pour cette nouvelle manche
     HumanThreatTracker().initializeRound(_gameState!);
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // TÉLÉMÉTRIE AI : Démarrer la collecte
     // ═══════════════════════════════════════════════════════════════════════
@@ -214,56 +225,102 @@ class GameProvider with ChangeNotifier implements IGameController {
   /// Cette opération est asynchrone et non-bloquante pour ne pas retarder le démarrage.
   Future<void> _hydrateBotsWithLearnedParams() async {
     if (_gameState == null) return;
-    
-    final botLearningService = BotLearningService();
+
     final bots = _gameState!.players.where((p) => !p.isHuman).toList();
-    
-    for (int i = 0; i < bots.length; i++) {
-      final bot = bots[i];
-      if (bot.aiParameters != null && bot.aiParameters!.isNotEmpty) {
-        continue;
+    final botsToHydrate = bots
+        .where((b) => (b.aiParameters == null || b.aiParameters!.isEmpty))
+        .where((b) => b.botBehavior != null && b.botSkillLevel != null)
+        .toList();
+
+    if (botsToHydrate.isEmpty) {
+      _botsHydrated = true;
+      notifyListeners();
+      checkIfBotShouldPlay();
+      return;
+    }
+
+    // Offline-first: ACK + timeout court avant les requêtes ML
+    final canReachBackend = await NetworkProbeService.canReachBackend(
+      timeout: const Duration(milliseconds: 700),
+    );
+    if (!canReachBackend) {
+      if (kDebugMode) {
+        debugPrint(
+            '⚠️ Offline détecté: hydratation ML ignorée (fallback local)');
       }
-      if (bot.botBehavior == null || bot.botSkillLevel == null) continue;
-      
+      _botsHydrated = true;
+      notifyListeners();
+      checkIfBotShouldPlay();
+      return;
+    }
+
+    final botLearningService = BotLearningService();
+    final uniqueKeys = <String>{};
+    for (final bot in botsToHydrate) {
       final behavior = bot.botBehavior.toString().split('.').last;
       final skillLevel = bot.botSkillLevel.toString().split('.').last;
-      
-      try {
-        final params = await botLearningService.fetchBotParameters(
-          behavior: behavior,
-          skillLevel: skillLevel,
-        );
-        
-        if (params != null && params.isNotEmpty) {
-          // Le serveur retourne directement les learnedParameters (objet plat)
-          // Convertir en Map<String, double>
-          final aiParams = <String, double>{};
-          params.forEach((key, value) {
-            if (value is num) {
-              aiParams[key] = value.toDouble();
-            }
-          });
-          
-          if (aiParams.isNotEmpty) {
-            // Remplacer le bot dans la liste avec les nouveaux paramètres
-            final botIndex = _gameState!.players.indexOf(bot);
-            if (botIndex >= 0) {
-              _gameState!.players[botIndex] = bot.copyWith(aiParameters: aiParams);
-              if (kDebugMode) debugPrint('✅ Bot $behavior/$skillLevel hydraté avec ${aiParams.length} paramètres ML');
-            }
-          }
+      uniqueKeys.add('$behavior|$skillLevel');
+    }
+
+    final paramTasks = <String, Future<Map<String, dynamic>?>>{};
+    for (final key in uniqueKeys) {
+      final parts = key.split('|');
+      final behavior = parts[0];
+      final skillLevel = parts[1];
+      paramTasks[key] = botLearningService.fetchBotParameters(
+        behavior: behavior,
+        skillLevel: skillLevel,
+      );
+    }
+
+    final hydratedParams = <String, Map<String, double>>{};
+    await Future.wait(paramTasks.entries.map((entry) async {
+      final key = entry.key;
+      final params = await entry.value;
+      if (params == null || params.isEmpty) return;
+
+      final aiParams = <String, double>{};
+      params.forEach((name, value) {
+        if (value is num) {
+          aiParams[name] = value.toDouble();
         }
-      } catch (e) {
-        if (kDebugMode) debugPrint('⚠️ Impossible de charger les paramètres ML pour $behavior/$skillLevel: $e');
-        // Continue avec les paramètres par défaut - pas critique
+      });
+      if (aiParams.isNotEmpty) {
+        hydratedParams[key] = aiParams;
+      }
+    }));
+
+    if (_gameState == null) {
+      _botsHydrated = true;
+      return;
+    }
+
+    int hydratedCount = 0;
+    for (final bot in botsToHydrate) {
+      final behavior = bot.botBehavior.toString().split('.').last;
+      final skillLevel = bot.botSkillLevel.toString().split('.').last;
+      final key = '$behavior|$skillLevel';
+      final aiParams = hydratedParams[key];
+      if (aiParams == null || aiParams.isEmpty) continue;
+
+      final botIndex = _gameState!.players.indexOf(bot);
+      if (botIndex < 0) continue;
+
+      _gameState!.players[botIndex] = bot.copyWith(aiParameters: aiParams);
+      hydratedCount++;
+      if (kDebugMode) {
+        debugPrint(
+            '✅ Bot $behavior/$skillLevel hydraté avec ${aiParams.length} paramètres ML');
       }
     }
-    
-    // Marquer l'hydratation comme terminée et notifier
+
+    if (kDebugMode) {
+      debugPrint(
+          '🤖 Hydratation ML terminée: $hydratedCount/${botsToHydrate.length}');
+    }
+
     _botsHydrated = true;
     notifyListeners();
-    
-    // Vérifier si un bot doit jouer maintenant que les params sont chargés
     checkIfBotShouldPlay();
   }
 
@@ -272,7 +329,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   void checkIfBotShouldPlay() {
     // Bloquer tant que les bots ne sont pas hydratés avec les params ML
     if (!_botsHydrated) return;
-    
+
     if (_botOrchestrator.shouldBotPlay(_gameState, isProcessing, _isPaused)) {
       _checkAndPlayBotTurn();
     }
@@ -285,7 +342,8 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void drawCard() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+      return;
 
     // LOG : État de l'humain au début de son tour
     GameLoggerService.instance.logTurnStart(
@@ -297,13 +355,16 @@ class GameProvider with ChangeNotifier implements IGameController {
     shakingCardIndices.clear();
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
-    
+
     GameLogic.drawCard(_gameState!);
-    
+
     _trackingProvider.recordPlayerActionWithResult(
       actionType: 'draw',
       gameState: _gameState!,
-      actionDetails: {'source': 'deck', 'drawnCard': _gameState!.drawnCard?.toJson()},
+      actionDetails: {
+        'source': 'deck',
+        'drawnCard': _gameState!.drawnCard?.toJson()
+      },
       result: {'scoreChange': human.getEstimatedScore() - beforeScore},
     );
     notifyListeners();
@@ -311,12 +372,14 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   @override
   void replaceCard(int cardIndex) {
-    if (_gameState == null || !_gameState!.currentPlayer.isHuman || _gameState!.drawnCard == null) return;
+    if (_gameState == null ||
+        !_gameState!.currentPlayer.isHuman ||
+        _gameState!.drawnCard == null) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     final drawnCard = _gameState!.drawnCard;
-    
+
     GameLogic.replaceCard(_gameState!, cardIndex);
     _trackingProvider.recordBotDiscards(_gameState!);
 
@@ -326,7 +389,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       actionDetails: {'cardIndex': cardIndex, 'drawnCard': drawnCard?.toJson()},
       result: {'scoreChange': human.getEstimatedScore() - beforeScore},
     );
-    
+
     _hapticService.cardTap();
     notifyListeners();
 
@@ -336,12 +399,14 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   @override
   void discardDrawnCard() {
-    if (_gameState == null || !_gameState!.currentPlayer.isHuman || _gameState!.drawnCard == null) return;
+    if (_gameState == null ||
+        !_gameState!.currentPlayer.isHuman ||
+        _gameState!.drawnCard == null) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     final drawnCard = _gameState!.drawnCard;
-    
+
     GameLogic.discardDrawnCard(_gameState!);
     _trackingProvider.recordBotDiscards(_gameState!);
 
@@ -351,7 +416,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       actionDetails: {'source': 'drawn', 'card': drawnCard?.toJson()},
       result: {'scoreChange': human.getEstimatedScore() - beforeScore},
     );
-    
+
     _hapticService.cardTap();
     notifyListeners();
 
@@ -363,12 +428,13 @@ class GameProvider with ChangeNotifier implements IGameController {
   void attemptMatch(int cardIndex, {Player? forcedPlayer}) async {
     if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
 
-    Player player = forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
+    Player player =
+        forcedPlayer ?? _gameState!.players.firstWhere((p) => p.isHuman);
     if (cardIndex < 0 || cardIndex >= player.hand.length) return;
 
     // 🎯 Capturer la valeur de la carte AVANT le match pour tracker les points économisés
     final cardValue = player.hand[cardIndex].points;
-    
+
     bool success = GameLogic.matchCard(_gameState!, player, cardIndex);
 
     if (player.isHuman) {
@@ -379,10 +445,11 @@ class GameProvider with ChangeNotifier implements IGameController {
         result: {'success': success, 'scoreChange': 0},
       );
       success ? _hapticService.cardTap() : _hapticService.error();
-      
+
       // 🎯 HUMAN THREAT TRACKER : Enregistrer les matchs réussis de l'humain
       if (success) {
-        HumanThreatTracker().recordHumanMatch(cardValue, _gameState!.actionCount);
+        HumanThreatTracker()
+            .recordHumanMatch(cardValue, _gameState!.actionCount);
       }
     }
 
@@ -398,18 +465,23 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void takeFromDiscard() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+      return;
     if (_gameState!.discardPile.isEmpty) return;
 
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
-    _gameState!.addToHistory("${human.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
+    _gameState!.addToHistory(
+        "${human.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
 
     _trackingProvider.recordPlayerActionWithResult(
       actionType: 'draw',
       gameState: _gameState!,
-      actionDetails: {'source': 'discard', 'drawnCard': _gameState!.drawnCard?.toJson()},
+      actionDetails: {
+        'source': 'discard',
+        'drawnCard': _gameState!.drawnCard?.toJson()
+      },
       result: {'scoreChange': human.getEstimatedScore() - beforeScore},
     );
     notifyListeners();
@@ -418,11 +490,13 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void callDutch() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) return;
+    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null)
+      return;
 
     final human = _gameState!.currentPlayer;
-    _trackingProvider.recordPlayerAction(actionType: 'dutch', gameState: _gameState!, actionDetails: {});
-    
+    _trackingProvider.recordPlayerAction(
+        actionType: 'dutch', gameState: _gameState!, actionDetails: {});
+
     _gameState!.phase = GamePhase.dutchCalled;
     _gameState!.dutchCallerId = human.id;
     _gameState!.addToHistory("📢 ${human.name} crie DUTCH !");
@@ -447,10 +521,12 @@ class GameProvider with ChangeNotifier implements IGameController {
     if (_gameState == null || isProcessing) return;
     final human = _gameState!.players.firstWhere((p) => p.isHuman);
     final isLocalTurn = _gameState!.currentPlayer.isHuman;
-    
+
     if (_gameState!.phase == GamePhase.reaction) {
       attemptMatch(cardIndex, forcedPlayer: human);
-    } else if (_gameState!.phase == GamePhase.playing && isLocalTurn && _gameState!.drawnCard != null) {
+    } else if (_gameState!.phase == GamePhase.playing &&
+        isLocalTurn &&
+        _gameState!.drawnCard != null) {
       replaceCard(cardIndex);
     }
   }
@@ -492,12 +568,15 @@ class GameProvider with ChangeNotifier implements IGameController {
   // TIMER DE RÉACTION (délégué au ReactionTimerManager)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void pauseReactionTimerForNotification() => _timerManager.pauseTimer(_gameState);
-  void resumeReactionTimerAfterNotification() => _timerManager.resumeTimer(_gameState!, _isPaused);
+  void pauseReactionTimerForNotification() =>
+      _timerManager.pauseTimer(_gameState);
+  void resumeReactionTimerAfterNotification() =>
+      _timerManager.resumeTimer(_gameState!, _isPaused);
 
   void startReactionPhase() {
     if (_gameState == null || _isPaused) return;
-    _timerManager.startReactionPhase(_gameState!, _currentReactionTimeMs, _isPaused);
+    _timerManager.startReactionPhase(
+        _gameState!, _currentReactionTimeMs, _isPaused);
     _simulateBotReaction();
   }
 
@@ -508,12 +587,13 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.lastSpiedCard = null;
     GameLogic.nextPlayer(_gameState!);
     _trackingProvider.incrementBotTurns(_gameState!);
-    
+
     // 🎯 HUMAN THREAT TRACKER : Notifier le changement de tour
     HumanThreatTracker().onNewTurn();
-    
+
     notifyListeners();
-    if (!_gameState!.currentPlayer.isHuman && !_isPaused) _checkAndPlayBotTurn();
+    if (!_gameState!.currentPlayer.isHuman && !_isPaused)
+      _checkAndPlayBotTurn();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -523,8 +603,8 @@ class GameProvider with ChangeNotifier implements IGameController {
   Future<void> _simulateBotReaction() async {
     if (_gameState == null || _isPaused) return;
     await _botOrchestrator.simulateBotReaction(
-      _gameState!, 
-      _playerMMR, 
+      _gameState!,
+      _playerMMR,
       _isPaused,
       hardcoreLevel: _hardcoreLevel,
       playerSkillEstimate: _skillEstimator.estimatedSkill,
@@ -543,10 +623,10 @@ class GameProvider with ChangeNotifier implements IGameController {
     notifyListeners();
 
     await _botOrchestrator.playBotTurn(
-      _gameState!, 
-      _playerMMR, 
-      _isPaused, 
-      _currentContext, 
+      _gameState!,
+      _playerMMR,
+      _isPaused,
+      _currentContext,
       () async => _checkInstantEnd(),
       hardcoreLevel: _hardcoreLevel,
       playerSkillEstimate: _skillEstimator.estimatedSkill,
@@ -561,7 +641,8 @@ class GameProvider with ChangeNotifier implements IGameController {
     notifyListeners();
     if (_gameState?.phase == GamePhase.playing) {
       if (_currentActionTextDisplayMs > 0) {
-        await Future.delayed(Duration(milliseconds: _currentActionTextDisplayMs));
+        await Future.delayed(
+            Duration(milliseconds: _currentActionTextDisplayMs));
         if (_gameState == null || _isPaused) return;
         if (_gameState!.phase != GamePhase.playing) return;
       }
@@ -582,9 +663,12 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void resumeGame() {
     _isPaused = false;
-    if (_gameState?.phase == GamePhase.reaction) _timerManager.resumeTimer(_gameState!, _isPaused);
+    if (_gameState?.phase == GamePhase.reaction)
+      _timerManager.resumeTimer(_gameState!, _isPaused);
     notifyListeners();
-    if (_gameState != null && !_gameState!.currentPlayer.isHuman && _gameState!.phase == GamePhase.playing) {
+    if (_gameState != null &&
+        !_gameState!.currentPlayer.isHuman &&
+        _gameState!.phase == GamePhase.playing) {
       _checkAndPlayBotTurn();
     }
   }
@@ -621,7 +705,9 @@ class GameProvider with ChangeNotifier implements IGameController {
         isEliminated: calledDutch && playerRank != 1,
         totalPlayers: _gameState!.players.length,
         isTournament: _gameState!.gameMode == GameMode.tournament,
-        tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,
+        tournamentRound: _gameState!.gameMode == GameMode.tournament
+            ? _gameState!.tournamentRound
+            : 1,
         winStreak: winStreak,
       );
     }
@@ -649,7 +735,9 @@ class GameProvider with ChangeNotifier implements IGameController {
       isSBMM: _useSBMM,
       totalPlayers: _gameState!.players.length,
       isTournament: _gameState!.gameMode == GameMode.tournament,
-      tournamentRound: _gameState!.gameMode == GameMode.tournament ? _gameState!.tournamentRound : 1,
+      tournamentRound: _gameState!.gameMode == GameMode.tournament
+          ? _gameState!.tournamentRound
+          : 1,
       tournamentId: _tournamentManager.activeTournamentId,
       actionHistory: List<String>.from(_gameState!.actionHistory),
     );
@@ -722,7 +810,8 @@ class GameProvider with ChangeNotifier implements IGameController {
     required int playerRank,
   }) {
     // Fire-and-forget pour ne pas bloquer notifyListeners
-    _saveBotMatchupAsync(ranking: ranking, human: human, playerRank: playerRank);
+    _saveBotMatchupAsync(
+        ranking: ranking, human: human, playerRank: playerRank);
   }
 
   Future<void> _saveBotMatchupAsync({
@@ -741,7 +830,14 @@ class GameProvider with ChangeNotifier implements IGameController {
         final params = bot.aiParameters ?? <String, double>{};
         final botRank = ranking.indexWhere((p) => p.id == bot.id) + 1;
         final keyParams = <String, double>{};
-        for (final key in ['memoryAccuracy', 'memoryRetention', 'dutchThreshold', 'dutchQuality', 'aggressiveness', 'decisionSpeed']) {
+        for (final key in [
+          'memoryAccuracy',
+          'memoryRetention',
+          'dutchThreshold',
+          'dutchQuality',
+          'aggressiveness',
+          'decisionSpeed'
+        ]) {
           final v = params[key];
           if (v != null) keyParams[key] = v;
         }
@@ -749,14 +845,16 @@ class GameProvider with ChangeNotifier implements IGameController {
         botEntries.add(BotMatchupEntry(
           botId: bot.botBehavior?.toString().split('.').last ?? 'unknown',
           botMMR: (params['serverMMR'] as num?)?.toInt() ?? 0,
-          botWinRateVsHuman: (params['serverWinRateVsHuman'] as num?)?.toDouble() ?? 0.0,
+          botWinRateVsHuman:
+              (params['serverWinRateVsHuman'] as num?)?.toDouble() ?? 0.0,
           botScore: _gameState!.getFinalScore(bot),
           botRank: botRank,
           botParams: keyParams,
         ));
       }
 
-      final hasBoosted = bots.any((b) => (b.aiParameters?['isBoostedSBMM'] ?? 0) == 1.0);
+      final hasBoosted =
+          bots.any((b) => (b.aiParameters?['isBoostedSBMM'] ?? 0) == 1.0);
 
       final record = BotMatchupRecord(
         gameId: '${DateTime.now().millisecondsSinceEpoch}',
@@ -860,7 +958,8 @@ class GameProvider with ChangeNotifier implements IGameController {
     notifyListeners();
   }
 
-  int getTournamentRP(int finalPosition) => _tournamentManager.calculateRP(finalPosition);
+  int getTournamentRP(int finalPosition) =>
+      _tournamentManager.calculateRP(finalPosition);
 
   Future<void> startNextTournamentRound() async {
     if (_gameState == null) return;
@@ -872,7 +971,8 @@ class GameProvider with ChangeNotifier implements IGameController {
       return;
     }
 
-    List<Player> survivors = _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
+    List<Player> survivors =
+        _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
     if (survivors.length < 2) return;
 
     await createNewGame(
@@ -890,10 +990,17 @@ class GameProvider with ChangeNotifier implements IGameController {
   void quitGame() {
     if (_gameState != null) {
       _statsService.saveGameResult(
-        score: 999, playerRank: _gameState!.players.length, calledDutch: false, wonDutch: false,
-        hasEmptyHand: false, isSBMM: _playerMMR != null, slotId: _currentSlotId,
-        totalPlayers: _gameState!.players.length, isTournament: _gameState!.gameMode == GameMode.tournament,
-        tournamentRound: _gameState!.tournamentRound, tournamentId: _tournamentManager.activeTournamentId,
+        score: 999,
+        playerRank: _gameState!.players.length,
+        calledDutch: false,
+        wonDutch: false,
+        hasEmptyHand: false,
+        isSBMM: _playerMMR != null,
+        slotId: _currentSlotId,
+        totalPlayers: _gameState!.players.length,
+        isTournament: _gameState!.gameMode == GameMode.tournament,
+        tournamentRound: _gameState!.tournamentRound,
+        tournamentId: _tournamentManager.activeTournamentId,
         actionHistory: List<String>.from(_gameState!.actionHistory),
       );
     }
@@ -926,7 +1033,10 @@ class GameProvider with ChangeNotifier implements IGameController {
     if (_gameState == null) return false;
     if (_gameState!.deck.isEmpty) {
       _refillDeckFromDiscard();
-      if (_gameState!.deck.isEmpty) { endGame(); return true; }
+      if (_gameState!.deck.isEmpty) {
+        endGame();
+        return true;
+      }
     }
     return false;
   }
@@ -938,15 +1048,17 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.discardPile.clear();
     _gameState!.discardPile.add(topCard);
     _gameState!.smartShuffle();
-    _gameState!.addToHistory("🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
+    _gameState!.addToHistory(
+        "🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
     notifyListeners();
   }
 
   void _addDutchHistory() {
     if (_gameState!.dutchCallerId == null) return;
-    Player dutchCaller = _gameState!.players.firstWhere((p) => p.id == _gameState!.dutchCallerId);
+    Player dutchCaller = _gameState!.players
+        .firstWhere((p) => p.id == _gameState!.dutchCallerId);
     if (dutchCaller.isHuman) return;
-    
+
     List<Player> ranking = _gameState!.getFinalRanking();
     int dutchCallerRank = ranking.indexWhere((p) => p.id == dutchCaller.id) + 1;
     dutchCaller.dutchHistory.add(DutchAttempt(
@@ -955,20 +1067,28 @@ class GameProvider with ChangeNotifier implements IGameController {
       won: dutchCallerRank == 1,
       opponentsCount: _gameState!.players.length - 1,
     ));
-    if (dutchCaller.dutchHistory.length > 10) dutchCaller.dutchHistory.removeAt(0);
+    if (dutchCaller.dutchHistory.length > 10)
+      dutchCaller.dutchHistory.removeAt(0);
   }
 
   void _logFinalRanking(List<Player> ranking) {
     final ranksWithTies = _gameState!.getFinalRanksWithTies();
     _gameState!.addToHistory("🏁 Classement final");
-    String rankEmoji(int rank) => rank == 1 ? "🥇" : rank == 2 ? "🥈" : rank == 3 ? "🥉" : "";
+    String rankEmoji(int rank) => rank == 1
+        ? "🥇"
+        : rank == 2
+            ? "🥈"
+            : rank == 3
+                ? "🥉"
+                : "";
     for (int i = 0; i < ranking.length; i++) {
       final player = ranking[i];
       final rank = ranksWithTies[player.id] ?? (i + 1);
       final score = _gameState!.getFinalScore(player);
       final badge = rankEmoji(rank);
       final dutchTag = player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
-      _gameState!.addToHistory("${badge.isEmpty ? "" : "$badge "}#$rank ${player.name}$dutchTag — $score pts");
+      _gameState!.addToHistory(
+          "${badge.isEmpty ? "" : "$badge "}#$rank ${player.name}$dutchTag — $score pts");
     }
   }
 

@@ -17,6 +17,9 @@ export class BotLearningService {
   private adaptive: AdaptiveDifficultyService;
   private leaderboard: LeaderboardService;
   private paused: boolean = false;
+  private statsCache: { value: BotStats; expiresAt: number } | null = null;
+  private readonly statsCacheTtlMs = 15_000;
+  private readonly recentGameSampleSize = 200;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning');
@@ -27,6 +30,17 @@ export class BotLearningService {
     this.genetic = new GeneticAlgorithmService();
     this.adaptive = new AdaptiveDifficultyService();
     this.leaderboard = new LeaderboardService();
+  }
+
+  private extractGameFilenameTimestamp(file: string): number {
+    const match = file.match(/_(\d+)\.json$/);
+    if (!match) return 0;
+    const ts = Number(match[1]);
+    return Number.isFinite(ts) ? ts : 0;
+  }
+
+  private invalidateStatsCache(): void {
+    this.statsCache = null;
   }
 
   isPaused(): boolean {
@@ -93,6 +107,7 @@ export class BotLearningService {
 
       if (processed > 0) {
         console.log(`✅ ${processed} parties en attente traitées`);
+        this.invalidateStatsCache();
       }
     } catch (_) { /* dir may not exist */ }
 
@@ -141,6 +156,7 @@ export class BotLearningService {
     // Réinitialiser les services en mémoire
     this.qLearning = new QLearningService();
     this.neuralNet = new NeuralNetworkService();
+    this.invalidateStatsCache();
 
     console.log(`🗑️ Reset complet : ${deletedProfiles} profils, ${deletedGames} parties supprimés`);
     return { deletedProfiles, deletedGames };
@@ -169,6 +185,7 @@ export class BotLearningService {
         ? { ...record, _pending: true }
         : record;
       await fs.writeFile(filepath, JSON.stringify(recordToSave, null, 2));
+      this.invalidateStatsCache();
 
       if (this.paused) {
         console.log(`⏸️ Partie enregistrée (en attente): ${filename}`);
@@ -598,6 +615,11 @@ export class BotLearningService {
    */
   async getStats(): Promise<BotStats> {
     try {
+      const now = Date.now();
+      if (this.statsCache && this.statsCache.expiresAt > now) {
+        return this.statsCache.value;
+      }
+
       const profilesDir = path.join(this.dataDir, 'profiles');
       const gamesDir = path.join(this.dataDir, 'games');
       
@@ -620,9 +642,32 @@ export class BotLearningService {
         .sort((a, b) => b.mmr - a.mmr)
         .slice(0, 10);
       
-      // Récupérer les parties récentes valides (tri par timestamp réel, pas par nom de fichier)
+      // Récupérer les parties récentes valides sans parser tout l'historique
+      const timestampedGameFiles: Array<{ file: string; ts: number }> = [];
+      const fallbackGameFiles: string[] = [];
+      for (const file of gameFiles) {
+        if (!file.endsWith('.json')) continue;
+        const ts = this.extractGameFilenameTimestamp(file);
+        if (ts > 0) {
+          timestampedGameFiles.push({ file, ts });
+        } else {
+          fallbackGameFiles.push(file);
+        }
+      }
+
+      timestampedGameFiles.sort((a, b) => b.ts - a.ts);
+      const recentCandidateFiles = timestampedGameFiles
+        .slice(0, this.recentGameSampleSize)
+        .map(entry => entry.file);
+
+      if (recentCandidateFiles.length < this.recentGameSampleSize) {
+        recentCandidateFiles.push(
+          ...fallbackGameFiles.slice(0, this.recentGameSampleSize - recentCandidateFiles.length)
+        );
+      }
+
       const parsedGames: BotGameRecord[] = [];
-      for (const file of gameFiles.filter(f => f.endsWith('.json'))) {
+      for (const file of recentCandidateFiles) {
         try {
           const data = await fs.readFile(path.join(gamesDir, file), 'utf-8');
           const game = JSON.parse(data) as Partial<BotGameRecord>;
@@ -656,14 +701,21 @@ export class BotLearningService {
       const recentGames = parsedGames
         .sort((a, b) => ts(b) - ts(a))
         .slice(0, 10);
-      
-      return {
+
+      const stats: BotStats = {
         totalGames,
         totalBots: profiles.length,
         avgWinRate,
         topPerformers,
         recentGames,
       };
+
+      this.statsCache = {
+        value: stats,
+        expiresAt: now + this.statsCacheTtlMs,
+      };
+
+      return stats;
     } catch (error) {
       console.error('❌ Erreur récupération stats:', error);
       return {

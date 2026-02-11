@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/player_learning_data.dart';
+import '../network/network_probe_service.dart';
 import 'player_learning_service.dart';
 
 class GhostProfile {
@@ -23,6 +24,11 @@ class GhostCloneService {
   static const String _cloneKeyPrefix = 'ghost_clone_id_slot_';
   static const String _offlineClonePrefix = 'offline_ghost_slot_';
   static const Duration _apiTimeout = Duration(seconds: 2);
+  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
+
+  Future<bool> _canReachBackendQuickly() {
+    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
+  }
 
   /// Récupère ou crée un profil ghost pour le joueur
   ///
@@ -35,24 +41,29 @@ class GhostCloneService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final existingId = prefs.getString('$_cloneKeyPrefix$slotId');
+    final isOnline = await _canReachBackendQuickly();
 
     // Essayer de récupérer un clone existant depuis le serveur
     if (existingId != null && existingId.isNotEmpty) {
-      final fetched = await _fetchClone(existingId);
-      if (fetched != null) return fetched;
+      if (isOnline) {
+        final fetched = await _fetchClone(existingId);
+        if (fetched != null) return fetched;
+      }
       // Si le fetch échoue, basculer directement en offline pour éviter le double délai.
       return _generateOfflineProfile(slotId: slotId, playerId: playerId);
     }
 
     // Essayer de créer un nouveau clone sur le serveur
-    final created = await _createClone(
-      slotId: slotId,
-      playerId: playerId,
-      playerName: playerName,
-    );
-    if (created != null) {
-      await prefs.setString('$_cloneKeyPrefix$slotId', created.cloneId);
-      return created;
+    if (isOnline) {
+      final created = await _createClone(
+        slotId: slotId,
+        playerId: playerId,
+        playerName: playerName,
+      );
+      if (created != null) {
+        await prefs.setString('$_cloneKeyPrefix$slotId', created.cloneId);
+        return created;
+      }
     }
 
     // FALLBACK OFFLINE : générer un profil local basé sur l'historique du joueur
@@ -69,7 +80,8 @@ class GhostCloneService {
       final profile = await PlayerLearningService().getProfile(slotId: slotId);
 
       // Générer un ID unique pour ce ghost offline
-      final offlineId = '$_offlineClonePrefix${playerId}_${DateTime.now().millisecondsSinceEpoch}';
+      final offlineId =
+          '$_offlineClonePrefix${playerId}_${DateTime.now().millisecondsSinceEpoch}';
 
       if (history.isEmpty) {
         // Pas d'historique : utiliser les paramètres par défaut du profil
@@ -151,21 +163,20 @@ class GhostCloneService {
         ? (totalAggressiveness / actionCount).clamp(0.0, 1.0)
         : 0.5;
 
-    double riskTolerance = actionCount > 0
-        ? (totalRiskTaking / actionCount).clamp(0.0, 1.0)
-        : 0.5;
+    double riskTolerance =
+        actionCount > 0 ? (totalRiskTaking / actionCount).clamp(0.0, 1.0) : 0.5;
 
     double powerUsageRate = avgActionsPerGame > 0
-        ? (powerUseCount / (gameCount * avgActionsPerGame * 0.3)).clamp(0.0, 1.0)
+        ? (powerUseCount / (gameCount * avgActionsPerGame * 0.3))
+            .clamp(0.0, 1.0)
         : 0.5;
 
     double avgDecisionTime = actionCount > 0
         ? (totalDecisionTime / actionCount).clamp(500.0, 10000.0)
         : 2000.0;
 
-    double dutchThreshold = dutchCount > 0
-        ? (totalDutchScore / dutchCount).clamp(5.0, 30.0)
-        : 15.0;
+    double dutchThreshold =
+        dutchCount > 0 ? (totalDutchScore / dutchCount).clamp(5.0, 30.0) : 15.0;
 
     // Ajuster la prudence inversement à l'agressivité
     double caution = (1.0 - aggressiveness).clamp(0.0, 1.0);
@@ -210,7 +221,8 @@ class GhostCloneService {
         'caution': numValue('caution', 0.5).clamp(0.0, 1.0),
         'riskTolerance': numValue('riskTolerance', 0.5).clamp(0.0, 1.0),
         'powerUsageRate': numValue('powerUsageRate', 0.5).clamp(0.0, 1.0),
-        'decisionSpeed': numValue('decisionSpeed', 2000.0).clamp(500.0, 10000.0),
+        'decisionSpeed':
+            numValue('decisionSpeed', 2000.0).clamp(500.0, 10000.0),
         'dutchThreshold': numValue('dutchThreshold', 15.0).clamp(5.0, 30.0),
       },
       isOffline: true,
@@ -231,6 +243,9 @@ class GhostCloneService {
 
   Future<GhostProfile?> _fetchClone(String cloneId) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return null;
+
       final uri = Uri.parse('$_serverUrl/clone/$cloneId');
       final response = await http.get(uri).timeout(_apiTimeout);
       if (response.statusCode != 200) return null;
@@ -250,13 +265,14 @@ class GhostCloneService {
     required String playerName,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return null;
+
       final history = await PlayerLearningService().getHistory(slotId: slotId);
       if (history.isEmpty) return null;
 
-      final games = history
-          .take(30)
-          .map(_mapGameRecord)
-          .toList(growable: false);
+      final games =
+          history.take(30).map(_mapGameRecord).toList(growable: false);
 
       final body = jsonEncode({
         'playerId': playerId,
@@ -299,8 +315,10 @@ class GhostCloneService {
     double aggressiveness = clamp01(numValue('aggressivenessScore', 0.5));
     double riskTolerance = clamp01(numValue('riskTakingScore', 0.5));
     double powerUsage = clamp01(numValue('powerUsageFrequency', 0.5));
-    double decisionSpeed = numValue('avgDecisionTime', 2000.0).clamp(500.0, 10000.0);
-    double dutchThreshold = numValue('dutchThresholdPattern', 15.0).clamp(5.0, 30.0);
+    double decisionSpeed =
+        numValue('avgDecisionTime', 2000.0).clamp(500.0, 10000.0);
+    double dutchThreshold =
+        numValue('dutchThresholdPattern', 15.0).clamp(5.0, 30.0);
 
     double caution = clamp01(1.0 - aggressiveness);
     final playStyle = pattern['playStyle']?.toString() ?? 'balanced';

@@ -5,12 +5,14 @@ import '../../models/bot_learning_data.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../../core/interfaces/i_learning_service.dart';
+import '../network/network_probe_service.dart';
 
 /// Service pour enregistrer et envoyer les données d'apprentissage des bots
 class BotLearningService implements ILearningService {
   static const String _serverUrl = 'https://dutch-game.me/api/bot-learning';
   static const Duration _apiTimeout = Duration(seconds: 2);
-  
+  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
+
   // Enregistrement de la partie en cours
   final Map<String, BotGameRecord> _activeGames = {};
   final Map<String, List<BotAction>> _pendingActions = {};
@@ -25,7 +27,11 @@ class BotLearningService implements ILearningService {
     // ignore: avoid_print
     print(message);
   }
-  
+
+  Future<bool> _canReachBackendQuickly() {
+    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
+  }
+
   /// Démarre l'enregistrement d'une partie pour un bot
   @override
   void startGameRecording({
@@ -36,12 +42,20 @@ class BotLearningService implements ILearningService {
   }) {
     final bot = player;
     if (bot.isHuman) return;
-    
+
+    final initialHandScore = _calculateHandScore(bot);
+    final initialHandRank = _calculateInitialHandRank(
+      gameState: gameState,
+      botId: bot.id,
+    );
+    final initialHandRankFromWorst =
+        gameState.players.length - initialHandRank + 1;
+
     // FIX: Normaliser behavior et skillLevel pour matcher le format serveur
     final behavior = bot.botBehavior.toString().split('.').last;
     final skill = bot.botSkillLevel.toString().split('.').last;
     final botId = '${behavior}_$skill';
-    
+
     _activeGames[bot.id] = BotGameRecord(
       gameId: gameId,
       botId: botId,
@@ -54,6 +68,9 @@ class BotLearningService implements ILearningService {
       usedSBMM: usedSBMM,
       actions: [],
       initialHandSize: bot.hand.length,
+      initialHandScore: initialHandScore,
+      initialHandRank: initialHandRank,
+      initialHandRankFromWorst: initialHandRankFromWorst,
       finalScore: 0,
       finalRank: 0,
       calledDutch: false,
@@ -67,16 +84,16 @@ class BotLearningService implements ILearningService {
       badDecisions: 0,
       opponents: _getOpponentsInfo(gameState, bot.id),
     );
-    
+
     _pendingActions[bot.id] = [];
     _initialDecks[bot.id] = _captureDeck(gameState);
     _turnCounters[bot.id] = 0;
     _discardsPerRound[bot.id] = [];
     _triageDecisions[bot.id] = [];
-    
+
     _log('🤖 Démarrage enregistrement pour bot ${bot.name} (ID: $botId)');
   }
-  
+
   /// Enregistre une action d'un bot
   void recordAction({
     required String botPlayerId,
@@ -86,9 +103,9 @@ class BotLearningService implements ILearningService {
     required Map<String, dynamic> actionDetails,
   }) {
     if (!_activeGames.containsKey(botPlayerId)) return;
-    
+
     _actionTimestamps[botPlayerId] = DateTime.now();
-    
+
     final action = BotAction(
       actionType: actionType,
       turnNumber: turnNumber,
@@ -97,20 +114,20 @@ class BotLearningService implements ILearningService {
       actionDetails: actionDetails,
       result: {}, // Sera rempli après l'action
     );
-    
+
     _pendingActions[botPlayerId]?.add(action);
   }
-  
+
   /// Met à jour le résultat de la dernière action
   void updateLastActionResult({
     required String botPlayerId,
     required Map<String, dynamic> result,
   }) {
     if (!_pendingActions.containsKey(botPlayerId)) return;
-    
+
     final actions = _pendingActions[botPlayerId]!;
     if (actions.isEmpty) return;
-    
+
     final lastAction = actions.last;
     final updatedAction = BotAction(
       actionType: lastAction.actionType,
@@ -120,10 +137,10 @@ class BotLearningService implements ILearningService {
       actionDetails: lastAction.actionDetails,
       result: result,
     );
-    
+
     actions[actions.length - 1] = updatedAction;
   }
-  
+
   /// Termine l'enregistrement d'une partie et envoie les données au serveur
   @override
   Future<void> endGameRecording({
@@ -139,26 +156,27 @@ class BotLearningService implements ILearningService {
     required int botFinalHandSize,
   }) async {
     if (!_activeGames.containsKey(botPlayerId)) return;
-    
+
     final record = _activeGames[botPlayerId]!;
     final actions = _pendingActions[botPlayerId] ?? [];
-    
+
     // Calculer les métriques
     final decisionTimes = <int>[];
     DateTime? lastTimestamp;
     for (var action in actions) {
       if (lastTimestamp != null) {
-        decisionTimes.add(action.timestamp.difference(lastTimestamp).inMilliseconds);
+        decisionTimes
+            .add(action.timestamp.difference(lastTimestamp).inMilliseconds);
       }
       lastTimestamp = action.timestamp;
     }
-    
-    final avgDecisionTime = decisionTimes.isEmpty 
-        ? 0.0 
+
+    final avgDecisionTime = decisionTimes.isEmpty
+        ? 0.0
         : decisionTimes.reduce((a, b) => a + b) / decisionTimes.length;
-    
+
     final powerUsesCount = actions.where((a) => a.actionType == 'power').length;
-    
+
     // Analyser les bonnes/mauvaises décisions
     int goodDecisions = 0;
     int badDecisions = 0;
@@ -179,7 +197,7 @@ class BotLearningService implements ILearningService {
     final cardsAdv = (humanFinalHandSize - botFinalHandSize).toDouble();
     final raw = 0.35 * scoreAdv + 0.25 * cardsAdv;
     final pBeatHuman = sigmoid(raw).clamp(0.01, 0.99);
-    
+
     final completedRecord = BotGameRecord(
       gameId: record.gameId,
       botId: record.botId,
@@ -201,6 +219,9 @@ class BotLearningService implements ILearningService {
       triageDecisions: _triageDecisions[botPlayerId],
       actions: actions,
       initialHandSize: record.initialHandSize,
+      initialHandScore: record.initialHandScore,
+      initialHandRank: record.initialHandRank,
+      initialHandRankFromWorst: record.initialHandRankFromWorst,
       finalScore: finalScore,
       finalRank: finalRank,
       calledDutch: calledDutch,
@@ -214,10 +235,10 @@ class BotLearningService implements ILearningService {
       badDecisions: badDecisions,
       opponents: record.opponents,
     );
-    
+
     // Envoyer au serveur
     await _sendToServer(completedRecord);
-    
+
     // Nettoyer
     _activeGames.remove(botPlayerId);
     _pendingActions.remove(botPlayerId);
@@ -226,14 +247,16 @@ class BotLearningService implements ILearningService {
     _turnCounters.remove(botPlayerId);
     _discardsPerRound.remove(botPlayerId);
     _triageDecisions.remove(botPlayerId);
-    
-    _log('🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
+
+    _log(
+        '🤖 Fin enregistrement pour bot ${record.botName} - Score: $finalScore, Rang: $finalRank');
   }
-  
+
   /// Capture l'état du jeu pour analyse
-  Map<String, dynamic> _captureGameState(GameState gameState, String botPlayerId) {
+  Map<String, dynamic> _captureGameState(
+      GameState gameState, String botPlayerId) {
     final bot = gameState.players.firstWhere((p) => p.id == botPlayerId);
-    
+
     return {
       'phase': gameState.phase.toString().split('.').last,
       'currentPlayerIndex': gameState.currentPlayerIndex,
@@ -249,9 +272,31 @@ class BotLearningService implements ILearningService {
           .toList(),
     };
   }
-  
+
+  int _calculateHandScore(Player player) {
+    return player.hand.fold<int>(0, (sum, card) => sum + card.points);
+  }
+
+  int _calculateInitialHandRank({
+    required GameState gameState,
+    required String botId,
+  }) {
+    final scored = gameState.players
+        .map((p) => (id: p.id, score: _calculateHandScore(p)))
+        .toList()
+      ..sort((a, b) {
+        final byScore = a.score.compareTo(b.score);
+        if (byScore != 0) return byScore;
+        return a.id.compareTo(b.id);
+      });
+
+    final index = scored.indexWhere((entry) => entry.id == botId);
+    return index >= 0 ? index + 1 : gameState.players.length;
+  }
+
   /// Récupère les informations des adversaires
-  List<Map<String, dynamic>> _getOpponentsInfo(GameState gameState, String botPlayerId) {
+  List<Map<String, dynamic>> _getOpponentsInfo(
+      GameState gameState, String botPlayerId) {
     return gameState.players
         .where((p) => p.id != botPlayerId)
         .map((p) => {
@@ -329,16 +374,24 @@ class BotLearningService implements ILearningService {
       discards.add(0);
     }
   }
-  
+
   /// Envoie les données au serveur
   Future<void> _sendToServer(BotGameRecord record) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_serverUrl/record'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(record.toJson()),
-      );
-      
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) {
+        _log('⚠️ Offline détecté, envoi bot ignoré');
+        return;
+      }
+
+      final response = await http
+          .post(
+            Uri.parse('$_serverUrl/record'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(record.toJson()),
+          )
+          .timeout(_apiTimeout);
+
       if (response.statusCode == 200) {
         _log('✅ Données bot envoyées au serveur');
       } else {
@@ -348,7 +401,7 @@ class BotLearningService implements ILearningService {
       _log('❌ Exception envoi données bot: $e');
     }
   }
-  
+
   /// Récupère les meilleurs bots depuis le serveur
   Future<List<BotProfile>> fetchTopBots({
     String? behavior,
@@ -356,15 +409,19 @@ class BotLearningService implements ILearningService {
     int limit = 10,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return [];
+
       final queryParams = <String, String>{
         'limit': limit.toString(),
         if (behavior != null) 'behavior': behavior,
         if (skillLevel != null) 'skillLevel': skillLevel,
       };
-      
-      final uri = Uri.parse('$_serverUrl/top-bots').replace(queryParameters: queryParams);
+
+      final uri = Uri.parse('$_serverUrl/top-bots')
+          .replace(queryParameters: queryParams);
       final response = await http.get(uri).timeout(_apiTimeout);
-      
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => BotProfile.fromJson(json)).toList();
@@ -372,26 +429,29 @@ class BotLearningService implements ILearningService {
     } catch (e) {
       _log('❌ Erreur récupération top bots: $e');
     }
-    
+
     return [];
   }
-  
+
   /// Récupère les paramètres appris d'un bot spécifique
   Future<Map<String, dynamic>?> fetchBotParameters({
     required String behavior,
     required String skillLevel,
   }) async {
     try {
+      final isOnline = await _canReachBackendQuickly();
+      if (!isOnline) return null;
+
       final uri = Uri.parse('$_serverUrl/parameters/$behavior/$skillLevel');
       final response = await http.get(uri).timeout(_apiTimeout);
-      
+
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (e) {
       _log('❌ Erreur récupération paramètres bot: $e');
     }
-    
+
     return null;
   }
 }

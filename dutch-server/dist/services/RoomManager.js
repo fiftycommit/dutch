@@ -299,8 +299,17 @@ class RoomManager {
             targetPlayerCount = room.players.length;
         }
         // Ajouter les bots jusqu'au nombre cible
+        const sbmmLevels = room.settings.sbmmBotLevels;
+        let botIndex = 0;
         while (room.players.length < targetPlayerCount) {
-            room.players.push(this.createBot(room.players.length, difficulty));
+            if (sbmmLevels && botIndex < sbmmLevels.length) {
+                // SBMM : chaque bot a son propre skill level
+                room.players.push(this.createBotWithSkill(room.players.length, sbmmLevels[botIndex]));
+            }
+            else {
+                room.players.push(this.createBot(room.players.length, difficulty));
+            }
+            botIndex++;
         }
         const gameState = (0, GameState_1.createGameState)(room.players, room.gameMode, difficulty);
         GameLogic_1.GameLogic.initializeGame(gameState);
@@ -1475,6 +1484,29 @@ class RoomManager {
             default:
                 return Player_1.BotSkillLevel.silver;
         }
+    }
+    // Crée un bot avec un BotSkillLevel spécifique (utilisé par le SBMM)
+    createBotWithSkill(position, skillLevel) {
+        const botNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve'];
+        const behaviors = [
+            Player_1.BotBehavior.balanced,
+            Player_1.BotBehavior.aggressive,
+            Player_1.BotBehavior.fast,
+        ];
+        const behavior = behaviors[position % behaviors.length];
+        return {
+            id: `bot_${position}`,
+            name: botNames[position] || `Bot ${position}`,
+            isHuman: false,
+            connected: true,
+            focused: true,
+            isSpectator: false,
+            botBehavior: behavior,
+            botSkillLevel: skillLevel,
+            position,
+            hand: [],
+            knownCards: [],
+        };
     }
     loadBotCastingCacheIfNeeded() {
         const now = this.now();
