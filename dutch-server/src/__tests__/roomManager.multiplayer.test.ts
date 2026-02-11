@@ -96,7 +96,7 @@ test('startGame fills bots up to maxPlayers when fillBots=true', (t) => {
   assert.equal(room.players.length, 4);
 });
 
-test('turn timeout triggers presence check then spectator', async (t) => {
+test('turn timeout triggers presence check then removes AFK player', async (t) => {
   const { io, manager } = createManager({
     turnTimeoutMs: 100, // Increased to be more robust
     presenceGraceMs: 50,
@@ -128,9 +128,6 @@ test('turn timeout triggers presence check then spectator', async (t) => {
   assert.equal(room.gameState.phase, 1 /* GamePhase.playing */);
 
   const currentPlayerId = getCurrentPlayer(room.gameState!).id;
-  const otherPlayerId = room.players.find((p) => p.id !== currentPlayerId && p.id !== 'host-3')!.id;
-  // Wait, we need to know who is next. GameLogic.nextPlayer usually goes by index.
-  // We just need to check currentPlayerId changed.
 
   // Wait for turn timeout (100ms) + buffer
   await new Promise((resolve) => setTimeout(resolve, 150));
@@ -140,8 +137,16 @@ test('turn timeout triggers presence check then spectator', async (t) => {
 
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  const timedOutPlayer = room.players.find((p) => p.id === currentPlayerId)!;
-  assert.equal(timedOutPlayer.isSpectator, true, 'Player should be spectator');
+  const timedOutPlayer = room.players.find((p) => p.id === currentPlayerId);
+  assert.equal(timedOutPlayer, undefined, 'Player should be removed from room');
+  assert.equal(
+    room.gameState!.players.some((p) => p.id === currentPlayerId),
+    false,
+    'Player should be removed from game state'
+  );
+
+  const kickedEvents = io.findEventsFor(currentPlayerId, 'room:kicked');
+  assert.ok(kickedEvents.length >= 1, 'Should notify AFK player as kicked');
 
   const newCurrentPlayerId = getCurrentPlayer(room.gameState!).id;
   assert.notEqual(newCurrentPlayerId, currentPlayerId, 'Turn should have passed');
@@ -304,7 +309,7 @@ test('non-host player can become host after host leaves', async (t) => {
 
 // ============ Tests départ d'un joueur non-hôte pendant la partie ============
 
-test('non-host player disconnecting during game becomes spectator', async (t) => {
+test('non-host player disconnecting during game is marked disconnected', async (t) => {
   const { io, manager } = createManager({
     turnTimeoutMs: 30,
     presenceGraceMs: 30,

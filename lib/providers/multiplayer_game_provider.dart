@@ -13,7 +13,14 @@ import 'managers/multiplayer/multiplayer_timer_manager.dart';
 import 'managers/multiplayer/multiplayer_chat_manager.dart';
 import 'managers/multiplayer/multiplayer_connection_manager.dart';
 
-enum GameEventType { playerJoined, playerLeft, error, kicked, gameStarted, info }
+enum GameEventType {
+  playerJoined,
+  playerLeft,
+  error,
+  kicked,
+  gameStarted,
+  info
+}
 
 class GameEvent {
   final GameEventType type;
@@ -25,11 +32,14 @@ class GameEvent {
 /// MultiplayerGameProvider refactoré - ~600 lignes au lieu de 1344
 /// Principe SOLID: SRP - Coordination uniquement, logique déléguée aux managers
 /// Implements IGameController pour permettre l'UI unifiée
-class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implements IGameController {
+class MultiplayerGameProvider
+    with ChangeNotifier, WidgetsBindingObserver
+    implements IGameController {
   final MultiplayerService _multiplayerService;
 
   // Event Stream for UI feedback
-  final StreamController<GameEvent> _eventController = StreamController<GameEvent>.broadcast();
+  final StreamController<GameEvent> _eventController =
+      StreamController<GameEvent>.broadcast();
   Stream<GameEvent> get events => _eventController.stream;
 
   // Managers
@@ -74,7 +84,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   Map<String, Map<String, dynamic>> _presenceById = {};
   Map<String, Map<String, dynamic>> _presenceByClientId = {};
   Map<String, Map<String, dynamic>> get presenceById => _presenceById;
-  Map<String, Map<String, dynamic>> get presenceByClientId => _presenceByClientId;
+  Map<String, Map<String, dynamic>> get presenceByClientId =>
+      _presenceByClientId;
 
   bool _presenceCheckActive = false;
   String? _presenceCheckReason;
@@ -95,21 +106,22 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   bool _isPaused = false;
   @override
   bool get isPaused => _isPaused;
-  
+
   @override
   bool get hasActiveGame => _gameState != null && _isPlaying;
-  
+
   @override
-  Player? get localPlayer => _gameState?.players.where((p) => p.id == playerId).firstOrNull;
-  
+  Player? get localPlayer =>
+      _gameState?.players.where((p) => p.id == playerId).firstOrNull;
+
   @override
   bool get isLocalPlayerTurn => _gameState?.currentPlayer.id == playerId;
-  
+
   @override
-  bool get canLocalPlayerAct => 
-    _gameState != null && 
-    isLocalPlayerTurn && 
-    _gameState!.phase == GamePhase.playing;
+  bool get canLocalPlayerAct =>
+      _gameState != null &&
+      isLocalPlayerTurn &&
+      _gameState!.phase == GamePhase.playing;
 
   String? _pausedByName;
   String? get pausedByName => _pausedByName;
@@ -128,25 +140,32 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   Set<String> get afkPlayerIds => Set.unmodifiable(_afkPlayerIds);
 
   // Délégations aux managers
-  SocketConnectionState get connectionState => _connectionManager.connectionState;
+  SocketConnectionState get connectionState =>
+      _connectionManager.connectionState;
   bool get isConnecting => _connectionManager.isConnecting;
   bool get isSilentReconnecting => _connectionManager.isSilentReconnecting;
-  String? get errorMessage => _notificationManager.errorMessage ?? _connectionManager.errorMessage;
-  
+  String? get errorMessage =>
+      _notificationManager.errorMessage ?? _connectionManager.errorMessage;
+
   bool get roomClosedByHost => _notificationManager.roomClosedByHost;
   String? get closedRoomCode => _notificationManager.closedRoomCode;
   bool get wasKicked => _notificationManager.wasKicked;
   String? get kickedMessage => _notificationManager.kickedMessage;
   bool get wasBanned => _notificationManager.wasBanned;
   String? get bannedMessage => _notificationManager.bannedMessage;
-  bool get playerLeftNotification => _notificationManager.playerLeftNotification;
+  bool get playerLeftNotification =>
+      _notificationManager.playerLeftNotification;
   String? get lastPlayerLeftName => _notificationManager.lastPlayerLeftName;
-  bool get specialPowerNotification => _notificationManager.specialPowerNotification;
+  bool get specialPowerNotification =>
+      _notificationManager.specialPowerNotification;
   String? get specialPowerByName => _notificationManager.specialPowerByName;
   String? get specialPowerType => _notificationManager.specialPowerType;
-  Map<String, dynamic>? get pendingSwapNotification => _notificationManager.pendingSwapNotification;
-  Map<String, dynamic>? get pendingJokerNotification => _notificationManager.pendingJokerNotification;
-  Map<String, dynamic>? get pendingSpyNotification => _notificationManager.pendingSpyNotification;
+  Map<String, dynamic>? get pendingSwapNotification =>
+      _notificationManager.pendingSwapNotification;
+  Map<String, dynamic>? get pendingJokerNotification =>
+      _notificationManager.pendingJokerNotification;
+  Map<String, dynamic>? get pendingSpyNotification =>
+      _notificationManager.pendingSpyNotification;
 
   @override
   int get currentReactionTimeMs => _timerManager.reactionTimeMs;
@@ -174,7 +193,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     // Calcul basé sur le nombre de joueurs initial
     // En manche N, il reste (initialPlayers - N + 1) joueurs
     // Donc initialPlayers = players.length + tournamentRound - 1
-    final initialPlayers = _gameState!.players.length + _gameState!.tournamentRound - 1;
+    final initialPlayers =
+        _gameState!.players.length + _gameState!.tournamentRound - 1;
     return initialPlayers - 1; // On élimine 1 joueur par manche jusqu'à 2
   }
 
@@ -184,7 +204,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   /// Vérifie si c'est la dernière manche du tournoi
   bool get isTournamentFinalRound {
     if (_gameState?.gameMode != GameMode.tournament) return false;
-    return tournamentRound >= tournamentTotalRounds || _gameState!.players.length <= 2;
+    return tournamentRound >= tournamentTotalRounds ||
+        _gameState!.players.length <= 2;
   }
 
   /// Vérifie si le joueur local est éliminé dans ce tournoi
@@ -236,8 +257,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   MultiplayerGameProvider({MultiplayerService? multiplayerService})
       : _multiplayerService = multiplayerService ?? MultiplayerService() {
     WidgetsBinding.instance.addObserver(this);
-    
-    _notificationManager = MultiplayerNotificationManager(notifyListeners: notifyListeners);
+
+    _notificationManager =
+        MultiplayerNotificationManager(notifyListeners: notifyListeners);
     _timerManager = MultiplayerTimerManager(
       notifyListeners: notifyListeners,
       getLatencyMs: () => _multiplayerService.latencyMs,
@@ -248,10 +270,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       multiplayerService: _multiplayerService,
       notifyListeners: notifyListeners,
       onReconnectToRoom: (roomCode, playerName) async {
-        await _multiplayerService.joinRoom(roomCode: roomCode, playerName: playerName);
+        await _multiplayerService.joinRoom(
+            roomCode: roomCode, playerName: playerName);
       },
     );
-    
+
     _setupListeners();
   }
 
@@ -260,7 +283,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   Future<void> init() async {
     if (_isInitialized) return;
     _isInitialized = true;
-    await _multiplayerService.cleanupInactiveRooms();
+    // Rooms are now managed explicitly by users (keep history/persistence by default).
+    // Manual cleanup remains available via cleanupInactiveRooms() when needed.
   }
 
   Map<String, dynamic>? get _localPresence {
@@ -284,10 +308,13 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       _preloadedDeckCard = card;
     };
     _multiplayerService.onTimerUpdate = (remaining) {
-      if (_gameState != null) _timerManager.applyServerUpdate(remaining, _gameState);
+      if (_gameState != null) {
+        _timerManager.applyServerUpdate(remaining, _gameState);
+      }
     };
     _multiplayerService.onGameAllReady = (data) {
-      _eventController.add(GameEvent(GameEventType.gameStarted, data['message'] ?? 'Le jeu commence !'));
+      _eventController.add(GameEvent(
+          GameEventType.gameStarted, data['message'] ?? 'Le jeu commence !'));
     };
     _multiplayerService.onPlayerJoined = _handlePlayerJoined;
     _multiplayerService.onGameStarted = (message) {
@@ -303,7 +330,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     _multiplayerService.onPresenceCheck = (data) {
       _presenceCheckActive = true;
       _presenceCheckReason = data['reason']?.toString();
-      _presenceCheckDeadlineMs = data['deadlineMs'] is int ? data['deadlineMs'] as int : 5000;
+      _presenceCheckDeadlineMs =
+          data['deadlineMs'] is int ? data['deadlineMs'] as int : 5000;
       notifyListeners();
     };
     _multiplayerService.onChatMessage = _chatManager.handleChatMessage;
@@ -313,7 +341,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     };
     _multiplayerService.onSocketConnectionStateChanged = (state) {
       _connectionManager.handleConnectionStateChanged(
-        state, connectionState, _roomCode, _playersInLobby, playerId,
+        state,
+        connectionState,
+        _roomCode,
+        _playersInLobby,
+        playerId,
       );
     };
     _multiplayerService.onRoomClosed = _notificationManager.handleRoomClosed;
@@ -321,7 +353,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       _gameState = null;
       _isPlaying = false;
       _isInLobby = true;
-      for (final player in _playersInLobby) { player['ready'] = false; }
+      for (final player in _playersInLobby) {
+        player['ready'] = false;
+      }
       notifyListeners();
     };
     _multiplayerService.onKicked = (data) {
@@ -340,16 +374,20 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       if (playerId != null) _afkPlayerIds.add(playerId);
       _notificationManager.handlePlayerAfk(data);
     };
-    _multiplayerService.onSpecialPowerTargeted = _notificationManager.handleSpecialPowerTargeted;
+    _multiplayerService.onSpecialPowerTargeted =
+        _notificationManager.handleSpecialPowerTargeted;
     _multiplayerService.onSpiedCard = (card, targetName) {
       _lastSpiedCard = card;
       _spiedTargetName = targetName;
       _showSpiedCardDialog = true;
       notifyListeners();
     };
-    _multiplayerService.onSwapNotification = _notificationManager.handleSwapNotification;
-    _multiplayerService.onJokerNotification = _notificationManager.handleJokerNotification;
-    _multiplayerService.onSpyNotification = _notificationManager.handleSpyNotification;
+    _multiplayerService.onSwapNotification =
+        _notificationManager.handleSwapNotification;
+    _multiplayerService.onJokerNotification =
+        _notificationManager.handleJokerNotification;
+    _multiplayerService.onSpyNotification =
+        _notificationManager.handleSpyNotification;
     _multiplayerService.onGamePaused = (pausedBy) {
       _isPaused = true;
       _pausedByName = pausedBy;
@@ -388,7 +426,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   void _handleTournamentEliminated(Map<String, dynamic> data) {
     _tournamentEliminated = true;
-    _tournamentEliminatedMessage = data['message']?.toString() ?? 'Vous avez été éliminé du tournoi !';
+    _tournamentEliminatedMessage =
+        data['message']?.toString() ?? 'Vous avez été éliminé du tournoi !';
     notifyListeners();
   }
 
@@ -411,11 +450,12 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   void _handleGameStateUpdate(GameState gameState) {
     final wasMyTurn = _gameState?.currentPlayer.id == playerId;
-    final isNowMyTurn = gameState.currentPlayer.id == playerId && gameState.phase == GamePhase.playing;
+    final isNowMyTurn = gameState.currentPlayer.id == playerId &&
+        gameState.phase == GamePhase.playing;
     if (!wasMyTurn && isNowMyTurn) HapticService.importantAction();
 
     _gameState = gameState;
-    
+
     // Reset le flag de processing quand on reçoit une mise à jour du serveur
     // Cela évite les blocages si une action n'a pas été confirmée
     if (_isProcessingAction) {
@@ -423,7 +463,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     }
 
     Player? me;
-    try { me = gameState.players.firstWhere((p) => p.id == playerId); } catch (_) { me = null; }
+    try {
+      me = gameState.players.firstWhere((p) => p.id == playerId);
+    } catch (_) {
+      me = null;
+    }
 
     if (me != null && !me.isSpectator) {
       _isPlaying = true;
@@ -441,13 +485,19 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     if (player == null) return;
     final clientId = player['clientId'];
     if (clientId != null) {
-      final index = _playersInLobby.indexWhere((p) => p['clientId'] == clientId);
-      if (index >= 0) { _playersInLobby[index] = player; } else { _playersInLobby.add(player); }
+      final index =
+          _playersInLobby.indexWhere((p) => p['clientId'] == clientId);
+      if (index >= 0) {
+        _playersInLobby[index] = player;
+      } else {
+        _playersInLobby.add(player);
+      }
     } else if (!_playersInLobby.any((p) => p['id'] == player['id'])) {
       _playersInLobby.add(player);
     }
     notifyListeners();
-    _eventController.add(GameEvent(GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
+    _eventController.add(GameEvent(
+        GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
   }
 
   void _handlePresenceUpdate(Map<String, dynamic> data) {
@@ -456,8 +506,12 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
     final players = data['players'];
     if (players is List) {
-      _playersInLobby = players.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList()
-        ..sort((a, b) => ((a['position'] as num?)?.toInt() ?? 0).compareTo((b['position'] as num?)?.toInt() ?? 0));
+      _playersInLobby = players
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList()
+        ..sort((a, b) => ((a['position'] as num?)?.toInt() ?? 0)
+            .compareTo((b['position'] as num?)?.toInt() ?? 0));
     }
 
     final byId = <String, Map<String, dynamic>>{};
@@ -472,10 +526,15 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     _presenceById = byId;
     _presenceByClientId = byClient;
 
-    if (data['gameMode'] is int) _roomGameMode = GameMode.values[data['gameMode']];
+    if (data['gameMode'] is int) {
+      _roomGameMode = GameMode.values[data['gameMode']];
+    }
     if (data['status'] is String) _roomStatus = data['status'];
     if (data['cumulativeScores'] is List) {
-      _cumulativeScores = (data['cumulativeScores'] as List).whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+      _cumulativeScores = (data['cumulativeScores'] as List)
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList();
     }
     notifyListeners();
   }
@@ -484,20 +543,30 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   // ROOM MANAGEMENT
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<void> createRoom({required GameSettings settings, required String playerName}) async {
+  Future<void> createRoom(
+      {required GameSettings settings, required String playerName}) async {
     try {
       _connectionManager.setConnecting(true);
       _notificationManager.clearError();
       _timerManager.setReactionTimeMs(settings.reactionTimeMs);
 
-      _roomCode = await _multiplayerService.createRoom(settings: settings, playerName: playerName);
+      _roomCode = await _multiplayerService.createRoom(
+          settings: settings, playerName: playerName);
 
       if (_roomCode != null) {
         _isHost = true;
         _isInLobby = true;
         _roomSettings = settings;
         _hostPlayerId = _multiplayerService.playerId;
-        _playersInLobby = [{'id': playerId, 'clientId': clientId, 'name': playerName, 'isHuman': true, 'ready': false}];
+        _playersInLobby = [
+          {
+            'id': playerId,
+            'clientId': clientId,
+            'name': playerName,
+            'isHuman': true,
+            'ready': false
+          }
+        ];
         _multiplayerService.setFocused(true);
       }
       _connectionManager.setConnecting(false);
@@ -508,9 +577,16 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     }
   }
 
-  Future<void> createPublicRoom({String playerName = 'Joueur', String? roomName}) async {
+  Future<void> createPublicRoom(
+      {String playerName = 'Joueur', String? roomName}) async {
     await createRoom(
-      settings: GameSettings(gameMode: GameMode.quick, numberOfPlayers: 4, isPublic: true, minPlayers: 2, maxPlayers: 4, roomName: roomName),
+      settings: GameSettings(
+          gameMode: GameMode.quick,
+          numberOfPlayers: 4,
+          isPublic: true,
+          minPlayers: 2,
+          maxPlayers: 4,
+          roomName: roomName),
       playerName: playerName,
     );
   }
@@ -522,7 +598,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
       final publicRooms = await _multiplayerService.getPublicRooms();
       if (publicRooms != null && publicRooms.isNotEmpty) {
-        await joinRoom(roomCode: publicRooms.first['code'] as String, playerName: playerName);
+        await joinRoom(
+            roomCode: publicRooms.first['code'] as String,
+            playerName: playerName);
       } else {
         throw Exception('Aucune partie publique disponible');
       }
@@ -535,25 +613,44 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   }
 
   Future<List<Map<String, dynamic>>?> getPublicRooms() async {
-    try { return await _multiplayerService.getPublicRooms(); } catch (_) { return null; }
+    try {
+      return await _multiplayerService.getPublicRooms();
+    } catch (_) {
+      return null;
+    }
   }
 
-  Future<void> joinRoom({required String roomCode, required String playerName}) async {
+  Future<void> joinRoom(
+      {required String roomCode, required String playerName}) async {
     try {
       _connectionManager.setConnecting(true);
       _notificationManager.clearError();
 
-      final room = await _multiplayerService.joinRoom(roomCode: roomCode, playerName: playerName);
+      final room = await _multiplayerService.joinRoom(
+          roomCode: roomCode, playerName: playerName);
 
       _roomCode = roomCode;
       _isHost = false;
       _isInLobby = true;
       if (room != null && room['players'] is List) {
-        _playersInLobby = (room['players'] as List).cast<Map<String, dynamic>>();
-        if (room['hostPlayerId'] is String) _hostPlayerId = room['hostPlayerId'];
-        if (room['settings'] is Map<String, dynamic>) _roomSettings = GameSettings.fromJson(room['settings']);
+        _playersInLobby =
+            (room['players'] as List).cast<Map<String, dynamic>>();
+        if (room['hostPlayerId'] is String) {
+          _hostPlayerId = room['hostPlayerId'];
+        }
+        if (room['settings'] is Map<String, dynamic>) {
+          _roomSettings = GameSettings.fromJson(room['settings']);
+        }
       } else {
-        _playersInLobby = [{'id': playerId, 'clientId': clientId, 'name': playerName, 'isHuman': true, 'ready': false}];
+        _playersInLobby = [
+          {
+            'id': playerId,
+            'clientId': clientId,
+            'name': playerName,
+            'isHuman': true,
+            'ready': false
+          }
+        ];
       }
       _multiplayerService.setFocused(true);
       _connectionManager.setConnecting(false);
@@ -564,15 +661,32 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     }
   }
 
-  Future<void> startGame({bool fillBots = false, int? numberOfBots, bool? useSBMM, int? botDifficulty}) async {
-    if (!_isHost) { _notificationManager.setError("Seul l'hôte peut démarrer"); return; }
-    if (!isReady) { _notificationManager.setError("Vous devez être prêt"); return; }
+  Future<void> startGame(
+      {bool fillBots = false,
+      int? numberOfBots,
+      bool? useSBMM,
+      int? botDifficulty}) async {
+    if (!_isHost) {
+      _notificationManager.setError("Seul l'hôte peut démarrer");
+      return;
+    }
+    if (!isReady) {
+      _notificationManager.setError("Vous devez être prêt");
+      return;
+    }
     final minPlayers = _roomSettings?.minPlayers ?? 2;
-    if (readyHumanCount < minPlayers) { _notificationManager.setError("Minimum $minPlayers joueurs prêts requis"); return; }
+    if (readyHumanCount < minPlayers) {
+      _notificationManager.setError("Minimum $minPlayers joueurs prêts requis");
+      return;
+    }
 
     try {
       _notificationManager.clearError();
-      final success = await _multiplayerService.startGame(fillBots: fillBots, numberOfBots: numberOfBots, useSBMM: useSBMM, botDifficulty: botDifficulty);
+      final success = await _multiplayerService.startGame(
+          fillBots: fillBots,
+          numberOfBots: numberOfBots,
+          useSBMM: useSBMM,
+          botDifficulty: botDifficulty);
       if (!success) _notificationManager.setError("Erreur lors du démarrage");
     } catch (e) {
       _notificationManager.setError(e.toString());
@@ -580,7 +694,11 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   }
 
   Future<void> leaveRoom() async {
-    if (_isHost) { await closeRoom(); } else { _multiplayerService.leaveRoom(); }
+    if (_isHost) {
+      await closeRoom();
+    } else {
+      _multiplayerService.leaveRoom();
+    }
     _resetRoomState();
   }
 
@@ -593,7 +711,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
 
   Future<bool> becomeHost() async {
     if (_notificationManager.closedRoomCode == null) return false;
-    final success = await _multiplayerService.becomeHost(_notificationManager.closedRoomCode!);
+    final success = await _multiplayerService
+        .becomeHost(_notificationManager.closedRoomCode!);
     if (success) {
       _roomCode = _notificationManager.closedRoomCode;
       _isHost = true;
@@ -604,32 +723,53 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     return success;
   }
 
-  Future<bool> restartGame() async => _isHost ? await _multiplayerService.restartGame() : false;
-  Future<bool> kickPlayer(String clientId) async => _isHost ? await _multiplayerService.kickPlayer(clientId) : false;
-  Future<bool> banPlayer(String clientId) async => _isHost ? await _multiplayerService.banPlayer(clientId) : false;
+  Future<bool> restartGame() async =>
+      _isHost ? await _multiplayerService.restartGame() : false;
+  Future<bool> kickPlayer(String clientId) async =>
+      _isHost ? await _multiplayerService.kickPlayer(clientId) : false;
+  Future<bool> banPlayer(String clientId) async =>
+      _isHost ? await _multiplayerService.banPlayer(clientId) : false;
 
   Future<bool> setGameMode(GameMode mode) async {
     if (!_isHost) return false;
     final success = await _multiplayerService.setGameMode(mode.index);
     if (success && _roomSettings != null) {
-      _roomSettings = GameSettings(gameMode: mode, botDifficulty: _roomSettings!.botDifficulty, luckDifficulty: _roomSettings!.luckDifficulty, reactionTimeMs: _roomSettings!.reactionTimeMs, minPlayers: _roomSettings!.minPlayers, maxPlayers: _roomSettings!.maxPlayers);
+      _roomSettings = GameSettings(
+          gameMode: mode,
+          botDifficulty: _roomSettings!.botDifficulty,
+          luckDifficulty: _roomSettings!.luckDifficulty,
+          reactionTimeMs: _roomSettings!.reactionTimeMs,
+          minPlayers: _roomSettings!.minPlayers,
+          maxPlayers: _roomSettings!.maxPlayers);
       notifyListeners();
     }
     return success;
   }
 
-  Future<bool> updateRoomSettings({Difficulty? botDifficulty, Difficulty? luckDifficulty}) async {
+  Future<bool> updateRoomSettings(
+      {Difficulty? botDifficulty, Difficulty? luckDifficulty}) async {
     if (!_isHost) return false;
-    final success = await _multiplayerService.updateRoomSettings(botDifficulty: botDifficulty?.index, luckDifficulty: luckDifficulty?.index);
+    final success = await _multiplayerService.updateRoomSettings(
+        botDifficulty: botDifficulty?.index,
+        luckDifficulty: luckDifficulty?.index);
     if (success && _roomSettings != null) {
-      _roomSettings = GameSettings(gameMode: _roomSettings!.gameMode, botDifficulty: botDifficulty ?? _roomSettings!.botDifficulty, luckDifficulty: luckDifficulty ?? _roomSettings!.luckDifficulty, reactionTimeMs: _roomSettings!.reactionTimeMs, minPlayers: _roomSettings!.minPlayers, maxPlayers: _roomSettings!.maxPlayers);
+      _roomSettings = GameSettings(
+          gameMode: _roomSettings!.gameMode,
+          botDifficulty: botDifficulty ?? _roomSettings!.botDifficulty,
+          luckDifficulty: luckDifficulty ?? _roomSettings!.luckDifficulty,
+          reactionTimeMs: _roomSettings!.reactionTimeMs,
+          minPlayers: _roomSettings!.minPlayers,
+          maxPlayers: _roomSettings!.maxPlayers);
       notifyListeners();
     }
     return success;
   }
 
-  Future<List<Map<String, dynamic>>?> checkActiveRooms(List<String> roomCodes) => _multiplayerService.checkActiveRooms(roomCodes);
-  Future<void> cleanupInactiveRooms() => _multiplayerService.cleanupInactiveRooms();
+  Future<List<Map<String, dynamic>>?> checkActiveRooms(
+          List<String> roomCodes) =>
+      _multiplayerService.checkActiveRooms(roomCodes);
+  Future<void> cleanupInactiveRooms() =>
+      _multiplayerService.cleanupInactiveRooms();
   void requestFullState() => _multiplayerService.requestFullState();
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -637,9 +777,9 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
-  void drawCard() { 
+  void drawCard() {
     if (_gameState == null) return;
-    
+
     // Optimisation: Utiliser la carte préchargée pour affichage instantané
     // Le serveur confirmera la vraie carte mais l'affichage est immédiat
     if (_preloadedDeckCard != null && _gameState!.drawnCard == null) {
@@ -647,27 +787,38 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
       _preloadedDeckCard = null; // Consommer la carte préchargée
       notifyListeners(); // Afficher immédiatement
     }
-    
+
     _multiplayerService.drawCard();
   }
-  
-  @override
-  void replaceCard(int cardIndex) { if (_gameState != null) _multiplayerService.replaceCard(cardIndex); }
-  
-  @override
-  void discardDrawnCard() { if (_gameState != null) _multiplayerService.discardDrawnCard(); }
-  
-  @override
-  void takeFromDiscard() { if (_gameState != null) _multiplayerService.takeFromDiscard(); }
-  
-  @override
-  void callDutch() { if (_gameState != null) _multiplayerService.callDutch(); }
-  
-  @override
-  void attemptMatch(int cardIndex) { if (_gameState != null) _multiplayerService.attemptMatch(cardIndex); }
 
   @override
-  void skipSpecialPower() => _executeWithProcessingLock(() => _multiplayerService.skipSpecialPower());
+  void replaceCard(int cardIndex) {
+    if (_gameState != null) _multiplayerService.replaceCard(cardIndex);
+  }
+
+  @override
+  void discardDrawnCard() {
+    if (_gameState != null) _multiplayerService.discardDrawnCard();
+  }
+
+  @override
+  void takeFromDiscard() {
+    if (_gameState != null) _multiplayerService.takeFromDiscard();
+  }
+
+  @override
+  void callDutch() {
+    if (_gameState != null) _multiplayerService.callDutch();
+  }
+
+  @override
+  void attemptMatch(int cardIndex) {
+    if (_gameState != null) _multiplayerService.attemptMatch(cardIndex);
+  }
+
+  @override
+  void skipSpecialPower() =>
+      _executeWithProcessingLock(() => _multiplayerService.skipSpecialPower());
 
   @override
   void handleCardTap(int cardIndex) {
@@ -675,20 +826,34 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     final pid = playerId;
     if (pid == null) return;
     Player? me;
-    try { me = _gameState!.players.firstWhere((p) => p.id == pid); } catch (_) { return; }
+    try {
+      me = _gameState!.players.firstWhere((p) => p.id == pid);
+    } catch (_) {
+      return;
+    }
     if (me.isSpectator) return;
     final isLocalTurn = _gameState!.currentPlayer.id == pid;
-    
+
     if (_gameState!.phase == GamePhase.reaction) {
       attemptMatch(cardIndex);
-    } else if (_gameState!.phase == GamePhase.playing && isLocalTurn && _gameState!.drawnCard != null) {
+    } else if (_gameState!.phase == GamePhase.playing &&
+        isLocalTurn &&
+        _gameState!.drawnCard != null) {
       replaceCard(cardIndex);
     }
   }
-  void usePower7LookOwnCard(int cardIndex) => _executeWithProcessingLock(() => _multiplayerService.usePower7LookOwnCard(cardIndex));
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) => _executeWithProcessingLock(() => _multiplayerService.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex));
-  void usePowerValetSwap(int p1, int c1, int p2, int c2) => _executeWithProcessingLock(() => _multiplayerService.usePowerValetSwap(p1, c1, p2, c2));
-  void usePowerJokerShuffle(int targetPlayerIndex) => _executeWithProcessingLock(() => _multiplayerService.usePowerJokerShuffle(targetPlayerIndex));
+
+  void usePower7LookOwnCard(int cardIndex) => _executeWithProcessingLock(
+      () => _multiplayerService.usePower7LookOwnCard(cardIndex));
+  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
+      _executeWithProcessingLock(() => _multiplayerService
+          .usePower10SpyOpponent(targetPlayerIndex, targetCardIndex));
+  void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
+      _executeWithProcessingLock(
+          () => _multiplayerService.usePowerValetSwap(p1, c1, p2, c2));
+  void usePowerJokerShuffle(int targetPlayerIndex) =>
+      _executeWithProcessingLock(
+          () => _multiplayerService.usePowerJokerShuffle(targetPlayerIndex));
 
   void _executeWithProcessingLock(void Function() action) {
     if (_gameState == null || _isProcessingAction) return;
@@ -696,30 +861,45 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     notifyListeners();
     action();
     Future.delayed(const Duration(seconds: 2), () {
-      if (_isProcessingAction) { _isProcessingAction = false; notifyListeners(); }
+      if (_isProcessingAction) {
+        _isProcessingAction = false;
+        notifyListeners();
+      }
     });
   }
 
-  void pauseGame() => _multiplayerService.socket?.emit('game:pause', {'roomCode': _roomCode});
-  void resumeGame() => _multiplayerService.socket?.emit('game:resume', {'roomCode': _roomCode});
+  void pauseGame() =>
+      _multiplayerService.socket?.emit('game:pause', {'roomCode': _roomCode});
+  void resumeGame() =>
+      _multiplayerService.socket?.emit('game:resume', {'roomCode': _roomCode});
 
   // ═══════════════════════════════════════════════════════════════════════════
   // NOTIFICATIONS & DIALOGS
   // ═══════════════════════════════════════════════════════════════════════════
 
   void clearSwapNotification() => _notificationManager.clearSwapNotification();
-  void clearJokerNotification() => _notificationManager.clearJokerNotification();
+  void clearJokerNotification() =>
+      _notificationManager.clearJokerNotification();
   void clearSpyNotification() => _notificationManager.clearSpyNotification();
-  void acknowledgeRoomClosed() { _notificationManager.acknowledgeRoomClosed(); _resetRoomState(); }
+  void acknowledgeRoomClosed() {
+    _notificationManager.acknowledgeRoomClosed();
+    _resetRoomState();
+  }
+
   void acknowledgeKicked() {
     _notificationManager.acknowledgeKicked();
     _resetRoomState();
   }
+
   void acknowledgeBanned() {
     _notificationManager.acknowledgeBanned();
     _resetRoomState();
   }
-  void clearError() { _notificationManager.clearError(); _connectionManager.clearError(); }
+
+  void clearError() {
+    _notificationManager.clearError();
+    _connectionManager.clearError();
+  }
 
   void closeSpiedCardDialog() {
     _showSpiedCardDialog = false;
@@ -744,7 +924,8 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
     final cid = clientId;
     final pid = playerId;
     for (final player in _playersInLobby) {
-      if ((cid != null && player['clientId'] == cid) || (pid != null && player['id'] == pid)) {
+      if ((cid != null && player['clientId'] == cid) ||
+          (pid != null && player['id'] == pid)) {
         player['ready'] = ready;
       }
     }
@@ -757,11 +938,15 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   // CHAT & EMOTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void sendChatMessage(String message) => _multiplayerService.sendChatMessage(message);
+  void sendChatMessage(String message) =>
+      _multiplayerService.sendChatMessage(message);
 
   void sendEmote(String emoji) {
-    final playerName = _playersInLobby.firstWhere((p) => p['id'] == playerId, orElse: () => {'name': 'Joueur'})['name'] as String? ?? 'Joueur';
-    _multiplayerService.socket?.emit('game:emote', {'roomCode': _roomCode, 'emoji': emoji, 'playerName': playerName});
+    final playerName = _playersInLobby.firstWhere((p) => p['id'] == playerId,
+            orElse: () => {'name': 'Joueur'})['name'] as String? ??
+        'Joueur';
+    _multiplayerService.socket?.emit('game:emote',
+        {'roomCode': _roomCode, 'emoji': emoji, 'playerName': playerName});
     _chatManager.addLocalEmote(emoji, playerName, playerId ?? '');
   }
 
@@ -769,8 +954,10 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   // CONNECTION
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<bool> reconnect() => _connectionManager.reconnect(_roomCode, _playersInLobby, playerId, (inLobby) => _isInLobby = inLobby);
-  Future<bool> checkServerReachable() => _connectionManager.checkServerReachable();
+  Future<bool> reconnect() => _connectionManager.reconnect(
+      _roomCode, _playersInLobby, playerId, (inLobby) => _isInLobby = inLobby);
+  Future<bool> checkServerReachable() =>
+      _connectionManager.checkServerReachable();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MISC
@@ -784,11 +971,16 @@ class MultiplayerGameProvider with ChangeNotifier, WidgetsBindingObserver implem
   }
 
   void watchGame() {
-    if (_gameState != null) { _isPlaying = true; _isInLobby = false; notifyListeners(); }
+    if (_gameState != null) {
+      _isPlaying = true;
+      _isInLobby = false;
+      notifyListeners();
+    }
   }
 
   Future<List<SavedRoom>> getMyRooms() => _multiplayerService.getMyRooms();
-  Future<void> removeRoom(String roomCode) => _multiplayerService.removeSavedRoom(roomCode);
+  Future<void> removeRoom(String roomCode) =>
+      _multiplayerService.removeSavedRoom(roomCode);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

@@ -55,7 +55,8 @@ class RoomManager {
         this.cleanupTimer = null;
         this.botCastingCache = null;
         this.botCastingCacheLoadedAtMs = 0;
-        this.turnTimeoutMs = options.turnTimeoutMs ?? 20000;
+        this.turnTimeoutMs = options.turnTimeoutMs ?? 70000;
+        this.specialPowerTimeoutMs = options.specialPowerTimeoutMs ?? 45000;
         this.presenceGraceMs = options.presenceGraceMs ?? 3000;
         this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
         this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
@@ -881,13 +882,10 @@ class RoomManager {
             this.ensureHost(room);
         }
         else {
-            leaving.connected = false;
-            leaving.focused = false;
-            leaving.lastSeenAt = this.now();
-            leaving.isSpectator = true;
-            if (room.gameState && (0, GameState_1.getCurrentPlayer)(room.gameState).id === leaving.id) {
-                this.forceEndTurn(roomCode, `${leaving.name} est passé spectateur.`);
-            }
+            this.removePlayerFromActiveRoom(roomCode, leaving.id, {
+                removeReason: `${leaving.name} a quitté la partie.`,
+            });
+            return;
         }
         this.touchRoom(room);
         this.broadcastPresence(roomCode);
@@ -917,8 +915,6 @@ class RoomManager {
             return;
         if (room.gameState.phase === GameState_1.GamePhase.setup)
             return; // Don't end during setup
-        // Count active (connected and not spectator) human players
-        const activeHumans = room.players.filter((p) => p.isHuman && p.connected && !p.isSpectator);
         // If less than 2 active humans remain (and we are in a multiplayer game)
         // Note: If playing with bots, we might want to keep playing?
         // User requirement: "When opponent leaves, game ends".
@@ -985,23 +981,45 @@ class RoomManager {
         // Si le jeu est en pause, on ne lance pas le timer maintenant
         if (room.isPaused)
             return;
-        // Si on attend un pouvoir spécial, ne pas lancer le timer
-        if (room.gameState.isWaitingForSpecialPower)
-            return;
+        const waitingSpecialPower = room.gameState.isWaitingForSpecialPower;
+        const timeoutMs = waitingSpecialPower
+            ? this.specialPowerTimeoutMs
+            : this.turnTimeoutMs;
         // Mettre à jour les infos de timer dans le gameState pour l'affichage client
         room.gameState.turnStartTime = this.now();
-        room.gameState.turnTimeoutMs = this.turnTimeoutMs;
+        room.gameState.turnTimeoutMs = timeoutMs;
         const playerId = currentPlayer.id;
         const timer = setTimeout(() => {
             const currentRoom = this.rooms.get(roomCode);
             if (!currentRoom || !currentRoom.gameState)
                 return;
-            const stillCurrent = (0, GameState_1.getCurrentPlayer)(currentRoom.gameState).id === playerId;
+            const currentGameState = currentRoom.gameState;
+            const stillCurrent = (0, GameState_1.getCurrentPlayer)(currentGameState).id === playerId;
             if (!stillCurrent)
                 return;
             this.actionTimers.delete(roomCode);
+            if (currentGameState.isWaitingForSpecialPower) {
+                GameLogic_1.GameLogic.skipSpecialPower(currentGameState);
+                const timeoutSeconds = Math.round(this.specialPowerTimeoutMs / 1000);
+                this.broadcastGameState(roomCode, 'ACTION_RESULT', {
+                    message: `⏱️ Pouvoir spécial expiré (${timeoutSeconds}s) : pouvoir ignoré.`,
+                });
+                if (currentGameState.phase === GameState_1.GamePhase.ended) {
+                    this.handleGameEnd(roomCode);
+                    return;
+                }
+                if (currentGameState.phase === GameState_1.GamePhase.reaction) {
+                    const reactionTime = typeof currentRoom.settings?.reactionTimeMs === 'number'
+                        ? currentRoom.settings.reactionTimeMs
+                        : 3000;
+                    this.startReactionTimer(roomCode, reactionTime);
+                    return;
+                }
+                void this.checkAndPlayBotTurn(roomCode);
+                return;
+            }
             this.triggerPresenceCheck(roomCode, playerId, 'Temps de jeu écoulé');
-        }, this.turnTimeoutMs);
+        }, timeoutMs);
         this.actionTimers.set(roomCode, timer);
     }
     clearTurnTimer(roomCode) {
@@ -1055,6 +1073,73 @@ class RoomManager {
             this.presenceTimers.delete(key);
         }
     }
+    removePlayerFromGameState(roomCode, playerId, removeReason) {
+        const room = this.rooms.get(roomCode);
+        if (!room?.gameState)
+            return;
+        const gameState = room.gameState;
+        const playerIndex = gameState.players.findIndex((p) => p.id === playerId);
+        if (playerIndex < 0)
+            return;
+        const wasCurrentPlayer = playerIndex === gameState.currentPlayerIndex;
+        const phaseBeforeRemoval = gameState.phase;
+        const gamePlayer = gameState.players[playerIndex];
+        gamePlayer.hasFolded = true;
+        if (!gameState.eliminatedPlayerIds.includes(playerId)) {
+            gameState.eliminatedPlayerIds.push(playerId);
+        }
+        gameState.readyPlayerIds = gameState.readyPlayerIds.filter((id) => id !== playerId);
+        if (phaseBeforeRemoval === GameState_1.GamePhase.playing && wasCurrentPlayer) {
+            this.clearTurnTimer(roomCode);
+            this.forceEndTurn(roomCode, removeReason);
+        }
+        const updatedIndex = gameState.players.findIndex((p) => p.id === playerId);
+        if (updatedIndex < 0)
+            return;
+        const wasCurrentAfterForceEnd = updatedIndex === gameState.currentPlayerIndex;
+        gameState.players.splice(updatedIndex, 1);
+        gameState.eliminatedPlayerIds = gameState.eliminatedPlayerIds.filter((id) => id !== playerId);
+        gameState.readyPlayerIds = gameState.readyPlayerIds.filter((id) => id !== playerId);
+        if (gameState.players.length === 0) {
+            gameState.currentPlayerIndex = 0;
+            return;
+        }
+        if (phaseBeforeRemoval === GameState_1.GamePhase.reaction && wasCurrentPlayer) {
+            gameState.currentPlayerIndex =
+                (updatedIndex - 1 + gameState.players.length) % gameState.players.length;
+            return;
+        }
+        if (updatedIndex < gameState.currentPlayerIndex) {
+            gameState.currentPlayerIndex -= 1;
+        }
+        else if (wasCurrentAfterForceEnd && gameState.currentPlayerIndex >= gameState.players.length) {
+            gameState.currentPlayerIndex = 0;
+        }
+    }
+    removePlayerFromActiveRoom(roomCode, playerId, options) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        const player = room.players.find((p) => p.id === playerId);
+        if (!player)
+            return;
+        this.clearPresenceCheck(roomCode, playerId);
+        this.removePlayerFromGameState(roomCode, playerId, options.removeReason);
+        const roomIndex = room.players.findIndex((p) => p.id === playerId);
+        if (roomIndex >= 0) {
+            room.players.splice(roomIndex, 1);
+        }
+        if (room.players.length === 0) {
+            this.removeRoom(roomCode);
+            return;
+        }
+        this.reindexPlayers(room);
+        this.ensureHost(room);
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+        this.broadcastGameState(roomCode, 'PLAYER_LEFT', { playerId });
+        this.checkGameEndCondition(roomCode);
+    }
     markSpectator(roomCode, playerId, reason) {
         const room = this.rooms.get(roomCode);
         if (!room)
@@ -1062,12 +1147,12 @@ class RoomManager {
         const player = room.players.find((p) => p.id === playerId);
         if (!player || player.isSpectator)
             return;
-        player.isSpectator = true;
-        player.connected = false; // Mark disconnected effectively
-        player.focused = false;
-        player.lastSeenAt = this.now();
-        this.clearPresenceCheck(roomCode, playerId);
-        this.clearTurnTimer(roomCode);
+        const removeReason = `${player.name} a été retiré de la partie (${reason}).`;
+        this.io.to(player.id).emit('room:kicked', {
+            roomCode,
+            message: `Retiré pour inactivité: ${reason}. Vous pouvez rejoindre une nouvelle partie.`,
+            canRejoin: true,
+        });
         // Notifier tous les joueurs qu'un joueur est devenu AFK/spectateur
         this.io.to(roomCode).emit('player:afk', {
             playerId: player.id,
@@ -1075,19 +1160,9 @@ class RoomManager {
             reason,
             roomCode,
         });
-        // Check if only one active player remains ("Last Man Standing")
-        const activeCount = this.activePlayerCount(room);
-        if (activeCount <= 1) {
-            this.touchRoom(room);
-            this.broadcastPresence(roomCode);
-            this.handleGameEnd(roomCode);
-            return;
-        }
-        if (room.gameState && (0, GameState_1.getCurrentPlayer)(room.gameState).id === playerId) {
-            this.forceEndTurn(roomCode, `${player.name} est passé spectateur.`);
-        }
-        this.touchRoom(room);
-        this.broadcastPresence(roomCode);
+        this.removePlayerFromActiveRoom(roomCode, playerId, {
+            removeReason,
+        });
     }
     forceEndTurn(roomCode, reason) {
         const room = this.rooms.get(roomCode);
@@ -1221,12 +1296,11 @@ class RoomManager {
                 return now - lastSeen <= this.stalePlayerMs;
             });
             if (!anyConnected) {
-                // Init grace period
+                // No short inactivity auto-delete: keep room available until TTL/admin action.
                 if (!room.emptyAt) {
                     room.emptyAt = now;
                 }
-                // 10 minutes de grace period ou expiration normale
-                if (now - room.emptyAt > 600000 || now >= room.expiresAt) {
+                if (now >= room.expiresAt) {
                     this.removeRoom(room.id);
                     continue;
                 }

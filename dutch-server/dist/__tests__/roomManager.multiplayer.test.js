@@ -75,7 +75,7 @@ function createManager(options = {}) {
     strict_1.default.equal(humanCount, 2);
     strict_1.default.equal(room.players.length, 4);
 });
-(0, node_test_1.default)('turn timeout triggers presence check then spectator', async (t) => {
+(0, node_test_1.default)('turn timeout triggers presence check then removes AFK player', async (t) => {
     const { io, manager } = createManager({
         turnTimeoutMs: 100, // Increased to be more robust
         presenceGraceMs: 50,
@@ -102,16 +102,16 @@ function createManager(options = {}) {
     manager.markPlayerReady(room.id, 'p3');
     strict_1.default.equal(room.gameState.phase, 1 /* GamePhase.playing */);
     const currentPlayerId = (0, GameState_1.getCurrentPlayer)(room.gameState).id;
-    const otherPlayerId = room.players.find((p) => p.id !== currentPlayerId && p.id !== 'host-3').id;
-    // Wait, we need to know who is next. GameLogic.nextPlayer usually goes by index.
-    // We just need to check currentPlayerId changed.
     // Wait for turn timeout (100ms) + buffer
     await new Promise((resolve) => setTimeout(resolve, 150));
     const checkEvents = io.findEventsFor(currentPlayerId, 'presence:check');
     strict_1.default.ok(checkEvents.length >= 1, 'Should have sent presence:check');
     await new Promise((resolve) => setTimeout(resolve, 100));
     const timedOutPlayer = room.players.find((p) => p.id === currentPlayerId);
-    strict_1.default.equal(timedOutPlayer.isSpectator, true, 'Player should be spectator');
+    strict_1.default.equal(timedOutPlayer, undefined, 'Player should be removed from room');
+    strict_1.default.equal(room.gameState.players.some((p) => p.id === currentPlayerId), false, 'Player should be removed from game state');
+    const kickedEvents = io.findEventsFor(currentPlayerId, 'room:kicked');
+    strict_1.default.ok(kickedEvents.length >= 1, 'Should notify AFK player as kicked');
     const newCurrentPlayerId = (0, GameState_1.getCurrentPlayer)(room.gameState).id;
     strict_1.default.notEqual(newCurrentPlayerId, currentPlayerId, 'Turn should have passed');
 });
@@ -236,7 +236,7 @@ function createManager(options = {}) {
     strict_1.default.ok(hostEvents.length >= 1);
 });
 // ============ Tests départ d'un joueur non-hôte pendant la partie ============
-(0, node_test_1.default)('non-host player disconnecting during game becomes spectator', async (t) => {
+(0, node_test_1.default)('non-host player disconnecting during game is marked disconnected', async (t) => {
     const { io, manager } = createManager({
         turnTimeoutMs: 30,
         presenceGraceMs: 30,

@@ -1,14 +1,13 @@
+import 'dart:async';
+
+import 'package:dutch_game/providers/multiplayer_game_provider.dart';
+import 'package:dutch_game/screens/multiplayer/menu/multiplayer_profile_space_screen.dart';
+import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
+import 'package:dutch_game/services/social/social_hub_repository.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../../../../providers/multiplayer_game_provider.dart';
-import '../../../../../models/game_state.dart';
-import '../../../../../models/game_settings.dart';
-import '../../../../../services/multiplayer/multiplayer_service.dart';
-import '../../../../../utils/ui_constants.dart';
-import '../lobby/multiplayer_lobby_screen.dart';
-
-enum _MenuFlow { choose, create, join }
 
 class MultiplayerMenuScreen extends StatefulWidget {
   const MultiplayerMenuScreen({super.key});
@@ -18,603 +17,864 @@ class MultiplayerMenuScreen extends StatefulWidget {
 }
 
 class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
-  final _nameController = TextEditingController(text: 'Joueur');
-  final _roomCodeController = TextEditingController();
-  GameMode _gameMode = GameMode.quick;
-  _MenuFlow _flow = _MenuFlow.choose;
+  final SocialHubRepository _socialRepository = SocialHubRepository();
 
-  // Mes rooms sauvegardées
-  List<SavedRoom> _myRooms = [];
-  List<Map<String, dynamic>> _activeRooms = [];
+  SocialProfile? _profile;
+  List<FriendEntry> _friends = <FriendEntry>[];
+  List<FriendRequestEntry> _incomingRequests = <FriendRequestEntry>[];
+  List<FriendRequestEntry> _outgoingRequests = <FriendRequestEntry>[];
+  List<String> _blockedUsers = <String>[];
+
+  List<SavedRoom> _myRooms = <SavedRoom>[];
+  List<Map<String, dynamic>> _activeRooms = <Map<String, dynamic>>[];
   bool _loadingRooms = false;
+  bool _showingProfileGate = false;
 
   @override
   void initState() {
     super.initState();
-    _initProvider();
+    _bootstrap();
   }
 
-  Future<void> _initProvider() async {
+  Future<void> _bootstrap() async {
     final provider = context.read<MultiplayerGameProvider>();
     await provider.init();
-    _loadMyRooms();
+    await Future.wait<void>(<Future<void>>[
+      _loadSocialData(),
+      _loadMyRooms(),
+    ]);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (_profile == null) {
+      await _openProfileDialog(forceCompletion: true);
+    }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _roomCodeController.dispose();
-    super.dispose();
+  Future<void> _loadSocialData() async {
+    final profile = await _socialRepository.getProfile();
+    final friends = await _socialRepository.getFriends();
+    final incoming = await _socialRepository.getFriendRequests(
+      direction: FriendRequestDirection.incoming,
+    );
+    final outgoing = await _socialRepository.getFriendRequests(
+      direction: FriendRequestDirection.outgoing,
+    );
+    final blocked = await _socialRepository.getBlockedUsers();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _profile = profile;
+      _friends = friends;
+      _incomingRequests = incoming;
+      _outgoingRequests = outgoing;
+      _blockedUsers = blocked;
+    });
   }
 
   Future<void> _loadMyRooms() async {
-    setState(() => _loadingRooms = true);
+    setState(() {
+      _loadingRooms = true;
+    });
 
     final provider = context.read<MultiplayerGameProvider>();
     final savedRooms = await provider.getMyRooms();
 
-    if (savedRooms.isEmpty) {
-      setState(() {
-        _myRooms = [];
-        _activeRooms = [];
-        _loadingRooms = false;
-      });
+    List<Map<String, dynamic>> activeRooms = <Map<String, dynamic>>[];
+    if (savedRooms.isNotEmpty) {
+      final roomCodes = savedRooms.map((room) => room.roomCode).toList();
+      activeRooms = await provider.checkActiveRooms(roomCodes) ??
+          <Map<String, dynamic>>[];
+    }
+
+    if (!mounted) {
       return;
     }
 
-    // Vérifier quelles rooms sont actives
-    final roomCodes = savedRooms.map((r) => r.roomCode).toList();
-    final active = await provider.checkActiveRooms(roomCodes);
-
-    if (!mounted) return;
-
     setState(() {
       _myRooms = savedRooms;
-      _activeRooms = active ?? [];
+      _activeRooms = activeRooms;
       _loadingRooms = false;
     });
-
-    // Nettoyer les rooms inactives
-    await provider.cleanupInactiveRooms();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+  String get _displayName => _profile?.displayName ?? 'Joueur';
 
-    // No longer using Consumer here - connection errors will be shown
-    // when the user explicitly tries an action (createRoom, joinRoom)
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colors.primary.withValues(alpha: 0.94),
-              colors.secondary.withValues(alpha: 0.94),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () {
-                        if (_flow == _MenuFlow.choose) {
-                          context.go('/');
-                        } else {
-                          setState(() => _flow = _MenuFlow.choose);
-                        }
-                      },
+  String get _username => _profile?.username ?? 'profil-incomplet';
+
+  Future<bool> _ensureProfileReady() async {
+    if (_profile != null) {
+      return true;
+    }
+    await _openProfileDialog(forceCompletion: true);
+    return _profile != null;
+  }
+
+  Future<void> _openProfileSpace() async {
+    if (!await _ensureProfileReady()) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const MultiplayerProfileSpaceScreen(),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+    await Future.wait<void>(<Future<void>>[
+      _loadSocialData(),
+      _loadMyRooms(),
+    ]);
+  }
+
+  Future<void> _openProfileDialog({
+    required bool forceCompletion,
+  }) async {
+    if (_showingProfileGate) {
+      return;
+    }
+    _showingProfileGate = true;
+
+    final existingProfile = _profile;
+    final nameController = TextEditingController(
+      text: existingProfile?.displayName ?? '',
+    );
+    final usernameController = TextEditingController(
+      text: existingProfile?.username ?? '',
+    );
+    final reservedUsernames = await _socialRepository.getReservedUsernames(
+      exceptUsername: existingProfile?.username,
+    );
+
+    String? pseudoError;
+    String? usernameError;
+    bool inviteNotificationsEnabled =
+        existingProfile?.roomInviteNotificationsEnabled ?? false;
+    bool saving = false;
+    Timer? validationDebounce;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !forceCompletion,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            String? validatePseudo({required bool checkRequired}) {
+              final rawPseudo = nameController.text.trim();
+              if (checkRequired && rawPseudo.isEmpty) {
+                return 'Le pseudo est requis.';
+              }
+              if (rawPseudo.length > 24) {
+                return 'Maximum 24 caracteres.';
+              }
+              return null;
+            }
+
+            String? validateUsername({required bool checkRequired}) {
+              final rawUsername = usernameController.text;
+              final normalizedUsername =
+                  SocialHubRepository.normalizeUsername(rawUsername);
+
+              if (checkRequired && normalizedUsername.isEmpty) {
+                return 'Le nom d utilisateur est requis.';
+              }
+              if (normalizedUsername.isEmpty) {
+                return null;
+              }
+              if (!SocialHubRepository.containsOnlyAllowedUsernameChars(
+                rawUsername,
+              )) {
+                return 'Caracteres autorises: lettres/chiffres, ., _ et - (accents autorises)';
+              }
+              if (normalizedUsername.length < 3) {
+                return 'Minimum 3 caracteres.';
+              }
+              if (normalizedUsername.length > 20) {
+                return 'Maximum 20 caracteres.';
+              }
+              if (reservedUsernames.contains(normalizedUsername)) {
+                return 'Ce nom d utilisateur existe deja sur cet appareil.';
+              }
+              return null;
+            }
+
+            void runLiveValidation() {
+              validationDebounce?.cancel();
+              validationDebounce = Timer(const Duration(milliseconds: 80), () {
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                setLocalState(() {
+                  pseudoError = validatePseudo(checkRequired: false);
+                  usernameError = validateUsername(checkRequired: false);
+                });
+              });
+            }
+
+            Future<void> onSave() async {
+              if (saving) {
+                return;
+              }
+
+              final rawName = nameController.text.trim();
+              final rawUsername = usernameController.text.trim();
+              final normalizedUsername =
+                  SocialHubRepository.normalizeUsername(rawUsername);
+              final nextPseudoError = validatePseudo(checkRequired: true);
+              final nextUsernameError = validateUsername(checkRequired: true);
+              if (nextPseudoError != null || nextUsernameError != null) {
+                setLocalState(() {
+                  pseudoError = nextPseudoError;
+                  usernameError = nextUsernameError;
+                });
+                return;
+              }
+
+              setLocalState(() {
+                saving = true;
+                pseudoError = null;
+                usernameError = null;
+              });
+
+              final now = DateTime.now();
+              final nextProfile = SocialProfile(
+                displayName: rawName,
+                username: normalizedUsername,
+                roomInviteNotificationsEnabled: inviteNotificationsEnabled,
+                createdAt: existingProfile?.createdAt ?? now,
+                updatedAt: now,
+              );
+              await _socialRepository.saveProfile(nextProfile);
+
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (!mounted) {
+                return;
+              }
+              await _loadSocialData();
+            }
+
+            return PopScope(
+              canPop: !forceCompletion,
+              child: AlertDialog(
+                backgroundColor: const Color(0xFFF6F4FB),
+                title: Text(
+                  forceCompletion ? 'Complete ton profil' : 'Mon profil',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                content: SizedBox(
+                  width: 440,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Text(
+                          'Pseudo',
+                          style: TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: nameController,
+                          textCapitalization: TextCapitalization.words,
+                          maxLength: 24,
+                          onChanged: (_) => runLiveValidation(),
+                          style: const TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Ton pseudo',
+                            hintStyle:
+                                const TextStyle(color: Color(0xFF6B7280)),
+                            errorText: pseudoError,
+                            filled: true,
+                            fillColor: Colors.white,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: pseudoError == null
+                                    ? const Color(0xFFD1D5DB)
+                                    : const Color(0xFFB91C1C),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                width: 1.4,
+                                color: pseudoError == null
+                                    ? const Color(0xFF4F46E5)
+                                    : const Color(0xFFB91C1C),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Nom d utilisateur',
+                          style: TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Container(
+                              margin: const EdgeInsets.only(top: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              child: const Text(
+                                '@',
+                                style: TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: usernameController,
+                                textCapitalization: TextCapitalization.none,
+                                maxLength: 20,
+                                onChanged: (_) => runLiveValidation(),
+                                style: const TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'pegga.pig',
+                                  hintStyle:
+                                      const TextStyle(color: Color(0xFF6B7280)),
+                                  errorText: usernameError,
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(
+                                      color: usernameError == null
+                                          ? const Color(0xFFD1D5DB)
+                                          : const Color(0xFFB91C1C),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(
+                                      width: 1.4,
+                                      color: usernameError == null
+                                          ? const Color(0xFF4F46E5)
+                                          : const Color(0xFFB91C1C),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: inviteNotificationsEnabled,
+                          onChanged: (value) {
+                            setLocalState(() {
+                              inviteNotificationsEnabled = value;
+                            });
+                          },
+                          title: const Text(
+                            'Notifications d invitation de salon',
+                            style: TextStyle(color: Color(0xFF111827)),
+                          ),
+                          subtitle: const Text(
+                            'Base locale activee. Push cross-device a brancher cote compte.',
+                            style: TextStyle(color: Color(0xFF374151)),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
+                  ),
+                ),
+                actions: <Widget>[
+                  if (!forceCompletion)
+                    TextButton(
+                      onPressed: saving
+                          ? null
+                          : () {
+                              Navigator.of(dialogContext).pop();
+                            },
+                      child: const Text('Fermer'),
+                    ),
+                  FilledButton(
+                    onPressed: saving ? null : onSave,
+                    child: saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Enregistrer'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    validationDebounce?.cancel();
+    _showingProfileGate = false;
+  }
+
+  Future<void> _inviteFriendsToRoom(String roomCode) async {
+    if (!await _ensureProfileReady()) {
+      return;
+    }
+
+    if (_friends.isEmpty) {
+      _showSnackBar('Ajoute des amis avant d envoyer des invitations.');
+      return;
+    }
+
+    final selected = <String>{};
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
                     const Text(
-                      'Multijoueur en ligne',
+                      'Inviter des amis',
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: _friends.map((friend) {
+                          final checked = selected.contains(friend.username);
+                          return CheckboxListTile(
+                            value: checked,
+                            onChanged: (value) {
+                              setLocalState(() {
+                                if (value == true) {
+                                  selected.add(friend.username);
+                                } else {
+                                  selected.remove(friend.username);
+                                }
+                              });
+                            },
+                            title: Text(friend.displayName),
+                            subtitle: Text('@${friend.username}'),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop();
+                            },
+                            child: const Text('Annuler'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () {
+                                    Navigator.of(sheetContext).pop();
+                                  },
+                            child: const Text('Inviter'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Expanded(
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: SizedBox(
-                      key: ValueKey(_flow),
-                      width: 520,
-                      child: _buildFlow(context),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || selected.isEmpty) {
+      return;
+    }
+
+    final invited = selected.map((entry) => '@$entry').join(', ');
+    _showSnackBar(
+      'Invitations preparees pour la room $roomCode: $invited. Livraison push cross-device a brancher cote comptes.',
+    );
+  }
+
+  Map<String, dynamic>? _activeRoomInfo(String roomCode) {
+    for (final room in _activeRooms) {
+      if ((room['roomCode'] as String?) == roomCode) {
+        return room;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _rejoinRoom(String roomCode) async {
+    if (!await _ensureProfileReady()) {
+      return;
+    }
+
+    final provider = context.read<MultiplayerGameProvider>();
+    try {
+      await provider.joinRoom(
+        roomCode: roomCode,
+        playerName: _displayName,
+      );
+      if (!mounted || provider.roomCode == null) {
+        return;
+      }
+      context.go('/lobby');
+    } catch (error) {
+      _showSnackBar(error.toString(), isError: true);
+    }
+  }
+
+  Future<void> _removeSavedRoom(String roomCode) async {
+    final provider = context.read<MultiplayerGameProvider>();
+    await provider.removeRoom(roomCode);
+    await _loadMyRooms();
+    _showSnackBar('Room $roomCode retiree de Mes salons.');
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
       ),
     );
   }
 
-  Widget _buildFlow(BuildContext context) {
-    switch (_flow) {
-      case _MenuFlow.create:
-        return _buildCreate(context);
-      case _MenuFlow.join:
-        return _buildJoin(context);
-      case _MenuFlow.choose:
-        return _buildChoose(context);
-    }
-  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: <Widget>[
+          const _MultiplayerBackground(),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                children: <Widget>[
+                  _buildHeader(context),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isDesktop = constraints.maxWidth >= 980;
+                        if (isDesktop) {
+                          return Row(
+                            children: <Widget>[
+                              Expanded(
+                                flex: 11,
+                                child: Column(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: _buildActionTile(
+                                        icon: Icons.add_home_work_rounded,
+                                        title: 'Creer un salon',
+                                        subtitle:
+                                            'Lance un salon prive ou public et invite ton groupe.',
+                                        accent: const Color(0xFF22D3EE),
+                                        onTap: () async {
+                                          if (!await _ensureProfileReady()) {
+                                            return;
+                                          }
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          context.go(
+                                              '/multiplayer/create-selection');
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Expanded(
+                                      child: _buildActionTile(
+                                        icon: Icons.door_front_door_outlined,
+                                        title: 'Rejoindre un salon',
+                                        subtitle:
+                                            'Code prive, matchmaking public, ou reprise d un salon.',
+                                        accent: const Color(0xFF34D399),
+                                        onTap: () async {
+                                          if (!await _ensureProfileReady()) {
+                                            return;
+                                          }
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          context.go(
+                                              '/multiplayer/join-selection');
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                flex: 10,
+                                child: Column(
+                                  children: <Widget>[
+                                    _buildProfileCard(),
+                                    const SizedBox(height: 14),
+                                    Expanded(child: _buildMyRoomsCard()),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }
 
-  Widget _buildChoose(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildHeroCard(
-            context,
-            icon: Icons.add_circle,
-            title: 'Creer un salon',
-            subtitle: 'Tu deviens hote et tu invites tes amis.',
-            color: colors.primaryContainer,
-            onTap: () => context.go('/multiplayer/create-selection'),
+                        return ListView(
+                          children: <Widget>[
+                            SizedBox(
+                              height: 168,
+                              child: _buildActionTile(
+                                icon: Icons.add_home_work_rounded,
+                                title: 'Creer un salon',
+                                subtitle:
+                                    'Lance un salon prive ou public et invite ton groupe.',
+                                accent: const Color(0xFF22D3EE),
+                                onTap: () async {
+                                  if (!await _ensureProfileReady()) {
+                                    return;
+                                  }
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  context.go('/multiplayer/create-selection');
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 168,
+                              child: _buildActionTile(
+                                icon: Icons.door_front_door_outlined,
+                                title: 'Rejoindre un salon',
+                                subtitle:
+                                    'Code prive, matchmaking public, ou reprise d un salon.',
+                                accent: const Color(0xFF34D399),
+                                onTap: () async {
+                                  if (!await _ensureProfileReady()) {
+                                    return;
+                                  }
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  context.go('/multiplayer/join-selection');
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildProfileCard(),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 420,
+                              child: _buildMyRoomsCard(),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          _buildHeroCard(
-            context,
-            icon: Icons.login,
-            title: 'Rejoindre un salon',
-            subtitle: 'Entre un code a 6 caracteres pour rejoindre.',
-            color: colors.secondaryContainer,
-            onTap: () => context.go('/multiplayer/join-selection'),
-          ),
-          const SizedBox(height: 24),
-          _buildMyRoomsSection(context, colors),
         ],
       ),
     );
   }
 
-  Widget _buildMyRoomsSection(BuildContext context, ColorScheme colors) {
-    // Ne rien afficher si aucune room sauvegardée
-    if (_myRooms.isEmpty && !_loadingRooms) {
-      return const SizedBox.shrink();
-    }
-
-    final activeRoomCodes =
-        _activeRooms.map((r) => r['roomCode'] as String).toSet();
-    final activeMyRooms =
-        _myRooms.where((r) => activeRoomCodes.contains(r.roomCode)).toList();
-
-    if (activeMyRooms.isEmpty && !_loadingRooms) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      color: Colors.white.withValues(alpha: 0.14),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.26)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.history, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Mes rooms',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const Spacer(),
-                if (_loadingRooms)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.refresh,
-                        color: AppColors.textSecondary, size: 20),
-                    onPressed: _loadMyRooms,
-                    tooltip: 'Actualiser',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_loadingRooms)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Chargement...',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              )
-            else if (activeMyRooms.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Aucune room active',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              )
-            else
-              ...activeMyRooms.map((room) {
-                final roomInfo = _activeRooms.firstWhere(
-                  (r) => r['roomCode'] == room.roomCode,
-                  orElse: () => {},
-                );
-                final playerCount = roomInfo['playerCount'] ?? 0;
-                final status = roomInfo['status'] ?? 'unknown';
-
-                return _buildRoomTile(
-                  context,
-                  room: room,
-                  playerCount: playerCount,
-                  status: status,
-                  colors: colors,
-                );
-              }),
-          ],
+  Widget _buildHeader(BuildContext context) {
+    final pendingCount = _incomingRequests.length + _outgoingRequests.length;
+    return Row(
+      children: <Widget>[
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go('/'),
         ),
-      ),
+        const SizedBox(width: 6),
+        const Expanded(
+          child: Text(
+            'Multijoueur',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Rye',
+              fontSize: 34,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        _pill(
+          icon: Icons.person_outline,
+          label: '@$_username',
+        ),
+        const SizedBox(width: 8),
+        _pill(
+          icon: Icons.group_outlined,
+          label: '${_friends.length} amis',
+        ),
+        if (pendingCount > 0) ...<Widget>[
+          const SizedBox(width: 8),
+          _pill(
+            icon: Icons.mark_email_unread_outlined,
+            label: '$pendingCount demandes',
+            color: const Color(0xFF0F766E),
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildRoomTile(
-    BuildContext context, {
-    required SavedRoom room,
-    required int playerCount,
-    required String status,
-    required ColorScheme colors,
+  Widget _pill({
+    required IconData icon,
+    required String label,
+    Color color = const Color(0x1FFFFFFF),
   }) {
-    final isHost = room.isHost;
-    final statusLabel = status == 'waiting'
-        ? 'En attente'
-        : status == 'playing'
-            ? 'En cours'
-            : status;
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: color,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: isHost ? colors.primaryContainer : colors.secondaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            isHost ? Icons.star : Icons.group,
-            color: colors.onPrimaryContainer,
-          ),
-        ),
-        title: Row(
-          children: [
-            Text(
-              room.roomCode,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: Colors.white, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
-            const SizedBox(width: 8),
-            if (isHost)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'Hôte',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Text(
-          '$statusLabel • $playerCount joueur${playerCount > 1 ? 's' : ''}',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-        trailing: FilledButton(
-          onPressed: () => _rejoinRoom(context, room.roomCode),
-          style: FilledButton.styleFrom(
-            backgroundColor: colors.primaryContainer,
-            foregroundColor: colors.onPrimaryContainer,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          child: const Text('Rejoindre'),
-        ),
+        ],
       ),
     );
   }
 
-  Future<void> _rejoinRoom(BuildContext context, String roomCode) async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
-
-    final provider = context.read<MultiplayerGameProvider>();
-    final navigator = Navigator.of(context);
-
-    try {
-      await provider.joinRoom(
-        roomCode: roomCode,
-        playerName: name,
-      );
-
-      if (!mounted || provider.roomCode == null) return;
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => const MultiplayerLobbyScreen(),
-        ),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    }
-  }
-
-  Widget _buildCreate(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Card(
-      color: Colors.white.withValues(alpha: 0.96),
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Configurer la partie',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: colors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildNameField(),
-            const SizedBox(height: 18),
-            Text(
-              'Mode de jeu',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: colors.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<GameMode>(
-              segments: const [
-                ButtonSegment(
-                  value: GameMode.quick,
-                  label: Text('Partie rapide'),
-                  icon: Icon(Icons.flash_on),
-                ),
-                ButtonSegment(
-                  value: GameMode.tournament,
-                  label: Text('Tournoi'),
-                  icon: Icon(Icons.emoji_events),
-                ),
-              ],
-              selected: {_gameMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) {
-                setState(() => _gameMode = selection.first);
-              },
-              style: ButtonStyle(
-                backgroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return colors.primaryContainer;
-                  }
-                  return Colors.white;
-                }),
-                foregroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return colors.onPrimaryContainer;
-                  }
-                  return colors.primary;
-                }),
-                side: WidgetStatePropertyAll(
-                  BorderSide(color: colors.primary.withValues(alpha: 0.3)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _createRoom(context),
-                icon: const Icon(Icons.rocket_launch),
-                label: const Text('Creer et ouvrir le lobby'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJoin(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Card(
-      color: Colors.white.withValues(alpha: 0.96),
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Rejoindre un lobby',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: colors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildNameField(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _roomCodeController,
-              textCapitalization: TextCapitalization.characters,
-              maxLength: 6,
-              style: const TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 3,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Code de la partie',
-                labelStyle: const TextStyle(color: Colors.black87),
-                hintText: 'ABC123',
-                hintStyle: const TextStyle(color: Colors.black45),
-                filled: true,
-                fillColor: Colors.white,
-                prefixIcon: Icon(Icons.key, color: colors.primary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _joinRoom(context),
-                icon: const Icon(Icons.group_add),
-                label: const Text('Rejoindre le lobby'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeroCard(
-    BuildContext context, {
+  Widget _buildActionTile({
     required IconData icon,
     required String title,
     required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
+    required Color accent,
+    required Future<void> Function() onTap,
   }) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Card(
-      color: Colors.white.withValues(alpha: 0.96),
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    return _glassCard(
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        onTap: () async {
+          await onTap();
+        },
         child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Row(
-            children: [
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
               Container(
-                width: 64,
-                height: 64,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(icon, size: 34, color: colors.onPrimaryContainer),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: colors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 13.5,
-                      ),
+                  gradient: LinearGradient(
+                    colors: <Color>[
+                      accent.withValues(alpha: 0.94),
+                      accent.withValues(alpha: 0.62),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.38),
+                      blurRadius: 20,
+                      spreadRadius: 1,
                     ),
                   ],
                 ),
+                child: Icon(icon, color: Colors.white, size: 28),
               ),
-              Icon(Icons.chevron_right, color: colors.primary),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  height: 1.12,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+              const Spacer(),
+              const Row(
+                children: <Widget>[
+                  Text(
+                    'Ouvrir',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                ],
+              ),
             ],
           ),
         ),
@@ -622,102 +882,400 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     );
   }
 
-  Widget _buildNameField() {
-    return TextField(
-      controller: _nameController,
-      textCapitalization: TextCapitalization.words,
-      maxLength: 20,
-      style: const TextStyle(color: Colors.black87),
-      decoration: const InputDecoration(
-        labelText: 'Votre nom',
-        labelStyle: TextStyle(color: Colors.black87),
-        hintText: 'Entrez votre nom',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.white,
-        prefixIcon: Icon(Icons.person, color: Colors.black87),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
+  Widget _buildProfileCard() {
+    final profile = _profile;
+    return _glassCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _openProfileSpace,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.account_circle,
+                      color: Colors.white, size: 26),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Mon profil',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _openProfileSpace,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: const Text('Ouvrir'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                profile == null ? 'Profil non complete' : profile.displayName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '@${profile?.username ?? 'a-completer'}',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _statChip(Icons.group, '${_friends.length} amis'),
+                  _statChip(
+                      Icons.mail_outline, '${_incomingRequests.length} recues'),
+                  _statChip(Icons.send_outlined,
+                      '${_outgoingRequests.length} envoyees'),
+                  _statChip(
+                      Icons.block_outlined, '${_blockedUsers.length} bloques'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Ouvre ton espace profil pour modifier ton pseudo, ton nom d utilisateur, gerer les demandes et voir tes salons hote.',
+                style: TextStyle(
+                  color: AppColors.textHint,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _createRoom(BuildContext context) async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
-
-    final provider = context.read<MultiplayerGameProvider>();
-    final navigator = Navigator.of(context);
-
-    try {
-      await provider.createRoom(
-        settings: GameSettings(
-          gameMode: _gameMode,
-          luckDifficulty: Difficulty.medium,
-          botDifficulty: Difficulty.medium,
-          minPlayers: 2,
-          maxPlayers: 4,
-          fillBots: false,
-        ),
-        playerName: name,
-      );
-
-      if (!mounted || provider.roomCode == null) return;
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => const MultiplayerLobbyScreen(),
-        ),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    }
+  Widget _statChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: Colors.white70),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _joinRoom(BuildContext context) async {
-    final name = _nameController.text.trim();
-    final code = _roomCodeController.text.trim().toUpperCase();
+  Widget _buildMyRoomsCard() {
+    return _glassCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.meeting_room_outlined, color: Colors.white),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Mes salons',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loadingRooms ? null : _loadMyRooms,
+                  icon:
+                      const Icon(Icons.refresh_rounded, color: Colors.white70),
+                  tooltip: 'Rafraichir',
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Salons en attente / arriere-plan. Tu peux rejoindre sans les supprimer de ta liste.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _loadingRooms
+                  ? const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2.2))
+                  : _myRooms.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Aucun salon enregistre.',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _myRooms.length,
+                          itemBuilder: (context, index) {
+                            final room = _myRooms[index];
+                            final activeInfo = _activeRoomInfo(room.roomCode);
+                            final status =
+                                activeInfo?['status'] as String? ?? 'offline';
+                            final playerCount =
+                                activeInfo?['playerCount'] as int?;
 
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
+                            final isActive = status != 'offline';
+                            final statusLabel = switch (status) {
+                              'waiting' => 'En attente',
+                              'playing' => 'En cours',
+                              'ended' => 'Termine',
+                              'closing' => 'Fermeture',
+                              _ => 'Hors ligne',
+                            };
 
-    if (code.length != 6) {
-      _showError('Le code doit contenir 6 caracteres');
-      return;
-    }
+                            final statusColor = isActive
+                                ? const Color(0xFF22C55E)
+                                : const Color(0xFF9CA3AF);
 
-    final provider = context.read<MultiplayerGameProvider>();
-    final navigator = Navigator.of(context);
-
-    try {
-      await provider.joinRoom(
-        roomCode: code,
-        playerName: name,
-      );
-
-      if (!mounted || provider.roomCode == null) return;
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => const MultiplayerLobbyScreen(),
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor:
+                                        Colors.white.withValues(alpha: 0.14),
+                                    child: Icon(
+                                      room.isHost ? Icons.star : Icons.group,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Row(
+                                          children: <Widget>[
+                                            Text(
+                                              room.roomCode,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 2,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withValues(
+                                                    alpha: 0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: statusColor.withValues(
+                                                      alpha: 0.6),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                statusLabel,
+                                                style: TextStyle(
+                                                  color: statusColor,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          room.isHost
+                                              ? 'Hote • ${playerCount ?? 0} joueur(s)'
+                                              : 'Participant • ${playerCount ?? 0} joueur(s)',
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FilledButton(
+                                    onPressed: isActive
+                                        ? () => _rejoinRoom(room.roomCode)
+                                        : null,
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    child: const Text('Rejoindre'),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    iconColor: Colors.white70,
+                                    onSelected: (action) {
+                                      if (action == 'remove_saved') {
+                                        _removeSavedRoom(room.roomCode);
+                                      } else if (action == 'invite_friends') {
+                                        _inviteFriendsToRoom(room.roomCode);
+                                      }
+                                    },
+                                    itemBuilder: (context) =>
+                                        <PopupMenuEntry<String>>[
+                                      const PopupMenuItem(
+                                        value: 'invite_friends',
+                                        child: Text('Inviter des amis'),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'remove_saved',
+                                        child: Text('Retirer de Mes salons'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 9),
+                        ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    }
+      ),
+    );
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
+  Widget _glassCard({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            Colors.white.withValues(alpha: 0.15),
+            Colors.white.withValues(alpha: 0.07),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.22),
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
+class _MultiplayerBackground extends StatelessWidget {
+  const _MultiplayerBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(-0.75, -0.95),
+          radius: 1.5,
+          colors: <Color>[
+            Color(0xFF334155),
+            Color(0xFF1F1B4D),
+            Color(0xFF09090B),
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Positioned(
+            top: -70,
+            left: -25,
+            child: _glowBlob(
+              size: 240,
+              colors: const <Color>[Color(0xFF22D3EE), Color(0x0022D3EE)],
+            ),
+          ),
+          Positioned(
+            top: 220,
+            right: -80,
+            child: _glowBlob(
+              size: 260,
+              colors: const <Color>[Color(0xFF10B981), Color(0x0010B981)],
+            ),
+          ),
+          Positioned(
+            bottom: -120,
+            left: 70,
+            child: _glowBlob(
+              size: 340,
+              colors: const <Color>[Color(0xFF38BDF8), Color(0x0038BDF8)],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _glowBlob({
+    required double size,
+    required List<Color> colors,
+  }) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: colors),
+        ),
       ),
     );
   }

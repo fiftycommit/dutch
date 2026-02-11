@@ -25,7 +25,7 @@ void main() {
 
         expect(profile.profileId, 'slot_1');
         expect(profile.gamesAnalyzed, 0);
-        expect(profile.mmr, 1000);
+        expect(profile.mmr, 0);
         expect(profile.learnedParameters, isNotEmpty);
       });
 
@@ -115,7 +115,15 @@ void main() {
       test('handles all action types', () {
         service.startGame(gameId: 'game123');
 
-        final actionTypes = ['draw', 'discard', 'replace', 'match', 'power', 'dutch', 'power_skip'];
+        final actionTypes = [
+          'draw',
+          'discard',
+          'replace',
+          'match',
+          'power',
+          'dutch',
+          'power_skip'
+        ];
 
         for (final actionType in actionTypes) {
           expect(
@@ -210,7 +218,7 @@ void main() {
         );
 
         expect(profile.gamesAnalyzed, 1);
-        expect(profile.mmr, greaterThan(1000)); // Won the game, MMR increased
+        expect(profile.mmr, greaterThan(0)); // Won the game, MMR increased
       });
 
       test('handles dutch win scenario', () async {
@@ -324,9 +332,10 @@ void main() {
     group('isBadPowerDecision', () {
       test('returns true for joker on single card hand', () {
         final joker = PlayingCard.create('joker', 'JOKER');
-        final target = Player(id: 'target', name: 'Target', isHuman: false, position: 1)
-          ..hand = [PlayingCard.create('hearts', 'A')]
-          ..knownCards = [false];
+        final target =
+            Player(id: 'target', name: 'Target', isHuman: false, position: 1)
+              ..hand = [PlayingCard.create('hearts', 'A')]
+              ..knownCards = [false];
 
         expect(
           PlayerLearningService.isBadPowerDecision(
@@ -339,13 +348,14 @@ void main() {
 
       test('returns false for joker on multi-card hand', () {
         final joker = PlayingCard.create('joker', 'JOKER');
-        final target = Player(id: 'target', name: 'Target', isHuman: false, position: 1)
-          ..hand = [
-            PlayingCard.create('hearts', 'A'),
-            PlayingCard.create('diamonds', '2'),
-            PlayingCard.create('clubs', '3'),
-          ]
-          ..knownCards = [false, false, false];
+        final target =
+            Player(id: 'target', name: 'Target', isHuman: false, position: 1)
+              ..hand = [
+                PlayingCard.create('hearts', 'A'),
+                PlayingCard.create('diamonds', '2'),
+                PlayingCard.create('clubs', '3'),
+              ]
+              ..knownCards = [false, false, false];
 
         expect(
           PlayerLearningService.isBadPowerDecision(
@@ -358,9 +368,10 @@ void main() {
 
       test('returns false for non-joker cards', () {
         final jack = PlayingCard.create('hearts', 'V');
-        final target = Player(id: 'target', name: 'Target', isHuman: false, position: 1)
-          ..hand = [PlayingCard.create('hearts', 'A')]
-          ..knownCards = [false];
+        final target =
+            Player(id: 'target', name: 'Target', isHuman: false, position: 1)
+              ..hand = [PlayingCard.create('hearts', 'A')]
+              ..knownCards = [false];
 
         expect(
           PlayerLearningService.isBadPowerDecision(
@@ -378,7 +389,7 @@ void main() {
 
         expect(profile.profileId, 'test');
         expect(profile.gamesAnalyzed, 0);
-        expect(profile.mmr, 1000);
+        expect(profile.mmr, 0);
         expect(profile.learnedParameters['aggressiveness'], isNotNull);
         expect(profile.learnedParameters['caution'], isNotNull);
         expect(profile.learnedParameters['dutchThreshold'], isNotNull);

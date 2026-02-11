@@ -25,11 +25,13 @@ Future<void> appendToLogFile(String gameId, String content) async {
   }
 }
 
-Future<void> downloadLog(String filename, String content) async {
+Future<bool> downloadLog(String filename, String content) async {
   try {
     final file = File('${Directory.systemTemp.path}/$filename');
     await file.writeAsString(content);
+    return true;
   } catch (_) {
     // best-effort logging
+    return false;
   }
 }

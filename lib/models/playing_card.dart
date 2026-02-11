@@ -74,10 +74,10 @@ class PlayingCard {
         break;
       case 'D':
         fileValue = 'D';
-        break; 
+        break;
       case 'R':
         fileValue = 'R';
-        break; 
+        break;
       default:
         if (int.tryParse(value) != null) {
           fileValue = value.padLeft(2, '0');
@@ -132,14 +132,16 @@ class PlayingCard {
   }
 
   String get displayName {
-    if (value == 'R') return ' Roi';
+    if (value == 'R') {
+      final color = (suit == 'hearts' || suit == 'diamonds') ? 'Rouge' : 'Noir';
+      return 'Roi $color';
+    }
+    if (value == 'JOKER') return 'Joker';
+    if (value == 'A') return 'A';
+    if (value == 'V') return 'Valet';
+    if (value == 'D') return 'Dame';
 
-    if (value == 'JOKER') return ' Joker';
-    if (value == 'A') return ' A';
-    if (value == 'V') return ' Valet';
-    if (value == 'D') return 'e Dame';
-
-    return ' $value';
+    return value;
   }
 
   // Sérialisation JSON pour multijoueur

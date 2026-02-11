@@ -24,10 +24,10 @@ class PowerDialogConfig {
   final void Function(Player player, int cardIndex) onLookAtCard;
   final void Function(Player player) onShuffleHand;
   final void Function(Player p1, int c1, Player p2, int c2) onSwapCards;
-  
+
   /// Pour identifier le joueur local (solo: isHuman, multi: id == playerId)
   final bool Function(Player p) isLocalPlayer;
-  
+
   /// En mode multijoueur, les cartes sont cachées côté client
   /// Le serveur envoie la vraie carte via game:spied_card
   final bool isMultiplayer;
@@ -44,14 +44,15 @@ class PowerDialogConfig {
     this.isMultiplayer = false,
   });
 
-  List<Player> get opponents => allPlayers.where((p) => !isLocalPlayer(p) && p.hand.isNotEmpty).toList();
+  List<Player> get opponents =>
+      allPlayers.where((p) => !isLocalPlayer(p) && p.hand.isNotEmpty).toList();
 
   /// Factory pour le mode SOLO
   static PowerDialogConfig solo(BuildContext context) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final gs = gp.gameState!;
     final human = gs.players.firstWhere((p) => p.isHuman);
-    
+
     return PowerDialogConfig(
       gameState: gs,
       localPlayer: human,
@@ -78,7 +79,8 @@ class PowerDialogConfig {
         }
         String name1 = p1.isHuman ? "Vous" : p1.name;
         String name2 = p2.isHuman ? "Vous" : p2.name;
-        gs.addToHistory("🔄 Échange : $name1 carte #${c1 + 1} ↔ $name2 carte #${c2 + 1}.");
+        gs.addToHistory(
+            "🔄 Échange : $name1 carte #${c1 + 1} ↔ $name2 carte #${c2 + 1}.");
         // LOG: Échange VALET par l'humain
         GameLoggerService.instance.logValetExchange(
           bot: gs.currentPlayer,
@@ -86,8 +88,10 @@ class PowerDialogConfig {
           player2: player2,
           index1: c1,
           index2: c2,
-          card1: player2.hand[c2], // Après swap: card1 est maintenant chez player2
-          card2: player1.hand[c1], // Après swap: card2 est maintenant chez player1
+          card1:
+              player2.hand[c2], // Après swap: card1 est maintenant chez player2
+          card2:
+              player1.hand[c1], // Après swap: card2 est maintenant chez player1
         );
         gp.skipSpecialPower();
       },
@@ -99,7 +103,7 @@ class PowerDialogConfig {
     final gp = Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gs = gp.gameState!;
     final me = gs.players.firstWhere((p) => p.id == gp.playerId);
-    
+
     return PowerDialogConfig(
       gameState: gs,
       localPlayer: me,
@@ -131,16 +135,22 @@ class PowerDialogConfig {
 /// Dialogues unifiés pour les pouvoirs spéciaux (solo + multiplayer)
 class UnifiedPowerDialogs {
   static double _cardWidthForGrid(DialogMetrics metrics,
-      {required int columns, double maxHeightFraction = 0.35}) =>
-      PowerDialogWidgets.cardWidthForGrid(metrics, columns: columns, maxHeightFraction: maxHeightFraction);
+          {required int columns, double maxHeightFraction = 0.35}) =>
+      PowerDialogWidgets.cardWidthForGrid(metrics,
+          columns: columns, maxHeightFraction: maxHeightFraction);
 
-  static Widget _scaledCard({required double width, required bool isRevealed, PlayingCard? card}) =>
-      PowerDialogWidgets.scaledCard(width: width, isRevealed: isRevealed, card: card);
+  static Widget _scaledCard(
+          {required double width,
+          required bool isRevealed,
+          PlayingCard? card}) =>
+      PowerDialogWidgets.scaledCard(
+          width: width, isRevealed: isRevealed, card: card);
 
   // ============================================================
   // CARTE 7 : Regarder UNE de ses propres cartes
   // ============================================================
-  static void showPower7Dialog(BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
+  static void showPower7Dialog(
+      BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -154,7 +164,8 @@ class UnifiedPowerDialogs {
           final bodySize = metrics.font(14);
           final buttonSize = metrics.font(16);
           final columns = math.min(config.localPlayer.hand.length, 4);
-          final cardWidth = _cardWidthForGrid(metrics, columns: columns, maxHeightFraction: 0.35);
+          final cardWidth = _cardWidthForGrid(metrics,
+              columns: columns, maxHeightFraction: 0.35);
           final borderWidth = math.max(1.0, metrics.scale * 2);
 
           return SingleChildScrollView(
@@ -177,30 +188,35 @@ class UnifiedPowerDialogs {
                   Text(
                     "Choisissez UNE de vos cartes à regarder",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: bodySize),
                   ),
                   SizedBox(height: spacing),
                   Wrap(
                     spacing: smallSpacing,
                     runSpacing: smallSpacing,
                     alignment: WrapAlignment.center,
-                    children: List.generate(config.localPlayer.hand.length, (index) {
+                    children:
+                        List.generate(config.localPlayer.hand.length, (index) {
                       return GestureDetector(
                         onTap: () {
                           Navigator.pop(ctx);
                           // En mode solo, afficher la carte immédiatement
                           // En mode multijoueur, le serveur enverra la carte via game:spied_card
                           if (!config.isMultiplayer) {
-                            _showCardRevealed(context, config.localPlayer, index, config.localPlayer.hand[index]);
+                            _showCardRevealed(context, config.localPlayer,
+                                index, config.localPlayer.hand[index]);
                           }
                           config.onLookAtCard(config.localPlayer, index);
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.amber, width: borderWidth),
+                            border: Border.all(
+                                color: Colors.amber, width: borderWidth),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: _scaledCard(width: cardWidth, isRevealed: false),
+                          child:
+                              _scaledCard(width: cardWidth, isRevealed: false),
                         ),
                       );
                     }),
@@ -211,7 +227,10 @@ class UnifiedPowerDialogs {
                       Navigator.pop(ctx);
                       config.onSkipPower();
                     },
-                    child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
+                    child: Text("PASSER",
+                        style: TextStyle(
+                            color: AppColors.textDisabled,
+                            fontSize: buttonSize)),
                   ),
                 ],
               ),
@@ -225,7 +244,8 @@ class UnifiedPowerDialogs {
   // ============================================================
   // CARTE 10 : Espionner une carte adversaire
   // ============================================================
-  static void showPower10Dialog(BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
+  static void showPower10Dialog(
+      BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -259,7 +279,8 @@ class UnifiedPowerDialogs {
                   Text(
                     "Choisissez un adversaire puis une de ses cartes",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: bodySize),
                   ),
                   SizedBox(height: spacing),
                   _buildOpponentSelection(context, config, metrics, buttonSize),
@@ -272,8 +293,8 @@ class UnifiedPowerDialogs {
     );
   }
 
-  static Widget _buildOpponentSelection(
-      BuildContext context, PowerDialogConfig config, DialogMetrics metrics, double buttonSize) {
+  static Widget _buildOpponentSelection(BuildContext context,
+      PowerDialogConfig config, DialogMetrics metrics, double buttonSize) {
     final opponents = config.opponents;
 
     if (opponents.isEmpty) {
@@ -281,14 +302,17 @@ class UnifiedPowerDialogs {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text("Aucun adversaire n'a de cartes !",
-              style: TextStyle(color: Colors.redAccent, fontSize: metrics.font(14))),
+              style: TextStyle(
+                  color: Colors.redAccent, fontSize: metrics.font(14))),
           SizedBox(height: metrics.space(16)),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               config.onSkipPower();
             },
-            child: Text("OK", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
+            child: Text("OK",
+                style: TextStyle(
+                    color: AppColors.textDisabled, fontSize: buttonSize)),
           ),
         ],
       );
@@ -305,6 +329,7 @@ class UnifiedPowerDialogs {
           runSpacing: metrics.space(10),
           alignment: WrapAlignment.center,
           children: opponents.map((opponent) {
+            final count = opponent.hand.length;
             return ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -315,8 +340,10 @@ class UnifiedPowerDialogs {
                 padding: EdgeInsets.symmetric(
                     horizontal: metrics.space(14), vertical: metrics.space(10)),
               ),
-              child: Text("${opponent.displayAvatar} ${opponent.name}",
-                  style: TextStyle(fontSize: metrics.font(14))),
+              child: Text(
+                "${opponent.displayAvatar} ${opponent.name} ($count carte${count > 1 ? 's' : ''})",
+                style: TextStyle(fontSize: metrics.font(14)),
+              ),
             );
           }).toList(),
         ),
@@ -326,7 +353,9 @@ class UnifiedPowerDialogs {
             Navigator.pop(context);
             config.onSkipPower();
           },
-          child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
+          child: Text("PASSER",
+              style: TextStyle(
+                  color: AppColors.textDisabled, fontSize: buttonSize)),
         ),
       ],
     );
@@ -344,7 +373,8 @@ class UnifiedPowerDialogs {
           final titleSize = metrics.font(18);
           final buttonSize = metrics.font(16);
           final columns = math.min(opponent.hand.length, 4);
-          final cardWidth = _cardWidthForGrid(metrics, columns: columns, maxHeightFraction: 0.35);
+          final cardWidth = _cardWidthForGrid(metrics,
+              columns: columns, maxHeightFraction: 0.35);
           final borderWidth = math.max(1.0, metrics.scale * 2);
 
           return SingleChildScrollView(
@@ -354,7 +384,7 @@ class UnifiedPowerDialogs {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    "Cartes de ${opponent.name}",
+                    "Cartes de ${opponent.name} (${opponent.hand.length} carte${opponent.hand.length > 1 ? 's' : ''})",
                     style: TextStyle(
                         color: Colors.amber,
                         fontSize: titleSize,
@@ -373,16 +403,19 @@ class UnifiedPowerDialogs {
                           // En mode solo, afficher la carte immédiatement
                           // En mode multijoueur, le serveur enverra la carte via game:spied_card
                           if (!config.isMultiplayer) {
-                            _showCardRevealed(context, opponent, index, opponent.hand[index]);
+                            _showCardRevealed(
+                                context, opponent, index, opponent.hand[index]);
                           }
                           config.onLookAtCard(opponent, index);
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.blue, width: borderWidth),
+                            border: Border.all(
+                                color: Colors.blue, width: borderWidth),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: _scaledCard(width: cardWidth, isRevealed: false),
+                          child:
+                              _scaledCard(width: cardWidth, isRevealed: false),
                         ),
                       );
                     }),
@@ -393,7 +426,10 @@ class UnifiedPowerDialogs {
                       Navigator.pop(ctx);
                       config.onSkipPower();
                     },
-                    child: Text("PASSER", style: TextStyle(color: AppColors.textDisabled, fontSize: buttonSize)),
+                    child: Text("PASSER",
+                        style: TextStyle(
+                            color: AppColors.textDisabled,
+                            fontSize: buttonSize)),
                   ),
                 ],
               ),
@@ -404,7 +440,8 @@ class UnifiedPowerDialogs {
     );
   }
 
-  static void _showCardRevealed(BuildContext context, Player player, int index, PlayingCard card) {
+  static void _showCardRevealed(
+      BuildContext context, Player player, int index, PlayingCard card) {
     player.knownCards[index] = true;
     PowerNotificationDialogs.showCardRevealed(context, card);
   }
@@ -412,13 +449,15 @@ class UnifiedPowerDialogs {
   // ============================================================
   // VALET : Échange universel
   // ============================================================
-  static void showValetSwapDialog(BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
+  static void showValetSwapDialog(
+      BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.black87,
-        builder: (context, metrics) => PowerSelectionWidgets.buildPowerIntroDialog(
+        builder: (context, metrics) =>
+            PowerSelectionWidgets.buildPowerIntroDialog(
           icon: Icons.swap_horiz,
           color: Colors.purple,
           title: "🤵 VALET : ÉCHANGE",
@@ -439,7 +478,8 @@ class UnifiedPowerDialogs {
     );
   }
 
-  static void _showUniversalSwap(BuildContext context, PowerDialogConfig config) {
+  static void _showUniversalSwap(
+      BuildContext context, PowerDialogConfig config) {
     Player? player1;
     int? card1;
     Player? player2;
@@ -459,22 +499,41 @@ class UnifiedPowerDialogs {
                 card1: card1,
                 player2: player2,
                 card2: card2,
-                onSelectPlayer1: (p) => setState(() { player1 = p; card1 = null; }),
+                onSelectPlayer1: (p) => setState(() {
+                  player1 = p;
+                  card1 = null;
+                }),
                 onSelectCard1: (i) => setState(() => card1 = i),
-                onSelectPlayer2: (p) => setState(() { player2 = p; card2 = null; }),
+                onSelectPlayer2: (p) => setState(() {
+                  player2 = p;
+                  card2 = null;
+                }),
                 onSelectCard2: (i) => setState(() => card2 = i),
-                onCancel: () { Navigator.pop(ctx); config.onSkipPower(); },
-                onConfirm: (player1 != null && card1 != null && player2 != null && card2 != null)
+                onCancel: () {
+                  Navigator.pop(ctx);
+                  config.onSkipPower();
+                },
+                onConfirm: (player1 != null &&
+                        card1 != null &&
+                        player2 != null &&
+                        card2 != null)
                     ? () {
                         Navigator.pop(ctx);
-                        String name1 = config.isLocalPlayer(player1!) ? "Vous" : player1!.name;
-                        String name2 = config.isLocalPlayer(player2!) ? "Vous" : player2!.name;
-                        PowerNotificationDialogs.showSwapNotification(context, name1, card1!, name2, card2!);
+                        String name1 = config.isLocalPlayer(player1!)
+                            ? "Vous"
+                            : player1!.name;
+                        String name2 = config.isLocalPlayer(player2!)
+                            ? "Vous"
+                            : player2!.name;
+                        PowerNotificationDialogs.showSwapNotification(
+                            context, name1, card1!, name2, card2!);
                         config.onSwapCards(player1!, card1!, player2!, card2!);
                       }
                     : null,
-                getPlayerLabel: (p) => config.isLocalPlayer(p) ? "Vous" : p.name,
-                getCardLabel: (p) => config.isLocalPlayer(p) ? "votre main" : p.name,
+                getPlayerLabel: (p) =>
+                    config.isLocalPlayer(p) ? "Vous" : p.name,
+                getCardLabel: (p) =>
+                    config.isLocalPlayer(p) ? "votre main" : p.name,
                 metrics: metrics,
               );
             },
@@ -487,13 +546,15 @@ class UnifiedPowerDialogs {
   // ============================================================
   // JOKER : Mélanger la main d'un joueur
   // ============================================================
-  static void showJokerDialog(BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
+  static void showJokerDialog(
+      BuildContext context, PlayingCard trigger, PowerDialogConfig config) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => ResponsiveDialog(
         backgroundColor: Colors.black87,
-        builder: (context, metrics) => PowerSelectionWidgets.buildPlayerSelectionDialog(
+        builder: (context, metrics) =>
+            PowerSelectionWidgets.buildPlayerSelectionDialog(
           icon: Icons.shuffle,
           color: Colors.red,
           title: "🃏 JOKER : CHAOS",
@@ -523,10 +584,13 @@ class UnifiedPowerDialogs {
   // ============================================================
   // NOTIFICATIONS (utilisées par multiplayer pour les événements serveur)
   // ============================================================
-  
+
   /// Notification quand une carte est révélée (pouvoir 7/10)
-  static Future<void> showCardRevealDialog(BuildContext context, PlayingCard card, {String title = "CARTE RÉVÉLÉE"}) {
-    return PowerNotificationDialogs.showCardRevealed(context, card, title: title);
+  static Future<void> showCardRevealDialog(
+      BuildContext context, PlayingCard card,
+      {String title = "CARTE RÉVÉLÉE"}) {
+    return PowerNotificationDialogs.showCardRevealed(context, card,
+        title: title);
   }
 
   /// Notification quand un autre joueur utilise le Valet sur nous
@@ -602,16 +666,24 @@ class UnifiedPowerDialogs {
   }
 
   /// Notification bot joker (solo) - attend que le joueur clique OK
-  static Future<void> showBotJokerNotification(BuildContext context, Player bot, String targetName) {
+  static Future<void> showBotJokerNotification(
+      BuildContext context, Player bot, String targetName) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final index = gp.gameState?.players.indexWhere((p) => p.id == bot.id) ?? -1;
-    return PowerNotificationDialogs.showShuffleNotification(context, targetName: targetName, isMe: targetName == "Vous", byPlayerName: bot.getPositionDisplay(index));
+    return PowerNotificationDialogs.showShuffleNotification(context,
+        targetName: targetName,
+        isMe: targetName == "Vous",
+        byPlayerName: bot.getPositionDisplay(index));
   }
 
   /// Notification bot spy (solo) - attend que le joueur clique OK
-  static Future<void> showBotSpyNotification(BuildContext context, Player bot, String targetName, int cardIndex) {
+  static Future<void> showBotSpyNotification(
+      BuildContext context, Player bot, String targetName, int cardIndex) {
     final gp = Provider.of<GameProvider>(context, listen: false);
     final index = gp.gameState?.players.indexWhere((p) => p.id == bot.id) ?? -1;
-    return PowerNotificationDialogs.showSpyByOtherNotification(context, byPlayerName: bot.getPositionDisplay(index), cardIndex: cardIndex, isMe: targetName == "Vous");
+    return PowerNotificationDialogs.showSpyByOtherNotification(context,
+        byPlayerName: bot.getPositionDisplay(index),
+        cardIndex: cardIndex,
+        isMe: targetName == "Vous");
   }
 }

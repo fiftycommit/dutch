@@ -8,6 +8,9 @@ import 'power_dialog_widgets.dart';
 /// Widgets de sélection partagés pour les pouvoirs spéciaux
 /// Principe GRASP: Pure Fabrication - Widgets de sélection réutilisables
 class PowerSelectionWidgets {
+  static String _cardCountLabel(int count) =>
+      '$count carte${count > 1 ? 's' : ''}';
+
   /// Construit une sélection de joueurs sous forme de boutons
   static Widget buildPlayerSelection({
     required List<Player> players,
@@ -35,16 +38,14 @@ class PowerSelectionWidgets {
               vertical: metrics.space(8),
             ),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? baseColor.withValues(alpha: 0.8)
-                  : baseColor,
+              color: isSelected ? baseColor.withValues(alpha: 0.8) : baseColor,
               border: Border.all(
                 color: isSelected ? Colors.amber : Colors.white30,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              getLabel(p),
+              '${getLabel(p)} (${_cardCountLabel(p.hand.length)})',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: metrics.font(12),
@@ -138,7 +139,7 @@ class PowerSelectionWidgets {
               getLabel: getPlayerLabel,
               metrics: metrics,
             ),
-            
+
             // Carte de A
             if (player1 != null) ...[
               SizedBox(height: sectionSpacing),
@@ -153,7 +154,7 @@ class PowerSelectionWidgets {
                 metrics: metrics,
               ),
             ],
-            
+
             // Joueur B
             SizedBox(height: sectionSpacing),
             Text("3️⃣ Joueur B :",
@@ -168,7 +169,7 @@ class PowerSelectionWidgets {
               metrics: metrics,
               excludePlayer: player1,
             ),
-            
+
             // Carte de B
             if (player2 != null) ...[
               SizedBox(height: sectionSpacing),
@@ -183,7 +184,7 @@ class PowerSelectionWidgets {
                 metrics: metrics,
               ),
             ],
-            
+
             // Boutons
             SizedBox(height: sectionSpacing),
             Row(
@@ -193,7 +194,8 @@ class PowerSelectionWidgets {
                   onPressed: onCancel,
                   child: Text("ANNULER",
                       style: TextStyle(
-                          color: AppColors.textDisabled, fontSize: metrics.font(14))),
+                          color: AppColors.textDisabled,
+                          fontSize: metrics.font(14))),
                 ),
                 ElevatedButton(
                   onPressed: onConfirm,
@@ -203,7 +205,8 @@ class PowerSelectionWidgets {
                         horizontal: metrics.space(20),
                         vertical: metrics.space(12)),
                   ),
-                  child: Text("ÉCHANGER", style: TextStyle(fontSize: buttonSize)),
+                  child:
+                      Text("ÉCHANGER", style: TextStyle(fontSize: buttonSize)),
                 ),
               ],
             ),
@@ -253,7 +256,8 @@ class PowerSelectionWidgets {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+              style:
+                  TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
             ),
             SizedBox(height: gapM),
             SizedBox(
@@ -288,7 +292,8 @@ class PowerSelectionWidgets {
               onPressed: onCancel,
               child: Text(
                 "ANNULER",
-                style: TextStyle(color: AppColors.textDisabled, fontSize: metrics.font(14)),
+                style: TextStyle(
+                    color: AppColors.textDisabled, fontSize: metrics.font(14)),
               ),
             ),
           ],
@@ -349,7 +354,8 @@ class PowerSelectionWidgets {
           onPressed: onCancel,
           child: Text(
             "ANNULER",
-            style: TextStyle(color: AppColors.textDisabled, fontSize: metrics.font(14)),
+            style: TextStyle(
+                color: AppColors.textDisabled, fontSize: metrics.font(14)),
           ),
         ),
       ],
@@ -379,13 +385,12 @@ class PowerSelectionWidgets {
             size: metrics.size(20),
           ),
           label: Text(
-            getLabel(player),
+            '${getLabel(player)} (${_cardCountLabel(player.hand.length)})',
             style: TextStyle(fontSize: metrics.font(14)),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: playerIsMe
-                ? Colors.amber.shade700
-                : Colors.blue.shade800,
+            backgroundColor:
+                playerIsMe ? Colors.amber.shade700 : Colors.blue.shade800,
             padding: EdgeInsets.symmetric(
               horizontal: metrics.space(14),
               vertical: metrics.space(10),

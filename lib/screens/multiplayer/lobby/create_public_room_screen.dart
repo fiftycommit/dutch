@@ -3,6 +3,7 @@ import '../../../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../services/social/social_hub_repository.dart';
 
 class CreatePublicRoomScreen extends StatefulWidget {
   const CreatePublicRoomScreen({super.key});
@@ -15,6 +16,24 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
   final _nameController = TextEditingController(text: 'Joueur');
   final _roomNameController = TextEditingController();
   bool _isCreating = false;
+  final SocialHubRepository _socialRepository = SocialHubRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateProfileName();
+  }
+
+  Future<void> _hydrateProfileName() async {
+    final profile = await _socialRepository.getProfile();
+    if (!mounted || profile == null) {
+      return;
+    }
+    if (_nameController.text.trim().isEmpty ||
+        _nameController.text.trim() == 'Joueur') {
+      _nameController.text = profile.displayName;
+    }
+  }
 
   @override
   void dispose() {
@@ -79,7 +98,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.go('/multiplayer/mode-selection'),
+                      onPressed: () =>
+                          context.go('/multiplayer/mode-selection'),
                     ),
                     const SizedBox(width: 12),
                     const Text(
@@ -98,14 +118,16 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    final isCompactLandscape = constraints.maxHeight < 400 && constraints.maxWidth > constraints.maxHeight;
+                    final isCompactLandscape = constraints.maxHeight < 400 &&
+                        constraints.maxWidth > constraints.maxHeight;
 
                     // Layout compact pour petit ecran en paysage
                     if (isCompactLandscape) {
                       return SingleChildScrollView(
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
                             child: Card(
                               color: Colors.white.withValues(alpha: 0.95),
                               elevation: 8,
@@ -125,7 +147,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                           child: TextField(
                                             controller: _nameController,
                                             enabled: !_isCreating,
-                                            textCapitalization: TextCapitalization.words,
+                                            textCapitalization:
+                                                TextCapitalization.words,
                                             maxLength: 20,
                                             style: const TextStyle(
                                               color: Colors.black87,
@@ -133,19 +156,31 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                             ),
                                             decoration: InputDecoration(
                                               labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              labelStyle: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 12),
                                               counterText: '',
                                               isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
-                                              prefixIcon: const Icon(Icons.person, color: Colors.blue, size: 18),
+                                              prefixIcon: const Icon(
+                                                  Icons.person,
+                                                  color: Colors.blue,
+                                                  size: 18),
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                                borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: const BorderSide(
+                                                    color: Colors.blue,
+                                                    width: 2),
                                               ),
                                             ),
                                           ),
@@ -156,27 +191,41 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                           child: TextField(
                                             controller: _roomNameController,
                                             enabled: !_isCreating,
-                                            textCapitalization: TextCapitalization.words,
+                                            textCapitalization:
+                                                TextCapitalization.words,
                                             maxLength: 30,
                                             style: const TextStyle(
                                               color: Colors.black87,
                                               fontSize: 14,
                                             ),
                                             decoration: InputDecoration(
-                                              labelText: 'Nom du salon (optionnel)',
-                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              labelText:
+                                                  'Nom du salon (optionnel)',
+                                              labelStyle: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 12),
                                               counterText: '',
                                               isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
-                                              prefixIcon: const Icon(Icons.label, color: Colors.blue, size: 18),
+                                              prefixIcon: const Icon(
+                                                  Icons.label,
+                                                  color: Colors.blue,
+                                                  size: 18),
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                                borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: const BorderSide(
+                                                    color: Colors.blue,
+                                                    width: 2),
                                               ),
                                             ),
                                           ),
@@ -189,13 +238,16 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_public_button'),
-                                        onPressed: _isCreating ? null : _createRoom,
+                                        onPressed:
+                                            _isCreating ? null : _createRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           elevation: 4,
                                         ),
@@ -203,21 +255,25 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                             ? const SizedBox(
                                                 height: 18,
                                                 width: 18,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : const Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
-                                                  Icon(Icons.add_circle, size: 18),
+                                                  Icon(Icons.add_circle,
+                                                      size: 18),
                                                   SizedBox(width: 8),
                                                   Text(
                                                     'CRÉER ET OUVRIR LE SALON',
                                                     style: TextStyle(
                                                       fontSize: 14,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),
@@ -250,7 +306,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Container(
-                                constraints: const BoxConstraints(maxWidth: 500),
+                                constraints:
+                                    const BoxConstraints(maxWidth: 500),
                                 padding: EdgeInsets.all(isMobile ? 24 : 32),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -282,7 +339,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                     TextField(
                                       controller: _nameController,
                                       enabled: !_isCreating,
-                                      textCapitalization: TextCapitalization.words,
+                                      textCapitalization:
+                                          TextCapitalization.words,
                                       maxLength: 20,
                                       style: const TextStyle(
                                         color: Colors.black87,
@@ -290,18 +348,24 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       ),
                                       decoration: InputDecoration(
                                         labelText: 'Votre nom',
-                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87),
                                         hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(color: Colors.black54),
+                                        hintStyle: const TextStyle(
+                                            color: Colors.black54),
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
-                                        prefixIcon: const Icon(Icons.person, color: Colors.blue),
+                                        prefixIcon: const Icon(Icons.person,
+                                            color: Colors.blue),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: const BorderSide(
+                                              color: Colors.blue, width: 2),
                                         ),
                                       ),
                                     ),
@@ -309,7 +373,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                     TextField(
                                       controller: _roomNameController,
                                       enabled: !_isCreating,
-                                      textCapitalization: TextCapitalization.words,
+                                      textCapitalization:
+                                          TextCapitalization.words,
                                       maxLength: 30,
                                       style: const TextStyle(
                                         color: Colors.black87,
@@ -317,18 +382,24 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       ),
                                       decoration: InputDecoration(
                                         labelText: 'Nom du salon (optionnel)',
-                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87),
                                         hintText: 'Ex: Partie entre amis',
-                                        hintStyle: const TextStyle(color: Colors.black54),
+                                        hintStyle: const TextStyle(
+                                            color: Colors.black54),
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
-                                        prefixIcon: const Icon(Icons.label, color: Colors.blue),
+                                        prefixIcon: const Icon(Icons.label,
+                                            color: Colors.blue),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          borderSide: const BorderSide(color: Colors.blue, width: 2),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: const BorderSide(
+                                              color: Colors.blue, width: 2),
                                         ),
                                       ),
                                     ),
@@ -337,7 +408,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_public_button'),
-                                        onPressed: _isCreating ? null : _createRoom,
+                                        onPressed:
+                                            _isCreating ? null : _createRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue,
                                           foregroundColor: Colors.white,
@@ -345,7 +417,8 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                             vertical: isMobile ? 14 : 16,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(14),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
                                           ),
                                           elevation: 4,
                                         ),
@@ -353,21 +426,25 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                             ? const SizedBox(
                                                 height: 20,
                                                 width: 20,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   const Icon(Icons.add_circle),
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     'CRÉER ET OUVRIR LE SALON',
                                                     style: TextStyle(
-                                                      fontSize: isMobile ? 14 : 16,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontSize:
+                                                          isMobile ? 14 : 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),

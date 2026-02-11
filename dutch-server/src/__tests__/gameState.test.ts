@@ -46,7 +46,7 @@ describe('GameState', () => {
       assert.strictEqual(state.pendingSwap, null);
       assert.deepStrictEqual(state.tournamentCumulativeScores, {});
       assert.strictEqual(state.turnStartTime, null);
-      assert.strictEqual(state.turnTimeoutMs, 20000);
+      assert.strictEqual(state.turnTimeoutMs, 70000);
       assert.deepStrictEqual(state.readyPlayerIds, []);
     });
 

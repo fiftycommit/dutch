@@ -5,18 +5,38 @@ import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../models/game_settings.dart';
 import '../../../../../models/game_state.dart';
+import '../../../../../services/social/social_hub_repository.dart';
 
 class CreatePrivateRoomScreen extends StatefulWidget {
   const CreatePrivateRoomScreen({super.key});
 
   @override
-  State<CreatePrivateRoomScreen> createState() => _CreatePrivateRoomScreenState();
+  State<CreatePrivateRoomScreen> createState() =>
+      _CreatePrivateRoomScreenState();
 }
 
 class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
   final _nameController = TextEditingController(text: 'Joueur');
   GameMode _gameMode = GameMode.quick;
   bool _isCreating = false;
+  final SocialHubRepository _socialRepository = SocialHubRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateProfileName();
+  }
+
+  Future<void> _hydrateProfileName() async {
+    final profile = await _socialRepository.getProfile();
+    if (!mounted || profile == null) {
+      return;
+    }
+    if (_nameController.text.trim().isEmpty ||
+        _nameController.text.trim() == 'Joueur') {
+      _nameController.text = profile.displayName;
+    }
+  }
 
   @override
   void dispose() {
@@ -85,7 +105,8 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.go('/multiplayer/mode-selection'),
+                      onPressed: () =>
+                          context.go('/multiplayer/mode-selection'),
                     ),
                     const SizedBox(width: 12),
                     const Text(
@@ -104,14 +125,16 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    final isCompactLandscape = constraints.maxHeight < 400 && constraints.maxWidth > constraints.maxHeight;
+                    final isCompactLandscape = constraints.maxHeight < 400 &&
+                        constraints.maxWidth > constraints.maxHeight;
 
                     // Layout compact pour petit ecran en paysage
                     if (isCompactLandscape) {
                       return SingleChildScrollView(
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
                             child: Card(
                               color: Colors.white.withValues(alpha: 0.95),
                               elevation: 8,
@@ -131,7 +154,8 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                           child: TextField(
                                             controller: _nameController,
                                             enabled: !_isCreating,
-                                            textCapitalization: TextCapitalization.words,
+                                            textCapitalization:
+                                                TextCapitalization.words,
                                             maxLength: 20,
                                             style: const TextStyle(
                                               color: Colors.black87,
@@ -139,19 +163,30 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                             ),
                                             decoration: InputDecoration(
                                               labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              labelStyle: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 12),
                                               counterText: '',
                                               isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.person, color: Colors.blue.shade700, size: 18),
+                                              prefixIcon: Icon(Icons.person,
+                                                  color: Colors.blue.shade700,
+                                                  size: 18),
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                                borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: BorderSide(
+                                                    color: Colors.blue.shade700,
+                                                    width: 2),
                                               ),
                                             ),
                                           ),
@@ -159,35 +194,50 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                         const SizedBox(width: 12),
                                         // Mode de jeu
                                         Expanded(
-                                          child: DropdownButtonFormField<GameMode>(
+                                          child:
+                                              DropdownButtonFormField<GameMode>(
                                             initialValue: _gameMode,
                                             isDense: true,
                                             decoration: InputDecoration(
                                               labelText: 'Mode de jeu',
-                                              labelStyle: const TextStyle(fontSize: 12),
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              labelStyle:
+                                                  const TextStyle(fontSize: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.gamepad, color: Colors.blue.shade700, size: 18),
+                                              prefixIcon: Icon(Icons.gamepad,
+                                                  color: Colors.blue.shade700,
+                                                  size: 18),
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                             ),
                                             items: const [
                                               DropdownMenuItem(
                                                 value: GameMode.quick,
-                                                child: Text('Rapide', style: TextStyle(fontSize: 13)),
+                                                child: Text('Rapide',
+                                                    style: TextStyle(
+                                                        fontSize: 13)),
                                               ),
                                               DropdownMenuItem(
                                                 value: GameMode.tournament,
-                                                child: Text('Tournoi', style: TextStyle(fontSize: 13)),
+                                                child: Text('Tournoi',
+                                                    style: TextStyle(
+                                                        fontSize: 13)),
                                               ),
                                             ],
-                                            onChanged: _isCreating ? null : (value) {
-                                              if (value != null) {
-                                                setState(() => _gameMode = value);
-                                              }
-                                            },
+                                            onChanged: _isCreating
+                                                ? null
+                                                : (value) {
+                                                    if (value != null) {
+                                                      setState(() =>
+                                                          _gameMode = value);
+                                                    }
+                                                  },
                                           ),
                                         ),
                                       ],
@@ -198,13 +248,16 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_private_button'),
-                                        onPressed: _isCreating ? null : _createRoom,
+                                        onPressed:
+                                            _isCreating ? null : _createRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue.shade700,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           elevation: 4,
                                         ),
@@ -212,21 +265,25 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                             ? const SizedBox(
                                                 height: 18,
                                                 width: 18,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : const Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
-                                                  Icon(Icons.add_circle, size: 18),
+                                                  Icon(Icons.add_circle,
+                                                      size: 18),
                                                   SizedBox(width: 8),
                                                   Text(
                                                     'CRÉER LE SALON',
                                                     style: TextStyle(
                                                       fontSize: 14,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),
@@ -259,7 +316,8 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Container(
-                                constraints: const BoxConstraints(maxWidth: 500),
+                                constraints:
+                                    const BoxConstraints(maxWidth: 500),
                                 padding: EdgeInsets.all(isMobile ? 24 : 32),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -291,7 +349,8 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                     TextField(
                                       controller: _nameController,
                                       enabled: !_isCreating,
-                                      textCapitalization: TextCapitalization.words,
+                                      textCapitalization:
+                                          TextCapitalization.words,
                                       maxLength: 20,
                                       style: const TextStyle(
                                         color: Colors.black87,
@@ -299,18 +358,25 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                       ),
                                       decoration: InputDecoration(
                                         labelText: 'Ton pseudo',
-                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87),
                                         hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(color: Colors.black54),
+                                        hintStyle: const TextStyle(
+                                            color: Colors.black54),
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.person, color: Colors.blue.shade700),
+                                        prefixIcon: Icon(Icons.person,
+                                            color: Colors.blue.shade700),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: BorderSide(
+                                              color: Colors.blue.shade700,
+                                              width: 2),
                                         ),
                                       ),
                                     ),
@@ -321,9 +387,11 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                         labelText: 'Mode de jeu',
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.gamepad, color: Colors.blue.shade700),
+                                        prefixIcon: Icon(Icons.gamepad,
+                                            color: Colors.blue.shade700),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                       ),
                                       items: const [
@@ -336,18 +404,22 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                           child: Text('Tournoi'),
                                         ),
                                       ],
-                                      onChanged: _isCreating ? null : (value) {
-                                        if (value != null) {
-                                          setState(() => _gameMode = value);
-                                        }
-                                      },
+                                      onChanged: _isCreating
+                                          ? null
+                                          : (value) {
+                                              if (value != null) {
+                                                setState(
+                                                    () => _gameMode = value);
+                                              }
+                                            },
                                     ),
                                     SizedBox(height: isMobile ? 24 : 32),
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_private_button'),
-                                        onPressed: _isCreating ? null : _createRoom,
+                                        onPressed:
+                                            _isCreating ? null : _createRoom,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue.shade700,
                                           foregroundColor: Colors.white,
@@ -355,7 +427,8 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                             vertical: isMobile ? 14 : 16,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(14),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
                                           ),
                                           elevation: 4,
                                         ),
@@ -363,21 +436,25 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                             ? const SizedBox(
                                                 height: 20,
                                                 width: 20,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   const Icon(Icons.add_circle),
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     'CRÉER LE SALON',
                                                     style: TextStyle(
-                                                      fontSize: isMobile ? 14 : 16,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontSize:
+                                                          isMobile ? 14 : 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),

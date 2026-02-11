@@ -43,9 +43,11 @@ class GameLoggerService {
     _turnNumber = 0;
     _roundNumber = 1;
 
-    _logBuffer.writeln('═══════════════════════════════════════════════════════════════');
+    _logBuffer.writeln(
+        '═══════════════════════════════════════════════════════════════');
     _logBuffer.writeln('  DUTCH GAME LOG - ${DateTime.now()}');
-    _logBuffer.writeln('═══════════════════════════════════════════════════════════════');
+    _logBuffer.writeln(
+        '═══════════════════════════════════════════════════════════════');
     _logBuffer.writeln('');
     _logBuffer.writeln('CONFIGURATION:');
     _logBuffer.writeln('  Target Score: $targetScore');
@@ -54,7 +56,8 @@ class GameLoggerService {
     _logBuffer.writeln('JOUEURS:');
     for (int i = 0; i < players.length; i++) {
       final p = players[i];
-      final type = p.isHuman ? 'HUMAIN' : 'BOT (${p.botBehavior?.name ?? "unknown"})';
+      final type =
+          p.isHuman ? 'HUMAIN' : 'BOT (${p.botBehavior?.name ?? "unknown"})';
       _logBuffer.writeln('  [${i + 1}] ${p.name} - $type');
       if (!p.isHuman) {
         final skill = p.botSkillLevel?.name ?? '?';
@@ -66,18 +69,21 @@ class GameLoggerService {
           final vsHuman = ai['serverWinRateVsHuman'] != null
               ? '${(ai['serverWinRateVsHuman']! * 100).toStringAsFixed(0)}%'
               : '?';
-          _logBuffer.writeln('        Skill: $skill | Params: $src | MMR: $mmr | Vs humain: $vsHuman');
+          _logBuffer.writeln(
+              '        Skill: $skill | Params: $src | MMR: $mmr | Vs humain: $vsHuman');
           final mem = ai['memoryAccuracy']?.toStringAsFixed(2) ?? '?';
           final dutch = ai['dutchThreshold']?.toStringAsFixed(1) ?? '?';
           final agg = ai['aggressiveness']?.toStringAsFixed(2) ?? '?';
-          _logBuffer.writeln('        memoryAccuracy=$mem dutchThreshold=$dutch aggressiveness=$agg');
+          _logBuffer.writeln(
+              '        memoryAccuracy=$mem dutchThreshold=$dutch aggressiveness=$agg');
         } else {
           _logBuffer.writeln('        Skill: $skill | Params: $src');
         }
       }
     }
     _logBuffer.writeln('');
-    _logBuffer.writeln('═══════════════════════════════════════════════════════════════');
+    _logBuffer.writeln(
+        '═══════════════════════════════════════════════════════════════');
     _logBuffer.writeln('');
 
     // Sur les plateformes natives, aussi sauvegarder dans un fichier
@@ -98,9 +104,12 @@ class GameLoggerService {
 
     final buffer = StringBuffer();
     buffer.writeln('');
-    buffer.writeln('┌─────────────────────────────────────────────────────────────┐');
-    buffer.writeln('│                    MANCHE $roundNumber                              │');
-    buffer.writeln('└─────────────────────────────────────────────────────────────┘');
+    buffer.writeln(
+        '┌─────────────────────────────────────────────────────────────┐');
+    buffer.writeln(
+        '│                    MANCHE $roundNumber                              │');
+    buffer.writeln(
+        '└─────────────────────────────────────────────────────────────┘');
     buffer.writeln('');
     buffer.writeln('Mains initiales:');
     for (final p in players) {
@@ -143,8 +152,9 @@ class GameLoggerService {
         }
       }
       final knownCount = player.mentalMap.where((c) => c != null).length;
-      buffer.writeln('│ Ce que ${player.name} SAIT: [${knownOwn.join(', ')}] ($knownCount/${player.hand.length} connues)');
-      
+      buffer.writeln(
+          '│ Ce que ${player.name} SAIT: [${knownOwn.join(', ')}] ($knownCount/${player.hand.length} connues)');
+
       // Score connu et confiance du bot
       final knownScore = player.getKnownScore();
       final confidence = player.getMemoryConfidence();
@@ -152,39 +162,48 @@ class GameLoggerService {
       if (unknownCount == 0) {
         buffer.writeln('│ Score CERTAIN: $knownScore pts (confiance: 100%)');
       } else {
-        buffer.writeln('│ Score connu: $knownScore pts + $unknownCount carte(s) inconnue(s) (confiance: ${(confidence * 100).toInt()}%)');
+        buffer.writeln(
+            '│ Score connu: $knownScore pts + $unknownCount carte(s) inconnue(s) (confiance: ${(confidence * 100).toInt()}%)');
       }
 
       // Comptage de cartes (pour bots Or/Platine/Hardcore uniquement)
       final skillLevel = player.botSkillLevel;
-      final isSmartBot = skillLevel == BotSkillLevel.gold || 
-                         skillLevel == BotSkillLevel.platinum ||
-                         (player.aiParameters != null && player.aiParameters!['hardcoreMode'] == 1.0);
+      final isSmartBot = skillLevel == BotSkillLevel.gold ||
+          skillLevel == BotSkillLevel.platinum ||
+          (player.aiParameters != null &&
+              player.aiParameters!['hardcoreMode'] == 1.0);
       if (isSmartBot && allPlayers != null) {
         final tracker = BotDutchStrategy.discardTracker;
         final ratio = tracker.lowToHighRatio;
         buffer.writeln('│ 📊 Comptage cartes:');
-        buffer.writeln('│   Ratio bonnes/mauvaises: ${ratio.toStringAsFixed(2)}');
-        buffer.writeln('│   Cartes 0-5pts restantes: ${tracker.remainingCount(0) + tracker.remainingCount(1) + tracker.remainingCount(2) + tracker.remainingCount(3) + tracker.remainingCount(4) + tracker.remainingCount(5)}');
-        buffer.writeln('│   Cartes 10+pts restantes: ${tracker.remainingCount(10) + tracker.remainingCount(11) + tracker.remainingCount(12) + tracker.remainingCount(13)}');
-        
+        buffer
+            .writeln('│   Ratio bonnes/mauvaises: ${ratio.toStringAsFixed(2)}');
+        buffer.writeln(
+            '│   Cartes 0-5pts restantes: ${tracker.remainingCount(0) + tracker.remainingCount(1) + tracker.remainingCount(2) + tracker.remainingCount(3) + tracker.remainingCount(4) + tracker.remainingCount(5)}');
+        buffer.writeln(
+            '│   Cartes 10+pts restantes: ${tracker.remainingCount(10) + tracker.remainingCount(11) + tracker.remainingCount(12) + tracker.remainingCount(13)}');
+
         // Estimations adversaires
         for (final opponent in allPlayers) {
           if (opponent.id != player.id && opponent.hand.isNotEmpty) {
-            final estimate = tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+            final estimate =
+                tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
             final lastWasExchange = tracker.lastActionWasExchange(opponent.id);
-            final actionInfo = lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
-            buffer.writeln('│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
+            final actionInfo =
+                lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
+            buffer.writeln(
+                '│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
           }
         }
       }
-      
+
       // Mémoire des adversaires (spyMemory)
       if (player.spyMemory.isNotEmpty && allPlayers != null) {
         buffer.writeln('│ Cartes espionnées:');
         for (final entry in player.spyMemory.entries) {
           final opponentId = entry.key;
-          final opponent = allPlayers.where((p) => p.id == opponentId).firstOrNull;
+          final opponent =
+              allPlayers.where((p) => p.id == opponentId).firstOrNull;
           if (opponent != null && entry.value.isNotEmpty) {
             final spiedCards = entry.value.entries
                 .map((e) => '  pos${e.key}:${_cardToString(e.value)}')
@@ -255,7 +274,8 @@ class GameLoggerService {
     final indicesStr = handIndices.join(', ');
     final totalPoints = matchedCards.fold<int>(0, (sum, c) => sum + c.points);
 
-    final text = '  → ${player.name} MATCH [$cardsStr] (positions: $indicesStr) '
+    final text =
+        '  → ${player.name} MATCH [$cardsStr] (positions: $indicesStr) '
         'avec ${_cardToString(discardCard)} - économise $totalPoints pts\n';
     _logBuffer.write(text);
     await _appendToFile(text);
@@ -270,7 +290,8 @@ class GameLoggerService {
   }) async {
     if (!_isEnabled) return;
 
-    final text = '  ⚡ ${player.name} utilise POUVOIR $powerValue ($powerName): $description\n';
+    final text =
+        '  ⚡ ${player.name} utilise POUVOIR $powerValue ($powerName): $description\n';
     _logBuffer.write(text);
     await _appendToFile(text);
   }
@@ -283,7 +304,8 @@ class GameLoggerService {
   }) async {
     if (!_isEnabled) return;
 
-    final text = '  ⚡ ${player.name} SAUTE pouvoir $powerValue - Raison: $reason\n';
+    final text =
+        '  ⚡ ${player.name} SAUTE pouvoir $powerValue - Raison: $reason\n';
     _logBuffer.write(text);
     await _appendToFile(text);
   }
@@ -300,7 +322,8 @@ class GameLoggerService {
   }) async {
     if (!_isEnabled) return;
 
-    final text = '  ⚡ ${bot.name} VALET: échange entre ${player1.name}[$index1] (${_cardToString(card1)}) '
+    final text =
+        '  ⚡ ${bot.name} VALET: échange entre ${player1.name}[$index1] (${_cardToString(card1)}) '
         'et ${player2.name}[$index2] (${_cardToString(card2)})\n';
     _logBuffer.write(text);
     await _appendToFile(text);
@@ -318,7 +341,8 @@ class GameLoggerService {
     buffer.writeln('');
     buffer.writeln('  ╔═══════════════════════════════════════════╗');
     buffer.writeln('  ║  🎯 DUTCH appelé par ${player.name.padRight(20)} ║');
-    buffer.writeln('  ║  Score estimé: $estimatedScore pts                      ║');
+    buffer.writeln(
+        '  ║  Score estimé: $estimatedScore pts                      ║');
     buffer.writeln('  ║  Raison: ${reason.padRight(32)} ║');
     buffer.writeln('  ╚═══════════════════════════════════════════╝');
     buffer.writeln('');
@@ -338,7 +362,8 @@ class GameLoggerService {
     final buffer = StringBuffer();
     buffer.writeln('');
     buffer.writeln('═══ FIN DE MANCHE $_roundNumber ═══');
-    buffer.writeln('Dutch par: ${dutchCaller.name} - ${dutchSuccess ? "RÉUSSI ✓" : "RATÉ ✗"}');
+    buffer.writeln(
+        'Dutch par: ${dutchCaller.name} - ${dutchSuccess ? "RÉUSSI ✓" : "RATÉ ✗"}');
     buffer.writeln('');
     buffer.writeln('Scores:');
     for (final p in players) {
@@ -361,9 +386,12 @@ class GameLoggerService {
 
     final buffer = StringBuffer();
     buffer.writeln('');
-    buffer.writeln('╔═══════════════════════════════════════════════════════════════╗');
-    buffer.writeln('║                      FIN DE PARTIE                            ║');
-    buffer.writeln('╚═══════════════════════════════════════════════════════════════╝');
+    buffer.writeln(
+        '╔═══════════════════════════════════════════════════════════════╗');
+    buffer.writeln(
+        '║                      FIN DE PARTIE                            ║');
+    buffer.writeln(
+        '╚═══════════════════════════════════════════════════════════════╝');
     buffer.writeln('');
     buffer.writeln('CLASSEMENT FINAL:');
 
@@ -373,7 +401,8 @@ class GameLoggerService {
 
     int rank = 1;
     for (final entry in sorted) {
-      final medal = rank == 1 ? '🥇' : (rank == 2 ? '🥈' : (rank == 3 ? '🥉' : '  '));
+      final medal =
+          rank == 1 ? '🥇' : (rank == 2 ? '🥈' : (rank == 3 ? '🥉' : '  '));
       buffer.writeln('  $medal $rank. ${entry.key}: ${entry.value} pts');
       rank++;
     }
@@ -381,7 +410,8 @@ class GameLoggerService {
     buffer.writeln('');
     buffer.writeln('🏆 GAGNANT: ${winner.name}');
     buffer.writeln('');
-    buffer.writeln('═══════════════════════════════════════════════════════════════');
+    buffer.writeln(
+        '═══════════════════════════════════════════════════════════════');
 
     _logBuffer.write(buffer.toString());
     await _appendToFile(buffer.toString());
@@ -436,14 +466,14 @@ class GameLoggerService {
   }
 
   /// Télécharge le log (fonctionne sur web et natif)
-  Future<void> downloadLog() async {
-    if (_logBuffer.isEmpty) return;
+  Future<bool> downloadLog() async {
+    if (_logBuffer.isEmpty) return false;
 
     final filename = _currentGameId != null
         ? '$_currentGameId.log'
         : 'dutch_game_${DateTime.now().millisecondsSinceEpoch}.log';
 
-    await platform.downloadLog(filename, _logBuffer.toString());
+    return platform.downloadLog(filename, _logBuffer.toString());
   }
 
   /// Retourne true si un log est disponible

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../../services/logging/game_logger_service.dart';
@@ -186,20 +187,28 @@ class ResultsScreen extends StatelessWidget {
 
   void _downloadGameLog(BuildContext context) async {
     try {
-      await GameLoggerService.instance.downloadLog();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Log exporté !'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+      if (kDebugMode) {
+        debugPrint('📄 Export log: button pressed');
       }
+      final exported = await GameLoggerService.instance.downloadLog();
+      if (kDebugMode) {
+        debugPrint('📄 Export log result: exported=$exported');
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(exported ? 'Log exporté !' : 'Export annulé'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Export log failed: $e');
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Erreur lors du téléchargement'),
+            content: Text("Erreur lors de l'export du log"),
             backgroundColor: Colors.red,
           ),
         );

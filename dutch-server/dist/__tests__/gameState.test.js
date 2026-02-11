@@ -39,7 +39,7 @@ const Player_1 = require("../models/Player");
             node_assert_1.default.strictEqual(state.pendingSwap, null);
             node_assert_1.default.deepStrictEqual(state.tournamentCumulativeScores, {});
             node_assert_1.default.strictEqual(state.turnStartTime, null);
-            node_assert_1.default.strictEqual(state.turnTimeoutMs, 20000);
+            node_assert_1.default.strictEqual(state.turnTimeoutMs, 70000);
             node_assert_1.default.deepStrictEqual(state.readyPlayerIds, []);
         });
         (0, node_test_1.it)('creates tournament mode game state', () => {

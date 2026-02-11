@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../services/social/social_hub_repository.dart';
 
 class JoinPrivateRoomScreen extends StatefulWidget {
   const JoinPrivateRoomScreen({super.key});
@@ -16,6 +17,24 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
   final _nameController = TextEditingController(text: 'Joueur');
   final _codeController = TextEditingController();
   bool _isJoining = false;
+  final SocialHubRepository _socialRepository = SocialHubRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateProfileName();
+  }
+
+  Future<void> _hydrateProfileName() async {
+    final profile = await _socialRepository.getProfile();
+    if (!mounted || profile == null) {
+      return;
+    }
+    if (_nameController.text.trim().isEmpty ||
+        _nameController.text.trim() == 'Joueur') {
+      _nameController.text = profile.displayName;
+    }
+  }
 
   @override
   void dispose() {
@@ -27,12 +46,12 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
   Future<void> _joinRoom() async {
     final name = _nameController.text.trim();
     final code = _codeController.text.trim().toUpperCase();
-    
+
     if (name.isEmpty) {
       _showError('Veuillez entrer votre nom');
       return;
     }
-    
+
     if (code.length != 6) {
       _showError('Le code doit contenir 6 caractères');
       return;
@@ -86,7 +105,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.go('/multiplayer/mode-selection'),
+                      onPressed: () =>
+                          context.go('/multiplayer/mode-selection'),
                     ),
                     const SizedBox(width: 12),
                     const Text(
@@ -105,14 +125,16 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    final isCompactLandscape = constraints.maxHeight < 400 && constraints.maxWidth > constraints.maxHeight;
+                    final isCompactLandscape = constraints.maxHeight < 400 &&
+                        constraints.maxWidth > constraints.maxHeight;
 
                     // Layout compact pour petit ecran en paysage
                     if (isCompactLandscape) {
                       return SingleChildScrollView(
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
                             child: Card(
                               color: Colors.white.withValues(alpha: 0.95),
                               elevation: 8,
@@ -141,7 +163,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                           child: TextField(
                                             controller: _codeController,
                                             enabled: !_isJoining,
-                                            textCapitalization: TextCapitalization.characters,
+                                            textCapitalization:
+                                                TextCapitalization.characters,
                                             maxLength: 6,
                                             textAlign: TextAlign.center,
                                             style: const TextStyle(
@@ -151,23 +174,34 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                               letterSpacing: 4,
                                             ),
                                             inputFormatters: [
-                                              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                                              FilteringTextInputFormatter.allow(
+                                                  RegExp(r'[A-Za-z0-9]')),
                                               UpperCaseTextFormatter(),
                                             ],
                                             decoration: InputDecoration(
                                               labelText: 'Code du salon',
-                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              labelStyle: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 12),
                                               counterText: '',
                                               isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                                borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: BorderSide(
+                                                    color:
+                                                        Colors.orange.shade700,
+                                                    width: 2),
                                               ),
                                             ),
                                           ),
@@ -178,7 +212,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                           child: TextField(
                                             controller: _nameController,
                                             enabled: !_isJoining,
-                                            textCapitalization: TextCapitalization.words,
+                                            textCapitalization:
+                                                TextCapitalization.words,
                                             maxLength: 20,
                                             style: const TextStyle(
                                               color: Colors.black87,
@@ -186,19 +221,31 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                             ),
                                             decoration: InputDecoration(
                                               labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              labelStyle: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 12),
                                               counterText: '',
                                               isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
                                               filled: true,
                                               fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.person, color: Colors.orange.shade700, size: 18),
+                                              prefixIcon: Icon(Icons.person,
+                                                  color: Colors.orange.shade700,
+                                                  size: 18),
                                               border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                                borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: BorderSide(
+                                                    color:
+                                                        Colors.orange.shade700,
+                                                    width: 2),
                                               ),
                                             ),
                                           ),
@@ -211,13 +258,17 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('join_private_button'),
-                                        onPressed: _isJoining ? null : _joinRoom,
+                                        onPressed:
+                                            _isJoining ? null : _joinRoom,
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.orange.shade700,
+                                          backgroundColor:
+                                              Colors.orange.shade700,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           elevation: 4,
                                         ),
@@ -225,13 +276,15 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                             ? const SizedBox(
                                                 height: 18,
                                                 width: 18,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : const Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   Icon(Icons.login, size: 18),
                                                   SizedBox(width: 8),
@@ -239,7 +292,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                                     'REJOINDRE',
                                                     style: TextStyle(
                                                       fontSize: 14,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),
@@ -272,7 +326,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Container(
-                                constraints: const BoxConstraints(maxWidth: 500),
+                                constraints:
+                                    const BoxConstraints(maxWidth: 500),
                                 padding: EdgeInsets.all(isMobile ? 24 : 32),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -304,7 +359,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                     TextField(
                                       controller: _codeController,
                                       enabled: !_isJoining,
-                                      textCapitalization: TextCapitalization.characters,
+                                      textCapitalization:
+                                          TextCapitalization.characters,
                                       maxLength: 6,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
@@ -314,12 +370,14 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                         letterSpacing: 8,
                                       ),
                                       inputFormatters: [
-                                        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                                        FilteringTextInputFormatter.allow(
+                                            RegExp(r'[A-Za-z0-9]')),
                                         UpperCaseTextFormatter(),
                                       ],
                                       decoration: InputDecoration(
                                         labelText: 'Code du salon',
-                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87),
                                         hintText: 'ABC123',
                                         hintStyle: TextStyle(
                                           color: Colors.black26,
@@ -329,11 +387,15 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: BorderSide(
+                                              color: Colors.orange.shade700,
+                                              width: 2),
                                         ),
                                       ),
                                     ),
@@ -341,7 +403,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                     TextField(
                                       controller: _nameController,
                                       enabled: !_isJoining,
-                                      textCapitalization: TextCapitalization.words,
+                                      textCapitalization:
+                                          TextCapitalization.words,
                                       maxLength: 20,
                                       style: const TextStyle(
                                         color: Colors.black87,
@@ -349,18 +412,25 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       ),
                                       decoration: InputDecoration(
                                         labelText: 'Ton pseudo',
-                                        labelStyle: const TextStyle(color: Colors.black87),
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87),
                                         hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(color: Colors.black54),
+                                        hintStyle: const TextStyle(
+                                            color: Colors.black54),
                                         filled: true,
                                         fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.person, color: Colors.orange.shade700),
+                                        prefixIcon: Icon(Icons.person,
+                                            color: Colors.orange.shade700),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          borderSide: BorderSide(color: Colors.orange.shade700, width: 2),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: BorderSide(
+                                              color: Colors.orange.shade700,
+                                              width: 2),
                                         ),
                                       ),
                                     ),
@@ -369,15 +439,18 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('join_private_button'),
-                                        onPressed: _isJoining ? null : _joinRoom,
+                                        onPressed:
+                                            _isJoining ? null : _joinRoom,
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.orange.shade700,
+                                          backgroundColor:
+                                              Colors.orange.shade700,
                                           foregroundColor: Colors.white,
                                           padding: EdgeInsets.symmetric(
                                             vertical: isMobile ? 14 : 16,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(14),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
                                           ),
                                           elevation: 4,
                                         ),
@@ -385,21 +458,25 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                             ? const SizedBox(
                                                 height: 20,
                                                 width: 20,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2,
                                                   color: Colors.white,
                                                 ),
                                               )
                                             : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   const Icon(Icons.login),
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     'REJOINDRE',
                                                     style: TextStyle(
-                                                      fontSize: isMobile ? 14 : 16,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontSize:
+                                                          isMobile ? 14 : 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       letterSpacing: 1,
                                                     ),
                                                   ),

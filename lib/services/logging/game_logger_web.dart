@@ -18,7 +18,7 @@ Future<void> appendToLogFile(String gameId, String content) async {
 }
 
 /// Télécharge le fichier de log via le navigateur
-Future<void> downloadLog(String filename, String content) async {
+Future<bool> downloadLog(String filename, String content) async {
   // Créer un blob avec le contenu
   final bytes = utf8.encode(content);
   final uint8List = Uint8List.fromList(bytes);
@@ -34,16 +34,17 @@ Future<void> downloadLog(String filename, String content) async {
   );
 
   // 1) Priorité mobile/PWA: partage natif (évite la navigation vers un aperçu)
-  if (await _tryShareFile(file, filename)) return;
+  if (await _tryShareFile(file, filename)) return true;
 
   // 2) Fallback iOS: partager le texte si le partage de fichier n'est pas disponible
-  if (_isLikelyIos() && await _tryShareText(filename, content)) return;
+  if (_isLikelyIos() && await _tryShareText(filename, content)) return true;
 
   // 3) Fallback iOS ultime: copier dans le presse-papiers
-  if (_isLikelyIos() && await _copyToClipboard(content)) return;
+  if (_isLikelyIos() && await _copyToClipboard(content)) return true;
 
   // 4) Fallback desktop/Android: téléchargement via <a download>
   _triggerAnchorDownload(filename, blob);
+  return true;
 }
 
 Future<bool> _tryShareFile(web.File file, String filename) async {

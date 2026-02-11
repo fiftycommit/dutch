@@ -46,7 +46,7 @@ export interface GameState {
   tournamentCumulativeScores: { [playerId: string]: number };
   // Timer de tour pour l'affichage visuel
   turnStartTime: number | null; // Timestamp en ms
-  turnTimeoutMs: number; // Durée max du tour en ms
+  turnTimeoutMs: number; // Durée max du tour en ms (multijoueur)
   // Joueurs prêts (ont terminé la mémorisation)
   readyPlayerIds: string[];
 }
@@ -77,7 +77,7 @@ export function createGameState(
     pendingSwap: null,
     tournamentCumulativeScores: {},
     turnStartTime: null,
-    turnTimeoutMs: 20000, // 20 secondes par défaut
+    turnTimeoutMs: 70000, // 70 secondes par défaut
     readyPlayerIds: [],
   };
 }
