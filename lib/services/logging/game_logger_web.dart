@@ -23,22 +23,98 @@ Future<void> downloadLog(String filename, String content) async {
   final bytes = utf8.encode(content);
   final uint8List = Uint8List.fromList(bytes);
   final jsArray = uint8List.toJS;
-  final blob = web.Blob([jsArray].toJS, web.BlobPropertyBag(type: 'text/plain'));
+  final blob = web.Blob(
+    [jsArray].toJS,
+    web.BlobPropertyBag(type: 'text/plain;charset=utf-8'),
+  );
+  final file = web.File(
+    [blob].toJS,
+    filename,
+    web.FilePropertyBag(type: 'text/plain;charset=utf-8'),
+  );
 
-  // Créer une URL pour le blob
+  // 1) Priorité mobile/PWA: partage natif (évite la navigation vers un aperçu)
+  if (await _tryShareFile(file, filename)) return;
+
+  // 2) Fallback iOS: partager le texte si le partage de fichier n'est pas disponible
+  if (_isLikelyIos() && await _tryShareText(filename, content)) return;
+
+  // 3) Fallback iOS ultime: copier dans le presse-papiers
+  if (_isLikelyIos() && await _copyToClipboard(content)) return;
+
+  // 4) Fallback desktop/Android: téléchargement via <a download>
+  _triggerAnchorDownload(filename, blob);
+}
+
+Future<bool> _tryShareFile(web.File file, String filename) async {
+  try {
+    final shareData = web.ShareData(
+      files: [file].toJS,
+      title: filename,
+      text: 'Log de partie Dutch',
+    );
+    final navigator = web.window.navigator;
+    if (!navigator.canShare(shareData)) return false;
+
+    // Si l'utilisateur annule, on considère l'action gérée (pas de fallback agressif).
+    try {
+      await navigator.share(shareData).toDart;
+    } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> _tryShareText(String filename, String content) async {
+  try {
+    final shareData = web.ShareData(
+      title: filename,
+      text: content,
+    );
+    final navigator = web.window.navigator;
+    if (!navigator.canShare(shareData)) return false;
+
+    try {
+      await navigator.share(shareData).toDart;
+    } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> _copyToClipboard(String content) async {
+  try {
+    await web.window.navigator.clipboard.writeText(content).toDart;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+bool _isLikelyIos() {
+  final ua = web.window.navigator.userAgent.toLowerCase();
+  return ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
+}
+
+void _triggerAnchorDownload(String filename, web.Blob blob) {
   final url = web.URL.createObjectURL(blob);
-
-  // Créer un élément <a> pour déclencher le téléchargement
   final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
   anchor.href = url;
   anchor.download = filename;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener';
   anchor.style.display = 'none';
 
-  // Ajouter au DOM, cliquer, puis retirer
   web.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
 
-  // Libérer l'URL
-  web.URL.revokeObjectURL(url);
+  // Safari peut démarrer la navigation/téléchargement plus tard.
+  Future<void>.delayed(const Duration(seconds: 30), () {
+    try {
+      web.URL.revokeObjectURL(url);
+    } catch (_) {}
+  });
 }

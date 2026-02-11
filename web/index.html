@@ -181,7 +181,38 @@
     
     window.flutterReady = function() {
       window.flutterTookOver = true;
+      try { sessionStorage.removeItem('dutch_bootstrap_retry_once'); } catch (_) {}
     };
+
+    // Watchdog anti "splash infini" (PWA iOS / Safari):
+    // si Flutter ne prend jamais la main, on force 1 reload automatique,
+    // puis on affiche une action manuelle.
+    setTimeout(function() {
+      if (window.flutterTookOver) return;
+
+      var shouldReload = false;
+      try {
+        var retried = sessionStorage.getItem('dutch_bootstrap_retry_once');
+        if (retried !== '1') {
+          sessionStorage.setItem('dutch_bootstrap_retry_once', '1');
+          shouldReload = true;
+        }
+      } catch (_) {}
+
+      if (shouldReload) {
+        window.location.reload();
+        return;
+      }
+
+      var statusEl = document.getElementById('splash-status');
+      if (statusEl) statusEl.textContent = 'Chargement bloqué. Touchez pour relancer.';
+
+      var splash = document.getElementById('splash');
+      if (splash) {
+        splash.style.cursor = 'pointer';
+        splash.onclick = function() { window.location.reload(); };
+      }
+    }, 12000);
   </script>
 
   <script>

@@ -10,11 +10,12 @@ import '../../widgets/game/player_avatar.dart';
 class PlayerRPResult {
   final int rpChange;
   final String? streakText;
-  
+
   const PlayerRPResult({required this.rpChange, this.streakText});
-  
-  String get formattedChange => rpChange >= 0 ? '+$rpChange RP' : '$rpChange RP';
-  Color get color => rpChange > 0 
+
+  String get formattedChange =>
+      rpChange >= 0 ? '+$rpChange RP' : '$rpChange RP';
+  Color get color => rpChange > 0
       ? (rpChange >= 50 ? Colors.amber : Colors.greenAccent)
       : (rpChange < -30 ? Colors.red : Colors.redAccent);
 }
@@ -24,26 +25,26 @@ class ResultsConfig {
   final GameState gameState;
   final String? localPlayerId;
   final List<Widget> Function(BuildContext context) buildActionButtons;
-  
+
   /// Titre personnalisé (par défaut "RÉSULTATS")
   final String? title;
-  
+
   /// Sous-titre optionnel (ex: "MANCHE 2 TERMINÉE")
   final String? subtitle;
 
   /// Indique si on est en finale de tournoi (pour textes spécifiques)
   final bool isTournamentFinal;
-  
+
   /// Message d'alerte optionnel (ex: "Vous avez été éliminé")
   final Widget? alertBanner;
 
   /// Liste des joueurs éliminés à cette manche (tournoi)
   final Set<String>? eliminatedPlayerIds;
-  
+
   /// Callback pour vérifier si on doit rediriger (multiplayer lobby)
   final bool Function()? shouldRedirect;
   final VoidCallback? onRedirect;
-  
+
   /// Callback optionnel pour calculer les RP d'un joueur (si null, pas d'affichage RP)
   final PlayerRPResult? Function(Player player, int rank)? rpCalculator;
 
@@ -82,7 +83,7 @@ class ResultsScreen extends StatelessWidget {
     final gameState = config.gameState;
     final ranking = gameState.getFinalRanking();
     final ranksWithTies = gameState.getFinalRanksWithTies();
-    
+
     final callerId = gameState.dutchCallerId;
     final caller = callerId != null
         ? gameState.players.firstWhere((p) => p.id == callerId)
@@ -127,7 +128,7 @@ class ResultsScreen extends StatelessWidget {
                   ],
                 ],
               ),
-              
+
               // Sous-titre optionnel
               if (config.subtitle != null) ...[
                 const SizedBox(height: 4),
@@ -139,21 +140,21 @@ class ResultsScreen extends StatelessWidget {
                   ),
                 ),
               ],
-              
+
               // Bannière d'alerte optionnelle
               if (config.alertBanner != null) ...[
                 const SizedBox(height: 8),
                 config.alertBanner!,
               ],
-              
+
               // Bannière Dutch caller
               if (caller != null) ...[
                 SizedBox(height: ScreenUtils.spacing(context, 8)),
                 _buildDutchCallerBanner(context, caller, callerWon),
               ],
-              
+
               SizedBox(height: ScreenUtils.spacing(context, 12)),
-              
+
               // Liste des joueurs
               Expanded(
                 child: ListView.builder(
@@ -168,7 +169,7 @@ class ResultsScreen extends StatelessWidget {
                   },
                 ),
               ),
-              
+
               // Boutons d'action
               Padding(
                 padding: EdgeInsets.all(ScreenUtils.spacing(context, 16)),
@@ -189,7 +190,7 @@ class ResultsScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Log téléchargé !'),
+            content: Text('Log exporté !'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -206,7 +207,8 @@ class ResultsScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildDutchCallerBanner(BuildContext context, Player caller, bool callerWon) {
+  Widget _buildDutchCallerBanner(
+      BuildContext context, Player caller, bool callerWon) {
     final isFinal = config.isTournamentFinal;
     final callerWinsTournament = isFinal && callerWon;
     return Container(
@@ -239,7 +241,8 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayerResult(BuildContext context, Player player, int rank, GameState gs) {
+  Widget _buildPlayerResult(
+      BuildContext context, Player player, int rank, GameState gs) {
     final isWinner = rank == 1;
     final isDutchCaller = gs.dutchCallerId == player.id;
     final isDutchEliminated = isDutchCaller && !isWinner;
@@ -247,7 +250,7 @@ class ResultsScreen extends StatelessWidget {
         config.eliminatedPlayerIds?.contains(player.id) ?? false;
     final isEliminated = isDutchEliminated || isTournamentEliminated;
     final score = gs.getFinalScore(player);
-    final isLocalPlayer = player.id == config.localPlayerId || 
+    final isLocalPlayer = player.id == config.localPlayerId ||
         (config.localPlayerId == null && player.isHuman);
 
     return Container(
@@ -260,9 +263,11 @@ class ResultsScreen extends StatelessWidget {
                 ? Colors.amber.withValues(alpha: 0.2)
                 : Colors.white.withValues(alpha: 0.05)),
         borderRadius: BorderRadius.circular(12),
-        border: isEliminated 
-            ? Border.all(color: Colors.red, width: 2) 
-            : (isDutchCaller ? Border.all(color: Colors.amber, width: 2) : null),
+        border: isEliminated
+            ? Border.all(color: Colors.red, width: 2)
+            : (isDutchCaller
+                ? Border.all(color: Colors.amber, width: 2)
+                : null),
       ),
       child: Row(
         children: [
@@ -286,11 +291,11 @@ class ResultsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Avatar
           PlayerAvatar(player: player, size: 44),
           const SizedBox(width: 12),
-          
+
           // Nom et badges
           Expanded(
             child: Column(
@@ -312,7 +317,8 @@ class ResultsScreen extends StatelessWidget {
                     if (isLocalPlayer) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.blue,
                           borderRadius: BorderRadius.circular(4),
@@ -330,7 +336,8 @@ class ResultsScreen extends StatelessWidget {
                     if (isDutchCaller) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.amber,
                           borderRadius: BorderRadius.circular(4),
@@ -370,7 +377,7 @@ class ResultsScreen extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Score et RP
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'utils/ui_constants.dart';
@@ -37,10 +38,18 @@ void main() async {
     overlays: [],
   );
 
-  // Ensure a persistent client identity exists for learning/cloning uploads.
-  await ClientIdService.ensureClientId();
+  // Warm-up non bloquant: ne jamais retarder le boot de l'app sur le web/PWA.
+  unawaited(_warmupClientId());
 
   runApp(const DutchGameApp());
+}
+
+Future<void> _warmupClientId() async {
+  try {
+    await ClientIdService.ensureClientId().timeout(const Duration(seconds: 2));
+  } catch (_) {
+    // Best effort uniquement
+  }
 }
 
 class DutchGameApp extends StatefulWidget {
