@@ -81,11 +81,19 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     final isSmallLandscape = isLandscape && screenSize.height < 500;
 
     return Scaffold(
-      backgroundColor: AppColors.gradientBottom,
-      body: SafeArea(
-        child: isSmallLandscape
-            ? _buildLandscapeLayout(context, isLoggedIn)
-            : _buildPortraitLayout(context, isLoggedIn),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: AppDecorations.pageBackground,
+            ),
+          ),
+          SafeArea(
+            child: isSmallLandscape
+                ? _buildLandscapeLayout(context, isLoggedIn)
+                : _buildPortraitLayout(context, isLoggedIn),
+          ),
+        ],
       ),
     );
   }

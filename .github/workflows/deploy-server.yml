@@ -106,6 +106,11 @@ jobs:
           script: |
             set -e
 
+            # ── Nginx Config ──
+            cp /root/apps/dutch-server/nginx/dutch-server.conf /etc/nginx/sites-available/dutch-server
+            ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
+            nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"
+
             # ── Trainer ──
             if [ ! -d /home/dutch/flutter ]; then
               echo "📥 Installing Flutter..."
