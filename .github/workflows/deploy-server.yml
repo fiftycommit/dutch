@@ -89,8 +89,9 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "dutch-server/*"
-          target: "/root/apps/"
-          strip_components: 0
+          target: "/root/apps/dutch-server"
+          strip_components: 1
+
 
       # Install, build, restart
       - name: Install and restart services
