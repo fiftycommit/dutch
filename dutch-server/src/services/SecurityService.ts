@@ -62,6 +62,13 @@ export class SecurityService {
         duration: 0.5, // 500ms entre chaque tentative de match
     });
 
+    // 5. Rate Limiting pour les tentatives de join (Anti-Brute-Force room codes)
+    // Limite: 5 tentatives par minute par IP
+    private static joinAttemptLimiter = new RateLimiterMemory({
+        points: 5,
+        duration: 60,
+    });
+
     static async checkConnectionLimit(ip: string): Promise<void> {
         try {
             await this.connectionLimiter.consume(ip);
@@ -85,6 +92,15 @@ export class SecurityService {
             return true;
         } catch (e) {
             return false; // Rate limit exceeded - trop de tentatives de match
+        }
+    }
+
+    static async checkJoinAttemptLimit(ip: string): Promise<boolean> {
+        try {
+            await this.joinAttemptLimiter.consume(ip);
+            return true;
+        } catch (e) {
+            return false; // Rate limit exceeded - trop de tentatives de join
         }
     }
 }

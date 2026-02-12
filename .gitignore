@@ -68,6 +68,9 @@ dutch-server/data/bot-learning/genetic/*.json
 dutch-server/data/bot-learning/adaptive/*.json
 dutch-server/data/bot-learning/leaderboard/*.json
 
+# Local Flutter web push config (use dart-define-from-file)
+env/*.local.json
+
 # Keep directory structure but ignore content
 !dutch-server/data/bot-learning/games/.gitkeep
 !dutch-server/data/bot-learning/profiles/.gitkeep

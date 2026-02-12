@@ -54,16 +54,28 @@ class SocketConnectionHandler {
     return ensured;
   }
 
+  String? _authToken;
+
+  void setAuthToken(String? token) {
+    _authToken = token;
+  }
+
   Future<void> connect(void Function(io.Socket) setupListeners) async {
     if (isConnected) return;
 
     _setConnectionState(SocketConnectionState.connecting);
 
-    _socket = io.io(serverUrl, <String, dynamic>{
+    final options = <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
       'reconnection': false,
-    });
+    };
+
+    if (_authToken != null) {
+      options['auth'] = {'token': _authToken};
+    }
+
+    _socket = io.io(serverUrl, options);
 
     setupListeners(_socket!);
     _socket!.connect();

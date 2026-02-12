@@ -26,10 +26,17 @@ dependencies:
   share_plus: ^10.1.4
   file_selector: ^1.0.3
 
+  # Auth
+  flutter_secure_storage: ^9.2.4
+
   # Multijoueur
   socket_io_client: ^3.1.4
   http: ^1.6.0
   connectivity_plus: ^6.1.4
+
+  # Push notifications (Firebase)
+  firebase_core: ^4.4.0
+  firebase_messaging: ^16.1.1
 
   # Routing
   go_router: ^17.0.1

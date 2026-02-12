@@ -1,7 +1,10 @@
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
+import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
+import 'package:dutch_game/services/social/friends_api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class MultiplayerProfileSpaceScreen extends StatefulWidget {
@@ -15,6 +18,7 @@ class MultiplayerProfileSpaceScreen extends StatefulWidget {
 class _MultiplayerProfileSpaceScreenState
     extends State<MultiplayerProfileSpaceScreen> {
   final SocialHubRepository _socialRepository = SocialHubRepository();
+  late final FriendsApiService _friendsApi;
   final TextEditingController _pseudoController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
 
@@ -27,16 +31,23 @@ class _MultiplayerProfileSpaceScreenState
   Map<String, Map<String, dynamic>> _activeHostRoomsByCode =
       <String, Map<String, dynamic>>{};
 
+  // Maps username → server IDs for API calls
+  final Map<String, int> _requestIdByUsername = {};
+  final Map<String, int> _userIdByUsername = {};
+
   Set<String> _reservedUsernames = <String>{};
 
   bool _loading = true;
   bool _savingProfile = false;
+  bool _deletingAccount = false;
   String? _pseudoError;
   String? _usernameError;
 
   @override
   void initState() {
     super.initState();
+    final authProvider = context.read<AuthProvider>();
+    _friendsApi = FriendsApiService(authProvider.authService);
     _loadData();
   }
 
@@ -53,15 +64,78 @@ class _MultiplayerProfileSpaceScreenState
     });
 
     final provider = context.read<MultiplayerGameProvider>();
-    final profile = await _socialRepository.getProfile();
-    final friends = await _socialRepository.getFriends();
-    final incoming = await _socialRepository.getFriendRequests(
-      direction: FriendRequestDirection.incoming,
-    );
-    final outgoing = await _socialRepository.getFriendRequests(
-      direction: FriendRequestDirection.outgoing,
-    );
-    final blocked = await _socialRepository.getBlockedUsers();
+    final authProvider = context.read<AuthProvider>();
+
+    // Charger le profil depuis l'auth provider
+    SocialProfile? profile;
+    List<FriendEntry> friends = [];
+    List<FriendRequestEntry> incoming = [];
+    List<FriendRequestEntry> outgoing = [];
+    List<String> blocked = [];
+
+    if (authProvider.isLoggedIn) {
+      // Profil depuis le serveur
+      profile = SocialProfile(
+        displayName: authProvider.user!.displayName,
+        username: authProvider.user!.username,
+        roomInviteNotificationsEnabled: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Amis depuis le serveur
+      final serverFriends = await _friendsApi.getFriends();
+      friends = serverFriends
+          .map((f) => FriendEntry(
+                username: f.username,
+                displayName: f.displayName,
+                addedAt: DateTime.tryParse(f.addedAt) ?? DateTime.now(),
+              ))
+          .toList();
+
+      final requests = await _friendsApi.getRequests();
+      incoming = requests.incoming.map((r) {
+        _requestIdByUsername[r.username] = r.requestId;
+        _userIdByUsername[r.username] = r.userId;
+        return FriendRequestEntry(
+          username: r.username,
+          displayName: r.displayName,
+          requestedAt: DateTime.tryParse(r.requestedAt) ?? DateTime.now(),
+          direction: FriendRequestDirection.incoming,
+        );
+      }).toList();
+      outgoing = requests.outgoing.map((r) {
+        _requestIdByUsername[r.username] = r.requestId;
+        return FriendRequestEntry(
+          username: r.username,
+          displayName: r.displayName,
+          requestedAt: DateTime.tryParse(r.requestedAt) ?? DateTime.now(),
+          direction: FriendRequestDirection.outgoing,
+        );
+      }).toList();
+
+      final serverBlocked = await _friendsApi.getBlockedUsers();
+      for (final b in serverBlocked) {
+        _userIdByUsername[b.username] = b.userId;
+      }
+      blocked = serverBlocked.map((b) => b.username).toList();
+
+      // Also store friend userIds
+      for (final f in serverFriends) {
+        _userIdByUsername[f.username] = f.userId;
+      }
+    } else {
+      // Fallback local
+      profile = await _socialRepository.getProfile();
+      friends = await _socialRepository.getFriends();
+      incoming = await _socialRepository.getFriendRequests(
+        direction: FriendRequestDirection.incoming,
+      );
+      outgoing = await _socialRepository.getFriendRequests(
+        direction: FriendRequestDirection.outgoing,
+      );
+      blocked = await _socialRepository.getBlockedUsers();
+    }
 
     final allRooms = await provider.getMyRooms();
     final hostRooms = allRooms.where((room) => room.isHost).toList();
@@ -163,9 +237,25 @@ class _MultiplayerProfileSpaceScreenState
       _usernameError = null;
     });
 
+    final authProvider = context.read<AuthProvider>();
+    final newDisplayName = _pseudoController.text.trim();
+
+    if (authProvider.isLoggedIn) {
+      // Mettre à jour via l'API serveur
+      final result = await authProvider.updateProfile(newDisplayName);
+      if (!mounted) return;
+
+      if (!result.success) {
+        setState(() => _savingProfile = false);
+        _showSnackBar(result.error ?? 'Erreur de mise a jour');
+        return;
+      }
+    }
+
+    // Aussi sauvegarder localement pour la rétrocompatibilité
     final now = DateTime.now();
     final updated = SocialProfile(
-      displayName: _pseudoController.text.trim(),
+      displayName: newDisplayName,
       username: SocialHubRepository.normalizeUsername(_usernameController.text),
       roomInviteNotificationsEnabled:
           _profile?.roomInviteNotificationsEnabled ?? false,
@@ -243,11 +333,26 @@ class _MultiplayerProfileSpaceScreenState
                 error = null;
               });
 
-              await _socialRepository.addFriendRequest(
-                username: normalizedUsername,
-                displayName: normalizedUsername,
-                direction: FriendRequestDirection.outgoing,
-              );
+              final authProvider = context.read<AuthProvider>();
+              if (authProvider.isLoggedIn) {
+                // Envoyer via l'API serveur
+                final result =
+                    await _friendsApi.sendRequest(normalizedUsername);
+                if (!result.success) {
+                  setLocalState(() {
+                    busy = false;
+                    error = result.error ?? 'Erreur d\'envoi';
+                  });
+                  return;
+                }
+              } else {
+                // Fallback local
+                await _socialRepository.addFriendRequest(
+                  username: normalizedUsername,
+                  displayName: normalizedUsername,
+                  direction: FriendRequestDirection.outgoing,
+                );
+              }
 
               if (dialogContext.mounted) {
                 Navigator.of(dialogContext).pop();
@@ -334,33 +439,167 @@ class _MultiplayerProfileSpaceScreenState
   }
 
   Future<void> _acceptIncomingRequest(String username) async {
-    await _socialRepository.acceptIncomingRequest(username);
-    await _loadData();
-    if (!mounted) {
-      return;
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.isLoggedIn) {
+      final requestId = _requestIdByUsername[username];
+      if (requestId != null) {
+        await _friendsApi.acceptRequest(requestId);
+      }
+    } else {
+      await _socialRepository.acceptIncomingRequest(username);
     }
+    await _loadData();
+    if (!mounted) return;
     _showSnackBar('@$username ajoute aux amis.');
   }
 
   Future<void> _declineIncomingRequest(String username) async {
-    await _socialRepository.removeFriendRequest(
-      username: username,
-      direction: FriendRequestDirection.incoming,
-    );
-    await _loadData();
-    if (!mounted) {
-      return;
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.isLoggedIn) {
+      final requestId = _requestIdByUsername[username];
+      if (requestId != null) {
+        await _friendsApi.rejectRequest(requestId);
+      }
+    } else {
+      await _socialRepository.removeFriendRequest(
+        username: username,
+        direction: FriendRequestDirection.incoming,
+      );
     }
+    await _loadData();
+    if (!mounted) return;
     _showSnackBar('Demande de @$username refusee.');
   }
 
   Future<void> _unblockUser(String username) async {
-    await _socialRepository.unblockUser(username);
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.isLoggedIn) {
+      final userId = _userIdByUsername[username];
+      if (userId != null) {
+        await _friendsApi.unblockUser(userId);
+      }
+    } else {
+      await _socialRepository.unblockUser(username);
+    }
     await _loadData();
-    if (!mounted) {
+    if (!mounted) return;
+    _showSnackBar('@$username debloque.');
+  }
+
+  Future<void> _openDeleteAccountDialog() async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isLoggedIn) {
+      _showSnackBar('Action reservee aux comptes connectes.');
       return;
     }
-    _showSnackBar('@$username debloque.');
+
+    final passwordController = TextEditingController();
+    String? error;
+    bool submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            Future<void> submit() async {
+              if (submitting) return;
+
+              final password = passwordController.text;
+              if (password.isEmpty) {
+                setLocalState(() {
+                  error = 'Mot de passe requis.';
+                });
+                return;
+              }
+
+              setLocalState(() {
+                submitting = true;
+                error = null;
+              });
+              if (mounted) {
+                setState(() {
+                  _deletingAccount = true;
+                });
+              }
+
+              final result = await authProvider.deleteAccount(password);
+              if (!mounted) return;
+
+              if (!result.success) {
+                if (dialogContext.mounted) {
+                  setLocalState(() {
+                    submitting = false;
+                    error = result.error ?? 'Suppression impossible';
+                  });
+                }
+                setState(() {
+                  _deletingAccount = false;
+                });
+                return;
+              }
+
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+
+              await _socialRepository.clearLocalData();
+
+              setState(() {
+                _deletingAccount = false;
+              });
+              _showSnackBar('Compte supprime.');
+              if (mounted) {
+                context.go('/');
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Supprimer mon compte'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Cette action est definitive. Toutes tes donnees de compte seront supprimees.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Mot de passe actuel',
+                      errorText: error,
+                    ),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB91C1C),
+                  ),
+                  child: submitting
+                      ? const Text('Suppression...')
+                      : const Text('Supprimer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    passwordController.dispose();
   }
 
   void _showSnackBar(String message) {
@@ -393,6 +632,8 @@ class _MultiplayerProfileSpaceScreenState
 
   @override
   Widget build(BuildContext context) {
+    final isLoggedIn = context.watch<AuthProvider>().isLoggedIn;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B1223),
       appBar: AppBar(
@@ -738,6 +979,50 @@ class _MultiplayerProfileSpaceScreenState
                           }).toList(),
                         ),
                 ),
+                if (isLoggedIn) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _sectionCard(
+                    icon: Icons.warning_amber_rounded,
+                    title: 'Zone sensible',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Text(
+                          'Supprimer le compte efface le profil, les amis, les demandes et les tokens push.',
+                          style: TextStyle(color: Color(0xFF4B5563)),
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: <Widget>[
+                              OutlinedButton.icon(
+                                onPressed: () => context.go('/change-password'),
+                                icon: const Icon(Icons.password_outlined),
+                                label: const Text('Changer mon mot de passe'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _deletingAccount
+                                    ? null
+                                    : _openDeleteAccountDialog,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFB91C1C),
+                                  side: const BorderSide(
+                                      color: Color(0xFFB91C1C)),
+                                ),
+                                icon: const Icon(Icons.delete_forever_outlined),
+                                label: const Text('Supprimer mon compte'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
     );

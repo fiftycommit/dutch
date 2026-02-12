@@ -12,14 +12,32 @@ import 'providers/game_provider.dart';
 import 'providers/game_tracking_provider.dart';
 import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/auth_provider.dart';
 import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
+import 'services/push/push_notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 
 /// Global navigator key for legacy code compatibility (bot_ai.dart)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Initialiser le service locator avec tous les services
   ServiceLocator.setupDefaultServices();
@@ -61,6 +79,17 @@ class DutchGameApp extends StatefulWidget {
 
 class _DutchGameAppState extends State<DutchGameApp> {
   GoRouter? _router;
+  bool _pushInitialized = false;
+
+  void _initPush(BuildContext context, bool isLoggedIn) {
+    if (_pushInitialized) return;
+    if (!isLoggedIn) return;
+
+    _pushInitialized = true;
+    unawaited(
+      PushNotificationService().init(context.read<AuthProvider>().authService),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,11 +103,15 @@ class _DutchGameAppState extends State<DutchGameApp> {
             trackingProvider: ServiceLocator().get<GameTrackingProvider>(),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
         ChangeNotifierProvider(create: (_) => MultiplayerGameProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: Builder(
         builder: (context) {
+          final isLoggedIn =
+              context.select<AuthProvider, bool>((auth) => auth.isLoggedIn);
+          _initPush(context, isLoggedIn);
           // Créer le router une seule fois pour éviter de reset la navigation
           _router ??= AppRouter.createRouter(context);
 

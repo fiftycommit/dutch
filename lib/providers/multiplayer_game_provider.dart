@@ -278,6 +278,11 @@ class MultiplayerGameProvider
     _setupListeners();
   }
 
+  /// Setter pour le token d'authentification JWT
+  void setAuthToken(String? token) {
+    _multiplayerService.setAuthToken(token);
+  }
+
   /// Initialize the provider - call this in initState() of multiplayer screens
   /// This performs async operations that shouldn't be in the constructor
   Future<void> init() async {

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dutch Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    /* ── Login ── */
+    #login-screen {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+    }
+    .login-box {
+      background: #1a1d29; border-radius: 16px; padding: 40px;
+      width: 100%; max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    .login-box h1 { text-align: center; margin-bottom: 24px; color: #fbbf24; font-size: 1.6em; }
+    .login-box input {
+      width: 100%; padding: 12px 16px; border: 1px solid #2d3148;
+      background: #12141e; color: #e2e8f0; border-radius: 8px;
+      font-size: 14px; margin-bottom: 16px; outline: none;
+    }
+    .login-box input:focus { border-color: #fbbf24; }
+    .login-box .error { color: #f87171; font-size: 13px; margin-bottom: 12px; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 8px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #fbbf24; color: #000; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-success { background: #22c55e; color: #fff; }
+    .btn-ghost { background: transparent; color: #94a3b8; border: 1px solid #2d3148; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-full { width: 100%; }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; }
+    header {
+      background: #1a1d29; padding: 16px 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #2d3148;
+    }
+    header h1 { font-size: 1.2em; color: #fbbf24; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+    /* ── Stats cards ── */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card {
+      background: #1a1d29; border-radius: 12px; padding: 20px;
+      border: 1px solid #2d3148;
+    }
+    .stat-card .label { color: #94a3b8; font-size: 13px; margin-bottom: 4px; }
+    .stat-card .value { font-size: 2em; font-weight: 700; color: #fbbf24; }
+
+    /* ── Table ── */
+    .toolbar {
+      display: flex; gap: 12px; margin-bottom: 16px; align-items: center;
+      flex-wrap: wrap;
+    }
+    .toolbar input {
+      flex: 1; min-width: 200px; padding: 10px 16px;
+      background: #1a1d29; border: 1px solid #2d3148; color: #e2e8f0;
+      border-radius: 8px; font-size: 14px; outline: none;
+    }
+    .toolbar input:focus { border-color: #fbbf24; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px 16px; }
+    th { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #2d3148; }
+    tr { border-bottom: 1px solid #1e2133; }
+    tr:hover { background: #1a1d2960; }
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-ok { background: #22c55e20; color: #22c55e; }
+    .badge-ban { background: #ef444420; color: #ef4444; }
+
+    .pagination {
+      display: flex; justify-content: center; gap: 8px; margin-top: 16px;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; display: none;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #1a1d29; border-radius: 16px; padding: 24px;
+      max-width: 480px; width: 90%;
+      box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 1.2em; }
+    .modal .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2d3148; }
+    .modal .detail-row .label { color: #94a3b8; }
+    .modal .actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>🔒 Dutch Admin</h1>
+    <input type="password" id="secret-input" placeholder="Admin Secret" autofocus>
+    <div class="error" id="login-error"></div>
+    <button class="btn btn-primary btn-full" onclick="tryLogin()">Connexion</button>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+  <header>
+    <h1>🎮 Dutch Admin</h1>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Déconnexion</button>
+  </header>
+
+  <div class="container">
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card"><div class="label">Utilisateurs</div><div class="value" id="stat-total">—</div></div>
+      <div class="stat-card"><div class="label">Bannis</div><div class="value" id="stat-banned">—</div></div>
+      <div class="stat-card"><div class="label">Nouveaux (7j)</div><div class="value" id="stat-recent">—</div></div>
+    </div>
+
+    <!-- Users table -->
+    <div class="toolbar">
+      <input type="text" id="search-input" placeholder="Rechercher par username, pseudo ou email…">
+      <button class="btn btn-primary btn-sm" onclick="loadUsers(1)">Rechercher</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Username</th><th>Pseudo</th><th>Email</th><th>Créé le</th><th>Dernière co.</th><th>Statut</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<!-- User Detail Modal -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal">
+    <h2 id="modal-title">Détails utilisateur</h2>
+    <div id="modal-body"></div>
+    <div class="actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<script>
+  let adminSecret = '';
+  let currentPage = 1;
+
+  const $ = id => document.getElementById(id);
+
+  // ── Auth ──
+  $('secret-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+  $('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsers(1); });
+
+  async function tryLogin() {
+    adminSecret = $('secret-input').value.trim();
+    if (!adminSecret) return;
+    $('login-error').textContent = '';
+    try {
+      const res = await api('/api/admin/stats');
+      if (res.success) {
+        $('login-screen').style.display = 'none';
+        $('dashboard').style.display = 'block';
+        loadStats();
+        loadUsers(1);
+      }
+    } catch {
+      $('login-error').textContent = 'Secret invalide';
+    }
+  }
+
+  function logout() {
+    adminSecret = '';
+    $('dashboard').style.display = 'none';
+    $('login-screen').style.display = 'flex';
+    $('secret-input').value = '';
+  }
+
+  // ── API helper ──
+  async function api(url, opts = {}) {
+    const res = await fetch(url, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': adminSecret, ...(opts.headers || {}) },
+    });
+    if (res.status === 403) throw new Error('Forbidden');
+    return res.json();
+  }
+
+  // ── Stats ──
+  async function loadStats() {
+    const { stats } = await api('/api/admin/stats');
+    $('stat-total').textContent = stats.totalUsers;
+    $('stat-banned').textContent = stats.bannedUsers;
+    $('stat-recent').textContent = stats.recentUsers;
+  }
+
+  // ── Users ──
+  async function loadUsers(page = 1) {
+    currentPage = page;
+    const search = $('search-input').value.trim();
+    const qs = new URLSearchParams({ page, limit: 50 });
+    if (search) qs.set('search', search);
+
+    const { users, pagination } = await api(`/api/admin/users?${qs}`);
+    const tbody = $('users-tbody');
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td><strong>${esc(u.username)}</strong></td>
+        <td>${esc(u.displayName)}</td>
+        <td>${esc(u.email || '—')}</td>
+        <td>${fmtDate(u.createdAt)}</td>
+        <td>${u.lastLoginAt ? fmtDate(u.lastLoginAt) : '—'}</td>
+        <td>${u.isBanned ? '<span class="badge badge-ban">Banni</span>' : '<span class="badge badge-ok">Actif</span>'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openUser(${u.id})">Voir</button></td>
+      </tr>
+    `).join('');
+
+    // Pagination
+    const pg = $('pagination');
+    pg.innerHTML = '';
+    for (let i = 1; i <= pagination.totalPages; i++) {
+      const btn = document.createElement('button');
+      btn.className = `btn btn-sm ${i === page ? 'btn-primary' : 'btn-ghost'}`;
+      btn.textContent = i;
+      btn.onclick = () => loadUsers(i);
+      pg.appendChild(btn);
+    }
+  }
+
+  // ── User Modal ──
+  async function openUser(id) {
+    const { user } = await api(`/api/admin/users/${id}`);
+    $('modal-title').textContent = `@${user.username}`;
+    $('modal-body').innerHTML = `
+      <div class="detail-row"><span class="label">ID</span><span>${user.id}</span></div>
+      <div class="detail-row"><span class="label">Pseudo</span><span>${esc(user.displayName)}</span></div>
+      <div class="detail-row"><span class="label">Email</span><span>${esc(user.email || '—')}</span></div>
+      <div class="detail-row"><span class="label">Créé le</span><span>${fmtDate(user.createdAt)}</span></div>
+      <div class="detail-row"><span class="label">Dernière connexion</span><span>${user.lastLoginAt ? fmtDate(user.lastLoginAt) : '—'}</span></div>
+      <div class="detail-row"><span class="label">Amis</span><span>${user.friendCount}</span></div>
+      <div class="detail-row"><span class="label">Statut</span><span>${user.isBanned ? '<span class="badge badge-ban">Banni</span>' : '<span class="badge badge-ok">Actif</span>'}</span></div>
+    `;
+    $('modal-actions').innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Fermer</button>
+      ${user.isBanned
+        ? `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">Débannir</button>`
+        : `<button class="btn btn-danger btn-sm" onclick="banUser(${user.id})">Bannir</button>`
+      }
+      <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${esc(user.username)}')">Supprimer</button>
+    `;
+    $('user-modal').classList.add('active');
+  }
+
+  function closeModal() { $('user-modal').classList.remove('active'); }
+  $('user-modal').addEventListener('click', e => { if (e.target === $('user-modal')) closeModal(); });
+
+  async function banUser(id) {
+    if (!confirm('Bannir cet utilisateur ?')) return;
+    await api(`/api/admin/users/${id}/ban`, { method: 'POST' });
+    closeModal(); loadStats(); loadUsers(currentPage);
+  }
+  async function unbanUser(id) {
+    if (!confirm('Débannir cet utilisateur ?')) return;
+    await api(`/api/admin/users/${id}/unban`, { method: 'POST' });
+    closeModal(); loadStats(); loadUsers(currentPage);
+  }
+  async function deleteUser(id, name) {
+    if (!confirm(`Supprimer définitivement @${name} et toutes ses données ?`)) return;
+    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    closeModal(); loadStats(); loadUsers(currentPage);
+  }
+
+  // ── Helpers ──
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + 'Z');
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+</script>
+</body>
+</html>

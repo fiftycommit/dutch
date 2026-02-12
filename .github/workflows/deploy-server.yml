@@ -1,49 +1,57 @@
-name: Deploy to Production Server
+name: Deploy to Production
 
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
 
+# Prevent concurrent deploys
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
-  build:
+  # ── 1. Build Flutter Web ──────────────────────────────────────────────
+  build-frontend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
-      - name: Get dependencies
-        run: flutter pub get
+      - run: flutter pub get
 
       - name: Build Web
         run: |
-          flutter build web --release --base-href /
+          flutter build web \
+            --release \
+            --base-href / \
+            --no-tree-shake-icons \
+            ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"}
           cp build/web/index.html build/web/404.html
+        env:
+          FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: flutter-build
-          path: './build/web'
+          name: flutter-web
+          path: build/web
           retention-days: 1
 
+  # ── 2. Deploy Frontend ────────────────────────────────────────────────
   deploy-frontend:
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-frontend
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: flutter-build
-          path: './build/web'
+          name: flutter-web
+          path: build/web
 
-      - name: Deploy frontend to server
+      - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: dutch-game.me
@@ -55,13 +63,14 @@ jobs:
           overwrite: true
           rm: true
 
+  # ── 3. Deploy Backend + Trainer ───────────────────────────────────────
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy trainer code
+      # Upload trainer code
+      - name: Deploy trainer
         uses: appleboy/scp-action@v0.1.7
         with:
           host: dutch-game.me
@@ -72,7 +81,8 @@ jobs:
           strip_components: 0
           overwrite: true
 
-      - name: Deploy server code
+      # Upload server code
+      - name: Deploy server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: dutch-game.me
@@ -82,36 +92,37 @@ jobs:
           target: "/root/apps/"
           strip_components: 0
 
-      - name: Install and restart server
+      # Install, build, restart
+      - name: Install and restart services
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GIT_SHA: ${{ github.sha }}
         with:
           host: dutch-game.me
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GIT_SHA
+          command_timeout: 10m
           script: |
-            # -------- Trainer install / restart --------
+            set -e
+
+            # ── Trainer ──
             if [ ! -d /home/dutch/flutter ]; then
               echo "📥 Installing Flutter..."
               git clone https://github.com/flutter/flutter.git -b stable /home/dutch/flutter
               chown -R dutch:dutch /home/dutch/flutter
               /home/dutch/flutter/bin/flutter --version
               /home/dutch/flutter/bin/flutter config --no-analytics
-            else
-              echo "✅ Flutter already installed"
             fi
 
-            # Ensure trainer folder exists
             mkdir -p /var/www/dutch-trainer
             chown -R dutch:dutch /var/www/dutch-trainer || true
-
             cd /var/www/dutch-trainer
-            /home/dutch/flutter/bin/flutter pub get
+            /home/dutch/flutter/bin/flutter pub get || echo "⚠️ flutter pub get failed, continuing"
 
-            # Ensure swap exists on low-memory droplets (1GB) to avoid trainer OOM loops
+            # Swap for low-memory VMs
             if ! swapon --show | grep -q '/swapfile'; then
-              if [ ! -f /swapfile ]; then
-                fallocate -l 2G /swapfile
-              fi
+              [ ! -f /swapfile ] && fallocate -l 2G /swapfile
               chmod 600 /swapfile
               mkswap -f /swapfile
               swapon /swapfile
@@ -155,101 +166,57 @@ jobs:
             if systemctl restart dutch-bot-trainer; then
               systemctl enable dutch-bot-trainer
             else
-              echo "⚠️ Trainer failed to start, keeping it disabled to protect production."
+              echo "⚠️ Trainer failed to start, keeping disabled"
               systemctl stop dutch-bot-trainer || true
               systemctl disable dutch-bot-trainer || true
             fi
 
-            # -------- Backend deploy --------
+            # ── Backend ──
+            echo "🔨 Building backend..."
             cd /root/apps/dutch-server
-            npm install
-            npm run build
-            npm prune --production
+            npm install --omit=dev 2>&1 || true
+            npm install typescript @types/node @types/express @types/cors @types/bcryptjs @types/better-sqlite3 @types/jsonwebtoken 2>&1 || true
+            npx tsc || { echo "❌ TypeScript build failed"; exit 1; }
+            npm prune --production 2>&1 || true
 
-            # Create ML data directories
-            echo "Creating ML data directories..."
+            # ML data dirs
             mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
             mkdir -p data/player-learning/{profiles,history}
             chmod -R 755 data/
-            
-            # Update Nginx config if needed
-            if ! grep -q "location /bot-stats" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for ML dashboard..."
-              sed -i '/location \/health {/i\    location /bot-stats {\n        proxy_pass http://dutch_backend/bot-stats;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /player-profile {\n        proxy_pass http://dutch_backend/player-profile;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/bot-learning {\n        proxy_pass http://dutch_backend/api/bot-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/player-learning {\n        proxy_pass http://dutch_backend/api/player-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
 
-            # Ensure player profile dashboard is routed to backend even if /bot-stats already exists
-            if ! grep -q "location /player-profile" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for player profile dashboard..."
-              sed -i '/location \/health {/i\    location /player-profile {\n        proxy_pass http://dutch_backend/player-profile;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-
-            # Ensure player learning API is routed to backend
-            if ! grep -q "location /api/player-learning" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for player learning API..."
-              sed -i '/location \/health {/i\    location /api/player-learning {\n        proxy_pass http://dutch_backend/api/player-learning;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-
-            # Ensure robots.txt is served correctly (SEO)
-            if ! grep -q "location = /robots.txt" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for robots.txt..."
-              sed -i '/location \/ {/i\    location = /robots.txt {\n        root /var/www/dutch/web;\n        default_type text/plain;\n        try_files /robots.txt =404;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-
-            # Ensure sitemap.xml is proxied to backend with static fallback
-            if ! grep -q "location = /sitemap.xml" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for sitemap.xml..."
-              sed -i '/location \/ {/i\    location = /sitemap.xml {\n        proxy_pass http://dutch_backend/sitemap.xml;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_intercept_errors on;\n        error_page 502 503 504 = @sitemap_fallback;\n    }\n\n    location @sitemap_fallback {\n        root /var/www/dutch/web;\n        try_files /sitemap-fallback.xml =404;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-
-            # Ensure /version is routed to backend (otherwise Flutter SPA catches it)
-            if ! grep -q "location /version" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for /version endpoint..."
-              sed -i '/location \/health {/i\    location /version {\n        proxy_pass http://dutch_backend/version;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-            
-            if ! grep -q "location /status" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration..."
-              sed -i '/location \/health {/i\    location /status {\n        proxy_pass http://dutch_backend/status;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /rooms {\n        proxy_pass http://dutch_backend/rooms;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-
-            # Disable cache for main JS files to prevent stale versions
-            if ! grep -q "location = /main.dart.js" /etc/nginx/sites-available/dutch-server; then
-              echo "Updating Nginx configuration for cache control..."
-              sed -i '/location \/ {/i\    # No cache for main app files\n    location = /index.html {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n        add_header Pragma "no-cache";\n        add_header Expires "0";\n    }\n\n    location = /main.dart.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n        add_header Pragma "no-cache";\n        add_header Expires "0";\n    }\n\n    location = /flutter.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n    }\n\n    location = /flutter_service_worker.js {\n        add_header Cache-Control "no-cache, no-store, must-revalidate";\n    }\n' /etc/nginx/sites-available/dutch-server
-              nginx -t && systemctl reload nginx
-            fi
-            
-            export GIT_SHA="${{ github.sha }}"
-            export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            cat > ecosystem.config.cjs << 'PM2CFG'
+            # ── PM2 restart ──
+            BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            cat > ecosystem.config.cjs << PMCFG
             module.exports = {
-              apps: [
-                {
-                  name: 'dutch-server',
-                  cwd: '/root/apps/dutch-server',
-                  script: 'dist/index.js',
-                  instances: 1,
-                  exec_mode: 'fork',
-                  env: {
-                    NODE_ENV: 'production',
-                    PORT: 3000,
-                    GIT_SHA: process.env.GIT_SHA,
-                    BUILD_TIME: process.env.BUILD_TIME,
-                  },
-                  max_memory_restart: '700M',
+              apps: [{
+                name: 'dutch-server',
+                cwd: '/root/apps/dutch-server',
+                script: 'dist/index.js',
+                instances: 1,
+                exec_mode: 'fork',
+                env: {
+                  NODE_ENV: 'production',
+                  PORT: 3000,
+                  GIT_SHA: '${GIT_SHA}',
+                  BUILD_TIME: '${BUILD_TIME}',
                 },
-              ],
+                max_memory_restart: '700M',
+              }],
             };
-            PM2CFG
-            pm2 startOrReload ecosystem.config.cjs --only dutch-server --update-env
+            PMCFG
+
+            pm2 delete dutch-server 2>/dev/null || true
+            pm2 start ecosystem.config.cjs
             pm2 save
-            echo "✅ Backend deployed successfully!"
-            echo "🤖 ML Dashboard: https://dutch-game.me/bot-stats"
+
+            # Quick health check
+            sleep 3
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "✅ Backend is healthy!"
+            else
+              echo "❌ Backend health check failed!"
+              pm2 logs dutch-server --lines 20 --nostream
+              exit 1
+            fi
+
+            echo "✅ Deploy complete"

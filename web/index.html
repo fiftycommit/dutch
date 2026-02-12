@@ -5,7 +5,6 @@
 
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
   <!-- SEO -->
   <title>Dutch Game — Jeu de cartes en ligne multijoueur</title>
@@ -216,9 +215,14 @@
   </script>
 
   <script>
-    // Use HTML renderer on mobile for better performance
-    // CanvasKit is heavy (26MB) and causes lag on mobile browsers
-    window.flutterWebRenderer = "html";
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register(
+          '/firebase-messaging-sw.js',
+          { scope: '/firebase-cloud-messaging-push-scope' }
+        );
+      });
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

@@ -13,6 +13,12 @@ import { publicRoomService } from './services/publicRoomService';
 import botLearningRoutes from './routes/botLearningRoutes';
 import playerLearningRoutes from './routes/playerLearningRoutes';
 import sbmmRoutes from './routes/sbmmRoutes';
+import authRoutes from './routes/authRoutes';
+import friendsRoutes from './routes/friendsRoutes';
+import roomRoutes from './routes/roomRoutes';
+import adminRoutes from './routes/adminRoutes';
+import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
+import { FriendsService } from './services/FriendsService';
 
 const startedAt = new Date().toISOString();
 
@@ -119,18 +125,28 @@ export function startServer() {
   const app = express();
   const httpServer = createServer(app);
 
-  app.use(cors());
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
+
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
   app.use(SecurityService.apiLimiter); // API Rate Limiting
 
   const io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: allowedOrigins,
       methods: ['GET', 'POST'],
     },
     pingTimeout: 60000,
     pingInterval: 25000,
   });
+
+  // Injecter la référence des users en ligne pour le service d'amis
+  FriendsService.setOnlineUsersRef(onlineUsers);
+
+  // Socket Auth Middleware (JWT validation)
+  io.use(socketAuthMiddleware);
 
   // Socket Connection Rate Limiting
   io.use(async (socket, next) => {
@@ -146,12 +162,18 @@ export function startServer() {
   const roomManager = new RoomManager(io);
 
   io.on('connection', (socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    const user = socket.data.user;
+    const userInfo = user ? ` (user: ${user.username})` : ' (guest)';
+    console.log(`Client connected: ${socket.id}${userInfo}`);
+
     setupConnectionHandler(socket, roomManager);
-    setupRoomHandler(socket, roomManager);
+    setupRoomHandler(socket, roomManager, io);
     setupGameHandler(socket, roomManager);
-    // Les handlers publics gèrent leur propre état via publicRoomService
     setupPublicRoomHandlers(socket, new Map());
+
+    socket.on('disconnect', () => {
+      handleSocketDisconnect(socket);
+    });
   });
 
   app.get('/status', (req, res) => {
@@ -218,6 +240,23 @@ export function startServer() {
 
   // Routes SBMM (nouveau système de matchmaking)
   app.use('/api/sbmm', sbmmRoutes);
+
+  // Routes Auth (inscription, connexion, profil)
+  app.use('/api/auth', authRoutes);
+
+  // Routes Friends (amis, demandes, blocage)
+  app.use('/api/friends', friendsRoutes);
+
+  // Routes Rooms (salons sauvegardés)
+  app.use('/api/rooms', roomRoutes);
+
+  // Routes Admin (gestion des utilisateurs)
+  app.use('/api/admin', adminRoutes);
+
+  // Dashboard admin
+  app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/admin.html'));
+  });
 
   // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {

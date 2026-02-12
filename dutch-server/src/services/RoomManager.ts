@@ -151,7 +151,8 @@ export class RoomManager {
     hostSocketId: string,
     settings: any,
     playerName?: string,
-    clientId?: string
+    clientId?: string,
+    userId?: number
   ): Room {
     const normalizedSettings = this.normalizeSettings(settings);
     const roomCode = this.generateRoomCode();
@@ -170,7 +171,8 @@ export class RoomManager {
       0,
       undefined,
       undefined,
-      clientId
+      clientId,
+      userId
     );
     hostPlayer.connected = true;
     hostPlayer.focused = true;
@@ -186,7 +188,8 @@ export class RoomManager {
     roomCode: string,
     socketId: string,
     playerName?: string,
-    clientId?: string
+    clientId?: string,
+    userId?: number
   ): {
     room?: Room;
     player?: Player;
@@ -253,7 +256,8 @@ export class RoomManager {
       room.players.length,
       undefined,
       undefined,
-      clientId
+      clientId,
+      userId
     );
     player.connected = true;
     player.focused = true;

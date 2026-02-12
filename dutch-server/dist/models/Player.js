@@ -16,12 +16,13 @@ var BotSkillLevel;
     BotSkillLevel[BotSkillLevel["gold"] = 2] = "gold";
     BotSkillLevel[BotSkillLevel["platinum"] = 3] = "platinum";
 })(BotSkillLevel || (exports.BotSkillLevel = BotSkillLevel = {}));
-function createPlayer(id, name, isHuman, position, botBehavior, botSkillLevel, clientId) {
+function createPlayer(id, name, isHuman, position, botBehavior, botSkillLevel, clientId, userId) {
     return {
         id,
         name,
         isHuman,
         clientId,
+        userId,
         connected: isHuman ? true : undefined,
         focused: isHuman ? true : undefined,
         isSpectator: false,

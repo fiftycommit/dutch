@@ -19,6 +19,11 @@ const publicRoomService_1 = require("./services/publicRoomService");
 const botLearningRoutes_1 = __importDefault(require("./routes/botLearningRoutes"));
 const playerLearningRoutes_1 = __importDefault(require("./routes/playerLearningRoutes"));
 const sbmmRoutes_1 = __importDefault(require("./routes/sbmmRoutes"));
+const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const friendsRoutes_1 = __importDefault(require("./routes/friendsRoutes"));
+const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
+const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
+const FriendsService_1 = require("./services/FriendsService");
 const startedAt = new Date().toISOString();
 function renderHomePage(roomCount) {
     return `
@@ -121,17 +126,24 @@ function renderHomePage(roomCount) {
 function startServer() {
     const app = (0, express_1.default)();
     const httpServer = (0, http_1.createServer)(app);
-    app.use((0, cors_1.default)());
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',')
+        : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
+    app.use((0, cors_1.default)({ origin: allowedOrigins }));
     app.use(express_1.default.json());
     app.use(SecurityService_1.SecurityService.apiLimiter); // API Rate Limiting
     const io = new socket_io_1.Server(httpServer, {
         cors: {
-            origin: '*',
+            origin: allowedOrigins,
             methods: ['GET', 'POST'],
         },
         pingTimeout: 60000,
         pingInterval: 25000,
     });
+    // Injecter la référence des users en ligne pour le service d'amis
+    FriendsService_1.FriendsService.setOnlineUsersRef(socketAuthMiddleware_1.onlineUsers);
+    // Socket Auth Middleware (JWT validation)
+    io.use(socketAuthMiddleware_1.socketAuthMiddleware);
     // Socket Connection Rate Limiting
     io.use(async (socket, next) => {
         try {
@@ -145,12 +157,16 @@ function startServer() {
     });
     const roomManager = new RoomManager_1.RoomManager(io);
     io.on('connection', (socket) => {
-        console.log(`Client connected: ${socket.id}`);
+        const user = socket.data.user;
+        const userInfo = user ? ` (user: ${user.username})` : ' (guest)';
+        console.log(`Client connected: ${socket.id}${userInfo}`);
         (0, connectionHandler_1.setupConnectionHandler)(socket, roomManager);
-        (0, roomHandler_1.setupRoomHandler)(socket, roomManager);
+        (0, roomHandler_1.setupRoomHandler)(socket, roomManager, io);
         (0, gameHandler_1.setupGameHandler)(socket, roomManager);
-        // Les handlers publics gèrent leur propre état via publicRoomService
         (0, publicRoomHandlers_1.setupPublicRoomHandlers)(socket, new Map());
+        socket.on('disconnect', () => {
+            (0, socketAuthMiddleware_1.handleSocketDisconnect)(socket);
+        });
     });
     app.get('/status', (req, res) => {
         // Authentification basique optionnelle (décommente pour activer)
@@ -206,6 +222,12 @@ function startServer() {
     app.use('/api/player-learning', playerLearningRoutes_1.default);
     // Routes SBMM (nouveau système de matchmaking)
     app.use('/api/sbmm', sbmmRoutes_1.default);
+    // Routes Auth (inscription, connexion, profil)
+    app.use('/api/auth', authRoutes_1.default);
+    // Routes Friends (amis, demandes, blocage)
+    app.use('/api/friends', friendsRoutes_1.default);
+    // Routes Rooms (salons sauvegardés)
+    app.use('/api/rooms', roomRoutes_1.default);
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
         res.sendFile(path_1.default.join(__dirname, '../public/bot-stats.html'));

@@ -18,6 +18,7 @@ export interface Player {
   name: string;
   isHuman: boolean;
   clientId?: string;
+  userId?: number;
   connected?: boolean;
   focused?: boolean;
   isSpectator?: boolean;
@@ -40,13 +41,15 @@ export function createPlayer(
   position: number,
   botBehavior?: BotBehavior,
   botSkillLevel?: BotSkillLevel,
-  clientId?: string
+  clientId?: string,
+  userId?: number
 ): Player {
   return {
     id,
     name,
     isHuman,
     clientId,
+    userId,
     connected: isHuman ? true : undefined,
     focused: isHuman ? true : undefined,
     isSpectator: false,

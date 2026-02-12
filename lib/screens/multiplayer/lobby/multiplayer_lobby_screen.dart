@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../providers/auth_provider.dart';
 import '../../../../../services/multiplayer/multiplayer_service.dart';
+import '../../../../../services/social/friends_api_service.dart';
 import '../../../../../models/game_state.dart';
 import '../../../../../models/game_settings.dart';
 import '../../../../../utils/ui_constants.dart';
@@ -324,6 +326,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               ),
             ),
           ),
+          // Bouton inviter un ami
+          if (context.read<AuthProvider>().isLoggedIn)
+            IconButton(
+              icon: const Icon(Icons.person_add, color: Colors.white),
+              iconSize: f(22),
+              tooltip: 'Inviter un ami',
+              onPressed: () => _showInviteFriendDialog(context, provider),
+            ),
           // Bouton paramètres (hôte uniquement)
           if (provider.isHost)
             IconButton(
@@ -1083,6 +1093,97 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showInviteFriendDialog(
+    BuildContext context,
+    MultiplayerGameProvider provider,
+  ) async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isLoggedIn) return;
+
+    final friendsApi = FriendsApiService(authProvider.authService);
+    final friends = await friendsApi.getFriends();
+    final onlineFriends = friends.where((f) => f.isOnline).toList();
+
+    if (!mounted) return;
+
+    final roomCode = provider.roomCode;
+    if (roomCode == null) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.person_add),
+            SizedBox(width: 8),
+            Text('Inviter un ami'),
+          ],
+        ),
+        content: SizedBox(
+          width: 300,
+          child: onlineFriends.isEmpty
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.people_outline, size: 48, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    Text(
+                      friends.isEmpty
+                          ? 'Aucun ami pour le moment'
+                          : 'Aucun ami en ligne',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: onlineFriends.length,
+                  itemBuilder: (context, index) {
+                    final friend = onlineFriends[index];
+                    return ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person),
+                      ),
+                      title: Text(friend.displayName),
+                      subtitle: Text('@${friend.username}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.send, color: Colors.green),
+                        tooltip: 'Inviter',
+                        onPressed: () async {
+                          final success = await friendsApi.inviteToRoom(
+                            roomCode,
+                            friend.userId,
+                          );
+                          if (!ctx.mounted) return;
+                          Navigator.of(ctx).pop();
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success
+                                      ? 'Invitation envoyée à ${friend.displayName}'
+                                      : 'Erreur lors de l\'envoi',
+                                ),
+                                backgroundColor: success ? Colors.green : Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fermer'),
+          ),
+        ],
       ),
     );
   }

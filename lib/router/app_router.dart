@@ -15,6 +15,11 @@ import '../screens/menu/rules_screen.dart';
 import '../screens/menu/settings_screen.dart';
 import '../screens/menu/stats_screen.dart';
 import '../screens/menu/ai_profile_screen.dart';
+import '../screens/auth/login_screen.dart';
+import '../screens/auth/register_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
+import '../screens/auth/change_password_screen.dart';
 import '../screens/multiplayer/menu/multiplayer_menu_screen.dart';
 import '../screens/multiplayer/menu/multiplayer_mode_selection_screen.dart';
 import '../screens/multiplayer/menu/create_mode_selection_screen.dart';
@@ -55,7 +60,8 @@ class AppRouter {
           pageBuilder: (context, state) => CustomTransitionPage(
             key: state.pageKey,
             child: const MainMenuScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
             },
             transitionDuration: const Duration(milliseconds: 300),
@@ -109,7 +115,8 @@ class AppRouter {
           path: '/settings',
           name: 'settings',
           builder: (context, state) {
-            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            final slot =
+                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
             return SettingsScreen(initialSlot: slot);
           },
         ),
@@ -117,7 +124,8 @@ class AppRouter {
           path: '/stats',
           name: 'stats',
           builder: (context, state) {
-            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            final slot =
+                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
             return StatsScreen(initialSlot: slot);
           },
         ),
@@ -126,9 +134,39 @@ class AppRouter {
           path: '/ai-profile',
           name: 'aiProfile',
           builder: (context, state) {
-            final slot = int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+            final slot =
+                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
             return AiProfileScreen(slotId: slot);
           },
+        ),
+
+        // ============ AUTHENTIFICATION ============
+        GoRoute(
+          path: '/login',
+          name: 'login',
+          builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/register',
+          name: 'register',
+          builder: (context, state) => const RegisterScreen(),
+        ),
+        GoRoute(
+          path: '/forgot-password',
+          name: 'forgotPassword',
+          builder: (context, state) => const ForgotPasswordScreen(),
+        ),
+        GoRoute(
+          path: '/reset-password',
+          name: 'resetPassword',
+          builder: (context, state) => ResetPasswordScreen(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/change-password',
+          name: 'changePassword',
+          builder: (context, state) => const ChangePasswordScreen(),
         ),
 
         // ============ MODE MULTIJOUEUR ============
@@ -388,6 +426,14 @@ extension GoRouterNavigation on BuildContext {
   void goSoloGame() => go('/solo/game');
   void goSoloResults() => go('/solo/results');
   void goSoloDutchReveal() => go('/solo/dutch-reveal');
+
+  // Auth
+  void goLogin() => go('/login');
+  void goRegister() => go('/register');
+  void goForgotPassword() => go('/forgot-password');
+  void goResetPassword(String token) =>
+      go('/reset-password?token=${Uri.encodeComponent(token)}');
+  void goChangePassword() => go('/change-password');
 
   // Multiplayer
   void goMultiplayer() => go('/multiplayer');

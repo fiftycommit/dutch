@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "751846261054",
+    "project_id": "dutch-game-1dd01",
+    "storage_bucket": "dutch-game-1dd01.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:751846261054:android:b36dc858eaeb77ef056c6f",
+        "android_client_info": {
+          "package_name": "com.max.dutch_game"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCH0yDjB0v_qU0Him383AoRVC3bI5oP-to"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

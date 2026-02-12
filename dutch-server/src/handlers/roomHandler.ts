@@ -1,15 +1,30 @@
-import { Socket } from 'socket.io';
+import { Socket, Server } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
 import { onPublicRoomCreated, onPublicRoomPlayerJoined, onPublicRoomPlayerLeft } from './publicRoomHandlers';
+import { ValidationService } from '../services/ValidationService';
+import { SecurityService } from '../services/SecurityService';
+import { AuthenticatedSocket } from '../middleware/socketAuthMiddleware';
+import { FriendsService } from '../services/FriendsService';
+import { AuthService } from '../services/AuthService';
+import { PushNotificationService } from '../services/PushNotificationService';
+import { database } from '../services/Database';
 
-export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
+export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: Server) {
+  const authSocket = socket as AuthenticatedSocket;
+  const socketUser = authSocket.data.user;
+
   socket.on('room:create', (data, callback) => {
     try {
+      // Utiliser le nom du compte si authentifié, sinon sanitize le nom fourni
+      const playerName = socketUser?.displayName
+        || ValidationService.sanitizePlayerName(data.playerName);
+
       const room = roomManager.createRoom(
         socket.id,
         data.settings,
-        data.playerName,
-        data.clientId
+        playerName,
+        data.clientId,
+        socketUser?.userId
       );
       socket.join(room.id);
       roomManager.broadcastPresence(room.id);
@@ -28,6 +43,17 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
         );
       }
       
+      // Sauvegarder en DB si authentifié
+      if (socketUser?.userId) {
+        try {
+          database.instance.prepare(`
+            INSERT INTO user_rooms (user_id, room_code, is_host)
+            VALUES (?, ?, 1)
+            ON CONFLICT(user_id, room_code) DO UPDATE SET is_host = 1, joined_at = datetime('now')
+          `).run(socketUser.userId, room.id);
+        } catch (e) { /* best effort */ }
+      }
+
       callback({ success: true, roomCode: room.id, room });
     } catch (error: any) {
       console.error('Error creating room:', error);
@@ -35,14 +61,26 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  socket.on('room:join', (data, callback) => {
+  socket.on('room:join', async (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
+
+      // Rate limit sur les tentatives de join
+      const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket.handshake.address);
+      if (!joinAllowed) {
+        callback({ success: false, error: 'Trop de tentatives, réessayez dans une minute' });
+        return;
+      }
+
+      const playerName = socketUser?.displayName
+        || ValidationService.sanitizePlayerName(data.playerName);
+
       const result = roomManager.joinRoom(
         roomCode,
         socket.id,
-        data.playerName,
-        data.clientId
+        playerName,
+        data.clientId,
+        socketUser?.userId
       );
 
       if (result.error || !result.room) {
@@ -60,6 +98,17 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
       // Mettre à jour le compteur pour les rooms publiques
       if (result.room) {
         onPublicRoomPlayerJoined(roomCode, result.room.players.length);
+      }
+
+      // Sauvegarder en DB si authentifié
+      if (socketUser?.userId) {
+        try {
+          database.instance.prepare(`
+            INSERT INTO user_rooms (user_id, room_code, is_host)
+            VALUES (?, ?, 0)
+            ON CONFLICT(user_id, room_code) DO UPDATE SET joined_at = datetime('now')
+          `).run(socketUser.userId, roomCode);
+        } catch (e) { /* best effort */ }
       }
 
       console.log(`Player ${socket.id} joined room ${roomCode}`);
@@ -146,7 +195,11 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('chat:send', (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
-      const message = data.message?.toString() ?? '';
+      const message = ValidationService.sanitizeChatMessage(data.message);
+      if (!message) {
+        callback?.({ success: false, error: 'Message vide' });
+        return;
+      }
       const success = roomManager.sendChat(roomCode, socket.id, message);
       callback?.({ success });
     } catch (error: any) {
@@ -330,6 +383,130 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager) {
     } catch (error: any) {
       console.error('Error banning player:', error);
       callback({ success: false, error: error.message });
+    }
+  });
+
+  // Inviter un ami dans un salon (authentifié uniquement)
+  socket.on('room:invite', async (data, callback) => {
+    try {
+      if (!socketUser) {
+        callback?.({ success: false, error: 'Authentification requise' });
+        return;
+      }
+
+      const { roomCode, friendUserId } = data;
+      if (!roomCode || !friendUserId) {
+        callback?.({ success: false, error: 'roomCode et friendUserId requis' });
+        return;
+      }
+
+      // Vérifier que c'est bien un ami
+      const friends = FriendsService.getFriends(socketUser.userId);
+      const isFriend = friends.some(f => f.userId === friendUserId);
+      if (!isFriend) {
+        callback?.({ success: false, error: 'Ce joueur n\'est pas ton ami' });
+        return;
+      }
+
+      // Enregistrer l'invitation
+      database.instance.prepare(
+        'INSERT OR REPLACE INTO room_invites (room_code, from_user_id, to_user_id) VALUES (?, ?, ?)'
+      ).run(roomCode, socketUser.userId, friendUserId);
+
+      // Notification temps réel via socket
+      const friendSocketIds = FriendsService.getUserSocketIds(friendUserId);
+      const inviterName = socketUser.displayName || socketUser.username;
+      for (const sid of friendSocketIds) {
+        io?.to(sid).emit('room:invite', {
+          roomCode,
+          fromUserId: socketUser.userId,
+          fromUsername: socketUser.username,
+          fromDisplayName: inviterName,
+        });
+      }
+
+      // Notification push
+      await PushNotificationService.notifyRoomInvite(friendUserId, inviterName, roomCode);
+
+      callback?.({ success: true });
+    } catch (error: any) {
+      console.error('Error inviting friend:', error);
+      callback?.({ success: false, error: error.message });
+    }
+  });
+
+  // Notifications friend temps réel (envoyées quand des actions friends arrivent via REST)
+  // Ces listeners sont pour les événements émis par le serveur lui-même
+  socket.on('friend:send_request', async (data, callback) => {
+    try {
+      if (!socketUser) {
+        callback?.({ success: false, error: 'Authentification requise' });
+        return;
+      }
+
+      const { username } = data;
+      const result = FriendsService.sendRequest(socketUser.userId, username);
+
+      if (result.success && result.toUserId) {
+        // Notifier le destinataire via socket
+        const targetSocketIds = FriendsService.getUserSocketIds(result.toUserId);
+        const senderUser = AuthService.getUser(socketUser.userId);
+        for (const sid of targetSocketIds) {
+          io?.to(sid).emit('friend:request_received', {
+            requestId: result.requestId,
+            fromUserId: socketUser.userId,
+            fromUsername: socketUser.username,
+            fromDisplayName: senderUser?.displayName || socketUser.username,
+          });
+        }
+
+        // Push notification
+        await PushNotificationService.notifyFriendRequest(
+          result.toUserId,
+          socketUser.username,
+          senderUser?.displayName || socketUser.username
+        );
+      }
+
+      callback?.(result);
+    } catch (error: any) {
+      callback?.({ success: false, error: error.message });
+    }
+  });
+
+  socket.on('friend:accept_request', async (data, callback) => {
+    try {
+      if (!socketUser) {
+        callback?.({ success: false, error: 'Authentification requise' });
+        return;
+      }
+
+      const { requestId } = data;
+      const result = FriendsService.acceptRequest(socketUser.userId, requestId);
+
+      if (result.success && result.toUserId) {
+        // Notifier l'expéditeur original
+        const targetSocketIds = FriendsService.getUserSocketIds(result.toUserId);
+        const accepterUser = AuthService.getUser(socketUser.userId);
+        for (const sid of targetSocketIds) {
+          io?.to(sid).emit('friend:accepted', {
+            userId: socketUser.userId,
+            username: socketUser.username,
+            displayName: accepterUser?.displayName || socketUser.username,
+          });
+        }
+
+        // Push notification
+        await PushNotificationService.notifyFriendAccepted(
+          result.toUserId,
+          socketUser.username,
+          accepterUser?.displayName || socketUser.username
+        );
+      }
+
+      callback?.(result);
+    } catch (error: any) {
+      callback?.({ success: false, error: error.message });
     }
   });
 }

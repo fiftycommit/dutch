@@ -85,6 +85,22 @@ flutter run
 flutter run -d chrome
 ```
 
+### Web push FCM (sans retaper la cle a chaque fois)
+
+`FCM_WEB_VAPID_KEY` est une cle publique (safe cote client).  
+Ne jamais exposer de cle privee (service account JSON, API private key SMTP, etc.).
+
+1. Copier `env/web.example.json` vers `env/web.local.json`.
+2. Remplir `FCM_WEB_VAPID_KEY` dans `env/web.local.json`.
+3. Lancer en local:
+
+```bash
+flutter run -d chrome --dart-define-from-file=env/web.local.json
+```
+
+Pour la CI/deploiement (`.github/workflows/deploy-server.yml`), definir le secret GitHub `FCM_WEB_VAPID_KEY`.  
+Le build web l'injecte automatiquement via `--dart-define`, sans la mettre dans le repo.
+
 ### Serveur multijoueur (optionnel)
 
 ```bash

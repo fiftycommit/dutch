@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
+import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/screens/multiplayer/menu/multiplayer_profile_space_screen.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
+import 'package:dutch_game/services/social/friends_api_service.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -18,12 +20,13 @@ class MultiplayerMenuScreen extends StatefulWidget {
 
 class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   final SocialHubRepository _socialRepository = SocialHubRepository();
+  late final FriendsApiService _friendsApi;
 
   SocialProfile? _profile;
-  List<FriendEntry> _friends = <FriendEntry>[];
-  List<FriendRequestEntry> _incomingRequests = <FriendRequestEntry>[];
-  List<FriendRequestEntry> _outgoingRequests = <FriendRequestEntry>[];
-  List<String> _blockedUsers = <String>[];
+  List<FriendInfo> _friends = <FriendInfo>[];
+  List<FriendRequestInfo> _incomingRequests = <FriendRequestInfo>[];
+  List<FriendRequestInfo> _outgoingRequests = <FriendRequestInfo>[];
+  List<BlockedUserInfo> _blockedUsers = <BlockedUserInfo>[];
 
   List<SavedRoom> _myRooms = <SavedRoom>[];
   List<Map<String, dynamic>> _activeRooms = <Map<String, dynamic>>[];
@@ -33,48 +36,72 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   @override
   void initState() {
     super.initState();
-    _bootstrap();
+    final authProvider = context.read<AuthProvider>();
+    _friendsApi = FriendsApiService(authProvider.authService);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_bootstrap());
+    });
   }
 
   Future<void> _bootstrap() async {
-    final provider = context.read<MultiplayerGameProvider>();
-    await provider.init();
+    // Vérifier l'authentification
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isInitialized) {
+      await authProvider.init();
+    }
+
+    if (!mounted) return;
+
+    if (!authProvider.isLoggedIn) {
+      // Rediriger vers login
+      context.go('/login');
+      return;
+    }
+
+    // Passer le token au service multiplayer
+    final multiProvider = context.read<MultiplayerGameProvider>();
+    multiProvider.setAuthToken(authProvider.token);
+    await multiProvider.init();
+
     await Future.wait<void>(<Future<void>>[
       _loadSocialData(),
       _loadMyRooms(),
     ]);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (_profile == null) {
-      await _openProfileDialog(forceCompletion: true);
-    }
   }
 
   Future<void> _loadSocialData() async {
-    final profile = await _socialRepository.getProfile();
-    final friends = await _socialRepository.getFriends();
-    final incoming = await _socialRepository.getFriendRequests(
-      direction: FriendRequestDirection.incoming,
-    );
-    final outgoing = await _socialRepository.getFriendRequests(
-      direction: FriendRequestDirection.outgoing,
-    );
-    final blocked = await _socialRepository.getBlockedUsers();
+    final authProvider = context.read<AuthProvider>();
 
-    if (!mounted) {
-      return;
+    if (authProvider.isLoggedIn) {
+      // Charger depuis le serveur
+      final friends = await _friendsApi.getFriends();
+      final requests = await _friendsApi.getRequests();
+      final blocked = await _friendsApi.getBlockedUsers();
+
+      if (!mounted) return;
+
+      setState(() {
+        _profile = SocialProfile(
+          displayName: authProvider.user!.displayName,
+          username: authProvider.user!.username,
+          roomInviteNotificationsEnabled: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        _friends = friends;
+        _incomingRequests = requests.incoming;
+        _outgoingRequests = requests.outgoing;
+        _blockedUsers = blocked;
+      });
+    } else {
+      // Fallback local (ne devrait plus arriver avec le redirect)
+      final profile = await _socialRepository.getProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+      });
     }
-
-    setState(() {
-      _profile = profile;
-      _friends = friends;
-      _incomingRequests = incoming;
-      _outgoingRequests = outgoing;
-      _blockedUsers = blocked;
-    });
   }
 
   Future<void> _loadMyRooms() async {
@@ -594,7 +621,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     return Scaffold(
       body: Stack(
         children: <Widget>[
-          const _MultiplayerBackground(),
+          Container(
+            decoration: AppDecorations.pageBackground,
+            child: const SizedBox.expand(),
+          ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -619,7 +649,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                                         title: 'Creer un salon',
                                         subtitle:
                                             'Lance un salon prive ou public et invite ton groupe.',
-                                        accent: const Color(0xFF22D3EE),
+                                        accent: AppColors.primary,
                                         onTap: () async {
                                           if (!await _ensureProfileReady()) {
                                             return;
@@ -639,7 +669,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                                         title: 'Rejoindre un salon',
                                         subtitle:
                                             'Code prive, matchmaking public, ou reprise d un salon.',
-                                        accent: const Color(0xFF34D399),
+                                        accent: AppColors.primaryDark,
                                         onTap: () async {
                                           if (!await _ensureProfileReady()) {
                                             return;
@@ -679,7 +709,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                                 title: 'Creer un salon',
                                 subtitle:
                                     'Lance un salon prive ou public et invite ton groupe.',
-                                accent: const Color(0xFF22D3EE),
+                                accent: AppColors.primary,
                                 onTap: () async {
                                   if (!await _ensureProfileReady()) {
                                     return;
@@ -699,7 +729,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
                                 title: 'Rejoindre un salon',
                                 subtitle:
                                     'Code prive, matchmaking public, ou reprise d un salon.',
-                                accent: const Color(0xFF34D399),
+                                accent: AppColors.primaryDark,
                                 onTap: () async {
                                   if (!await _ensureProfileReady()) {
                                     return;
@@ -812,7 +842,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   }) {
     return _glassCard(
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         onTap: () async {
           await onTap();
         },
@@ -886,7 +916,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     final profile = _profile;
     return _glassCard(
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         onTap: _openProfileSpace,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1190,93 +1220,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   Widget _glassCard({required Widget child}) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            Colors.white.withValues(alpha: 0.15),
-            Colors.white.withValues(alpha: 0.07),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.22),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: child,
-    );
-  }
-}
-
-class _MultiplayerBackground extends StatelessWidget {
-  const _MultiplayerBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(-0.75, -0.95),
-          radius: 1.5,
-          colors: <Color>[
-            Color(0xFF334155),
-            Color(0xFF1F1B4D),
-            Color(0xFF09090B),
-          ],
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Positioned(
-            top: -70,
-            left: -25,
-            child: _glowBlob(
-              size: 240,
-              colors: const <Color>[Color(0xFF22D3EE), Color(0x0022D3EE)],
-            ),
-          ),
-          Positioned(
-            top: 220,
-            right: -80,
-            child: _glowBlob(
-              size: 260,
-              colors: const <Color>[Color(0xFF10B981), Color(0x0010B981)],
-            ),
-          ),
-          Positioned(
-            bottom: -120,
-            left: 70,
-            child: _glowBlob(
-              size: 340,
-              colors: const <Color>[Color(0xFF38BDF8), Color(0x0038BDF8)],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _glowBlob({
-    required double size,
-    required List<Color> colors,
-  }) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: colors),
-        ),
-      ),
     );
   }
 }

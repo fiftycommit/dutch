@@ -398,4 +398,12 @@ class SocialHubRepository {
     reserved.removeWhere((value) => value.isEmpty);
     return reserved;
   }
+
+  Future<void> clearLocalData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_profileKey);
+    await prefs.remove(_friendsKey);
+    await prefs.remove(_friendRequestsKey);
+    await prefs.remove(_blockedUsersKey);
+  }
 }

@@ -19,9 +19,9 @@ class ClientIdService {
       return existing;
     }
 
-    final random = Random();
-    final generated =
-        '${DateTime.now().millisecondsSinceEpoch}-${random.nextInt(1 << 30)}';
+    final random = Random.secure();
+    final bytes = List.generate(16, (_) => random.nextInt(256));
+    final generated = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
     // Best effort persistence (private mode can reject writes).
     try {

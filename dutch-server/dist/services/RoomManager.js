@@ -127,12 +127,12 @@ class RoomManager {
         this.actionTimers.clear();
         this.rooms.clear();
     }
-    createRoom(hostSocketId, settings, playerName, clientId) {
+    createRoom(hostSocketId, settings, playerName, clientId, userId) {
         const normalizedSettings = this.normalizeSettings(settings);
         const roomCode = this.generateRoomCode();
         const expiresAt = this.now() + this.roomTtlMs;
         const room = (0, Room_1.createRoom)(roomCode, hostSocketId, normalizedSettings, expiresAt);
-        const hostPlayer = (0, Player_1.createPlayer)(hostSocketId, playerName || 'Hôte', true, 0, undefined, undefined, clientId);
+        const hostPlayer = (0, Player_1.createPlayer)(hostSocketId, playerName || 'Hôte', true, 0, undefined, undefined, clientId, userId);
         hostPlayer.connected = true;
         hostPlayer.focused = true;
         hostPlayer.lastSeenAt = this.now();
@@ -141,7 +141,7 @@ class RoomManager {
         this.rooms.set(roomCode, room);
         return room;
     }
-    joinRoom(roomCode, socketId, playerName, clientId) {
+    joinRoom(roomCode, socketId, playerName, clientId, userId) {
         const room = this.rooms.get(roomCode);
         if (!room) {
             return { error: 'Room introuvable' };
@@ -186,7 +186,7 @@ class RoomManager {
         if (!isSpectator && this.activePlayerCount(room) >= maxPlayers) {
             return { error: 'Room pleine' };
         }
-        const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, clientId);
+        const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, clientId, userId);
         player.connected = true;
         player.focused = true;
         player.lastSeenAt = this.now();

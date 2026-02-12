@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/ui/stats_service.dart';
 import '../../utils/ui_constants.dart';
 import 'main_menu_widgets.dart';
@@ -66,8 +68,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     context.go('/multiplayer');
   }
 
+  void _goToAuthEntry(bool isLoggedIn) {
+    context.go(isLoggedIn ? '/multiplayer' : '/login');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final isLoggedIn = authProvider.isLoggedIn;
     final screenSize = MediaQuery.of(context).size;
     final isLandscape = screenSize.width > screenSize.height;
     final isSmallLandscape = isLandscape && screenSize.height < 500;
@@ -76,14 +84,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       backgroundColor: AppColors.gradientBottom,
       body: SafeArea(
         child: isSmallLandscape
-            ? _buildLandscapeLayout(context)
-            : _buildPortraitLayout(context),
+            ? _buildLandscapeLayout(context, isLoggedIn)
+            : _buildPortraitLayout(context, isLoggedIn),
       ),
     );
   }
 
   /// Layout paysage optimisé pour iPhone
-  Widget _buildLandscapeLayout(BuildContext context) {
+  Widget _buildLandscapeLayout(BuildContext context, bool isLoggedIn) {
     // Moins de padding, éléments plus gros, centrage vertical
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -184,6 +192,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   isPrimary: false,
                   onPressed: _goToMultiplayer,
                 ),
+                const SizedBox(height: 18),
+                CompactMenuButton(
+                  label: isLoggedIn ? 'MON COMPTE' : 'CONNEXION',
+                  icon: isLoggedIn ? Icons.person : Icons.login,
+                  isPrimary: false,
+                  onPressed: () => _goToAuthEntry(isLoggedIn),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -219,7 +234,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   /// Layout portrait classique
-  Widget _buildPortraitLayout(BuildContext context) {
+  Widget _buildPortraitLayout(BuildContext context, bool isLoggedIn) {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Adapter les espacements selon la hauteur disponible

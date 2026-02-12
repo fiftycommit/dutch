@@ -87,6 +87,11 @@ class MultiplayerService {
     }
   }
 
+  /// Setter pour le token d'authentification (appelé par le provider)
+  void setAuthToken(String? token) {
+    _connectionHandler.setAuthToken(token);
+  }
+
   Future<void> connect() async {
     _connectionHandler.onConnectionStateChanged = onSocketConnectionStateChanged;
     _connectionHandler.onError = onError;
