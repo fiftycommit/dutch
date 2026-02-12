@@ -81,6 +81,16 @@ jobs:
           strip_components: 0
           overwrite: true
 
+      # Clean old source before upload (scp doesn't delete removed files)
+      - name: Clean server source
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: dutch-game.me
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf /root/apps/dutch-server/src /root/apps/dutch-server/dist
+
       # Upload server code
       - name: Deploy server
         uses: appleboy/scp-action@v0.1.7
