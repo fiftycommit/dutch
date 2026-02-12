@@ -63,23 +63,11 @@ jobs:
           overwrite: true
           rm: true
 
-  # ── 3. Deploy Backend + Trainer ───────────────────────────────────────
+  # ── 3. Deploy Backend ─────────────────────────────────────────────────
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Upload trainer code
-      - name: Deploy trainer
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: dutch-game.me
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "tool/bot_training_runner.dart,lib/**,pubspec.yaml,pubspec.lock,analysis_options.yaml,assets/**"
-          target: "/var/www/dutch-trainer"
-          strip_components: 0
-          overwrite: true
 
       # Clean old source before upload (scp doesn't delete removed files)
       - name: Clean server source
@@ -102,7 +90,6 @@ jobs:
           target: "/root/apps/dutch-server"
           strip_components: 1
 
-
       # Install, build, restart
       - name: Install and restart services
         uses: appleboy/ssh-action@v1.0.3
@@ -123,70 +110,15 @@ jobs:
             ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"
 
-            # ── Trainer ──
-            if [ ! -d /home/dutch/flutter ]; then
-              echo "📥 Installing Flutter..."
-              git clone https://github.com/flutter/flutter.git -b stable /home/dutch/flutter
-              chown -R dutch:dutch /home/dutch/flutter
-              /home/dutch/flutter/bin/flutter --version
-              /home/dutch/flutter/bin/flutter config --no-analytics
-            fi
-
-            mkdir -p /var/www/dutch-trainer
-            chown -R dutch:dutch /var/www/dutch-trainer || true
-            cd /var/www/dutch-trainer
-            /home/dutch/flutter/bin/flutter pub get || echo "⚠️ flutter pub get failed, continuing"
-
-            # Swap for low-memory VMs
-            if ! swapon --show | grep -q '/swapfile'; then
-              [ ! -f /swapfile ] && fallocate -l 2G /swapfile
-              chmod 600 /swapfile
-              mkswap -f /swapfile
-              swapon /swapfile
-              grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-            fi
-
-            cat > /etc/systemd/system/dutch-bot-trainer.service << 'SERVICE'
-            [Unit]
-            Description=Dutch Bot Trainer
-            After=network.target
-            StartLimitIntervalSec=600
-            StartLimitBurst=3
-
-            [Service]
-            Type=simple
-            User=dutch
-            WorkingDirectory=/var/www/dutch-trainer
-            Environment=HOME=/home/dutch
-            Environment=BOT_TRAIN_SERVER=https://dutch-game.me
-            Environment=BOT_TRAIN_START_HOUR=20
-            Environment=BOT_TRAIN_END_HOUR=12
-            Environment=BOT_TRAIN_BATCH=4
-            Environment=BOT_TRAIN_SLEEP_MS=1500
-            Environment=BOT_TRAIN_MAX_TURNS=500
-            Environment=BOT_TRAIN_BALANCED_ONLY=true
-            Environment=PATH=/home/dutch/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-            ExecStartPre=/usr/bin/git config --global --add safe.directory /home/dutch/flutter
-            ExecStart=/home/dutch/flutter/bin/cache/dart-sdk/bin/dart run tool/bot_training_runner.dart
-            Restart=always
-            RestartSec=120
-            Nice=10
-            IOSchedulingClass=idle
-            CPUQuota=45%
-            OOMScoreAdjust=500
-
-            [Install]
-            WantedBy=multi-user.target
-            SERVICE
-
+            # ── Kill any trainer leftovers ──
+            systemctl stop dutch-bot-trainer 2>/dev/null || true
+            systemctl disable dutch-bot-trainer 2>/dev/null || true
+            rm -f /etc/systemd/system/dutch-bot-trainer.service
             systemctl daemon-reload
-            if systemctl restart dutch-bot-trainer; then
-              systemctl enable dutch-bot-trainer
-            else
-              echo "⚠️ Trainer failed to start, keeping disabled"
-              systemctl stop dutch-bot-trainer || true
-              systemctl disable dutch-bot-trainer || true
-            fi
+            su - dutch -c 'pm2 kill' 2>/dev/null || true
+            # Kill any rogue process on port 3000
+            fuser -k 3000/tcp 2>/dev/null || true
+            sleep 1
 
             # ── Backend ──
             echo "🔨 Building backend..."
