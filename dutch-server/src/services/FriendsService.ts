@@ -1,8 +1,8 @@
-import { database } from './Database';
-import { User } from '../models/User';
+import { firestoreService, FirestoreUser } from './FirestoreService';
+import { PublicUser } from '../models/User';
 
 export interface FriendInfo {
-  userId: number;
+  userId: string;
   username: string;
   displayName: string;
   addedAt: string;
@@ -10,263 +10,203 @@ export interface FriendInfo {
 }
 
 export interface RequestInfo {
-  requestId: number;
-  userId: number;
+  requestId: string;
+  userId: string;
   username: string;
   displayName: string;
   requestedAt: string;
 }
 
 export interface BlockedInfo {
-  userId: number;
+  userId: string;
   username: string;
   displayName: string;
 }
 
 // Référence vers la map d'utilisateurs en ligne (injectée depuis socketAuthMiddleware)
-let onlineUsersRef: Map<number, Set<string>> = new Map();
+let onlineUsersRef: Map<string, Set<string>> = new Map();
 
 export class FriendsService {
-  static setOnlineUsersRef(ref: Map<number, Set<string>>) {
+  static setOnlineUsersRef(ref: Map<string, Set<string>>) {
     onlineUsersRef = ref;
   }
 
-  static isUserOnline(userId: number): boolean {
+  static isUserOnline(userId: string): boolean {
     const sockets = onlineUsersRef.get(userId);
     return !!sockets && sockets.size > 0;
   }
 
-  static getFriends(userId: number): FriendInfo[] {
-    const rows = database.instance.prepare(`
-      SELECT u.id, u.username, u.display_name, f.created_at
-      FROM friends f
-      JOIN users u ON u.id = f.friend_id
-      WHERE f.user_id = ?
-      ORDER BY u.display_name COLLATE NOCASE
-    `).all(userId) as { id: number; username: string; display_name: string; created_at: string }[];
+  static async getFriends(userId: string): Promise<FriendInfo[]> {
+    const friendUids = await firestoreService.getFriends(userId);
+    const friends: FriendInfo[] = [];
 
-    return rows.map(r => ({
-      userId: r.id,
-      username: r.username,
-      displayName: r.display_name,
-      addedAt: r.created_at,
-      isOnline: this.isUserOnline(r.id),
-    }));
+    for (const uid of friendUids) {
+      const user = await firestoreService.getUser(uid);
+      if (user) {
+        friends.push({
+          userId: uid,
+          username: user.username,
+          displayName: user.displayName,
+          addedAt: user.createdAt?.toDate?.()?.toISOString() || '',
+          isOnline: this.isUserOnline(uid),
+        });
+      }
+    }
+
+    return friends;
   }
 
-  static getIncomingRequests(userId: number): RequestInfo[] {
-    const rows = database.instance.prepare(`
-      SELECT fr.id, u.id as user_id, u.username, u.display_name, fr.created_at
-      FROM friend_requests fr
-      JOIN users u ON u.id = fr.from_user_id
-      WHERE fr.to_user_id = ? AND fr.status = 'pending'
-      ORDER BY fr.created_at DESC
-    `).all(userId) as { id: number; user_id: number; username: string; display_name: string; created_at: string }[];
+  static async getIncomingRequests(userId: string): Promise<RequestInfo[]> {
+    const requests = await firestoreService.getPendingRequestsTo(userId);
+    const results: RequestInfo[] = [];
 
-    return rows.map(r => ({
-      requestId: r.id,
-      userId: r.user_id,
-      username: r.username,
-      displayName: r.display_name,
-      requestedAt: r.created_at,
-    }));
+    for (const req of requests) {
+      const user = await firestoreService.getUser(req.fromUid);
+      if (user) {
+        results.push({
+          requestId: req.id,
+          userId: req.fromUid,
+          username: user.username,
+          displayName: user.displayName,
+          requestedAt: req.createdAt?.toDate?.()?.toISOString() || '',
+        });
+      }
+    }
+
+    return results;
   }
 
-  static getOutgoingRequests(userId: number): RequestInfo[] {
-    const rows = database.instance.prepare(`
-      SELECT fr.id, u.id as user_id, u.username, u.display_name, fr.created_at
-      FROM friend_requests fr
-      JOIN users u ON u.id = fr.to_user_id
-      WHERE fr.from_user_id = ? AND fr.status = 'pending'
-      ORDER BY fr.created_at DESC
-    `).all(userId) as { id: number; user_id: number; username: string; display_name: string; created_at: string }[];
+  static async getOutgoingRequests(userId: string): Promise<RequestInfo[]> {
+    const requests = await firestoreService.getPendingRequestsFrom(userId);
+    const results: RequestInfo[] = [];
 
-    return rows.map(r => ({
-      requestId: r.id,
-      userId: r.user_id,
-      username: r.username,
-      displayName: r.display_name,
-      requestedAt: r.created_at,
-    }));
+    for (const req of requests) {
+      const user = await firestoreService.getUser(req.toUid);
+      if (user) {
+        results.push({
+          requestId: req.id,
+          userId: req.toUid,
+          username: user.username,
+          displayName: user.displayName,
+          requestedAt: req.createdAt?.toDate?.()?.toISOString() || '',
+        });
+      }
+    }
+
+    return results;
   }
 
-  static sendRequest(fromUserId: number, toUsername: string): { success: boolean; error?: string; requestId?: number; toUserId?: number } {
-    const target = database.instance.prepare(
-      'SELECT id FROM users WHERE username = ?'
-    ).get(toUsername.toLowerCase()) as { id: number } | undefined;
+  static async sendRequest(fromUserId: string, toUsername: string): Promise<{ success: boolean; error?: string; requestId?: string; toUserId?: string }> {
+    const target = await firestoreService.getUserByUsername(toUsername);
 
     if (!target) {
       return { success: false, error: 'Utilisateur introuvable' };
     }
 
-    if (target.id === fromUserId) {
+    if (target.uid === fromUserId) {
       return { success: false, error: 'Tu ne peux pas t\'ajouter toi-même' };
     }
 
     // Vérifier si déjà amis
-    const alreadyFriends = database.instance.prepare(
-      'SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?'
-    ).get(fromUserId, target.id);
-
-    if (alreadyFriends) {
+    const friends = await firestoreService.getFriends(fromUserId);
+    if (friends.includes(target.uid)) {
       return { success: false, error: 'Déjà amis' };
     }
 
-    // Vérifier si bloqué
-    const isBlocked = database.instance.prepare(
-      'SELECT 1 FROM blocked_users WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)'
-    ).get(fromUserId, target.id, target.id, fromUserId);
-
-    if (isBlocked) {
+    // Vérifier blocage
+    const blocked = await firestoreService.isBlocked(fromUserId, target.uid);
+    const blockedReverse = await firestoreService.isBlocked(target.uid, fromUserId);
+    if (blocked || blockedReverse) {
       return { success: false, error: 'Action impossible' };
     }
 
-    // Vérifier si une demande inverse existe (auto-accept)
-    const reverseRequest = database.instance.prepare(
-      'SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = \'pending\''
-    ).get(target.id, fromUserId) as { id: number } | undefined;
-
+    // Vérifier si demande inverse (auto-accept)
+    const pendingToMe = await firestoreService.getPendingRequestsTo(fromUserId);
+    const reverseRequest = pendingToMe.find(r => r.fromUid === target.uid);
     if (reverseRequest) {
-      // Auto-accept : la personne nous a déjà envoyé une demande
-      return this.acceptRequest(fromUserId, reverseRequest.id);
+      const result = await firestoreService.acceptFriendRequest(reverseRequest.id);
+      if (result) {
+        return { success: true, toUserId: target.uid };
+      }
     }
 
     // Vérifier si demande déjà envoyée
-    const existing = database.instance.prepare(
-      'SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = \'pending\''
-    ).get(fromUserId, target.id);
-
+    const pendingFromMe = await firestoreService.getPendingRequestsFrom(fromUserId);
+    const existing = pendingFromMe.find(r => r.toUid === target.uid);
     if (existing) {
       return { success: false, error: 'Demande déjà envoyée' };
     }
 
-    const result = database.instance.prepare(
-      'INSERT INTO friend_requests (from_user_id, to_user_id) VALUES (?, ?)'
-    ).run(fromUserId, target.id);
-
-    return { success: true, requestId: result.lastInsertRowid as number, toUserId: target.id };
+    const requestId = await firestoreService.sendFriendRequest(fromUserId, target.uid);
+    return { success: true, requestId, toUserId: target.uid };
   }
 
-  static acceptRequest(userId: number, requestId: number): { success: boolean; error?: string; toUserId?: number } {
-    const request = database.instance.prepare(
-      'SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? AND status = \'pending\''
-    ).get(requestId, userId) as { id: number; from_user_id: number; to_user_id: number } | undefined;
-
-    if (!request) {
+  static async acceptRequest(userId: string, requestId: string): Promise<{ success: boolean; error?: string; toUserId?: string }> {
+    const result = await firestoreService.acceptFriendRequest(requestId);
+    if (!result) {
       return { success: false, error: 'Demande introuvable' };
     }
-
-    const addFriends = database.instance.transaction(() => {
-      // Ajouter la relation bidirectionnelle
-      database.instance.prepare(
-        'INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)'
-      ).run(userId, request.from_user_id);
-      database.instance.prepare(
-        'INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)'
-      ).run(request.from_user_id, userId);
-
-      // Marquer la demande comme acceptée
-      database.instance.prepare(
-        'UPDATE friend_requests SET status = \'accepted\' WHERE id = ?'
-      ).run(requestId);
-    });
-
-    addFriends();
-    return { success: true, toUserId: request.from_user_id };
+    return { success: true, toUserId: result.fromUid };
   }
 
-  static rejectRequest(userId: number, requestId: number): { success: boolean; error?: string } {
-    const result = database.instance.prepare(
-      'UPDATE friend_requests SET status = \'rejected\' WHERE id = ? AND to_user_id = ? AND status = \'pending\''
-    ).run(requestId, userId);
-
-    if (result.changes === 0) {
+  static async rejectRequest(userId: string, requestId: string): Promise<{ success: boolean; error?: string }> {
+    const ok = await firestoreService.rejectFriendRequest(requestId);
+    if (!ok) {
       return { success: false, error: 'Demande introuvable' };
     }
     return { success: true };
   }
 
-  static cancelRequest(userId: number, requestId: number): { success: boolean; error?: string } {
-    const result = database.instance.prepare(
-      'DELETE FROM friend_requests WHERE id = ? AND from_user_id = ? AND status = \'pending\''
-    ).run(requestId, userId);
-
-    if (result.changes === 0) {
+  static async cancelRequest(userId: string, requestId: string): Promise<{ success: boolean; error?: string }> {
+    const ok = await firestoreService.cancelFriendRequest(requestId, userId);
+    if (!ok) {
       return { success: false, error: 'Demande introuvable' };
     }
     return { success: true };
   }
 
-  static removeFriend(userId: number, friendId: number): { success: boolean; error?: string } {
-    const removeBoth = database.instance.transaction(() => {
-      database.instance.prepare(
-        'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)'
-      ).run(userId, friendId, friendId, userId);
-    });
-
-    removeBoth();
+  static async removeFriend(userId: string, friendId: string): Promise<{ success: boolean; error?: string }> {
+    await firestoreService.removeFriend(userId, friendId);
     return { success: true };
   }
 
-  static blockUser(userId: number, targetId: number): { success: boolean; error?: string } {
+  static async blockUser(userId: string, targetId: string): Promise<{ success: boolean; error?: string }> {
     if (userId === targetId) {
       return { success: false, error: 'Action impossible' };
     }
-
-    const blockAndCleanup = database.instance.transaction(() => {
-      // Ajouter au blocage
-      database.instance.prepare(
-        'INSERT OR IGNORE INTO blocked_users (user_id, blocked_id) VALUES (?, ?)'
-      ).run(userId, targetId);
-
-      // Supprimer l'amitié
-      database.instance.prepare(
-        'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)'
-      ).run(userId, targetId, targetId, userId);
-
-      // Supprimer les demandes en attente
-      database.instance.prepare(
-        'DELETE FROM friend_requests WHERE ((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND status = \'pending\''
-      ).run(userId, targetId, targetId, userId);
-    });
-
-    blockAndCleanup();
+    await firestoreService.blockUser(userId, targetId);
     return { success: true };
   }
 
-  static unblockUser(userId: number, targetId: number): { success: boolean; error?: string } {
-    database.instance.prepare(
-      'DELETE FROM blocked_users WHERE user_id = ? AND blocked_id = ?'
-    ).run(userId, targetId);
+  static async unblockUser(userId: string, targetId: string): Promise<{ success: boolean; error?: string }> {
+    await firestoreService.unblockUser(userId, targetId);
     return { success: true };
   }
 
-  static getBlockedUsers(userId: number): BlockedInfo[] {
-    const rows = database.instance.prepare(`
-      SELECT u.id, u.username, u.display_name
-      FROM blocked_users b
-      JOIN users u ON u.id = b.blocked_id
-      WHERE b.user_id = ?
-      ORDER BY u.username
-    `).all(userId) as { id: number; username: string; display_name: string }[];
+  static async getBlockedUsers(userId: string): Promise<BlockedInfo[]> {
+    const blockedUids = await firestoreService.getBlockedUsers(userId);
+    const results: BlockedInfo[] = [];
 
-    return rows.map(r => ({
-      userId: r.id,
-      username: r.username,
-      displayName: r.display_name,
-    }));
+    for (const uid of blockedUids) {
+      const user = await firestoreService.getUser(uid);
+      if (user) {
+        results.push({
+          userId: uid,
+          username: user.username,
+          displayName: user.displayName,
+        });
+      }
+    }
+
+    return results;
   }
 
-  // Vérifier si un user est bloqué par un autre
-  static isBlocked(userId: number, targetId: number): boolean {
-    const row = database.instance.prepare(
-      'SELECT 1 FROM blocked_users WHERE user_id = ? AND blocked_id = ?'
-    ).get(userId, targetId);
-    return !!row;
+  static isBlocked(userId: string, targetId: string): Promise<boolean> {
+    return firestoreService.isBlocked(userId, targetId);
   }
 
   // Obtenir les socket IDs d'un user pour les notifications temps réel
-  static getUserSocketIds(userId: number): string[] {
+  static getUserSocketIds(userId: string): string[] {
     const sockets = onlineUsersRef.get(userId);
     return sockets ? Array.from(sockets) : [];
   }

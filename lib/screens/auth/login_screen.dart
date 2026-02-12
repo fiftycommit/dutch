@@ -14,14 +14,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final result = await authProvider.login(
-      _usernameController.text.trim(),
+      _emailController.text.trim(),
       _passwordController.text,
     );
 
@@ -93,16 +93,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Username
+                    // Email
                     TextFormField(
-                      controller: _usernameController,
-                      autofillHints: const [AutofillHints.username],
+                      controller: _emailController,
+                      autofillHints: const [AutofillHints.email],
+                      keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration(
-                          'Nom d\'utilisateur', Icons.alternate_email),
+                      decoration:
+                          _inputDecoration('Email', Icons.email_outlined),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Requis';
+                        if (!v.contains('@')) return 'Email invalide';
                         return null;
                       },
                     ),
@@ -189,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextButton(
                       onPressed: () => context.go('/register'),
                       child: const Text(
-                        'Pas encore de compte ? Creer un compte',
+                        'Pas encore de compte ? Créer un compte',
                         style: TextStyle(color: Colors.amber, fontSize: 14),
                       ),
                     ),

@@ -22,6 +22,7 @@ const sbmmRoutes_1 = __importDefault(require("./routes/sbmmRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const friendsRoutes_1 = __importDefault(require("./routes/friendsRoutes"));
 const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
+const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const startedAt = new Date().toISOString();
@@ -142,7 +143,7 @@ function startServer() {
     });
     // Injecter la référence des users en ligne pour le service d'amis
     FriendsService_1.FriendsService.setOnlineUsersRef(socketAuthMiddleware_1.onlineUsers);
-    // Socket Auth Middleware (JWT validation)
+    // Socket Auth Middleware (Firebase token verification)
     io.use(socketAuthMiddleware_1.socketAuthMiddleware);
     // Socket Connection Rate Limiting
     io.use(async (socket, next) => {
@@ -228,6 +229,12 @@ function startServer() {
     app.use('/api/friends', friendsRoutes_1.default);
     // Routes Rooms (salons sauvegardés)
     app.use('/api/rooms', roomRoutes_1.default);
+    // Routes Admin (gestion des utilisateurs)
+    app.use('/api/admin', adminRoutes_1.default);
+    // Dashboard admin
+    app.get('/admin', (req, res) => {
+        res.sendFile(path_1.default.join(__dirname, '../public/admin.html'));
+    });
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
         res.sendFile(path_1.default.join(__dirname, '../public/bot-stats.html'));

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { FriendsService } from '../services/FriendsService';
+import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -8,22 +9,22 @@ const router = Router();
 router.use(requireAuth);
 
 // GET /api/friends
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const friends = FriendsService.getFriends(authReq.user!.userId);
+  const friends = await FriendsService.getFriends(authReq.user!.uid);
   res.json({ success: true, friends });
 });
 
 // GET /api/friends/requests
-router.get('/requests', (req, res) => {
+router.get('/requests', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const incoming = FriendsService.getIncomingRequests(authReq.user!.userId);
-  const outgoing = FriendsService.getOutgoingRequests(authReq.user!.userId);
+  const incoming = await FriendsService.getIncomingRequests(authReq.user!.uid);
+  const outgoing = await FriendsService.getOutgoingRequests(authReq.user!.uid);
   res.json({ success: true, incoming, outgoing });
 });
 
 // POST /api/friends/request
-router.post('/request', (req, res) => {
+router.post('/request', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { username } = req.body;
 
@@ -32,7 +33,7 @@ router.post('/request', (req, res) => {
     return;
   }
 
-  const result = FriendsService.sendRequest(authReq.user!.userId, username);
+  const result = await FriendsService.sendRequest(authReq.user!.uid, username);
 
   if (!result.success) {
     res.status(400).json(result);
@@ -43,7 +44,7 @@ router.post('/request', (req, res) => {
 });
 
 // POST /api/friends/accept
-router.post('/accept', (req, res) => {
+router.post('/accept', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -52,7 +53,7 @@ router.post('/accept', (req, res) => {
     return;
   }
 
-  const result = FriendsService.acceptRequest(authReq.user!.userId, requestId);
+  const result = await FriendsService.acceptRequest(authReq.user!.uid, requestId);
 
   if (!result.success) {
     res.status(400).json(result);
@@ -63,7 +64,7 @@ router.post('/accept', (req, res) => {
 });
 
 // POST /api/friends/reject
-router.post('/reject', (req, res) => {
+router.post('/reject', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -72,7 +73,7 @@ router.post('/reject', (req, res) => {
     return;
   }
 
-  const result = FriendsService.rejectRequest(authReq.user!.userId, requestId);
+  const result = await FriendsService.rejectRequest(authReq.user!.uid, requestId);
 
   if (!result.success) {
     res.status(400).json(result);
@@ -83,7 +84,7 @@ router.post('/reject', (req, res) => {
 });
 
 // POST /api/friends/cancel
-router.post('/cancel', (req, res) => {
+router.post('/cancel', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -92,7 +93,7 @@ router.post('/cancel', (req, res) => {
     return;
   }
 
-  const result = FriendsService.cancelRequest(authReq.user!.userId, requestId);
+  const result = await FriendsService.cancelRequest(authReq.user!.uid, requestId);
 
   if (!result.success) {
     res.status(400).json(result);
@@ -103,21 +104,21 @@ router.post('/cancel', (req, res) => {
 });
 
 // DELETE /api/friends/:userId
-router.delete('/:userId', (req, res) => {
+router.delete('/:userId', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const friendId = parseInt(req.params.userId, 10);
+  const friendId = req.params.userId; // String directement, plus de parseInt
 
-  if (isNaN(friendId)) {
+  if (!friendId) {
     res.status(400).json({ success: false, error: 'userId invalide' });
     return;
   }
 
-  const result = FriendsService.removeFriend(authReq.user!.userId, friendId);
+  const result = await FriendsService.removeFriend(authReq.user!.uid, friendId);
   res.json(result);
 });
 
 // POST /api/friends/block
-router.post('/block', (req, res) => {
+router.post('/block', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { userId } = req.body;
 
@@ -126,7 +127,7 @@ router.post('/block', (req, res) => {
     return;
   }
 
-  const result = FriendsService.blockUser(authReq.user!.userId, userId);
+  const result = await FriendsService.blockUser(authReq.user!.uid, userId);
 
   if (!result.success) {
     res.status(400).json(result);
@@ -137,23 +138,23 @@ router.post('/block', (req, res) => {
 });
 
 // DELETE /api/friends/block/:userId
-router.delete('/block/:userId', (req, res) => {
+router.delete('/block/:userId', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const targetId = parseInt(req.params.userId, 10);
+  const targetId = req.params.userId; // String directement, plus de parseInt
 
-  if (isNaN(targetId)) {
+  if (!targetId) {
     res.status(400).json({ success: false, error: 'userId invalide' });
     return;
   }
 
-  const result = FriendsService.unblockUser(authReq.user!.userId, targetId);
+  const result = await FriendsService.unblockUser(authReq.user!.uid, targetId);
   res.json(result);
 });
 
 // GET /api/friends/blocked
-router.get('/blocked', (req, res) => {
+router.get('/blocked', async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const blocked = FriendsService.getBlockedUsers(authReq.user!.userId);
+  const blocked = await FriendsService.getBlockedUsers(authReq.user!.uid);
   res.json({ success: true, blocked });
 });
 

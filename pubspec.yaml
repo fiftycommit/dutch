@@ -34,8 +34,9 @@ dependencies:
   http: ^1.6.0
   connectivity_plus: ^6.1.4
 
-  # Push notifications (Firebase)
+  # Firebase
   firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
   firebase_messaging: ^16.1.1
 
   # Routing

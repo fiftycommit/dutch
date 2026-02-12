@@ -5,7 +5,7 @@ import '../multiplayer/socket_connection_handler.dart';
 import '../auth/auth_service.dart';
 
 class FriendInfo {
-  final int userId;
+  final String userId;
   final String username;
   final String displayName;
   final String addedAt;
@@ -21,18 +21,18 @@ class FriendInfo {
 
   factory FriendInfo.fromJson(Map<String, dynamic> json) {
     return FriendInfo(
-      userId: json['userId'] as int,
+      userId: json['userId']?.toString() ?? '',
       username: json['username'] as String,
       displayName: json['displayName'] as String,
-      addedAt: json['addedAt'] as String,
+      addedAt: json['addedAt']?.toString() ?? '',
       isOnline: json['isOnline'] as bool? ?? false,
     );
   }
 }
 
 class FriendRequestInfo {
-  final int requestId;
-  final int userId;
+  final String requestId;
+  final String userId;
   final String username;
   final String displayName;
   final String requestedAt;
@@ -47,17 +47,17 @@ class FriendRequestInfo {
 
   factory FriendRequestInfo.fromJson(Map<String, dynamic> json) {
     return FriendRequestInfo(
-      requestId: json['requestId'] as int,
-      userId: json['userId'] as int,
+      requestId: json['requestId']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
       username: json['username'] as String,
       displayName: json['displayName'] as String,
-      requestedAt: json['requestedAt'] as String,
+      requestedAt: json['requestedAt']?.toString() ?? '',
     );
   }
 }
 
 class BlockedUserInfo {
-  final int userId;
+  final String userId;
   final String username;
   final String displayName;
 
@@ -69,7 +69,7 @@ class BlockedUserInfo {
 
   factory BlockedUserInfo.fromJson(Map<String, dynamic> json) {
     return BlockedUserInfo(
-      userId: json['userId'] as int,
+      userId: json['userId']?.toString() ?? '',
       username: json['username'] as String,
       displayName: json['displayName'] as String,
     );
@@ -92,10 +92,12 @@ class FriendsApiService {
 
   Future<List<FriendInfo>> getFriends() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/friends'),
-        headers: await _headers(),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/api/friends'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -110,12 +112,15 @@ class FriendsApiService {
     }
   }
 
-  Future<({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})> getRequests() async {
+  Future<({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
+      getRequests() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/friends/requests'),
-        headers: await _headers(),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/api/friends/requests'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -136,26 +141,33 @@ class FriendsApiService {
 
   Future<({bool success, String? error})> sendRequest(String username) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/request'),
-        headers: await _headers(),
-        body: jsonEncode({'username': username}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/request'),
+            headers: await _headers(),
+            body: jsonEncode({'username': username}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
-      return (success: data['success'] == true, error: data['error'] as String?);
+      return (
+        success: data['success'] == true,
+        error: data['error'] as String?
+      );
     } catch (e) {
       return (success: false, error: 'Erreur reseau');
     }
   }
 
-  Future<bool> acceptRequest(int requestId) async {
+  Future<bool> acceptRequest(String requestId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/accept'),
-        headers: await _headers(),
-        body: jsonEncode({'requestId': requestId}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/accept'),
+            headers: await _headers(),
+            body: jsonEncode({'requestId': requestId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -164,13 +176,15 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> rejectRequest(int requestId) async {
+  Future<bool> rejectRequest(String requestId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/reject'),
-        headers: await _headers(),
-        body: jsonEncode({'requestId': requestId}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/reject'),
+            headers: await _headers(),
+            body: jsonEncode({'requestId': requestId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -179,13 +193,15 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> cancelRequest(int requestId) async {
+  Future<bool> cancelRequest(String requestId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/cancel'),
-        headers: await _headers(),
-        body: jsonEncode({'requestId': requestId}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/cancel'),
+            headers: await _headers(),
+            body: jsonEncode({'requestId': requestId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -194,12 +210,14 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> removeFriend(int userId) async {
+  Future<bool> removeFriend(String userId) async {
     try {
-      final response = await http.delete(
-        Uri.parse('$_baseUrl/api/friends/$userId'),
-        headers: await _headers(),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .delete(
+            Uri.parse('$_baseUrl/api/friends/$userId'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -208,13 +226,15 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> blockUser(int userId) async {
+  Future<bool> blockUser(String userId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/block'),
-        headers: await _headers(),
-        body: jsonEncode({'userId': userId}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/block'),
+            headers: await _headers(),
+            body: jsonEncode({'userId': userId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -223,12 +243,14 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> unblockUser(int userId) async {
+  Future<bool> unblockUser(String userId) async {
     try {
-      final response = await http.delete(
-        Uri.parse('$_baseUrl/api/friends/block/$userId'),
-        headers: await _headers(),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .delete(
+            Uri.parse('$_baseUrl/api/friends/block/$userId'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -239,10 +261,12 @@ class FriendsApiService {
 
   Future<List<BlockedUserInfo>> getBlockedUsers() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/friends/blocked'),
-        headers: await _headers(),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/api/friends/blocked'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -256,13 +280,16 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> inviteToRoom(String roomCode, int friendUserId) async {
+  Future<bool> inviteToRoom(String roomCode, String friendUserId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/friends/invite'),
-        headers: await _headers(),
-        body: jsonEncode({'roomCode': roomCode, 'friendUserId': friendUserId}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/friends/invite'),
+            headers: await _headers(),
+            body: jsonEncode(
+                {'roomCode': roomCode, 'friendUserId': friendUserId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;

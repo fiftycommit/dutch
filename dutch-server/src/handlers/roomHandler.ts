@@ -5,9 +5,8 @@ import { ValidationService } from '../services/ValidationService';
 import { SecurityService } from '../services/SecurityService';
 import { AuthenticatedSocket } from '../middleware/socketAuthMiddleware';
 import { FriendsService } from '../services/FriendsService';
-import { AuthService } from '../services/AuthService';
+import { firestoreService } from '../services/FirestoreService';
 import { PushNotificationService } from '../services/PushNotificationService';
-import { database } from '../services/Database';
 
 export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: Server) {
   const authSocket = socket as AuthenticatedSocket;
@@ -24,13 +23,13 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         data.settings,
         playerName,
         data.clientId,
-        socketUser?.userId
+        socketUser?.uid
       );
       socket.join(room.id);
       roomManager.broadcastPresence(room.id);
 
       console.log(`Room created: ${room.id} by ${socket.id}`);
-      
+
       // Si c'est une room publique, l'ajouter au service
       if (data.settings?.isPublic === true) {
         onPublicRoomCreated(
@@ -42,16 +41,10 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
           data.settings.roomName
         );
       }
-      
+
       // Sauvegarder en DB si authentifié
-      if (socketUser?.userId) {
-        try {
-          database.instance.prepare(`
-            INSERT INTO user_rooms (user_id, room_code, is_host)
-            VALUES (?, ?, 1)
-            ON CONFLICT(user_id, room_code) DO UPDATE SET is_host = 1, joined_at = datetime('now')
-          `).run(socketUser.userId, room.id);
-        } catch (e) { /* best effort */ }
+      if (socketUser?.uid) {
+        firestoreService.saveRoomToUser(socketUser.uid, room.id, true).catch(() => { /* best effort */ });
       }
 
       callback({ success: true, roomCode: room.id, room });
@@ -80,7 +73,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         socket.id,
         playerName,
         data.clientId,
-        socketUser?.userId
+        socketUser?.uid
       );
 
       if (result.error || !result.room) {
@@ -94,21 +87,15 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       roomManager.broadcastPresence(roomCode);
-      
+
       // Mettre à jour le compteur pour les rooms publiques
       if (result.room) {
         onPublicRoomPlayerJoined(roomCode, result.room.players.length);
       }
 
       // Sauvegarder en DB si authentifié
-      if (socketUser?.userId) {
-        try {
-          database.instance.prepare(`
-            INSERT INTO user_rooms (user_id, room_code, is_host)
-            VALUES (?, ?, 0)
-            ON CONFLICT(user_id, room_code) DO UPDATE SET joined_at = datetime('now')
-          `).run(socketUser.userId, roomCode);
-        } catch (e) { /* best effort */ }
+      if (socketUser?.uid) {
+        firestoreService.saveRoomToUser(socketUser.uid, roomCode, false).catch(() => { /* best effort */ });
       }
 
       console.log(`Player ${socket.id} joined room ${roomCode}`);
@@ -212,7 +199,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     const { roomCode } = data;
     socket.leave(roomCode);
     roomManager.handleLeave(roomCode, socket.id);
-    
+
     // Mettre à jour le compteur pour les rooms publiques
     const updatedRoom = roomManager.getRoom(roomCode);
     if (updatedRoom) {
@@ -221,7 +208,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       // La room n'existe plus, la supprimer du service public
       onPublicRoomPlayerLeft(roomCode, 0);
     }
-    
+
     console.log(`Player ${socket.id} left room ${roomCode}`);
   });
 
@@ -401,17 +388,12 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       // Vérifier que c'est bien un ami
-      const friends = FriendsService.getFriends(socketUser.userId);
+      const friends = await FriendsService.getFriends(socketUser.uid);
       const isFriend = friends.some(f => f.userId === friendUserId);
       if (!isFriend) {
         callback?.({ success: false, error: 'Ce joueur n\'est pas ton ami' });
         return;
       }
-
-      // Enregistrer l'invitation
-      database.instance.prepare(
-        'INSERT OR REPLACE INTO room_invites (room_code, from_user_id, to_user_id) VALUES (?, ?, ?)'
-      ).run(roomCode, socketUser.userId, friendUserId);
 
       // Notification temps réel via socket
       const friendSocketIds = FriendsService.getUserSocketIds(friendUserId);
@@ -419,7 +401,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       for (const sid of friendSocketIds) {
         io?.to(sid).emit('room:invite', {
           roomCode,
-          fromUserId: socketUser.userId,
+          fromUserId: socketUser.uid,
           fromUsername: socketUser.username,
           fromDisplayName: inviterName,
         });
@@ -445,16 +427,16 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       const { username } = data;
-      const result = FriendsService.sendRequest(socketUser.userId, username);
+      const result = await FriendsService.sendRequest(socketUser.uid, username);
 
       if (result.success && result.toUserId) {
         // Notifier le destinataire via socket
         const targetSocketIds = FriendsService.getUserSocketIds(result.toUserId);
-        const senderUser = AuthService.getUser(socketUser.userId);
+        const senderUser = await firestoreService.getUser(socketUser.uid);
         for (const sid of targetSocketIds) {
           io?.to(sid).emit('friend:request_received', {
             requestId: result.requestId,
-            fromUserId: socketUser.userId,
+            fromUserId: socketUser.uid,
             fromUsername: socketUser.username,
             fromDisplayName: senderUser?.displayName || socketUser.username,
           });
@@ -482,15 +464,15 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       const { requestId } = data;
-      const result = FriendsService.acceptRequest(socketUser.userId, requestId);
+      const result = await FriendsService.acceptRequest(socketUser.uid, requestId);
 
       if (result.success && result.toUserId) {
         // Notifier l'expéditeur original
         const targetSocketIds = FriendsService.getUserSocketIds(result.toUserId);
-        const accepterUser = AuthService.getUser(socketUser.userId);
+        const accepterUser = await firestoreService.getUser(socketUser.uid);
         for (const sid of targetSocketIds) {
           io?.to(sid).emit('friend:accepted', {
-            userId: socketUser.userId,
+            userId: socketUser.uid,
             username: socketUser.username,
             displayName: accepterUser?.displayName || socketUser.username,
           });

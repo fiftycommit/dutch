@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../multiplayer/socket_connection_handler.dart';
 
 class UserInfo {
-  final int id;
+  final String id;
   final String username;
   final String displayName;
 
@@ -14,7 +14,7 @@ class UserInfo {
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
     return UserInfo(
-      id: json['id'] as int,
+      id: json['id']?.toString() ?? '',
       username: json['username'] as String,
       displayName: json['displayName'] as String,
     );
@@ -38,81 +38,115 @@ class AuthResult {
 
 class AuthService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
-  static const String _tokenKey = 'auth_token';
-  static const String _userKey = 'auth_user';
 
-  String? _cachedToken;
-  UserInfo? _cachedUser;
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
+  /// Retourne le Firebase ID token (se rafraîchit automatiquement)
   Future<String?> getStoredToken() async {
-    if (_cachedToken != null) return _cachedToken;
-    final prefs = await SharedPreferences.getInstance();
-    _cachedToken = prefs.getString(_tokenKey);
-    return _cachedToken;
+    return _firebaseAuth.currentUser?.getIdToken();
   }
 
+  /// Construit un UserInfo depuis le currentUser Firebase
   Future<UserInfo?> getStoredUser() async {
-    if (_cachedUser != null) return _cachedUser;
-    final prefs = await SharedPreferences.getInstance();
-    final userJson = prefs.getString(_userKey);
-    if (userJson != null) {
-      try {
-        _cachedUser = UserInfo.fromJson(jsonDecode(userJson));
-      } catch (_) {}
-    }
-    return _cachedUser;
-  }
-
-  Future<void> _storeAuth(String token, UserInfo user) async {
-    _cachedToken = token;
-    _cachedUser = user;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    await prefs.setString(_userKey, jsonEncode(user.toJson()));
+    final fbUser = _firebaseAuth.currentUser;
+    if (fbUser == null) return null;
+    return UserInfo(
+      id: fbUser.uid,
+      username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+      displayName: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+    );
   }
 
   Future<void> clearAuth() async {
-    _cachedToken = null;
-    _cachedUser = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_userKey);
+    await _firebaseAuth.signOut();
   }
 
   Future<bool> isLoggedIn() async {
-    final token = await getStoredToken();
-    return token != null;
+    return _firebaseAuth.currentUser != null;
   }
 
   Future<AuthResult> register(String username, String displayName, String email,
       String password) async {
     try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/auth/register'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'username': username,
-              'displayName': displayName,
-              'email': email,
-              'password': password,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
+      // 1. Créer le compte Firebase
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      final data = jsonDecode(response.body);
+      // 2. Mettre le displayName dans Firebase Auth
+      await credential.user?.updateDisplayName(displayName);
 
-      if (response.statusCode == 201 && data['success'] == true) {
-        final user = UserInfo.fromJson(data['user']);
-        final token = data['token'] as String;
-        await _storeAuth(token, user);
-        return AuthResult(success: true, token: token, user: user);
+      // 3. Récupérer le token
+      final token = await credential.user?.getIdToken();
+
+      if (token == null || credential.user == null) {
+        return const AuthResult(
+            success: false, error: 'Erreur de création de compte');
       }
 
-      return AuthResult(
-          success: false, error: data['error'] ?? 'Erreur d\'inscription');
+      // 4. Enregistrer username + displayName sur le serveur (Firestore)
+      try {
+        await http
+            .put(
+              Uri.parse('$_baseUrl/api/auth/profile'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'displayName': displayName,
+                'username': username,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
+      } catch (e) {
+        if (kDebugMode) debugPrint('Profile update after register: $e');
+      }
+
+      final user = UserInfo(
+        id: credential.user!.uid,
+        username: username,
+        displayName: displayName,
+      );
+
+      return AuthResult(success: true, token: token, user: user);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
       if (kDebugMode) debugPrint('Register error: $e');
+      return AuthResult(success: false, error: 'Impossible de créer le compte');
+    }
+  }
+
+  Future<AuthResult> login(String email, String password) async {
+    try {
+      final credential = await _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final token = await credential.user?.getIdToken();
+
+      if (token == null || credential.user == null) {
+        return const AuthResult(success: false, error: 'Erreur de connexion');
+      }
+
+      final user = UserInfo(
+        id: credential.user!.uid,
+        username: credential.user!.displayName ??
+            credential.user!.email?.split('@').first ??
+            '',
+        displayName: credential.user!.displayName ??
+            credential.user!.email?.split('@').first ??
+            '',
+      );
+
+      return AuthResult(success: true, token: token, user: user);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Login error: $e');
       return AuthResult(
           success: false, error: 'Impossible de contacter le serveur');
     }
@@ -124,104 +158,16 @@ class AuthService {
     }
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/auth/forgot-password'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email.trim()}),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        return const AuthResult(success: true);
-      }
-
-      return AuthResult(
-        success: false,
-        error: data['error']?.toString() ?? 'Erreur de reinitialisation',
-      );
+      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
       if (kDebugMode) debugPrint('Forgot password error: $e');
       return const AuthResult(
         success: false,
-        error: 'Impossible de contacter le serveur',
+        error: 'Impossible d\'envoyer l\'email',
       );
-    }
-  }
-
-  Future<AuthResult> resetPassword({
-    required String token,
-    required String newPassword,
-  }) async {
-    if (token.trim().isEmpty) {
-      return const AuthResult(success: false, error: 'Token requis');
-    }
-    if (newPassword.trim().isEmpty) {
-      return const AuthResult(
-        success: false,
-        error: 'Nouveau mot de passe requis',
-      );
-    }
-
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/auth/reset-password'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'token': token.trim(),
-              'newPassword': newPassword,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        return const AuthResult(success: true);
-      }
-
-      return AuthResult(
-        success: false,
-        error: data['error']?.toString() ?? 'Lien invalide ou expire',
-      );
-    } catch (e) {
-      if (kDebugMode) debugPrint('Reset password error: $e');
-      return const AuthResult(
-        success: false,
-        error: 'Impossible de contacter le serveur',
-      );
-    }
-  }
-
-  Future<AuthResult> login(String username, String password) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/auth/login'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'username': username,
-              'password': password,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        final user = UserInfo.fromJson(data['user']);
-        final token = data['token'] as String;
-        await _storeAuth(token, user);
-        return AuthResult(success: true, token: token, user: user);
-      }
-
-      return AuthResult(
-          success: false, error: data['error'] ?? 'Identifiants incorrects');
-    } catch (e) {
-      if (kDebugMode) debugPrint('Login error: $e');
-      return AuthResult(
-          success: false, error: 'Impossible de contacter le serveur');
     }
   }
 
@@ -244,10 +190,14 @@ class AuthService {
   Future<AuthResult> updateProfile(String displayName) async {
     final token = await getStoredToken();
     if (token == null) {
-      return const AuthResult(success: false, error: 'Non connecte');
+      return const AuthResult(success: false, error: 'Non connecté');
     }
 
     try {
+      // Mettre à jour dans Firebase Auth
+      await _firebaseAuth.currentUser?.updateDisplayName(displayName);
+
+      // Mettre à jour dans Firestore via le serveur
       final response = await http
           .put(
             Uri.parse('$_baseUrl/api/auth/profile'),
@@ -263,12 +213,11 @@ class AuthService {
 
       if (response.statusCode == 200 && data['success'] == true) {
         final user = UserInfo.fromJson(data['user']);
-        await _storeAuth(token, user);
         return AuthResult(success: true, user: user);
       }
 
       return AuthResult(
-          success: false, error: data['error'] ?? 'Erreur de mise a jour');
+          success: false, error: data['error'] ?? 'Erreur de mise à jour');
     } catch (e) {
       return AuthResult(
           success: false, error: 'Impossible de contacter le serveur');
@@ -276,48 +225,46 @@ class AuthService {
   }
 
   Future<AuthResult> deleteAccount(String password) async {
-    final token = await getStoredToken();
-    if (token == null) {
-      return const AuthResult(success: false, error: 'Non connecte');
-    }
-
-    if (password.trim().isEmpty) {
-      return const AuthResult(success: false, error: 'Mot de passe requis');
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
     }
 
     try {
-      final request = http.Request(
-        'DELETE',
-        Uri.parse('$_baseUrl/api/auth/account'),
+      // Ré-authentifier avant suppression (requis par Firebase)
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
       );
-      request.headers.addAll({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      });
-      request.body = jsonEncode({'password': password});
+      await user.reauthenticateWithCredential(credential);
 
-      final streamedResponse =
+      // Supprimer côté serveur (Firestore)
+      final token = await user.getIdToken();
+      if (token != null) {
+        try {
+          final request = http.Request(
+            'DELETE',
+            Uri.parse('$_baseUrl/api/auth/account'),
+          );
+          request.headers.addAll({
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          });
           await request.send().timeout(const Duration(seconds: 10));
-      final response = await http.Response.fromStream(streamedResponse);
-
-      final Map<String, dynamic> data = response.body.isNotEmpty
-          ? jsonDecode(response.body) as Map<String, dynamic>
-          : <String, dynamic>{};
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        await clearAuth();
-        return const AuthResult(success: true);
+        } catch (_) {}
       }
 
-      return AuthResult(
-        success: false,
-        error: data['error']?.toString() ?? 'Erreur de suppression du compte',
-      );
+      // Supprimer le compte Firebase
+      await user.delete();
+
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
       if (kDebugMode) debugPrint('Delete account error: $e');
       return const AuthResult(
         success: false,
-        error: 'Impossible de contacter le serveur',
+        error: 'Impossible de supprimer le compte',
       );
     }
   }
@@ -326,54 +273,30 @@ class AuthService {
     required String currentPassword,
     required String newPassword,
   }) async {
-    final token = await getStoredToken();
-    if (token == null) {
-      return const AuthResult(success: false, error: 'Non connecte');
-    }
-
-    if (currentPassword.trim().isEmpty) {
-      return const AuthResult(
-        success: false,
-        error: 'Mot de passe actuel requis',
-      );
-    }
-    if (newPassword.trim().isEmpty) {
-      return const AuthResult(
-        success: false,
-        error: 'Nouveau mot de passe requis',
-      );
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
     }
 
     try {
-      final response = await http
-          .put(
-            Uri.parse('$_baseUrl/api/auth/password'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode({
-              'currentPassword': currentPassword,
-              'newPassword': newPassword,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        return const AuthResult(success: true);
-      }
-
-      return AuthResult(
-        success: false,
-        error:
-            data['error']?.toString() ?? 'Erreur de changement de mot de passe',
+      // Ré-authentifier
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
       );
+      await user.reauthenticateWithCredential(credential);
+
+      // Changer le mot de passe
+      await user.updatePassword(newPassword);
+
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
       if (kDebugMode) debugPrint('Change password error: $e');
       return const AuthResult(
         success: false,
-        error: 'Impossible de contacter le serveur',
+        error: 'Erreur de changement de mot de passe',
       );
     }
   }
@@ -395,6 +318,32 @@ class AuthService {
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       if (kDebugMode) debugPrint('Register device token error: $e');
+    }
+  }
+
+  /// Traduit les codes d'erreur Firebase en messages français
+  String _mapFirebaseError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'Cet email est déjà utilisé';
+      case 'invalid-email':
+        return 'Email invalide';
+      case 'weak-password':
+        return 'Mot de passe trop faible (min 6 caractères)';
+      case 'user-not-found':
+        return 'Aucun compte trouvé avec cet email';
+      case 'wrong-password':
+        return 'Mot de passe incorrect';
+      case 'invalid-credential':
+        return 'Email ou mot de passe incorrect';
+      case 'user-disabled':
+        return 'Ce compte a été désactivé';
+      case 'too-many-requests':
+        return 'Trop de tentatives, réessaie plus tard';
+      case 'requires-recent-login':
+        return 'Reconnecte-toi pour effectuer cette action';
+      default:
+        return 'Erreur d\'authentification ($code)';
     }
   }
 }

@@ -59,9 +59,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
       return;
     }
 
-    // Passer le token au service multiplayer
+    // Passer le token Firebase au service multiplayer
     final multiProvider = context.read<MultiplayerGameProvider>();
-    multiProvider.setAuthToken(authProvider.token);
+    final freshToken = await authProvider.getFreshToken();
+    multiProvider.setAuthToken(freshToken);
     await multiProvider.init();
 
     await Future.wait<void>(<Future<void>>[

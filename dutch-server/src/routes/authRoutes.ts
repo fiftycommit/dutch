@@ -1,181 +1,77 @@
 import { Router } from 'express';
-import { AuthService } from '../services/AuthService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { firestoreService } from '../services/FirestoreService';
 import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
 
-// Rate limiting strict pour l'auth
+// Rate limiting pour la sécurité
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 30,
   message: { success: false, error: 'Trop de tentatives, réessayez dans 15 minutes' },
 });
 
-const registerLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { success: false, error: 'Trop d\'inscriptions, réessayez dans 15 minutes' },
-});
-
-const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: {
-    success: false,
-    error: 'Trop de demandes, réessayez dans 15 minutes',
-  },
-});
-
-const resetPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: {
-    success: false,
-    error: 'Trop de tentatives, réessayez dans 15 minutes',
-  },
-});
-
-// POST /api/auth/register
-router.post('/register', registerLimiter, (req, res) => {
-  const { username, displayName, email, password } = req.body;
-  const result = AuthService.register(username, displayName, email, password);
-
-  if (!result.success) {
-    const isConflict =
-      result.error?.includes('déjà') || result.error?.includes('deja');
-    const status = isConflict ? 409 : 400;
-    res.status(status).json(result);
-    return;
-  }
-
-  res.status(201).json(result);
-});
-
-// POST /api/auth/login
-router.post('/login', authLimiter, (req, res) => {
-  const { username, password } = req.body;
-  const result = AuthService.login(username, password);
-
-  if (!result.success) {
-    res.status(401).json(result);
-    return;
-  }
-
-  res.json(result);
-});
-
-// POST /api/auth/forgot-password
-router.post(
-  '/forgot-password',
-  forgotPasswordLimiter,
-  async (req, res) => {
-    const { email } = req.body ?? {};
-    const result = await AuthService.requestPasswordReset(email);
-
-    if (!result.success) {
-      const status = result.error?.includes('Email invalide') ? 400 : 500;
-      res.status(status).json(result);
-      return;
-    }
-
-    res.json({
-      success: true,
-      message:
-        'Si un compte existe avec cet email, un lien de reinitialisation a ete envoye.',
-    });
-  }
-);
-
-// POST /api/auth/reset-password
-router.post('/reset-password', resetPasswordLimiter, (req, res) => {
-  const { token, newPassword } = req.body ?? {};
-  const result = AuthService.resetPasswordWithToken(token, newPassword);
-
-  if (!result.success) {
-    res.status(400).json(result);
-    return;
-  }
-
-  res.json({ success: true });
-});
+// ── Les routes register/login/forgot-password/reset-password sont supprimées ──
+// L'authentification est désormais gérée côté client par Firebase Auth SDK.
+// Le serveur ne fait que VÉRIFIER les tokens.
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const user = AuthService.getUser(authReq.user!.userId);
+  const user = await firestoreService.getUser(authReq.user!.uid);
 
   if (!user) {
     res.status(404).json({ success: false, error: 'Utilisateur introuvable' });
     return;
   }
 
-  res.json({ success: true, user });
+  res.json({
+    success: true,
+    user: {
+      id: authReq.user!.uid,
+      username: user.username,
+      displayName: user.displayName,
+    },
+  });
 });
 
 // GET /api/auth/check-username?username=xxx
-router.get('/check-username', (req, res) => {
+router.get('/check-username', async (req, res) => {
   const username = req.query.username as string;
-  const available = AuthService.isUsernameAvailable(username);
+  if (!username) {
+    res.json({ available: false });
+    return;
+  }
+  const available = await firestoreService.isUsernameAvailable(username);
   res.json({ available });
 });
 
 // PUT /api/auth/profile
-router.put('/profile', requireAuth, (req, res) => {
+router.put('/profile', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { displayName } = req.body;
-  const result = AuthService.updateProfile(authReq.user!.userId, displayName);
 
-  if (!result.success) {
-    res.status(400).json(result);
+  if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0 || displayName.trim().length > 24) {
+    res.status(400).json({ success: false, error: 'Pseudo invalide (1-24 caractères)' });
     return;
   }
 
-  res.json(result);
-});
+  await firestoreService.updateUser(authReq.user!.uid, { displayName: displayName.trim() });
 
-// PUT /api/auth/password
-router.put('/password', requireAuth, (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const { currentPassword, newPassword } = req.body ?? {};
-  const result = AuthService.changePassword(
-    authReq.user!.userId,
-    currentPassword,
-    newPassword
-  );
-
-  if (!result.success) {
-    if (result.error?.includes('incorrect')) {
-      res.status(401).json(result);
-      return;
-    }
-    res.status(400).json(result);
-    return;
-  }
-
-  res.json({ success: true });
-});
-
-// DELETE /api/auth/account
-router.delete('/account', requireAuth, (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const { password } = req.body ?? {};
-  const result = AuthService.deleteAccount(authReq.user!.userId, password);
-
-  if (!result.success) {
-    if (result.error?.includes('incorrect')) {
-      res.status(401).json(result);
-      return;
-    }
-    res.status(400).json(result);
-    return;
-  }
-
-  res.json({ success: true });
+  const user = await firestoreService.getUser(authReq.user!.uid);
+  res.json({
+    success: true,
+    user: user ? {
+      id: authReq.user!.uid,
+      username: user.username,
+      displayName: user.displayName,
+    } : undefined,
+  });
 });
 
 // POST /api/auth/device-token
-router.post('/device-token', requireAuth, (req, res) => {
+router.post('/device-token', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { token, platform } = req.body;
 
@@ -184,12 +80,13 @@ router.post('/device-token', requireAuth, (req, res) => {
     return;
   }
 
-  AuthService.registerDeviceToken(authReq.user!.userId, token, platform);
+  await firestoreService.registerDeviceToken(authReq.user!.uid, token, platform);
   res.json({ success: true });
 });
 
 // DELETE /api/auth/device-token
-router.delete('/device-token', requireAuth, (req, res) => {
+router.delete('/device-token', requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
   const { token } = req.body;
 
   if (!token) {
@@ -197,8 +94,22 @@ router.delete('/device-token', requireAuth, (req, res) => {
     return;
   }
 
-  AuthService.removeDeviceToken(token);
+  await firestoreService.removeDeviceToken(authReq.user!.uid, token);
   res.json({ success: true });
+});
+
+// DELETE /api/auth/account — Suppression de compte
+router.delete('/account', requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  try {
+    await firestoreService.deleteUser(authReq.user!.uid);
+    // Optionnel: supprimer aussi l'utilisateur dans Firebase Auth
+    // await auth.deleteUser(authReq.user!.uid);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Erreur lors de la suppression' });
+  }
 });
 
 export default router;

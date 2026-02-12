@@ -18,8 +18,6 @@ import '../screens/menu/ai_profile_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
-import '../screens/auth/reset_password_screen.dart';
-import '../screens/auth/change_password_screen.dart';
 import '../screens/multiplayer/menu/multiplayer_menu_screen.dart';
 import '../screens/multiplayer/menu/multiplayer_mode_selection_screen.dart';
 import '../screens/multiplayer/menu/create_mode_selection_screen.dart';
@@ -155,18 +153,6 @@ class AppRouter {
           path: '/forgot-password',
           name: 'forgotPassword',
           builder: (context, state) => const ForgotPasswordScreen(),
-        ),
-        GoRoute(
-          path: '/reset-password',
-          name: 'resetPassword',
-          builder: (context, state) => ResetPasswordScreen(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-        GoRoute(
-          path: '/change-password',
-          name: 'changePassword',
-          builder: (context, state) => const ChangePasswordScreen(),
         ),
 
         // ============ MODE MULTIJOUEUR ============
@@ -431,9 +417,6 @@ extension GoRouterNavigation on BuildContext {
   void goLogin() => go('/login');
   void goRegister() => go('/register');
   void goForgotPassword() => go('/forgot-password');
-  void goResetPassword(String token) =>
-      go('/reset-password?token=${Uri.encodeComponent(token)}');
-  void goChangePassword() => go('/change-password');
 
   // Multiplayer
   void goMultiplayer() => go('/multiplayer');

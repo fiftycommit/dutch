@@ -1,17 +1,16 @@
 export interface User {
-  id: number;
+  id: string;            // Firebase UID
   username: string;
   email: string | null;
   display_name: string;
-  password_hash: string;
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
-  is_banned: number;
+  is_banned: boolean;
 }
 
 export interface PublicUser {
-  id: number;
+  id: string;            // Firebase UID
   username: string;
   displayName: string;
 }

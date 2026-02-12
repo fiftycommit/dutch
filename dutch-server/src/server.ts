@@ -145,7 +145,7 @@ export function startServer() {
   // Injecter la référence des users en ligne pour le service d'amis
   FriendsService.setOnlineUsersRef(onlineUsers);
 
-  // Socket Auth Middleware (JWT validation)
+  // Socket Auth Middleware (Firebase token verification)
   io.use(socketAuthMiddleware);
 
   // Socket Connection Rate Limiting

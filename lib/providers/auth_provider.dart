@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../services/auth/auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
@@ -8,23 +10,53 @@ class AuthProvider with ChangeNotifier {
   String? _token;
   bool _isLoading = false;
   bool _isInitialized = false;
+  StreamSubscription<fb.User?>? _authSub;
 
   UserInfo? get user => _user;
   String? get token => _token;
-  bool get isLoggedIn => _token != null && _user != null;
+  bool get isLoggedIn => _user != null;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   AuthService get authService => _authService;
 
-  /// Initialise l'auth en restaurant le token stocké
+  /// Initialise l'auth en écoutant Firebase authStateChanges
   Future<void> init() async {
     if (_isInitialized) return;
     _isLoading = true;
     notifyListeners();
 
     try {
-      _token = await _authService.getStoredToken();
-      _user = await _authService.getStoredUser();
+      // Charger l'utilisateur courant (session persistée par Firebase)
+      final fbUser = fb.FirebaseAuth.instance.currentUser;
+      if (fbUser != null) {
+        _token = await fbUser.getIdToken();
+        _user = UserInfo(
+          id: fbUser.uid,
+          username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+          displayName:
+              fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+        );
+      }
+
+      // Écouter les changements d'état auth
+      _authSub = fb.FirebaseAuth.instance.authStateChanges().listen(
+        (fbUser) async {
+          if (fbUser != null) {
+            _token = await fbUser.getIdToken();
+            _user = UserInfo(
+              id: fbUser.uid,
+              username:
+                  fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+              displayName:
+                  fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+            );
+          } else {
+            _token = null;
+            _user = null;
+          }
+          notifyListeners();
+        },
+      );
     } catch (e) {
       if (kDebugMode) debugPrint('Auth init error: $e');
     }
@@ -34,11 +66,19 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<AuthResult> login(String username, String password) async {
+  /// Rafraîchit le token Firebase (auto-refresh)
+  Future<String?> getFreshToken() async {
+    final fbUser = fb.FirebaseAuth.instance.currentUser;
+    if (fbUser == null) return null;
+    _token = await fbUser.getIdToken();
+    return _token;
+  }
+
+  Future<AuthResult> login(String email, String password) async {
     _isLoading = true;
     notifyListeners();
 
-    final result = await _authService.login(username, password);
+    final result = await _authService.login(email, password);
 
     if (result.success) {
       _user = result.user;
@@ -73,23 +113,6 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     final result = await _authService.forgotPassword(email);
-
-    _isLoading = false;
-    notifyListeners();
-    return result;
-  }
-
-  Future<AuthResult> resetPassword({
-    required String token,
-    required String newPassword,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-
-    final result = await _authService.resetPassword(
-      token: token,
-      newPassword: newPassword,
-    );
 
     _isLoading = false;
     notifyListeners();
@@ -146,5 +169,11 @@ class AuthProvider with ChangeNotifier {
     _user = null;
     _token = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 }

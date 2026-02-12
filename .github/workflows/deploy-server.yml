@@ -182,7 +182,7 @@ jobs:
             echo "🔨 Building backend..."
             cd /root/apps/dutch-server
             npm install --omit=dev 2>&1 || true
-            npm install typescript @types/node @types/express @types/cors @types/bcryptjs @types/better-sqlite3 @types/jsonwebtoken 2>&1 || true
+            npm install typescript @types/node @types/express @types/cors 2>&1 || true
             npm run build || { echo "❌ Build failed"; exit 1; }
             npm prune --production 2>&1 || true
 

@@ -52,12 +52,12 @@ export class RoomManager {
 
   private botCastingCache:
     | Array<{
-        botId: string;
-        botName?: string;
-        behavior?: string;
-        skillLevel?: string;
-        mmr?: number;
-      }>
+      botId: string;
+      botName?: string;
+      behavior?: string;
+      skillLevel?: string;
+      mmr?: number;
+    }>
     | null = null;
   private botCastingCacheLoadedAtMs = 0;
 
@@ -152,7 +152,7 @@ export class RoomManager {
     settings: any,
     playerName?: string,
     clientId?: string,
-    userId?: number
+    userId?: string
   ): Room {
     const normalizedSettings = this.normalizeSettings(settings);
     const roomCode = this.generateRoomCode();
@@ -189,7 +189,7 @@ export class RoomManager {
     socketId: string,
     playerName?: string,
     clientId?: string,
-    userId?: number
+    userId?: string
   ): {
     room?: Room;
     player?: Player;
@@ -372,7 +372,7 @@ export class RoomManager {
     if (this.activePlayerCount(room) > maxPlayers) return false;
 
     const difficulty = this.getBotDifficulty(room.settings);
-    
+
     // Déterminer le nombre de bots à ajouter
     let targetPlayerCount = maxPlayers;
     if (room.settings.numberOfBots !== undefined) {
@@ -385,7 +385,7 @@ export class RoomManager {
       // Ne pas ajouter de bots
       targetPlayerCount = room.players.length;
     }
-    
+
     // Ajouter les bots jusqu'au nombre cible
     const sbmmLevels = room.settings.sbmmBotLevels;
     let botIndex = 0;
@@ -752,8 +752,8 @@ export class RoomManager {
 
     this.io.to(roomCode).emit('room:restarted', {
       roomCode,
-      message: room.gameMode === GameMode.tournament 
-        ? `Manche ${room.tournamentRound} !` 
+      message: room.gameMode === GameMode.tournament
+        ? `Manche ${room.tournamentRound} !`
         : 'Nouvelle partie !',
       cumulativeScores: this.getCumulativeScoresArray(room),
       tournamentRound: room.tournamentRound,
@@ -1309,7 +1309,7 @@ export class RoomManager {
 
     if (phaseBeforeRemoval === GamePhase.reaction && wasCurrentPlayer) {
       gameState.currentPlayerIndex =
-          (updatedIndex - 1 + gameState.players.length) % gameState.players.length;
+        (updatedIndex - 1 + gameState.players.length) % gameState.players.length;
       return;
     }
 
@@ -1753,10 +1753,10 @@ export class RoomManager {
     // Précharger la prochaine carte du deck pour le joueur actuel
     // Cela permet d'éliminer la latence perçue lors de la pioche
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    if (currentPlayer?.id === playerId && 
-        gameState.deck.length > 0 && 
-        gameState.phase === GamePhase.playing &&
-        !gameState.drawnCard) {
+    if (currentPlayer?.id === playerId &&
+      gameState.deck.length > 0 &&
+      gameState.phase === GamePhase.playing &&
+      !gameState.drawnCard) {
       // Envoyer la carte du dessus du deck (celle qui sera piochée)
       state.preloadedDeckCard = gameState.deck[gameState.deck.length - 1];
     } else {

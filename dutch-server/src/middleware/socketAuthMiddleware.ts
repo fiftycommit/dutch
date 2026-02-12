@@ -1,16 +1,24 @@
 import { Socket } from 'socket.io';
-import { AuthService, JwtPayload } from '../services/AuthService';
+import { auth } from '../services/FirebaseAdmin';
+import { firestoreService, FirestoreUser } from '../services/FirestoreService';
 
-// Map userId -> Set<socketId> pour tracker les users en ligne
-export const onlineUsers = new Map<number, Set<string>>();
+// Map uid -> Set<socketId> pour tracker les users en ligne
+export const onlineUsers = new Map<string, Set<string>>();
+
+export interface FirebaseUserPayload {
+  uid: string;
+  email: string | null;
+  displayName: string;
+  username: string;
+}
 
 export interface AuthenticatedSocket extends Socket {
   data: {
-    user?: JwtPayload & { displayName?: string };
+    user?: FirebaseUserPayload;
   };
 }
 
-export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void) {
+export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void) {
   const token = socket.handshake.auth?.token;
 
   if (!token) {
@@ -20,26 +28,33 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
     return;
   }
 
-  try {
-    const payload = AuthService.verifyToken(token);
-    const user = AuthService.getUser(payload.userId);
+  if (!auth) {
+    next(new Error('Firebase Auth non configuré'));
+    return;
+  }
 
-    if (!user) {
-      next(new Error('Utilisateur introuvable'));
-      return;
-    }
+  try {
+    const decoded = await auth.verifyIdToken(token);
+
+    // Charger ou créer le profil Firestore
+    const profile = await firestoreService.getOrCreateUser(decoded.uid, {
+      email: decoded.email || null,
+      displayName: decoded.name || decoded.email?.split('@')[0] || 'Joueur',
+      username: decoded.email?.split('@')[0]?.toLowerCase() || decoded.uid.slice(0, 8),
+    });
 
     socket.data.user = {
-      userId: payload.userId,
-      username: payload.username,
-      displayName: user.displayName,
+      uid: decoded.uid,
+      email: decoded.email || null,
+      displayName: profile.displayName,
+      username: profile.username,
     };
 
     // Tracker l'utilisateur en ligne
-    if (!onlineUsers.has(payload.userId)) {
-      onlineUsers.set(payload.userId, new Set());
+    if (!onlineUsers.has(decoded.uid)) {
+      onlineUsers.set(decoded.uid, new Set());
     }
-    onlineUsers.get(payload.userId)!.add(socket.id);
+    onlineUsers.get(decoded.uid)!.add(socket.id);
 
     next();
   } catch {
@@ -49,12 +64,12 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
 
 export function handleSocketDisconnect(socket: Socket) {
   const user = socket.data.user;
-  if (user?.userId) {
-    const sockets = onlineUsers.get(user.userId);
+  if (user?.uid) {
+    const sockets = onlineUsers.get(user.uid);
     if (sockets) {
       sockets.delete(socket.id);
       if (sockets.size === 0) {
-        onlineUsers.delete(user.userId);
+        onlineUsers.delete(user.uid);
       }
     }
   }

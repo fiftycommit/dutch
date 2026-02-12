@@ -1,28 +1,23 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { database } from '../services/Database';
+import { firestoreService } from '../services/FirestoreService';
 
 const router = Router();
 
 // GET /api/rooms/mine — Récupérer les rooms de l'utilisateur
-router.get('/mine', requireAuth, (req, res) => {
+router.get('/mine', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const userId = authReq.user!.userId;
+  const uid = authReq.user!.uid;
 
   try {
-    const rooms = database.instance.prepare(`
-      SELECT room_code, is_host, joined_at FROM user_rooms
-      WHERE user_id = ?
-      ORDER BY joined_at DESC
-      LIMIT 10
-    `).all(userId) as { room_code: string; is_host: number; joined_at: string }[];
+    const rooms = await firestoreService.getUserRooms(uid);
 
     res.json({
       success: true,
       rooms: rooms.map(r => ({
-        roomCode: r.room_code,
-        isHost: r.is_host === 1,
-        joinedAt: r.joined_at,
+        roomCode: r.roomCode,
+        isHost: r.isHost,
+        joinedAt: r.joinedAt?.toDate?.()?.toISOString() || '',
       })),
     });
   } catch (e) {
@@ -31,24 +26,18 @@ router.get('/mine', requireAuth, (req, res) => {
 });
 
 // POST /api/rooms/save — Sauvegarder une room
-router.post('/save', requireAuth, (req, res) => {
+router.post('/save', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const userId = authReq.user!.userId;
+  const uid = authReq.user!.uid;
   const { roomCode, isHost } = req.body;
 
   if (!roomCode || typeof roomCode !== 'string') {
-    return res.status(400).json({ success: false, error: 'roomCode requis' });
+    res.status(400).json({ success: false, error: 'roomCode requis' });
+    return;
   }
 
   try {
-    database.instance.prepare(`
-      INSERT INTO user_rooms (user_id, room_code, is_host)
-      VALUES (?, ?, ?)
-      ON CONFLICT(user_id, room_code) DO UPDATE SET
-        is_host = excluded.is_host,
-        joined_at = datetime('now')
-    `).run(userId, roomCode.toUpperCase(), isHost ? 1 : 0);
-
+    await firestoreService.saveRoomToUser(uid, roomCode.toUpperCase(), !!isHost);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Erreur serveur' });
@@ -56,16 +45,13 @@ router.post('/save', requireAuth, (req, res) => {
 });
 
 // DELETE /api/rooms/:roomCode — Supprimer une room sauvegardée
-router.delete('/:roomCode', requireAuth, (req, res) => {
+router.delete('/:roomCode', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const userId = authReq.user!.userId;
+  const uid = authReq.user!.uid;
   const roomCode = (req.params.roomCode as string).toUpperCase();
 
   try {
-    database.instance.prepare(`
-      DELETE FROM user_rooms WHERE user_id = ? AND room_code = ?
-    `).run(userId, roomCode);
-
+    await firestoreService.removeUserRoom(uid, roomCode);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Erreur serveur' });

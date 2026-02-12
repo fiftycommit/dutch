@@ -1,46 +1,8 @@
-import { AuthService } from './AuthService';
+import { messaging } from './FirebaseAdmin';
+import { firestoreService } from './FirestoreService';
 
-// Firebase Admin est optionnel — dégradation gracieuse si non configuré
-let firebaseAdmin: any = null;
-let messaging: any = null;
-
-try {
-  const admin = require('firebase-admin');
-  const path = require('path');
-  const fs = require('fs');
-
-
-  const serviceAccountPath = path.join(__dirname, '../../data/firebase-service-account.json');
-
-  // 1. Essayer via Variable d'environnement (Production)
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      messaging = admin.messaging();
-      firebaseAdmin = admin;
-      console.log('🔔 Firebase Cloud Messaging initialisé (via ENV)');
-    } catch (e) {
-      console.error('❌ Erreur parsing FIREBASE_SERVICE_ACCOUNT_JSON:', e);
-    }
-  }
-  // 2. Essayer via Fichier (Local / Dev)
-  else if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    messaging = admin.messaging();
-    firebaseAdmin = admin;
-    console.log('🔔 Firebase Cloud Messaging initialisé (via FILE)');
-  } else {
-    console.log('⚠️ Firebase non configuré (ni ENV ni FILE). Push notifications désactivées.');
-  }
-} catch (e) {
-  console.log('⚠️ Firebase Admin non disponible:', e);
-}
+// ─── Push Notification Service ──────────────────────────────────────────────
+// Utilise le module centralisé FirebaseAdmin au lieu de sa propre initialisation.
 
 export interface PushPayload {
   title: string;
@@ -53,10 +15,10 @@ export class PushNotificationService {
     return messaging !== null;
   }
 
-  static async sendToUser(userId: number, payload: PushPayload): Promise<void> {
+  static async sendToUser(userId: string, payload: PushPayload): Promise<void> {
     if (!messaging) return;
 
-    const tokens = AuthService.getDeviceTokens(userId);
+    const tokens = await firestoreService.getDeviceTokens(userId);
     if (tokens.length === 0) return;
 
     const message = {
@@ -75,7 +37,7 @@ export class PushNotificationService {
       if (response.failureCount > 0) {
         response.responses.forEach((resp: any, idx: number) => {
           if (!resp.success && resp.error?.code === 'messaging/registration-token-not-registered') {
-            AuthService.removeDeviceToken(tokens[idx]);
+            firestoreService.removeDeviceToken(userId, tokens[idx]);
           }
         });
       }
@@ -84,7 +46,7 @@ export class PushNotificationService {
     }
   }
 
-  static async notifyFriendRequest(toUserId: number, fromUsername: string, fromDisplayName: string): Promise<void> {
+  static async notifyFriendRequest(toUserId: string, fromUsername: string, fromDisplayName: string): Promise<void> {
     await this.sendToUser(toUserId, {
       title: 'Demande d\'ami',
       body: `${fromDisplayName} (@${fromUsername}) veut être ton ami !`,
@@ -92,7 +54,7 @@ export class PushNotificationService {
     });
   }
 
-  static async notifyFriendAccepted(toUserId: number, fromUsername: string, fromDisplayName: string): Promise<void> {
+  static async notifyFriendAccepted(toUserId: string, fromUsername: string, fromDisplayName: string): Promise<void> {
     await this.sendToUser(toUserId, {
       title: 'Ami accepté !',
       body: `${fromDisplayName} (@${fromUsername}) a accepté ta demande d'ami`,
@@ -100,7 +62,7 @@ export class PushNotificationService {
     });
   }
 
-  static async notifyRoomInvite(toUserId: number, fromDisplayName: string, roomCode: string): Promise<void> {
+  static async notifyRoomInvite(toUserId: string, fromDisplayName: string, roomCode: string): Promise<void> {
     await this.sendToUser(toUserId, {
       title: 'Invitation salon',
       body: `${fromDisplayName} t'invite à rejoindre une partie !`,

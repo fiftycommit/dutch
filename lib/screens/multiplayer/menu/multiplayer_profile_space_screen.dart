@@ -32,8 +32,8 @@ class _MultiplayerProfileSpaceScreenState
       <String, Map<String, dynamic>>{};
 
   // Maps username → server IDs for API calls
-  final Map<String, int> _requestIdByUsername = {};
-  final Map<String, int> _userIdByUsername = {};
+  final Map<String, String> _requestIdByUsername = {};
+  final Map<String, String> _userIdByUsername = {};
 
   Set<String> _reservedUsernames = <String>{};
 
