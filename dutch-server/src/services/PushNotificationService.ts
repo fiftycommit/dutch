@@ -9,20 +9,37 @@ try {
   const path = require('path');
   const fs = require('fs');
 
+
   const serviceAccountPath = path.join(__dirname, '../../data/firebase-service-account.json');
-  if (fs.existsSync(serviceAccountPath)) {
+
+  // 1. Essayer via Variable d'environnement (Production)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      messaging = admin.messaging();
+      firebaseAdmin = admin;
+      console.log('🔔 Firebase Cloud Messaging initialisé (via ENV)');
+    } catch (e) {
+      console.error('❌ Erreur parsing FIREBASE_SERVICE_ACCOUNT_JSON:', e);
+    }
+  }
+  // 2. Essayer via Fichier (Local / Dev)
+  else if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
     messaging = admin.messaging();
     firebaseAdmin = admin;
-    console.log('🔔 Firebase Cloud Messaging initialisé');
+    console.log('🔔 Firebase Cloud Messaging initialisé (via FILE)');
   } else {
-    console.log('⚠️ Firebase non configuré (fichier service-account manquant). Push notifications désactivées.');
+    console.log('⚠️ Firebase non configuré (ni ENV ni FILE). Push notifications désactivées.');
   }
 } catch (e) {
-  console.log('⚠️ Firebase Admin non disponible. Push notifications désactivées.');
+  console.log('⚠️ Firebase Admin non disponible:', e);
 }
 
 export interface PushPayload {

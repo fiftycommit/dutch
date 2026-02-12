@@ -97,11 +97,12 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           GIT_SHA: ${{ github.sha }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         with:
           host: dutch-game.me
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GIT_SHA
+          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON
           command_timeout: 10m
           script: |
             set -e
@@ -191,6 +192,7 @@ jobs:
 
             # ── PM2 restart ──
             BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            # Use process.env in the js file to capture the env var injected by ssh-action
             cat > ecosystem.config.cjs << PMCFG
             module.exports = {
               apps: [{
@@ -204,6 +206,7 @@ jobs:
                   PORT: 3000,
                   GIT_SHA: '${GIT_SHA}',
                   BUILD_TIME: '${BUILD_TIME}',
+                  FIREBASE_SERVICE_ACCOUNT_JSON: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
                 },
                 max_memory_restart: '700M',
               }],
