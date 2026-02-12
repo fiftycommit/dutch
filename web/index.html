@@ -192,28 +192,31 @@
 
     window.flutterReady = function () {
       window.flutterTookOver = true;
-      try { sessionStorage.removeItem('dutch_bootstrap_retry_once'); } catch (_) { }
+      try { sessionStorage.removeItem('dutch_bootstrap_retries'); } catch (_) { }
     };
 
     // Watchdog anti "splash infini" (PWA iOS / Safari):
-    // si Flutter ne prend jamais la main, on force 1 reload automatique,
-    // puis on affiche une action manuelle.
+    // Si Flutter ne prend jamais la main, on force un reload avec cache-busting
+    // jusqu'à 3 tentatives, puis action manuelle.
     setTimeout(function () {
       if (window.flutterTookOver) return;
 
-      var shouldReload = false;
+      var retryCount = 0;
       try {
-        var retried = sessionStorage.getItem('dutch_bootstrap_retry_once');
-        if (retried !== '1') {
-          sessionStorage.setItem('dutch_bootstrap_retry_once', '1');
-          shouldReload = true;
-        }
+        retryCount = parseInt(sessionStorage.getItem('dutch_bootstrap_retries') || '0', 10);
       } catch (_) { }
 
-      if (shouldReload) {
-        window.location.reload();
+      if (retryCount < 3) {
+        try {
+          sessionStorage.setItem('dutch_bootstrap_retries', String(retryCount + 1));
+        } catch (_) { }
+        // Cache-busting reload: force fresh fetch
+        window.location.href = '/?cb=' + Date.now();
         return;
       }
+
+      // After 3 retries, show manual action
+      try { sessionStorage.removeItem('dutch_bootstrap_retries'); } catch (_) { }
 
       var statusEl = document.getElementById('splash-status');
       if (statusEl) statusEl.textContent = 'Chargement bloqué. Touchez pour relancer.';
@@ -221,9 +224,12 @@
       var splash = document.getElementById('splash');
       if (splash) {
         splash.style.cursor = 'pointer';
-        splash.onclick = function () { window.location.reload(); };
+        splash.onclick = function () {
+          try { sessionStorage.removeItem('dutch_bootstrap_retries'); } catch (_) { }
+          window.location.href = '/?cb=' + Date.now();
+        };
       }
-    }, 12000);
+    }, 20000);
   </script>
 
   <script>

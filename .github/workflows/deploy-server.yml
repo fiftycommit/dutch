@@ -110,13 +110,7 @@ jobs:
             ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"
 
-            # ── Kill any trainer leftovers ──
-            systemctl stop dutch-bot-trainer 2>/dev/null || true
-            systemctl disable dutch-bot-trainer 2>/dev/null || true
-            rm -f /etc/systemd/system/dutch-bot-trainer.service
-            systemctl daemon-reload
-            su - dutch -c 'pm2 kill' 2>/dev/null || true
-            # Kill any rogue process on port 3000
+            # ── Kill any rogue process on port 3000 ──
             fuser -k 3000/tcp 2>/dev/null || true
             sleep 1
 
