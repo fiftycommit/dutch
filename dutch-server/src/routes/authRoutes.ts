@@ -50,14 +50,46 @@ router.get('/check-username', async (req, res) => {
 // PUT /api/auth/profile
 router.put('/profile', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const { displayName } = req.body;
+  const { displayName, username } = req.body;
 
-  if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0 || displayName.trim().length > 24) {
-    res.status(400).json({ success: false, error: 'Pseudo invalide (1-24 caractères)' });
+  const updates: Record<string, string> = {};
+
+  // Validation displayName
+  if (displayName && typeof displayName === 'string' && displayName.trim().length > 0 && displayName.trim().length <= 24) {
+    updates.displayName = displayName.trim();
+  }
+
+  // Validation username (optionnel, envoyé à l'inscription)
+  if (username && typeof username === 'string') {
+    const trimmed = username.trim().toLowerCase();
+    if (trimmed.length < 3 || trimmed.length > 20 || !/^[a-z0-9_]+$/.test(trimmed)) {
+      res.status(400).json({ success: false, error: 'Nom d\'utilisateur invalide (3-20 caractères, lettres/chiffres/_)' });
+      return;
+    }
+    // Vérifier unicité
+    const available = await firestoreService.isUsernameAvailable(trimmed, authReq.user!.uid);
+    if (!available) {
+      res.status(409).json({ success: false, error: 'Ce nom d\'utilisateur est déjà pris' });
+      return;
+    }
+    updates.username = trimmed;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ success: false, error: 'Aucune donnée valide à mettre à jour' });
     return;
   }
 
-  await firestoreService.updateUser(authReq.user!.uid, { displayName: displayName.trim() });
+  // Créer le document s'il n'existe pas encore (première inscription)
+  const existingUser = await firestoreService.getUser(authReq.user!.uid);
+  if (!existingUser) {
+    await firestoreService.createUser(authReq.user!.uid, {
+      username: updates.username || '',
+      displayName: updates.displayName || '',
+    });
+  } else {
+    await firestoreService.updateUser(authReq.user!.uid, updates);
+  }
 
   const user = await firestoreService.getUser(authReq.user!.uid);
   res.json({

@@ -46,10 +46,34 @@ class AuthService {
     return _firebaseAuth.currentUser?.getIdToken();
   }
 
-  /// Construit un UserInfo depuis le currentUser Firebase
-  Future<UserInfo?> getStoredUser() async {
+  /// Récupère le profil complet depuis le serveur (username + displayName)
+  Future<UserInfo?> fetchProfile() async {
+    final token = await getStoredToken();
     final fbUser = _firebaseAuth.currentUser;
-    if (fbUser == null) return null;
+    if (token == null || fbUser == null) return null;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['user'] != null) {
+          return UserInfo(
+            id: fbUser.uid,
+            username: data['user']['username'] ?? '',
+            displayName:
+                data['user']['displayName'] ?? fbUser.displayName ?? '',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('fetchProfile error: $e');
+    }
+
+    // Fallback sur Firebase Auth (mieux que rien)
     return UserInfo(
       id: fbUser.uid,
       username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
@@ -132,15 +156,17 @@ class AuthService {
         return const AuthResult(success: false, error: 'Erreur de connexion');
       }
 
-      final user = UserInfo(
-        id: credential.user!.uid,
-        username: credential.user!.displayName ??
-            credential.user!.email?.split('@').first ??
-            '',
-        displayName: credential.user!.displayName ??
-            credential.user!.email?.split('@').first ??
-            '',
-      );
+      // Récupérer le vrai profil (username) depuis Firestore
+      final user = await fetchProfile() ??
+          UserInfo(
+            id: credential.user!.uid,
+            username: credential.user!.displayName ??
+                credential.user!.email?.split('@').first ??
+                '',
+            displayName: credential.user!.displayName ??
+                credential.user!.email?.split('@').first ??
+                '',
+          );
 
       return AuthResult(success: true, token: token, user: user);
     } on FirebaseAuthException catch (e) {

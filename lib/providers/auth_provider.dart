@@ -30,12 +30,8 @@ class AuthProvider with ChangeNotifier {
       final fbUser = fb.FirebaseAuth.instance.currentUser;
       if (fbUser != null) {
         _token = await fbUser.getIdToken();
-        _user = UserInfo(
-          id: fbUser.uid,
-          username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
-          displayName:
-              fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
-        );
+        // Récupérer le vrai profil (username) depuis Firestore
+        _user = await _authService.fetchProfile();
       }
 
       // Écouter les changements d'état auth
@@ -43,13 +39,8 @@ class AuthProvider with ChangeNotifier {
         (fbUser) async {
           if (fbUser != null) {
             _token = await fbUser.getIdToken();
-            _user = UserInfo(
-              id: fbUser.uid,
-              username:
-                  fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
-              displayName:
-                  fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
-            );
+            // Récupérer le vrai profil depuis Firestore
+            _user = await _authService.fetchProfile();
           } else {
             _token = null;
             _user = null;
