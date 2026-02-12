@@ -203,8 +203,17 @@ jobs:
 
             # ── PM2 restart ──
             BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            # Use process.env in the js file to capture the env var injected by ssh-action
-            cat > ecosystem.config.cjs << PMCFG
+
+            # Write Firebase creds to file (avoids shell escaping issues with JSON)
+            echo "$FIREBASE_SERVICE_ACCOUNT_JSON" > /root/apps/dutch-server/data/firebase-service-account.json
+            chmod 600 /root/apps/dutch-server/data/firebase-service-account.json
+
+            cat > ecosystem.config.cjs << 'PMCFG'
+            const fs = require('fs');
+            let firebaseCreds = '';
+            try {
+              firebaseCreds = fs.readFileSync('/root/apps/dutch-server/data/firebase-service-account.json', 'utf-8').trim();
+            } catch(e) {}
             module.exports = {
               apps: [{
                 name: 'dutch-server',
@@ -215,14 +224,17 @@ jobs:
                 env: {
                   NODE_ENV: 'production',
                   PORT: 3000,
-                  GIT_SHA: '${GIT_SHA}',
-                  BUILD_TIME: '${BUILD_TIME}',
-                  FIREBASE_SERVICE_ACCOUNT_JSON: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+                  GIT_SHA: process.env.GIT_SHA || '',
+                  BUILD_TIME: process.env.BUILD_TIME || '',
+                  FIREBASE_SERVICE_ACCOUNT_JSON: firebaseCreds,
                 },
                 max_memory_restart: '700M',
               }],
             };
             PMCFG
+            # Inject shell vars that the quoted heredoc can't expand
+            export BUILD_TIME
+            export GIT_SHA
 
             pm2 delete dutch-server 2>/dev/null || true
             pm2 start ecosystem.config.cjs
