@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
@@ -17,8 +19,12 @@ class MainMenuScreen extends StatefulWidget {
   State<MainMenuScreen> createState() => _MainMenuScreenState();
 }
 
-class _MainMenuScreenState extends State<MainMenuScreen> {
-  int selectedSlot = 1;
+class _MainMenuScreenState extends State<MainMenuScreen>
+    with TickerProviderStateMixin {
+  int? selectedSlot;
+  late final AnimationController _slotShakeController;
+  late final AnimationController _slotPulseController;
+  late final AnimationController _slotTapPulseController;
 
   Map<int, Map<String, dynamic>> slotsData = {};
   bool isLoading = true;
@@ -26,12 +32,33 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   void initState() {
     super.initState();
+    _slotShakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _slotPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    );
+    _slotTapPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 290),
+    );
+    _syncSlotPulseAnimation();
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         WebSplashHelper.hideSplash();
       });
     }
     _loadDataParallel();
+  }
+
+  @override
+  void dispose() {
+    _slotShakeController.dispose();
+    _slotPulseController.dispose();
+    _slotTapPulseController.dispose();
+    super.dispose();
   }
 
   /// Load all data in parallel for faster startup
@@ -46,8 +73,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
     if (mounted) {
       final prefs = results[0] as SharedPreferences;
+      final savedSlot = prefs.getInt('lastSelectedSlot');
+      final initialSlot =
+          (savedSlot != null && savedSlot >= 1 && savedSlot <= 3)
+              ? savedSlot
+              : null;
+
       setState(() {
-        selectedSlot = prefs.getInt('lastSelectedSlot') ?? 1;
+        selectedSlot = initialSlot;
         slotsData = {
           1: results[1] as Map<String, dynamic>,
           2: results[2] as Map<String, dynamic>,
@@ -55,6 +88,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         };
         isLoading = false;
       });
+      _syncSlotPulseAnimation();
     }
   }
 
@@ -70,6 +104,92 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   void _goToAuthEntry(bool isLoggedIn) {
     context.go(isLoggedIn ? '/multiplayer' : '/login');
+  }
+
+  void _shakeSlots() {
+    _slotShakeController.forward(from: 0);
+  }
+
+  void _syncSlotPulseAnimation() {
+    if (selectedSlot == null) {
+      if (!_slotPulseController.isAnimating) {
+        _slotPulseController.repeat();
+      }
+      return;
+    }
+    if (_slotPulseController.isAnimating) {
+      _slotPulseController.stop();
+    }
+    _slotPulseController.value = 0;
+  }
+
+  void _handleBlockedGameButtonTap() {
+    if (selectedSlot != null) return;
+    _shakeSlots();
+
+    _slotTapPulseController
+      ..stop()
+      ..value = 0
+      ..repeat(reverse: true);
+
+    Future<void>.delayed(const Duration(milliseconds: 760), () {
+      if (!mounted || selectedSlot != null) return;
+      _slotTapPulseController.stop();
+      _slotTapPulseController.value = 0;
+    });
+  }
+
+  void _handleSlotSelected(int slotId) {
+    if (selectedSlot == slotId) return;
+    setState(() => selectedSlot = slotId);
+    _saveSelectedSlot(slotId);
+    _slotTapPulseController.stop();
+    _slotTapPulseController.value = 0;
+    _syncSlotPulseAnimation();
+  }
+
+  Widget _buildShakableSlots({required Widget child}) {
+    return AnimatedBuilder(
+      animation: _slotShakeController,
+      child: child,
+      builder: (context, slotChild) {
+        final shakeOffset = sin(_slotShakeController.value * pi * 4) * 16.0;
+        return Transform.translate(
+          offset: Offset(shakeOffset, 0),
+          child: slotChild,
+        );
+      },
+    );
+  }
+
+  Widget _buildSlotsAttentionBand({
+    required double radius,
+    required Widget child,
+  }) {
+    if (selectedSlot != null) {
+      return child;
+    }
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        _slotPulseController,
+        _slotTapPulseController,
+      ]),
+      child: child,
+      builder: (context, bandChild) {
+        final alertPulse = _slotTapPulseController.value;
+        return CustomPaint(
+          painter: _SnakeBorderPainter(
+            progress: _slotPulseController.value,
+            color: const Color.fromARGB(255, 243, 3, 3),
+            strokeWidth: 2 + (alertPulse * 0.9),
+            radius: radius,
+            pulse: alertPulse,
+          ),
+          child: bandChild,
+        );
+      },
+    );
   }
 
   @override
@@ -142,28 +262,38 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 const SizedBox(height: 20),
                 // Slots de sauvegarde en ligne
                 if (!isLoading)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [1, 2, 3].map((slotId) {
-                      final data = slotsData[slotId] ?? {};
-                      final mmr = data['mmr'] ?? 0;
-                      final rankName = StatsService.getRankName(mmr);
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: CompactSlotCard(
-                          id: slotId,
-                          name: "J$slotId",
-                          rank: rankName,
-                          rp: "$mmr RP",
-                          isSelected: selectedSlot == slotId,
-                          rankColor: getRankColor(rankName),
-                          onTap: () {
-                            setState(() => selectedSlot = slotId);
-                            _saveSelectedSlot(slotId);
-                          },
+                  _buildShakableSlots(
+                    child: _buildSlotsAttentionBand(
+                      radius: 10,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [1, 2, 3].asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final slotId = entry.value;
+                            final data = slotsData[slotId] ?? {};
+                            final mmr = data['mmr'] ?? 0;
+                            final rankName = StatsService.getRankName(mmr);
+                            return Padding(
+                              padding:
+                                  EdgeInsets.only(left: index == 0 ? 0 : 6),
+                              child: CompactSlotCard(
+                                id: slotId,
+                                name: "J$slotId",
+                                rank: rankName,
+                                rp: "$mmr RP",
+                                isSelected: selectedSlot == slotId,
+                                rankColor: getRankColor(rankName),
+                                onTap: () => _handleSlotSelected(slotId),
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -178,9 +308,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'PARTIE RAPIDE',
                   icon: Icons.flash_on,
                   isPrimary: true,
+                  enabled: selectedSlot != null,
+                  onDisabledTap: _handleBlockedGameButtonTap,
                   onPressed: () {
-                    context
-                        .go('/solo/setup?tournament=false&slot=$selectedSlot');
+                    final slot = selectedSlot;
+                    if (slot == null) {
+                      _handleBlockedGameButtonTap();
+                      return;
+                    }
+                    context.go('/solo/setup?tournament=false&slot=$slot');
                   },
                 ),
                 const SizedBox(height: 18),
@@ -188,9 +324,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'TOURNOI',
                   icon: Icons.emoji_events,
                   isPrimary: false,
+                  enabled: selectedSlot != null,
+                  onDisabledTap: _handleBlockedGameButtonTap,
                   onPressed: () {
-                    context
-                        .go('/solo/setup?tournament=true&slot=$selectedSlot');
+                    final slot = selectedSlot;
+                    if (slot == null) {
+                      _handleBlockedGameButtonTap();
+                      return;
+                    }
+                    context.go('/solo/setup?tournament=true&slot=$slot');
                   },
                 ),
                 const SizedBox(height: 18),
@@ -198,7 +340,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   label: 'MULTIJOUEUR',
                   icon: Icons.groups,
                   isPrimary: false,
-                  onPressed: _goToMultiplayer,
+                  enabled: selectedSlot != null,
+                  onDisabledTap: _handleBlockedGameButtonTap,
+                  onPressed: () {
+                    if (selectedSlot == null) {
+                      _handleBlockedGameButtonTap();
+                      return;
+                    }
+                    _goToMultiplayer();
+                  },
                 ),
                 const SizedBox(height: 18),
                 CompactMenuButton(
@@ -229,7 +379,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     SmallIconButton(
                       icon: Icons.psychology,
                       onPressed: () =>
-                          context.go('/ai-profile?slot=$selectedSlot'),
+                          context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
                     ),
                   ],
                 ),
@@ -295,37 +445,53 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   if (isLoading)
                     const CircularProgressIndicator(color: Colors.amber)
                   else
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [1, 2, 3].map((slotId) {
-                        final data = slotsData[slotId] ?? {};
-                        final mmr = data['mmr'] ?? 0;
-                        final rankName = StatsService.getRankName(mmr);
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: SaveSlotCard(
-                            id: slotId,
-                            name: "Joueur $slotId",
-                            rank: rankName,
-                            rp: "$mmr RP",
-                            isSelected: selectedSlot == slotId,
-                            rankColor: getRankColor(rankName),
-                            onTap: () {
-                              setState(() => selectedSlot = slotId);
-                              _saveSelectedSlot(slotId);
-                            },
+                    _buildShakableSlots(
+                      child: _buildSlotsAttentionBand(
+                        radius: 12,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 3),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [1, 2, 3].asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final slotId = entry.value;
+                              final data = slotsData[slotId] ?? {};
+                              final mmr = data['mmr'] ?? 0;
+                              final rankName = StatsService.getRankName(mmr);
+                              return Padding(
+                                padding:
+                                    EdgeInsets.only(left: index == 0 ? 0 : 6),
+                                child: SaveSlotCard(
+                                  id: slotId,
+                                  name: "Joueur $slotId",
+                                  rank: rankName,
+                                  rp: "$mmr RP",
+                                  isSelected: selectedSlot == slotId,
+                                  rankColor: getRankColor(rankName),
+                                  onTap: () => _handleSlotSelected(slotId),
+                                ),
+                              );
+                            }).toList(),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                      ),
                     ),
                   SizedBox(height: spacing3),
                   MenuButton(
                     label: 'PARTIE RAPIDE',
                     icon: Icons.flash_on,
                     isPrimary: true,
+                    enabled: selectedSlot != null,
+                    onDisabledTap: _handleBlockedGameButtonTap,
                     onPressed: () {
-                      context.go(
-                          '/solo/setup?tournament=false&slot=$selectedSlot');
+                      final slot = selectedSlot;
+                      if (slot == null) {
+                        _handleBlockedGameButtonTap();
+                        return;
+                      }
+                      context.go('/solo/setup?tournament=false&slot=$slot');
                     },
                   ),
                   SizedBox(height: spacing4),
@@ -333,9 +499,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'TOURNOI',
                     icon: Icons.emoji_events,
                     isPrimary: false,
+                    enabled: selectedSlot != null,
+                    onDisabledTap: _handleBlockedGameButtonTap,
                     onPressed: () {
-                      context
-                          .go('/solo/setup?tournament=true&slot=$selectedSlot');
+                      final slot = selectedSlot;
+                      if (slot == null) {
+                        _handleBlockedGameButtonTap();
+                        return;
+                      }
+                      context.go('/solo/setup?tournament=true&slot=$slot');
                     },
                   ),
                   SizedBox(height: spacing4),
@@ -343,7 +515,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     label: 'MULTIJOUEUR',
                     icon: Icons.groups,
                     isPrimary: false,
-                    onPressed: _goToMultiplayer,
+                    enabled: selectedSlot != null,
+                    onDisabledTap: _handleBlockedGameButtonTap,
+                    onPressed: () {
+                      if (selectedSlot == null) {
+                        _handleBlockedGameButtonTap();
+                        return;
+                      }
+                      _goToMultiplayer();
+                    },
                   ),
                   SizedBox(height: spacing3),
                   Row(
@@ -353,7 +533,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         icon: Icons.settings,
                         label: 'Réglages',
                         onPressed: () =>
-                            context.go('/settings?slot=$selectedSlot'),
+                            context.go('/settings?slot=${selectedSlot ?? 1}'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
@@ -366,14 +546,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         icon: Icons.bar_chart,
                         label: 'Stats',
                         onPressed: () =>
-                            context.go('/stats?slot=$selectedSlot'),
+                            context.go('/stats?slot=${selectedSlot ?? 1}'),
                       ),
                       const SizedBox(width: 20),
                       LabeledIconButton(
                         icon: Icons.psychology,
                         label: 'Profil IA',
                         onPressed: () =>
-                            context.go('/ai-profile?slot=$selectedSlot'),
+                            context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
                       ),
                     ],
                   ),
@@ -385,5 +565,81 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         );
       },
     );
+  }
+}
+
+class _SnakeBorderPainter extends CustomPainter {
+  const _SnakeBorderPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+    required this.radius,
+    required this.pulse,
+  });
+
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  final double pulse;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+
+    final rect = Offset.zero & size;
+    final safeRadius = max(0.0, min(radius, min(size.width, size.height) / 2));
+    final borderRect = rect.deflate(strokeWidth / 2);
+    final rrect = RRect.fromRectAndRadius(
+      borderRect,
+      Radius.circular(safeRadius),
+    );
+
+    final basePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..color = color.withValues(alpha: 0.22 + (pulse * 0.56));
+    canvas.drawRRect(rrect, basePaint);
+
+    final snakePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        startAngle: -pi / 2,
+        endAngle: 3 * pi / 2,
+        transform: GradientRotation(progress * 2 * pi),
+        colors: [
+          Colors.transparent,
+          Colors.transparent,
+          color.withValues(alpha: 0.20),
+          color.withValues(alpha: 1.0),
+          color.withValues(alpha: 1.0),
+          color.withValues(alpha: 0.20),
+          Colors.transparent,
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.56, 0.68, 0.74, 0.80, 0.88, 0.96, 1.0],
+      ).createShader(borderRect)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.5 + (pulse * 3.0));
+    canvas.drawRRect(rrect, snakePaint);
+
+    if (pulse > 0) {
+      final pulsePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth + (pulse * 1.6)
+        ..color = color.withValues(alpha: 0.15 + (pulse * 0.45))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2 + (pulse * 4));
+      canvas.drawRRect(rrect, pulsePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SnakeBorderPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.radius != radius ||
+        oldDelegate.pulse != pulse;
   }
 }

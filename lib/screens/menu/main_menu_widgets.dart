@@ -60,7 +60,8 @@ class CompactSlotCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.person,
-                color: isSelected ? Colors.black : AppColors.textSecondary, size: 20),
+                color: isSelected ? Colors.black : AppColors.textSecondary,
+                size: 20),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -82,7 +83,8 @@ class CompactSlotCard extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(rp,
                   style: TextStyle(
-                      color: isSelected ? Colors.black54 : AppColors.textDisabled,
+                      color:
+                          isSelected ? Colors.black54 : AppColors.textDisabled,
                       fontSize: AppFontSizes.small)),
             ),
           ],
@@ -137,7 +139,8 @@ class SaveSlotCard extends StatelessWidget {
         child: Column(
           children: [
             Icon(Icons.person,
-                color: isSelected ? Colors.black : AppColors.textSecondary, size: 30),
+                color: isSelected ? Colors.black : AppColors.textSecondary,
+                size: 30),
             const SizedBox(height: 4),
             Text(name,
                 style: TextStyle(
@@ -166,6 +169,8 @@ class CompactMenuButton extends StatelessWidget {
   final IconData icon;
   final bool isPrimary;
   final VoidCallback onPressed;
+  final bool enabled;
+  final VoidCallback? onDisabledTap;
 
   const CompactMenuButton({
     super.key,
@@ -173,25 +178,41 @@ class CompactMenuButton extends StatelessWidget {
     required this.icon,
     required this.isPrimary,
     required this.onPressed,
+    this.enabled = true,
+    this.onDisabledTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      height: 40,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon,
-            color: isPrimary ? Colors.black : Colors.white, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? Colors.amber : AppColors.buttonSecondary,
-          foregroundColor: isPrimary ? Colors.black : Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          elevation: isPrimary ? 6 : 3,
+    return GestureDetector(
+      onTap: enabled ? null : onDisabledTap,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 160),
+        opacity: enabled ? 1.0 : 0.45,
+        child: SizedBox(
+          width: 160,
+          height: 40,
+          child: ElevatedButton.icon(
+            onPressed: enabled ? onPressed : null,
+            icon: Icon(icon,
+                color: isPrimary ? Colors.black : Colors.white, size: 18),
+            label: Text(label, style: const TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isPrimary ? Colors.amber : AppColors.buttonSecondary,
+              foregroundColor: isPrimary ? Colors.black : Colors.white,
+              disabledBackgroundColor: isPrimary
+                  ? Colors.amber.withValues(alpha: 0.55)
+                  : AppColors.buttonSecondary.withValues(alpha: 0.55),
+              disabledForegroundColor: isPrimary
+                  ? Colors.black.withValues(alpha: 0.65)
+                  : Colors.white.withValues(alpha: 0.65),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              elevation: enabled ? (isPrimary ? 6 : 3) : 0,
+            ),
+          ),
         ),
       ),
     );
@@ -204,6 +225,8 @@ class MenuButton extends StatelessWidget {
   final IconData icon;
   final bool isPrimary;
   final VoidCallback onPressed;
+  final bool enabled;
+  final VoidCallback? onDisabledTap;
 
   const MenuButton({
     super.key,
@@ -211,23 +234,39 @@ class MenuButton extends StatelessWidget {
     required this.icon,
     required this.isPrimary,
     required this.onPressed,
+    this.enabled = true,
+    this.onDisabledTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: isPrimary ? Colors.black : Colors.white),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? Colors.amber : AppColors.buttonSecondary,
-          foregroundColor: isPrimary ? Colors.black : Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: isPrimary ? 8 : 4,
+    return GestureDetector(
+      onTap: enabled ? null : onDisabledTap,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 180),
+        opacity: enabled ? 1.0 : 0.45,
+        child: SizedBox(
+          width: 200,
+          child: ElevatedButton.icon(
+            onPressed: enabled ? onPressed : null,
+            icon: Icon(icon, color: isPrimary ? Colors.black : Colors.white),
+            label: Text(label),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isPrimary ? Colors.amber : AppColors.buttonSecondary,
+              foregroundColor: isPrimary ? Colors.black : Colors.white,
+              disabledBackgroundColor: isPrimary
+                  ? Colors.amber.withValues(alpha: 0.55)
+                  : AppColors.buttonSecondary.withValues(alpha: 0.55),
+              disabledForegroundColor: isPrimary
+                  ? Colors.black.withValues(alpha: 0.65)
+                  : Colors.white.withValues(alpha: 0.65),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: enabled ? (isPrimary ? 8 : 4) : 0,
+            ),
+          ),
         ),
       ),
     );
@@ -287,7 +326,8 @@ class LabeledIconButton extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(label,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            style:
+                const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ],
     );
   }
