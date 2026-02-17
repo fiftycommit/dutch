@@ -4,7 +4,7 @@ import '../../utils/ui_constants.dart';
 Color getRankColor(String rank) {
   switch (rank) {
     case 'Platine':
-      return const Color(0xFF00BFFF); // Bleu diamant brillant
+      return const Color(0xFFE5E4E2);
     case 'Or':
       return Colors.amber;
     case 'Argent':
@@ -37,6 +37,10 @@ class CompactSlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final idleColor = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.42),
+      rankColor,
+    );
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -44,17 +48,19 @@ class CompactSlotCard extends StatelessWidget {
         width: 78,
         height: 78,
         decoration: BoxDecoration(
-          color: isSelected ? rankColor : Colors.black.withValues(alpha: 0.5),
+          color: isSelected ? rankColor : idleColor,
           borderRadius: BorderRadius.circular(10),
-          border: isSelected
-              ? Border.all(color: Colors.white, width: 2)
-              : Border.all(color: Colors.transparent, width: 2),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: rankColor.withValues(alpha: 0.5), blurRadius: 8)
-                ]
-              : [],
+          border: Border.all(
+            color:
+                isSelected ? Colors.white : rankColor.withValues(alpha: 0.34),
+            width: isSelected ? 2 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: rankColor.withValues(alpha: isSelected ? 0.5 : 0.22),
+              blurRadius: isSelected ? 8 : 5,
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -117,6 +123,10 @@ class SaveSlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final idleColor = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.42),
+      rankColor,
+    );
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -124,17 +134,19 @@ class SaveSlotCard extends StatelessWidget {
         width: 100,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? rankColor : Colors.black.withValues(alpha: 0.5),
+          color: isSelected ? rankColor : idleColor,
           borderRadius: BorderRadius.circular(12),
-          border: isSelected
-              ? Border.all(color: Colors.white, width: 2)
-              : Border.all(color: Colors.transparent, width: 2),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: rankColor.withValues(alpha: 0.5), blurRadius: 10)
-                ]
-              : [],
+          border: Border.all(
+            color:
+                isSelected ? Colors.white : rankColor.withValues(alpha: 0.34),
+            width: isSelected ? 2 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: rankColor.withValues(alpha: isSelected ? 0.5 : 0.22),
+              blurRadius: isSelected ? 10 : 6,
+            ),
+          ],
         ),
         child: Column(
           children: [

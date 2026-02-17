@@ -23,11 +23,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     with TickerProviderStateMixin {
   int? selectedSlot;
   late final AnimationController _slotShakeController;
-  late final AnimationController _slotPulseController;
   late final AnimationController _slotTapPulseController;
 
   Map<int, Map<String, dynamic>> slotsData = {};
   bool isLoading = true;
+  bool _isProfileStackOpen = false;
 
   @override
   void initState() {
@@ -36,15 +36,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       vsync: this,
       duration: const Duration(milliseconds: 420),
     );
-    _slotPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    );
     _slotTapPulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 290),
     );
-    _syncSlotPulseAnimation();
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         WebSplashHelper.hideSplash();
@@ -56,7 +51,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   @override
   void dispose() {
     _slotShakeController.dispose();
-    _slotPulseController.dispose();
     _slotTapPulseController.dispose();
     super.dispose();
   }
@@ -88,7 +82,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         };
         isLoading = false;
       });
-      _syncSlotPulseAnimation();
     }
   }
 
@@ -110,19 +103,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _slotShakeController.forward(from: 0);
   }
 
-  void _syncSlotPulseAnimation() {
-    if (selectedSlot == null) {
-      if (!_slotPulseController.isAnimating) {
-        _slotPulseController.repeat();
-      }
-      return;
-    }
-    if (_slotPulseController.isAnimating) {
-      _slotPulseController.stop();
-    }
-    _slotPulseController.value = 0;
-  }
-
   void _handleBlockedGameButtonTap() {
     if (selectedSlot != null) return;
     _shakeSlots();
@@ -139,13 +119,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     });
   }
 
-  void _handleSlotSelected(int slotId) {
-    if (selectedSlot == slotId) return;
-    setState(() => selectedSlot = slotId);
-    _saveSelectedSlot(slotId);
+  void _handleSlotSelected(int slotId, {bool closeStack = false}) {
+    final selectionChanged = selectedSlot != slotId;
+    if (!selectionChanged && !closeStack) return;
+
+    setState(() {
+      selectedSlot = slotId;
+      if (closeStack) {
+        _isProfileStackOpen = false;
+      }
+    });
+
+    if (selectionChanged) {
+      _saveSelectedSlot(slotId);
+    }
     _slotTapPulseController.stop();
     _slotTapPulseController.value = 0;
-    _syncSlotPulseAnimation();
+  }
+
+  void _handleProfileCardTap(int slotId) {
+    if (!_isProfileStackOpen) {
+      setState(() => _isProfileStackOpen = true);
+      return;
+    }
+    _handleSlotSelected(slotId, closeStack: true);
   }
 
   Widget _buildShakableSlots({required Widget child}) {
@@ -171,24 +168,214 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     }
 
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        _slotPulseController,
-        _slotTapPulseController,
-      ]),
+      animation: _slotTapPulseController,
       child: child,
       builder: (context, bandChild) {
-        final alertPulse = _slotTapPulseController.value;
-        return CustomPaint(
-          painter: _SnakeBorderPainter(
-            progress: _slotPulseController.value,
-            color: const Color.fromARGB(255, 243, 3, 3),
-            strokeWidth: 2 + (alertPulse * 0.9),
-            radius: radius,
-            pulse: alertPulse,
+        final t = _slotTapPulseController.value;
+        final isPulsing = _slotTapPulseController.isAnimating || t > 0;
+        if (!isPulsing) {
+          return bandChild!;
+        }
+
+        final easedT = Curves.easeInOut.transform(t);
+        final borderColor = Color.lerp(
+          const Color(0x55FF1744),
+          const Color(0xFFFF1744),
+          easedT,
+        )!;
+        final borderWidth = 1.4 + (easedT * 1.8);
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: borderColor, width: borderWidth),
+            borderRadius: BorderRadius.circular(radius),
           ),
           child: bandChild,
         );
       },
+    );
+  }
+
+  Widget _buildProfileSelectionTitle({required bool compact}) {
+    final showTitle = selectedSlot == null;
+    return SizedBox(
+      width: double.infinity,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        child: showTitle
+            ? Padding(
+                padding: EdgeInsets.only(top: compact ? 8 : 12),
+                child: Text(
+                  'Sélectionnez votre profil',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: compact ? 12 : 16,
+                    letterSpacing: compact ? 0.8 : 1.2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  Widget _buildProfileSelectionBox({
+    required bool compact,
+    required double radius,
+    required EdgeInsets padding,
+  }) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildShakableSlots(
+            child: _buildSlotsAttentionBand(
+              radius: radius,
+              child: Padding(
+                padding: padding,
+                child: _buildProfileCardStack(compact: compact),
+              ),
+            ),
+          ),
+          _buildProfileSelectionTitle(compact: compact),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCardStack({required bool compact}) {
+    const slotIds = [1, 2, 3];
+    final frontSlotId = selectedSlot ?? 1;
+
+    final cardWidth = compact ? 78.0 : 100.0;
+    final openGap = compact ? 12.0 : 14.0;
+    final openWidth = (cardWidth * 3) + (openGap * 2);
+    final closedSpread = compact ? 38.0 : 46.0;
+    final closedWidth = cardWidth + (closedSpread * 2);
+    final stackWidth = _isProfileStackOpen ? openWidth : closedWidth;
+    final stackHeight = compact ? 88.0 : 126.0;
+
+    final centerLeft = (stackWidth - cardWidth) / 2;
+    final openStart = (stackWidth - openWidth) / 2;
+    final backSlots = slotIds.where((slot) => slot != frontSlotId).toList();
+
+    final poses = <int, _ProfileCardPose>{};
+    if (_isProfileStackOpen) {
+      for (final entry in slotIds.asMap().entries) {
+        final index = entry.key;
+        final slotId = entry.value;
+        final left = openStart + (index * (cardWidth + openGap));
+        final rotation = (index - 1) * (compact ? 0.035 : 0.045);
+        final z = (selectedSlot == slotId) ? 10 : index;
+        poses[slotId] = _ProfileCardPose(
+          left: left,
+          top: compact ? 2 : 4,
+          rotationRadians: rotation,
+          scale: 1,
+          zIndex: z,
+        );
+      }
+    } else {
+      poses[frontSlotId] = _ProfileCardPose(
+        left: centerLeft,
+        top: compact ? 2 : 4,
+        rotationRadians: 0,
+        scale: 1,
+        zIndex: 3,
+      );
+      poses[backSlots[0]] = _ProfileCardPose(
+        left: centerLeft - (compact ? 32 : 40),
+        top: compact ? 9 : 13,
+        rotationRadians: -0.16,
+        scale: 0.98,
+        zIndex: 1,
+      );
+      poses[backSlots[1]] = _ProfileCardPose(
+        left: centerLeft + (compact ? 32 : 40),
+        top: compact ? 8 : 11,
+        rotationRadians: 0.16,
+        scale: 0.99,
+        zIndex: 2,
+      );
+    }
+
+    final paintOrder = slotIds.toList()
+      ..sort((a, b) => poses[a]!.zIndex.compareTo(poses[b]!.zIndex));
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_isProfileStackOpen) return;
+        setState(() => _isProfileStackOpen = true);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        width: stackWidth,
+        height: stackHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: paintOrder.map((slotId) {
+            final pose = poses[slotId]!;
+            return AnimatedPositioned(
+              key: ValueKey('profile_card_$slotId'),
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              left: pose.left,
+              top: pose.top,
+              child: AnimatedRotation(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                turns: pose.rotationRadians / (2 * pi),
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  scale: pose.scale,
+                  child: _buildProfileCard(
+                    slotId: slotId,
+                    compact: compact,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCard({
+    required int slotId,
+    required bool compact,
+  }) {
+    final data = slotsData[slotId] ?? {};
+    final mmr = data['mmr'] ?? 0;
+    final rankName = StatsService.getRankName(mmr);
+
+    if (compact) {
+      return CompactSlotCard(
+        id: slotId,
+        name: "J$slotId",
+        rank: rankName,
+        rp: "$mmr RP",
+        isSelected: selectedSlot == slotId,
+        rankColor: getRankColor(rankName),
+        onTap: () => _handleProfileCardTap(slotId),
+      );
+    }
+
+    return SaveSlotCard(
+      id: slotId,
+      name: "Joueur $slotId",
+      rank: rankName,
+      rp: "$mmr RP",
+      isSelected: selectedSlot == slotId,
+      rankColor: getRankColor(rankName),
+      onTap: () => _handleProfileCardTap(slotId),
     );
   }
 
@@ -262,37 +449,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 const SizedBox(height: 20),
                 // Slots de sauvegarde en ligne
                 if (!isLoading)
-                  _buildShakableSlots(
-                    child: _buildSlotsAttentionBand(
-                      radius: 10,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 3),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [1, 2, 3].asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final slotId = entry.value;
-                            final data = slotsData[slotId] ?? {};
-                            final mmr = data['mmr'] ?? 0;
-                            final rankName = StatsService.getRankName(mmr);
-                            return Padding(
-                              padding:
-                                  EdgeInsets.only(left: index == 0 ? 0 : 6),
-                              child: CompactSlotCard(
-                                id: slotId,
-                                name: "J$slotId",
-                                rank: rankName,
-                                rp: "$mmr RP",
-                                isSelected: selectedSlot == slotId,
-                                rankColor: getRankColor(rankName),
-                                onTap: () => _handleSlotSelected(slotId),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
+                  _buildProfileSelectionBox(
+                    compact: true,
+                    radius: 10,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 3,
                     ),
                   ),
               ],
@@ -445,37 +607,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   if (isLoading)
                     const CircularProgressIndicator(color: Colors.amber)
                   else
-                    _buildShakableSlots(
-                      child: _buildSlotsAttentionBand(
-                        radius: 12,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 3),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [1, 2, 3].asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final slotId = entry.value;
-                              final data = slotsData[slotId] ?? {};
-                              final mmr = data['mmr'] ?? 0;
-                              final rankName = StatsService.getRankName(mmr);
-                              return Padding(
-                                padding:
-                                    EdgeInsets.only(left: index == 0 ? 0 : 6),
-                                child: SaveSlotCard(
-                                  id: slotId,
-                                  name: "Joueur $slotId",
-                                  rank: rankName,
-                                  rp: "$mmr RP",
-                                  isSelected: selectedSlot == slotId,
-                                  rankColor: getRankColor(rankName),
-                                  onTap: () => _handleSlotSelected(slotId),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
+                    _buildProfileSelectionBox(
+                      compact: false,
+                      radius: 12,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
                       ),
                     ),
                   SizedBox(height: spacing3),
@@ -568,78 +705,18 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   }
 }
 
-class _SnakeBorderPainter extends CustomPainter {
-  const _SnakeBorderPainter({
-    required this.progress,
-    required this.color,
-    required this.strokeWidth,
-    required this.radius,
-    required this.pulse,
+class _ProfileCardPose {
+  const _ProfileCardPose({
+    required this.left,
+    required this.top,
+    required this.rotationRadians,
+    required this.scale,
+    required this.zIndex,
   });
 
-  final double progress;
-  final Color color;
-  final double strokeWidth;
-  final double radius;
-  final double pulse;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-
-    final rect = Offset.zero & size;
-    final safeRadius = max(0.0, min(radius, min(size.width, size.height) / 2));
-    final borderRect = rect.deflate(strokeWidth / 2);
-    final rrect = RRect.fromRectAndRadius(
-      borderRect,
-      Radius.circular(safeRadius),
-    );
-
-    final basePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..color = color.withValues(alpha: 0.22 + (pulse * 0.56));
-    canvas.drawRRect(rrect, basePaint);
-
-    final snakePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..shader = SweepGradient(
-        startAngle: -pi / 2,
-        endAngle: 3 * pi / 2,
-        transform: GradientRotation(progress * 2 * pi),
-        colors: [
-          Colors.transparent,
-          Colors.transparent,
-          color.withValues(alpha: 0.20),
-          color.withValues(alpha: 1.0),
-          color.withValues(alpha: 1.0),
-          color.withValues(alpha: 0.20),
-          Colors.transparent,
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.56, 0.68, 0.74, 0.80, 0.88, 0.96, 1.0],
-      ).createShader(borderRect)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.5 + (pulse * 3.0));
-    canvas.drawRRect(rrect, snakePaint);
-
-    if (pulse > 0) {
-      final pulsePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth + (pulse * 1.6)
-        ..color = color.withValues(alpha: 0.15 + (pulse * 0.45))
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2 + (pulse * 4));
-      canvas.drawRRect(rrect, pulsePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SnakeBorderPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.radius != radius ||
-        oldDelegate.pulse != pulse;
-  }
+  final double left;
+  final double top;
+  final double rotationRadians;
+  final double scale;
+  final int zIndex;
 }
