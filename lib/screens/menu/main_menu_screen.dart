@@ -513,8 +513,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               ),
             ),
           SafeArea(
-            child: isSmallLandscape
-                ? _buildLandscapeLayout(context, isLoggedIn)
+            child: isLandscape
+                ? _buildLandscapeLayout(context, isLoggedIn, isSmallLandscape)
                 : _buildPortraitLayout(context, isLoggedIn),
           ),
         ],
@@ -522,9 +522,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     );
   }
 
-  /// Layout paysage optimisé pour iPhone
-  Widget _buildLandscapeLayout(BuildContext context, bool isLoggedIn) {
-    // Moins de padding, éléments plus gros, centrage vertical
+  /// Layout paysage (iPhone petit écran + desktop/web grand écran)
+  Widget _buildLandscapeLayout(BuildContext context, bool isLoggedIn, bool isCompact) {
+    final showLabels = !isCompact;
+    final buttonSpacing = isCompact ? 18.0 : 20.0;
+    final titleSize = isCompact ? 44.0 : 52.0;
+    final iconSize = isCompact ? 60.0 : 70.0;
+    final subtitleSize = isCompact ? 13.0 : 15.0;
+    final profileSpacing = isCompact ? 20.0 : 28.0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Row(
@@ -536,16 +542,16 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.style, size: 60, color: Colors.amber),
+                Icon(Icons.style, size: iconSize, color: Colors.amber),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'DUTCH\' 78',
                   style: TextStyle(
                     fontFamily: 'Rye',
-                    fontSize: 44,
+                    fontSize: titleSize,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    shadows: [
+                    shadows: const [
                       Shadow(
                           color: Colors.black45,
                           blurRadius: 10,
@@ -554,20 +560,20 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'réalisé par Max, Irfat et EL Roy',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: subtitleSize,
                     letterSpacing: 2,
                     color: Colors.amber,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: profileSpacing),
                 // Slots de sauvegarde en ligne
                 if (!isLoading)
                   _buildProfileSelectionBox(
-                    compact: true,
+                    compact: isCompact,
                     radius: 10,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
@@ -598,7 +604,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     context.go('/solo/setup?tournament=false&slot=$slot');
                   },
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: buttonSpacing),
                 CompactMenuButton(
                   label: 'TOURNOI',
                   icon: Icons.emoji_events,
@@ -614,7 +620,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     context.go('/solo/setup?tournament=true&slot=$slot');
                   },
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: buttonSpacing),
                 CompactMenuButton(
                   label: 'MULTIJOUEUR',
                   icon: Icons.groups,
@@ -629,38 +635,62 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     _goToMultiplayer();
                   },
                 ),
-                const SizedBox(height: 18),
-                CompactMenuButton(
-                  label: isLoggedIn ? 'MON COMPTE' : 'CONNEXION',
-                  icon: isLoggedIn ? Icons.person : Icons.login,
-                  isPrimary: false,
-                  onPressed: () => _goToAuthEntry(isLoggedIn),
-                ),
-                const SizedBox(height: 24),
+                SizedBox(height: buttonSpacing + 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SmallIconButton(
-                      icon: Icons.settings,
-                      onPressed: () => context.go('/settings'),
-                    ),
-                    const SizedBox(width: 18),
-                    SmallIconButton(
-                      icon: Icons.menu_book,
-                      onPressed: () => context.go('/rules'),
-                    ),
-                    const SizedBox(width: 18),
-                    SmallIconButton(
-                      icon: Icons.bar_chart,
-                      onPressed: () => context.go('/stats'),
-                    ),
-                    const SizedBox(width: 18),
-                    SmallIconButton(
-                      icon: Icons.psychology,
-                      onPressed: () =>
-                          context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
-                    ),
-                  ],
+                  children: showLabels
+                      ? [
+                          LabeledIconButton(
+                            icon: Icons.settings,
+                            label: 'Réglages',
+                            onPressed: () =>
+                                context.go('/settings?slot=${selectedSlot ?? 1}'),
+                          ),
+                          const SizedBox(width: 20),
+                          LabeledIconButton(
+                            icon: Icons.menu_book,
+                            label: 'Règles',
+                            onPressed: () => context.go('/rules'),
+                          ),
+                          const SizedBox(width: 20),
+                          LabeledIconButton(
+                            icon: Icons.bar_chart,
+                            label: 'Statistiques',
+                            onPressed: () =>
+                                context.go('/stats?slot=${selectedSlot ?? 1}'),
+                          ),
+                          const SizedBox(width: 20),
+                          LabeledIconButton(
+                            icon: Icons.psychology,
+                            label: 'Profil IA',
+                            onPressed: () =>
+                                context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                          ),
+                        ]
+                      : [
+                          SmallIconButton(
+                            icon: Icons.settings,
+                            onPressed: () =>
+                                context.go('/settings?slot=${selectedSlot ?? 1}'),
+                          ),
+                          const SizedBox(width: 18),
+                          SmallIconButton(
+                            icon: Icons.menu_book,
+                            onPressed: () => context.go('/rules'),
+                          ),
+                          const SizedBox(width: 18),
+                          SmallIconButton(
+                            icon: Icons.bar_chart,
+                            onPressed: () =>
+                                context.go('/stats?slot=${selectedSlot ?? 1}'),
+                          ),
+                          const SizedBox(width: 18),
+                          SmallIconButton(
+                            icon: Icons.psychology,
+                            onPressed: () =>
+                                context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                          ),
+                        ],
                 ),
               ],
             ),
