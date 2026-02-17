@@ -27,6 +27,16 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   late final AnimationController _slotShakeController;
   late final AnimationController _slotTapPulseController;
 
+  // Keys for card rain obstacle collision
+  final _titleKey = GlobalKey();
+  final _btn1Key = GlobalKey();
+  final _btn2Key = GlobalKey();
+  final _btn3Key = GlobalKey();
+  final _icon1Key = GlobalKey();
+  final _icon2Key = GlobalKey();
+  final _icon3Key = GlobalKey();
+  final _icon4Key = GlobalKey();
+
   Map<int, Map<String, dynamic>> slotsData = {};
   Map<int, String> slotNames = {
     1: 'Joueur 1',
@@ -488,7 +498,20 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             ),
           ),
           if (settings.cardRainEnabled && settings.animationsEnabled)
-            const Positioned.fill(child: CardRainBackground()),
+            Positioned.fill(
+              child: CardRainBackground(
+                obstacleKeys: [
+                  _titleKey,
+                  _btn1Key,
+                  _btn2Key,
+                  _btn3Key,
+                  _icon1Key,
+                  _icon2Key,
+                  _icon3Key,
+                  _icon4Key,
+                ],
+              ),
+            ),
           SafeArea(
             child: isSmallLandscape
                 ? _buildLandscapeLayout(context, isLoggedIn)
@@ -674,6 +697,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   Icon(Icons.style, size: iconSize, color: Colors.amber),
                   const SizedBox(height: 10),
                   Text(
+                    key: _titleKey,
                     'DUTCH\' 78',
                     style: TextStyle(
                       fontFamily: 'Rye',
@@ -702,89 +726,110 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     const CircularProgressIndicator(color: Colors.amber)
                   else
                     _buildProfileSelectionBox(
-                      compact: false,
-                      radius: 12,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
+                        compact: false,
+                        radius: 12,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
                       ),
-                    ),
                   SizedBox(height: spacing3),
-                  MenuButton(
-                    label: 'PARTIE RAPIDE',
-                    icon: Icons.flash_on,
-                    isPrimary: true,
-                    enabled: selectedSlot != null,
-                    onDisabledTap: _handleBlockedGameButtonTap,
-                    onPressed: () {
-                      final slot = selectedSlot;
-                      if (slot == null) {
-                        _handleBlockedGameButtonTap();
-                        return;
-                      }
-                      context.go('/solo/setup?tournament=false&slot=$slot');
-                    },
+                  KeyedSubtree(
+                    key: _btn1Key,
+                    child: MenuButton(
+                      label: 'PARTIE RAPIDE',
+                      icon: Icons.flash_on,
+                      isPrimary: true,
+                      enabled: selectedSlot != null,
+                      onDisabledTap: _handleBlockedGameButtonTap,
+                      onPressed: () {
+                        final slot = selectedSlot;
+                        if (slot == null) {
+                          _handleBlockedGameButtonTap();
+                          return;
+                        }
+                        context.go('/solo/setup?tournament=false&slot=$slot');
+                      },
+                    ),
                   ),
                   SizedBox(height: spacing4),
-                  MenuButton(
-                    label: 'TOURNOI',
-                    icon: Icons.emoji_events,
-                    isPrimary: false,
-                    enabled: selectedSlot != null,
-                    onDisabledTap: _handleBlockedGameButtonTap,
-                    onPressed: () {
-                      final slot = selectedSlot;
-                      if (slot == null) {
-                        _handleBlockedGameButtonTap();
-                        return;
-                      }
-                      context.go('/solo/setup?tournament=true&slot=$slot');
-                    },
+                  KeyedSubtree(
+                    key: _btn2Key,
+                    child: MenuButton(
+                      label: 'TOURNOI',
+                      icon: Icons.emoji_events,
+                      isPrimary: false,
+                      enabled: selectedSlot != null,
+                      onDisabledTap: _handleBlockedGameButtonTap,
+                      onPressed: () {
+                        final slot = selectedSlot;
+                        if (slot == null) {
+                          _handleBlockedGameButtonTap();
+                          return;
+                        }
+                        context.go('/solo/setup?tournament=true&slot=$slot');
+                      },
+                    ),
                   ),
                   SizedBox(height: spacing4),
-                  MenuButton(
-                    label: 'MULTIJOUEUR',
-                    icon: Icons.groups,
-                    isPrimary: false,
-                    enabled: selectedSlot != null,
-                    onDisabledTap: _handleBlockedGameButtonTap,
-                    onPressed: () {
-                      if (selectedSlot == null) {
-                        _handleBlockedGameButtonTap();
-                        return;
-                      }
-                      _goToMultiplayer();
-                    },
+                  KeyedSubtree(
+                    key: _btn3Key,
+                    child: MenuButton(
+                      label: 'MULTIJOUEUR',
+                      icon: Icons.groups,
+                      isPrimary: false,
+                      enabled: selectedSlot != null,
+                      onDisabledTap: _handleBlockedGameButtonTap,
+                      onPressed: () {
+                        if (selectedSlot == null) {
+                          _handleBlockedGameButtonTap();
+                          return;
+                        }
+                        _goToMultiplayer();
+                      },
+                    ),
                   ),
                   SizedBox(height: spacing3),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      LabeledIconButton(
-                        icon: Icons.settings,
-                        label: 'Réglages',
-                        onPressed: () =>
-                            context.go('/settings?slot=${selectedSlot ?? 1}'),
+                      KeyedSubtree(
+                        key: _icon1Key,
+                        child: LabeledIconButton(
+                          icon: Icons.settings,
+                          label: 'Réglages',
+                          onPressed: () =>
+                              context.go('/settings?slot=${selectedSlot ?? 1}'),
+                        ),
                       ),
                       const SizedBox(width: 20),
-                      LabeledIconButton(
-                        icon: Icons.menu_book,
-                        label: 'Règles',
-                        onPressed: () => context.go('/rules'),
+                      KeyedSubtree(
+                        key: _icon2Key,
+                        child: LabeledIconButton(
+                          icon: Icons.menu_book,
+                          label: 'Règles',
+                          onPressed: () => context.go('/rules'),
+                        ),
                       ),
                       const SizedBox(width: 20),
-                      LabeledIconButton(
-                        icon: Icons.bar_chart,
-                        label: 'Stats',
-                        onPressed: () =>
-                            context.go('/stats?slot=${selectedSlot ?? 1}'),
+                      KeyedSubtree(
+                        key: _icon3Key,
+                        child: LabeledIconButton(
+                          icon: Icons.bar_chart,
+                          label: 'Stats',
+                          onPressed: () =>
+                              context.go('/stats?slot=${selectedSlot ?? 1}'),
+                        ),
                       ),
                       const SizedBox(width: 20),
-                      LabeledIconButton(
-                        icon: Icons.psychology,
-                        label: 'Profil IA',
-                        onPressed: () =>
-                            context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                      KeyedSubtree(
+                        key: _icon4Key,
+                        child: LabeledIconButton(
+                          icon: Icons.psychology,
+                          label: 'Profil IA',
+                          onPressed: () =>
+                              context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                        ),
                       ),
                     ],
                   ),
