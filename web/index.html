@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html
-  style="background: linear-gradient(to bottom right, #0d2818, #1a472a); overscroll-behavior-x: none; touch-action: pan-y;">
+  style="background: #0d2818; overscroll-behavior-x: none; touch-action: pan-y;">
 
 <head>
   <base href="$FLUTTER_BASE_HREF">
@@ -37,29 +37,24 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    :root { --safe-bg: linear-gradient(to bottom right, #0d2818, #1a472a); }
+    :root { --safe-bg: #0d2818; }
 
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background: var(--safe-bg);
-      background-color: #0d2818;
+      background: #0d2818;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    /* Couvre les safe areas (encoche iOS paysage) que html/body ne peint pas */
+    /* Couleur solide qui couvre toutes les safe areas iOS */
     body::before {
       content: '';
       position: fixed;
-      top: -100px;
-      left: -100px;
-      right: -100px;
-      bottom: -100px;
-      background: linear-gradient(to bottom right, #0d2818, #1a472a);
+      inset: -200px;
+      background: #0d2818;
       z-index: -1;
       pointer-events: none;
     }
@@ -197,12 +192,26 @@
       }
     };
 
-    // Watch for Flutter view creation and fix background
+    // Ensure viewport-fit=cover survives Flutter's meta tag replacement
+    window._ensureViewportFitCover = function() {
+      var meta = document.querySelector('meta[name="viewport"]');
+      if (meta && meta.content.indexOf('viewport-fit=cover') === -1) {
+        meta.content = meta.content + ', viewport-fit=cover';
+      }
+    };
+
+    // Watch for Flutter view creation and fix background + viewport
     new MutationObserver(function(mutations) {
+      window._ensureViewportFitCover();
       if (document.querySelector('flutter-view')) {
         window._fixFlutterBg();
       }
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+
+    // Also watch head specifically for meta tag changes
+    new MutationObserver(function() {
+      window._ensureViewportFitCover();
+    }).observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['content'] });
 
     window.splashProgress = 0;
     window.splashStatus = '';

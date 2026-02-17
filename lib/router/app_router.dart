@@ -42,7 +42,7 @@ class AppRouter {
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
   /// Mapping route → CSS background pour les safe areas iOS
-  static const _defaultSafeBg = 'linear-gradient(to bottom right, #0d2818, #1a472a)';
+  static const _defaultSafeBg = '#0d2818';
   static const _routeSafeBg = <String, String>{
     '/multiplayer/profile': '#0B1223',
   };
