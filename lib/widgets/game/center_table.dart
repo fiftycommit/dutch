@@ -249,7 +249,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
       children: [
         if (isReaction) ...[
           Text(
-            "Vite ! Avez-vous un$topCardValue ?",
+            "Vite ! Avez-vous un${topCardValue == 'Dame' ? 'e' : ''} $topCardValue ?",
             style: TextStyle(
               color: Colors.white,
               fontSize: widget.isCompactMode ? 12 : 16,
