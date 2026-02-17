@@ -44,224 +44,235 @@ class AppRouter {
       initialLocation: '/splash',
       debugLogDiagnostics: true,
       routes: [
-        // ============ ÉCRAN DE CHARGEMENT ============
-        GoRoute(
-          path: '/splash',
-          name: 'splash',
-          builder: (context, state) => const SplashScreen(),
-        ),
+        // ShellRoute pour envelopper toutes les pages avec SelectionArea
+        // (nécessite d'être à l'intérieur du Navigator pour avoir accès à l'Overlay)
+        ShellRoute(
+          builder: (context, state, child) => SelectionArea(child: child),
+          routes: [
+            // ============ ÉCRAN DE CHARGEMENT ============
+            GoRoute(
+              path: '/splash',
+              name: 'splash',
+              builder: (context, state) => const SplashScreen(),
+            ),
 
-        // ============ MENU PRINCIPAL ============
-        GoRoute(
-          path: '/',
-          name: 'home',
-          pageBuilder: (context, state) => CustomTransitionPage(
-            key: state.pageKey,
-            child: const MainMenuScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        ),
+            // ============ MENU PRINCIPAL ============
+            GoRoute(
+              path: '/',
+              name: 'home',
+              pageBuilder: (context, state) => CustomTransitionPage(
+                key: state.pageKey,
+                child: const MainMenuScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            ),
 
-        // ============ MODE SOLO ============
-        // Route avec query parameters pour isTournament et saveSlot
-        GoRoute(
-          path: '/solo/setup',
-          name: 'soloSetup',
-          builder: (context, state) {
-            final isTournament =
-                state.uri.queryParameters['tournament'] == 'true';
-            final saveSlot =
-                int.tryParse(state.uri.queryParameters['slot'] ?? '0') ?? 0;
-            return GameSetupScreen(
-              isTournament: isTournament,
-              saveSlot: saveSlot,
-            );
-          },
-        ),
-        GoRoute(
-          path: '/solo/memorization',
-          name: 'soloMemorization',
-          builder: (context, state) => const MemorizationScreen(),
-        ),
-        GoRoute(
-          path: '/solo/game',
-          name: 'soloGame',
-          builder: (context, state) => const GameScreen(),
-        ),
-        GoRoute(
-          path: '/solo/results',
-          name: 'soloResults',
-          builder: (context, state) => const ResultsScreen(),
-        ),
-        GoRoute(
-          path: '/solo/dutch-reveal',
-          name: 'soloDutchReveal',
-          builder: (context, state) => const DutchRevealScreen(),
-        ),
+            // ============ MODE SOLO ============
+            // Route avec query parameters pour isTournament et saveSlot
+            GoRoute(
+              path: '/solo/setup',
+              name: 'soloSetup',
+              builder: (context, state) {
+                final isTournament =
+                    state.uri.queryParameters['tournament'] == 'true';
+                final saveSlot =
+                    int.tryParse(state.uri.queryParameters['slot'] ?? '0') ?? 0;
+                return GameSetupScreen(
+                  isTournament: isTournament,
+                  saveSlot: saveSlot,
+                );
+              },
+            ),
+            GoRoute(
+              path: '/solo/memorization',
+              name: 'soloMemorization',
+              builder: (context, state) => const MemorizationScreen(),
+            ),
+            GoRoute(
+              path: '/solo/game',
+              name: 'soloGame',
+              builder: (context, state) => const GameScreen(),
+            ),
+            GoRoute(
+              path: '/solo/results',
+              name: 'soloResults',
+              builder: (context, state) => const ResultsScreen(),
+            ),
+            GoRoute(
+              path: '/solo/dutch-reveal',
+              name: 'soloDutchReveal',
+              builder: (context, state) => const DutchRevealScreen(),
+            ),
 
-        // ============ RÈGLES / SETTINGS / STATS ============
-        GoRoute(
-          path: '/rules',
-          name: 'rules',
-          builder: (context, state) => const RulesScreen(),
-        ),
-        GoRoute(
-          path: '/settings',
-          name: 'settings',
-          builder: (context, state) {
-            final slot =
-                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-            return SettingsScreen(initialSlot: slot);
-          },
-        ),
-        GoRoute(
-          path: '/stats',
-          name: 'stats',
-          builder: (context, state) {
-            final slot =
-                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-            return StatsScreen(initialSlot: slot);
-          },
-        ),
+            // ============ RÈGLES / SETTINGS / STATS ============
+            GoRoute(
+              path: '/rules',
+              name: 'rules',
+              builder: (context, state) => const RulesScreen(),
+            ),
+            GoRoute(
+              path: '/settings',
+              name: 'settings',
+              builder: (context, state) {
+                final slot =
+                    int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+                return SettingsScreen(initialSlot: slot);
+              },
+            ),
+            GoRoute(
+              path: '/stats',
+              name: 'stats',
+              builder: (context, state) {
+                final slot =
+                    int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+                return StatsScreen(initialSlot: slot);
+              },
+            ),
 
-        GoRoute(
-          path: '/ai-profile',
-          name: 'aiProfile',
-          builder: (context, state) {
-            final slot =
-                int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-            return AiProfileScreen(slotId: slot);
-          },
-        ),
+            GoRoute(
+              path: '/ai-profile',
+              name: 'aiProfile',
+              builder: (context, state) {
+                final slot =
+                    int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
+                return AiProfileScreen(slotId: slot);
+              },
+            ),
 
-        // ============ AUTHENTIFICATION ============
-        GoRoute(
-          path: '/login',
-          name: 'login',
-          builder: (context, state) => const LoginScreen(),
-        ),
-        GoRoute(
-          path: '/register',
-          name: 'register',
-          builder: (context, state) => const RegisterScreen(),
-        ),
-        GoRoute(
-          path: '/forgot-password',
-          name: 'forgotPassword',
-          builder: (context, state) => const ForgotPasswordScreen(),
-        ),
+            // ============ AUTHENTIFICATION ============
+            GoRoute(
+              path: '/login',
+              name: 'login',
+              builder: (context, state) => const LoginScreen(),
+            ),
+            GoRoute(
+              path: '/register',
+              name: 'register',
+              builder: (context, state) => const RegisterScreen(),
+            ),
+            GoRoute(
+              path: '/forgot-password',
+              name: 'forgotPassword',
+              builder: (context, state) => const ForgotPasswordScreen(),
+            ),
 
-        // ============ MODE MULTIJOUEUR ============
-        GoRoute(
-          path: '/multiplayer',
-          name: 'multiplayer',
-          builder: (context, state) => const MultiplayerMenuScreen(),
-        ),
+            // ============ MODE MULTIJOUEUR ============
+            GoRoute(
+              path: '/multiplayer',
+              name: 'multiplayer',
+              builder: (context, state) => const MultiplayerMenuScreen(),
+            ),
 
-        // Sélection du mode (public/privé) - ancien écran gardé pour compatibilité
-        GoRoute(
-          path: '/multiplayer/mode-selection',
-          name: 'multiplayerModeSelection',
-          builder: (context, state) => const MultiplayerModeSelectionScreen(),
-        ),
+            // Sélection du mode (public/privé) - ancien écran gardé pour compatibilité
+            GoRoute(
+              path: '/multiplayer/mode-selection',
+              name: 'multiplayerModeSelection',
+              builder: (context, state) =>
+                  const MultiplayerModeSelectionScreen(),
+            ),
 
-        // Sélection pour créer un salon
-        GoRoute(
-          path: '/multiplayer/create-selection',
-          name: 'createModeSelection',
-          builder: (context, state) => const CreateModeSelectionScreen(),
-        ),
+            // Sélection pour créer un salon
+            GoRoute(
+              path: '/multiplayer/create-selection',
+              name: 'createModeSelection',
+              builder: (context, state) => const CreateModeSelectionScreen(),
+            ),
 
-        // Sélection pour rejoindre un salon
-        GoRoute(
-          path: '/multiplayer/join-selection',
-          name: 'joinModeSelection',
-          builder: (context, state) => const JoinModeSelectionScreen(),
-        ),
+            // Sélection pour rejoindre un salon
+            GoRoute(
+              path: '/multiplayer/join-selection',
+              name: 'joinModeSelection',
+              builder: (context, state) => const JoinModeSelectionScreen(),
+            ),
 
-        // Créer un salon privé
-        GoRoute(
-          path: '/multiplayer/create-private',
-          name: 'createPrivateRoom',
-          builder: (context, state) => const CreatePrivateRoomScreen(),
-        ),
+            // Créer un salon privé
+            GoRoute(
+              path: '/multiplayer/create-private',
+              name: 'createPrivateRoom',
+              builder: (context, state) => const CreatePrivateRoomScreen(),
+            ),
 
-        // Créer un salon public
-        GoRoute(
-          path: '/multiplayer/create-public',
-          name: 'createPublicRoom',
-          builder: (context, state) => const CreatePublicRoomScreen(),
-        ),
+            // Créer un salon public
+            GoRoute(
+              path: '/multiplayer/create-public',
+              name: 'createPublicRoom',
+              builder: (context, state) => const CreatePublicRoomScreen(),
+            ),
 
-        // Rejoindre un salon privé (avec code)
-        GoRoute(
-          path: '/multiplayer/join-private',
-          name: 'joinPrivateRoom',
-          builder: (context, state) => const JoinPrivateRoomScreen(),
-        ),
+            // Rejoindre un salon privé (avec code)
+            GoRoute(
+              path: '/multiplayer/join-private',
+              name: 'joinPrivateRoom',
+              builder: (context, state) => const JoinPrivateRoomScreen(),
+            ),
 
-        // Liste des salons publics
-        GoRoute(
-          path: '/multiplayer/matchmaking',
-          name: 'publicMatchmaking',
-          builder: (context, state) => const PublicMatchmakingScreen(),
-        ),
+            // Liste des salons publics
+            GoRoute(
+              path: '/multiplayer/matchmaking',
+              name: 'publicMatchmaking',
+              builder: (context, state) => const PublicMatchmakingScreen(),
+            ),
 
-        // Route pour le salon (le roomCode est géré par le provider)
-        GoRoute(
-          path: '/lobby',
-          name: 'lobby',
-          builder: (context, state) => const MultiplayerLobbyScreen(),
-        ),
+            // Route pour le salon (le roomCode est géré par le provider)
+            GoRoute(
+              path: '/lobby',
+              name: 'lobby',
+              builder: (context, state) => const MultiplayerLobbyScreen(),
+            ),
 
-        // Route dynamique pour rejoindre une room via URL partagée
-        // Ex: dutch-game.me/room/ABC123?name=Max
-        GoRoute(
-          path: '/room/:roomCode',
-          name: 'room',
-          builder: (context, state) {
-            final roomCode = state.pathParameters['roomCode']!;
-            final playerName = state.uri.queryParameters['name'] ?? 'Joueur';
+            // Route dynamique pour rejoindre une room via URL partagée
+            // Ex: dutch-game.me/room/ABC123?name=Max
+            GoRoute(
+              path: '/room/:roomCode',
+              name: 'room',
+              builder: (context, state) {
+                final roomCode = state.pathParameters['roomCode']!;
+                final playerName =
+                    state.uri.queryParameters['name'] ?? 'Joueur';
 
-            // On utilise un widget intermédiaire pour gérer la connexion
-            return _RoomJoinHandler(
-              roomCode: roomCode,
-              playerName: playerName,
-            );
-          },
-        ),
+                // On utilise un widget intermédiaire pour gérer la connexion
+                return _RoomJoinHandler(
+                  roomCode: roomCode,
+                  playerName: playerName,
+                );
+              },
+            ),
 
-        // Routes pour les phases de jeu multiplayer
-        GoRoute(
-          path: '/multiplayer/memorization',
-          name: 'multiplayerMemorization',
-          builder: (context, state) => const MultiplayerMemorizationScreen(),
-        ),
-        GoRoute(
-          path: '/multiplayer/game',
-          name: 'multiplayerGame',
-          builder: (context, state) => const MultiplayerGameScreen(),
-        ),
-        GoRoute(
-          path: '/multiplayer/results',
-          name: 'multiplayerResults',
-          builder: (context, state) {
-            final gameProvider =
-                Provider.of<MultiplayerGameProvider>(context, listen: false);
-            return MultiplayerResultsScreen(
-              gameState: gameProvider.gameState!,
-              localPlayerId: gameProvider.playerId,
-            );
-          },
-        ),
-        GoRoute(
-          path: '/multiplayer/dutch-reveal',
-          name: 'multiplayerDutchReveal',
-          builder: (context, state) => const MultiplayerDutchRevealScreen(),
+            // Routes pour les phases de jeu multiplayer
+            GoRoute(
+              path: '/multiplayer/memorization',
+              name: 'multiplayerMemorization',
+              builder: (context, state) =>
+                  const MultiplayerMemorizationScreen(),
+            ),
+            GoRoute(
+              path: '/multiplayer/game',
+              name: 'multiplayerGame',
+              builder: (context, state) => const MultiplayerGameScreen(),
+            ),
+            GoRoute(
+              path: '/multiplayer/results',
+              name: 'multiplayerResults',
+              builder: (context, state) {
+                final gameProvider =
+                    Provider.of<MultiplayerGameProvider>(context, listen: false);
+                return MultiplayerResultsScreen(
+                  gameState: gameProvider.gameState!,
+                  localPlayerId: gameProvider.playerId,
+                );
+              },
+            ),
+            GoRoute(
+              path: '/multiplayer/dutch-reveal',
+              name: 'multiplayerDutchReveal',
+              builder: (context, state) =>
+                  const MultiplayerDutchRevealScreen(),
+            ),
+          ],
         ),
       ],
 
