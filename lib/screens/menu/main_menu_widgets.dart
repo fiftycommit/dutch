@@ -23,6 +23,7 @@ class CompactSlotCard extends StatelessWidget {
   final bool isSelected;
   final Color rankColor;
   final VoidCallback onTap;
+  final VoidCallback onEditTap;
 
   const CompactSlotCard({
     super.key,
@@ -33,6 +34,7 @@ class CompactSlotCard extends StatelessWidget {
     required this.isSelected,
     required this.rankColor,
     required this.onTap,
+    required this.onEditTap,
   });
 
   @override
@@ -62,36 +64,54 @@ class CompactSlotCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
           children: [
-            Icon(Icons.person,
-                color: isSelected ? Colors.black : AppColors.textSecondary,
-                size: 20),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(name,
-                  style: TextStyle(
-                      color: isSelected ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10)),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.person,
+                    color: isSelected ? Colors.black : AppColors.textSecondary,
+                    size: 20),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(name,
+                      style: TextStyle(
+                          color: isSelected ? Colors.black : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10)),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(rank,
+                      style: TextStyle(
+                          color: isSelected ? Colors.black87 : rankColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: AppFontSizes.small)),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(rp,
+                      style: TextStyle(
+                          color: isSelected
+                              ? Colors.black54
+                              : AppColors.textDisabled,
+                          fontSize: AppFontSizes.small)),
+                ),
+              ],
             ),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(rank,
-                  style: TextStyle(
-                      color: isSelected ? Colors.black87 : rankColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: AppFontSizes.small)),
-            ),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(rp,
-                  style: TextStyle(
-                      color:
-                          isSelected ? Colors.black54 : AppColors.textDisabled,
-                      fontSize: AppFontSizes.small)),
+            Positioned(
+              top: 3,
+              right: 3,
+              child: _SlotEditButton(
+                onTap: onEditTap,
+                iconColor: isSelected ? Colors.black87 : Colors.white,
+                backgroundColor: isSelected
+                    ? Colors.white.withValues(alpha: 0.60)
+                    : Colors.black.withValues(alpha: 0.36),
+                iconSize: 11,
+                buttonSize: 18,
+              ),
             ),
           ],
         ),
@@ -109,6 +129,7 @@ class SaveSlotCard extends StatelessWidget {
   final bool isSelected;
   final Color rankColor;
   final VoidCallback onTap;
+  final VoidCallback onEditTap;
 
   const SaveSlotCard({
     super.key,
@@ -119,6 +140,7 @@ class SaveSlotCard extends StatelessWidget {
     required this.isSelected,
     required this.rankColor,
     required this.onTap,
+    required this.onEditTap,
   });
 
   @override
@@ -148,27 +170,81 @@ class SaveSlotCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
+        child: Stack(
           children: [
-            Icon(Icons.person,
-                color: isSelected ? Colors.black : AppColors.textSecondary,
-                size: 30),
-            const SizedBox(height: 4),
-            Text(name,
-                style: TextStyle(
-                    color: isSelected ? Colors.black : Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12)),
-            Text(rank,
-                style: TextStyle(
-                    color: isSelected ? Colors.black87 : rankColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11)),
-            Text(rp,
-                style: TextStyle(
-                    color: isSelected ? Colors.black54 : Colors.grey,
-                    fontSize: 10)),
+            Column(
+              children: [
+                Icon(Icons.person,
+                    color: isSelected ? Colors.black : AppColors.textSecondary,
+                    size: 30),
+                const SizedBox(height: 4),
+                Text(name,
+                    style: TextStyle(
+                        color: isSelected ? Colors.black : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12)),
+                Text(rank,
+                    style: TextStyle(
+                        color: isSelected ? Colors.black87 : rankColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11)),
+                Text(rp,
+                    style: TextStyle(
+                        color: isSelected ? Colors.black54 : Colors.grey,
+                        fontSize: 10)),
+              ],
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: _SlotEditButton(
+                onTap: onEditTap,
+                iconColor: isSelected ? Colors.black87 : Colors.white,
+                backgroundColor: isSelected
+                    ? Colors.white.withValues(alpha: 0.60)
+                    : Colors.black.withValues(alpha: 0.36),
+                iconSize: 13,
+                buttonSize: 20,
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SlotEditButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final Color iconColor;
+  final Color backgroundColor;
+  final double iconSize;
+  final double buttonSize;
+
+  const _SlotEditButton({
+    required this.onTap,
+    required this.iconColor,
+    required this.backgroundColor,
+    required this.iconSize,
+    required this.buttonSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: buttonSize,
+        height: buttonSize,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(buttonSize / 2),
+        ),
+        child: Icon(
+          Icons.edit,
+          size: iconSize,
+          color: iconColor,
         ),
       ),
     );

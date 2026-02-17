@@ -26,6 +26,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   late final AnimationController _slotTapPulseController;
 
   Map<int, Map<String, dynamic>> slotsData = {};
+  Map<int, String> slotNames = {
+    1: 'Joueur 1',
+    2: 'Joueur 2',
+    3: 'Joueur 3',
+  };
   bool isLoading = true;
   bool _isProfileStackOpen = false;
 
@@ -72,9 +77,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           (savedSlot != null && savedSlot >= 1 && savedSlot <= 3)
               ? savedSlot
               : null;
+      final loadedNames = {
+        1: _getSavedSlotName(prefs, 1),
+        2: _getSavedSlotName(prefs, 2),
+        3: _getSavedSlotName(prefs, 3),
+      };
 
       setState(() {
         selectedSlot = initialSlot;
+        slotNames = loadedNames;
         slotsData = {
           1: results[1] as Map<String, dynamic>,
           2: results[2] as Map<String, dynamic>,
@@ -88,6 +99,80 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   Future<void> _saveSelectedSlot(int slotId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('lastSelectedSlot', slotId);
+  }
+
+  String _slotNameKey(int slotId) => 'slot_name_$slotId';
+
+  String _defaultSlotName(int slotId) => 'Joueur $slotId';
+
+  String _getSavedSlotName(SharedPreferences prefs, int slotId) {
+    final raw = prefs.getString(_slotNameKey(slotId));
+    if (raw == null) return _defaultSlotName(slotId);
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? _defaultSlotName(slotId) : trimmed;
+  }
+
+  Future<void> _saveSlotName(int slotId, String slotName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_slotNameKey(slotId), slotName);
+  }
+
+  Future<void> _promptRenameSlot(int slotId) async {
+    final initialName = slotNames[slotId] ?? _defaultSlotName(slotId);
+    final controller = TextEditingController(text: initialName);
+    String? nextName;
+
+    try {
+      nextName = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Renommer Joueur $slotId'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 18,
+              style: const TextStyle(color: Colors.black),
+              cursorColor: Colors.black,
+              decoration: const InputDecoration(
+                labelText: 'Nom du profil',
+                labelStyle: TextStyle(color: Colors.black87),
+                floatingLabelStyle: TextStyle(color: Colors.black87),
+                counterStyle: TextStyle(color: Colors.black54),
+              ),
+              onSubmitted: (value) {
+                Navigator.of(dialogContext).pop(value);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Enregistrer'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+
+    if (nextName == null) return;
+    final trimmed = nextName.trim();
+    if (trimmed.isEmpty || trimmed == initialName) return;
+
+    if (mounted) {
+      setState(() {
+        slotNames[slotId] = trimmed;
+      });
+    }
+    await _saveSlotName(slotId, trimmed);
   }
 
   /// Naviguer vers le menu multijoueur
@@ -355,27 +440,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     final data = slotsData[slotId] ?? {};
     final mmr = data['mmr'] ?? 0;
     final rankName = StatsService.getRankName(mmr);
+    final slotName = slotNames[slotId] ?? _defaultSlotName(slotId);
 
     if (compact) {
       return CompactSlotCard(
         id: slotId,
-        name: "J$slotId",
+        name: slotName,
         rank: rankName,
         rp: "$mmr RP",
         isSelected: selectedSlot == slotId,
         rankColor: getRankColor(rankName),
         onTap: () => _handleProfileCardTap(slotId),
+        onEditTap: () => _promptRenameSlot(slotId),
       );
     }
 
     return SaveSlotCard(
       id: slotId,
-      name: "Joueur $slotId",
+      name: slotName,
       rank: rankName,
       rp: "$mmr RP",
       isSelected: selectedSlot == slotId,
       rankColor: getRankColor(rankName),
       onTap: () => _handleProfileCardTap(slotId),
+      onEditTap: () => _promptRenameSlot(slotId),
     );
   }
 

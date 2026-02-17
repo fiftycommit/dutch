@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/tournament_labels.dart';
@@ -18,6 +19,44 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
+  Map<int, String> _slotNames = {
+    1: 'Joueur 1',
+    2: 'Joueur 2',
+    3: 'Joueur 3',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSlotNames();
+  }
+
+  Future<void> _loadSlotNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _slotNames = {
+        1: _readSlotName(prefs, 1),
+        2: _readSlotName(prefs, 2),
+        3: _readSlotName(prefs, 3),
+      };
+    });
+  }
+
+  String _slotNameKey(int slotId) => 'slot_name_$slotId';
+
+  String _defaultSlotName(int slotId) => 'Joueur $slotId';
+
+  String _slotDisplayName(int slotId) =>
+      _slotNames[slotId] ?? _defaultSlotName(slotId);
+
+  String _readSlotName(SharedPreferences prefs, int slotId) {
+    final raw = prefs.getString(_slotNameKey(slotId));
+    if (raw == null) return _defaultSlotName(slotId);
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? _defaultSlotName(slotId) : trimmed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
@@ -39,14 +78,29 @@ class _StatsScreenState extends State<StatsScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => context.go('/'),
           ),
-          bottom: const TabBar(
+          bottom: TabBar(
             indicatorColor: Colors.amber,
             labelColor: Colors.amber,
             unselectedLabelColor: AppColors.textDisabled,
             tabs: [
-              Tab(text: "Profil 1"),
-              Tab(text: "Profil 2"),
-              Tab(text: "Profil 3"),
+              Tab(
+                child: Text(
+                  _slotDisplayName(1),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Tab(
+                child: Text(
+                  _slotDisplayName(2),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Tab(
+                child: Text(
+                  _slotDisplayName(3),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),
@@ -178,14 +232,17 @@ class _StatsScreenState extends State<StatsScreen> {
                   itemCount: matches.length,
                   itemBuilder: (context, index) {
                     final match = matches[index];
-                    final round = StatsHelpers.roundValue(match['tournamentRound'], index + 1);
-                    final dateStr = StatsHelpers.formatDate(StatsHelpers.parseDate(match));
+                    final round = StatsHelpers.roundValue(
+                        match['tournamentRound'], index + 1);
+                    final dateStr =
+                        StatsHelpers.formatDate(StatsHelpers.parseDate(match));
                     final subtitle =
                         "${tournamentStageLabel(round, totalRounds: totalRounds)} • $dateStr";
                     return MatchHistoryTile(
                       match: match,
                       subtitleOverride: subtitle,
-                      onTap: () => _showMatchHistory(match, round: round, totalRounds: totalRounds),
+                      onTap: () => _showMatchHistory(match,
+                          round: round, totalRounds: totalRounds),
                     );
                   },
                 ),
@@ -248,7 +305,8 @@ class _StatsScreenState extends State<StatsScreen> {
                         itemBuilder: (context, index) {
                           return Text(
                             orderedActions[index],
-                            style: const TextStyle(color: AppColors.textSecondary),
+                            style:
+                                const TextStyle(color: AppColors.textSecondary),
                           );
                         },
                       ),
@@ -267,6 +325,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   void _confirmReset(BuildContext context, int slotId) {
+    final slotName = _slotDisplayName(slotId);
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
@@ -281,12 +340,14 @@ class _StatsScreenState extends State<StatsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Icône d'avertissement
-              Icon(Icons.warning_amber_rounded, 
-                   color: Colors.orange, 
-                   size: metrics.font(48)),
+              Icon(Icons.warning_amber_rounded,
+                  color: Colors.orange, size: metrics.font(48)),
               SizedBox(height: gap),
-              Text("⚠️ Réinitialiser Profil $slotId ?",
-                  style: TextStyle(color: Colors.white, fontSize: titleSize, fontWeight: FontWeight.bold),
+              Text("⚠️ Réinitialiser $slotName ?",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: titleSize,
+                      fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center),
               SizedBox(height: gap),
               Container(
@@ -299,15 +360,23 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: Column(
                   children: [
                     Text("Cette action est irréversible !",
-                        style: TextStyle(color: Colors.red.shade300, fontSize: bodySize, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.red.shade300,
+                            fontSize: bodySize,
+                            fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center),
                     SizedBox(height: gap / 2),
-                    Text("Tout l'historique de ce profil sera définitivement effacé :",
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                    Text(
+                        "Tout l'historique de ce profil sera définitivement effacé :",
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: bodySize),
                         textAlign: TextAlign.center),
                     SizedBox(height: gap / 2),
-                    Text("• Statistiques de parties\n• Points de classement (RP)\n• Historique des tournois",
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize - 1),
+                    Text(
+                        "• Statistiques de parties\n• Points de classement (RP)\n• Historique des tournois",
+                        style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: bodySize - 1),
                         textAlign: TextAlign.left),
                   ],
                 ),
@@ -322,9 +391,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
                         side: const BorderSide(color: AppColors.textDisabled),
-                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                        padding:
+                            EdgeInsets.symmetric(vertical: metrics.space(12)),
                       ),
-                      child: Text("Annuler", style: TextStyle(fontSize: buttonSize)),
+                      child: Text("Annuler",
+                          style: TextStyle(fontSize: buttonSize)),
                     ),
                   ),
                   SizedBox(width: gap),
@@ -338,9 +409,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                        padding:
+                            EdgeInsets.symmetric(vertical: metrics.space(12)),
                       ),
-                      child: Text("Effacer", style: TextStyle(fontSize: buttonSize)),
+                      child: Text("Effacer",
+                          style: TextStyle(fontSize: buttonSize)),
                     ),
                   ),
                 ],
@@ -353,6 +426,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   void _showFinalConfirmation(BuildContext context, int slotId) {
+    final slotName = _slotDisplayName(slotId);
     showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
@@ -366,14 +440,20 @@ class _StatsScreenState extends State<StatsScreen> {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_forever, color: Colors.red, size: metrics.font(48)),
+              Icon(Icons.delete_forever,
+                  color: Colors.red, size: metrics.font(48)),
               SizedBox(height: gap),
               Text("Dernière chance !",
-                  style: TextStyle(color: Colors.red.shade300, fontSize: titleSize, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.red.shade300,
+                      fontSize: titleSize,
+                      fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center),
               SizedBox(height: gap),
-              Text("Appuyez sur \"Confirmer la suppression\" pour effacer définitivement le Profil $slotId.",
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+              Text(
+                  "Appuyez sur \"Confirmer la suppression\" pour effacer définitivement $slotName.",
+                  style: TextStyle(
+                      color: AppColors.textSecondary, fontSize: bodySize),
                   textAlign: TextAlign.center),
               SizedBox(height: gap * 1.5),
               Row(
@@ -385,9 +465,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
                         side: const BorderSide(color: AppColors.textDisabled),
-                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                        padding:
+                            EdgeInsets.symmetric(vertical: metrics.space(12)),
                       ),
-                      child: Text("Annuler", style: TextStyle(fontSize: buttonSize)),
+                      child: Text("Annuler",
+                          style: TextStyle(fontSize: buttonSize)),
                     ),
                   ),
                   SizedBox(width: gap),
@@ -399,7 +481,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Profil $slotId réinitialisé'),
+                              content: Text('$slotName réinitialisé'),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -409,9 +491,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red.shade700,
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: metrics.space(12)),
+                        padding:
+                            EdgeInsets.symmetric(vertical: metrics.space(12)),
                       ),
-                      child: Text("Confirmer", style: TextStyle(fontSize: buttonSize)),
+                      child: Text("Confirmer",
+                          style: TextStyle(fontSize: buttonSize)),
                     ),
                   ),
                 ],

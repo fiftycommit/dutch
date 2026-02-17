@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/settings_provider.dart';
 import '../../models/game_settings.dart';
 import '../../utils/ui_constants.dart';
@@ -15,6 +16,41 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Map<int, String> _slotNames = {
+    1: 'Joueur 1',
+    2: 'Joueur 2',
+    3: 'Joueur 3',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSlotNames();
+  }
+
+  Future<void> _loadSlotNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _slotNames = {
+        1: _readSlotName(prefs, 1),
+        2: _readSlotName(prefs, 2),
+        3: _readSlotName(prefs, 3),
+      };
+    });
+  }
+
+  String _slotNameKey(int slotId) => 'slot_name_$slotId';
+
+  String _defaultSlotName(int slotId) => 'Joueur $slotId';
+
+  String _readSlotName(SharedPreferences prefs, int slotId) {
+    final raw = prefs.getString(_slotNameKey(slotId));
+    if (raw == null) return _defaultSlotName(slotId);
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? _defaultSlotName(slotId) : trimmed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsProvider>(context);
@@ -25,7 +61,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('RÉGLAGES',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           backgroundColor: AppColors.backgroundMedium,
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
@@ -35,14 +72,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => context.go('/'),
           ),
-          bottom: const TabBar(
+          bottom: TabBar(
             indicatorColor: Colors.amber,
             labelColor: Colors.amber,
             unselectedLabelColor: AppColors.textDisabled,
             tabs: [
-              Tab(text: "Profil 1"),
-              Tab(text: "Profil 2"),
-              Tab(text: "Profil 3"),
+              Tab(
+                child: Text(
+                  _slotNames[1] ?? _defaultSlotName(1),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Tab(
+                child: Text(
+                  _slotNames[2] ?? _defaultSlotName(2),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Tab(
+                child: Text(
+                  _slotNames[3] ?? _defaultSlotName(3),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),
@@ -67,137 +119,137 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-            _buildSectionHeader("MÉCANIQUE DE JEU"),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        _buildSectionHeader("MÉCANIQUE DE JEU"),
+        Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Vitesse Défausse",
-                          style: TextStyle(color: Colors.white, fontSize: 16)),
-                      Text(
-                          "${(settings.reactionTimeMs / 1000).toStringAsFixed(1)} s",
-                          style: const TextStyle(
-                              color: Colors.amber,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
-                    ],
-                  ),
-                  Slider(
-                    value: settings.reactionTimeMs.toDouble(),
-                    min: 2000,
-                    max: 6000,
-                    divisions: 8,
-                    activeColor: Colors.amber,
-                    inactiveColor: Colors.white24,
-                    onChanged: (value) {
-                      settings.setReactionTime(value.toInt());
-                    },
-                  ),
-                  const Text(
-                    "Temps disponible pour jouer une carte sur la défausse.",
-                    style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Affichage action bot",
-                          style: TextStyle(color: Colors.white, fontSize: 16)),
-                      Text(
-                          settings.actionTextDisplayMs == 0
-                              ? "Désactivé"
-                              : "${(settings.actionTextDisplayMs / 1000).toStringAsFixed(1)} s",
-                          style: const TextStyle(
-                              color: Colors.amber,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
-                    ],
-                  ),
-                  Slider(
-                    value: settings.actionTextDisplayMs.toDouble(),
-                    min: 0,
-                    max: 10000,
-                    divisions: 20,
-                    activeColor: Colors.amber,
-                    inactiveColor: Colors.white24,
-                    onChanged: (value) {
-                      settings.setActionTextDisplayTime(value.toInt());
-                    },
-                  ),
-                  const Text(
-                    "Durée d'affichage de l'action des bots avant la réaction. 0 = désactivé.",
-                    style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
-                  ),
+                  const Text("Vitesse Défausse",
+                      style: TextStyle(color: Colors.white, fontSize: 16)),
+                  Text(
+                      "${(settings.reactionTimeMs / 1000).toStringAsFixed(1)} s",
+                      style: const TextStyle(
+                          color: Colors.amber,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ],
               ),
-            ),
-            _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+              Slider(
+                value: settings.reactionTimeMs.toDouble(),
+                min: 2000,
+                max: 6000,
+                divisions: 8,
+                activeColor: Colors.amber,
+                inactiveColor: Colors.white24,
+                onChanged: (value) {
+                  settings.setReactionTime(value.toInt());
+                },
               ),
-              child: Column(
+              const Text(
+                "Temps disponible pour jouer une carte sur la défausse.",
+                style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildShuffleOption(
-                      settings,
-                      Difficulty.easy,
-                      "DÉTENDU",
-                      "Mélange 100% aléatoire. Chance pure.\nIdéal pour les parties rapides.",
-                      Colors.green),
-                  const Divider(height: 1, color: Colors.white24),
-                  _buildShuffleOption(
-                      settings,
-                      Difficulty.medium,
-                      "TACTIQUE",
-                      "Mélange pondéré et équilibré.\nMoins de chaos, plus de stratégie.",
-                      Colors.amber),
-                  const Divider(height: 1, color: Colors.white24),
-                  _buildShuffleOption(
-                      settings,
-                      Difficulty.hard,
-                      "CHALLENGER",
-                      "Pioche exigeante.\nLes bonnes cartes se méritent.",
-                      Colors.red),
+                  const Text("Affichage action bot",
+                      style: TextStyle(color: Colors.white, fontSize: 16)),
+                  Text(
+                      settings.actionTextDisplayMs == 0
+                          ? "Désactivé"
+                          : "${(settings.actionTextDisplayMs / 1000).toStringAsFixed(1)} s",
+                      style: const TextStyle(
+                          color: Colors.amber,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ],
               ),
-            ),
-            const SizedBox(height: 30),
-            _buildSectionHeader("AUDIO & IMMERSION"),
-            _buildSwitchTile(
-              "Effets Sonores",
-              "Bruits de cartes et alertes",
-              settings.soundEnabled,
-              (val) => settings.toggleSound(val),
-            ),
-            _buildSwitchTile(
-              "Vibrations",
-              "Retour haptique",
-              settings.hapticEnabled,
-              (val) => settings.toggleHaptic(val),
-            ),
-            _buildSwitchTile(
-              "Animations",
-              "Vol des cartes et transitions",
-              settings.animationsEnabled,
-              (val) => settings.toggleAnimations(val),
-            ),
-            const SizedBox(height: 10),
-            _buildSwitchTile(
-              "SBMM (Adaptatif)",
-              "Ajuste l'IA des bots selon vos résultats",
-              settings.useSBMM,
-              (val) => settings.toggleSBMM(val),
-            ),
+              Slider(
+                value: settings.actionTextDisplayMs.toDouble(),
+                min: 0,
+                max: 10000,
+                divisions: 20,
+                activeColor: Colors.amber,
+                inactiveColor: Colors.white24,
+                onChanged: (value) {
+                  settings.setActionTextDisplayTime(value.toInt());
+                },
+              ),
+              const Text(
+                "Durée d'affichage de l'action des bots avant la réaction. 0 = désactivé.",
+                style: TextStyle(color: AppColors.textDisabled, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              _buildShuffleOption(
+                  settings,
+                  Difficulty.easy,
+                  "DÉTENDU",
+                  "Mélange 100% aléatoire. Chance pure.\nIdéal pour les parties rapides.",
+                  Colors.green),
+              const Divider(height: 1, color: Colors.white24),
+              _buildShuffleOption(
+                  settings,
+                  Difficulty.medium,
+                  "TACTIQUE",
+                  "Mélange pondéré et équilibré.\nMoins de chaos, plus de stratégie.",
+                  Colors.amber),
+              const Divider(height: 1, color: Colors.white24),
+              _buildShuffleOption(
+                  settings,
+                  Difficulty.hard,
+                  "CHALLENGER",
+                  "Pioche exigeante.\nLes bonnes cartes se méritent.",
+                  Colors.red),
+            ],
+          ),
+        ),
+        const SizedBox(height: 30),
+        _buildSectionHeader("AUDIO & IMMERSION"),
+        _buildSwitchTile(
+          "Effets Sonores",
+          "Bruits de cartes et alertes",
+          settings.soundEnabled,
+          (val) => settings.toggleSound(val),
+        ),
+        _buildSwitchTile(
+          "Vibrations",
+          "Retour haptique",
+          settings.hapticEnabled,
+          (val) => settings.toggleHaptic(val),
+        ),
+        _buildSwitchTile(
+          "Animations",
+          "Vol des cartes et transitions",
+          settings.animationsEnabled,
+          (val) => settings.toggleAnimations(val),
+        ),
+        const SizedBox(height: 10),
+        _buildSwitchTile(
+          "SBMM (Adaptatif)",
+          "Ajuste l'IA des bots selon vos résultats",
+          settings.useSBMM,
+          (val) => settings.toggleSBMM(val),
+        ),
       ],
     );
   }
@@ -225,7 +277,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle,
-            style: const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
+            style:
+                const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.amber,
@@ -263,8 +316,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           fontSize: 16)),
                   const SizedBox(height: 4),
                   Text(desc,
-                      style:
-                          const TextStyle(color: AppColors.textDisabled, fontSize: 12)),
+                      style: const TextStyle(
+                          color: AppColors.textDisabled, fontSize: 12)),
                 ],
               ),
             ),
