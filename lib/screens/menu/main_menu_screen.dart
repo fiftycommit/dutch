@@ -192,10 +192,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     context.go('/multiplayer');
   }
 
-  void _goToAuthEntry(bool isLoggedIn) {
-    context.go(isLoggedIn ? '/multiplayer' : '/login');
-  }
-
   void _shakeSlots() {
     _slotShakeController.forward(from: 0);
   }
