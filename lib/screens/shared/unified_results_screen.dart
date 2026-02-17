@@ -92,6 +92,7 @@ class ResultsScreen extends StatelessWidget {
     final callerWon = gameState.didDutchCallerWin();
 
     return Scaffold(
+      backgroundColor: AppColors.gradientBottom,
       body: Container(
         decoration: AppDecorations.pageBackground,
         child: SafeArea(

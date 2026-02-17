@@ -88,6 +88,7 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.gradientBottom,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(

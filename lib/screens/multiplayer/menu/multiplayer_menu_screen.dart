@@ -620,6 +620,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.gradientBottom,
       body: Stack(
         children: <Widget>[
           Container(

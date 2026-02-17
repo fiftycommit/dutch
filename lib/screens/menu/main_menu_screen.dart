@@ -490,6 +490,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     final settings = context.watch<SettingsProvider>();
 
     return Scaffold(
+      backgroundColor: AppColors.gradientBottom,
       body: Stack(
         children: [
           Positioned.fill(
