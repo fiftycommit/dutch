@@ -7,7 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/ui/stats_service.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/ui_constants.dart';
+import '../../widgets/card_rain_background.dart';
 import 'main_menu_widgets.dart';
 import '../web_splash_helper.dart'
     if (dart.library.io) '../web_splash_helper_stub.dart';
@@ -475,6 +477,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     final isLandscape = screenSize.width > screenSize.height;
     final isSmallLandscape = isLandscape && screenSize.height < 500;
 
+    final settings = context.watch<SettingsProvider>();
+
     return Scaffold(
       body: Stack(
         children: [
@@ -483,6 +487,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               decoration: AppDecorations.pageBackground,
             ),
           ),
+          if (settings.cardRainEnabled && settings.animationsEnabled)
+            const Positioned.fill(child: CardRainBackground()),
           SafeArea(
             child: isSmallLandscape
                 ? _buildLandscapeLayout(context, isLoggedIn)

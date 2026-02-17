@@ -243,6 +243,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           settings.animationsEnabled,
           (val) => settings.toggleAnimations(val),
         ),
+        _buildSwitchTile(
+          "Pluie de cartes",
+          "Animation de fond sur le menu principal",
+          settings.cardRainEnabled,
+          (val) => settings.toggleCardRain(val),
+        ),
         const SizedBox(height: 10),
         _buildSwitchTile(
           "SBMM (Adaptatif)",

@@ -36,7 +36,7 @@ class BotFactory {
     'Guy2',
     'Avon Barksdale',
     'Messball',
-    'Bersa',
+    'Balkhis',
     'Marlo Stanfield',
     'Manboy',
     'Bramsou',
