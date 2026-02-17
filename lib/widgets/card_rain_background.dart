@@ -56,6 +56,11 @@ class _FallingCard {
   });
 }
 
+/// Notifier léger qui évite de reconstruire tout le widget tree parent
+class _CardRainNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
+}
+
 class CardRainBackground extends StatefulWidget {
   /// GlobalKeys of UI elements that act as obstacles for bouncing cards
   final List<GlobalKey> obstacleKeys;
@@ -298,33 +303,43 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     _resolveCardCollisions();
     _resolveObstacleCollisions();
 
-    setState(() {});
+    _notifier.notify();
   }
+
+  // Notifier léger pour éviter setState à chaque frame
+  final _CardRainNotifier _notifier = _CardRainNotifier();
 
   @override
   Widget build(BuildContext context) {
     if (_cards.isEmpty) return const SizedBox.expand();
 
     return IgnorePointer(
-      child: Stack(
-        children: _cards.map((card) {
-          return Positioned(
-            left: card.x,
-            top: card.y,
-            child: Opacity(
-              opacity: card.opacity,
-              child: Transform.rotate(
-                angle: card.rotation,
-                child: SvgPicture.asset(
-                  card.asset,
-                  height: card.size,
-                  width: card.width,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+      child: RepaintBoundary(
+        child: ListenableBuilder(
+          listenable: _notifier,
+          builder: (context, _) {
+            return Stack(
+              children: _cards.map((card) {
+                return Positioned(
+                  left: card.x,
+                  top: card.y,
+                  child: Opacity(
+                    opacity: card.opacity,
+                    child: Transform.rotate(
+                      angle: card.rotation,
+                      child: SvgPicture.asset(
+                        card.asset,
+                        height: card.size,
+                        width: card.width,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../../services/ui/stats_service.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/card_rain_background.dart';
+import '../../services/ui/svg_precache_service.dart';
 import 'main_menu_widgets.dart';
 import '../web_splash_helper.dart'
     if (dart.library.io) '../web_splash_helper_stub.dart';
@@ -63,6 +65,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       });
     }
     _loadDataParallel();
+    // Précache les SVGs restants en arrière-plan (non bloquant)
+    unawaited(SvgPrecacheService().precacheRemainingSvgs());
   }
 
   @override

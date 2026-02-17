@@ -13,7 +13,15 @@ class SvgPrecacheService {
   bool get isPrecached => _isPrecached;
   static const String _prefsKey = 'svg_precache_v1';
 
-  /// Tous les SVGs de cartes
+  /// SVGs critiques : dos de cartes + cartes numériques (les plus fréquentes)
+  /// Les figures (V, D, R) et jokers sont chargés en arrière-plan après
+  static const List<String> _criticalCardSvgPaths = [
+    'assets/images/cards/dos-bleu.svg',
+    'assets/images/cards/back.svg',
+    'assets/images/cards/joker-rouge.svg',
+  ];
+
+  /// Tous les SVGs de cartes (pour le chargement en arrière-plan)
   static const List<String> _allCardSvgPaths = [
     // Dos de cartes
     'assets/images/cards/dos-bleu.svg',
@@ -79,6 +87,45 @@ class SvgPrecacheService {
     'assets/images/cards/joker-rouge.svg',
   ];
 
+  /// Précache uniquement les SVGs critiques (dos de carte, joker pour splash)
+  /// Rapide : 3 fichiers seulement, utilisé pendant le splash
+  Future<void> precacheCriticalSvgs() async {
+    final desiredCacheSize = _allCardSvgPaths.length + 20;
+    if (svg.cache.maximumSize < desiredCacheSize) {
+      svg.cache.maximumSize = desiredCacheSize;
+    }
+
+    await Future.wait(
+      _criticalCardSvgPaths.map(_loadSvg),
+      eagerError: false,
+    );
+  }
+
+  /// Précache tous les SVGs restants en arrière-plan
+  /// Appelé après la navigation vers le menu principal
+  Future<void> precacheRemainingSvgs() async {
+    if (_isPrecached) return;
+
+    try {
+      final remaining = _allCardSvgPaths
+          .where((p) => !_criticalCardSvgPaths.contains(p))
+          .toList();
+
+      for (int i = 0; i < remaining.length; i += 10) {
+        final batch = remaining.skip(i).take(10);
+        await Future.wait(
+          batch.map(_loadSvg),
+          eagerError: false,
+        );
+      }
+
+      _isPrecached = true;
+      await _setPrecachedPersisted();
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Erreur précache SVG: $e');
+    }
+  }
+
   /// Précache tous les SVGs de cartes
   /// [onProgress] est appelé avec une valeur entre 0.0 et 1.0.
   Future<void> precacheCardSvgs({
@@ -103,7 +150,6 @@ class SvgPrecacheService {
       }
     }
 
-    final stopwatch = Stopwatch()..start();
     final total = _allCardSvgPaths.length;
     int loaded = 0;
     onProgress?.call(0.0);
@@ -123,8 +169,7 @@ class SvgPrecacheService {
           eagerError: false,
         );
       }
-      
-      stopwatch.stop();
+
       _isPrecached = true;
       await _setPrecachedPersisted();
       onProgress?.call(1.0);

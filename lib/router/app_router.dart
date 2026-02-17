@@ -7,6 +7,8 @@ import '../providers/multiplayer_game_provider.dart';
 import '../utils/ui_constants.dart';
 import '../screens/web_splash_helper.dart'
     if (dart.library.io) '../screens/web_splash_helper_stub.dart';
+
+// ── Eager imports (critical path: splash → menu → solo game) ──
 import '../screens/splash_screen.dart';
 import '../screens/menu/main_menu_screen.dart';
 import '../screens/game/game_setup_screen.dart';
@@ -14,26 +16,89 @@ import '../screens/game/memorization_screen.dart';
 import '../screens/game/game_screen.dart';
 import '../screens/game/results_screen.dart';
 import '../screens/game/dutch_reveal_screen.dart';
-import '../screens/menu/rules_screen.dart';
-import '../screens/menu/settings_screen.dart';
-import '../screens/menu/stats_screen.dart';
-import '../screens/menu/ai_profile_screen.dart';
-import '../screens/auth/login_screen.dart';
-import '../screens/auth/register_screen.dart';
-import '../screens/auth/forgot_password_screen.dart';
-import '../screens/multiplayer/menu/multiplayer_menu_screen.dart';
-import '../screens/multiplayer/menu/multiplayer_mode_selection_screen.dart';
-import '../screens/multiplayer/menu/create_mode_selection_screen.dart';
-import '../screens/multiplayer/menu/join_mode_selection_screen.dart';
-import '../screens/multiplayer/lobby/create_private_room_screen.dart';
-import '../screens/multiplayer/lobby/create_public_room_screen.dart';
-import '../screens/multiplayer/lobby/join_private_room_screen.dart';
-import '../screens/multiplayer/lobby/public_matchmaking_screen.dart';
-import '../screens/multiplayer/lobby/multiplayer_lobby_screen.dart';
-import '../screens/multiplayer/game/multiplayer_memorization_screen.dart';
-import '../screens/multiplayer/game/multiplayer_game_screen.dart';
-import '../screens/multiplayer/game/multiplayer_results_screen.dart';
-import '../screens/multiplayer/game/multiplayer_dutch_reveal_screen.dart';
+
+// ── Deferred imports (loaded on demand) ──
+import '../screens/menu/rules_screen.dart' deferred as rules;
+import '../screens/menu/settings_screen.dart' deferred as settings;
+import '../screens/menu/stats_screen.dart' deferred as stats;
+import '../screens/menu/ai_profile_screen.dart' deferred as ai_profile;
+import '../screens/auth/login_screen.dart' deferred as login;
+import '../screens/auth/register_screen.dart' deferred as register;
+import '../screens/auth/forgot_password_screen.dart' deferred as forgot_pwd;
+import '../screens/multiplayer/menu/multiplayer_menu_screen.dart'
+    deferred as mp_menu;
+import '../screens/multiplayer/menu/multiplayer_mode_selection_screen.dart'
+    deferred as mp_mode;
+import '../screens/multiplayer/menu/create_mode_selection_screen.dart'
+    deferred as mp_create_mode;
+import '../screens/multiplayer/menu/join_mode_selection_screen.dart'
+    deferred as mp_join_mode;
+import '../screens/multiplayer/lobby/create_private_room_screen.dart'
+    deferred as mp_create_private;
+import '../screens/multiplayer/lobby/create_public_room_screen.dart'
+    deferred as mp_create_public;
+import '../screens/multiplayer/lobby/join_private_room_screen.dart'
+    deferred as mp_join_private;
+import '../screens/multiplayer/lobby/public_matchmaking_screen.dart'
+    deferred as mp_matchmaking;
+import '../screens/multiplayer/lobby/multiplayer_lobby_screen.dart'
+    deferred as mp_lobby;
+import '../screens/multiplayer/game/multiplayer_memorization_screen.dart'
+    deferred as mp_memo;
+import '../screens/multiplayer/game/multiplayer_game_screen.dart'
+    deferred as mp_game;
+import '../screens/multiplayer/game/multiplayer_results_screen.dart'
+    deferred as mp_results;
+import '../screens/multiplayer/game/multiplayer_dutch_reveal_screen.dart'
+    deferred as mp_dutch;
+
+/// Widget wrapper pour charger un module deferred avant d'afficher l'écran
+class _DeferredScreen extends StatelessWidget {
+  final Future<void> Function() loader;
+  final Widget Function() builder;
+
+  const _DeferredScreen({required this.loader, required this.builder});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: loader(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.hasError) {
+            return Scaffold(
+              backgroundColor: AppColors.gradientBottom,
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    const Text('Erreur de chargement',
+                        style: TextStyle(color: Colors.white, fontSize: 18)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('Retour'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return builder();
+        }
+        return const Scaffold(
+          backgroundColor: Color(0xFF1a472a),
+          body: Center(
+            child: CircularProgressIndicator(color: Colors.amber),
+          ),
+        );
+      },
+    );
+  }
+}
 
 /// Configuration du routeur pour l'application
 /// Permet d'avoir des URLs propres sur le web (ex: /room/ABC123)
@@ -124,11 +189,14 @@ class AppRouter {
               builder: (context, state) => const DutchRevealScreen(),
             ),
 
-            // ============ RÈGLES / SETTINGS / STATS ============
+            // ============ RÈGLES / SETTINGS / STATS (deferred) ============
             GoRoute(
               path: '/rules',
               name: 'rules',
-              builder: (context, state) => const RulesScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: rules.loadLibrary,
+                builder: () => rules.RulesScreen(),
+              ),
             ),
             GoRoute(
               path: '/settings',
@@ -136,7 +204,10 @@ class AppRouter {
               builder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return SettingsScreen(initialSlot: slot);
+                return _DeferredScreen(
+                  loader: settings.loadLibrary,
+                  builder: () => settings.SettingsScreen(initialSlot: slot),
+                );
               },
             ),
             GoRoute(
@@ -145,7 +216,10 @@ class AppRouter {
               builder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return StatsScreen(initialSlot: slot);
+                return _DeferredScreen(
+                  loader: stats.loadLibrary,
+                  builder: () => stats.StatsScreen(initialSlot: slot),
+                );
               },
             ),
 
@@ -155,89 +229,134 @@ class AppRouter {
               builder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return AiProfileScreen(slotId: slot);
+                return _DeferredScreen(
+                  loader: ai_profile.loadLibrary,
+                  builder: () => ai_profile.AiProfileScreen(slotId: slot),
+                );
               },
             ),
 
-            // ============ AUTHENTIFICATION ============
+            // ============ AUTHENTIFICATION (deferred) ============
             GoRoute(
               path: '/login',
               name: 'login',
-              builder: (context, state) => const LoginScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: login.loadLibrary,
+                builder: () => login.LoginScreen(),
+              ),
             ),
             GoRoute(
               path: '/register',
               name: 'register',
-              builder: (context, state) => const RegisterScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: register.loadLibrary,
+                builder: () => register.RegisterScreen(),
+              ),
             ),
             GoRoute(
               path: '/forgot-password',
               name: 'forgotPassword',
-              builder: (context, state) => const ForgotPasswordScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: forgot_pwd.loadLibrary,
+                builder: () => forgot_pwd.ForgotPasswordScreen(),
+              ),
             ),
 
-            // ============ MODE MULTIJOUEUR ============
+            // ============ MODE MULTIJOUEUR (deferred) ============
             GoRoute(
               path: '/multiplayer',
               name: 'multiplayer',
-              builder: (context, state) => const MultiplayerMenuScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_menu.loadLibrary,
+                builder: () => mp_menu.MultiplayerMenuScreen(),
+              ),
             ),
 
             // Sélection du mode (public/privé) - ancien écran gardé pour compatibilité
             GoRoute(
               path: '/multiplayer/mode-selection',
               name: 'multiplayerModeSelection',
-              builder: (context, state) =>
-                  const MultiplayerModeSelectionScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_mode.loadLibrary,
+                builder: () =>
+                    mp_mode.MultiplayerModeSelectionScreen(),
+              ),
             ),
 
             // Sélection pour créer un salon
             GoRoute(
               path: '/multiplayer/create-selection',
               name: 'createModeSelection',
-              builder: (context, state) => const CreateModeSelectionScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_create_mode.loadLibrary,
+                builder: () =>
+                    mp_create_mode.CreateModeSelectionScreen(),
+              ),
             ),
 
             // Sélection pour rejoindre un salon
             GoRoute(
               path: '/multiplayer/join-selection',
               name: 'joinModeSelection',
-              builder: (context, state) => const JoinModeSelectionScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_join_mode.loadLibrary,
+                builder: () =>
+                    mp_join_mode.JoinModeSelectionScreen(),
+              ),
             ),
 
             // Créer un salon privé
             GoRoute(
               path: '/multiplayer/create-private',
               name: 'createPrivateRoom',
-              builder: (context, state) => const CreatePrivateRoomScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_create_private.loadLibrary,
+                builder: () =>
+                    mp_create_private.CreatePrivateRoomScreen(),
+              ),
             ),
 
             // Créer un salon public
             GoRoute(
               path: '/multiplayer/create-public',
               name: 'createPublicRoom',
-              builder: (context, state) => const CreatePublicRoomScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_create_public.loadLibrary,
+                builder: () =>
+                    mp_create_public.CreatePublicRoomScreen(),
+              ),
             ),
 
             // Rejoindre un salon privé (avec code)
             GoRoute(
               path: '/multiplayer/join-private',
               name: 'joinPrivateRoom',
-              builder: (context, state) => const JoinPrivateRoomScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_join_private.loadLibrary,
+                builder: () =>
+                    mp_join_private.JoinPrivateRoomScreen(),
+              ),
             ),
 
             // Liste des salons publics
             GoRoute(
               path: '/multiplayer/matchmaking',
               name: 'publicMatchmaking',
-              builder: (context, state) => const PublicMatchmakingScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_matchmaking.loadLibrary,
+                builder: () =>
+                    mp_matchmaking.PublicMatchmakingScreen(),
+              ),
             ),
 
             // Route pour le salon (le roomCode est géré par le provider)
             GoRoute(
               path: '/lobby',
               name: 'lobby',
-              builder: (context, state) => const MultiplayerLobbyScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_lobby.loadLibrary,
+                builder: () => mp_lobby.MultiplayerLobbyScreen(),
+              ),
             ),
 
             // Route dynamique pour rejoindre une room via URL partagée
@@ -262,13 +381,19 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/memorization',
               name: 'multiplayerMemorization',
-              builder: (context, state) =>
-                  const MultiplayerMemorizationScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_memo.loadLibrary,
+                builder: () =>
+                    mp_memo.MultiplayerMemorizationScreen(),
+              ),
             ),
             GoRoute(
               path: '/multiplayer/game',
               name: 'multiplayerGame',
-              builder: (context, state) => const MultiplayerGameScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_game.loadLibrary,
+                builder: () => mp_game.MultiplayerGameScreen(),
+              ),
             ),
             GoRoute(
               path: '/multiplayer/results',
@@ -276,17 +401,23 @@ class AppRouter {
               builder: (context, state) {
                 final gameProvider =
                     Provider.of<MultiplayerGameProvider>(context, listen: false);
-                return MultiplayerResultsScreen(
-                  gameState: gameProvider.gameState!,
-                  localPlayerId: gameProvider.playerId,
+                return _DeferredScreen(
+                  loader: mp_results.loadLibrary,
+                  builder: () => mp_results.MultiplayerResultsScreen(
+                    gameState: gameProvider.gameState!,
+                    localPlayerId: gameProvider.playerId,
+                  ),
                 );
               },
             ),
             GoRoute(
               path: '/multiplayer/dutch-reveal',
               name: 'multiplayerDutchReveal',
-              builder: (context, state) =>
-                  const MultiplayerDutchRevealScreen(),
+              builder: (context, state) => _DeferredScreen(
+                loader: mp_dutch.loadLibrary,
+                builder: () =>
+                    mp_dutch.MultiplayerDutchRevealScreen(),
+              ),
             ),
           ],
         ),

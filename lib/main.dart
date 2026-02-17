@@ -34,22 +34,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Lancer Firebase et l'orientation en parallèle (non séquentiel)
+  await Future.wait([
+    Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]),
+  ]);
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Initialiser le service locator avec tous les services
   ServiceLocator.setupDefaultServices();
-
-  // Autoriser toutes les orientations (le jeu s'adaptera)
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
 
   // Mode immersif : masquer toutes les barres système pour une expérience plein écran
   SystemChrome.setEnabledSystemUIMode(

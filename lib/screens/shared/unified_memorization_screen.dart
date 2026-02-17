@@ -82,9 +82,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 900), //animation pulsation cartes
+      duration: const Duration(milliseconds: 900),
       vsync: this,
-    )..repeat(reverse: true);
+    );
 
     // Setup countdown if enabled
     if (config.countdownSeconds != null) {
@@ -154,6 +154,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         _selectedCards.add(index);
       }
     });
+
+    // Start/stop pulse animation based on selection
+    if (_selectedCards.isNotEmpty && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (_selectedCards.isEmpty && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.value = 0;
+    }
   }
 
   void _confirmAndStart() async {

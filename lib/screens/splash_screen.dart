@@ -92,20 +92,16 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _runInitializationSteps() async {
     final skipPrecache = kIsWeb && WebConnectionHelper.isLowBandwidth();
     if (!skipPrecache) {
-      _setStatus('Chargement des cartes...', progress: 0.05);
+      _setStatus('Chargement...', progress: 0.10);
 
+      // Précache uniquement les SVGs critiques (dos + joker = 3 fichiers)
       await SvgPrecacheService()
-          .precacheCardSvgs(
-            skipIfCached: true,
-            onProgress: (progress) {
-              // 5% -> 95% pendant le précache des cartes
-              final weighted = 0.05 + (progress * 0.90);
-              _setProgress(weighted);
-            },
-          )
-          .timeout(const Duration(seconds: 8));
+          .precacheCriticalSvgs()
+          .timeout(const Duration(seconds: 3));
+
+      _setProgress(0.80);
     } else {
-      _setStatus('Mode léger (connexion lente)', progress: 0.90);
+      _setStatus('Mode léger (connexion lente)', progress: 0.80);
     }
     _setStatus('Préparation...', progress: 0.95);
   }
