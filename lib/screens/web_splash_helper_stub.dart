@@ -11,4 +11,8 @@ class WebSplashHelper {
   static void hideSplash() {
     // No-op on non-web platforms
   }
+
+  static void setSafeAreaBackground(String cssValue) {
+    // No-op on non-web platforms
+  }
 }

@@ -121,7 +121,6 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.gradientBottom,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(

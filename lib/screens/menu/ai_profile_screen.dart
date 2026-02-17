@@ -30,7 +30,6 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
       initialIndex: (widget.slotId - 1).clamp(0, 2),
       length: 3,
       child: Scaffold(
-        backgroundColor: AppColors.gradientBottom,
         appBar: AppBar(
           title: const Text(
             'MON PROFIL IA',

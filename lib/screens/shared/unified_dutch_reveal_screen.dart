@@ -216,7 +216,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     final maxCards = players.map((p) => p.hand.length).reduce(math.max);
 
     return Scaffold(
-      backgroundColor: AppColors.gradientBottom,
       body: Container(
         decoration: AppDecorations.pageBackground,
         child: SafeArea(

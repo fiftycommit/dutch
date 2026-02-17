@@ -59,7 +59,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       initialIndex: (widget.initialSlot - 1).clamp(0, 2),
       length: 3,
       child: Scaffold(
-        backgroundColor: AppColors.gradientBottom,
         appBar: AppBar(
           title: const Text('RÉGLAGES',
               style:

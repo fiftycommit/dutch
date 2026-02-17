@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/multiplayer_game_provider.dart';
 import '../utils/ui_constants.dart';
+import '../screens/web_splash_helper.dart'
+    if (dart.library.io) '../screens/web_splash_helper_stub.dart';
 import '../screens/splash_screen.dart';
 import '../screens/menu/main_menu_screen.dart';
 import '../screens/game/game_setup_screen.dart';
@@ -38,8 +41,21 @@ class AppRouter {
   static final GlobalKey<NavigatorState> _rootNavigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
+  /// Mapping route → CSS background pour les safe areas iOS
+  static const _defaultSafeBg = 'linear-gradient(to bottom right, #0d2818, #1a472a)';
+  static const _routeSafeBg = <String, String>{
+    '/multiplayer/profile': '#0B1223',
+  };
+
+  static String _safeBgForLocation(String location) {
+    for (final entry in _routeSafeBg.entries) {
+      if (location.startsWith(entry.key)) return entry.value;
+    }
+    return _defaultSafeBg;
+  }
+
   static GoRouter createRouter(BuildContext context) {
-    return GoRouter(
+    final router = GoRouter(
       navigatorKey: _rootNavigatorKey,
       initialLocation: '/splash',
       debugLogDiagnostics: true,
@@ -307,6 +323,15 @@ class AppRouter {
         ),
       ),
     );
+
+    if (kIsWeb) {
+      router.routerDelegate.addListener(() {
+        final location = router.routerDelegate.currentConfiguration.uri.path;
+        WebSplashHelper.setSafeAreaBackground(_safeBgForLocation(location));
+      });
+    }
+
+    return router;
   }
 }
 

@@ -217,7 +217,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           child: GestureDetector(
             onTap: _dismissKeyboard,
             child: Scaffold(
-              backgroundColor: AppColors.gradientBottom,
               resizeToAvoidBottomInset: true,
               body: Container(
                 decoration: BoxDecoration(

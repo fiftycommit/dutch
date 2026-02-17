@@ -133,7 +133,6 @@ class _SplashScreenState extends State<SplashScreen>
     return AnimatedBuilder(
       animation: _progressController,
       builder: (context, _) => Scaffold(
-        backgroundColor: AppColors.gradientTop,
         body: Stack(
           children: [
             Positioned.fill(

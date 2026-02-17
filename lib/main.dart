@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'utils/ui_constants.dart';
@@ -121,8 +122,9 @@ class _DutchGameAppState extends State<DutchGameApp> {
             debugShowCheckedModeBanner: false,
             theme: ThemeData(
               primarySwatch: Colors.green,
-              scaffoldBackgroundColor:
-                  AppColors.gradientBottom, // Vert foncé poker
+              scaffoldBackgroundColor: kIsWeb
+                  ? Colors.transparent
+                  : AppColors.gradientBottom, // Vert foncé poker
               fontFamily: 'Roboto',
               textTheme: const TextTheme(
                 headlineLarge: TextStyle(

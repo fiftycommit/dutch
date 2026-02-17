@@ -25,6 +25,15 @@ class WebSplashHelper {
       // Ignore errors
     }
   }
+
+  /// Change le background CSS des safe areas (bandes iOS paysage)
+  static void setSafeAreaBackground(String cssValue) {
+    try {
+      _callSetSafeBg(cssValue);
+    } catch (e) {
+      // Ignore errors
+    }
+  }
 }
 
 @JS('updateSplash')
@@ -35,3 +44,6 @@ external void _callFlutterReady();
 
 @JS('hideSplash')
 external void _callHideSplash();
+
+@JS('setSafeBg')
+external void _callSetSafeBg(String value);

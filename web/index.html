@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html
-  style="background: linear-gradient(to bottom, #0d2818, #1a472a); background-attachment: fixed; overscroll-behavior-x: none; touch-action: pan-y;">
+  style="background: linear-gradient(to bottom right, #0d2818, #1a472a); overscroll-behavior-x: none; touch-action: pan-y;">
 
 <head>
   <base href="$FLUTTER_BASE_HREF">
@@ -37,15 +37,35 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
+    :root { --safe-bg: linear-gradient(to bottom right, #0d2818, #1a472a); }
+
     html,
     body {
       margin: 0;
       padding: 0;
-      background: linear-gradient(to bottom, #0d2818, #1a472a);
-      background-attachment: fixed;
-      overflow: hidden;
+      width: 100%;
       height: 100%;
+      background: var(--safe-bg);
+      background-color: #0d2818;
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Couvre les safe areas (encoche iOS paysage) que html/body ne peint pas */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -100px;
+      left: -100px;
+      right: -100px;
+      bottom: -100px;
+      background: linear-gradient(to bottom right, #0d2818, #1a472a);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    flutter-view, flt-glass-pane, #flt-glass-pane, #flutter_target {
+      background: transparent !important;
     }
 
     /* Native splash screen */
@@ -153,6 +173,37 @@
   </noscript>
 
   <script>
+    window.setSafeBg = function(value) {
+      document.documentElement.style.background = value;
+      // Force transparency on Flutter's Shadow DOM elements
+      window._fixFlutterBg();
+    };
+
+    // Force Flutter view + Shadow DOM to transparent so body bg shows through
+    window._fixFlutterBg = function() {
+      var fv = document.querySelector('flutter-view');
+      if (!fv) return;
+      fv.style.background = 'transparent';
+      if (fv.shadowRoot) {
+        var glass = fv.shadowRoot.querySelector('flt-glass-pane');
+        if (glass) glass.style.background = 'transparent';
+        // Also target any host-level styles
+        var style = document.createElement('style');
+        style.textContent = ':host, flt-glass-pane { background: transparent !important; }';
+        if (!fv.shadowRoot.querySelector('[data-safe-bg-fix]')) {
+          style.setAttribute('data-safe-bg-fix', '');
+          fv.shadowRoot.appendChild(style);
+        }
+      }
+    };
+
+    // Watch for Flutter view creation and fix background
+    new MutationObserver(function(mutations) {
+      if (document.querySelector('flutter-view')) {
+        window._fixFlutterBg();
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+
     window.splashProgress = 0;
     window.splashStatus = '';
     window.flutterTookOver = false;
