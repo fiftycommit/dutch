@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:file_selector/file_selector.dart' as fs;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Implémentation native (iOS, Android, macOS, Windows, Linux)
-/// Utilise le système de fichiers local
+/// Utilise le système de fichiers local + copie presse-papiers
 
 Map<String, File> _logFiles = {};
 
@@ -33,14 +34,17 @@ Future<void> appendToLogFile(String gameId, String content) async {
   }
 }
 
-/// Télécharge/ouvre le fichier de log
+/// Télécharge/partage le fichier de log + copie dans le presse-papiers
 Future<bool> downloadLog(String filename, String content) async {
   try {
+    // Toujours copier dans le presse-papiers
+    await Clipboard.setData(ClipboardData(text: content));
+
     final directory = await _getLogDirectory();
     final file = File('${directory.path}/$filename');
     await file.writeAsString(content);
 
-    // Sur mobile natif, on ouvre le share sheet pour une UX cohérente avec le web.
+    // Mobile: share sheet natif
     if (Platform.isIOS || Platform.isAndroid) {
       await Share.shareXFiles(
         [XFile(file.path)],
@@ -50,34 +54,23 @@ Future<bool> downloadLog(String filename, String content) async {
       return true;
     }
 
-    // Sur macOS desktop, ouvrir une vraie fenêtre "Enregistrer sous...".
+    // macOS: fenêtre "Enregistrer sous..."
     if (Platform.isMacOS) {
-      if (kDebugMode) {
-        debugPrint('📄 macOS save panel: opening for $filename');
-      }
       final saveLocation = await fs.getSaveLocation(
         suggestedName: filename,
         confirmButtonText: 'Enregistrer',
       );
 
-      if (saveLocation == null) {
-        if (kDebugMode) {
-          debugPrint('📄 macOS save panel: canceled by user');
-        }
-        return false;
-      }
+      if (saveLocation == null) return false;
 
       final targetPath = saveLocation.path.toLowerCase().endsWith('.log')
           ? saveLocation.path
           : '${saveLocation.path}.log';
       await File(targetPath).writeAsString(content);
-      if (kDebugMode) {
-        debugPrint('📄 macOS save panel: saved to $targetPath');
-      }
       return true;
     }
 
-    // Desktop non macOS: log déjà écrit dans le dossier local de l'app.
+    // Autres desktop: fichier déjà sauvé localement
     return true;
   } catch (e) {
     if (kDebugMode) debugPrint('⚠️ downloadLog error: $e');

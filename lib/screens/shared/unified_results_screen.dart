@@ -197,7 +197,9 @@ class ResultsScreen extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(exported ? 'Log exporté !' : 'Export annulé'),
+          content: Text(exported
+              ? 'Log exporté et copié dans le presse-papiers !'
+              : 'Export annulé (copié dans le presse-papiers)'),
           duration: Duration(seconds: 2),
         ),
       );
