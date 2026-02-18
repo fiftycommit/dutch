@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/bot/bot_power_handler.dart';
 import 'package:dutch_game/services/game/bot/bot_difficulty.dart';
 import 'package:dutch_game/models/game_state.dart';
+import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/models/playing_card.dart';
 
@@ -166,6 +167,31 @@ void main() {
         expect(finalKnown, greaterThanOrEqualTo(initialKnown));
       });
 
+      test('gold does not skip power 7 even with fully known hand', () async {
+        bot.knownCards = List.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', '7');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.gold,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('a utilisé son pouvoir')),
+          isTrue,
+        );
+      });
+
       test('power V may swap cards', () async {
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -216,6 +242,33 @@ void main() {
         );
 
         expect(bot.mentalMap[3], equals(bot.hand[3]));
+      });
+
+      test('power 7 prioritizes swapped unknown card for gold', () async {
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+          null,
+        ];
+        bot.knownCards = [true, true, false, false];
+        bot.setUnknownCardHint(
+          2,
+          quality: 0.1,
+          confidence: 0.8,
+          actionCount: gameState.actionCount,
+        );
+
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', '7');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.gold,
+          null,
+        );
+
+        expect(bot.mentalMap[2], equals(bot.hand[2]));
       });
     });
 
@@ -288,6 +341,221 @@ void main() {
         );
 
         expect(bot.spyMemory.containsKey(human.id), isFalse);
+      });
+    });
+
+    group('gold/platinum valet targeting rules', () {
+      List<PlayingCard> makeHand(int size) {
+        final seed = <PlayingCard>[
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+          PlayingCard.create('spades', '8'),
+          PlayingCard.create('hearts', '10'),
+        ];
+        return List<PlayingCard>.from(seed.take(size));
+      }
+
+      Player makePlayer(
+        String id,
+        String name, {
+        required bool isHuman,
+        required int cards,
+        BotSkillLevel? skill,
+        int position = 0,
+      }) {
+        return Player(
+          id: id,
+          name: name,
+          isHuman: isHuman,
+          botSkillLevel: skill,
+          position: position,
+        )
+          ..hand = makeHand(cards)
+          ..knownCards = List<bool>.filled(cards, false, growable: true);
+      }
+
+      test('targets two boosted bots first (min cards, tie by ranking)',
+          () async {
+        final main = makePlayer(
+          'main',
+          'Main',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.gold,
+          position: 0,
+        )..initializeBotMemory();
+        final boostedA = makePlayer(
+          'boosted_a',
+          'Boosted A',
+          isHuman: false,
+          cards: 2,
+          skill: BotSkillLevel.gold,
+          position: 1,
+        );
+        final boostedB = makePlayer(
+          'boosted_b',
+          'Boosted B',
+          isHuman: false,
+          cards: 2,
+          skill: BotSkillLevel.platinum,
+          position: 2,
+        );
+        final slowBot = makePlayer(
+          'slow',
+          'Slow Bot',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.bronze,
+          position: 3,
+        );
+        final human = makePlayer(
+          'human_x',
+          'Human X',
+          isHuman: true,
+          cards: 4,
+          position: 4,
+        );
+
+        final gs = GameState(
+          players: [main, boostedA, boostedB, slowBot, human],
+          deck: GameState.createFullDeck().sublist(0, 30),
+          discardPile: [PlayingCard.create('hearts', '6')],
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+        )
+          ..isWaitingForSpecialPower = true
+          ..specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(gs, BotDifficulty.gold, null);
+
+        final exchange = gs.actionHistory
+            .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
+        expect(exchange, contains('Boosted A'));
+        expect(exchange, contains('Boosted B'));
+        expect(exchange.contains('Slow Bot'), isFalse);
+      });
+
+      test('with one boosted bot, pairs it with best other bot', () async {
+        final main = makePlayer(
+          'main',
+          'Main',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.gold,
+          position: 0,
+        )..initializeBotMemory();
+        final boosted = makePlayer(
+          'boosted',
+          'Boosted',
+          isHuman: false,
+          cards: 2,
+          skill: BotSkillLevel.silver,
+          position: 1,
+        );
+        final topBot = makePlayer(
+          'top_bot',
+          'Top Bot',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.platinum,
+          position: 2,
+        );
+        final lowBot = makePlayer(
+          'low_bot',
+          'Low Bot',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.bronze,
+          position: 3,
+        );
+        final human = makePlayer(
+          'human_x',
+          'Human X',
+          isHuman: true,
+          cards: 3,
+          position: 4,
+        );
+
+        final gs = GameState(
+          players: [main, boosted, topBot, lowBot, human],
+          deck: GameState.createFullDeck().sublist(0, 30),
+          discardPile: [PlayingCard.create('hearts', '6')],
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+        )
+          ..isWaitingForSpecialPower = true
+          ..specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(gs, BotDifficulty.gold, null);
+
+        final exchange = gs.actionHistory
+            .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
+        expect(exchange, contains('Boosted'));
+        expect(exchange, contains('Top Bot'));
+        expect(exchange.contains('Human X'), isFalse);
+      });
+
+      test('when no boosted and hand known, swaps top bot with top human',
+          () async {
+        final main = makePlayer(
+          'main',
+          'Main',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.platinum,
+          position: 0,
+        )
+          ..knownCards = List<bool>.filled(4, true, growable: true)
+          ..mentalMap = List<PlayingCard?>.from(makeHand(4));
+        final topBot = makePlayer(
+          'top_bot',
+          'Top Bot',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.platinum,
+          position: 1,
+        );
+        final lowBot = makePlayer(
+          'low_bot',
+          'Low Bot',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.bronze,
+          position: 2,
+        );
+        final humanA = makePlayer(
+          'human_a',
+          'Human A',
+          isHuman: true,
+          cards: 3,
+          position: 3,
+        );
+        final humanB = makePlayer(
+          'human_b',
+          'Human B',
+          isHuman: true,
+          cards: 4,
+          position: 4,
+        );
+
+        final gs = GameState(
+          players: [main, topBot, lowBot, humanA, humanB],
+          deck: GameState.createFullDeck().sublist(0, 30),
+          discardPile: [PlayingCard.create('hearts', '6')],
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+        )
+          ..isWaitingForSpecialPower = true
+          ..specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+            gs, BotDifficulty.platinum, null);
+
+        final exchange = gs.actionHistory
+            .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
+        expect(exchange, contains('Top Bot'));
+        expect(exchange, contains('Human A'));
       });
     });
   });

@@ -324,6 +324,72 @@ void main() {
       });
     });
 
+    group('gold seven behavior', () {
+      test('discards 7 when an unknown card exists', () async {
+        // Main partiellement inconnue (setup par défaut: 2 connues, 2 inconnues)
+        gameState.drawnCard = PlayingCard.create('hearts', '7');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.exploration,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(gameState.discardPile.last.value, equals('7'));
+      });
+
+      test('keeps 7 only to replace a known card strictly above 7', () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'), // 1
+          PlayingCard.create('diamonds', '5'), // 5
+          PlayingCard.create('clubs', '8'), // 8
+          PlayingCard.create('spades', 'R'), // 13 (pire)
+        ];
+        bot.knownCards = List.filled(4, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+        gameState.drawnCard = PlayingCard.create('hearts', '7');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.optimization,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(
+            bot.hand.any((c) => c.value == '7' && c.suit == 'hearts'), isTrue);
+        expect(
+            bot.hand.any((c) => c.value == 'R' && c.suit == 'spades'), isFalse);
+      });
+
+      test('discards 7 when all known cards are 7 or lower', () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+          PlayingCard.create('spades', '7'),
+        ];
+        bot.knownCards = List.filled(4, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+        gameState.drawnCard = PlayingCard.create('diamonds', '7');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.endgame,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(gameState.discardPile.last.value, equals('7'));
+        expect(bot.hand.any((c) => c.value == '7' && c.suit == 'diamonds'),
+            isFalse);
+      });
+    });
+
     group('platinum contextual unknown swaps', () {
       test('targets suspicious unknown card first', () async {
         bot.mentalMap = [

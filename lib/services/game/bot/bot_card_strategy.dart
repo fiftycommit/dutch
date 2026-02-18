@@ -80,6 +80,39 @@ class BotCardStrategy {
         isLateGame ||
         isHumanDangerous;
 
+    final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
+
+    // RÈGLE OR/PLATINE SUR LE 7 :
+    // - S'il reste des inconnues, on défausse le 7 pour activer le pouvoir.
+    // - Sinon, on garde le 7 uniquement pour remplacer une carte > 7.
+    // - Si aucune carte > 7, on défausse quand même le 7 pour re-vérifier une carte.
+    if (drawn.value == '7' && _isAdvancedCardTier(decisionProfile.tier)) {
+      if (unknownIndices.isNotEmpty) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+
+      int worstKnownValue = -1;
+      int worstKnownIdx = -1;
+      for (int i = 0; i < bot.mentalMap.length; i++) {
+        final known = bot.mentalMap[i];
+        if (known != null && known.points > worstKnownValue) {
+          worstKnownValue = known.points;
+          worstKnownIdx = i;
+        }
+      }
+
+      if (worstKnownIdx != -1 && worstKnownValue > 7) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+      }
+      return;
+    }
+
     // Note: En endgame tendu ou si l'humain est dangereux,
     // on désactive la stratégie doublons (voir ci-dessous)
 
@@ -110,7 +143,6 @@ class BotCardStrategy {
 
     // EXPLORATION : Remplacer une carte inconnue systématiquement
     // Règle demandée : si je ne connais pas une carte, je la remplace peu importe la valeur
-    List<int> unknownIndices = BotMemoryManager.getUnknownIndices(bot);
     if (unknownIndices.isNotEmpty) {
       final replaceIdx = _chooseUnknownReplacementIndex(
         gs,

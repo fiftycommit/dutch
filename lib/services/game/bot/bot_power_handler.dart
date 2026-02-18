@@ -60,10 +60,10 @@ class BotPowerHandler {
 
     final report = BotThreatAnalyzer.analyzeOpponents(gameState, bot);
     final diffName = difficulty.name;
-    final isPlatinum = diffName == 'Platine' || diffName == 'Impossible';
+    final isPlatinum = _isPlatinumDifficulty(difficulty);
+    final isGold = _isGoldDifficulty(difficulty);
     final isBronze = diffName == 'Bronze';
     final isSilver = diffName == 'Argent';
-    final isGold = diffName == 'Or';
 
     // Détection de menace immédiate
     final hasImmediateThreat = report.hasOpponentWithOneCard ||
@@ -95,10 +95,12 @@ class BotPowerHandler {
 
     // Pouvoirs d'info = utilisés si ça apporte quelque chose
     final hasUnknown = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
-    final shouldUseInfo = (val == '7' && (hasUnknown || isPlatinum)) ||
-        (val == '10' && (shouldUsePower10 || isPlatinum));
+    final shouldUseInfo =
+        (val == '7' && (hasUnknown || isGold || isPlatinum)) ||
+            (val == '10' && (shouldUsePower10 || isPlatinum));
 
     final shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
+    final forceUsePower7 = val == '7' && (isGold || isPlatinum);
 
     // Bronze "bête": rate souvent l'opportunité d'un pouvoir non critique.
     final passiveSkipChance = isBronze
@@ -110,6 +112,7 @@ class BotPowerHandler {
                 : 0.0;
     if (passiveSkipChance > 0 &&
         !hasImmediateThreat &&
+        !forceUsePower7 &&
         !isOffensive &&
         _random.nextDouble() < passiveSkipChance) {
       _skipPower(gameState, bot);
@@ -182,6 +185,31 @@ class BotPowerHandler {
     BotDifficulty difficulty,
   ) {
     final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
+    final isAdvanced =
+        _isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty);
+
+    if (isAdvanced && unknownIndices.isNotEmpty) {
+      int? swappedIndex;
+      int latestSwapAction = -1;
+      double bestSwapConfidence = -1.0;
+
+      for (final idx in unknownIndices) {
+        final hintAction = bot.getUnknownCardHintAction(idx);
+        if (hintAction == null) continue;
+
+        final confidence = bot.getUnknownCardHintConfidence(idx) ?? 0.0;
+        if (hintAction > latestSwapAction ||
+            (hintAction == latestSwapAction &&
+                confidence > bestSwapConfidence)) {
+          latestSwapAction = hintAction;
+          bestSwapConfidence = confidence;
+          swappedIndex = idx;
+        }
+      }
+
+      if (swappedIndex != null) return swappedIndex;
+    }
+
     if (_isPlatinumDifficulty(difficulty) && unknownIndices.isNotEmpty) {
       int? bestIndex;
       double bestPriority = -9999;
@@ -212,6 +240,23 @@ class BotPowerHandler {
       }
 
       if (bestIndex != null) return bestIndex;
+    }
+
+    if (unknownIndices.isNotEmpty) {
+      return unknownIndices[_random.nextInt(unknownIndices.length)];
+    }
+
+    if (isAdvanced) {
+      int worstIdx = 0;
+      int worstValue = -1;
+      for (int i = 0; i < bot.mentalMap.length; i++) {
+        final known = bot.mentalMap[i];
+        if (known != null && known.points > worstValue) {
+          worstValue = known.points;
+          worstIdx = i;
+        }
+      }
+      return worstIdx;
     }
 
     return BotMemoryManager.chooseCardToLook(bot, difficulty);
@@ -378,9 +423,9 @@ class BotPowerHandler {
   }
 
   /// Choisit DEUX cibles pour le pouvoir Valet (pas le bot lui-même)
-  /// Algorithme contextuel : cible les 2 joueurs les plus menaçants
-  /// Si l'humain est dans le top 2 menace, il est inclus
-  /// À menace égale, l'humain est préféré
+  /// Bronze: comportement chaotique.
+  /// Argent: ciblage menace existant.
+  /// Or/Platine: règles contextuelles demandées (cartes d'abord, puis ranking).
   static (Player, Player)? _chooseValetTargets(
     GameState gs,
     Player bot,
@@ -432,22 +477,92 @@ class BotPowerHandler {
       return (first, second);
     }
 
-    List<Player> opponents =
+    final opponents =
         gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
-    if (opponents.length < 2) return null; // Besoin de 2 adversaires minimum
+    if (opponents.length < 2) return null;
 
-    final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
-    final report =
-        BotThreatAnalyzer.analyzeOpponents(gs, bot, isHardcoreMode: isHardcore);
+    final isAdvancedValet =
+        _isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty);
+    if (!isAdvancedValet) {
+      // Argent: conserver l'ancien ciblage par menace.
+      final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
+      final report = BotThreatAnalyzer.analyzeOpponents(gs, bot,
+          isHardcoreMode: isHardcore);
 
-    // Trier par menace décroissante (le tiebreaker +3 pour l'humain est déjà inclus)
-    final sorted = report.sortedByThreat;
-    if (sorted.length >= 2) {
-      return (sorted[0].player, sorted[1].player);
+      final sorted = report.sortedByThreat;
+      if (sorted.length >= 2) {
+        return (sorted[0].player, sorted[1].player);
+      }
+      return (opponents[0], opponents[1]);
     }
 
-    // Fallback
-    return (opponents[0], opponents[1]);
+    final bots = opponents.where((p) => !p.isHuman).toList();
+    final humans = opponents.where((p) => p.isHuman).toList();
+
+    final allSorted = List<Player>.from(opponents)
+      ..sort(_compareByCardsThenHistory);
+    final botsSorted = List<Player>.from(bots)
+      ..sort(_compareByCardsThenHistory);
+    final humansSorted = List<Player>.from(humans)
+      ..sort(_compareByCardsThenHistory);
+
+    // 1) Priorité: bots "boostés" (moins de cartes que le max des bots),
+    // puis on garde seulement ceux au minimum de cartes.
+    if (botsSorted.isNotEmpty) {
+      final maxBotCards =
+          botsSorted.map((p) => p.hand.length).reduce((a, b) => a > b ? a : b);
+      final boostedCandidates =
+          botsSorted.where((p) => p.hand.length < maxBotCards).toList();
+
+      if (boostedCandidates.isNotEmpty) {
+        final minBoostedCards = boostedCandidates
+            .map((p) => p.hand.length)
+            .reduce((a, b) => a < b ? a : b);
+        final boosted = boostedCandidates
+            .where((p) => p.hand.length == minBoostedCards)
+            .toList()
+          ..sort(_compareByHistoryThenCards);
+
+        if (boosted.length >= 2) {
+          return (boosted[0], boosted[1]);
+        }
+
+        if (boosted.length == 1) {
+          final j1 = boosted.first;
+          final j2 = botsSorted.firstWhere(
+            (p) => p.id != j1.id,
+            orElse: () {
+              final fallback = humansSorted.firstWhere(
+                (p) => p.id != j1.id,
+                orElse: () => allSorted.firstWhere(
+                  (p) => p.id != j1.id,
+                  orElse: () => j1,
+                ),
+              );
+              return fallback;
+            },
+          );
+
+          if (j2.id != j1.id) {
+            return (j1, j2);
+          }
+        }
+      }
+    }
+
+    // 2) Si le bot connaît toute sa main: perturber le bot "historique fort"
+    // avec un humain prioritaire.
+    final knowsAllCards = BotMemoryManager.getUnknownIndices(bot).isEmpty;
+    if (knowsAllCards && botsSorted.isNotEmpty && humansSorted.isNotEmpty) {
+      return (botsSorted.first, humansSorted.first);
+    }
+
+    // 3) Fallback déterministe: cartes ASC puis historique DESC.
+    if (allSorted.length >= 2) {
+      return (allSorted[0], allSorted[1]);
+    }
+
+    return null;
   }
 
   static int _chooseValetTargetCardIndex(
@@ -590,6 +705,56 @@ class BotPowerHandler {
       default:
         return difficulty.matchAccuracy <= 0.7 &&
             difficulty.reactionSpeed <= 0.5;
+    }
+  }
+
+  static bool _isGoldDifficulty(BotDifficulty difficulty) {
+    if (_isPlatinumDifficulty(difficulty)) return false;
+    switch (difficulty.name) {
+      case 'Or':
+      case 'Hard':
+      case 'Insane':
+        return true;
+      default:
+        return difficulty.matchAccuracy >= 0.95 &&
+            difficulty.reactionSpeed >= 0.9;
+    }
+  }
+
+  static int _compareByCardsThenHistory(Player a, Player b) {
+    final byCards = a.hand.length.compareTo(b.hand.length);
+    if (byCards != 0) return byCards;
+
+    final byHistory =
+        _historicalRankingScore(b).compareTo(_historicalRankingScore(a));
+    if (byHistory != 0) return byHistory;
+
+    return a.id.compareTo(b.id);
+  }
+
+  static int _compareByHistoryThenCards(Player a, Player b) {
+    final byHistory =
+        _historicalRankingScore(b).compareTo(_historicalRankingScore(a));
+    if (byHistory != 0) return byHistory;
+
+    final byCards = a.hand.length.compareTo(b.hand.length);
+    if (byCards != 0) return byCards;
+
+    return a.id.compareTo(b.id);
+  }
+
+  static int _historicalRankingScore(Player player) {
+    final level = player.botSkillLevel;
+    if (level == null) return 0;
+    switch (level) {
+      case BotSkillLevel.bronze:
+        return 1;
+      case BotSkillLevel.silver:
+        return 2;
+      case BotSkillLevel.gold:
+        return 3;
+      case BotSkillLevel.platinum:
+        return 4;
     }
   }
 }
