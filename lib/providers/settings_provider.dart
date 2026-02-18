@@ -21,8 +21,6 @@ class SettingsProvider with ChangeNotifier {
   bool get cardRainEnabled => _settings.cardRainEnabled;
   bool get useSBMM => _settings.useSBMM;
 
-  Difficulty get luckDifficulty => _settings.luckDifficulty;
-
   Difficulty get botDifficulty => _settings.botDifficulty;
   int get reactionTimeMs => _settings.reactionTimeMs;
   int get actionTextDisplayMs => _settings.actionTextDisplayMs;
@@ -65,12 +63,6 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-
-  void setLuckDifficulty(Difficulty difficulty) {
-    _settings = _settings.copyWith(luckDifficulty: difficulty);
-    _saveSettings();
-    notifyListeners();
-  }
 
   void setReactionTime(int ms) {
     _settings = _settings.copyWith(reactionTimeMs: ms);

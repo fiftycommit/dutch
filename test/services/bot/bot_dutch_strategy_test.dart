@@ -45,26 +45,32 @@ void main() {
     group('shouldCallDutch', () {
       test('returns false during exploration phase', () {
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.gold, BotGamePhase.exploration,
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.exploration,
         );
-        
+
         expect(result, isFalse);
       });
 
       test('considers bot score for bronze difficulty', () {
         // Low score hand
         bot.hand = [
-          PlayingCard.create('hearts', 'A'),  // 1
+          PlayingCard.create('hearts', 'A'), // 1
           PlayingCard.create('diamonds', 'A'), // 1
         ];
         bot.mentalMap = List.filled(2, null, growable: true);
         bot.mentalMap[0] = bot.hand[0];
         bot.mentalMap[1] = bot.hand[1];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.bronze, BotGamePhase.endgame,
+          gameState,
+          bot,
+          BotDifficulty.bronze,
+          BotGamePhase.endgame,
         );
-        
+
         // With very low score, should likely call Dutch
         expect(result, isA<bool>());
       });
@@ -77,11 +83,14 @@ void main() {
         bot.mentalMap = List.filled(2, null, growable: true);
         bot.mentalMap[0] = bot.hand[0];
         bot.mentalMap[1] = bot.hand[1];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.silver, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.silver,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
 
@@ -93,11 +102,14 @@ void main() {
         bot.mentalMap = List.filled(2, null, growable: true);
         bot.mentalMap[0] = bot.hand[0];
         bot.mentalMap[1] = bot.hand[1];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.gold, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
 
@@ -109,11 +121,14 @@ void main() {
         bot.mentalMap = List.filled(2, null, growable: true);
         bot.mentalMap[0] = bot.hand[0];
         bot.mentalMap[1] = bot.hand[1];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.platinum, BotGamePhase.endgame,
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
         );
-        
+
         expect(result, isA<bool>());
       });
 
@@ -121,7 +136,7 @@ void main() {
         // Bot has fewer cards
         bot.hand = [PlayingCard.create('hearts', 'A')];
         bot.mentalMap = [bot.hand[0]];
-        
+
         // Human has more cards
         gameState.players[0].hand = [
           PlayingCard.create('hearts', '5'),
@@ -129,11 +144,14 @@ void main() {
           PlayingCard.create('clubs', '7'),
           PlayingCard.create('spades', '8'),
         ];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.platinum, BotGamePhase.endgame,
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
         );
-        
+
         // With card advantage and low score, should likely call
         expect(result, isA<bool>());
       });
@@ -146,11 +164,14 @@ void main() {
           PlayingCard.create('diamonds', '2'),
           PlayingCard.create('clubs', '3'),
         ];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.bronze, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.bronze,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
 
@@ -160,11 +181,14 @@ void main() {
           PlayingCard.create('diamonds', '2'),
           PlayingCard.create('clubs', '3'),
         ];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.silver, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.silver,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
 
@@ -174,11 +198,14 @@ void main() {
           PlayingCard.create('diamonds', '2'),
           PlayingCard.create('clubs', '3'),
         ];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.gold, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
     });
@@ -192,11 +219,14 @@ void main() {
         bot.mentalMap = List.filled(2, null, growable: true);
         bot.mentalMap[0] = bot.hand[0];
         bot.mentalMap[1] = bot.hand[1];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.gold, BotGamePhase.endgame,
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.endgame,
         );
-        
+
         expect(result, isA<bool>());
       });
     });
@@ -209,11 +239,14 @@ void main() {
           PlayingCard.create('diamonds', '2'),
           PlayingCard.create('clubs', '3'),
         ];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.silver, BotGamePhase.optimization,
+          gameState,
+          bot,
+          BotDifficulty.silver,
+          BotGamePhase.optimization,
         );
-        
+
         expect(result, isA<bool>());
       });
     });
@@ -229,14 +262,98 @@ void main() {
             ]
             ..knownCards = List.filled(2, false, growable: true),
         );
-        
+
         bot.hand = [PlayingCard.create('hearts', 'A')];
-        
+
         final result = BotDutchStrategy.shouldCallDutch(
-          gameState, bot, BotDifficulty.platinum, BotGamePhase.endgame,
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
         );
-        
+
         expect(result, isA<bool>());
+      });
+    });
+
+    group('difficulty ladder behavior', () {
+      test('exploration blocks Dutch even with perfect information', () {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '4'),
+        ];
+        bot.knownCards = List.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        final result = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.exploration,
+        );
+
+        expect(result, isFalse);
+      });
+
+      test('platinum calls in tight spots where bronze stays conservative', () {
+        // Score bot = 8
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', 'A'),
+          PlayingCard.create('clubs', '2'),
+          PlayingCard.create('spades', '4'),
+        ];
+        bot.knownCards = List.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        // Opposant avec 2 cartes => estimation neutre ~13 (sans historique)
+        gameState.players[0].hand = [
+          PlayingCard.create('hearts', '9'),
+          PlayingCard.create('diamonds', 'D'),
+        ];
+
+        final bronzeDecision = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.bronze,
+          BotGamePhase.optimization,
+        );
+        final platinumDecision = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.optimization,
+        );
+
+        expect(bronzeDecision, isFalse);
+        expect(platinumDecision, isTrue);
+      });
+
+      test('bronze can call Dutch only because it has fewer cards', () {
+        bot.hand = [
+          PlayingCard.create('hearts', '9'),
+          PlayingCard.create('diamonds', 'D'),
+        ];
+        bot.knownCards = [false, false];
+        bot.mentalMap = [null, null];
+
+        gameState.players[0].hand = [
+          PlayingCard.create('hearts', '2'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '4'),
+          PlayingCard.create('spades', '5'),
+        ];
+
+        final bronzeDecision = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.bronze,
+          BotGamePhase.optimization,
+        );
+
+        expect(bronzeDecision, isTrue);
       });
     });
   });

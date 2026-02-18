@@ -58,3 +58,8 @@ flutter:
     - assets/images/cards/
     - assets/sounds/
     - assets/music/
+
+  fonts:
+    - family: NotoColorEmoji
+      fonts:
+        - asset: assets/fonts/NotoColorEmoji.ttf

@@ -411,7 +411,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       await gameProvider.createNewGame(
         players: players,
         gameMode: widget.isTournament ? GameMode.tournament : GameMode.quick,
-        difficulty: settings.luckDifficulty,
+        difficulty: Difficulty.easy,
         reactionTimeMs: settings.reactionTimeMs,
         actionTextDisplayMs: settings.actionTextDisplayMs,
         saveSlot: widget.saveSlot,

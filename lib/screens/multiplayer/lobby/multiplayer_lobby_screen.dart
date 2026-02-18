@@ -418,8 +418,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
     // Valeurs par défaut
     int botDifficulty = settings.botDifficulty.index;
-    int luckDifficulty = settings.luckDifficulty.index;
-
     final result = await showDialog<Map<String, int>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -451,23 +449,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   setState(() => botDifficulty = selection.first);
                 },
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'Tri des cartes',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Aléatoire')),
-                  ButtonSegment(value: 1, label: Text('Moyen')),
-                  ButtonSegment(value: 2, label: Text('Trié')),
-                ],
-                selected: {luckDifficulty},
-                onSelectionChanged: (selection) {
-                  setState(() => luckDifficulty = selection.first);
-                },
-              ),
             ],
           ),
           actions: [
@@ -478,7 +459,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             FilledButton(
               onPressed: () => Navigator.pop(ctx, {
                 'botDifficulty': botDifficulty,
-                'luckDifficulty': luckDifficulty,
               }),
               child: const Text('Appliquer'),
             ),
@@ -490,7 +470,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (result != null && mounted) {
       final success = await provider.updateRoomSettings(
         botDifficulty: Difficulty.values[result['botDifficulty']!],
-        luckDifficulty: Difficulty.values[result['luckDifficulty']!],
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

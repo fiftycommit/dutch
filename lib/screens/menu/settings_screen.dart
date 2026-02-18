@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/settings_provider.dart';
-import '../../models/game_settings.dart';
 import '../../utils/ui_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -192,37 +191,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-        _buildSectionHeader("MÉTHODE DE MÉLANGE (CHANCE)"),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              _buildShuffleOption(
-                  settings,
-                  Difficulty.easy,
-                  "DÉTENDU",
-                  "Mélange 100% aléatoire. Chance pure.\nIdéal pour les parties rapides.",
-                  Colors.green),
-              const Divider(height: 1, color: Colors.white24),
-              _buildShuffleOption(
-                  settings,
-                  Difficulty.medium,
-                  "TACTIQUE",
-                  "Mélange pondéré et équilibré.\nMoins de chaos, plus de stratégie.",
-                  Colors.amber),
-              const Divider(height: 1, color: Colors.white24),
-              _buildShuffleOption(
-                  settings,
-                  Difficulty.hard,
-                  "CHALLENGER",
-                  "Pioche exigeante.\nLes bonnes cartes se méritent.",
-                  Colors.red),
-            ],
-          ),
-        ),
         const SizedBox(height: 30),
         _buildSectionHeader("AUDIO & IMMERSION"),
         _buildSwitchTile(
@@ -292,44 +260,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildShuffleOption(SettingsProvider settings, Difficulty level,
-      String label, String desc, Color color) {
-    bool isSelected = settings.luckDifficulty == level;
-    return InkWell(
-      onTap: () => settings.setLuckDifficulty(level),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color:
-              isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
-        ),
-        child: Row(
-          children: [
-            Icon(
-                isSelected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-                color: isSelected ? color : Colors.white24),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: isSelected ? color : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Text(desc,
-                      style: const TextStyle(
-                          color: AppColors.textDisabled, fontSize: 12)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

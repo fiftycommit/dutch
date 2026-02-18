@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../../../models/playing_card.dart';
 import '../../../models/game_state.dart';
+import '../../../models/player.dart';
 import '../../../core/interfaces/i_bot_ai_service.dart';
-import '../../../services/game/bot/hardcore_bot_config.dart';
+import '../../../services/game/bot/bot_config.dart';
+import '../../../services/game/bot/bot_difficulty.dart';
 
 /// Orchestrateur dédié à la gestion des actions des bots
 /// Principe GRASP: Pure Fabrication - Responsabilité unique d'orchestration des bots
@@ -41,17 +43,37 @@ class BotOrchestrator {
     PlayingCard? topCard = gameState.topDiscardCard;
     if (topCard == null) return false;
 
-    for (var bot in gameState.players.where((p) => !p.isHuman)) {
+    final reactionBots =
+        gameState.players.where((p) => !p.isHuman).toList(growable: false);
+    if (reactionBots.isEmpty) return false;
+
+    final difficulties = <String, BotDifficulty>{};
+    for (final bot in reactionBots) {
+      difficulties[bot.id] = BotConfig.getDifficulty(
+        bot,
+        playerMMR,
+        hardcoreLevel: hardcoreLevel,
+        playerSkillEstimate: playerSkillEstimate,
+      );
+    }
+
+    final rng = Random();
+    final initiatives = <String, double>{};
+    for (final bot in reactionBots) {
+      final difficulty = difficulties[bot.id]!;
+      initiatives[bot.id] = _reactionInitiative(difficulty, rng);
+    }
+
+    final orderedBots = List<Player>.from(reactionBots)
+      ..sort(
+          (a, b) => (initiatives[b.id] ?? 0).compareTo(initiatives[a.id] ?? 0));
+
+    for (var bot in orderedBots) {
       if (gameState.phase != GamePhase.reaction) return false;
       if (isPaused) return false;
 
-      // En mode hardcore, les bots réagissent plus vite
-      int delay;
-      if (hardcoreLevel != null) {
-        delay = HardcoreBotConfig.getReactionTime(hardcoreLevel, Random()) ~/ 3;
-      } else {
-        delay = Random().nextInt(250) + 100;
-      }
+      final difficulty = difficulties[bot.id]!;
+      final delay = _reactionDelayMs(difficulty, hardcoreLevel, rng);
       await Future.delayed(Duration(milliseconds: delay));
 
       if (gameState.phase != GamePhase.reaction) return false;
@@ -68,8 +90,31 @@ class BotOrchestrator {
         return true; // Un bot a matché
       }
     }
-    
+
     return false; // Aucun bot n'a matché
+  }
+
+  double _reactionInitiative(BotDifficulty difficulty, Random rng) {
+    // Combine vitesse de réaction et propension à matcher.
+    // Un léger jitter évite un ordre strictement identique à chaque tour.
+    return difficulty.reactionSpeed * 0.70 +
+        difficulty.reactionMatchChance * 0.25 +
+        difficulty.matchAccuracy * 0.05 +
+        (rng.nextDouble() * 0.05);
+  }
+
+  int _reactionDelayMs(
+    BotDifficulty difficulty,
+    HardcoreLevel? hardcoreLevel,
+    Random rng,
+  ) {
+    if (hardcoreLevel != null) {
+      return (HardcoreBotConfig.getReactionTime(hardcoreLevel, rng) ~/ 4)
+          .clamp(15, 120);
+    }
+
+    final speedPenalty = ((1 - difficulty.reactionSpeed) * 180).round();
+    return 20 + speedPenalty + rng.nextInt(50);
   }
 
   /// Jouer le tour d'un bot (boucle complète)
@@ -83,7 +128,7 @@ class BotOrchestrator {
     int? playerSkillEstimate,
   }) async {
     int loopCount = 0;
-    
+
     while (!gameState.currentPlayer.isHuman &&
         gameState.phase == GamePhase.playing &&
         !isPaused) {
@@ -91,7 +136,7 @@ class BotOrchestrator {
 
       if (loopCount > 10) break;
       if (isPaused) break;
-      
+
       // Vérifier si la partie est terminée
       final shouldEnd = await onCheckInstantEnd();
       if (shouldEnd) return;
@@ -105,7 +150,7 @@ class BotOrchestrator {
 
       try {
         if (isPaused) break;
-        
+
         await _botAIService.playBotTurn(
           gameState,
           playerMMR: playerMMR,
@@ -113,7 +158,7 @@ class BotOrchestrator {
           hardcoreLevel: hardcoreLevel,
           playerSkillEstimate: playerSkillEstimate,
         );
-        
+
         if (isPaused) break;
 
         if (gameState.phase == GamePhase.dutchCalled) {
@@ -127,7 +172,7 @@ class BotOrchestrator {
             await Future.delayed(Duration(milliseconds: powerWait));
           }
           if (isPaused) break;
-          
+
           await _botAIService.useBotSpecialPower(
             gameState,
             playerMMR: playerMMR,
@@ -135,7 +180,7 @@ class BotOrchestrator {
             hardcoreLevel: hardcoreLevel,
             playerSkillEstimate: playerSkillEstimate,
           );
-          
+
           if (isPaused) break;
 
           gameState.isWaitingForSpecialPower = false;
@@ -151,7 +196,7 @@ class BotOrchestrator {
       }
 
       if (isPaused) break;
-      
+
       // Si on est toujours en phase playing, démarrer la phase de réaction
       if (gameState.phase == GamePhase.playing) {
         break; // Sortir de la boucle pour démarrer la phase de réaction

@@ -17,29 +17,29 @@ class BotDifficulty {
 
   static const BotDifficulty bronze = BotDifficulty(
     name: "Bronze",
-    forgetChancePerTurn: 0.08,
-    confusionOnSwap: 0.15,
-    reactionSpeed: 0.75,
-    matchAccuracy: 0.88,
-    reactionMatchChance: 0.60,
+    forgetChancePerTurn: 0.32,
+    confusionOnSwap: 0.45,
+    reactionSpeed: 0.35,
+    matchAccuracy: 0.42,
+    reactionMatchChance: 0.22,
   );
 
   static const BotDifficulty silver = BotDifficulty(
     name: "Argent",
-    forgetChancePerTurn: 0.02,
-    confusionOnSwap: 0.03,
-    reactionSpeed: 0.95,
-    matchAccuracy: 0.98,
-    reactionMatchChance: 0.90,
+    forgetChancePerTurn: 0.24,
+    confusionOnSwap: 0.32,
+    reactionSpeed: 0.50,
+    matchAccuracy: 0.60,
+    reactionMatchChance: 0.34,
   );
 
   static const BotDifficulty gold = BotDifficulty(
     name: "Or",
-    forgetChancePerTurn: 0.0,
-    confusionOnSwap: 0.0,
-    reactionSpeed: 1.0,
-    matchAccuracy: 1.0,
-    reactionMatchChance: 1.0,
+    forgetChancePerTurn: 0.10,
+    confusionOnSwap: 0.14,
+    reactionSpeed: 0.78,
+    matchAccuracy: 0.88,
+    reactionMatchChance: 0.70,
   );
 
   static const BotDifficulty platinum = BotDifficulty(

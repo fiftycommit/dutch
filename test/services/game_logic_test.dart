@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/services/game/game_logic.dart';
+import 'package:dutch_game/services/game/bot/bot_dutch_strategy.dart';
 import '../helpers/test_helpers.dart';
 
 void main() {
@@ -324,7 +325,8 @@ void main() {
       // Pénalité = carte supplémentaire
       expect(gs.humanPlayer.hand.length, 5);
       expect(gs.humanPlayer.knownCards.length, 5);
-      expect(gs.humanPlayer.knownCards.last, false); // Carte pénalité non connue
+      expect(
+          gs.humanPlayer.knownCards.last, false); // Carte pénalité non connue
     });
 
     test('matchCard returns false when discard pile is empty', () {
@@ -440,7 +442,7 @@ void main() {
       final stateAfterFirst = gs.phase;
 
       GameLogic.endGame(gs);
-      
+
       expect(gs.phase, stateAfterFirst);
     });
   });
@@ -480,6 +482,43 @@ void main() {
 
       expect(p1.knownCards[0], false);
       expect(p2.knownCards[0], false);
+    });
+
+    test('swapCards assigns contextual hint to bot receiver', () {
+      final gs = createDeterministicGameState();
+      final human = gs.players[0];
+      final bot = gs.players[1];
+
+      BotDutchStrategy.discardTracker.reset();
+      BotDutchStrategy.discardTracker.trackDiscard(
+        createCard('spades', 'R'),
+        discardedBy: human.id,
+        wasExchange: true,
+      );
+      BotDutchStrategy.discardTracker.trackDiscard(
+        createCard('clubs', 'D'),
+        discardedBy: human.id,
+        wasExchange: true,
+      );
+
+      GameLogic.swapCards(gs, bot, 2, human, 0);
+
+      expect(bot.getUnknownCardHintQuality(2), isNotNull);
+      expect(bot.getUnknownCardHintConfidence(2), greaterThan(0));
+    });
+
+    test('replaceCard clears hint on replaced index', () {
+      final gs = createDeterministicGameState();
+      final bot = gs.players[1];
+      gs.currentPlayerIndex = 1;
+      bot.setUnknownCardHint(2,
+          quality: -0.7, confidence: 0.9, actionCount: gs.actionCount);
+      gs.drawnCard = createCard('hearts', '2');
+
+      GameLogic.replaceCard(gs, 2);
+
+      expect(bot.getUnknownCardHintQuality(2), isNull);
+      expect(bot.getUnknownCardHintConfidence(2), isNull);
     });
 
     test('swapCards does nothing with invalid indices', () {

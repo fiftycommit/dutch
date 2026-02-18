@@ -38,6 +38,26 @@ class Player {
   /// Permet au bot de se souvenir des cartes qu'il a vues chez les autres
   Map<String, Map<int, PlayingCard>> spyMemory;
 
+  /// Indice qualitatif sur les cartes inconnues reçues/estimées.
+  /// -1.0 = probablement mauvaise carte, +1.0 = probablement bonne carte.
+  List<double?> unknownCardQualityHints;
+
+  /// Confiance associée à [unknownCardQualityHints] (0.0..1.0).
+  List<double?> unknownCardHintConfidence;
+
+  /// Compteur d'action de la dernière mise à jour du hint.
+  List<int?> unknownCardHintActionCount;
+
+  /// Mode "blackout" des bots Bronze: ils pensent connaître leurs cartes
+  /// alors que leur mémoire est fausse.
+  bool bronzeBlackoutActive;
+
+  /// Action count à partir duquel le blackout n'est plus actif.
+  int bronzeBlackoutUntilActionCount;
+
+  /// Dernière action où un blackout a été déclenché (anti-spam).
+  int lastBronzeBlackoutActionCount;
+
   Player({
     required this.id,
     required this.name,
@@ -53,11 +73,20 @@ class Player {
     this.consecutiveBadDraws = 0,
     List<DutchAttempt>? dutchHistory,
     Map<String, Map<int, PlayingCard>>? spyMemory,
+    List<double?>? unknownCardQualityHints,
+    List<double?>? unknownCardHintConfidence,
+    List<int?>? unknownCardHintActionCount,
+    this.bronzeBlackoutActive = false,
+    this.bronzeBlackoutUntilActionCount = -1,
+    this.lastBronzeBlackoutActionCount = -999,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
         dutchHistory = dutchHistory ?? [],
-        spyMemory = spyMemory ?? {};
+        spyMemory = spyMemory ?? {},
+        unknownCardQualityHints = unknownCardQualityHints ?? [],
+        unknownCardHintConfidence = unknownCardHintConfidence ?? [],
+        unknownCardHintActionCount = unknownCardHintActionCount ?? [];
 
   Player.clone(Player other)
       : id = other.id,
@@ -75,7 +104,14 @@ class Player {
         mentalMap = List.from(other.mentalMap),
         consecutiveBadDraws = other.consecutiveBadDraws,
         dutchHistory = List.from(other.dutchHistory),
-        spyMemory = Map.from(other.spyMemory);
+        spyMemory = Map.from(other.spyMemory),
+        unknownCardQualityHints = List.from(other.unknownCardQualityHints),
+        unknownCardHintConfidence = List.from(other.unknownCardHintConfidence),
+        unknownCardHintActionCount =
+            List.from(other.unknownCardHintActionCount),
+        bronzeBlackoutActive = other.bronzeBlackoutActive,
+        bronzeBlackoutUntilActionCount = other.bronzeBlackoutUntilActionCount,
+        lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount;
 
   int calculateScore() {
     int score = 0;
@@ -148,7 +184,8 @@ class Player {
     // Interpolation entre estimation neutre et estimation informée
     final neutralEstimate = 6.5;
     final informedEstimate = estimatedAvgCard;
-    final blendedAvg = neutralEstimate * (1 - confidence) + informedEstimate * confidence;
+    final blendedAvg =
+        neutralEstimate * (1 - confidence) + informedEstimate * confidence;
 
     return (cardCount * blendedAvg).round();
   }
@@ -180,6 +217,7 @@ class Player {
     mentalMap[1] = hand[1];
     knownCards[0] = true;
     knownCards[1] = true;
+    resetUnknownCardHints();
   }
 
   void updateMentalMap(int index, PlayingCard card) {
@@ -192,11 +230,14 @@ class Player {
     if (index < knownCards.length) {
       knownCards[index] = true;
     }
+
+    clearUnknownCardHint(index);
   }
 
   void resetMentalMap() {
     mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
     knownCards = List<bool>.filled(hand.length, false, growable: true);
+    resetUnknownCardHints();
   }
 
   void forgetCard(int index) {
@@ -206,6 +247,86 @@ class Player {
     if (index >= 0 && index < knownCards.length) {
       knownCards[index] = false;
     }
+    clearUnknownCardHint(index);
+  }
+
+  void _syncUnknownCardHints() {
+    while (unknownCardQualityHints.length < hand.length) {
+      unknownCardQualityHints.add(null);
+    }
+    while (unknownCardHintConfidence.length < hand.length) {
+      unknownCardHintConfidence.add(null);
+    }
+    while (unknownCardHintActionCount.length < hand.length) {
+      unknownCardHintActionCount.add(null);
+    }
+
+    if (unknownCardQualityHints.length > hand.length) {
+      unknownCardQualityHints.removeRange(
+          hand.length, unknownCardQualityHints.length);
+    }
+    if (unknownCardHintConfidence.length > hand.length) {
+      unknownCardHintConfidence.removeRange(
+          hand.length, unknownCardHintConfidence.length);
+    }
+    if (unknownCardHintActionCount.length > hand.length) {
+      unknownCardHintActionCount.removeRange(
+          hand.length, unknownCardHintActionCount.length);
+    }
+  }
+
+  void resetUnknownCardHints() {
+    unknownCardQualityHints =
+        List<double?>.filled(hand.length, null, growable: true);
+    unknownCardHintConfidence =
+        List<double?>.filled(hand.length, null, growable: true);
+    unknownCardHintActionCount =
+        List<int?>.filled(hand.length, null, growable: true);
+  }
+
+  void setUnknownCardHint(
+    int index, {
+    required double quality,
+    required double confidence,
+    int? actionCount,
+  }) {
+    _syncUnknownCardHints();
+    if (index < 0 || index >= hand.length) return;
+
+    final clampedQuality =
+        quality < -1.0 ? -1.0 : (quality > 1.0 ? 1.0 : quality);
+    final clampedConfidence =
+        confidence < 0.0 ? 0.0 : (confidence > 1.0 ? 1.0 : confidence);
+
+    unknownCardQualityHints[index] = clampedQuality;
+    unknownCardHintConfidence[index] = clampedConfidence;
+    unknownCardHintActionCount[index] = actionCount;
+  }
+
+  void clearUnknownCardHint(int index) {
+    _syncUnknownCardHints();
+    if (index < 0 || index >= hand.length) return;
+    unknownCardQualityHints[index] = null;
+    unknownCardHintConfidence[index] = null;
+    unknownCardHintActionCount[index] = null;
+  }
+
+  double? getUnknownCardHintQuality(int index) {
+    _syncUnknownCardHints();
+    if (index < 0 || index >= hand.length) return null;
+    return unknownCardQualityHints[index];
+  }
+
+  double? getUnknownCardHintConfidence(int index) {
+    _syncUnknownCardHints();
+    if (index < 0 || index >= hand.length) return null;
+    return unknownCardHintConfidence[index];
+  }
+
+  int? getUnknownCardHintAction(int index) {
+    _syncUnknownCardHints();
+    if (index < 0 || index >= hand.length) return null;
+    return unknownCardHintActionCount[index];
   }
 
   /// Mémorise une carte espionnée chez un adversaire
@@ -278,7 +399,7 @@ class Player {
   /// Utilise l'index passé pour déterminer Gauche/Haut/Droite
   String getPositionDisplay(int indexInGame) {
     if (isHuman) return name;
-    
+
     String position;
     switch (indexInGame) {
       case 1:
@@ -405,9 +526,10 @@ class Player {
       isHuman: isHuman ?? this.isHuman,
       botBehavior: botBehavior ?? this.botBehavior,
       botSkillLevel: botSkillLevel ?? this.botSkillLevel,
-      aiParameters: aiParameters ?? (this.aiParameters != null 
-          ? Map<String, double>.from(this.aiParameters!)
-          : null),
+      aiParameters: aiParameters ??
+          (this.aiParameters != null
+              ? Map<String, double>.from(this.aiParameters!)
+              : null),
       position: position ?? this.position,
       isSpectator: isSpectator ?? this.isSpectator,
       hand: List.from(hand),
@@ -415,6 +537,13 @@ class Player {
       mentalMap: List.from(mentalMap),
       consecutiveBadDraws: consecutiveBadDraws,
       dutchHistory: List.from(dutchHistory),
+      spyMemory: Map.from(spyMemory),
+      unknownCardQualityHints: List.from(unknownCardQualityHints),
+      unknownCardHintConfidence: List.from(unknownCardHintConfidence),
+      unknownCardHintActionCount: List.from(unknownCardHintActionCount),
+      bronzeBlackoutActive: bronzeBlackoutActive,
+      bronzeBlackoutUntilActionCount: bronzeBlackoutUntilActionCount,
+      lastBronzeBlackoutActionCount: lastBronzeBlackoutActionCount,
     );
   }
 }

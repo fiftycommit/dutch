@@ -1,9 +1,7 @@
-import 'dart:math';
 import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
 import 'game_sub_states.dart';
-import '../services/game/shuffle_strategy.dart';
 
 enum GameMode { quick, tournament }
 
@@ -175,245 +173,23 @@ class GameState {
   }
 
   void smartShuffle() {
-    // Aligne le mélange sur la méthode choisie dans les réglages (luckDifficulty).
-    final strategy = _resolveShuffleStrategy();
-    final shuffled = strategy.shuffle(deck);
-    deck
-      ..clear()
-      ..addAll(shuffled);
-    addToHistory("🎲 Mélange ${_shuffleLabel()}");
+    deck.shuffle();
+    addToHistory("🎲 Mélange aléatoire");
   }
   
 
   void dealCards() {
-    Random rnd = Random();
-
-    if (difficulty == Difficulty.easy) {
-      _dealCardsEasy(rnd);
-    } else if (difficulty == Difficulty.medium) {
-      _dealCardsMedium(rnd);
-    } else {
-      _dealCardsHard(rnd);
-    }
-  }
-
-  void _dealCardsEasy(Random rnd) {
-    // Séparer les Jokers
-    List<PlayingCard> normalCards =
-        deck.where((c) => c.value != 'JOKER').toList();
-    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-
-    normalCards.shuffle(rnd);
-
+    deck.shuffle();
     for (var player in players) {
       player.hand = [];
       player.knownCards = [];
       for (int i = 0; i < 4; i++) {
-        if (normalCards.isNotEmpty) {
-          player.hand.add(normalCards.removeLast());
+        if (deck.isNotEmpty) {
+          player.hand.add(deck.removeLast());
           player.knownCards.add(false);
         }
       }
     }
-
-    deck.clear();
-    deck.addAll(normalCards);
-    deck.addAll(jokers);
-    deck.shuffle(rnd);
-
-    _logDealResults();
-  }
-
-  void _dealCardsMedium(Random rnd) {
-    List<PlayingCard> normalCards =
-        deck.where((c) => c.value != 'JOKER').toList();
-    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-
-    Map<String, List<PlayingCard>> cardsByValue = {};
-    for (var card in normalCards) {
-      cardsByValue.putIfAbsent(card.value, () => []);
-      cardsByValue[card.value]!.add(card);
-    }
-    for (var cards in cardsByValue.values) {
-      cards.shuffle(rnd);
-    }
-
-    List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
-    List<String> mediumValues = ['7', '6', '5'];
-    List<String> goodValues = ['4', '3', '2', 'A'];
-
-    _distributeWithSeparation(
-      cardsByValue,
-      badValues,
-      mediumValues,
-      goodValues,
-      jokers,
-      rnd,
-      badCardsPerPlayer: 2,
-      separationStrength: 0.7,
-    );
-  }
-
-  void _dealCardsHard(Random rnd) {
-    List<PlayingCard> normalCards =
-        deck.where((c) => c.value != 'JOKER').toList();
-    List<PlayingCard> jokers = deck.where((c) => c.value == 'JOKER').toList();
-
-    Map<String, List<PlayingCard>> cardsByValue = {};
-    for (var card in normalCards) {
-      cardsByValue.putIfAbsent(card.value, () => []);
-      cardsByValue[card.value]!.add(card);
-    }
-    for (var cards in cardsByValue.values) {
-      cards.shuffle(rnd);
-    }
-
-    List<String> badValues = ['R', 'D', 'V', '10', '9', '8'];
-    List<String> mediumValues = ['7', '6', '5'];
-    List<String> goodValues = ['4', '3', '2', 'A'];
-
-    _distributeWithSeparation(
-      cardsByValue,
-      badValues,
-      mediumValues,
-      goodValues,
-      jokers,
-      rnd,
-      badCardsPerPlayer: 3,
-      separationStrength: 1.0,
-    );
-  }
-
-  void _distributeWithSeparation(
-    Map<String, List<PlayingCard>> cardsByValue,
-    List<String> badValues,
-    List<String> mediumValues,
-    List<String> goodValues,
-    List<PlayingCard> jokers,
-    Random rnd, {
-    required int badCardsPerPlayer,
-    required double separationStrength,
-  }) {
-    int numPlayers = players.length;
-
-    // Mélanger l'ordre des joueurs
-    List<int> playerOrder = List.generate(numPlayers, (i) => i);
-    playerOrder.shuffle(rnd);
-
-    // Mélanger les valeurs
-    badValues = List.from(badValues)..shuffle(rnd);
-    mediumValues = List.from(mediumValues)..shuffle(rnd);
-    goodValues = List.from(goodValues)..shuffle(rnd);
-
-    List<List<PlayingCard>> hands = List.generate(numPlayers, (_) => []);
-    Set<String> globalUsedValues = {};
-
-    // PHASE 1: Donner des mauvaises cartes UNIQUES à chaque joueur
-    for (int playerIdx in playerOrder) {
-      int cardsGiven = 0;
-
-      for (var value in badValues) {
-        if (cardsGiven >= badCardsPerPlayer) break;
-
-        // Séparation: éviter les valeurs déjà données
-        if (rnd.nextDouble() < separationStrength &&
-            globalUsedValues.contains(value)) {
-          continue;
-        }
-
-        if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
-          hands[playerIdx].add(cardsByValue[value]!.removeLast());
-          globalUsedValues.add(value);
-          cardsGiven++;
-        }
-      }
-    }
-
-    List<String> remaining = [...badValues, ...mediumValues];
-    remaining.shuffle(rnd);
-
-    for (int playerIdx in playerOrder) {
-      Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
-
-      for (var value in remaining) {
-        if (hands[playerIdx].length >= 3) break;
-
-        if (playerValues.contains(value)) continue;
-
-        if (rnd.nextDouble() < separationStrength &&
-            globalUsedValues.contains(value)) {
-          continue;
-        }
-
-        if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
-          hands[playerIdx].add(cardsByValue[value]!.removeLast());
-          globalUsedValues.add(value);
-          playerValues.add(value);
-        }
-      }
-    }
-
-    List<String> allValues = [...badValues, ...mediumValues, ...goodValues];
-
-    for (int playerIdx in playerOrder) {
-      Set<String> playerValues = hands[playerIdx].map((c) => c.value).toSet();
-
-      while (hands[playerIdx].length < 4) {
-        bool cardAdded = false;
-
-        allValues.shuffle(rnd);
-        for (var value in allValues) {
-          if (playerValues.contains(value)) continue;
-
-          if (cardsByValue[value] != null && cardsByValue[value]!.isNotEmpty) {
-            hands[playerIdx].add(cardsByValue[value]!.removeLast());
-            playerValues.add(value);
-            cardAdded = true;
-            break;
-          }
-        }
-
-        if (!cardAdded) {
-          for (var value in allValues) {
-            if (cardsByValue[value] != null &&
-                cardsByValue[value]!.isNotEmpty) {
-              hands[playerIdx].add(cardsByValue[value]!.removeLast());
-              cardAdded = true;
-              break;
-            }
-          }
-        }
-
-        if (!cardAdded) break;
-      }
-    }
-
-    for (int i = 0; i < numPlayers; i++) {
-      players[i].hand = hands[i];
-      players[i].knownCards = List.filled(hands[i].length, false);
-    }
-
-    deck.clear();
-
-    for (var value in goodValues) {
-      if (cardsByValue[value] != null) {
-        deck.addAll(cardsByValue[value]!);
-      }
-    }
-    for (var value in mediumValues) {
-      if (cardsByValue[value] != null) {
-        deck.addAll(cardsByValue[value]!);
-      }
-    }
-    for (var value in badValues) {
-      if (cardsByValue[value] != null) {
-        deck.addAll(cardsByValue[value]!);
-      }
-    }
-
-    deck.addAll(jokers);
-    deck.shuffle(rnd);
-
     _logDealResults();
   }
 
@@ -423,40 +199,7 @@ class GameState {
   }
 
   void shuffleDeckRandomly() {
-    final shuffled = RandomShuffleStrategy().shuffle(deck);
-    deck
-      ..clear()
-      ..addAll(shuffled);
-  }
-
-  ShuffleStrategy _resolveShuffleStrategy() {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return RandomShuffleStrategy();
-      case Difficulty.medium:
-        return SmartShuffleStrategy('medium');
-      case Difficulty.hard:
-      case Difficulty.platinum:
-        return SmartShuffleStrategy('hard');
-      case Difficulty.mix:
-        // Mix est utilisé ailleurs pour les bots; ici on le garde en mode expérimental.
-        return MLShuffleStrategy('medium');
-    }
-  }
-
-  String _shuffleLabel() {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return 'Détendu';
-      case Difficulty.medium:
-        return 'Tactique';
-      case Difficulty.hard:
-        return 'Challenger';
-      case Difficulty.platinum:
-        return 'Boss';
-      case Difficulty.mix:
-        return 'ML (expérimental)';
-    }
+    deck.shuffle();
   }
 
   List<Player> getFinalRanking() {

@@ -5,7 +5,6 @@ export 'game/bot/dutch_strategy_config.dart';
 export 'game/game_logic.dart';
 export 'game/game_state_validator.dart';
 export 'game/rp_calculator.dart';
-export 'game/shuffle_strategy.dart';
 
 export 'learning/bot_learning_service.dart';
 export 'learning/bot_strategy.dart';

@@ -127,6 +127,7 @@ class _DutchGameAppState extends State<DutchGameApp> {
                   ? Colors.transparent
                   : AppColors.gradientBottom, // Vert foncé poker
               fontFamily: 'Roboto',
+              fontFamilyFallback: const ['NotoColorEmoji'],
               textTheme: const TextTheme(
                 headlineLarge: TextStyle(
                   color: Colors.white,

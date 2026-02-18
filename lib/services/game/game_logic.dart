@@ -17,13 +17,14 @@ class GameLogic {
   }) {
     // Reset le tracker de défausses pour la nouvelle manche
     BotDutchStrategy.discardTracker.reset();
-    
+
     List<PlayingCard> deck = GameState.createFullDeck();
 
     for (var p in players) {
       p.hand = [];
       p.knownCards = [];
       p.mentalMap = [];
+      p.resetUnknownCardHints();
     }
 
     GameState gameState = GameState(
@@ -77,7 +78,8 @@ class GameLogic {
     if (gameState.deck.isEmpty) _refillDeck(gameState);
 
     // Si _refillDeck a déjà terminé la partie, ne pas continuer
-    if (gameState.phase == GamePhase.ended || gameState.phase == GamePhase.dutchCalled) {
+    if (gameState.phase == GamePhase.ended ||
+        gameState.phase == GamePhase.dutchCalled) {
       return;
     }
 
@@ -108,12 +110,12 @@ class GameLogic {
     final cardName = card.displayName == 'e Dame' ? ' Dame' : card.displayName;
     final verb = isHuman ? "ne gardez pas" : "ne garde pas";
 
-    gameState.addToHistory("$currentName $verb la carte$cardName (pas intéressé)");
-    
+    gameState
+        .addToHistory("$currentName $verb la carte$cardName (pas intéressé)");
 
     // Tracker la défausse (wasExchange = false : pas d'échange)
     BotDutchStrategy.discardTracker.trackDiscard(
-      card, 
+      card,
       discardedBy: gameState.currentPlayer.id,
       wasExchange: false,
     );
@@ -148,7 +150,8 @@ class GameLogic {
     if (!player.isHuman) {
       player.updateMentalMap(cardIndex, newCard);
     }
-    
+    player.clearUnknownCardHint(cardIndex);
+
     // FIX CRITIQUE : Invalider la SpyMemory des autres bots sur cette position
     // Quand un joueur échange, la carte à cette position change !
     for (final otherPlayer in gameState.players) {
@@ -165,15 +168,17 @@ class GameLogic {
     final isDame = oldCard.displayName == 'e Dame';
     final cardName = isDame ? 'Dame' : oldCard.displayName.trimLeft();
     if (player.isHuman) {
-      gameState.addToHistory("Vous remplacez votre $cardName par la carte piochée");
+      gameState
+          .addToHistory("Vous remplacez votre $cardName par la carte piochée");
     } else {
       final possessif = isDame ? 'sa' : 'son';
-      gameState.addToHistory("${player.name} remplace $possessif $cardName par la carte piochée");
+      gameState.addToHistory(
+          "${player.name} remplace $possessif $cardName par la carte piochée");
     }
 
     // Tracker la défausse (wasExchange = true : il a gardé la pioche)
     BotDutchStrategy.discardTracker.trackDiscard(
-      oldCard, 
+      oldCard,
       discardedBy: player.id,
       wasExchange: true,
     );
@@ -204,7 +209,7 @@ class GameLogic {
 
       // Tracker le match pour le comptage de cartes
       BotDutchStrategy.discardTracker.trackDiscard(
-        playerCard, 
+        playerCard,
         discardedBy: player.id,
       );
 
@@ -220,6 +225,15 @@ class GameLogic {
       if (!player.isHuman && cardIndex < player.mentalMap.length) {
         player.mentalMap.removeAt(cardIndex);
       }
+      if (cardIndex < player.unknownCardQualityHints.length) {
+        player.unknownCardQualityHints.removeAt(cardIndex);
+      }
+      if (cardIndex < player.unknownCardHintConfidence.length) {
+        player.unknownCardHintConfidence.removeAt(cardIndex);
+      }
+      if (cardIndex < player.unknownCardHintActionCount.length) {
+        player.unknownCardHintActionCount.removeAt(cardIndex);
+      }
 
       // BUGFIX: Invalider TOUTE la mémoire espionnage sur ce joueur
       // Car les indices des cartes ont changé après le match
@@ -229,7 +243,8 @@ class GameLogic {
         }
       }
 
-      String textMatch = "MATCH ! - ${player.name} pose un${playerCard.displayName} !";
+      String textMatch =
+          "MATCH ! - ${player.name} pose un${playerCard.displayName} !";
 
       if (player.name == "Vous") {
         textMatch = "MATCH ! - Vous avez posé un${playerCard.displayName} !";
@@ -257,7 +272,8 @@ class GameLogic {
       GameLoggerService.instance.logCustomAction(
         player: player,
         action: 'MATCH RATÉ',
-        details: '${playerCard.displayName} ≠ ${topDiscard.displayName} → pénalité',
+        details:
+            '${playerCard.displayName} ≠ ${topDiscard.displayName} → pénalité',
       );
 
       applyPenalty(gameState, player);
@@ -283,6 +299,7 @@ class GameLogic {
     if (!player.isHuman) {
       player.mentalMap.add(null);
     }
+    player.clearUnknownCardHint(newHand.length - 1);
 
     gameState.addToHistory("${player.name} prend une carte de pénalité.");
   }
@@ -305,6 +322,12 @@ class GameLogic {
 
     final c1 = p1.hand[idx1];
     final c2 = p2.hand[idx2];
+    final p1HintQuality = p1.getUnknownCardHintQuality(idx1);
+    final p1HintConfidence = p1.getUnknownCardHintConfidence(idx1);
+    final p1HintAction = p1.getUnknownCardHintAction(idx1);
+    final p2HintQuality = p2.getUnknownCardHintQuality(idx2);
+    final p2HintConfidence = p2.getUnknownCardHintConfidence(idx2);
+    final p2HintAction = p2.getUnknownCardHintAction(idx2);
 
     p1.hand[idx1] = c2;
     p2.hand[idx2] = c1;
@@ -318,6 +341,47 @@ class GameLogic {
     if (!p2.isHuman && idx2 < p2.mentalMap.length) {
       p2.mentalMap[idx2] = null;
     }
+
+    final p1IgnoresSwap = _shouldBronzeIgnoreSwap(p1);
+    final p2IgnoresSwap = _shouldBronzeIgnoreSwap(p2);
+    if (p1IgnoresSwap) {
+      if (idx1 < p1.knownCards.length) {
+        p1.knownCards[idx1] = true;
+      }
+      if (!p1.isHuman && idx1 < p1.mentalMap.length) {
+        // Bronze "en déni": garde l'ancienne info en mémoire.
+        p1.mentalMap[idx1] = c1;
+      }
+      p1.clearUnknownCardHint(idx1);
+    }
+    if (p2IgnoresSwap) {
+      if (idx2 < p2.knownCards.length) {
+        p2.knownCards[idx2] = true;
+      }
+      if (!p2.isHuman && idx2 < p2.mentalMap.length) {
+        p2.mentalMap[idx2] = c2;
+      }
+      p2.clearUnknownCardHint(idx2);
+    }
+
+    _applySwapUnknownHint(
+      gameState,
+      receiver: p1,
+      receiverIndex: idx1,
+      source: p2,
+      sourceHintQuality: p2HintQuality,
+      sourceHintConfidence: p2HintConfidence,
+      sourceHintActionCount: p2HintAction,
+    );
+    _applySwapUnknownHint(
+      gameState,
+      receiver: p2,
+      receiverIndex: idx2,
+      source: p1,
+      sourceHintQuality: p1HintQuality,
+      sourceHintConfidence: p1HintConfidence,
+      sourceHintActionCount: p1HintAction,
+    );
 
     // Invalider la mémoire espionnage pour tous les bots
     // Car les cartes ont changé de place
@@ -343,6 +407,81 @@ class GameLogic {
     );
   }
 
+  static void _applySwapUnknownHint(
+    GameState gameState, {
+    required Player receiver,
+    required int receiverIndex,
+    required Player source,
+    double? sourceHintQuality,
+    double? sourceHintConfidence,
+    int? sourceHintActionCount,
+  }) {
+    receiver.clearUnknownCardHint(receiverIndex);
+    if (receiver.isHuman) return;
+
+    final estimate = BotDutchStrategy.discardTracker
+        .estimateOpponentHand(source.id, source.hand.length);
+    final sourceCardAverage = source.hand.isEmpty
+        ? 6.5
+        : estimate.estimatedScore / source.hand.length;
+
+    // Qualité du joueur source d'après son historique public:
+    // plus il semble fort, plus la carte reçue a de chances d'être bonne.
+    double inferredQuality = (7.0 - sourceCardAverage) / 6.0;
+    if (source.hand.length <= 2) {
+      inferredQuality += 0.22;
+    } else if (source.hand.length >= 5) {
+      inferredQuality -= 0.12;
+    }
+    if (BotDutchStrategy.discardTracker.lastActionWasExchange(source.id)) {
+      inferredQuality += 0.06;
+    }
+
+    double confidence = 0.20 + (estimate.confidence * 0.60);
+    if (source.hand.length <= 2) {
+      confidence += 0.18;
+    } else if (source.hand.length >= 5) {
+      confidence -= 0.05;
+    }
+    if (BotDutchStrategy.discardTracker.lastActionWasExchange(source.id)) {
+      confidence *= 0.78;
+    }
+
+    // Contamination: si la carte source était déjà issue d'un échange
+    // récent/non vérifié, on réduit fortement la confiance.
+    if (sourceHintQuality != null && sourceHintConfidence != null) {
+      final inheritedWeight =
+          _clampDouble(sourceHintConfidence * 0.45, 0.0, 0.45);
+      inferredQuality = (inferredQuality * (1 - inheritedWeight)) +
+          (sourceHintQuality * inheritedWeight);
+
+      confidence *= 0.58;
+      if (sourceHintActionCount != null &&
+          (gameState.actionCount - sourceHintActionCount) <= 2) {
+        confidence *= 0.72;
+      }
+    }
+
+    receiver.setUnknownCardHint(
+      receiverIndex,
+      quality: _clampDouble(inferredQuality, -1.0, 1.0),
+      confidence: _clampDouble(confidence, 0.05, 0.95),
+      actionCount: gameState.actionCount,
+    );
+  }
+
+  static double _clampDouble(double value, double lower, double upper) {
+    if (value < lower) return lower;
+    if (value > upper) return upper;
+    return value;
+  }
+
+  static bool _shouldBronzeIgnoreSwap(Player player) {
+    if (player.isHuman) return false;
+    if (player.botSkillLevel != BotSkillLevel.bronze) return false;
+    return _random.nextDouble() < 0.62;
+  }
+
   static void jokerEffect(GameState gameState, Player targetPlayer) {
     List<PlayingCard> shuffledHand = List.from(targetPlayer.hand);
     shuffledHand.shuffle(Random());
@@ -359,8 +498,9 @@ class GameLogic {
     }
 
     if (!targetPlayer.isHuman) {
-      targetPlayer.mentalMap =
-          List<PlayingCard?>.filled(targetPlayer.hand.length, null, growable: true);
+      targetPlayer.mentalMap = List<PlayingCard?>.filled(
+          targetPlayer.hand.length, null,
+          growable: true);
     }
 
     gameState.addToHistory(
@@ -418,7 +558,8 @@ class GameLogic {
       gameState.discardPile.add(top);
       // Utiliser smartShuffle avec le mode de mélange des paramètres
       gameState.smartShuffle();
-      gameState.addToHistory("🔄 Pioche vide ! Défausse mélangée (${gameState.deck.length} cartes)");
+      gameState.addToHistory(
+          "🔄 Pioche vide ! Défausse mélangée (${gameState.deck.length} cartes)");
     } else {
       if (gameState.dutchCallerId != null) {
         gameState.phase = GamePhase.dutchCalled;
