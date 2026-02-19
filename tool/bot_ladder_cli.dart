@@ -9,6 +9,7 @@ import 'package:dutch_game/services/game/bot/bot_card_strategy.dart';
 import 'package:dutch_game/services/game/bot/bot_config.dart';
 import 'package:dutch_game/services/game/bot/bot_difficulty.dart';
 import 'package:dutch_game/services/game/bot/bot_dutch_strategy.dart';
+import 'package:dutch_game/services/game/bot/bot_fair_play_audit.dart';
 import 'package:dutch_game/services/game/bot/bot_memory_manager.dart';
 import 'package:dutch_game/services/game/bot/bot_personality.dart';
 import 'package:dutch_game/services/game/bot/bot_power_handler.dart';
@@ -277,14 +278,29 @@ class _LadderSimulator {
       difficulty,
       personality: personality,
     );
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'cli_turn_start',
+    );
 
-    if (BotDutchStrategy.shouldCallDutch(
+    final shouldCallDutch = BotDutchStrategy.shouldCallDutch(
       gameState,
       bot,
       difficulty,
       phase,
       personality: personality,
-    )) {
+    );
+    BotFairPlayAudit.auditDutchDecisionBlindness(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      shouldCallDutch,
+      personality: personality,
+    );
+    if (shouldCallDutch) {
       GameLogic.callDutch(gameState, reason: 'cli_ladder');
       return;
     }
@@ -299,6 +315,12 @@ class _LadderSimulator {
       phase,
       personality: personality,
     );
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'cli_after_card_action',
+    );
 
     if (gameState.isWaitingForSpecialPower &&
         gameState.specialCardToActivate != null) {
@@ -308,6 +330,12 @@ class _LadderSimulator {
         null,
         personality: personality,
         skipDelay: true,
+      );
+      BotFairPlayAudit.auditKnowledgeState(
+        gameState,
+        bot,
+        difficulty,
+        stage: 'cli_after_power',
       );
     }
   }

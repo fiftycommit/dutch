@@ -9,6 +9,7 @@ import 'bot/bot_dutch_strategy.dart';
 import 'bot/bot_card_strategy.dart';
 import 'bot/bot_power_handler.dart';
 import 'bot/bot_personality.dart';
+import 'bot/bot_fair_play_audit.dart';
 
 export 'bot/bot_config.dart'
     show
@@ -58,6 +59,12 @@ class BotAI {
     // Appliquer la décroissance de la mémoire
     BotMemoryManager.applyMemoryDecay(bot, difficulty,
         personality: personality);
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'turn_start',
+    );
 
     // Temps de réflexion (plus court en mode hardcore)
     int thinkingTime;
@@ -75,13 +82,22 @@ class BotAI {
     await Future.delayed(Duration(milliseconds: thinkingTime));
 
     // Vérifier si le bot doit appeler Dutch
-    if (BotDutchStrategy.shouldCallDutch(
+    final shouldCallDutch = BotDutchStrategy.shouldCallDutch(
       gameState,
       bot,
       difficulty,
       phase,
       personality: personality,
-    )) {
+    );
+    BotFairPlayAudit.auditDutchDecisionBlindness(
+      gameState,
+      bot,
+      difficulty,
+      phase,
+      shouldCallDutch,
+      personality: personality,
+    );
+    if (shouldCallDutch) {
       GameLogic.callDutch(gameState);
       return;
     }
@@ -110,6 +126,12 @@ class BotAI {
       phase,
       personality: personality,
     );
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'after_card_action',
+    );
   }
 
   /// Tente un match de réaction pour un bot
@@ -132,13 +154,26 @@ class BotAI {
     final phase = BotConfig.getBotPhase(bot, gameState);
     final personality = BotPersonality.fromBot(bot);
 
-    return await BotCardStrategy.tryReactionMatch(
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'reaction_pre',
+    );
+    final result = await BotCardStrategy.tryReactionMatch(
       gameState,
       bot,
       difficulty,
       phase,
       personality: personality,
     );
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'reaction_post',
+    );
+    return result;
   }
 
   /// Utilise le pouvoir spécial du bot
@@ -162,12 +197,24 @@ class BotAI {
       playerSkillEstimate: playerSkillEstimate,
     );
     final personality = BotPersonality.fromBot(bot);
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'power_pre',
+    );
 
     await BotPowerHandler.useBotSpecialPower(
       gameState,
       difficulty,
       context,
       personality: personality,
+    );
+    BotFairPlayAudit.auditKnowledgeState(
+      gameState,
+      bot,
+      difficulty,
+      stage: 'power_post',
     );
   }
 }

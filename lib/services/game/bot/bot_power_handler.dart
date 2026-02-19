@@ -806,9 +806,19 @@ class BotPowerHandler {
     switch (difficulty.name) {
       case 'Bronze':
         return true;
+      case 'Argent':
+      case 'Or':
+      case 'Platine':
+      case 'Hard':
+      case 'Insane':
+      case 'Nightmare':
+      case 'Impossible':
+        return false;
       default:
-        return difficulty.matchAccuracy <= 0.7 &&
-            difficulty.reactionSpeed <= 0.5;
+        // Fallback "bronze-like" pour difficultés dynamiques:
+        // volontairement plus bas que Silver pour éviter le recouvrement.
+        return difficulty.matchAccuracy < 0.55 &&
+            difficulty.reactionSpeed < 0.45;
     }
   }
 
