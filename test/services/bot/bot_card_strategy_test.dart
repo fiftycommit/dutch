@@ -507,7 +507,8 @@ void main() {
         expect(bot.hand[2].value, equals('8'));
       });
 
-      test('keeps likely good unknown when draw is only medium', () async {
+      test('does not preserve unknown card only because hint is positive',
+          () async {
         bot.mentalMap = [
           bot.hand[0],
           bot.hand[1],
@@ -520,8 +521,7 @@ void main() {
             confidence: 0.95,
             actionCount: gameState.actionCount);
 
-        final cardBefore = bot.hand[3];
-        gameState.drawnCard = PlayingCard.create('clubs', '5');
+        gameState.drawnCard = PlayingCard.create('clubs', '6');
 
         await BotCardStrategy.decideCardAction(
           gameState,
@@ -531,8 +531,133 @@ void main() {
         );
 
         expect(gameState.drawnCard, isNull);
-        expect(bot.hand[3], equals(cardBefore));
-        expect(gameState.discardPile.last.value, equals('5'));
+        expect(bot.hand[3].value, equals('6'));
+        expect(gameState.discardPile.last.value, equals('R'));
+      });
+
+      test('stable table: prioritizes unknown resolution over tempo self-match',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '5'),
+          PlayingCard.create('clubs', '8'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, true, false, false];
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+          null,
+        ];
+        gameState.drawnCard = PlayingCard.create('hearts', '5');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.optimization,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(bot.hand.length, equals(4));
+        expect(bot.hand.where((c) => c.value == '5').length, equals(2));
+      });
+
+      test('under pressure but behind on cards: prioritizes unknown resolution',
+          () async {
+        // Table sous pression: adversaire à 2 cartes -> tempo prioritaire autorisé.
+        gameState.players[0].hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+        ];
+
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '5'),
+          PlayingCard.create('clubs', '8'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, true, false, false];
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+          null,
+        ];
+        gameState.drawnCard = PlayingCard.create('hearts', '5');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(bot.hand.length, equals(4));
+        expect(bot.hand.where((c) => c.value == '5').length, equals(2));
+      });
+
+      test('under pressure and not behind: allows tempo self-match', () async {
+        gameState.players[0].hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+        ];
+
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '5'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, true, false];
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+        ];
+        gameState.drawnCard = PlayingCard.create('hearts', '5');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(bot.hand.length, equals(2));
+        expect(bot.hand.where((c) => c.value == '5').length, equals(0));
+      });
+    });
+
+    group('gold contextual unknown swaps', () {
+      test('does not keep a high draw instead of resolving an unknown',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '5'),
+          PlayingCard.create('clubs', '8'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, true, false, false];
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+          null,
+        ];
+        gameState.drawnCard = PlayingCard.create('hearts', '10');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.exploration,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(bot.hand[3].value, equals('10'));
       });
     });
 

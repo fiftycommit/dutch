@@ -155,6 +155,82 @@ void main() {
         // With card advantage and low score, should likely call
         expect(result, isA<bool>());
       });
+
+      test('platinum waits when opponent just chained matches', () {
+        // Score certain = 7
+        bot.hand = [
+          PlayingCard.create('hearts', '3'),
+          PlayingCard.create('diamonds', '4'),
+        ];
+        bot.knownCards = List.filled(2, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        // Opposant menaçant (peu de cartes) + momentum de match récent.
+        gameState.players[0].hand = [
+          PlayingCard.create('clubs', '4'),
+          PlayingCard.create('spades', '2'),
+        ];
+        gameState.actionHistory = [
+          '[15:52] MATCH ! - Human pose un5 !',
+          '[15:52] MATCH ! - Human pose un7 !',
+          '[15:51] Human remplace son 9 par la carte piochée',
+        ];
+
+        final result = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(result, isFalse);
+      });
+
+      test('gold and platinum still call immediately with guaranteed zero', () {
+        bot.hand = [];
+        bot.knownCards = [];
+        bot.mentalMap = [];
+        gameState.actionHistory = [
+          '[16:10] MATCH ! - Human pose un4 !',
+          '[16:09] MATCH ! - Human pose un6 !',
+        ];
+
+        final goldResult = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.optimization,
+        );
+        final platinumResult = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.optimization,
+        );
+
+        expect(goldResult, isTrue);
+        expect(platinumResult, isTrue);
+      });
+
+      test('duel tie with known opponent score triggers immediate dutch', () {
+        bot.hand = [PlayingCard.create('hearts', '2')];
+        bot.knownCards = [true];
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        gameState.players[0].hand = [PlayingCard.create('clubs', '2')];
+        gameState.players[0].knownCards = [false];
+        bot.rememberSpiedCard(
+            gameState.players[0].id, 0, gameState.players[0].hand[0]);
+
+        final result = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(result, isTrue);
+      });
     });
 
     group('difficulty effects', () {
@@ -297,7 +373,7 @@ void main() {
         expect(result, isFalse);
       });
 
-      test('platinum calls in tight spots where bronze stays conservative', () {
+      test('platinum avoids risky dutch at medium score under pressure', () {
         // Score bot = 8
         bot.hand = [
           PlayingCard.create('hearts', 'A'),
@@ -328,7 +404,7 @@ void main() {
         );
 
         expect(bronzeDecision, isFalse);
-        expect(platinumDecision, isTrue);
+        expect(platinumDecision, isFalse);
       });
 
       test('bronze does not Dutch only because it has fewer cards', () {

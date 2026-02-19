@@ -46,39 +46,8 @@ class BotCardStrategy {
     // Les bots doivent réagir quand l'humain devient dangereux
     // ═══════════════════════════════════════════════════════════════════════
     final threatTracker = HumanThreatTracker();
-    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
-
-    // En menace HIGH+, les bots deviennent plus conservateurs et stratégiques
-    final isHumanDangerous = humanThreatLevel == HumanThreatLevel.high ||
-        humanThreatLevel == HumanThreatLevel.critical;
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ANALYSE DU CONTEXTE DE TABLE
-    // Quand tout le monde a peu de cartes OU qu'on a beaucoup joué → CONSERVATEUR
-    // ═══════════════════════════════════════════════════════════════════════
-    final myCards = bot.hand.length;
-    final otherPlayersCards =
-        gs.players.where((p) => p.id != bot.id).map((p) => p.hand.length);
-    final avgOthersCards = otherPlayersCards.isEmpty
-        ? 4.0
-        : otherPlayersCards.reduce((a, b) => a + b) / otherPlayersCards.length;
-    final minOthersCards = otherPlayersCards.isEmpty
-        ? 4
-        : otherPlayersCards.reduce((a, b) => a < b ? a : b);
-
-    // Nombre de fois que CE bot a joué
-    final myTurnsPlayed = gs.actionCount ~/ gs.players.length;
-    final isLateGame = myTurnsPlayed >= 7;
-
-    // Mode "endgame tendu" :
-    // - Peu de cartes pour tout le monde OU
-    // - Quelqu'un a ≤2 cartes OU
-    // - On a joué plus de 7 tours
-    // - 🎯 OU l'humain est dangereux (menace HIGH+)
-    final isTenseEndgame = (myCards <= 2 && avgOthersCards <= 3) ||
-        minOthersCards <= 2 ||
-        isLateGame ||
-        isHumanDangerous;
+    final tableConclusions = _buildTableConclusions(gs, bot, threatTracker);
+    final isTenseEndgame = tableConclusions.isTenseEndgame;
 
     final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
 
@@ -115,6 +84,8 @@ class BotCardStrategy {
         difficulty,
         unknownIndices,
         phase,
+        threatTracker: threatTracker,
+        tableConclusions: tableConclusions,
       );
       return;
     }
@@ -150,6 +121,62 @@ class BotCardStrategy {
       return;
     }
 
+    // PRIORITE INFO (Platine) :
+    // tant qu'il reste des inconnues, on les résout d'abord.
+    // Exception: en forte pression de table, le tempo-match immédiat reste autorisé.
+    if (unknownIndices.isNotEmpty) {
+      final prioritizeInfo =
+          _shouldPrioritizeInfoWhenUnknowns(tableConclusions);
+      if (!prioritizeInfo &&
+          _tryAdvancedTempoSelfMatchPlay(
+            gs,
+            bot,
+            drawn,
+            phase,
+            decisionProfile,
+            tableConclusions,
+            onlyWhenForceTempo: true,
+          )) {
+        return;
+      }
+
+      final replaceIdx = _chooseUnknownReplacementIndex(
+        gs,
+        bot,
+        unknownIndices,
+        decisionProfile,
+        phase,
+      );
+
+      if (decisionProfile.unknownReplaceSkipChance > 0 &&
+          drawnVal >= 7 &&
+          _random.nextDouble() < decisionProfile.unknownReplaceSkipChance) {
+        // Bot faible: il "panique" et jette une carte moyenne/haute
+        // au lieu d'explorer une inconnue.
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+      if (!confused) {
+        bot.updateMentalMap(replaceIdx, drawn);
+      }
+      GameLogic.replaceCard(gs, replaceIdx);
+      bot.consecutiveBadDraws = 0;
+      return;
+    }
+
+    if (_tryAdvancedTempoSelfMatchPlay(
+      gs,
+      bot,
+      drawn,
+      phase,
+      decisionProfile,
+      tableConclusions,
+    )) {
+      return;
+    }
+
     // Note: En endgame tendu ou si l'humain est dangereux,
     // on désactive la stratégie doublons (voir ci-dessous)
 
@@ -176,94 +203,6 @@ class BotCardStrategy {
         GameLogic.replaceCard(gs, exchangeIdx);
         return;
       }
-    }
-
-    // EXPLORATION : Remplacer une carte inconnue systématiquement
-    // Règle demandée : si je ne connais pas une carte, je la remplace peu importe la valeur
-    if (unknownIndices.isNotEmpty) {
-      final replaceIdx = _chooseUnknownReplacementIndex(
-        gs,
-        bot,
-        unknownIndices,
-        decisionProfile,
-        phase,
-      );
-      final replaceHintScore =
-          _unknownHintScore(bot, replaceIdx, gs.actionCount);
-
-      if (decisionProfile.tier == _CardTier.platinum) {
-        // Si Platine pioche un 7 alors qu'il a encore des inconnues,
-        // il privilégie la défausse du 7 pour déclencher le pouvoir
-        // "regarder une carte", au lieu d'un échange aveugle.
-        if (drawn.value == '7') {
-          GameLogic.discardDrawnCard(gs);
-          bot.consecutiveBadDraws++;
-          return;
-        }
-
-        final expectedUnknownValue =
-            BotMemoryManager.getExpectedDeckCardValue(gs);
-        final knownScore = bot.getKnownScore();
-        final lowScoreEndgameProtection =
-            (phase == BotGamePhase.endgame || isTenseEndgame) &&
-                knownScore <= 2 &&
-                drawnVal > 2;
-        if (lowScoreEndgameProtection) {
-          GameLogic.discardDrawnCard(gs);
-          bot.consecutiveBadDraws++;
-          return;
-        }
-
-        // Carte reçue possiblement bonne (swap depuis joueur fort):
-        // on évite de l'écraser avec une pioche moyenne/haute.
-        final preserveLikelyGoodUnknown =
-            replaceHintScore >= 0.55 && drawnVal > 4;
-        final preserveVeryGoodUnknown =
-            replaceHintScore >= 0.70 && drawnVal > 3;
-        if (preserveLikelyGoodUnknown || preserveVeryGoodUnknown) {
-          GameLogic.discardDrawnCard(gs);
-          bot.consecutiveBadDraws++;
-          return;
-        }
-
-        // Politique stricte: Platine n'échange une inconnue que si la pioche
-        // est réellement meilleure que l'espérance de cette inconnue.
-        // En début de partie (peu de tours joués), plus tolérant pour découvrir vite
-        final myTurnsPlayed = gs.actionCount ~/ gs.players.length;
-        final baseBlindSwapTolerance = myTurnsPlayed <= 3
-            ? 0.2
-            : isTenseEndgame
-                ? -0.8
-                : -0.4;
-        final contextualTolerance =
-            baseBlindSwapTolerance - (replaceHintScore * 1.1);
-        final maxAcceptableBlindSwap =
-            expectedUnknownValue + contextualTolerance;
-        if (drawnVal > 2 && drawnVal > maxAcceptableBlindSwap) {
-          // Platine: applique une logique d'espérance sur les inconnues
-          // pour éviter les échanges aveugles fortement défavorables.
-          GameLogic.discardDrawnCard(gs);
-          bot.consecutiveBadDraws++;
-          return;
-        }
-      }
-
-      if (decisionProfile.unknownReplaceSkipChance > 0 &&
-          drawnVal >= 7 &&
-          _random.nextDouble() < decisionProfile.unknownReplaceSkipChance) {
-        // Bot faible: il "panique" et jette une carte moyenne/haute
-        // au lieu d'explorer une inconnue.
-        GameLogic.discardDrawnCard(gs);
-        bot.consecutiveBadDraws++;
-        return;
-      }
-      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
-      if (!confused) {
-        bot.updateMentalMap(replaceIdx, drawn);
-      }
-      GameLogic.replaceCard(gs, replaceIdx);
-      bot.consecutiveBadDraws = 0;
-      return;
     }
 
     // OPTIMIZATION : Aucun inconnu -> seule règle
@@ -382,23 +321,14 @@ class BotCardStrategy {
     if (unknownIndices.length == 1) return unknownIndices.first;
 
     if (profile.tier == _CardTier.platinum) {
-      // Platine cible d'abord l'inconnue jugée la plus suspecte
-      // (hint faible/négatif) au lieu d'un choix arbitraire.
-      int bestIdx = unknownIndices.first;
-      double worstHintScore = _unknownHintScore(bot, bestIdx, gs.actionCount);
+      return phase == BotGamePhase.endgame
+          ? unknownIndices.first
+          : unknownIndices.last;
+    }
 
-      for (final idx in unknownIndices.skip(1)) {
-        final score = _unknownHintScore(bot, idx, gs.actionCount);
-        if (score < worstHintScore) {
-          worstHintScore = score;
-          bestIdx = idx;
-        }
-      }
-
-      // S'il n'y a aucun signal, fallback stable en fin de main.
-      final noContext = unknownIndices
-          .every((idx) => bot.getUnknownCardHintQuality(idx) == null);
-      return noContext ? unknownIndices.last : bestIdx;
+    if (profile.tier == _CardTier.gold) {
+      if (phase == BotGamePhase.endgame) return unknownIndices.first;
+      return unknownIndices.last;
     }
 
     // En fin de manche, les tiers élevés jouent plus "stables"
@@ -408,6 +338,96 @@ class BotCardStrategy {
     }
 
     return unknownIndices[_random.nextInt(unknownIndices.length)];
+  }
+
+  static bool _tryAdvancedTempoSelfMatchPlay(
+    GameState gs,
+    Player bot,
+    PlayingCard drawn,
+    BotGamePhase phase,
+    _CardDecisionProfile profile,
+    _CardTableConclusions tableConclusions, {
+    bool onlyWhenForceTempo = false,
+  }) {
+    if (!_isAdvancedCardTier(profile.tier)) return false;
+    if (drawn.value == '7' ||
+        drawn.value == '10' ||
+        drawn.value == 'V' ||
+        drawn.value == 'JOKER') {
+      return false;
+    }
+
+    final bestMatchIdx = _bestKnownMatchIndex(bot, drawn);
+    if (bestMatchIdx == -1) return false;
+
+    final worstKnownValue = _worstKnownValue(bot);
+    final replaceGain =
+        worstKnownValue > drawn.points ? worstKnownValue - drawn.points : 0;
+    final tempoGain = drawn.points + (tableConclusions.myCards <= 2 ? 2 : 1);
+
+    final forceTempo = tableConclusions.isTenseEndgame ||
+        phase == BotGamePhase.endgame ||
+        tableConclusions.minOpponentCards <= 2 ||
+        tableConclusions.isHumanDangerous ||
+        tableConclusions.myCards <= 3;
+
+    if (onlyWhenForceTempo && !forceTempo) return false;
+
+    if (!forceTempo && replaceGain >= tempoGain + 2) {
+      return false;
+    }
+    if (!forceTempo &&
+        drawn.points <= 2 &&
+        replaceGain >= 4 &&
+        tableConclusions.avgOpponentCards >= 3.5) {
+      return false;
+    }
+
+    GameLogic.discardDrawnCard(gs);
+    final matchIdx = _bestKnownMatchIndex(bot, drawn);
+    final matched =
+        matchIdx != -1 ? GameLogic.matchCard(gs, bot, matchIdx) : false;
+    if (matched) {
+      bot.consecutiveBadDraws = 0;
+    } else {
+      bot.consecutiveBadDraws++;
+    }
+    return true;
+  }
+
+  static int _bestKnownMatchIndex(Player bot, PlayingCard target) {
+    int idx = -1;
+    int highestPoints = -1;
+    for (int i = 0; i < bot.hand.length; i++) {
+      if (i >= bot.mentalMap.length) continue;
+      final known = bot.mentalMap[i];
+      if (known == null || !known.matches(target)) continue;
+      if (known.points > highestPoints) {
+        highestPoints = known.points;
+        idx = i;
+      }
+    }
+    return idx;
+  }
+
+  static int _worstKnownValue(Player bot) {
+    int value = -1;
+    for (int i = 0; i < bot.hand.length; i++) {
+      if (i >= bot.mentalMap.length) continue;
+      final known = bot.mentalMap[i];
+      if (known == null) continue;
+      if (known.points > value) value = known.points;
+    }
+    return value;
+  }
+
+  static bool _shouldPrioritizeInfoWhenUnknowns(
+      _CardTableConclusions tableConclusions) {
+    // Si le bot est clairement en retard en nombre de cartes,
+    // il priorise l'info pour rattraper l'optimisation.
+    final cardGap =
+        tableConclusions.myCards - tableConclusions.minOpponentCards;
+    return cardGap >= 2;
   }
 
   static void _handleBronzeReplacementByContext(
@@ -537,28 +557,14 @@ class BotCardStrategy {
     int drawnVal,
     BotDifficulty difficulty,
     List<int> unknownIndices,
-    BotGamePhase phase,
-  ) {
-    final myTurnsPlayed = gs.actionCount ~/ gs.players.length;
-    final threatTracker = HumanThreatTracker();
-    final humanThreat = threatTracker.calculateThreatLevel(gs);
-    final isHumanDangerous = humanThreat == HumanThreatLevel.high ||
-        humanThreat == HumanThreatLevel.critical;
-    final antiHumanActive = myTurnsPlayed >= 3 || isHumanDangerous;
-
-    // Contexte de table
-    final otherPlayersCards =
-        gs.players.where((p) => p.id != bot.id).map((p) => p.hand.length);
-    final minOthersCards = otherPlayersCards.isEmpty
-        ? 4
-        : otherPlayersCards.reduce((a, b) => a < b ? a : b);
-    final avgOthersCards = otherPlayersCards.isEmpty
-        ? 4.0
-        : otherPlayersCards.reduce((a, b) => a + b) / otherPlayersCards.length;
-    final isTenseEndgame = (bot.hand.length <= 2 && avgOthersCards <= 3) ||
-        minOthersCards <= 2 ||
-        myTurnsPlayed >= 7 ||
-        isHumanDangerous;
+    BotGamePhase phase, {
+    HumanThreatTracker? threatTracker,
+    _CardTableConclusions? tableConclusions,
+  }) {
+    final tracker = threatTracker ?? HumanThreatTracker();
+    final table = tableConclusions ?? _buildTableConclusions(gs, bot, tracker);
+    final antiHumanActive = table.myTurnsPlayed >= 3 || table.isHumanDangerous;
+    final isTenseEndgame = table.isTenseEndgame;
 
     // RÈGLE DU 7 : défausse pour pouvoir si inconnues, sinon remplace pire >7
     if (drawn.value == '7') {
@@ -586,6 +592,48 @@ class BotCardStrategy {
       return;
     }
 
+    if (unknownIndices.isNotEmpty) {
+      final prioritizeInfo = _shouldPrioritizeInfoWhenUnknowns(table);
+      if (!prioritizeInfo &&
+          _tryAdvancedTempoSelfMatchPlay(
+            gs,
+            bot,
+            drawn,
+            phase,
+            _decisionProfileForDifficulty(difficulty),
+            table,
+            onlyWhenForceTempo: true,
+          )) {
+        return;
+      }
+
+      final replaceIdx = _chooseUnknownReplacementIndex(
+        gs,
+        bot,
+        unknownIndices,
+        _decisionProfileForDifficulty(difficulty),
+        phase,
+      );
+      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+      if (!confused) {
+        bot.updateMentalMap(replaceIdx, drawn);
+      }
+      GameLogic.replaceCard(gs, replaceIdx);
+      bot.consecutiveBadDraws = 0;
+      return;
+    }
+
+    if (_tryAdvancedTempoSelfMatchPlay(
+      gs,
+      bot,
+      drawn,
+      phase,
+      _decisionProfileForDifficulty(difficulty),
+      table,
+    )) {
+      return;
+    }
+
     // STRATÉGIE DOUBLONS (désactivée en tense endgame)
     if (!isTenseEndgame) {
       final doublonInfo =
@@ -603,24 +651,6 @@ class BotCardStrategy {
       }
     }
 
-    // EXPLORATION : swap systématique des inconnues (séquentiel via .first)
-    // Gold hésite parfois à explorer avec une carte haute (≥8)
-    if (unknownIndices.isNotEmpty) {
-      if (drawnVal >= 8 && _random.nextDouble() < 0.15) {
-        GameLogic.discardDrawnCard(gs);
-        bot.consecutiveBadDraws++;
-        return;
-      }
-      final replaceIdx = unknownIndices.first;
-      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
-      if (!confused) {
-        bot.updateMentalMap(replaceIdx, drawn);
-      }
-      GameLogic.replaceCard(gs, replaceIdx);
-      bot.consecutiveBadDraws = 0;
-      return;
-    }
-
     // OPTIMISATION : remplacer la pire connue si amélioration
     int worstKnownValue = -1;
     int worstKnownIdx = -1;
@@ -636,7 +666,7 @@ class BotCardStrategy {
       // Anti-humain : vérifier avant de défausser
       if (antiHumanActive &&
           _shouldAvoidHelpingHumanByKeeping(
-            threatTracker,
+            tracker,
             gs,
             drawnVal,
             worstKnownValue,
@@ -651,7 +681,7 @@ class BotCardStrategy {
     } else if (worstKnownIdx != -1 &&
         antiHumanActive &&
         _shouldAvoidHelpingHumanByKeeping(
-          threatTracker,
+          tracker,
           gs,
           drawnVal,
           worstKnownValue,
@@ -694,18 +724,96 @@ class BotCardStrategy {
     return false;
   }
 
-  static double _unknownHintScore(Player bot, int cardIndex, int actionCount) {
-    final quality = bot.getUnknownCardHintQuality(cardIndex);
-    final confidence = bot.getUnknownCardHintConfidence(cardIndex);
-    if (quality == null || confidence == null) return 0.0;
+  static _CardTableConclusions _buildTableConclusions(
+    GameState gs,
+    Player bot,
+    HumanThreatTracker threatTracker,
+  ) {
+    final humanThreatLevel = threatTracker.calculateThreatLevel(gs);
+    final isHumanDangerous = humanThreatLevel == HumanThreatLevel.high ||
+        humanThreatLevel == HumanThreatLevel.critical;
 
-    final updatedAt = bot.getUnknownCardHintAction(cardIndex);
-    final age = updatedAt == null ? 0 : (actionCount - updatedAt).clamp(0, 20);
-    final decayFactor = pow(0.92, age).toDouble();
-    final boundedDecay =
-        decayFactor < 0.25 ? 0.25 : (decayFactor > 1.0 ? 1.0 : decayFactor);
-    final decayedConfidence = confidence * boundedDecay;
-    return quality * decayedConfidence;
+    final myCards = bot.hand.length;
+    final otherPlayersCards =
+        gs.players.where((p) => p.id != bot.id).map((p) => p.hand.length);
+    final avgOthersCards = otherPlayersCards.isEmpty
+        ? 4.0
+        : otherPlayersCards.reduce((a, b) => a + b) / otherPlayersCards.length;
+    final minOthersCards = otherPlayersCards.isEmpty
+        ? 4
+        : otherPlayersCards.reduce((a, b) => a < b ? a : b);
+
+    final playersCount = gs.players.isEmpty ? 1 : gs.players.length;
+    final myTurnsPlayed = gs.actionCount ~/ playersCount;
+    final isLateGame = myTurnsPlayed >= 7;
+
+    final isTenseEndgame = (myCards <= 2 && avgOthersCards <= 3) ||
+        minOthersCards <= 2 ||
+        isLateGame ||
+        isHumanDangerous;
+
+    return _CardTableConclusions(
+      isHumanDangerous: isHumanDangerous,
+      isTenseEndgame: isTenseEndgame,
+      myTurnsPlayed: myTurnsPlayed,
+      minOpponentCards: minOthersCards,
+      avgOpponentCards: avgOthersCards,
+      myCards: myCards,
+    );
+  }
+
+  static _ReactionConclusions _buildReactionConclusions({
+    required GameState gameState,
+    required Player bot,
+    required BotDifficulty difficulty,
+    required BotGamePhase phase,
+    required _CardDecisionProfile profile,
+    required bool hasKnownMatch,
+    BotPersonality? personality,
+  }) {
+    final bronzeBlackoutActive = profile.tier == _CardTier.bronze &&
+        _isBronzeBlackoutActive(bot, gameState);
+    final shouldAttemptBlackoutRandomMatch =
+        bronzeBlackoutActive && bot.hand.isNotEmpty;
+    final blackoutRecklessChance = hasKnownMatch ? 0.42 : 0.28;
+
+    final immediateRaceThreat =
+        gameState.players.any((p) => p.id != bot.id && p.hand.length <= 2) ||
+            gameState.dutchCallerId != null;
+    final forceKnownReaction = hasKnownMatch &&
+        (profile.forceKnownReaction ||
+            immediateRaceThreat ||
+            phase == BotGamePhase.endgame ||
+            bot.hand.length <= 3);
+
+    double knownMatchLapseChance = 0.0;
+    if (!forceKnownReaction &&
+        profile.knownMatchLapseChance > 0 &&
+        hasKnownMatch) {
+      final crowdedTablePenalty =
+          ((gameState.players.length - 4) * 0.015).clamp(0.0, 0.20);
+      knownMatchLapseChance =
+          (profile.knownMatchLapseChance + crowdedTablePenalty)
+              .clamp(0.0, 0.90);
+    }
+
+    final matchChance = forceKnownReaction
+        ? 1.0
+        : _getMatchChance(
+            bot,
+            difficulty,
+            phase,
+            gameState,
+            personality: personality,
+          );
+
+    return _ReactionConclusions(
+      forceKnownReaction: forceKnownReaction,
+      shouldAttemptBlackoutRandomMatch: shouldAttemptBlackoutRandomMatch,
+      blackoutRecklessChance: blackoutRecklessChance,
+      knownMatchLapseChance: knownMatchLapseChance,
+      matchChance: matchChance,
+    );
   }
 
   static int _requiredImprovement(
@@ -808,18 +916,24 @@ class BotCardStrategy {
     PlayingCard topDiscard = gameState.discardPile.last;
     final decisionProfile = _decisionProfileForDifficulty(difficulty);
     final hasKnownMatch = _hasKnownMatch(bot, topDiscard);
+    final reactionConclusions = _buildReactionConclusions(
+      gameState: gameState,
+      bot: bot,
+      difficulty: difficulty,
+      phase: phase,
+      personality: personality,
+      profile: decisionProfile,
+      hasKnownMatch: hasKnownMatch,
+    );
 
     if (decisionProfile.tier == _CardTier.silver) {
       return _trySilverReactionMatch(gameState, bot, difficulty, hasKnownMatch);
     }
 
-    final bronzeBlackoutActive = decisionProfile.tier == _CardTier.bronze &&
-        _isBronzeBlackoutActive(bot, gameState);
-
     // Bronze en blackout: il tente parfois un match totalement au hasard.
-    if (bronzeBlackoutActive && bot.hand.isNotEmpty) {
-      final recklessChance = hasKnownMatch ? 0.42 : 0.28;
-      if (_random.nextDouble() < recklessChance) {
+    if (reactionConclusions.shouldAttemptBlackoutRandomMatch &&
+        bot.hand.isNotEmpty) {
+      if (_random.nextDouble() < reactionConclusions.blackoutRecklessChance) {
         final randomIndex = _random.nextInt(bot.hand.length);
         await Future.delayed(const Duration(milliseconds: 120));
         return GameLogic.matchCard(gameState, bot, randomIndex);
@@ -828,28 +942,14 @@ class BotCardStrategy {
 
     // Bronze (et un peu Argent) peut "rater le timing" d'une réaction,
     // même s'il connaît une carte matchante.
-    if (decisionProfile.knownMatchLapseChance > 0 && hasKnownMatch) {
-      final crowdedTablePenalty =
-          ((gameState.players.length - 4) * 0.015).clamp(0.0, 0.20);
-      final lapseChance =
-          (decisionProfile.knownMatchLapseChance + crowdedTablePenalty)
-              .clamp(0.0, 0.90);
-      if (_random.nextDouble() < lapseChance) {
-        return false;
-      }
+    if (reactionConclusions.knownMatchLapseChance > 0 &&
+        _random.nextDouble() < reactionConclusions.knownMatchLapseChance) {
+      return false;
     }
 
-    final forceKnownReaction =
-        decisionProfile.forceKnownReaction && hasKnownMatch;
-    if (!forceKnownReaction) {
-      double matchChance = _getMatchChance(
-        bot,
-        difficulty,
-        phase,
-        gameState,
-        personality: personality,
-      );
-      if (_random.nextDouble() > matchChance) return false;
+    if (!reactionConclusions.forceKnownReaction &&
+        _random.nextDouble() > reactionConclusions.matchChance) {
+      return false;
     }
 
     // Chercher une carte qui match dans la main du bot
@@ -1040,9 +1140,9 @@ class BotCardStrategy {
           allowEqualSwapInEndgame: true,
           greedyImmediate: false,
           greedyMinImmediateImprovement: 1,
-          knownMatchLapseChance: 0.12,
-          unknownReplaceSkipChance: 0.05,
-          forceKnownReaction: false,
+          knownMatchLapseChance: 0.03,
+          unknownReplaceSkipChance: 0.0,
+          forceKnownReaction: true,
         );
       case _CardTier.platinum:
         return const _CardDecisionProfile(
@@ -1120,5 +1220,39 @@ class _CardDecisionProfile {
     required this.knownMatchLapseChance,
     required this.unknownReplaceSkipChance,
     required this.forceKnownReaction,
+  });
+}
+
+class _CardTableConclusions {
+  final bool isHumanDangerous;
+  final bool isTenseEndgame;
+  final int myTurnsPlayed;
+  final int minOpponentCards;
+  final double avgOpponentCards;
+  final int myCards;
+
+  const _CardTableConclusions({
+    required this.isHumanDangerous,
+    required this.isTenseEndgame,
+    required this.myTurnsPlayed,
+    required this.minOpponentCards,
+    required this.avgOpponentCards,
+    required this.myCards,
+  });
+}
+
+class _ReactionConclusions {
+  final bool forceKnownReaction;
+  final bool shouldAttemptBlackoutRandomMatch;
+  final double blackoutRecklessChance;
+  final double knownMatchLapseChance;
+  final double matchChance;
+
+  const _ReactionConclusions({
+    required this.forceKnownReaction,
+    required this.shouldAttemptBlackoutRandomMatch,
+    required this.blackoutRecklessChance,
+    required this.knownMatchLapseChance,
+    required this.matchChance,
   });
 }

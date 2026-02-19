@@ -370,6 +370,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       player: _gameState!.currentPlayer,
       turnNumber: _gameState!.turnCount,
       allPlayers: _gameState!.players,
+      gameState: _gameState,
     );
 
     shakingCardIndices.clear();
@@ -1026,9 +1027,11 @@ class GameProvider with ChangeNotifier implements IGameController {
       final int quitScore;
       final String detail;
       if (isTournament) {
-        final int remainingRounds = tournamentTotalRounds - _gameState!.tournamentRound + 1;
+        final int remainingRounds =
+            tournamentTotalRounds - _gameState!.tournamentRound + 1;
         quitScore = penaltyPerRound * remainingRounds;
-        detail = 'Abandon : $penaltyPerRound pts x $remainingRounds manche(s) restante(s) = $quitScore pts';
+        detail =
+            'Abandon : $penaltyPerRound pts x $remainingRounds manche(s) restante(s) = $quitScore pts';
       } else {
         quitScore = penaltyPerRound;
         detail = 'Abandon : $penaltyPerRound pts (pire main possible)';
@@ -1153,16 +1156,18 @@ class GameProvider with ChangeNotifier implements IGameController {
     required bool isTournament,
   }) {
     SharedPreferences.getInstance().then((prefs) {
-      prefs.setString(_kActiveGameKey, jsonEncode({
-        'slotId': slotId,
-        'tournamentRound': tournamentRound,
-        'totalRounds': totalRounds,
-        'totalPlayers': totalPlayers,
-        'tournamentId': tournamentId,
-        'useSBMM': useSBMM,
-        'isTournament': isTournament,
-        'timestamp': DateTime.now().toIso8601String(),
-      }));
+      prefs.setString(
+          _kActiveGameKey,
+          jsonEncode({
+            'slotId': slotId,
+            'tournamentRound': tournamentRound,
+            'totalRounds': totalRounds,
+            'totalPlayers': totalPlayers,
+            'tournamentId': tournamentId,
+            'useSBMM': useSBMM,
+            'isTournament': isTournament,
+            'timestamp': DateTime.now().toIso8601String(),
+          }));
     });
   }
 
@@ -1196,10 +1201,12 @@ class GameProvider with ChangeNotifier implements IGameController {
       if (isTournament) {
         final remainingRounds = totalRounds - tournamentRound + 1;
         quitScore = penaltyPerRound * remainingRounds;
-        detail = 'Abandon (app fermée) : $penaltyPerRound pts x $remainingRounds manche(s) = $quitScore pts';
+        detail =
+            'Abandon (app fermée) : $penaltyPerRound pts x $remainingRounds manche(s) = $quitScore pts';
       } else {
         quitScore = penaltyPerRound;
-        detail = 'Abandon (app fermée) : $penaltyPerRound pts (pire main possible)';
+        detail =
+            'Abandon (app fermée) : $penaltyPerRound pts (pire main possible)';
       }
 
       await StatsService.saveGameResult(
@@ -1218,7 +1225,8 @@ class GameProvider with ChangeNotifier implements IGameController {
       );
 
       if (kDebugMode) {
-        debugPrint('Abandon détecté : ${isTournament ? "tournoi round $tournamentRound" : "partie rapide"}, score=$quitScore');
+        debugPrint(
+            'Abandon détecté : ${isTournament ? "tournoi round $tournamentRound" : "partie rapide"}, score=$quitScore');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Erreur checkForAbandonedGame: $e');

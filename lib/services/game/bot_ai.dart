@@ -10,16 +10,22 @@ import 'bot/bot_card_strategy.dart';
 import 'bot/bot_power_handler.dart';
 import 'bot/bot_personality.dart';
 
-export 'bot/bot_config.dart' show BotGamePhase, BotBehavior, BotSkillLevel, HardcoreLevel, HardcoreBotConfig, PlayerSkillEstimator;
+export 'bot/bot_config.dart'
+    show
+        BotGamePhase,
+        BotBehavior,
+        BotSkillLevel,
+        HardcoreLevel,
+        HardcoreBotConfig,
+        PlayerSkillEstimator;
 export 'bot/bot_difficulty.dart' show BotDifficulty;
 
 /// BotAI refactoré - Orchestrateur léger (~100 lignes au lieu de 1376)
 /// Principe GRASP: Controller - Point d'entrée, délègue aux modules spécialisés
 /// Principe SOLID: SRP - Coordination uniquement
 class BotAI {
-
   /// Joue le tour d'un bot
-  /// 
+  ///
   /// [hardcoreLevel] - Si défini, utilise le mode hardcore avec ce niveau
   /// [playerSkillEstimate] - Estimation du skill joueur en temps réel (pour adaptation)
   static Future<void> playBotTurn(
@@ -33,7 +39,7 @@ class BotAI {
     if (bot.isHuman) return;
 
     final difficulty = BotConfig.getDifficulty(
-      bot, 
+      bot,
       playerMMR,
       hardcoreLevel: hardcoreLevel,
       playerSkillEstimate: playerSkillEstimate,
@@ -46,15 +52,18 @@ class BotAI {
       player: bot,
       turnNumber: gameState.turnCount,
       allPlayers: gameState.players,
+      gameState: gameState,
     );
 
     // Appliquer la décroissance de la mémoire
-    BotMemoryManager.applyMemoryDecay(bot, difficulty, personality: personality);
+    BotMemoryManager.applyMemoryDecay(bot, difficulty,
+        personality: personality);
 
     // Temps de réflexion (plus court en mode hardcore)
     int thinkingTime;
     if (hardcoreLevel != null) {
-      thinkingTime = HardcoreBotConfig.getReactionTime(hardcoreLevel, BotConfig.random);
+      thinkingTime =
+          HardcoreBotConfig.getReactionTime(hardcoreLevel, BotConfig.random);
     } else {
       thinkingTime = BotConfig.getThinkingTime(
         bot.botBehavior,
@@ -84,9 +93,12 @@ class BotAI {
     // En mode hardcore, réduire le délai
     final int postDrawDelay;
     if (hardcoreLevel != null) {
-      postDrawDelay = HardcoreBotConfig.getReactionTime(hardcoreLevel, BotConfig.random) ~/ 2;
+      postDrawDelay =
+          HardcoreBotConfig.getReactionTime(hardcoreLevel, BotConfig.random) ~/
+              2;
     } else if (personality != null) {
-      postDrawDelay = (personality.decisionSpeedMs * 0.35).round().clamp(150, 900);
+      postDrawDelay =
+          (personality.decisionSpeedMs * 0.35).round().clamp(150, 900);
     } else {
       postDrawDelay = 600;
     }
@@ -112,7 +124,7 @@ class BotAI {
     if (bot.isHuman) return false;
 
     final difficulty = BotConfig.getDifficulty(
-      bot, 
+      bot,
       playerMMR,
       hardcoreLevel: hardcoreLevel,
       playerSkillEstimate: playerSkillEstimate,
@@ -137,11 +149,14 @@ class BotAI {
     HardcoreLevel? hardcoreLevel,
     int? playerSkillEstimate,
   }) async {
-    if (!gameState.isWaitingForSpecialPower || gameState.specialCardToActivate == null) return;
+    if (!gameState.isWaitingForSpecialPower ||
+        gameState.specialCardToActivate == null) {
+      return;
+    }
 
     Player bot = gameState.currentPlayer;
     final difficulty = BotConfig.getDifficulty(
-      bot, 
+      bot,
       playerMMR,
       hardcoreLevel: hardcoreLevel,
       playerSkillEstimate: playerSkillEstimate,

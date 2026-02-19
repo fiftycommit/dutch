@@ -5,11 +5,17 @@ import 'package:web/web.dart' as web;
 /// Utilise les API Screen Orientation et Fullscreen du navigateur
 class WebOrientationService {
   /// Passe en fullscreen puis verrouille l'écran en mode paysage
-  static void lockLandscape() {
+  static void lockLandscape({bool requestFullscreen = true}) {
     try {
       final doc = web.document;
       final element = doc.documentElement;
       if (element == null) return;
+
+      // Cas sans fullscreen auto: on tente juste le lock d'orientation.
+      if (!requestFullscreen) {
+        _lockOrientation();
+        return;
+      }
 
       // Si déjà fullscreen, verrouiller l'orientation directement
       if (doc.fullscreenElement != null) {

@@ -13,7 +13,6 @@ export 'package:dutch_game/widgets/game/game_layout_mixin.dart';
 /// Contient la logique écran (navigation, orientation)
 /// Les screens doivent aussi mixer GameLayoutMixin pour les helpers layout
 mixin GameScreenMixin<T extends StatefulWidget> on State<T> {
-  
   // ============================================================
   // END GAME NAVIGATION
   // ============================================================
@@ -44,9 +43,11 @@ mixin GameScreenMixin<T extends StatefulWidget> on State<T> {
   // ORIENTATION HANDLING
   // ============================================================
 
-  void lockLandscapeOrientation() {
+  void lockLandscapeOrientation({bool autoFullscreenOnWeb = true}) {
     if (kIsWeb) {
-      WebOrientationService.lockLandscape();
+      WebOrientationService.lockLandscape(
+        requestFullscreen: autoFullscreenOnWeb,
+      );
     } else {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,

@@ -3,31 +3,46 @@ import '../../../models/playing_card.dart';
 import '../../../models/player.dart';
 import '../../../models/game_state.dart';
 
+enum DiscardActionType {
+  drawnDiscard,
+  exchangeDiscard,
+  matchDiscard,
+}
+
 /// Système de comptage de cartes pour les bots intelligents
-/// 
+///
 /// Un joueur expert observe :
 /// - Les cartes défaussées (visibles par tous)
 /// - Ce que les adversaires défaussent (indice sur leur main)
 /// - Les probabilités restantes
-/// 
+///
 /// Avec 52 cartes + 2 jokers = 54 cartes au total
 /// 4 exemplaires de chaque valeur (sauf Joker = 2)
 class DiscardTracker {
   /// Cartes vues dans la défausse (par valeur de points)
   /// Ex: {0: 3} = 3 cartes à 0 points vues (As, Roi rouge, Joker)
   final Map<int, int> _seenByPoints = {};
-  
+
   /// Cartes vues par valeur exacte (pour probabilités fines)
   /// Ex: {'A': 2, 'R': 3, '7': 1}
   final Map<String, int> _seenByValue = {};
-  
+
   /// Historique des défausses par joueur (playerId -> liste de points défaussés)
   /// Permet d'estimer la qualité de leur main
   final Map<String, List<int>> _playerDiscardHistory = {};
-  
+
+  /// Actions observées par joueur.
+  /// - exchangeDiscard: a gardé la pioche en échangeant une carte de main
+  /// - drawnDiscard: a défaussé directement la carte piochée
+  /// - matchDiscard: a posé une carte via match en réaction
+  final Map<String, int> _playerExchangeDiscardCount = {};
+  final Map<String, int> _playerDrawnDiscardCount = {};
+  final Map<String, int> _playerMatchDiscardCount = {};
+
   /// Nombre de défausses observées pour un joueur
-  int getDiscardCount(String playerId) => _playerDiscardHistory[playerId]?.length ?? 0;
-  
+  int getDiscardCount(String playerId) =>
+      _playerDiscardHistory[playerId]?.length ?? 0;
+
   /// Cartes totales dans le jeu par points
   /// 0 pts: 6 (4 As + 2 Jokers) si rouge, sinon 4 As
   /// 1-10: 4 chacun
@@ -36,9 +51,9 @@ class DiscardTracker {
   /// 13 (Roi noir): 2
   /// 0 (Roi rouge): 2
   static const Map<int, int> totalCardsByPoints = {
-    0: 6,   // 4 As (1pt mais on les compte à 0 ici) + 2 Jokers... 
-            // En fait: As=1pt, Roi rouge=0, Joker=0
-    1: 4,   // 4 As
+    0: 6, // 4 As (1pt mais on les compte à 0 ici) + 2 Jokers...
+    // En fait: As=1pt, Roi rouge=0, Joker=0
+    1: 4, // 4 As
     2: 4,
     3: 4,
     4: 4,
@@ -48,73 +63,111 @@ class DiscardTracker {
     8: 4,
     9: 4,
     10: 4,
-    11: 4,  // Valets
-    12: 4,  // Dames
-    13: 2,  // Rois noirs uniquement (rouges = 0)
+    11: 4, // Valets
+    12: 4, // Dames
+    13: 2, // Rois noirs uniquement (rouges = 0)
   };
-  
+
   /// Nombre total de cartes basses (≤4 pts) dans le jeu
   static const int totalLowCards = 4 + 4 + 4 + 4 + 4; // As(1) + 2 + 3 + 4 = 20
-  
-  /// Nombre total de cartes hautes (≥10 pts) dans le jeu  
+
+  /// Nombre total de cartes hautes (≥10 pts) dans le jeu
   static const int totalHighCards = 4 + 4 + 4 + 2; // 10 + V + D + R noir = 14
-  
+
   // ═══════════════════════════════════════════════════════════════════════════
   // TRACKING
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   /// Type d'action effectuée
   /// wasExchange = true → le joueur a gardé la carte piochée (échange)
   /// wasExchange = false → le joueur a défaussé la carte piochée directement
   final Map<String, bool> _lastActionWasExchange = {};
-  
+
   /// Enregistre une carte vue dans la défausse
   /// [wasExchange] : true si le joueur a échangé (gardé la pioche), false si défausse directe
-  void trackDiscard(PlayingCard card, {String? discardedBy, bool wasExchange = false}) {
+  void trackDiscard(
+    PlayingCard card, {
+    String? discardedBy,
+    bool wasExchange = false,
+    DiscardActionType? actionType,
+  }) {
     final points = card.points;
     final value = card.value;
-    
+
     _seenByPoints[points] = (_seenByPoints[points] ?? 0) + 1;
     _seenByValue[value] = (_seenByValue[value] ?? 0) + 1;
-    
+
     if (discardedBy != null) {
       _playerDiscardHistory.putIfAbsent(discardedBy, () => []);
       _playerDiscardHistory[discardedBy]!.add(points);
-      _lastActionWasExchange[discardedBy] = wasExchange;
+
+      final resolvedType = actionType ??
+          (wasExchange
+              ? DiscardActionType.exchangeDiscard
+              : DiscardActionType.drawnDiscard);
+      switch (resolvedType) {
+        case DiscardActionType.exchangeDiscard:
+          _playerExchangeDiscardCount[discardedBy] =
+              (_playerExchangeDiscardCount[discardedBy] ?? 0) + 1;
+          _lastActionWasExchange[discardedBy] = true;
+          break;
+        case DiscardActionType.drawnDiscard:
+          _playerDrawnDiscardCount[discardedBy] =
+              (_playerDrawnDiscardCount[discardedBy] ?? 0) + 1;
+          _lastActionWasExchange[discardedBy] = false;
+          break;
+        case DiscardActionType.matchDiscard:
+          _playerMatchDiscardCount[discardedBy] =
+              (_playerMatchDiscardCount[discardedBy] ?? 0) + 1;
+          _lastActionWasExchange[discardedBy] = false;
+          break;
+      }
     }
   }
-  
+
   /// Retourne true si la dernière action du joueur était un échange
-  bool lastActionWasExchange(String playerId) => _lastActionWasExchange[playerId] ?? false;
-  
+  bool lastActionWasExchange(String playerId) =>
+      _lastActionWasExchange[playerId] ?? false;
+
   /// Enregistre plusieurs cartes (ex: après un match)
-  void trackMultipleDiscards(List<PlayingCard> cards, {String? discardedBy}) {
+  void trackMultipleDiscards(
+    List<PlayingCard> cards, {
+    String? discardedBy,
+    DiscardActionType actionType = DiscardActionType.matchDiscard,
+  }) {
     for (final card in cards) {
-      trackDiscard(card, discardedBy: discardedBy);
+      trackDiscard(
+        card,
+        discardedBy: discardedBy,
+        actionType: actionType,
+      );
     }
   }
-  
+
   /// Reset pour une nouvelle manche
   void reset() {
     _seenByPoints.clear();
     _seenByValue.clear();
     _playerDiscardHistory.clear();
     _lastActionWasExchange.clear();
+    _playerExchangeDiscardCount.clear();
+    _playerDrawnDiscardCount.clear();
+    _playerMatchDiscardCount.clear();
   }
-  
+
   // ═══════════════════════════════════════════════════════════════════════════
   // PROBABILITÉS
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   /// Nombre de cartes d'une valeur de points déjà vues
   int seenCount(int points) => _seenByPoints[points] ?? 0;
-  
+
   /// Nombre de cartes d'une valeur de points restantes (non vues)
   int remainingCount(int points) {
     final total = totalCardsByPoints[points] ?? 4;
     return max(0, total - seenCount(points));
   }
-  
+
   /// Probabilité qu'une carte de X points soit encore en jeu
   /// Retourne 0.0 à 1.0
   double probabilityRemaining(int points) {
@@ -122,7 +175,7 @@ class DiscardTracker {
     final remaining = remainingCount(points);
     return remaining / total;
   }
-  
+
   /// Nombre total de cartes basses (≤4) restantes
   int get remainingLowCards {
     int count = 0;
@@ -133,7 +186,7 @@ class DiscardTracker {
     count += remainingCount(0);
     return count;
   }
-  
+
   /// Nombre total de cartes hautes (≥10) restantes
   int get remainingHighCards {
     int count = 0;
@@ -142,7 +195,7 @@ class DiscardTracker {
     }
     return count;
   }
-  
+
   /// Ratio de cartes basses vs hautes restantes
   /// > 1.0 = plus de bonnes cartes disponibles
   /// < 1.0 = plus de mauvaises cartes disponibles
@@ -151,19 +204,19 @@ class DiscardTracker {
     if (high == 0) return 10.0; // Toutes les hautes sont sorties !
     return remainingLowCards / high;
   }
-  
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ANALYSE DES ADVERSAIRES
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   /// Analyse la qualité probable de la main d'un adversaire
   /// basée sur ce qu'il a défaussé
-  /// 
+  ///
   /// Logique : Si un joueur défausse beaucoup de cartes hautes,
   /// il garde probablement des cartes basses → bonne main !
   OpponentHandEstimate estimateOpponentHand(String playerId, int cardCount) {
     final history = _playerDiscardHistory[playerId] ?? [];
-    
+
     if (history.isEmpty) {
       // Pas d'info → estimation neutre
       return OpponentHandEstimate(
@@ -174,13 +227,13 @@ class DiscardTracker {
         avgDiscardedPoints: 0,
       );
     }
-    
+
     // Moyenne des points défaussés
     final avgDiscarded = history.reduce((a, b) => a + b) / history.length;
-    
+
     // Si il défausse des cartes hautes (>8), il garde probablement des basses
     final likelyLowHand = avgDiscarded >= 8;
-    
+
     // Estimation du score basée sur les défausses
     // Plus il défausse haut, plus son score estimé est bas
     double estimatedAvgCard;
@@ -193,10 +246,10 @@ class DiscardTracker {
     } else {
       estimatedAvgCard = 9.0; // Il défausse des basses → garde des hautes !
     }
-    
+
     // Confiance basée sur le nombre d'observations
     final confidence = min(1.0, history.length / 5.0);
-    
+
     return OpponentHandEstimate(
       playerId: playerId,
       estimatedScore: cardCount * estimatedAvgCard,
@@ -205,41 +258,101 @@ class DiscardTracker {
       avgDiscardedPoints: avgDiscarded,
     );
   }
-  
+
+  int getExchangeDiscardCount(String playerId) =>
+      _playerExchangeDiscardCount[playerId] ?? 0;
+
+  int getDrawnDiscardCount(String playerId) =>
+      _playerDrawnDiscardCount[playerId] ?? 0;
+
+  int getMatchDiscardCount(String playerId) =>
+      _playerMatchDiscardCount[playerId] ?? 0;
+
+  int getObservedDecisionCount(String playerId) =>
+      getExchangeDiscardCount(playerId) + getDrawnDiscardCount(playerId);
+
+  double getExchangeRate(String playerId) {
+    final decisions = getObservedDecisionCount(playerId);
+    if (decisions == 0) return 0.5;
+    return getExchangeDiscardCount(playerId) / decisions;
+  }
+
+  double getAverageDiscardedPoints(String playerId) {
+    final history = _playerDiscardHistory[playerId] ?? const <int>[];
+    if (history.isEmpty) return 6.5;
+    final total = history.reduce((a, b) => a + b);
+    return total / history.length;
+  }
+
+  OpponentStyleEstimate estimateOpponentStyle(String playerId) {
+    final decisions = getObservedDecisionCount(playerId);
+    final exchangeRate = getExchangeRate(playerId);
+    final avgDiscarded = getAverageDiscardedPoints(playerId);
+    final matchCount = getMatchDiscardCount(playerId);
+
+    // Confiance rapide mais bornée: le Platine doit s'adapter tôt.
+    final confidence = (decisions / 4.0).clamp(0.15, 1.0);
+    final highDiscardSignal = ((avgDiscarded - 5.5) / 6.0).clamp(0.0, 1.0);
+    final matchSignal = (matchCount / 3.0).clamp(0.0, 1.0);
+
+    // 0..1 : capacité probable à optimiser sa main.
+    final optimization =
+        (highDiscardSignal * 0.55 + exchangeRate * 0.30 + matchSignal * 0.15)
+            .clamp(0.0, 1.0);
+
+    // 0..1 : profil opportuniste/agressif (beaucoup d'échanges).
+    final aggression =
+        (exchangeRate * 0.75 + matchSignal * 0.25).clamp(0.0, 1.0);
+
+    // 0..1 : tendance à varier ses décisions (plus c'est haut, plus c'est dur à lire).
+    final unpredictability =
+        (1.0 - ((exchangeRate - 0.5).abs() * 2.0)).clamp(0.0, 1.0);
+
+    return OpponentStyleEstimate(
+      playerId: playerId,
+      optimization: optimization,
+      aggression: aggression,
+      unpredictability: unpredictability,
+      confidence: confidence,
+      avgDiscardedPoints: avgDiscarded,
+      observedDecisions: decisions,
+    );
+  }
+
   /// Estime le meilleur score adverse probable (le plus bas)
   /// Pour décider si on peut Dutch en sécurité
   double estimateBestOpponentScore(GameState gs, Player bot) {
     double bestScore = 999;
-    
+
     for (final player in gs.players) {
       if (player.id == bot.id) continue;
-      
+
       final estimate = estimateOpponentHand(player.id, player.hand.length);
-      
+
       // Pondérer par la confiance
       // Si pas de confiance, utiliser une estimation prudente (basse)
       final weightedScore = estimate.confidence > 0.3
           ? estimate.estimatedScore
           : player.hand.length * 4.0; // Estimation prudente
-      
+
       if (weightedScore < bestScore) {
         bestScore = weightedScore;
       }
     }
-    
+
     return bestScore;
   }
-  
+
   /// Détermine si c'est un bon moment pour Dutch
   /// basé sur le comptage de cartes
   bool isGoodTimeForDutch(GameState gs, Player bot) {
     final myScore = bot.getKnownScore();
     final bestOpponentEstimate = estimateBestOpponentScore(gs, bot);
-    
+
     // Marge de sécurité basée sur le ratio low/high restant
     final ratio = lowToHighRatio;
     double safetyMargin;
-    
+
     if (ratio > 1.5) {
       // Beaucoup de bonnes cartes restantes → adversaires peuvent s'améliorer
       safetyMargin = 3.0;
@@ -249,14 +362,14 @@ class DiscardTracker {
       // Plus de mauvaises cartes → moins de risque
       safetyMargin = 1.0;
     }
-    
+
     return myScore + safetyMargin < bestOpponentEstimate;
   }
-  
+
   // ═══════════════════════════════════════════════════════════════════════════
   // DEBUG
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   @override
   String toString() {
     final buffer = StringBuffer();
@@ -265,7 +378,8 @@ class DiscardTracker {
     for (final entry in _seenByPoints.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key))) {
       final remaining = remainingCount(entry.key);
-      buffer.writeln('  ${entry.key} pts: ${entry.value} vues, $remaining restantes');
+      buffer.writeln(
+          '  ${entry.key} pts: ${entry.value} vues, $remaining restantes');
     }
     buffer.writeln('Low/High ratio: ${lowToHighRatio.toStringAsFixed(2)}');
     return buffer.toString();
@@ -279,7 +393,7 @@ class OpponentHandEstimate {
   final double confidence; // 0.0 à 1.0
   final bool likelyLowHand;
   final double avgDiscardedPoints;
-  
+
   OpponentHandEstimate({
     required this.playerId,
     required this.estimatedScore,
@@ -287,10 +401,30 @@ class OpponentHandEstimate {
     required this.likelyLowHand,
     required this.avgDiscardedPoints,
   });
-  
+
   @override
-  String toString() => 
-    'Estimate($playerId): ~${estimatedScore.toStringAsFixed(1)} pts '
-    '(conf: ${(confidence * 100).toStringAsFixed(0)}%, '
-    'avgDiscard: ${avgDiscardedPoints.toStringAsFixed(1)})';
+  String toString() =>
+      'Estimate($playerId): ~${estimatedScore.toStringAsFixed(1)} pts '
+      '(conf: ${(confidence * 100).toStringAsFixed(0)}%, '
+      'avgDiscard: ${avgDiscardedPoints.toStringAsFixed(1)})';
+}
+
+class OpponentStyleEstimate {
+  final String playerId;
+  final double optimization;
+  final double aggression;
+  final double unpredictability;
+  final double confidence;
+  final double avgDiscardedPoints;
+  final int observedDecisions;
+
+  OpponentStyleEstimate({
+    required this.playerId,
+    required this.optimization,
+    required this.aggression,
+    required this.unpredictability,
+    required this.confidence,
+    required this.avgDiscardedPoints,
+    required this.observedDecisions,
+  });
 }

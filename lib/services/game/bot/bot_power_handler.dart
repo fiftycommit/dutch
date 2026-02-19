@@ -9,6 +9,7 @@ import 'bot_difficulty.dart';
 import '../game_logic.dart';
 import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
+import 'bot_dutch_strategy.dart';
 import 'bot_personality.dart';
 import 'bot_power_notifications_stub.dart'
     if (dart.library.ui) 'bot_power_notifications_flutter.dart'
@@ -60,77 +61,33 @@ class BotPowerHandler {
     // V et JOKER = toujours utilisés (mort subite)
     // 7 et 10 = utilisés si ça apporte de l'info utile
     // ═══════════════════════════════════════════════════════════════════════
-
     final report = BotThreatAnalyzer.analyzeOpponents(gameState, bot);
-    final diffName = difficulty.name;
-    final isPlatinum = _isPlatinumDifficulty(difficulty);
-    final isGold = _isGoldDifficulty(difficulty);
-    final isBronze = diffName == 'Bronze';
-    final isSilver = diffName == 'Argent';
-
-    // Détection de menace immédiate
-    final hasImmediateThreat = report.hasOpponentWithOneCard ||
-        report.minOpponentCards <= 2 ||
-        (gameState.dutchCallerId != null && gameState.dutchCallerId != bot.id);
-
-    // Pouvoirs offensifs = JAMAIS skip (peuvent retourner la partie)
-    final isOffensive = (val == 'V' || val == 'JOKER');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // POUVOIR 10 INTELLIGENT
-    // Skip si toutes nos cartes connues sont < 10 (on n'a pas besoin d'info)
-    // SAUF si urgence (quelqu'un a 1 carte) → on veut savoir si Dutch est viable
-    // ═══════════════════════════════════════════════════════════════════════
-    bool shouldUsePower10 = true;
-    if (val == '10') {
-      final allCardsLow = BotMemoryManager.allKnownCardsBelow(bot, 10);
-      final hasUnknownCards =
-          BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
-
-      if (allCardsLow &&
-          !hasUnknownCards &&
-          !hasImmediateThreat &&
-          !isPlatinum) {
-        // Nos cartes sont bonnes, on connaît tout, pas d'urgence → skip
-        shouldUsePower10 = false;
-      }
-    }
-
-    // Pouvoirs d'info = utilisés si ça apporte quelque chose
-    final hasUnknown = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
-    final shouldUseInfo =
-        (val == '7' && (hasUnknown || isGold || isPlatinum)) ||
-            (val == '10' && (shouldUsePower10 || isPlatinum));
-
-    final shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
-    final forceUsePower7 = val == '7' && (isGold || isPlatinum);
-    final isSilverPower7 = isSilver && val == '7';
+    final powerConclusions = _buildPowerUseConclusions(
+      gameState: gameState,
+      bot: bot,
+      difficulty: difficulty,
+      report: report,
+      powerValue: val,
+    );
 
     // Argent (medium): le 7 est utilisé sauf étourdissement contextuel.
-    if (isSilverPower7 && _shouldSilverSkipPower7(gameState, bot)) {
+    if (powerConclusions.shouldSkipSilverPower7ByDizziness) {
       _skipPower(gameState, bot);
       return;
     }
 
     // Bronze "bête": rate souvent l'opportunité d'un pouvoir non critique.
-    final passiveSkipChance = isBronze
-        ? 0.92
-        : isSilver
-            ? 0.26
-            : isGold
-                ? 0.12
-                : 0.0;
-    if (passiveSkipChance > 0 &&
-        !hasImmediateThreat &&
-        !forceUsePower7 &&
-        !isSilverPower7 &&
-        !isOffensive &&
-        _random.nextDouble() < passiveSkipChance) {
+    if (powerConclusions.passiveSkipChance > 0 &&
+        !powerConclusions.hasImmediateThreat &&
+        !powerConclusions.forceUsePower7 &&
+        !powerConclusions.isSilverPower7 &&
+        !powerConclusions.isOffensive &&
+        _random.nextDouble() < powerConclusions.passiveSkipChance) {
       _skipPower(gameState, bot);
       return;
     }
 
-    if (!shouldUsePower) {
+    if (!powerConclusions.shouldUsePower) {
       _skipPower(gameState, bot);
       return;
     }
@@ -168,6 +125,62 @@ class BotPowerHandler {
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     gameState.addToHistory("${bot.name} a utilisé son pouvoir.");
+  }
+
+  static _PowerUseConclusions _buildPowerUseConclusions({
+    required GameState gameState,
+    required Player bot,
+    required BotDifficulty difficulty,
+    required ThreatReport report,
+    required String powerValue,
+  }) {
+    final diffName = difficulty.name;
+    final isPlatinum = _isPlatinumDifficulty(difficulty);
+    final isGold = _isGoldDifficulty(difficulty);
+    final isBronze = diffName == 'Bronze';
+    final isSilver = diffName == 'Argent';
+
+    final hasImmediateThreat = report.hasOpponentWithOneCard ||
+        report.minOpponentCards <= 2 ||
+        (gameState.dutchCallerId != null && gameState.dutchCallerId != bot.id);
+
+    final isOffensive = powerValue == 'V' || powerValue == 'JOKER';
+    final hasUnknown = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
+
+    bool shouldUsePower10 = true;
+    if (powerValue == '10') {
+      final allCardsLow = BotMemoryManager.allKnownCardsBelow(bot, 10);
+      if (allCardsLow && !hasUnknown && !hasImmediateThreat && !isPlatinum) {
+        shouldUsePower10 = false;
+      }
+    }
+
+    final shouldUseInfo =
+        (powerValue == '7' && (hasUnknown || isGold || isPlatinum)) ||
+            (powerValue == '10' && (shouldUsePower10 || isPlatinum));
+    final shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
+    final forceUsePower7 = powerValue == '7' && (isGold || isPlatinum);
+    final isSilverPower7 = isSilver && powerValue == '7';
+    final shouldSkipSilverPower7ByDizziness =
+        isSilverPower7 && _shouldSilverSkipPower7(gameState, bot);
+
+    final passiveSkipChance = isBronze
+        ? 0.92
+        : isSilver
+            ? 0.26
+            : isGold
+                ? 0.12
+                : 0.0;
+
+    return _PowerUseConclusions(
+      hasImmediateThreat: hasImmediateThreat,
+      isOffensive: isOffensive,
+      shouldUsePower: shouldUsePower,
+      forceUsePower7: forceUsePower7,
+      isSilverPower7: isSilverPower7,
+      shouldSkipSilverPower7ByDizziness: shouldSkipSilverPower7ByDizziness,
+      passiveSkipChance: passiveSkipChance,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -443,10 +456,20 @@ class BotPowerHandler {
     }
 
     // Choisir les indices des cartes à échanger
-    int idx1 =
-        _chooseValetTargetCardIndex(target1, difficulty, bot.botBehavior);
-    int idx2 =
-        _chooseValetTargetCardIndex(target2, difficulty, bot.botBehavior);
+    int idx1 = _chooseValetTargetCardIndex(
+      target1,
+      difficulty,
+      bot.botBehavior,
+      observer: bot,
+      preferLowIfKnown: true,
+    );
+    int idx2 = _chooseValetTargetCardIndex(
+      target2,
+      difficulty,
+      bot.botBehavior,
+      observer: bot,
+      preferLowIfKnown: false,
+    );
 
     // Effectuer l'échange entre les deux AUTRES joueurs
     GameLogic.swapCards(gs, target1, idx1, target2, idx2);
@@ -555,6 +578,14 @@ class BotPowerHandler {
       return (threatPool[0], threatPool[1]);
     }
 
+    if (_isPlatinumDifficulty(difficulty)) {
+      final adaptiveTargets = _chooseAdaptivePlatinumValetTargets(
+        gs,
+        opponents,
+      );
+      if (adaptiveTargets != null) return adaptiveTargets;
+    }
+
     final ranked = List<Player>.from(opponents)..sort(_compareByValetStrength);
     Player first = ranked[0];
     Player second = ranked[1];
@@ -590,12 +621,36 @@ class BotPowerHandler {
   }
 
   static int _chooseValetTargetCardIndex(
-      Player target, BotDifficulty difficulty, BotBehavior? behavior) {
+    Player target,
+    BotDifficulty difficulty,
+    BotBehavior? behavior, {
+    Player? observer,
+    required bool preferLowIfKnown,
+  }) {
     if (target.hand.isEmpty) return 0;
     if (target.hand.length == 1) return 0;
 
-    // Le bot ne voit PAS les cartes cachées de la cible
-    // Il choisit un index aléatoire (comme un humain le ferait)
+    // Si le bot a espionné des cartes sur cette cible, il exploite cette info.
+    // - preferLowIfKnown=true  : extraire une carte probablement bonne (basse)
+    //   pour l'échanger et potentiellement "empoisonner" le joueur ciblé.
+    // - preferLowIfKnown=false : choisir une carte probablement haute.
+    final spied = observer?.getSpiedCards(target.id);
+    if (spied != null && spied.isNotEmpty) {
+      final knownEntries = spied.entries
+          .where((e) => e.key >= 0 && e.key < target.hand.length)
+          .toList(growable: false);
+      if (knownEntries.isNotEmpty) {
+        knownEntries.sort((a, b) {
+          if (preferLowIfKnown) {
+            return a.value.points.compareTo(b.value.points);
+          }
+          return b.value.points.compareTo(a.value.points);
+        });
+        return knownEntries.first.key;
+      }
+    }
+
+    // Sans info fiable, le bot ne voit pas les cartes cachées de la cible.
     return _random.nextInt(target.hand.length);
   }
 
@@ -667,6 +722,16 @@ class BotPowerHandler {
     List<Player> possibleTargets =
         gs.players.where((p) => p.id != bot.id && p.hand.length >= 2).toList();
     if (possibleTargets.isEmpty) return null;
+
+    if (_isPlatinumDifficulty(difficulty)) {
+      final scored = possibleTargets
+          .map((p) => (player: p, score: _adaptivePlatinumThreatScore(gs, p)))
+          .toList(growable: false)
+        ..sort((a, b) => b.score.compareTo(a.score));
+      if (scored.isNotEmpty) {
+        return scored.first.player;
+      }
+    }
 
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
     final report =
@@ -851,6 +916,105 @@ class BotPowerHandler {
     }
   }
 
+  static (Player, Player)? _chooseAdaptivePlatinumValetTargets(
+    GameState gs,
+    List<Player> opponents,
+  ) {
+    if (opponents.length < 2) return null;
+
+    final scored = opponents
+        .map((p) => (player: p, score: _adaptivePlatinumThreatScore(gs, p)))
+        .toList(growable: false)
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    Player first = scored[0].player;
+    Player second = scored[1].player;
+    final gap = scored[0].score - scored[1].score;
+
+    // Si le choix est ambigu, injecter un humain pour augmenter
+    // la perturbation perçue (règle métier existante).
+    if (gap <= 2.0 && !first.isHuman && !second.isHuman) {
+      final humanScored = scored.where((e) => e.player.isHuman).toList();
+      if (humanScored.isNotEmpty && humanScored.first.player.id != first.id) {
+        second = humanScored.first.player;
+      }
+    }
+
+    // Déstabilisation adaptative:
+    // si un autre joueur "optimise vite", le forcer dans l'échange.
+    final opportunist = scored
+        .where((e) =>
+            e.player.id != first.id &&
+            e.player.id != second.id &&
+            e.player.hand.length <= 3 &&
+            _opponentOptimizationSignal(e.player.id) >= 0.58)
+        .firstOrNull;
+    if (opportunist != null) {
+      final closeRace = gap <= 3.0 || first.hand.length <= 2;
+      final opportunistCloseToSecond = opportunist.score >= scored[1].score - 1;
+      if (closeRace || opportunistCloseToSecond) {
+        second = opportunist.player;
+      }
+    }
+
+    final isAmbiguous = _isValetChoiceAmbiguous(opponents, first, second);
+    if (isAmbiguous && !first.isHuman && !second.isHuman) {
+      final humanScored = scored.where((e) => e.player.isHuman).toList();
+      if (humanScored.isNotEmpty && humanScored.first.player.id != first.id) {
+        second = humanScored.first.player;
+      }
+    }
+
+    if (first.id == second.id) {
+      final fallback = scored
+          .map((e) => e.player)
+          .firstWhere((p) => p.id != first.id, orElse: () => first);
+      if (fallback.id != first.id) {
+        second = fallback;
+      } else {
+        return null;
+      }
+    }
+
+    return (first, second);
+  }
+
+  static double _adaptivePlatinumThreatScore(GameState gs, Player player) {
+    final handEstimate = BotDutchStrategy.discardTracker
+        .estimateOpponentHand(player.id, player.hand.length);
+    final style =
+        BotDutchStrategy.discardTracker.estimateOpponentStyle(player.id);
+    final cardsThreat = ((6 - player.hand.length).clamp(0, 5)).toDouble();
+    final scoreThreat = (18.0 - handEstimate.estimatedScore).clamp(0.0, 18.0);
+    final styleThreat =
+        (style.optimization * 1.0 + style.aggression * 0.45) * style.confidence;
+    final historyBias = _historicalRankingScore(player) * 0.35;
+
+    double score = cardsThreat * 3.2 + scoreThreat * 1.35 + styleThreat * 8.0;
+    score += historyBias;
+
+    if (player.isHuman && player.hand.length <= 2) {
+      score += 14.0;
+    }
+    if (BotDutchStrategy.discardTracker.lastActionWasExchange(player.id)) {
+      score += 1.8;
+    }
+
+    final targetedRecently = player.lastTargetedByPowerTurn >= 0 &&
+        (gs.turnCount - player.lastTargetedByPowerTurn) <= 1;
+    if (targetedRecently) {
+      score -= 1.6;
+    }
+
+    return score;
+  }
+
+  static double _opponentOptimizationSignal(String playerId) {
+    final style =
+        BotDutchStrategy.discardTracker.estimateOpponentStyle(playerId);
+    return (style.optimization * 0.8 + style.aggression * 0.2).clamp(0.0, 1.0);
+  }
+
   static int _humanValetCooldownTurns(Player bot, BotDifficulty difficulty) {
     if (bot.botSkillLevel == BotSkillLevel.bronze ||
         _isBronzeDifficulty(difficulty)) {
@@ -877,4 +1041,24 @@ class BotPowerHandler {
         .map((p) => p.id)
         .toSet();
   }
+}
+
+class _PowerUseConclusions {
+  final bool hasImmediateThreat;
+  final bool isOffensive;
+  final bool shouldUsePower;
+  final bool forceUsePower7;
+  final bool isSilverPower7;
+  final bool shouldSkipSilverPower7ByDizziness;
+  final double passiveSkipChance;
+
+  const _PowerUseConclusions({
+    required this.hasImmediateThreat,
+    required this.isOffensive,
+    required this.shouldUsePower,
+    required this.forceUsePower7,
+    required this.isSilverPower7,
+    required this.shouldSkipSilverPower7ByDizziness,
+    required this.passiveSkipChance,
+  });
 }

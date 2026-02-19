@@ -519,7 +519,7 @@ void main() {
 
         gameState.turnCount = 10;
         human.lastBronzeValetTargetTurn =
-            4; // attaqué dans les 8 derniers tours
+            7; // attaqué dans les 4 derniers tours
 
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');

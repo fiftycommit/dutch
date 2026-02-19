@@ -20,7 +20,8 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen>, GameScreenMixin<GameScreen> {
+class _GameScreenState extends State<GameScreen>
+    with GameLayoutMixin<GameScreen>, GameScreenMixin<GameScreen> {
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
   GameProvider? _gameProvider;
@@ -29,7 +30,7 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
   void initState() {
     super.initState();
     resetEndGameNavigation(); // Reset guard on screen entry
-    lockLandscapeOrientation();
+    lockLandscapeOrientation(autoFullscreenOnWeb: false);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -88,116 +89,116 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
     return PopScope(
       canPop: false,
       child: Scaffold(
-      backgroundColor: AppColors.gradientBottom,
-      body: Consumer<GameProvider>(
-        builder: (context, gameProvider, child) {
-          if (!gameProvider.hasActiveGame) {
-            return const Center(
-                child: CircularProgressIndicator(color: Colors.amber));
-          }
+        backgroundColor: AppColors.gradientBottom,
+        body: Consumer<GameProvider>(
+          builder: (context, gameProvider, child) {
+            if (!gameProvider.hasActiveGame) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Colors.amber));
+            }
 
-          final gameState = gameProvider.gameState!;
-          final totalRounds = gameState.gameMode == GameMode.tournament
-              ? gameProvider.tournamentTotalRounds
-              : 1;
-          final remainingRounds = (totalRounds - gameState.tournamentRound)
-              .clamp(0, totalRounds)
-              .toInt();
+            final gameState = gameProvider.gameState!;
+            final totalRounds = gameState.gameMode == GameMode.tournament
+                ? gameProvider.tournamentTotalRounds
+                : 1;
+            final remainingRounds = (totalRounds - gameState.tournamentRound)
+                .clamp(0, totalRounds)
+                .toInt();
 
-          final size = MediaQuery.of(context).size;
-          final isPortrait = size.height > size.width;
-          
-          if (kIsWeb && isPortrait) {
-            return _buildRotateScreenOverlay();
-          }
+            final size = MediaQuery.of(context).size;
+            final isPortrait = size.height > size.width;
 
-          return Stack(
-            children: [
-              GameTableWidget(
-                gameState: gameState,
-                isProcessing: gameProvider.isProcessing,
-                shakingCardIndices: gameProvider.shakingCardIndices.toList(),
-                callbacks: GameTableCallbacks.fromController(
-                  context: context,
-                  controller: gameProvider,
-                  supportsTakeFromDiscard: false, // Solo mode
-                ),
-                onSpecialPowerAnimationComplete: (cardId) {
-                  if (!mounted) return;
-                  setState(() {
-                    _specialPowerReadyId = cardId;
-                    _specialPowerDialogShownId = null;
-                  });
-                },
-                multiplayerConfig: MultiplayerConfig(
-                  reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
-                ),
-              ),
-              if (gameState.gameMode == GameMode.tournament)
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            tournamentStageLabel(
-                              gameState.tournamentRound,
-                              totalRounds: totalRounds,
-                            ),
-                            style: const TextStyle(
-                                color: Colors.amber,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(
-                          "Manches restantes : $remainingRounds",
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
+            if (kIsWeb && isPortrait) {
+              return _buildRotateScreenOverlay();
+            }
+
+            return Stack(
+              children: [
+                GameTableWidget(
+                  gameState: gameState,
+                  isProcessing: gameProvider.isProcessing,
+                  shakingCardIndices: gameProvider.shakingCardIndices.toList(),
+                  callbacks: GameTableCallbacks.fromController(
+                    context: context,
+                    controller: gameProvider,
+                    supportsTakeFromDiscard: false, // Solo mode
+                  ),
+                  onSpecialPowerAnimationComplete: (cardId) {
+                    if (!mounted) return;
+                    setState(() {
+                      _specialPowerReadyId = cardId;
+                      _specialPowerDialogShownId = null;
+                    });
+                  },
+                  multiplayerConfig: MultiplayerConfig(
+                    reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
                   ),
                 ),
-              if (gameState.phase == GamePhase.dutchCalled)
-                _buildDutchNotification(gameState),
-              if (gameState.isWaitingForSpecialPower)
-                _buildSpecialPowerOverlay(gameProvider, gameState),
-              if (gameProvider.isProcessing)
-                const Positioned(
-                  top: 20,
-                  right: 60,
-                  child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.textDisabled)),
+                if (gameState.gameMode == GameMode.tournament)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              tournamentStageLabel(
+                                gameState.tournamentRound,
+                                totalRounds: totalRounds,
+                              ),
+                              style: const TextStyle(
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Manches restantes : $remainingRounds",
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (gameState.phase == GamePhase.dutchCalled)
+                  _buildDutchNotification(gameState),
+                if (gameState.isWaitingForSpecialPower)
+                  _buildSpecialPowerOverlay(gameProvider, gameState),
+                if (gameProvider.isProcessing)
+                  const Positioned(
+                    top: 20,
+                    right: 60,
+                    child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.textDisabled)),
+                  ),
+                // Bouton Pause
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: IconButton(
+                    onPressed: () => gameProvider.pauseGame(),
+                    icon: const Icon(Icons.pause_circle_outline,
+                        color: AppColors.textSecondary, size: 32),
+                    tooltip: 'Pause',
+                  ),
                 ),
-              // Bouton Pause
-              Positioned(
-                top: 10,
-                right: 10,
-                child: IconButton(
-                  onPressed: () => gameProvider.pauseGame(),
-                  icon: const Icon(Icons.pause_circle_outline, color: AppColors.textSecondary, size: 32),
-                  tooltip: 'Pause',
-                ),
-              ),
-              if (gameProvider.isPaused)
-                _buildPauseOverlay(gameProvider),
-            ],
-          );
-        },
+                if (gameProvider.isPaused) _buildPauseOverlay(gameProvider),
+              ],
+            );
+          },
+        ),
       ),
-    ),
     );
   }
 
@@ -304,7 +305,8 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.pause_circle_outline, color: Colors.amber, size: 80),
+            const Icon(Icons.pause_circle_outline,
+                color: Colors.amber, size: 80),
             const SizedBox(height: 20),
             const Text(
               "PAUSE",
@@ -322,8 +324,10 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 16),
@@ -340,7 +344,8 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                 }
               },
               icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-              label: const Text("Quitter la partie", style: TextStyle(color: Colors.redAccent)),
+              label: const Text("Quitter la partie",
+                  style: TextStyle(color: Colors.redAccent)),
             ),
           ],
         ),

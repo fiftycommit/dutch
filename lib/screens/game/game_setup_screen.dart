@@ -286,7 +286,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         ),
                         SizedBox(height: f(5)),
                         Text(
-                          "Choisissez vous-même la difficulté des bots.",
+                          "A vous de choisir le niveau de difficulté des bots !",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
@@ -294,8 +294,22 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                           ),
                         ),
                         SizedBox(height: f(6)),
-                        Text(
-                          "Vous pouvez passer en mode SBMM dans Réglages > SBMM (Adaptatif).",
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                  text: "Vous pouvez passer en mode "),
+                              TextSpan(
+                                text: "Automatique",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const TextSpan(
+                                text: " dans Réglages > SBMM (Adaptatif).",
+                              ),
+                            ],
+                          ),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.9),

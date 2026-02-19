@@ -1,7 +1,9 @@
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
-import '../../models/game_settings.dart';
+import '../../models/game_state.dart';
+import '../game/bot/bot_config.dart';
 import '../game/bot/bot_dutch_strategy.dart';
+import '../game/bot/bot_personality.dart';
 
 // Fallback headless pour `dart run` (sans Flutter UI / dart:ui),
 // puis spécialisations web et Flutter.
@@ -133,6 +135,7 @@ class GameLoggerService {
     required Player player,
     required int turnNumber,
     List<Player>? allPlayers,
+    GameState? gameState,
   }) async {
     if (!_isEnabled) return;
 
@@ -205,6 +208,41 @@ class GameLoggerService {
               lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
           buffer.writeln(
               '│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
+        }
+      }
+
+      if (isSmartBot && gameState != null) {
+        final difficulty = BotConfig.getDifficulty(player, null);
+        final phase = BotConfig.getBotPhase(player, gameState);
+        final personality = BotPersonality.fromBot(player);
+        final trace = BotDutchStrategy.buildObservationTrace(
+          gameState,
+          player,
+          difficulty,
+          phase,
+          personality: personality,
+        );
+
+        buffer.writeln('│ 🧠 Conclusion observation:');
+        buffer.writeln(
+            '│   Verdict: ${trace.conclusion} (${trace.shouldCallDutch ? "call" : "wait"})');
+        buffer.writeln(
+            '│   Lecture table: minCartes=${trace.minOpponentCards}, pression=${trace.tablePressure.toStringAsFixed(2)}, marge=${trace.margin}');
+        buffer.writeln(
+            '│   Auto-éval: scorePerçu=${trace.perceivedScore} (known=${trace.knownScore}, unknown=${trace.unknownCount}, E[unk]=${trace.expectedUnknown.toStringAsFixed(1)})');
+        buffer.writeln(
+            '│   Seuil hybride: ${trace.hybridThreshold} (${trace.canBreakHybridThreshold ? "cassable" : "strict"})');
+        buffer.writeln(
+            '│   Contexte: duel=${trace.duelActive ? "oui" : "non"}, momentum=${trace.opponentMomentumHot ? "chaud" : "calme"}, explosive=${trace.tableExplosive ? "oui" : "non"}');
+        if (trace.duelKnownOpponentScore != null) {
+          buffer.writeln(
+              '│   Duel connu: score adverse=${trace.duelKnownOpponentScore}');
+        }
+        if (trace.opportunities.isNotEmpty) {
+          buffer.writeln('│   Feux verts: ${trace.opportunities.join(' | ')}');
+        }
+        if (trace.blockers.isNotEmpty) {
+          buffer.writeln('│   Veto: ${trace.blockers.join(' | ')}');
         }
       }
 

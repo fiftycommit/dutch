@@ -268,6 +268,7 @@ class _LadderSimulator {
         player: bot,
         turnNumber: gameState.turnCount,
         allPlayers: gameState.players,
+        gameState: gameState,
       );
     }
 

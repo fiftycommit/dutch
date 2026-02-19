@@ -5,6 +5,7 @@ import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../logging/game_logger_service.dart';
 import 'bot/bot_dutch_strategy.dart';
+import 'bot/discard_tracker.dart';
 
 class GameLogic {
   static final Random _random = Random();
@@ -118,6 +119,7 @@ class GameLogic {
       card,
       discardedBy: gameState.currentPlayer.id,
       wasExchange: false,
+      actionType: DiscardActionType.drawnDiscard,
     );
 
     // Log
@@ -181,6 +183,7 @@ class GameLogic {
       oldCard,
       discardedBy: player.id,
       wasExchange: true,
+      actionType: DiscardActionType.exchangeDiscard,
     );
 
     // Log
@@ -211,6 +214,7 @@ class GameLogic {
       BotDutchStrategy.discardTracker.trackDiscard(
         playerCard,
         discardedBy: player.id,
+        actionType: DiscardActionType.matchDiscard,
       );
 
       List<PlayingCard> newHand = List.from(player.hand);
