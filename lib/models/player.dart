@@ -61,7 +61,7 @@ class Player {
   /// Dernière action où un blackout a été déclenché (anti-spam).
   int lastBronzeBlackoutActionCount;
 
-  /// Dernier tour où ce joueur humain a été ciblé par un Valet Bronze.
+  /// Dernier tour où ce joueur humain a été ciblé par un Valet Bronze/Argent.
   int lastBronzeValetTargetTurn;
 
   /// Dernier tour où ce joueur a été ciblé par un pouvoir offensif adverse

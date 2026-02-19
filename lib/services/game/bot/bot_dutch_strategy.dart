@@ -20,8 +20,17 @@ class BotDutchStrategy {
     BotGamePhase phase, {
     BotPersonality? personality,
   }) {
-    if (phase == BotGamePhase.exploration) return false;
     final tier = _tierFromDifficulty(difficulty);
+
+    // Règle premium (Or/Platine): main vide OU score 0 certain => Dutch immédiat.
+    if (tier == _DutchTier.gold || tier == _DutchTier.platinum) {
+      final knownUnknownCount = BotMemoryManager.getUnknownIndices(bot).length;
+      final hasGuaranteedZeroScore =
+          knownUnknownCount == 0 ? bot.getKnownScore() == 0 : false;
+      if (bot.hand.isEmpty || hasGuaranteedZeroScore) return true;
+    }
+
+    if (phase == BotGamePhase.exploration) return false;
 
     switch (tier) {
       case _DutchTier.bronze:
@@ -152,8 +161,22 @@ class BotDutchStrategy {
         : myKnownScore + (expectedUnknownValue * unknownCount).round();
     final profile = _profileForDifficulty(difficulty);
 
-    // Score 0 (main vide ou toutes les cartes à 0 pts) = Dutch garanti gagnant
-    if (unknownCount == 0 && myKnownScore == 0) return true;
+    // Garde-fou critique:
+    // si un adversaire a déjà une main vide, son score est 0 garanti.
+    // Dutch avec un score > 0 est donc perdant d'office.
+    final hasOpponentWithGuaranteedZero =
+        gs.players.any((p) => p.id != bot.id && p.hand.isEmpty);
+    if (hasOpponentWithGuaranteedZero && myScore > 0) {
+      return false;
+    }
+
+    // Score 0 certain = Dutch immédiat seulement pour Or/Platine.
+    if ((profile.tier == _DutchTier.gold ||
+            profile.tier == _DutchTier.platinum) &&
+        unknownCount == 0 &&
+        myKnownScore == 0) {
+      return true;
+    }
 
     // Platine: verrouille vite les très bas scores en endgame
     if (profile.tier == _DutchTier.platinum &&

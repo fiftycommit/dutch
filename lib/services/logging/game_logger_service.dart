@@ -191,15 +191,20 @@ class GameLoggerService {
 
         // Estimations adversaires
         for (final opponent in allPlayers) {
-          if (opponent.id != player.id && opponent.hand.isNotEmpty) {
-            final estimate =
-                tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
-            final lastWasExchange = tracker.lastActionWasExchange(opponent.id);
-            final actionInfo =
-                lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
+          if (opponent.id == player.id) continue;
+          if (opponent.hand.isEmpty) {
             buffer.writeln(
-                '│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
+                '│   → ${opponent.name}: ~0pts (main vide, conf:100%)');
+            continue;
           }
+
+          final estimate =
+              tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+          final lastWasExchange = tracker.lastActionWasExchange(opponent.id);
+          final actionInfo =
+              lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
+          buffer.writeln(
+              '│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
         }
       }
 

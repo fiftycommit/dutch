@@ -18,6 +18,8 @@ import 'bot_power_notifications_stub.dart'
 /// Principe GRASP: Controller - Orchestre l'utilisation des pouvoirs
 class BotPowerHandler {
   static final Random _random = Random();
+  static const int _bronzeHumanValetCooldownTurns = 4;
+  static const int _silverHumanValetCooldownTurns = 2;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TÉLÉMÉTRIE : Mesure d'impact des pouvoirs
@@ -423,7 +425,8 @@ class BotPowerHandler {
     final (target1, target2) = targets;
     if (target1.hand.isEmpty || target2.hand.isEmpty) return;
 
-    if (_isBronzeDifficulty(difficulty)) {
+    final humanCooldownTurns = _humanValetCooldownTurns(bot, difficulty);
+    if (humanCooldownTurns > 0) {
       if (target1.isHuman) {
         target1.lastBronzeValetTargetTurn = gs.turnCount;
       }
@@ -478,22 +481,26 @@ class BotPowerHandler {
   /// Argent: ciblage menace existant.
   /// Or/Platine: cible les 2 joueurs les plus forts.
   /// Si choix ambigu, inclut un humain dans les cibles.
+  /// Protection anti-focus humain:
+  /// - Bronze: max 1 ciblage humain / 4 tours de table.
+  /// - Argent: max 1 ciblage humain / 2 tours de table.
   static (Player, Player)? _chooseValetTargets(
     GameState gs,
     Player bot,
     BotDifficulty difficulty, {
     BotPersonality? personality,
   }) {
-    if (_isBronzeDifficulty(difficulty)) {
+    final isBronzeValet = bot.botSkillLevel == BotSkillLevel.bronze ||
+        _isBronzeDifficulty(difficulty);
+    final humanCooldownTurns = _humanValetCooldownTurns(bot, difficulty);
+
+    if (isBronzeValet) {
       final candidates =
           gs.players.where((p) => p.hand.isNotEmpty).toList(growable: false);
       if (candidates.length < 2) return null;
 
-      final protectedHumanIds = candidates
-          .where((p) =>
-              p.isHuman && (gs.turnCount - p.lastBronzeValetTargetTurn) <= 8)
-          .map((p) => p.id)
-          .toSet();
+      final protectedHumanIds =
+          _protectedHumanIds(gs, candidates, humanCooldownTurns);
 
       List<Player> pool = candidates
           .where((p) => !protectedHumanIds.contains(p.id))
@@ -523,15 +530,29 @@ class BotPowerHandler {
         _isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty);
     if (!isAdvancedValet) {
       // Argent: conserver l'ancien ciblage par menace.
+      List<Player> threatPool = opponents;
+      final protectedHumanIds =
+          _protectedHumanIds(gs, opponents, humanCooldownTurns);
+      final unprotectedPool = opponents
+          .where((p) => !protectedHumanIds.contains(p.id))
+          .toList(growable: false);
+      if (unprotectedPool.length >= 2) {
+        threatPool = unprotectedPool;
+      }
+
       final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
       final report = BotThreatAnalyzer.analyzeOpponents(gs, bot,
           isHardcoreMode: isHardcore);
 
-      final sorted = report.sortedByThreat;
+      final poolIds = threatPool.map((p) => p.id).toSet();
+      final sorted = report.sortedByThreat
+          .map((entry) => entry.player)
+          .where((p) => poolIds.contains(p.id))
+          .toList(growable: false);
       if (sorted.length >= 2) {
-        return (sorted[0].player, sorted[1].player);
+        return (sorted[0], sorted[1]);
       }
-      return (opponents[0], opponents[1]);
+      return (threatPool[0], threatPool[1]);
     }
 
     final ranked = List<Player>.from(opponents)..sort(_compareByValetStrength);
@@ -828,5 +849,32 @@ class BotPowerHandler {
       case BotSkillLevel.platinum:
         return 4;
     }
+  }
+
+  static int _humanValetCooldownTurns(Player bot, BotDifficulty difficulty) {
+    if (bot.botSkillLevel == BotSkillLevel.bronze ||
+        _isBronzeDifficulty(difficulty)) {
+      return _bronzeHumanValetCooldownTurns;
+    }
+    if (bot.botSkillLevel == BotSkillLevel.silver ||
+        _isSilverDifficulty(difficulty)) {
+      return _silverHumanValetCooldownTurns;
+    }
+    return 0;
+  }
+
+  static Set<String> _protectedHumanIds(
+    GameState gs,
+    List<Player> candidates,
+    int cooldownTurns,
+  ) {
+    if (cooldownTurns <= 0) return const <String>{};
+    return candidates
+        .where((p) =>
+            p.isHuman &&
+            p.lastBronzeValetTargetTurn >= 0 &&
+            (gs.turnCount - p.lastBronzeValetTargetTurn) < cooldownTurns)
+        .map((p) => p.id)
+        .toSet();
   }
 }

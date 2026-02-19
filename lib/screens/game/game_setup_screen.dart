@@ -244,10 +244,78 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                             fontSize: f(13),
                           ),
                         ),
+                        SizedBox(height: f(6)),
+                        Text(
+                          "Vous pouvez passer en mode manuel dans Réglages > SBMM (Adaptatif).",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: f(12),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ] else ...[
+                  Container(
+                    padding: EdgeInsets.all(f(20)),
+                    margin: EdgeInsets.symmetric(
+                      horizontal: f(40),
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      border:
+                          Border.all(color: Colors.lightBlueAccent, width: 1.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.tune,
+                          color: Colors.lightBlueAccent,
+                          size: f(36),
+                        ),
+                        SizedBox(height: f(10)),
+                        Text(
+                          "Mode Manuel Actif",
+                          style: TextStyle(
+                            color: Colors.lightBlueAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: f(18),
+                          ),
+                        ),
+                        SizedBox(height: f(5)),
+                        Text(
+                          "Choisissez vous-même la difficulté des bots.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: f(13),
+                          ),
+                        ),
+                        SizedBox(height: f(6)),
+                        Text(
+                          "Vous pouvez passer en mode SBMM dans Réglages > SBMM (Adaptatif).",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: f(12),
+                          ),
+                        ),
+                        SizedBox(height: f(4)),
+                        Text(
+                          "Le RP augmente uniquement en mode SBMM.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.amber.shade200,
+                            fontSize: f(12),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: spacingSmall),
                   Theme(
                     data: Theme.of(context).copyWith(
                       segmentedButtonTheme: SegmentedButtonThemeData(
