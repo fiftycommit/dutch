@@ -72,6 +72,14 @@ class BotDutchStrategy {
     } else if (perceivedScore <= hybridThreshold) {
       opportunities.add('dans fenêtre seuil hybride');
     }
+    if (context.avgEstimateConfidence < 0.35) {
+      blockers.add('lecture adverse incertaine');
+    } else {
+      opportunities.add('lecture adverse fiable');
+    }
+    if (context.minEstimateConfidence < 0.20) {
+      blockers.add('angle mort adverse');
+    }
 
     if (conclusions != null) {
       if (conclusions.tableExplosive) {
@@ -142,6 +150,8 @@ class BotDutchStrategy {
       minOpponentCards: context.minOpponentCards,
       avgOpponentCards: context.avgOpponentCards,
       tablePressure: context.tablePressure,
+      avgEstimateConfidence: context.avgEstimateConfidence,
+      minEstimateConfidence: context.minEstimateConfidence,
       adjustedOpponentEstimate: adjustedOpponentEstimate,
       margin: margin,
       hybridThreshold: hybridThreshold,
@@ -468,6 +478,15 @@ class BotDutchStrategy {
     final leadGap = context.avgOpponentEstimate - myScore;
     final urgency = ((4 - context.minOpponentCards).clamp(0, 3)) / 3.0;
 
+    final uncertainRead = context.avgEstimateConfidence < 0.38;
+    final blindSpot = context.minEstimateConfidence < 0.22;
+    if (uncertainRead && margin <= 1 && myScore > 0) {
+      return false;
+    }
+    if (blindSpot && context.minOpponentCards <= 2 && myScore > 1) {
+      return false;
+    }
+
     // Mode hybride: seuil de base + contexte qui peut durcir/assouplir.
     final hybridThreshold = _resolveHybridDutchThreshold(
       profile: profile,
@@ -638,6 +657,8 @@ class BotDutchStrategy {
     int minOpponentCards = 99;
     int totalOpponentCards = 0;
     double totalOpponentEstimate = 0;
+    double totalEstimateConfidence = 0;
+    double minEstimateConfidence = 1.0;
     double stylePressure = 0;
     int opponentCount = 0;
 
@@ -658,6 +679,15 @@ class BotDutchStrategy {
       if (estimated < bestOpponentEstimate) {
         bestOpponentEstimate = estimated;
       }
+      final estimateConfidence = _estimateOpponentConfidenceForContext(
+        bot,
+        opponent,
+        profile.tier,
+      );
+      totalEstimateConfidence += estimateConfidence;
+      if (estimateConfidence < minEstimateConfidence) {
+        minEstimateConfidence = estimateConfidence;
+      }
 
       final style = discardTracker.estimateOpponentStyle(opponent.id);
       final fewCardsPressure = ((4 - cards).clamp(0, 3)) / 3.0;
@@ -674,11 +704,14 @@ class BotDutchStrategy {
         minOpponentCards: 0,
         avgOpponentCards: 0,
         tablePressure: 0,
+        avgEstimateConfidence: 0,
+        minEstimateConfidence: 0,
       );
     }
 
     final avgOpponentEstimate = totalOpponentEstimate / opponentCount;
     final avgOpponentCards = totalOpponentCards / opponentCount;
+    final avgEstimateConfidence = totalEstimateConfidence / opponentCount;
 
     // Pression de table 0..~2 (plus c'est haut, plus la table est "chaude")
     double tablePressure = 0;
@@ -699,6 +732,10 @@ class BotDutchStrategy {
       minOpponentCards: minOpponentCards == 99 ? 0 : minOpponentCards,
       avgOpponentCards: avgOpponentCards,
       tablePressure: tablePressure,
+      avgEstimateConfidence: avgEstimateConfidence,
+      minEstimateConfidence: minEstimateConfidence == 1.0
+          ? avgEstimateConfidence
+          : minEstimateConfidence,
     );
   }
 
@@ -815,6 +852,36 @@ class BotDutchStrategy {
         (spyCoverage * 0.25) +
         cardCountBonus;
     return (blended * tierFactor).clamp(0.05, 0.95);
+  }
+
+  static double _estimateOpponentConfidenceForContext(
+    Player observer,
+    Player opponent,
+    _DutchTier tier,
+  ) {
+    if (opponent.hand.isEmpty) return 1.0;
+
+    final base =
+        discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+    final style = discardTracker.estimateOpponentStyle(opponent.id);
+    final spied = observer.getSpiedCards(opponent.id);
+    int knownSpied = 0;
+    if (spied != null && spied.isNotEmpty) {
+      knownSpied = spied.keys
+          .where((idx) => idx >= 0 && idx < opponent.hand.length)
+          .length;
+    }
+    final spyCoverage = opponent.hand.isEmpty
+        ? 1.0
+        : (knownSpied / opponent.hand.length).clamp(0.0, 1.0);
+
+    return _estimateOpponentConfidence(
+      tier: tier,
+      baseConfidence: base.confidence,
+      styleConfidence: style.confidence,
+      spyCoverage: spyCoverage,
+      cards: opponent.hand.length,
+    );
   }
 
   static double _spyWeightForTier(_DutchTier tier) {
@@ -1197,6 +1264,8 @@ class _DutchDecisionContext {
   final int minOpponentCards;
   final double avgOpponentCards;
   final double tablePressure;
+  final double avgEstimateConfidence;
+  final double minEstimateConfidence;
 
   const _DutchDecisionContext({
     required this.opponentCount,
@@ -1205,6 +1274,8 @@ class _DutchDecisionContext {
     required this.minOpponentCards,
     required this.avgOpponentCards,
     required this.tablePressure,
+    required this.avgEstimateConfidence,
+    required this.minEstimateConfidence,
   });
 }
 
@@ -1257,6 +1328,8 @@ class BotDutchObservationTrace {
   final int minOpponentCards;
   final double avgOpponentCards;
   final double tablePressure;
+  final double avgEstimateConfidence;
+  final double minEstimateConfidence;
   final int adjustedOpponentEstimate;
   final int margin;
   final int hybridThreshold;
@@ -1288,6 +1361,8 @@ class BotDutchObservationTrace {
     required this.minOpponentCards,
     required this.avgOpponentCards,
     required this.tablePressure,
+    required this.avgEstimateConfidence,
+    required this.minEstimateConfidence,
     required this.adjustedOpponentEstimate,
     required this.margin,
     required this.hybridThreshold,

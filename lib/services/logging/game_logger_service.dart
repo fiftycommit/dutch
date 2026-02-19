@@ -245,6 +245,8 @@ class GameLoggerService {
         buffer.writeln(
             '│   Lecture table: minCartes=${trace.minOpponentCards}, pression=${trace.tablePressure.toStringAsFixed(2)}, marge=${trace.margin}');
         buffer.writeln(
+            '│   Fiabilité lecture: avg=${(trace.avgEstimateConfidence * 100).toInt()}% min=${(trace.minEstimateConfidence * 100).toInt()}%');
+        buffer.writeln(
             '│   Auto-éval: scorePerçu=${trace.perceivedScore} (known=${trace.knownScore}, unknown=${trace.unknownCount}, E[unk]=${trace.expectedUnknown.toStringAsFixed(1)})');
         buffer.writeln(
             '│   Seuil hybride: ${trace.hybridThreshold} (${trace.canBreakHybridThreshold ? "cassable" : "strict"})');

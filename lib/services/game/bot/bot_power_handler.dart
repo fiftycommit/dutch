@@ -167,7 +167,9 @@ class BotPowerHandler {
     final passiveSkipChance = isBronze
         ? 0.92
         : isSilver
-            ? 0.26
+            // Argent reste distrait sur les pouvoirs "confort",
+            // mais n'ignore pas arbitrairement un espionnage 10.
+            ? (powerValue == '10' ? 0.0 : 0.26)
             : isGold
                 ? 0.12
                 : 0.0;
@@ -189,6 +191,8 @@ class BotPowerHandler {
 
   static void _usePower7(
       GameState gameState, Player bot, BotDifficulty difficulty) {
+    if (bot.hand.isEmpty) return;
+
     final idx = _choosePower7TargetIndex(gameState, bot, difficulty);
     GameLogic.lookAtCard(gameState, bot, idx);
     bot.updateMentalMap(idx, bot.hand[idx]);
@@ -400,6 +404,18 @@ class BotPowerHandler {
         gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.isEmpty) return null;
 
+    // Argent: si un humain est à 1 carte, priorité d'info immédiate.
+    // Évite les runs non déterministes où le bot ignore la cible critique.
+    if (_isSilverDifficulty(difficulty)) {
+      final urgentHumans = opponents
+          .where((p) => p.isHuman && p.hand.length <= 1)
+          .toList(growable: false);
+      if (urgentHumans.isNotEmpty) {
+        urgentHumans.sort((a, b) => a.hand.length.compareTo(b.hand.length));
+        return urgentHumans.first;
+      }
+    }
+
     // Utiliser le système de ciblage unifié basé sur la menace réelle
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
     final target = BotThreatAnalyzer.pickBestTarget(
@@ -581,7 +597,9 @@ class BotPowerHandler {
     if (_isPlatinumDifficulty(difficulty)) {
       final adaptiveTargets = _chooseAdaptivePlatinumValetTargets(
         gs,
+        bot,
         opponents,
+        difficulty,
       );
       if (adaptiveTargets != null) return adaptiveTargets;
     }
@@ -725,7 +743,10 @@ class BotPowerHandler {
 
     if (_isPlatinumDifficulty(difficulty)) {
       final scored = possibleTargets
-          .map((p) => (player: p, score: _adaptivePlatinumThreatScore(gs, p)))
+          .map((p) => (
+                player: p,
+                score: _adaptivePlatinumThreatScore(gs, bot, p, difficulty)
+              ))
           .toList(growable: false)
         ..sort((a, b) => b.score.compareTo(a.score));
       if (scored.isNotEmpty) {
@@ -918,12 +939,17 @@ class BotPowerHandler {
 
   static (Player, Player)? _chooseAdaptivePlatinumValetTargets(
     GameState gs,
+    Player observer,
     List<Player> opponents,
+    BotDifficulty difficulty,
   ) {
     if (opponents.length < 2) return null;
 
     final scored = opponents
-        .map((p) => (player: p, score: _adaptivePlatinumThreatScore(gs, p)))
+        .map((p) => (
+              player: p,
+              score: _adaptivePlatinumThreatScore(gs, observer, p, difficulty)
+            ))
         .toList(growable: false)
       ..sort((a, b) => b.score.compareTo(a.score));
 
@@ -979,18 +1005,32 @@ class BotPowerHandler {
     return (first, second);
   }
 
-  static double _adaptivePlatinumThreatScore(GameState gs, Player player) {
-    final handEstimate = BotDutchStrategy.discardTracker
-        .estimateOpponentHand(player.id, player.hand.length);
+  static double _adaptivePlatinumThreatScore(
+    GameState gs,
+    Player observer,
+    Player player,
+    BotDifficulty difficulty,
+  ) {
+    final handEstimate = BotDutchStrategy.estimateOpponentForObserver(
+      gs,
+      observer,
+      player,
+      difficulty,
+    );
     final style =
         BotDutchStrategy.discardTracker.estimateOpponentStyle(player.id);
     final cardsThreat = ((6 - player.hand.length).clamp(0, 5)).toDouble();
     final scoreThreat = (18.0 - handEstimate.estimatedScore).clamp(0.0, 18.0);
+    final uncertaintyThreat =
+        (1.0 - handEstimate.confidence) * (player.hand.length <= 2 ? 8.0 : 3.5);
     final styleThreat =
         (style.optimization * 1.0 + style.aggression * 0.45) * style.confidence;
     final historyBias = _historicalRankingScore(player) * 0.35;
 
-    double score = cardsThreat * 3.2 + scoreThreat * 1.35 + styleThreat * 8.0;
+    double score = cardsThreat * 3.2 +
+        scoreThreat * 1.35 +
+        styleThreat * 8.0 +
+        uncertaintyThreat;
     score += historyBias;
 
     if (player.isHuman && player.hand.length <= 2) {

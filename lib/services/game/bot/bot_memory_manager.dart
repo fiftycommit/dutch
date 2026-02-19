@@ -19,21 +19,21 @@ class BotMemoryManager {
     if (bot.knownCards.isEmpty || bot.mentalMap.isEmpty) return;
 
     double forgetChance = difficulty.forgetChancePerTurn;
-    
+
     // HARDCORE FIX: Pour les difficultés hautes, ne PAS forcer un minimum de 1%
     // Platine/Or/Nightmare/Insane/Hard/Impossible peuvent avoir une mémoire parfaite
-    final isHardcore = difficulty.name == "Platine" || 
-                       difficulty.name == "Or" ||
-                       difficulty.name == "Hard" ||
-                       difficulty.name == "Insane" ||
-                       difficulty.name == "Nightmare" ||
-                       difficulty.name == "Impossible";
-    
+    final isHardcore = difficulty.name == "Platine" ||
+        difficulty.name == "Or" ||
+        difficulty.name == "Hard" ||
+        difficulty.name == "Insane" ||
+        difficulty.name == "Nightmare" ||
+        difficulty.name == "Impossible";
+
     if (personality != null) {
       final retention = personality.memoryRetention;
       // Réduction de la chance d'oubli basée sur la rétention
       forgetChance = forgetChance * (1.0 - (retention * 0.7));
-      
+
       // HARDCORE FIX: Clamp différent selon le niveau
       if (isHardcore) {
         // Les bots hardcore peuvent avoir une mémoire parfaite (0%)
@@ -53,24 +53,26 @@ class BotMemoryManager {
 
   /// Choisit une carte inconnue à regarder
   static int chooseCardToLook(Player bot, BotDifficulty difficulty) {
+    if (bot.hand.isEmpty) return 0;
+
     List<int> unknown = [];
     for (int i = 0; i < bot.hand.length; i++) {
       if (i >= bot.mentalMap.length || bot.mentalMap[i] == null) {
         unknown.add(i);
       }
     }
-    
+
     if (unknown.isNotEmpty) {
       return unknown[_random.nextInt(unknown.length)];
     }
 
     // HARDCORE FIX: Niveaux hardcore regardent la pire carte connue
-    final isHardcore = difficulty.name == "Or" || 
-                       difficulty.name == "Platine" ||
-                       difficulty.name == "Hard" ||
-                       difficulty.name == "Insane" ||
-                       difficulty.name == "Nightmare" ||
-                       difficulty.name == "Impossible";
+    final isHardcore = difficulty.name == "Or" ||
+        difficulty.name == "Platine" ||
+        difficulty.name == "Hard" ||
+        difficulty.name == "Insane" ||
+        difficulty.name == "Nightmare" ||
+        difficulty.name == "Impossible";
 
     // Si toutes les cartes sont connues, regarder la pire
     if (bot.botBehavior == BotBehavior.balanced && isHardcore) {
@@ -169,7 +171,8 @@ class BotMemoryManager {
   /// Retourne le doublon avec la plus haute valeur (priorité pour échange)
   /// Logique: 2×4 = 8 pts, si on échange un 4 contre un 6, on a 4+6=10 mais on peut
   /// matcher l'autre 4 pendant la défausse collective → économie de 4 pts
-  static (int, int, int)? getBestDoublonForExchange(Player bot, int drawnCardValue) {
+  static (int, int, int)? getBestDoublonForExchange(
+      Player bot, int drawnCardValue) {
     final doublons = findDoublons(bot);
     if (doublons.isEmpty) return null;
 
@@ -285,7 +288,21 @@ class BotMemoryManager {
   /// Retourne les rangs avec forte probabilité de match (>25%)
   static List<String> getHighProbabilityMatchRanks(GameState gs, Player bot) {
     final ranks = <String>[];
-    final allRanks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R'];
+    final allRanks = [
+      'A',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      'V',
+      'D',
+      'R'
+    ];
 
     for (final rank in allRanks) {
       if (getMatchProbability(gs, bot, rank) > 0.25) {
@@ -303,8 +320,20 @@ class BotMemoryManager {
 
     // Points par rang
     final rankPoints = {
-      'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
-      '8': 8, '9': 9, '10': 10, 'V': 10, 'D': 10, 'R': 13, 'JOKER': 0,
+      'A': 1,
+      '2': 2,
+      '3': 3,
+      '4': 4,
+      '5': 5,
+      '6': 6,
+      '7': 7,
+      '8': 8,
+      '9': 9,
+      '10': 10,
+      'V': 10,
+      'D': 10,
+      'R': 13,
+      'JOKER': 0,
     };
 
     double totalPoints = 0;
@@ -314,7 +343,8 @@ class BotMemoryManager {
       final rank = entry.key;
       final points = entry.value;
       final discarded = discardCounts[rank] ?? 0;
-      final remaining = (rank == 'R' ? 4 : (rank == 'JOKER' ? 2 : 4)) - discarded;
+      final remaining =
+          (rank == 'R' ? 4 : (rank == 'JOKER' ? 2 : 4)) - discarded;
 
       if (remaining > 0) {
         totalPoints += points * remaining;
@@ -323,5 +353,74 @@ class BotMemoryManager {
     }
 
     return totalCards > 0 ? totalPoints / totalCards : 6.0;
+  }
+
+  /// Valeur attendue d'une carte inconnue précise de la main du bot.
+  ///
+  /// Combine:
+  /// - l'espérance neutre du deck,
+  /// - un hint qualitatif local (si présent),
+  /// - la fraîcheur temporelle du hint.
+  ///
+  /// Sans hint fiable, retourne simplement l'espérance du deck.
+  static double getUnknownBeliefExpectedValue(
+    GameState gs,
+    Player bot,
+    int handIndex,
+  ) {
+    final base = getExpectedDeckCardValue(gs);
+    final quality = bot.getUnknownCardHintQuality(handIndex);
+    final confidence = bot.getUnknownCardHintConfidence(handIndex);
+    final hintAction = bot.getUnknownCardHintAction(handIndex);
+
+    if (quality == null || confidence == null || confidence <= 0) {
+      return base;
+    }
+
+    final age =
+        hintAction == null ? 0 : (gs.actionCount - hintAction).clamp(0, 30);
+    final freshness = pow(0.93, age).toDouble();
+    final effectiveConfidence = (confidence * freshness).clamp(0.0, 1.0);
+
+    // quality +1 => carte probablement très bonne (valeur attendue plus basse)
+    // quality -1 => carte probablement mauvaise (valeur attendue plus haute)
+    final hintedValue = (base - (quality * 3.2)).clamp(0.0, 13.0);
+
+    final blended = (base * (1 - effectiveConfidence)) +
+        (hintedValue * effectiveConfidence);
+    return blended.clamp(0.0, 13.0);
+  }
+
+  /// Choisit la carte inconnue la plus probable d'être "mauvaise" (score élevé).
+  static int chooseWorstUnknownByBelief(
+    GameState gs,
+    Player bot,
+    List<int> unknownIndices,
+  ) {
+    if (unknownIndices.isEmpty) return 0;
+    if (unknownIndices.length == 1) return unknownIndices.first;
+
+    int bestIndex = unknownIndices.first;
+    double bestExpected = -1;
+    double bestConfidence = -1;
+
+    for (final idx in unknownIndices) {
+      final expected = getUnknownBeliefExpectedValue(gs, bot, idx);
+      final confidence = bot.getUnknownCardHintConfidence(idx) ?? 0.0;
+
+      if (expected > bestExpected) {
+        bestExpected = expected;
+        bestConfidence = confidence;
+        bestIndex = idx;
+        continue;
+      }
+      if ((expected - bestExpected).abs() <= 0.25 &&
+          confidence > bestConfidence) {
+        bestConfidence = confidence;
+        bestIndex = idx;
+      }
+    }
+
+    return bestIndex;
   }
 }

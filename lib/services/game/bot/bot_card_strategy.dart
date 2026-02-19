@@ -320,6 +320,13 @@ class BotCardStrategy {
   ) {
     if (unknownIndices.length == 1) return unknownIndices.first;
 
+    final hasBeliefSignal = unknownIndices
+        .any((idx) => (bot.getUnknownCardHintConfidence(idx) ?? 0.0) >= 0.20);
+    if (hasBeliefSignal && _isAdvancedCardTier(profile.tier)) {
+      return BotMemoryManager.chooseWorstUnknownByBelief(
+          gs, bot, unknownIndices);
+    }
+
     if (profile.tier == _CardTier.platinum) {
       return phase == BotGamePhase.endgame
           ? unknownIndices.first
@@ -364,6 +371,8 @@ class BotCardStrategy {
     final replaceGain =
         worstKnownValue > drawn.points ? worstKnownValue - drawn.points : 0;
     final tempoGain = drawn.points + (tableConclusions.myCards <= 2 ? 2 : 1);
+    final chainRisk = BotMemoryManager.getMatchProbability(gs, bot, drawn.value)
+        .clamp(0.0, 1.0);
 
     final forceTempo = tableConclusions.isTenseEndgame ||
         phase == BotGamePhase.endgame ||
@@ -373,13 +382,21 @@ class BotCardStrategy {
 
     if (onlyWhenForceTempo && !forceTempo) return false;
 
-    if (!forceTempo && replaceGain >= tempoGain + 2) {
+    final evTempo = tempoGain.toDouble() +
+        (forceTempo ? 1.2 : 0.0) +
+        (drawn.points <= 4 ? 0.5 : 0.0) -
+        (chainRisk * 1.4) -
+        (tableConclusions.myCards > tableConclusions.minOpponentCards
+            ? 0.7
+            : 0.0);
+    final evReplace = replaceGain.toDouble() +
+        (!forceTempo && tableConclusions.avgOpponentCards >= 3.5 ? 0.4 : 0.0) +
+        (drawn.points <= 2 ? 0.3 : 0.0);
+
+    if (!forceTempo && evTempo + 0.35 < evReplace) {
       return false;
     }
-    if (!forceTempo &&
-        drawn.points <= 2 &&
-        replaceGain >= 4 &&
-        tableConclusions.avgOpponentCards >= 3.5) {
+    if (onlyWhenForceTempo && replaceGain >= 3 && evTempo + 0.15 < evReplace) {
       return false;
     }
 
