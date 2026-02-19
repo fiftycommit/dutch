@@ -53,6 +53,8 @@ class StatsService {
     int tournamentRound = 1,
     String? tournamentId,
     List<String>? actionHistory,
+    String? gameLog,
+    String? scoreDetail,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic> stats = await getStats(slotId: slotId);
@@ -131,6 +133,8 @@ class StatsService {
       "tournamentRound": isTournament ? tournamentRound : null,
       "totalPlayers": totalPlayers,
       "actionHistory": actionHistory ?? [],
+      "gameLog": gameLog,
+      "scoreDetail": scoreDetail,
       "winStreak": winStreak,
       "streakBonus": streakBonus,
       "streakMultiplier": streakMultiplier,

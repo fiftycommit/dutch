@@ -235,6 +235,8 @@ class GameLogic {
         player.unknownCardHintActionCount.removeAt(cardIndex);
       }
 
+      _maybeBronzeForgetAfterReactionMatch(gameState, player, playerCard);
+
       // BUGFIX: Invalider TOUTE la mémoire espionnage sur ce joueur
       // Car les indices des cartes ont changé après le match
       for (final bot in gameState.players) {
@@ -480,6 +482,34 @@ class GameLogic {
     if (player.isHuman) return false;
     if (player.botSkillLevel != BotSkillLevel.bronze) return false;
     return _random.nextDouble() < 0.62;
+  }
+
+  static void _maybeBronzeForgetAfterReactionMatch(
+    GameState gameState,
+    Player player,
+    PlayingCard discardedCard,
+  ) {
+    if (gameState.phase != GamePhase.reaction) return;
+    if (player.isHuman) return;
+    if (player.botSkillLevel != BotSkillLevel.bronze) return;
+    if (player.hand.isEmpty) return;
+    if (_random.nextDouble() >= 0.45) return;
+
+    final idx = _random.nextInt(player.hand.length);
+    while (player.mentalMap.length < player.hand.length) {
+      player.mentalMap.add(null);
+    }
+    while (player.knownCards.length < player.hand.length) {
+      player.knownCards.add(false);
+    }
+
+    // Mémoire erronée: il croit encore avoir une carte du rang défaussé.
+    player.mentalMap[idx] =
+        PlayingCard.create(player.hand[idx].suit, discardedCard.value);
+    player.knownCards[idx] = true;
+    player.clearUnknownCardHint(idx);
+    gameState.addToHistory(
+        "😵 ${player.name} oublie sa défausse de réaction et se trompe de carte.");
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {

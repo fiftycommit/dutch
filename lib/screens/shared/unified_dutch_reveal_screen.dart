@@ -225,7 +225,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
               Text(
                 "DUTCH !",
                 style: TextStyle(
-                  fontFamily: 'Rye',
                   fontSize: isCompact ? 24 : 36,
                   color: Colors.amber,
                 ),

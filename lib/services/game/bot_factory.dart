@@ -145,8 +145,8 @@ class BotFactory {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// Crée les bots en mode manuel (difficulté choisie par l'utilisateur)
-  /// Bronze/Silver/Gold : sélection par winrate moyen cible
-  /// Platinum : meilleurs bots absolus de la catégorie (filtrés platinum)
+  /// Bronze/Argent : bots par défaut (pas de sélection serveur)
+  /// Or/Platine : sélection serveur par winrate / élite
   static Future<List<Player>> createManualBots({
     required int numberOfBots,
     required Difficulty difficulty,
@@ -164,8 +164,24 @@ class BotFactory {
       return _createMixBots(numberOfBots);
     }
 
-    // Bronze / Silver / Gold : sélection par tranche de winrate
-    return _createWinrateBots(numberOfBots, difficulty, saveSlot: saveSlot);
+    // Or : sélection serveur par winrate
+    if (difficulty == Difficulty.hard) {
+      return _createWinrateBots(numberOfBots, difficulty, saveSlot: saveSlot);
+    }
+
+    // Bronze / Argent : bots par défaut, pas de sélection serveur
+    final targetSkill = difficultyToSkillLevel(difficulty);
+    return List.generate(
+      numberOfBots,
+      (i) => Player(
+        id: 'bot_$i',
+        name: getBotName(BotBehavior.balanced, targetSkill),
+        isHuman: false,
+        botBehavior: BotBehavior.balanced,
+        botSkillLevel: targetSkill,
+        position: i + 1,
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

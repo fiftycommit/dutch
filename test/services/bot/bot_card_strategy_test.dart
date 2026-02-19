@@ -214,8 +214,62 @@ void main() {
       });
     });
 
+    group('silver contextual behavior', () {
+      test('replaces first unknown card when drawing non-7', () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '9'),
+          PlayingCard.create('clubs', '10'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, false, false, true];
+        bot.mentalMap = [
+          bot.hand[0],
+          null,
+          null,
+          bot.hand[3],
+        ];
+
+        gameState.drawnCard = PlayingCard.create('hearts', '2');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.silver,
+          BotGamePhase.optimization,
+        );
+
+        expect(bot.hand[1].value, equals('2'));
+      });
+
+      test('discards 7 when no known card is above 7', () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '4'),
+          PlayingCard.create('clubs', '6'),
+          PlayingCard.create('spades', '7'),
+        ];
+        bot.knownCards = List.filled(4, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+        gameState.drawnCard = PlayingCard.create('diamonds', '7');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.silver,
+          BotGamePhase.optimization,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(gameState.discardPile.last.value, equals('7'));
+        expect(gameState.isWaitingForSpecialPower, isTrue);
+        expect(gameState.specialCardToActivate?.value, equals('7'));
+      });
+    });
+
     group('difficulty ladder behavior', () {
-      test('bronze discards slight gain while platinum keeps it', () async {
+      test('bronze keeps slight immediate gain by replacing higher known card',
+          () async {
         // Main connue, sans doublon.
         bot.hand = [
           PlayingCard.create('hearts', 'A'), // 1
@@ -235,11 +289,11 @@ void main() {
           BotGamePhase.optimization,
         );
 
-        // Bronze très faible: un petit gain n'est pas jugé suffisant.
+        // Bronze contextuel: remplace la carte supérieure connue.
+        expect(bot.hand.any((c) => c.value == '10' && c.suit == 'spades'),
+            isFalse);
         expect(
-            bot.hand.any((c) => c.value == '10' && c.suit == 'spades'), isTrue);
-        expect(
-            bot.hand.any((c) => c.value == '9' && c.suit == 'hearts'), isFalse);
+            bot.hand.any((c) => c.value == '9' && c.suit == 'hearts'), isTrue);
 
         // Reset même scénario pour Platinum.
         bot.hand = [
@@ -390,6 +444,38 @@ void main() {
       });
     });
 
+    group('silver reaction behavior', () {
+      test('retries once on confusion when a known match exists', () async {
+        gameState.phase = GamePhase.reaction;
+        gameState.discardPile = [PlayingCard.create('hearts', '3')];
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+        ];
+        bot.knownCards = [true, true, true];
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        const forcedConfusionSilver = BotDifficulty(
+          name: 'Argent',
+          forgetChancePerTurn: 0.24,
+          confusionOnSwap: 1.0,
+          reactionSpeed: 1.0,
+          matchAccuracy: 1.0,
+          reactionMatchChance: 1.0,
+        );
+
+        final matched = await BotCardStrategy.tryReactionMatch(
+          gameState,
+          bot,
+          forcedConfusionSilver,
+          BotGamePhase.endgame,
+        );
+
+        expect(matched, isTrue);
+      });
+    });
+
     group('platinum contextual unknown swaps', () {
       test('targets suspicious unknown card first', () async {
         bot.mentalMap = [
@@ -451,7 +537,7 @@ void main() {
     });
 
     group('bronze blackout behavior', () {
-      test('bronze can enter blackout after enough turns', () async {
+      test('bronze does not enter blackout automatically', () async {
         gameState.turnCount = 3;
         gameState.actionCount = 20;
         gameState.drawnCard = PlayingCard.create('hearts', '6');
@@ -463,7 +549,7 @@ void main() {
           BotGamePhase.optimization,
         );
 
-        expect(bot.bronzeBlackoutActive, isTrue);
+        expect(bot.bronzeBlackoutActive, isFalse);
       });
     });
   });

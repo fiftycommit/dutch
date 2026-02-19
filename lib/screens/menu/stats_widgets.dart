@@ -318,15 +318,38 @@ class MatchHistoryTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              "$score pts",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                height: 1.0,
+            if (match['scoreDetail'] != null)
+              Tooltip(
+                message: match['scoreDetail'] as String,
+                triggerMode: TooltipTriggerMode.tap,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        color: Colors.red, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      "$score pts",
+                      style: TextStyle(
+                        color: Colors.red.shade300,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Text(
+                "$score pts",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  height: 1.0,
+                ),
               ),
-            ),
             Text(
               rpDisplay.text,
               style: TextStyle(

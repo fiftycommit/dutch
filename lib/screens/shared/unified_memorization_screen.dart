@@ -41,6 +41,9 @@ class MemorizationConfig {
   /// Titre du message quand le joueur n'existe pas
   final String noPlayerTitle;
 
+  /// Callback pour quitter la partie (retour à l'accueil)
+  final void Function(BuildContext context)? onQuit;
+
   const MemorizationConfig({
     required this.localPlayer,
     required this.onMemorizationComplete,
@@ -52,6 +55,7 @@ class MemorizationConfig {
     this.buildReadyInfo,
     this.noPlayerMessage = "Les bots continuent...",
     this.noPlayerTitle = "VOUS ÊTES ÉLIMINÉ",
+    this.onQuit,
   });
 }
 
@@ -425,7 +429,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                 Text(
                   config.noPlayerTitle,
                   style: const TextStyle(
-                    fontFamily: 'Rye',
                     fontSize: 32,
                     color: Colors.amberAccent,
                     fontWeight: FontWeight.bold,
@@ -479,8 +482,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         height: double.infinity,
         color: AppColors.gradientBottom,
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
+          child: Stack(
+            children: [
+              Center(
+                child: SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: horizontalPadding,
@@ -498,7 +503,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                       "MÉMORISATION",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily: 'Rye',
                         fontSize: titleSize,
                         color: Colors.amber,
                         fontWeight: FontWeight.bold,
@@ -585,8 +589,52 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                 ),
               ),
             ),
+            ),
+              if (config.onQuit != null)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IconButton(
+                    onPressed: () => _confirmQuit(context),
+                    icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _confirmQuit(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.backgroundMedium,
+        title: const Text('Quitter la partie ?',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Vous n\'avez pas encore vu vos cartes.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _countdownTimer?.cancel();
+              _gameStartSubscription?.cancel();
+              config.onQuit!(context);
+            },
+            child: const Text('Quitter', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
       ),
     );
   }

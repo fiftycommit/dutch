@@ -45,6 +45,10 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
             // Le serveur gère tout
           },
           navigateToGame: (context) => context.go('/multiplayer/game'),
+          onQuit: (context) {
+            provider.forfeitGame();
+            context.go('/multiplayer/lobby');
+          },
           countdownSeconds: 15,
           showWaitingScreen: true,
           gameStartStream: gameStartStream,
@@ -85,7 +89,6 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
               Text(
                 "VOUS ÊTES SPECTATEUR",
                 style: TextStyle(
-                  fontFamily: 'Rye',
                   fontSize: 32,
                   color: Colors.amberAccent,
                   fontWeight: FontWeight.bold,

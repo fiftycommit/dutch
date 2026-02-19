@@ -21,6 +21,8 @@ abstract class IStatsService {
     int tournamentRound = 1,
     String? tournamentId,
     List<String>? actionHistory,
+    String? gameLog,
+    String? scoreDetail,
   });
 
   /// Réinitialiser les statistiques d'un slot

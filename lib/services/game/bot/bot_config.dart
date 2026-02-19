@@ -4,6 +4,7 @@ import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import '../../../models/player_learning_data.dart';
 import 'bot_difficulty.dart';
+import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
 import 'hardcore_bot_config.dart';
 
@@ -25,6 +26,11 @@ class BotConfig {
   /// Détermine la phase de jeu du bot
   /// Logique basée sur la CERTITUDE, pas sur des estimations de score
   static BotGamePhase getBotPhase(Player bot, GameState gameState) {
+    // Platine : analyse contextuelle pure, pas de phases fixes
+    if (bot.botSkillLevel == BotSkillLevel.platinum) {
+      return _getPlatinumContextualPhase(bot, gameState);
+    }
+
     final knowsAll = bot.knowsAllCards;
     final knownScore = bot.getKnownScore();
 
@@ -54,6 +60,29 @@ class BotConfig {
     }
 
     return BotGamePhase.optimization;
+  }
+
+  /// Phase contextuelle pour Platine : jamais d'exploration passive
+  static BotGamePhase _getPlatinumContextualPhase(Player bot, GameState gs) {
+    final knownScore = bot.getKnownScore();
+    final unknownCount = BotMemoryManager.getUnknownIndices(bot).length;
+    final minOpponentCards = gs.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.hand.length)
+        .fold(99, (int a, int b) => a < b ? a : b);
+
+    // Tournoi : endgame si score cumulé élevé
+    if (gs.gameMode == GameMode.tournament) {
+      int cumulativeScore = gs.getCumulativeScore(bot);
+      if (cumulativeScore >= 70) {
+        return BotGamePhase.endgame;
+      }
+    }
+
+    if (minOpponentCards <= 2) return BotGamePhase.endgame;
+    if (unknownCount == 0 && knownScore <= 5) return BotGamePhase.endgame;
+    if (knownScore <= 3 && unknownCount <= 1) return BotGamePhase.endgame;
+    return BotGamePhase.optimization; // jamais exploration passive
   }
 
   /// Calcule le temps de réflexion du bot

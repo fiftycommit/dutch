@@ -52,11 +52,14 @@ void main() async {
   // Initialiser le service locator avec tous les services
   ServiceLocator.setupDefaultServices();
 
-  // Mode immersif : masquer toutes les barres système pour une expérience plein écran
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.immersiveSticky,
-    overlays: [],
-  );
+  // Plein écran edge-to-edge : contenu sous les barres système
+  // mais SafeArea toujours respectée (contrairement à immersiveSticky)
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+  ));
 
   // Warm-up non bloquant: ne jamais retarder le boot de l'app sur le web/PWA.
   unawaited(_warmupClientId());

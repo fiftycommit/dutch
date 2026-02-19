@@ -777,7 +777,6 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
             'Multijoueur',
             style: TextStyle(
               color: Colors.white,
-              fontFamily: 'Rye',
               fontSize: 34,
               letterSpacing: 0.4,
             ),

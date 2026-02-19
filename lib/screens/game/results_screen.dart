@@ -120,18 +120,46 @@ class _ResultsScreenState extends State<ResultsScreen> {
             isTournamentFinal: isFinalRound,
             eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
             buildActionButtons: (ctx) => [
-              shared.ResultsActionButton(
-                label: (isTournament && !isTournamentOver) ? 'MANCHE SUIVANTE >>' : 'TERMINER',
-                backgroundColor: Colors.amber.shade700,
-                onPressed: () async {
-                  if (isTournament && !isTournamentOver) {
-                    await gameProvider.startNextTournamentRound();
-                    if (ctx.mounted) ctx.go('/solo/memorization');
-                  } else {
-                    ctx.go('/');
-                  }
-                },
-              ),
+              if (isTournament && !isTournamentOver)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 180,
+                        child: shared.ResultsActionButton(
+                          label: 'ABANDONNER',
+                          backgroundColor: Colors.red.shade700,
+                          onPressed: () => _confirmAbandonTournament(
+                            ctx,
+                            gameProvider,
+                            remainingRounds,
+                            gameState,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 180,
+                        child: shared.ResultsActionButton(
+                          label: 'MANCHE SUIVANTE >>',
+                          backgroundColor: Colors.amber.shade700,
+                          onPressed: () async {
+                            await gameProvider.startNextTournamentRound();
+                            if (ctx.mounted) ctx.go('/solo/memorization');
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                shared.ResultsActionButton(
+                  label: 'TERMINER',
+                  backgroundColor: Colors.amber.shade700,
+                  onPressed: () => ctx.go('/'),
+                ),
             ],
             rpCalculator: showRP
                 ? (player, rank) => _calculateRP(gameProvider, player, rank, gameState)
@@ -140,6 +168,98 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         );
       },
+    );
+  }
+
+  void _confirmAbandonTournament(
+    BuildContext ctx,
+    GameProvider gameProvider,
+    int remainingRounds,
+    GameState gameState,
+  ) {
+    const penaltyPerRound = 13 * 4; // 52
+    final penaltyScore = penaltyPerRound * remainingRounds;
+
+    // Score cumulé des manches déjà jouées
+    final human = gameState.players.firstWhere((p) => p.isHuman);
+    final cumulativeScores = gameState.tournamentCumulativeScores;
+    final currentCumul = cumulativeScores[human.id] ?? 0;
+    final totalScore = currentCumul + penaltyScore;
+
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1a1a2e),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 28),
+            const SizedBox(width: 8),
+            const Text('Abandonner le tournoi ?',
+                style: TextStyle(color: Colors.white, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Score actuel (manches jouées) : $currentCumul pts',
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Pénalité abandon : $penaltyPerRound pts x $remainingRounds manche(s) = $penaltyScore pts',
+                    style: TextStyle(color: Colors.red.shade300, fontSize: 14),
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  Text(
+                    'Score total enregistré : $totalScore pts',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Vous serez classé dernier avec ce score.',
+              style: TextStyle(color: Colors.red.shade200, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              gameProvider.quitGame();
+              if (ctx.mounted) ctx.go('/');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Abandonner'),
+          ),
+        ],
+      ),
     );
   }
 

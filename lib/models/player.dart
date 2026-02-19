@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'playing_card.dart';
 import 'game_settings.dart';
 
@@ -18,6 +19,8 @@ class DutchAttempt {
 }
 
 class Player {
+  static final Random _random = Random();
+
   final String id;
   final String name;
   final bool isHuman;
@@ -58,6 +61,13 @@ class Player {
   /// Dernière action où un blackout a été déclenché (anti-spam).
   int lastBronzeBlackoutActionCount;
 
+  /// Dernier tour où ce joueur humain a été ciblé par un Valet Bronze.
+  int lastBronzeValetTargetTurn;
+
+  /// Dernier tour où ce joueur a été ciblé par un pouvoir offensif adverse
+  /// (espionnage, échange, joker).
+  int lastTargetedByPowerTurn;
+
   Player({
     required this.id,
     required this.name,
@@ -79,6 +89,8 @@ class Player {
     this.bronzeBlackoutActive = false,
     this.bronzeBlackoutUntilActionCount = -1,
     this.lastBronzeBlackoutActionCount = -999,
+    this.lastBronzeValetTargetTurn = -999,
+    this.lastTargetedByPowerTurn = -999,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
@@ -111,7 +123,9 @@ class Player {
             List.from(other.unknownCardHintActionCount),
         bronzeBlackoutActive = other.bronzeBlackoutActive,
         bronzeBlackoutUntilActionCount = other.bronzeBlackoutUntilActionCount,
-        lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount;
+        lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount,
+        lastBronzeValetTargetTurn = other.lastBronzeValetTargetTurn,
+        lastTargetedByPowerTurn = other.lastTargetedByPowerTurn;
 
   int calculateScore() {
     int score = 0;
@@ -213,10 +227,34 @@ class Player {
     mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
     knownCards = List<bool>.filled(hand.length, false, growable: true);
 
-    mentalMap[0] = hand[0];
-    mentalMap[1] = hand[1];
-    knownCards[0] = true;
-    knownCards[1] = true;
+    // Bronze distrait: il regarde 2 cartes aléatoires au début.
+    // Si elles ne sont pas adjacentes, il les "oublie" immédiatement.
+    if (botSkillLevel == BotSkillLevel.bronze && hand.length >= 2) {
+      final first = _random.nextInt(hand.length);
+      int second = _random.nextInt(hand.length);
+      while (second == first) {
+        second = _random.nextInt(hand.length);
+      }
+
+      mentalMap[first] = hand[first];
+      mentalMap[second] = hand[second];
+      knownCards[first] = true;
+      knownCards[second] = true;
+
+      final areAdjacent = (first - second).abs() == 1;
+      if (!areAdjacent) {
+        mentalMap[first] = null;
+        mentalMap[second] = null;
+        knownCards[first] = false;
+        knownCards[second] = false;
+      }
+    } else {
+      mentalMap[0] = hand[0];
+      mentalMap[1] = hand[1];
+      knownCards[0] = true;
+      knownCards[1] = true;
+    }
+
     resetUnknownCardHints();
   }
 
@@ -544,6 +582,8 @@ class Player {
       bronzeBlackoutActive: bronzeBlackoutActive,
       bronzeBlackoutUntilActionCount: bronzeBlackoutUntilActionCount,
       lastBronzeBlackoutActionCount: lastBronzeBlackoutActionCount,
+      lastBronzeValetTargetTurn: lastBronzeValetTargetTurn,
+      lastTargetedByPowerTurn: lastTargetedByPowerTurn,
     );
   }
 }

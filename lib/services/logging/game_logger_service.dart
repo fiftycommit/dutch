@@ -20,6 +20,7 @@ class GameLoggerService {
   GameLoggerService._();
 
   final StringBuffer _logBuffer = StringBuffer();
+  final StringBuffer _tournamentArchive = StringBuffer();
   String? _currentGameId;
   int _turnNumber = 0;
   int _roundNumber = 1;
@@ -37,7 +38,12 @@ class GameLoggerService {
   }) async {
     if (!_isEnabled) return;
 
+    // Archiver le log de la manche précédente (pour "tout le tournoi")
+    if (_logBuffer.isNotEmpty) {
+      _tournamentArchive.write(_logBuffer.toString());
+    }
     _logBuffer.clear();
+
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
     _currentGameId = 'game_$timestamp';
     _turnNumber = 0;
@@ -465,6 +471,16 @@ class GameLoggerService {
     return _logBuffer.toString();
   }
 
+  /// Retourne le log complet du tournoi (toutes les manches archivées + manche courante)
+  String getFullLog() {
+    return _tournamentArchive.toString() + _logBuffer.toString();
+  }
+
+  /// Retourne le log de la manche courante uniquement
+  String getLogForCurrentRound() {
+    return _logBuffer.toString();
+  }
+
   /// Télécharge le log (fonctionne sur web et natif)
   Future<bool> downloadLog() async {
     if (_logBuffer.isEmpty) return false;
@@ -476,15 +492,28 @@ class GameLoggerService {
     return platform.downloadLog(filename, _logBuffer.toString());
   }
 
+  /// Télécharge un contenu de log arbitraire
+  Future<bool> downloadLogContent(String content) async {
+    if (content.isEmpty) return false;
+    final filename = _currentGameId != null
+        ? '$_currentGameId.log'
+        : 'dutch_game_${DateTime.now().millisecondsSinceEpoch}.log';
+    return platform.downloadLog(filename, content);
+  }
+
   /// Retourne true si un log est disponible
-  bool get hasLog => _logBuffer.isNotEmpty;
+  bool get hasLog => _logBuffer.isNotEmpty || _tournamentArchive.isNotEmpty;
+
+  /// Retourne true si des manches précédentes sont archivées (tournoi multi-manches)
+  bool get hasTournamentArchive => _tournamentArchive.isNotEmpty;
 
   /// Retourne l'ID de la partie en cours
   String? get currentGameId => _currentGameId;
 
-  /// Réinitialise le log
+  /// Réinitialise le log (appelé en début de nouveau tournoi/partie)
   void reset() {
     _logBuffer.clear();
+    _tournamentArchive.clear();
     _currentGameId = null;
     _turnNumber = 0;
     _roundNumber = 1;

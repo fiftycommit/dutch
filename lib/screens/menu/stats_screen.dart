@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/logging/game_logger_service.dart';
 import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/tournament_labels.dart';
@@ -248,6 +250,29 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
               ),
               SizedBox(height: metrics.space(8)),
+              if (matches.any((m) =>
+                  m['gameLog'] != null &&
+                  (m['gameLog'] as String).isNotEmpty))
+                Padding(
+                  padding: EdgeInsets.only(bottom: metrics.space(8)),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final allLogs = matches
+                          .where((m) =>
+                              m['gameLog'] != null &&
+                              (m['gameLog'] as String).isNotEmpty)
+                          .map((m) => m['gameLog'] as String)
+                          .join('\n\n');
+                      _downloadLogFromStats(context, allLogs);
+                    },
+                    icon: const Icon(Icons.download, size: 16),
+                    label: const Text("Télécharger tous les logs"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text("Fermer",
@@ -312,6 +337,21 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
               ),
               SizedBox(height: metrics.space(8)),
+              if (match['gameLog'] != null &&
+                  (match['gameLog'] as String).isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(bottom: metrics.space(8)),
+                  child: ElevatedButton.icon(
+                    onPressed: () => _downloadLogFromStats(
+                        context, match['gameLog'] as String),
+                    icon: const Icon(Icons.download, size: 16),
+                    label: const Text("Télécharger le log"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text("Fermer",
@@ -322,6 +362,32 @@ class _StatsScreenState extends State<StatsScreen> {
         },
       ),
     );
+  }
+
+  void _downloadLogFromStats(BuildContext context, String logContent) async {
+    try {
+      // Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: logContent));
+      // Also try platform download
+      await GameLoggerService.instance.downloadLogContent(logContent);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Log copié dans le presse-papiers !'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Erreur lors de l'export du log"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _confirmReset(BuildContext context, int slotId) {

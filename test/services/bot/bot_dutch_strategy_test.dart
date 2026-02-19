@@ -331,7 +331,7 @@ void main() {
         expect(platinumDecision, isTrue);
       });
 
-      test('bronze can call Dutch only because it has fewer cards', () {
+      test('bronze does not Dutch only because it has fewer cards', () {
         bot.hand = [
           PlayingCard.create('hearts', '9'),
           PlayingCard.create('diamonds', 'D'),
@@ -353,7 +353,7 @@ void main() {
           BotGamePhase.optimization,
         );
 
-        expect(bronzeDecision, isTrue);
+        expect(bronzeDecision, isFalse);
       });
     });
   });

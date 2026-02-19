@@ -9,6 +9,7 @@ import '../models/player_learning_data.dart';
 import '../services/game/game_logic.dart';
 import '../core/interfaces/i_haptic_service.dart';
 import '../core/interfaces/i_stats_service.dart';
+import '../services/ui/stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
 import '../services/game/bot/hardcore_bot_config.dart';
@@ -29,6 +30,9 @@ import 'package:flutter/widgets.dart';
 
 export 'managers/solo/tournament_manager.dart' show TournamentResult;
 export '../services/game/bot/hardcore_bot_config.dart' show HardcoreLevel;
+
+// Clé SharedPreferences pour détecter les abandons par fermeture d'app
+const String _kActiveGameKey = 'active_tournament_game';
 
 /// GameProvider refactoré - ~400 lignes au lieu de 1200
 /// Principe SOLID: SRP - Coordination uniquement, logique déléguée aux managers
@@ -207,6 +211,9 @@ class GameProvider with ChangeNotifier implements IGameController {
     // ═══════════════════════════════════════════════════════════════════════
     // LOGGING : Démarrer l'enregistrement de la partie
     // ═══════════════════════════════════════════════════════════════════════
+    if (tournamentRound <= 1) {
+      GameLoggerService.instance.reset();
+    }
     GameLoggerService.instance.startNewGame(
       players: players,
       targetScore: 100,
@@ -218,6 +225,18 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     shakingCardIndices.clear();
     isProcessing = false;
+
+    // Persister un flag "partie en cours" pour détecter les abandons par fermeture d'app
+    _setActiveGameFlag(
+      slotId: saveSlot,
+      tournamentRound: tournamentRound,
+      totalRounds: gameMode == GameMode.tournament ? tournamentTotalRounds : 1,
+      totalPlayers: players.length,
+      tournamentId: _tournamentManager.activeTournamentId,
+      useSBMM: useSBMM,
+      isTournament: gameMode == GameMode.tournament,
+    );
+
     notifyListeners();
   }
 
@@ -688,6 +707,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void endGame() {
     if (_gameState == null) return;
+    _clearActiveGameFlag();
     _gameState!.phase = GamePhase.ended;
 
     for (var p in _gameState!.players) {
@@ -749,6 +769,7 @@ class GameProvider with ChangeNotifier implements IGameController {
           : 1,
       tournamentId: _tournamentManager.activeTournamentId,
       actionHistory: List<String>.from(_gameState!.actionHistory),
+      gameLog: GameLoggerService.instance.getLogForCurrentRound(),
     );
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -997,9 +1018,23 @@ class GameProvider with ChangeNotifier implements IGameController {
   }
 
   void quitGame() {
+    _clearActiveGameFlag();
     if (_gameState != null) {
+      // Calcul du score d'abandon : 52pts (4 Rois) par manche restante
+      final bool isTournament = _gameState!.gameMode == GameMode.tournament;
+      const int penaltyPerRound = 13 * 4; // 52 = pire main possible
+      final int quitScore;
+      final String detail;
+      if (isTournament) {
+        final int remainingRounds = tournamentTotalRounds - _gameState!.tournamentRound + 1;
+        quitScore = penaltyPerRound * remainingRounds;
+        detail = 'Abandon : $penaltyPerRound pts x $remainingRounds manche(s) restante(s) = $quitScore pts';
+      } else {
+        quitScore = penaltyPerRound;
+        detail = 'Abandon : $penaltyPerRound pts (pire main possible)';
+      }
       _statsService.saveGameResult(
-        score: 999,
+        score: quitScore,
         playerRank: _gameState!.players.length,
         calledDutch: false,
         wonDutch: false,
@@ -1007,10 +1042,12 @@ class GameProvider with ChangeNotifier implements IGameController {
         isSBMM: _playerMMR != null,
         slotId: _currentSlotId,
         totalPlayers: _gameState!.players.length,
-        isTournament: _gameState!.gameMode == GameMode.tournament,
+        isTournament: isTournament,
         tournamentRound: _gameState!.tournamentRound,
         tournamentId: _tournamentManager.activeTournamentId,
         actionHistory: List<String>.from(_gameState!.actionHistory),
+        gameLog: GameLoggerService.instance.getLogForCurrentRound(),
+        scoreDetail: detail,
       );
     }
     _gameState = null;
@@ -1099,6 +1136,94 @@ class GameProvider with ChangeNotifier implements IGameController {
       final dutchTag = player.id == _gameState!.dutchCallerId ? " (DUTCH)" : "";
       _gameState!.addToHistory(
           "${badge.isEmpty ? "" : "$badge "}#$rank ${player.name}$dutchTag — $score pts");
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FLAG "PARTIE EN COURS" — détection abandon par fermeture d'app
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _setActiveGameFlag({
+    required int slotId,
+    required int tournamentRound,
+    required int totalRounds,
+    required int totalPlayers,
+    required String? tournamentId,
+    required bool useSBMM,
+    required bool isTournament,
+  }) {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString(_kActiveGameKey, jsonEncode({
+        'slotId': slotId,
+        'tournamentRound': tournamentRound,
+        'totalRounds': totalRounds,
+        'totalPlayers': totalPlayers,
+        'tournamentId': tournamentId,
+        'useSBMM': useSBMM,
+        'isTournament': isTournament,
+        'timestamp': DateTime.now().toIso8601String(),
+      }));
+    });
+  }
+
+  void _clearActiveGameFlag() {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove(_kActiveGameKey);
+    });
+  }
+
+  /// Appelé au lancement de l'app (main menu) pour détecter un abandon
+  /// par fermeture d'app/page lors d'un tournoi.
+  static Future<void> checkForAbandonedGame() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kActiveGameKey);
+    if (raw == null) return;
+
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final slotId = data['slotId'] as int;
+      final tournamentRound = data['tournamentRound'] as int? ?? 1;
+      final totalRounds = data['totalRounds'] as int? ?? 1;
+      final totalPlayers = data['totalPlayers'] as int;
+      final tournamentId = data['tournamentId'] as String?;
+      final useSBMM = data['useSBMM'] as bool? ?? false;
+      final isTournament = data['isTournament'] as bool? ?? false;
+
+      const penaltyPerRound = 13 * 4; // 52
+      final int quitScore;
+      final String detail;
+
+      if (isTournament) {
+        final remainingRounds = totalRounds - tournamentRound + 1;
+        quitScore = penaltyPerRound * remainingRounds;
+        detail = 'Abandon (app fermée) : $penaltyPerRound pts x $remainingRounds manche(s) = $quitScore pts';
+      } else {
+        quitScore = penaltyPerRound;
+        detail = 'Abandon (app fermée) : $penaltyPerRound pts (pire main possible)';
+      }
+
+      await StatsService.saveGameResult(
+        score: quitScore,
+        playerRank: totalPlayers,
+        calledDutch: false,
+        wonDutch: false,
+        hasEmptyHand: false,
+        isSBMM: useSBMM,
+        slotId: slotId,
+        totalPlayers: totalPlayers,
+        isTournament: isTournament,
+        tournamentRound: tournamentRound,
+        tournamentId: tournamentId,
+        scoreDetail: detail,
+      );
+
+      if (kDebugMode) {
+        debugPrint('Abandon détecté : ${isTournament ? "tournoi round $tournamentRound" : "partie rapide"}, score=$quitScore');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Erreur checkForAbandonedGame: $e');
+    } finally {
+      await prefs.remove(_kActiveGameKey);
     }
   }
 

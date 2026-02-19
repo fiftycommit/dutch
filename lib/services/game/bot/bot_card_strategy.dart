@@ -82,7 +82,44 @@ class BotCardStrategy {
 
     final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
 
-    // RÈGLE OR/PLATINE SUR LE 7 :
+    if (decisionProfile.tier == _CardTier.bronze) {
+      _handleBronzeReplacementByContext(
+        gs,
+        bot,
+        drawn,
+        drawnVal,
+        difficulty,
+        unknownIndices,
+      );
+      return;
+    }
+
+    if (decisionProfile.tier == _CardTier.silver) {
+      _handleSilverReplacementByContext(
+        gs,
+        bot,
+        drawn,
+        drawnVal,
+        difficulty,
+        unknownIndices,
+      );
+      return;
+    }
+
+    if (decisionProfile.tier == _CardTier.gold) {
+      _handleGoldReplacementByContext(
+        gs,
+        bot,
+        drawn,
+        drawnVal,
+        difficulty,
+        unknownIndices,
+        phase,
+      );
+      return;
+    }
+
+    // RÈGLE PLATINE SUR LE 7 :
     // - S'il reste des inconnues, on défausse le 7 pour activer le pouvoir.
     // - Sinon, on garde le 7 uniquement pour remplacer une carte > 7.
     // - Si aucune carte > 7, on défausse quand même le 7 pour re-vérifier une carte.
@@ -180,9 +217,9 @@ class BotCardStrategy {
         // Carte reçue possiblement bonne (swap depuis joueur fort):
         // on évite de l'écraser avec une pioche moyenne/haute.
         final preserveLikelyGoodUnknown =
-            replaceHintScore >= 0.40 && drawnVal > 3;
+            replaceHintScore >= 0.55 && drawnVal > 4;
         final preserveVeryGoodUnknown =
-            replaceHintScore >= 0.60 && drawnVal > 2;
+            replaceHintScore >= 0.70 && drawnVal > 3;
         if (preserveLikelyGoodUnknown || preserveVeryGoodUnknown) {
           GameLogic.discardDrawnCard(gs);
           bot.consecutiveBadDraws++;
@@ -191,7 +228,9 @@ class BotCardStrategy {
 
         // Politique stricte: Platine n'échange une inconnue que si la pioche
         // est réellement meilleure que l'espérance de cette inconnue.
-        final baseBlindSwapTolerance = phase == BotGamePhase.exploration
+        // En début de partie (peu de tours joués), plus tolérant pour découvrir vite
+        final myTurnsPlayed = gs.actionCount ~/ gs.players.length;
+        final baseBlindSwapTolerance = myTurnsPlayed <= 3
             ? 0.2
             : isTenseEndgame
                 ? -0.8
@@ -371,6 +410,261 @@ class BotCardStrategy {
     return unknownIndices[_random.nextInt(unknownIndices.length)];
   }
 
+  static void _handleBronzeReplacementByContext(
+    GameState gs,
+    Player bot,
+    PlayingCard drawn,
+    int drawnVal,
+    BotDifficulty difficulty,
+    List<int> unknownIndices,
+  ) {
+    // Bronze par contexte:
+    // 1) remplacer une carte connue strictement supérieure à la pioche;
+    // 2) sinon explorer une inconnue;
+    // 3) sinon défausser.
+    int replaceIdx = -1;
+    int highestKnownAboveDraw = -1;
+    for (int i = 0; i < bot.mentalMap.length; i++) {
+      final known = bot.mentalMap[i];
+      if (known == null) continue;
+      if (known.points > drawnVal && known.points > highestKnownAboveDraw) {
+        highestKnownAboveDraw = known.points;
+        replaceIdx = i;
+      }
+    }
+
+    if (replaceIdx == -1 && unknownIndices.isNotEmpty) {
+      replaceIdx = unknownIndices[_random.nextInt(unknownIndices.length)];
+    }
+
+    if (replaceIdx != -1) {
+      _replaceCard(gs, bot, replaceIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+    } else {
+      GameLogic.discardDrawnCard(gs);
+      bot.consecutiveBadDraws++;
+    }
+  }
+
+  static void _handleSilverReplacementByContext(
+    GameState gs,
+    Player bot,
+    PlayingCard drawn,
+    int drawnVal,
+    BotDifficulty difficulty,
+    List<int> unknownIndices,
+  ) {
+    // Argent (contextuel simple):
+    // - 7: remplacer une connue >7, sinon défausser pour déclencher le pouvoir.
+    // - sinon: remplacer la 1ère inconnue, sinon améliorer la pire connue.
+    if (drawn.value == '7') {
+      final myTurns = gs.actionCount ~/ gs.players.length;
+      // Argent apprend la règle du 7 tard : défausse stratégique à partir du tour 5
+      if (myTurns >= 5 && unknownIndices.isNotEmpty) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+
+      int replaceIdx = -1;
+      int worstAboveSeven = -1;
+      for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+        final known = bot.mentalMap[i];
+        if (known == null) continue;
+        if (known.points > 7 && known.points > worstAboveSeven) {
+          worstAboveSeven = known.points;
+          replaceIdx = i;
+        }
+      }
+
+      if (replaceIdx != -1) {
+        _replaceCard(gs, bot, replaceIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+      }
+      return;
+    }
+
+    if (unknownIndices.isNotEmpty) {
+      final replaceIdx = unknownIndices.first;
+      _replaceCard(gs, bot, replaceIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+      return;
+    }
+
+    int worstKnownIdx = -1;
+    int worstKnownValue = -1;
+    for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+      final known = bot.mentalMap[i];
+      if (known == null) continue;
+      if (known.points > worstKnownValue) {
+        worstKnownValue = known.points;
+        worstKnownIdx = i;
+      }
+    }
+
+    if (worstKnownIdx != -1 && drawnVal < worstKnownValue) {
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+    } else {
+      // Anti-humain soft Argent : actif tous les 4 tours à partir du tour 5
+      final myTurns = gs.actionCount ~/ gs.players.length;
+      final silverAntiHumanActive = myTurns >= 5 && myTurns % 4 == 0;
+      if (silverAntiHumanActive &&
+          worstKnownIdx != -1 &&
+          _shouldAvoidHelpingHumanByKeeping(
+            HumanThreatTracker(),
+            gs,
+            drawnVal,
+            worstKnownValue,
+            _decisionProfileForDifficulty(difficulty),
+          )) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+      }
+    }
+  }
+
+  static void _handleGoldReplacementByContext(
+    GameState gs,
+    Player bot,
+    PlayingCard drawn,
+    int drawnVal,
+    BotDifficulty difficulty,
+    List<int> unknownIndices,
+    BotGamePhase phase,
+  ) {
+    final myTurnsPlayed = gs.actionCount ~/ gs.players.length;
+    final threatTracker = HumanThreatTracker();
+    final humanThreat = threatTracker.calculateThreatLevel(gs);
+    final isHumanDangerous = humanThreat == HumanThreatLevel.high ||
+        humanThreat == HumanThreatLevel.critical;
+    final antiHumanActive = myTurnsPlayed >= 3 || isHumanDangerous;
+
+    // Contexte de table
+    final otherPlayersCards =
+        gs.players.where((p) => p.id != bot.id).map((p) => p.hand.length);
+    final minOthersCards = otherPlayersCards.isEmpty
+        ? 4
+        : otherPlayersCards.reduce((a, b) => a < b ? a : b);
+    final avgOthersCards = otherPlayersCards.isEmpty
+        ? 4.0
+        : otherPlayersCards.reduce((a, b) => a + b) / otherPlayersCards.length;
+    final isTenseEndgame = (bot.hand.length <= 2 && avgOthersCards <= 3) ||
+        minOthersCards <= 2 ||
+        myTurnsPlayed >= 7 ||
+        isHumanDangerous;
+
+    // RÈGLE DU 7 : défausse pour pouvoir si inconnues, sinon remplace pire >7
+    if (drawn.value == '7') {
+      if (unknownIndices.isNotEmpty) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+      int worstKnownValue = -1;
+      int worstKnownIdx = -1;
+      for (int i = 0; i < bot.mentalMap.length; i++) {
+        final known = bot.mentalMap[i];
+        if (known != null && known.points > worstKnownValue) {
+          worstKnownValue = known.points;
+          worstKnownIdx = i;
+        }
+      }
+      if (worstKnownIdx != -1 && worstKnownValue > 7) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+      }
+      return;
+    }
+
+    // STRATÉGIE DOUBLONS (désactivée en tense endgame)
+    if (!isTenseEndgame) {
+      final doublonInfo =
+          BotMemoryManager.getBestDoublonForExchange(bot, drawnVal);
+      if (doublonInfo != null) {
+        final (exchangeIdx, _, doublonValue) = doublonInfo;
+        if (2 * doublonValue > drawnVal) {
+          bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+          if (!confused) {
+            bot.updateMentalMap(exchangeIdx, drawn);
+          }
+          GameLogic.replaceCard(gs, exchangeIdx);
+          return;
+        }
+      }
+    }
+
+    // EXPLORATION : swap systématique des inconnues (séquentiel via .first)
+    // Gold hésite parfois à explorer avec une carte haute (≥8)
+    if (unknownIndices.isNotEmpty) {
+      if (drawnVal >= 8 && _random.nextDouble() < 0.15) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+      final replaceIdx = unknownIndices.first;
+      bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
+      if (!confused) {
+        bot.updateMentalMap(replaceIdx, drawn);
+      }
+      GameLogic.replaceCard(gs, replaceIdx);
+      bot.consecutiveBadDraws = 0;
+      return;
+    }
+
+    // OPTIMISATION : remplacer la pire connue si amélioration
+    int worstKnownValue = -1;
+    int worstKnownIdx = -1;
+    for (int i = 0; i < bot.mentalMap.length; i++) {
+      final known = bot.mentalMap[i];
+      if (known != null && known.points > worstKnownValue) {
+        worstKnownValue = known.points;
+        worstKnownIdx = i;
+      }
+    }
+
+    if (worstKnownIdx != -1 && drawnVal < worstKnownValue) {
+      // Anti-humain : vérifier avant de défausser
+      if (antiHumanActive &&
+          _shouldAvoidHelpingHumanByKeeping(
+            threatTracker,
+            gs,
+            drawnVal,
+            worstKnownValue,
+            _decisionProfileForDifficulty(difficulty),
+          )) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+        return;
+      }
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+    } else if (worstKnownIdx != -1 &&
+        antiHumanActive &&
+        _shouldAvoidHelpingHumanByKeeping(
+          threatTracker,
+          gs,
+          drawnVal,
+          worstKnownValue,
+          _decisionProfileForDifficulty(difficulty),
+        )) {
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+    } else {
+      GameLogic.discardDrawnCard(gs);
+      bot.consecutiveBadDraws++;
+    }
+  }
+
   static void _maybeTriggerBronzeBlackout(
     GameState gs,
     Player bot,
@@ -384,39 +678,13 @@ class BotCardStrategy {
       return;
     }
 
-    if (_isBronzeBlackoutActive(bot, gs)) return;
-
-    if (gs.turnCount < 3) return;
-    final cooldown = gs.players.length;
-    final actionsSinceLast = gs.actionCount - bot.lastBronzeBlackoutActionCount;
-    if (actionsSinceLast < cooldown) return;
-    if (gs.turnCount % 3 != 0) return;
-
-    bot.bronzeBlackoutActive = true;
-    bot.lastBronzeBlackoutActionCount = gs.actionCount;
-    bot.bronzeBlackoutUntilActionCount =
-        gs.actionCount + (gs.players.length * 2);
-
-    while (bot.mentalMap.length < bot.hand.length) {
-      bot.mentalMap.add(null);
+    // Le blackout Bronze ne se déclenche plus "magiquement".
+    // Il est uniquement provoqué par des événements de distraction
+    // (attaque subie, perte de focus sur un pouvoir, etc.).
+    if (bot.bronzeBlackoutActive &&
+        gs.actionCount > bot.bronzeBlackoutUntilActionCount) {
+      bot.bronzeBlackoutActive = false;
     }
-    while (bot.knownCards.length < bot.hand.length) {
-      bot.knownCards.add(false);
-    }
-
-    for (int i = 0; i < bot.hand.length; i++) {
-      final pretendKnows = _random.nextDouble() < 0.80;
-      if (pretendKnows) {
-        bot.mentalMap[i] = _fakeCardForBlackout(actual: bot.hand[i]);
-        bot.knownCards[i] = true;
-      } else {
-        bot.mentalMap[i] = null;
-        bot.knownCards[i] = false;
-      }
-      bot.clearUnknownCardHint(i);
-    }
-
-    gs.addToHistory('💫 ${bot.name} a un blackout et croit tout savoir.');
   }
 
   static bool _isBronzeBlackoutActive(Player bot, GameState gs) {
@@ -424,40 +692,6 @@ class BotCardStrategy {
     if (gs.actionCount <= bot.bronzeBlackoutUntilActionCount) return true;
     bot.bronzeBlackoutActive = false;
     return false;
-  }
-
-  static PlayingCard _fakeCardForBlackout({required PlayingCard actual}) {
-    const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
-    const values = [
-      'A',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '10',
-      'V',
-      'D',
-      'R',
-      'JOKER'
-    ];
-    PlayingCard fake = PlayingCard.create(
-      suits[_random.nextInt(suits.length)],
-      values[_random.nextInt(values.length)],
-    );
-
-    int guard = 0;
-    while (fake.value == actual.value && guard < 8) {
-      fake = PlayingCard.create(
-        suits[_random.nextInt(suits.length)],
-        values[_random.nextInt(values.length)],
-      );
-      guard++;
-    }
-    return fake;
   }
 
   static double _unknownHintScore(Player bot, int cardIndex, int actionCount) {
@@ -574,6 +808,11 @@ class BotCardStrategy {
     PlayingCard topDiscard = gameState.discardPile.last;
     final decisionProfile = _decisionProfileForDifficulty(difficulty);
     final hasKnownMatch = _hasKnownMatch(bot, topDiscard);
+
+    if (decisionProfile.tier == _CardTier.silver) {
+      return _trySilverReactionMatch(gameState, bot, difficulty, hasKnownMatch);
+    }
+
     final bronzeBlackoutActive = decisionProfile.tier == _CardTier.bronze &&
         _isBronzeBlackoutActive(bot, gameState);
 
@@ -642,6 +881,53 @@ class BotCardStrategy {
     // Si sa mémoire est altérée (oubli/confusion), il peut se tromper
     // et recevoir une pénalité — c'est le risque naturel du jeu.
     return false;
+  }
+
+  static Future<bool> _trySilverReactionMatch(
+    GameState gameState,
+    Player bot,
+    BotDifficulty difficulty,
+    bool hasKnownMatch,
+  ) async {
+    if (!hasKnownMatch) return false;
+
+    final topDiscard = gameState.discardPile.last;
+    final matchingIndices = <int>[];
+    for (int i = 0; i < bot.hand.length; i++) {
+      if (i < bot.mentalMap.length &&
+          bot.mentalMap[i] != null &&
+          bot.mentalMap[i]!.matches(topDiscard)) {
+        matchingIndices.add(i);
+      }
+    }
+    if (matchingIndices.isEmpty) return false;
+
+    final preferredIndex = matchingIndices.first;
+    final confused = _random.nextDouble() < difficulty.confusionOnSwap;
+    int firstAttemptIndex = preferredIndex;
+    int? retryIndex;
+
+    if (confused) {
+      final alternatives =
+          List<int>.generate(bot.hand.length, (i) => i).where((i) {
+        return i != preferredIndex;
+      }).toList(growable: false);
+      if (alternatives.isNotEmpty) {
+        firstAttemptIndex = alternatives[_random.nextInt(alternatives.length)];
+        retryIndex = preferredIndex;
+      }
+    }
+
+    int reactionDelay = (380 * (1 - difficulty.reactionSpeed)).round() + 120;
+    await Future.delayed(Duration(milliseconds: reactionDelay));
+
+    final firstSuccess = GameLogic.matchCard(gameState, bot, firstAttemptIndex);
+    if (firstSuccess) return true;
+    if (retryIndex == null) return false;
+
+    if (retryIndex >= bot.hand.length) return false;
+    await Future.delayed(const Duration(milliseconds: 120));
+    return GameLogic.matchCard(gameState, bot, retryIndex);
   }
 
   static double _getMatchChance(
@@ -735,27 +1021,27 @@ class BotCardStrategy {
       case _CardTier.silver:
         return const _CardDecisionProfile(
           tier: _CardTier.silver,
-          minImprovement: 2,
-          tenseImprovementBonus: 1,
-          maxAcceptedWorseningToDenyHuman: 0,
-          allowEqualSwapInEndgame: false,
-          greedyImmediate: false,
-          greedyMinImmediateImprovement: 1,
-          knownMatchLapseChance: 0.52,
-          unknownReplaceSkipChance: 0.34,
-          forceKnownReaction: false,
-        );
-      case _CardTier.gold:
-        return const _CardDecisionProfile(
-          tier: _CardTier.gold,
           minImprovement: 1,
           tenseImprovementBonus: 0,
           maxAcceptedWorseningToDenyHuman: 1,
           allowEqualSwapInEndgame: false,
           greedyImmediate: false,
           greedyMinImmediateImprovement: 1,
-          knownMatchLapseChance: 0.24,
-          unknownReplaceSkipChance: 0.12,
+          knownMatchLapseChance: 0.14,
+          unknownReplaceSkipChance: 0.0,
+          forceKnownReaction: false,
+        );
+      case _CardTier.gold:
+        return const _CardDecisionProfile(
+          tier: _CardTier.gold,
+          minImprovement: 0,
+          tenseImprovementBonus: 0,
+          maxAcceptedWorseningToDenyHuman: 1,
+          allowEqualSwapInEndgame: true,
+          greedyImmediate: false,
+          greedyMinImmediateImprovement: 1,
+          knownMatchLapseChance: 0.12,
+          unknownReplaceSkipChance: 0.05,
           forceKnownReaction: false,
         );
       case _CardTier.platinum:

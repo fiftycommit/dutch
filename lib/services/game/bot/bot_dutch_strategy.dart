@@ -1,4 +1,3 @@
-import 'dart:math';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import 'bot_config.dart';
@@ -12,7 +11,6 @@ import 'discard_tracker.dart';
 class BotDutchStrategy {
   /// Tracker de défausses partagé (comptage de cartes)
   static final DiscardTracker discardTracker = DiscardTracker();
-  static final Random _random = Random();
 
   /// Décide si le bot doit appeler Dutch
   static bool shouldCallDutch(
@@ -24,11 +22,20 @@ class BotDutchStrategy {
   }) {
     if (phase == BotGamePhase.exploration) return false;
     final tier = _tierFromDifficulty(difficulty);
-    if (tier == _DutchTier.bronze) {
-      return _shouldBronzeDutchNaive(gs, bot, phase);
+
+    switch (tier) {
+      case _DutchTier.bronze:
+        return _shouldBronzeDutchNaive(gs, bot, phase);
+      case _DutchTier.silver:
+        if (!_canDutchStateBased(gs, bot, difficulty)) return false;
+        return _shouldSilverDutch(gs, bot, difficulty, phase, personality);
+      case _DutchTier.gold:
+        if (!_canDutchStateBased(gs, bot, difficulty)) return false;
+        return _shouldGoldDutch(gs, bot, difficulty, phase, personality);
+      case _DutchTier.platinum:
+        if (!_canDutchStateBased(gs, bot, difficulty)) return false;
+        return _shouldPlatinumDutch(gs, bot, difficulty, personality);
     }
-    if (!_canDutchStateBased(gs, bot, difficulty)) return false;
-    return _shouldDutchStateBased(gs, bot, difficulty, phase, personality);
   }
 
   static bool _shouldBronzeDutchNaive(
@@ -36,31 +43,25 @@ class BotDutchStrategy {
     Player bot,
     BotGamePhase phase,
   ) {
-    final opponents =
-        gs.players.where((p) => p.id != bot.id).toList(growable: false);
-    if (opponents.isEmpty) return false;
-
-    int minOpponentCards = opponents.first.hand.length;
-    for (final opponent in opponents.skip(1)) {
-      if (opponent.hand.length < minOpponentCards) {
-        minOpponentCards = opponent.hand.length;
-      }
-    }
-
-    final hasCardCountLead = bot.hand.length <= minOpponentCards;
+    // Bronze distrait: il regarde d'abord son propre score perçu,
+    // sans analyse des adversaires.
     final enoughTurns = gs.turnCount >= 2 || phase == BotGamePhase.endgame;
-    if (hasCardCountLead && enoughTurns) {
-      return true;
-    }
+    if (!enoughTurns) return false;
 
-    // Impulsif: en fin de manche, Bronze peut tenter un Dutch "au feeling"
-    // même sans vraie certitude.
     final unknownCount = BotMemoryManager.getUnknownIndices(bot).length;
-    if (phase == BotGamePhase.endgame && unknownCount >= 2) {
-      return _random.nextDouble() < 0.30;
+    final knownScore = bot.getKnownScore();
+    final expectedUnknown = BotMemoryManager.getExpectedDeckCardValue(gs);
+    final perceivedScore =
+        knownScore + (expectedUnknown * unknownCount).round();
+
+    // S'il a encore trop d'inconnues, Bronze hésite hors endgame.
+    if (phase != BotGamePhase.endgame && unknownCount >= 3) {
+      return false;
     }
 
-    return false;
+    // Seuils simples orientés "si ça a l'air bon pour moi, je Dutch".
+    final threshold = phase == BotGamePhase.endgame ? 9 : 6;
+    return perceivedScore <= threshold;
   }
 
   /// Vérifie si le bot PEUT Dutch (conditions nécessaires)
@@ -95,6 +96,40 @@ class BotDutchStrategy {
     }
 
     return true;
+  }
+
+  /// Silver Dutch : prudent, stat-based avec biais négatif
+  static bool _shouldSilverDutch(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase,
+    BotPersonality? personality,
+  ) {
+    return _shouldDutchStateBased(gs, bot, difficulty, phase, personality);
+  }
+
+  /// Gold Dutch : opportuniste contextuel, analyse de table
+  static bool _shouldGoldDutch(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BotGamePhase phase,
+    BotPersonality? personality,
+  ) {
+    return _shouldDutchStateBased(gs, bot, difficulty, phase, personality);
+  }
+
+  /// Platinum Dutch : ultra-opportuniste, pas de phase exploration
+  static bool _shouldPlatinumDutch(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty,
+    BotPersonality? personality,
+  ) {
+    // Platine n'est jamais bridé par la phase — il analyse contextuellement
+    return _shouldDutchStateBased(
+        gs, bot, difficulty, BotGamePhase.endgame, personality);
   }
 
   /// Décide si le bot DEVRAIT Dutch (conditions suffisantes)
@@ -379,7 +414,7 @@ class BotDutchStrategy {
       case _DutchTier.silver:
         return 0.25;
       case _DutchTier.gold:
-        return 0.45;
+        return 0.65;
       case _DutchTier.platinum:
         return 0.80;
     }
@@ -437,41 +472,41 @@ class BotDutchStrategy {
         return const _DutchDecisionProfile(
           tier: _DutchTier.silver,
           opponentEstimatePenalty: 2,
-          baseRisk: 5.2,
-          scoreRiskPerPoint: 0.32,
-          uncertaintyRiskWeight: 2.0,
-          cardDisadvantageRiskWeight: 1.0,
-          urgencyRiskReduction: 0.08,
-          endgameRiskReduction: 0.12,
-          timingRiskReduction: 0.02,
-          cardGapWeight: 0.08,
-          leadWeight: 0.05,
-          urgencyWeight: 0.15,
-          pressureWeight: 0.08,
-          endgameOpportunityBonus: 0.03,
-          timingOpportunityBonus: 0.02,
-          badDrawOpportunityWeight: 0.03,
-          decisionBias: -2.20,
+          baseRisk: 4.4,
+          scoreRiskPerPoint: 0.28,
+          uncertaintyRiskWeight: 1.75,
+          cardDisadvantageRiskWeight: 0.92,
+          urgencyRiskReduction: 0.12,
+          endgameRiskReduction: 0.18,
+          timingRiskReduction: 0.06,
+          cardGapWeight: 0.11,
+          leadWeight: 0.07,
+          urgencyWeight: 0.20,
+          pressureWeight: 0.11,
+          endgameOpportunityBonus: 0.06,
+          timingOpportunityBonus: 0.05,
+          badDrawOpportunityWeight: 0.04,
+          decisionBias: -1.45,
         );
       case _DutchTier.gold:
         return const _DutchDecisionProfile(
           tier: _DutchTier.gold,
           opponentEstimatePenalty: 1,
-          baseRisk: 3.6,
-          scoreRiskPerPoint: 0.24,
-          uncertaintyRiskWeight: 1.35,
-          cardDisadvantageRiskWeight: 0.80,
-          urgencyRiskReduction: 0.18,
-          endgameRiskReduction: 0.24,
-          timingRiskReduction: 0.10,
-          cardGapWeight: 0.14,
-          leadWeight: 0.09,
-          urgencyWeight: 0.24,
-          pressureWeight: 0.14,
-          endgameOpportunityBonus: 0.08,
-          timingOpportunityBonus: 0.08,
-          badDrawOpportunityWeight: 0.05,
-          decisionBias: -0.90,
+          baseRisk: 3.2,
+          scoreRiskPerPoint: 0.22,
+          uncertaintyRiskWeight: 1.20,
+          cardDisadvantageRiskWeight: 0.70,
+          urgencyRiskReduction: 0.20,
+          endgameRiskReduction: 0.28,
+          timingRiskReduction: 0.12,
+          cardGapWeight: 0.18,
+          leadWeight: 0.12,
+          urgencyWeight: 0.32,
+          pressureWeight: 0.20,
+          endgameOpportunityBonus: 0.14,
+          timingOpportunityBonus: 0.12,
+          badDrawOpportunityWeight: 0.06,
+          decisionBias: 0.20,
         );
       case _DutchTier.platinum:
         return const _DutchDecisionProfile(

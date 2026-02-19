@@ -73,7 +73,6 @@ class GameOverlays {
                 color: Colors.amber,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                fontFamily: 'Rye',
               ),
             ),
             const SizedBox(height: 10),

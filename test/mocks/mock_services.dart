@@ -78,6 +78,8 @@ class MockStatsService implements IStatsService {
     int tournamentRound = 1,
     String? tournamentId,
     List<String>? actionHistory,
+    String? gameLog,
+    String? scoreDetail,
   }) async {
     savedResults.add({
       'playerRank': playerRank,

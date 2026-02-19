@@ -58,6 +58,13 @@ class MemorizationScreen extends StatelessWidget {
             });
           },
           navigateToGame: (context) => context.go('/solo/game'),
+          onQuit: (context) {
+            if (gameState.gameMode == GameMode.tournament &&
+                gameState.tournamentRound > 1) {
+              gameProvider.quitGame();
+            }
+            context.go('/');
+          },
           noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
           noPlayerMessage: "Les bots continuent...",
         ),
@@ -80,7 +87,6 @@ class MemorizationScreen extends StatelessWidget {
               Text(
                 "VOUS ÊTES ÉLIMINÉ",
                 style: TextStyle(
-                  fontFamily: 'Rye',
                   fontSize: 32,
                   color: Colors.redAccent,
                   fontWeight: FontWeight.bold,

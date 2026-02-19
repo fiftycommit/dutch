@@ -312,7 +312,6 @@ class _GameScreenState extends State<GameScreen> with GameLayoutMixin<GameScreen
                 color: Colors.amber,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                fontFamily: 'Rye',
               ),
             ),
             const SizedBox(height: 40),

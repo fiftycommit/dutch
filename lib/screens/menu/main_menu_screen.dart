@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/game_provider.dart';
 import '../../services/ui/stats_service.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/ui_constants.dart';
@@ -65,6 +66,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       });
     }
     _loadDataParallel();
+    // Vérifier si un tournoi a été abandonné (fermeture d'app)
+    unawaited(GameProvider.checkForAbandonedGame());
     // Précache les SVGs restants en arrière-plan (non bloquant)
     unawaited(SvgPrecacheService().precacheRemainingSvgs());
   }
@@ -136,6 +139,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   Future<void> _promptRenameSlot(int slotId) async {
     final initialName = slotNames[slotId] ?? _defaultSlotName(slotId);
     final controller = TextEditingController(text: initialName);
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: initialName.length,
+    );
     String? nextName;
 
     try {
@@ -545,9 +552,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 Icon(Icons.style, size: iconSize, color: Colors.amber),
                 const SizedBox(height: 8),
                 Text(
-                  'DUTCH\' 78',
+                  "DUTCH'78",
                   style: TextStyle(
-                    fontFamily: 'Rye',
                     fontSize: titleSize,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -728,9 +734,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   const SizedBox(height: 10),
                   Text(
                     key: _titleKey,
-                    'DUTCH\' 78',
+                    "DUTCH'78",
                     style: TextStyle(
-                      fontFamily: 'Rye',
                       fontSize: titleSize,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,

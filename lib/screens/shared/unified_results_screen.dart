@@ -106,7 +106,6 @@ class ResultsScreen extends StatelessWidget {
                   Text(
                     config.title ?? "RÉSULTATS",
                     style: TextStyle(
-                      fontFamily: 'Rye',
                       fontSize: ScreenUtils.scaleFont(context, 32),
                       color: Colors.white,
                       shadows: const [
@@ -186,27 +185,85 @@ class ResultsScreen extends StatelessWidget {
   }
 
   void _downloadGameLog(BuildContext context) async {
+    final isTournament =
+        config.gameState.gameMode == GameMode.tournament;
+
+    if (isTournament && GameLoggerService.instance.hasTournamentArchive) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1a2a3a),
+          title: const Text('Télécharger le log',
+              style: TextStyle(color: Colors.white)),
+          content: const Text('Que souhaitez-vous télécharger ?',
+              style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'round'),
+              child: const Text('Cette manche',
+                  style: TextStyle(color: Colors.amber)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'full'),
+              child: const Text('Tout le tournoi',
+                  style: TextStyle(color: Colors.amber)),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !context.mounted) return;
+      // For "round", we still use downloadLog but could use getLogForCurrentRound
+      // For simplicity, downloadLog exports the full buffer; we just pick content
+      if (choice == 'round') {
+        _exportLogContent(
+            context, GameLoggerService.instance.getLogForCurrentRound());
+      } else {
+        _exportLogContent(
+            context, GameLoggerService.instance.getFullLog());
+      }
+      return;
+    }
+
+    // Non-tournament: export full log
     try {
-      if (kDebugMode) {
-        debugPrint('📄 Export log: button pressed');
-      }
       final exported = await GameLoggerService.instance.downloadLog();
-      if (kDebugMode) {
-        debugPrint('📄 Export log result: exported=$exported');
-      }
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(exported
               ? 'Log exporté et copié dans le presse-papiers !'
               : 'Export annulé (copié dans le presse-papiers)'),
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ Export log failed: $e');
+      if (kDebugMode) debugPrint('Export log failed: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Erreur lors de l'export du log"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    }
+  }
+
+  void _exportLogContent(BuildContext context, String content) async {
+    try {
+      final exported =
+          await GameLoggerService.instance.downloadLogContent(content);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(exported
+              ? 'Log exporté et copié dans le presse-papiers !'
+              : 'Export annulé (copié dans le presse-papiers)'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Export log failed: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
