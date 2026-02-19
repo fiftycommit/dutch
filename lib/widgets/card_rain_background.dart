@@ -36,7 +36,8 @@ class _FallingCard {
   double size; // card height in pixels
   double opacity;
   String asset;
-  bool ignoresObstacles; // true = passes through buttons, only card-card collisions
+  bool
+      ignoresObstacles; // true = passes through buttons, only card-card collisions
 
   double get width => size * _aspectRatio;
 
@@ -134,7 +135,8 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     for (final key in widget.obstacleKeys) {
       final renderObj = key.currentContext?.findRenderObject();
       if (renderObj is RenderBox && renderObj.hasSize) {
-        final position = renderObj.localToGlobal(Offset.zero, ancestor: myRenderBox);
+        final position =
+            renderObj.localToGlobal(Offset.zero, ancestor: myRenderBox);
         rects.add(position & renderObj.size);
       }
     }
@@ -199,8 +201,10 @@ class _CardRainBackgroundState extends State<CardRainBackground>
             }
           }
 
-          a.rotationSpeed = -a.rotationSpeed * 0.8 + (_random.nextDouble() - 0.5) * 3.0;
-          b.rotationSpeed = -b.rotationSpeed * 0.8 + (_random.nextDouble() - 0.5) * 3.0;
+          a.rotationSpeed =
+              -a.rotationSpeed * 0.8 + (_random.nextDouble() - 0.5) * 3.0;
+          b.rotationSpeed =
+              -b.rotationSpeed * 0.8 + (_random.nextDouble() - 0.5) * 3.0;
         }
       }
     }
@@ -288,7 +292,8 @@ class _CardRainBackgroundState extends State<CardRainBackground>
       // After a bounce, smoothly restore original fall speed (no gravity feel)
       final baseVy = 35 + (card.size - 40) / 40 * 40; // approximate original vy
       if (card.vy < baseVy) {
-        card.vy += (baseVy - card.vy) * 0.8 * dt; // gentle convergence, not gravity
+        card.vy +=
+            (baseVy - card.vy) * 0.8 * dt; // gentle convergence, not gravity
       }
 
       // Replace cards that exit any screen edge
@@ -311,13 +316,15 @@ class _CardRainBackgroundState extends State<CardRainBackground>
 
   @override
   Widget build(BuildContext context) {
-    if (_cards.isEmpty) return const SizedBox.expand();
-
     return IgnorePointer(
       child: RepaintBoundary(
         child: ListenableBuilder(
           listenable: _notifier,
           builder: (context, _) {
+            if (_cards.isEmpty) {
+              return const SizedBox.expand();
+            }
+
             return Stack(
               children: _cards.map((card) {
                 return Positioned(
