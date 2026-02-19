@@ -658,6 +658,10 @@ class GameProvider with ChangeNotifier implements IGameController {
       () async => _checkInstantEnd(),
       hardcoreLevel: _hardcoreLevel,
       playerSkillEstimate: _skillEstimator.estimatedSkill,
+      onStateChanged: () {
+        if (_gameState == null) return;
+        notifyListeners();
+      },
     );
 
     if (_gameState?.phase == GamePhase.dutchCalled) {

@@ -62,6 +62,8 @@ class GameLogic {
       gameState.addToHistory("Tirage au sort : $starterName !");
     }
 
+    BotDutchStrategy.discardTracker.recordTableSnapshot(gameState);
+
     return gameState;
   }
 
@@ -215,6 +217,7 @@ class GameLogic {
         playerCard,
         discardedBy: player.id,
         actionType: DiscardActionType.matchDiscard,
+        turnCount: gameState.turnCount,
       );
 
       List<PlayingCard> newHand = List.from(player.hand);
@@ -582,6 +585,7 @@ class GameLogic {
 
   static void nextPlayer(GameState gameState) {
     gameState.nextTurn();
+    BotDutchStrategy.discardTracker.recordTableSnapshot(gameState);
   }
 
   static void _refillDeck(GameState gameState) {

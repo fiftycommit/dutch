@@ -47,7 +47,8 @@ class GameTableCallbacks {
   }) {
     return GameTableCallbacks(
       onDrawCard: controller.drawCard,
-      onTakeFromDiscard: supportsTakeFromDiscard ? controller.takeFromDiscard : null,
+      onTakeFromDiscard:
+          supportsTakeFromDiscard ? controller.takeFromDiscard : null,
       onDiscardDrawnCard: controller.discardDrawnCard,
       onCallDutch: controller.callDutch,
       onCardTap: controller.handleCardTap,
@@ -169,6 +170,10 @@ class _GameTableContentState extends State<_GameTableContent>
   Offset? _lastDrawnCardCenter;
   final List<DrawnToHandAnimation> _drawnToHandAnimations = [];
   int _nextDrawnToHandAnimationId = 0;
+  final List<ValetSwapAnimation> _valetSwapAnimations = [];
+  int _nextValetSwapAnimationId = 0;
+  bool _valetHistoryInitialized = false;
+  final Map<String, int> _processedValetHistoryCounts = {};
   String? _pendingSpecialPowerCardId;
 
   GameState get gs => widget.gameState;
@@ -196,6 +201,7 @@ class _GameTableContentState extends State<_GameTableContent>
     _checkPenaltyAnimations();
     _checkDiscardAnimations();
     _checkDrawnCardAnimations();
+    _checkValetSwapAnimations();
     _syncCardTracking();
   }
 
@@ -405,6 +411,295 @@ class _GameTableContentState extends State<_GameTableContent>
     }
   }
 
+  void _checkValetSwapAnimations() {
+    if (!_animationsEnabled) {
+      _ensureAnimationsDisabled();
+      return;
+    }
+
+    final directSwap = _detectValetSwapFromHands();
+    if (directSwap != null) {
+      _scheduleValetSwapAnimation(
+        player1: directSwap.player1,
+        index1: directSwap.index1,
+        player2: directSwap.player2,
+        index2: directSwap.index2,
+      );
+      _syncProcessedValetHistorySnapshot();
+      return;
+    }
+    if (gs.actionHistory.isEmpty) return;
+
+    final counts = <String, int>{};
+    _ParsedValetSwapEvent? latestParsed;
+    String? latestRaw;
+
+    // `actionHistory` est trié du plus récent au plus ancien.
+    // On balaie du plus ancien au plus récent pour récupérer le dernier event "nouveau".
+    for (int i = gs.actionHistory.length - 1; i >= 0; i--) {
+      final raw = gs.actionHistory[i];
+      final parsed = _parseValetSwapEvent(raw);
+      if (parsed == null) continue;
+
+      final occurrence = (counts[raw] ?? 0) + 1;
+      counts[raw] = occurrence;
+
+      final alreadyProcessed = _processedValetHistoryCounts[raw] ?? 0;
+      if (occurrence > alreadyProcessed) {
+        latestParsed = parsed;
+        latestRaw = raw;
+      }
+    }
+
+    if (!_valetHistoryInitialized) {
+      _processedValetHistoryCounts
+        ..clear()
+        ..addAll(counts);
+      _valetHistoryInitialized = true;
+      return;
+    }
+
+    _processedValetHistoryCounts
+      ..clear()
+      ..addAll(counts);
+
+    if (latestParsed == null || latestRaw == null) return;
+
+    final player1 = _findPlayerByName(latestParsed.player1Name);
+    final player2 = _findPlayerByName(latestParsed.player2Name);
+    if (player1 == null || player2 == null) return;
+    if (player1.id == player2.id) return;
+    if (player1.hand.isEmpty || player2.hand.isEmpty) return;
+
+    final index1 = latestParsed.player1Index ?? _inferSwappedIndex(player1);
+    final index2 = latestParsed.player2Index ?? _inferSwappedIndex(player2);
+    if (index1 < 0 || index2 < 0) return;
+    if (index1 >= player1.hand.length || index2 >= player2.hand.length) return;
+
+    _scheduleValetSwapAnimation(
+      player1: player1,
+      index1: index1,
+      player2: player2,
+      index2: index2,
+    );
+  }
+
+  _DetectedValetSwap? _detectValetSwapFromHands() {
+    final changedSlots = <_ChangedCardSlot>[];
+
+    for (final player in gs.players) {
+      final previous = _lastHandCards[player.id];
+      if (previous == null) continue;
+      if (previous.length != player.hand.length) continue;
+      if (player.hand.isEmpty) continue;
+
+      int? changedIndex;
+      int diffCount = 0;
+      for (int i = 0; i < player.hand.length; i++) {
+        if (previous[i].id != player.hand[i].id) {
+          diffCount += 1;
+          changedIndex = i;
+          if (diffCount > 1) break;
+        }
+      }
+
+      if (diffCount == 1 && changedIndex != null) {
+        changedSlots.add(_ChangedCardSlot(
+          player: player,
+          index: changedIndex,
+          previousCardId: previous[changedIndex].id,
+          currentCardId: player.hand[changedIndex].id,
+        ));
+      }
+    }
+
+    if (changedSlots.length != 2) return null;
+
+    final first = changedSlots[0];
+    final second = changedSlots[1];
+    if (first.player.id == second.player.id) return null;
+
+    final crossSwap = first.currentCardId == second.previousCardId &&
+        second.currentCardId == first.previousCardId;
+    if (!crossSwap) return null;
+
+    return _DetectedValetSwap(
+      player1: first.player,
+      index1: first.index,
+      player2: second.player,
+      index2: second.index,
+    );
+  }
+
+  void _syncProcessedValetHistorySnapshot() {
+    final counts = <String, int>{};
+    for (final raw in gs.actionHistory) {
+      final parsed = _parseValetSwapEvent(raw);
+      if (parsed == null) continue;
+      counts[raw] = (counts[raw] ?? 0) + 1;
+    }
+    _processedValetHistoryCounts
+      ..clear()
+      ..addAll(counts);
+    _valetHistoryInitialized = true;
+  }
+
+  _ParsedValetSwapEvent? _parseValetSwapEvent(String raw) {
+    final timestampIdx = raw.indexOf('] ');
+    final text =
+        (timestampIdx >= 0 ? raw.substring(timestampIdx + 2) : raw).trim();
+    if (text.isEmpty) return null;
+
+    final detailedPattern = RegExp(
+      r'^(?:🔄\s*)?[ÉE]change\s*:\s*(.+?)\s+carte\s+#(\d+)\s+↔\s+(.+?)\s+carte\s+#(\d+)\.?$',
+      caseSensitive: false,
+    );
+    final detailed = detailedPattern.firstMatch(text);
+    if (detailed != null) {
+      final p1 = detailed.group(1)?.trim();
+      final p2 = detailed.group(3)?.trim();
+      final i1 = int.tryParse(detailed.group(2) ?? '');
+      final i2 = int.tryParse(detailed.group(4) ?? '');
+      if (p1 == null || p2 == null || p1.isEmpty || p2.isEmpty) return null;
+      return _ParsedValetSwapEvent(
+        player1Name: p1,
+        player2Name: p2,
+        player1Index: i1 != null ? (i1 - 1).clamp(0, 99).toInt() : null,
+        player2Index: i2 != null ? (i2 - 1).clamp(0, 99).toInt() : null,
+      );
+    }
+
+    final simplePattern = RegExp(
+      r'^(?:🔄\s*)?(.+?)\s+[ée]change\s+avec\s+(.+?)\.?$',
+      caseSensitive: false,
+    );
+    final simple = simplePattern.firstMatch(text);
+    if (simple == null) return null;
+
+    final p1 = simple.group(1)?.trim();
+    final p2 = simple.group(2)?.trim();
+    if (p1 == null || p2 == null || p1.isEmpty || p2.isEmpty) return null;
+    return _ParsedValetSwapEvent(player1Name: p1, player2Name: p2);
+  }
+
+  Player? _findPlayerByName(String name) {
+    final trimmed = name.trim();
+    for (final player in gs.players) {
+      if (player.name == trimmed) return player;
+    }
+    return null;
+  }
+
+  int _inferSwappedIndex(Player player) {
+    if (player.hand.isEmpty) return -1;
+    final previous = _lastHandCards[player.id];
+    if (previous == null || previous.isEmpty) {
+      return player.hand.length - 1;
+    }
+
+    final len = math.min(previous.length, player.hand.length);
+    for (int i = 0; i < len; i++) {
+      if (previous[i].id != player.hand[i].id) return i;
+    }
+
+    final previousIds = previous.map((c) => c.id).toSet();
+    for (int i = 0; i < player.hand.length; i++) {
+      if (!previousIds.contains(player.hand[i].id)) return i;
+    }
+
+    return player.hand.length - 1;
+  }
+
+  void _scheduleValetSwapAnimation({
+    required Player player1,
+    required int index1,
+    required Player player2,
+    required int index2,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final stackContext = _stackKey.currentContext;
+      if (stackContext == null) return;
+      final stackRender = stackContext.findRenderObject();
+      if (stackRender is! RenderBox) return;
+
+      final handKey1 = _handKeys[player1.id];
+      final handKey2 = _handKeys[player2.id];
+      if (handKey1 == null || handKey2 == null) return;
+
+      final size1 = _swapAnimationSizeForPlayer(player1);
+      final size2 = _swapAnimationSizeForPlayer(player2);
+      final card1 = player1.hand[index1];
+      final card2 = player2.hand[index2];
+      final startGlobal1 = _globalCardCenterInHand(
+        handKey1,
+        index1,
+        size1,
+        player1.hand.length,
+        overlapCards: !player1.isHuman,
+        fitToWidth: player1.isHuman,
+      );
+      final startGlobal2 = _globalCardCenterInHand(
+        handKey2,
+        index2,
+        size2,
+        player2.hand.length,
+        overlapCards: !player2.isHuman,
+        fitToWidth: player2.isHuman,
+      );
+      if (startGlobal1 == null || startGlobal2 == null) return;
+
+      final stackOrigin = stackRender.localToGlobal(Offset.zero);
+      final metrics1 = cardVisualSize(context, size1);
+      final metrics2 = cardVisualSize(context, size2);
+      final half1 = Offset(metrics1.width / 2, metrics1.height / 2);
+      final half2 = Offset(metrics2.width / 2, metrics2.height / 2);
+
+      final start1 = startGlobal1 - stackOrigin - half1;
+      final end1 = startGlobal2 - stackOrigin - half1;
+      final start2 = startGlobal2 - stackOrigin - half2;
+      final end2 = startGlobal1 - stackOrigin - half2;
+
+      setState(() {
+        _hideHandCardId(player1.id, card1.id);
+        _hideHandCardId(player2.id, card2.id);
+        _valetSwapAnimations.add(ValetSwapAnimation(
+          id: _nextValetSwapAnimationId++,
+          playerId: player1.id,
+          cardId: card1.id,
+          start: start1,
+          end: end1,
+          size: size1,
+        ));
+        _valetSwapAnimations.add(ValetSwapAnimation(
+          id: _nextValetSwapAnimationId++,
+          playerId: player2.id,
+          cardId: card2.id,
+          start: start2,
+          end: end2,
+          size: size2,
+        ));
+      });
+    });
+  }
+
+  void _removeValetSwapAnimation(int id) {
+    if (!mounted) return;
+    setState(() {
+      final removed = _valetSwapAnimations.where((a) => a.id == id).toList();
+      _valetSwapAnimations.removeWhere((a) => a.id == id);
+      for (final anim in removed) {
+        _unhideHandCardId(anim.playerId, anim.cardId);
+      }
+    });
+  }
+
+  CardSize _swapAnimationSizeForPlayer(Player player) {
+    final base = _cardSizeForPlayer(player);
+    if (base == CardSize.tiny) return CardSize.small;
+    return base;
+  }
+
   void _updateHandCounts() {
     for (final player in gs.players) {
       _lastHandCounts[player.id] = player.hand.length;
@@ -417,6 +712,7 @@ class _GameTableContentState extends State<_GameTableContent>
     _penaltyAnimations.clear();
     _discardAnimations.clear();
     _drawnToHandAnimations.clear();
+    _valetSwapAnimations.clear();
     _discardOverrideCard = null;
     _discardOverrideCount = 0;
     _pendingSpecialPowerCardId = null;
@@ -428,6 +724,7 @@ class _GameTableContentState extends State<_GameTableContent>
         _penaltyAnimations.isNotEmpty ||
         _discardAnimations.isNotEmpty ||
         _drawnToHandAnimations.isNotEmpty ||
+        _valetSwapAnimations.isNotEmpty ||
         _discardOverrideCount != 0;
     if (!hasActive) return;
     setState(() {
@@ -450,8 +747,7 @@ class _GameTableContentState extends State<_GameTableContent>
   }
 
   void _hideHandCardId(String playerId, String cardId) {
-    final set =
-        _hiddenCardIdsByPlayer.putIfAbsent(playerId, () => <String>{});
+    final set = _hiddenCardIdsByPlayer.putIfAbsent(playerId, () => <String>{});
     set.add(cardId);
   }
 
@@ -516,8 +812,7 @@ class _GameTableContentState extends State<_GameTableContent>
 
     double overlap = metrics.overlap;
     double totalWidth = metrics.totalWidth;
-    final maxWidth =
-        size.width.isFinite ? size.width : metrics.totalWidth;
+    final maxWidth = size.width.isFinite ? size.width : metrics.totalWidth;
 
     if (fitToWidth && handCount > 1 && totalWidth > maxWidth + 0.5) {
       final desiredOverlap = (maxWidth - metrics.cardWidth) / (handCount - 1);
@@ -829,8 +1124,7 @@ class _GameTableContentState extends State<_GameTableContent>
     // Active la disposition latérale pioche/défausse sur les petits écrans en paysage
     // (iPhones, petites tablettes en paysage avec hauteur < 500)
     final useSideDeckDiscard = isLandscape && screenHeight < 500;
-    final showCenterDeck =
-        !useSideDeckDiscard || isSpectator || human == null;
+    final showCenterDeck = !useSideDeckDiscard || isSpectator || human == null;
     final botCardType = isCompact ? CardSize.tiny : CardSize.small;
     final playerCardType = isCompact ? CardSize.small : CardSize.medium;
     final botCardMetrics = cardVisualSize(context, botCardType);
@@ -918,36 +1212,39 @@ class _GameTableContentState extends State<_GameTableContent>
           const centerMediumPadding = 15.0;
           const centerSmallGap = 10.0;
           const centerMediumGap = 20.0;
-          final centerSmallWidth =
-              (centerSmallMetrics.width * 2) + centerSmallGap + (centerSmallPadding * 2);
+          final centerSmallWidth = (centerSmallMetrics.width * 2) +
+              centerSmallGap +
+              (centerSmallPadding * 2);
           final centerSmallHeight =
               centerSmallMetrics.height + (centerSmallPadding * 2);
-          final centerMediumWidth =
-              (centerMediumMetrics.width * 2) + centerMediumGap + (centerMediumPadding * 2);
+          final centerMediumWidth = (centerMediumMetrics.width * 2) +
+              centerMediumGap +
+              (centerMediumPadding * 2);
           final centerMediumHeight =
               centerMediumMetrics.height + (centerMediumPadding * 2);
-          final centerUseMedium =
-              centerWidth >= centerMediumWidth && centerHeight >= centerMediumHeight;
+          final centerUseMedium = centerWidth >= centerMediumWidth &&
+              centerHeight >= centerMediumHeight;
           final centerCompact = isCompact && !centerUseMedium;
-          final baseCenterWidth = centerUseMedium ? centerMediumWidth : centerSmallWidth;
-          final baseCenterHeight = centerUseMedium ? centerMediumHeight : centerSmallHeight;
+          final baseCenterWidth =
+              centerUseMedium ? centerMediumWidth : centerSmallWidth;
+          final baseCenterHeight =
+              centerUseMedium ? centerMediumHeight : centerSmallHeight;
           final rawCenterScale = math.min(
             baseCenterWidth <= 0 ? 1.0 : centerWidth / baseCenterWidth,
             baseCenterHeight <= 0 ? 1.0 : centerHeight / baseCenterHeight,
           );
-          final centerScale = isCompact
-              ? rawCenterScale.clamp(1.0, 1.25).toDouble()
-              : 1.0;
+          final centerScale =
+              isCompact ? rawCenterScale.clamp(1.0, 1.25).toDouble() : 1.0;
 
           // Largeur des zones pioche/défausse latérales
           // Calculée en réservant d'abord l'espace nécessaire au centre,
           // puis en distribuant l'espace restant aux côtés
           final desiredCenterWidth = baseCenterWidth * centerScale;
-          final centerReservedWidth = desiredCenterWidth.clamp(0.0, centerWidth);
+          final centerReservedWidth =
+              desiredCenterWidth.clamp(0.0, centerWidth);
           final remainingWidth = centerWidth - centerReservedWidth;
-          final sideAccessoryWidth = useSideDeckDiscard
-              ? (remainingWidth / 2)
-              : 0.0;
+          final sideAccessoryWidth =
+              useSideDeckDiscard ? (remainingWidth / 2) : 0.0;
 
           final centerShiftY = (botCardMetrics.height -
                   playerCardMetrics.height -
@@ -957,26 +1254,26 @@ class _GameTableContentState extends State<_GameTableContent>
           final centerShiftFraction = centerHeight == 0
               ? 0.0
               : (centerShiftY / (centerHeight / 2)).clamp(-1.0, 1.0);
-    if (isDrawnCardVisible) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final center = _globalCenter(_drawnCardKey);
-        if (center != null) {
-          _lastDrawnCardCenter = center;
-        }
-      });
-    }
+          if (isDrawnCardVisible) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final center = _globalCenter(_drawnCardKey);
+              if (center != null) {
+                _lastDrawnCardCenter = center;
+              }
+            });
+          }
 
-    // Largeur effective pour le centre (réduite si accessoires latéraux)
-    final effectiveSideBandWidth = sideBandWidth + sideAccessoryWidth;
+          // Largeur effective pour le centre (réduite si accessoires latéraux)
+          final effectiveSideBandWidth = sideBandWidth + sideAccessoryWidth;
 
-    return Stack(
-      key: _stackKey,
-      children: [
-        // Centre - Table (pioche + défausse ou juste texte reaction)
-        Positioned(
-          left: effectiveSideBandWidth,
-          right: effectiveSideBandWidth,
+          return Stack(
+            key: _stackKey,
+            children: [
+              // Centre - Table (pioche + défausse ou juste texte reaction)
+              Positioned(
+                left: effectiveSideBandWidth,
+                right: effectiveSideBandWidth,
                 top: topBandHeight,
                 bottom: bottomBandHeight,
                 child: Center(
@@ -1005,16 +1302,14 @@ class _GameTableContentState extends State<_GameTableContent>
                             onShowDiscard: callbacks.onShowDiscardPile,
                             onDrawCard: callbacks.onDrawCard,
                             onTakeFromDiscard: callbacks.onTakeFromDiscard,
-                            reactionTimeTotalMs:
-                                mpConfig.reactionTimeTotalMs,
+                            reactionTimeTotalMs: mpConfig.reactionTimeTotalMs,
                             enableHaptics: true,
                             showDeckAndDiscard: showCenterDeck,
                             deckKey: _deckKey,
                             discardKey: _discardKey,
-                            discardCardOverride:
-                                gs.phase == GamePhase.playing
-                                    ? _discardOverrideCard
-                                    : null,
+                            discardCardOverride: gs.phase == GamePhase.playing
+                                ? _discardOverrideCard
+                                : null,
                             drawnCardKey: _drawnCardKey,
                           ),
                         ),
@@ -1022,7 +1317,7 @@ class _GameTableContentState extends State<_GameTableContent>
                     ),
                   ),
                 ),
-            ),
+              ),
 
               // Pioche à gauche (entre adversaires gauche et centre)
               if (useSideDeckDiscard && !isSpectator && human != null)
@@ -1033,7 +1328,9 @@ class _GameTableContentState extends State<_GameTableContent>
                   width: sideAccessoryWidth,
                   child: SideDeckWidget(
                     gameState: gs,
-                    canDraw: _isMyTurn && !_hasDrawn && gs.phase == GamePhase.playing,
+                    canDraw: _isMyTurn &&
+                        !_hasDrawn &&
+                        gs.phase == GamePhase.playing,
                     onDrawCard: callbacks.onDrawCard,
                     deckKey: _deckKey,
                   ),
@@ -1258,6 +1555,19 @@ class _GameTableContentState extends State<_GameTableContent>
                   child: const SpectatorBanner(),
                 ),
 
+              ..._valetSwapAnimations.map((anim) {
+                return AnimatedCardTransition(
+                  key: ValueKey('valet_${anim.id}'),
+                  card: null,
+                  isRevealed: false,
+                  size: anim.size,
+                  startPosition: anim.start,
+                  endPosition: anim.end,
+                  duration: const Duration(milliseconds: 520),
+                  curve: Curves.easeInOutCubic,
+                  onComplete: () => _removeValetSwapAnimation(anim.id),
+                );
+              }),
               ..._penaltyAnimations.map((anim) {
                 return AnimatedCardTransition(
                   key: ValueKey('penalty_${anim.id}'),
@@ -1580,4 +1890,46 @@ class _GameTableContentState extends State<_GameTableContent>
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
     );
   }
+}
+
+class _ParsedValetSwapEvent {
+  final String player1Name;
+  final String player2Name;
+  final int? player1Index;
+  final int? player2Index;
+
+  const _ParsedValetSwapEvent({
+    required this.player1Name,
+    required this.player2Name,
+    this.player1Index,
+    this.player2Index,
+  });
+}
+
+class _DetectedValetSwap {
+  final Player player1;
+  final int index1;
+  final Player player2;
+  final int index2;
+
+  const _DetectedValetSwap({
+    required this.player1,
+    required this.index1,
+    required this.player2,
+    required this.index2,
+  });
+}
+
+class _ChangedCardSlot {
+  final Player player;
+  final int index;
+  final String previousCardId;
+  final String currentCardId;
+
+  const _ChangedCardSlot({
+    required this.player,
+    required this.index,
+    required this.previousCardId,
+    required this.currentCardId,
+  });
 }

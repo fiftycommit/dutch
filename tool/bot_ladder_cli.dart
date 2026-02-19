@@ -30,7 +30,8 @@ Future<void> main(List<String> args) async {
     stdout.writeln(
       'games=${config.games} maxTurns=${config.maxTurns} '
       'showSamples=${config.showSamples} mix=${config.mixLabel} '
-      'inspectLosses=${config.inspectLosses} totalPlayers=${config.totalPlayers}',
+      'inspectLosses=${config.inspectLosses} totalPlayers=${config.totalPlayers} '
+      'shuffleSeats=${config.shuffleSeats}',
     );
 
     final simulator = _LadderSimulator(config: config);
@@ -53,6 +54,7 @@ class _CliConfig {
   final int maxTurns;
   final int showSamples;
   final int inspectLosses;
+  final bool shuffleSeats;
   final Map<BotSkillLevel, int> skillCounts;
 
   const _CliConfig({
@@ -60,6 +62,7 @@ class _CliConfig {
     required this.maxTurns,
     required this.showSamples,
     required this.inspectLosses,
+    required this.shuffleSeats,
     required this.skillCounts,
   });
 
@@ -102,6 +105,7 @@ class _CliConfig {
       maxTurns: readInt('--max-turns', 800).clamp(100, 10000),
       showSamples: readInt('--samples', 5).clamp(0, 30),
       inspectLosses: readInt('--inspect-losses', 0).clamp(0, 20),
+      shuffleSeats: _readBoolArg(args, '--shuffle-seats', false),
       skillCounts: skillCounts,
     );
   }
@@ -114,6 +118,19 @@ String? _readArgValue(List<String> args, String key) {
     }
   }
   return null;
+}
+
+bool _readBoolArg(List<String> args, String key, bool fallback) {
+  final value = _readArgValue(args, key);
+  if (value == null) return fallback;
+  final lower = value.toLowerCase();
+  if (lower == '1' || lower == 'true' || lower == 'yes' || lower == 'on') {
+    return true;
+  }
+  if (lower == '0' || lower == 'false' || lower == 'no' || lower == 'off') {
+    return false;
+  }
+  return fallback;
 }
 
 class _LadderSimulator {
@@ -192,6 +209,7 @@ class _LadderSimulator {
       outcomes.add(_PlayerOutcome(
         playerName: player.name,
         skill: skill,
+        seat: player.position,
         rank: i + 1,
         score: gameState.getFinalScore(player),
       ));
@@ -223,9 +241,6 @@ class _LadderSimulator {
   }
 
   List<Player> _createLadderPlayers(int gameIndex) {
-    final players = <Player>[];
-    int position = 0;
-
     final buildOrder = <BotSkillLevel>[
       BotSkillLevel.bronze,
       BotSkillLevel.silver,
@@ -233,21 +248,32 @@ class _LadderSimulator {
       BotSkillLevel.platinum,
     ];
 
+    final slots = <_PlayerSeatSlot>[];
     for (final skill in buildOrder) {
       final count = config.skillCounts[skill] ?? 0;
       for (int i = 0; i < count; i++) {
-        players.add(
-          Player(
-            id: 'bot_${skill.name}_${i + 1}_g$gameIndex',
-            name: '${_skillShort(skill)}${i + 1}',
-            isHuman: false,
-            botBehavior: BotBehavior.balanced,
-            botSkillLevel: skill,
-            position: position,
-          ),
-        );
-        position++;
+        slots.add(_PlayerSeatSlot(skill: skill, ordinal: i + 1));
       }
+    }
+
+    if (config.shuffleSeats) {
+      final rng = Random((gameIndex * 9973) + slots.length * 31);
+      slots.shuffle(rng);
+    }
+
+    final players = <Player>[];
+    for (int position = 0; position < slots.length; position++) {
+      final slot = slots[position];
+      players.add(
+        Player(
+          id: 'bot_${slot.skill.name}_${slot.ordinal}_g$gameIndex',
+          name: '${_skillShort(slot.skill)}${slot.ordinal}',
+          isHuman: false,
+          botBehavior: BotBehavior.balanced,
+          botSkillLevel: slot.skill,
+          position: position,
+        ),
+      );
     }
 
     return players;
@@ -437,15 +463,27 @@ class _LadderSimulator {
   }
 }
 
+class _PlayerSeatSlot {
+  final BotSkillLevel skill;
+  final int ordinal;
+
+  const _PlayerSeatSlot({
+    required this.skill,
+    required this.ordinal,
+  });
+}
+
 class _PlayerOutcome {
   final String playerName;
   final BotSkillLevel skill;
+  final int seat;
   final int rank;
   final int score;
 
   const _PlayerOutcome({
     required this.playerName,
     required this.skill,
+    required this.seat,
     required this.rank,
     required this.score,
   });
@@ -521,6 +559,18 @@ class _SimulationAggregate {
     BotSkillLevel.gold: _GameSkillStats(),
     BotSkillLevel.platinum: _GameSkillStats(),
   };
+  final Map<BotSkillLevel, Map<int, int>> _seatAppearancesBySkill = {
+    BotSkillLevel.bronze: <int, int>{},
+    BotSkillLevel.silver: <int, int>{},
+    BotSkillLevel.gold: <int, int>{},
+    BotSkillLevel.platinum: <int, int>{},
+  };
+  final Map<BotSkillLevel, Map<int, int>> _seatWinsBySkill = {
+    BotSkillLevel.bronze: <int, int>{},
+    BotSkillLevel.silver: <int, int>{},
+    BotSkillLevel.gold: <int, int>{},
+    BotSkillLevel.platinum: <int, int>{},
+  };
 
   int _platWinBronzeLastGames = 0;
   int _orderedAverageRanksGames = 0;
@@ -542,6 +592,12 @@ class _SimulationAggregate {
         score: outcome.score,
         playerCount: result.playerCount,
       );
+      final seatAppearances = _seatAppearancesBySkill[outcome.skill]!;
+      seatAppearances[outcome.seat] = (seatAppearances[outcome.seat] ?? 0) + 1;
+      if (outcome.rank == 1) {
+        final seatWins = _seatWinsBySkill[outcome.skill]!;
+        seatWins[outcome.seat] = (seatWins[outcome.seat] ?? 0) + 1;
+      }
       ranksBySkill.putIfAbsent(outcome.skill, () => <int>[]).add(outcome.rank);
     }
 
@@ -675,6 +731,26 @@ class _SimulationAggregate {
       lines.add(
         '$skillName  $n   $botWin $gameWin $podium $topHalf $avgRank $last $avgScore $bestRankAvgGame',
       );
+    }
+
+    lines.add('');
+    lines.add('--- Win% par seat ---');
+    for (final skill in _orderedSkills.reversed) {
+      final count = config.skillCounts[skill] ?? 0;
+      if (count == 0) continue;
+      final appearances = _seatAppearancesBySkill[skill]!;
+      if (appearances.isEmpty) continue;
+
+      final seats = appearances.keys.toList()..sort();
+      final cells = <String>[];
+      for (final seat in seats) {
+        final total = appearances[seat] ?? 0;
+        final wins = _seatWinsBySkill[skill]?[seat] ?? 0;
+        cells.add(
+          'S${seat + 1}:${fmtPctFromCounts(wins, total)} ($wins/$total)',
+        );
+      }
+      lines.add('${skill.name.padRight(9)} ${cells.join(' | ')}');
     }
 
     if (_samples.isNotEmpty) {

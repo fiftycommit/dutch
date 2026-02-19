@@ -126,6 +126,7 @@ class BotOrchestrator {
     Function onCheckInstantEnd, {
     HardcoreLevel? hardcoreLevel,
     int? playerSkillEstimate,
+    VoidCallback? onStateChanged,
   }) async {
     int loopCount = 0;
 
@@ -158,6 +159,7 @@ class BotOrchestrator {
           hardcoreLevel: hardcoreLevel,
           playerSkillEstimate: playerSkillEstimate,
         );
+        onStateChanged?.call();
 
         if (isPaused) break;
 
@@ -180,11 +182,13 @@ class BotOrchestrator {
             hardcoreLevel: hardcoreLevel,
             playerSkillEstimate: playerSkillEstimate,
           );
+          onStateChanged?.call();
 
           if (isPaused) break;
 
           gameState.isWaitingForSpecialPower = false;
           gameState.specialCardToActivate = null;
+          onStateChanged?.call();
         }
       } catch (e) {
         if (kDebugMode) debugPrint('⚠️ Bot turn error: $e');

@@ -80,6 +80,20 @@ class BotDutchStrategy {
     if (context.minEstimateConfidence < 0.20) {
       blockers.add('angle mort adverse');
     }
+    if (profile.tier == _DutchTier.platinum) {
+      if (context.hasLatentLeader) {
+        blockers.add(
+            'leader latent (tempo=${context.maxTempoScore.toStringAsFixed(2)})');
+      }
+      if (context.maxBurstRisk >= 0.60) {
+        blockers.add(
+            'burst risk élevé (${(context.maxBurstRisk * 100).toStringAsFixed(0)}%)');
+      }
+      if (context.maxProjectedFinishRisk >= 0.60) {
+        blockers.add(
+            'finishRisk<=1rot élevé (${(context.maxProjectedFinishRisk * 100).toStringAsFixed(0)}%)');
+      }
+    }
 
     if (conclusions != null) {
       if (conclusions.tableExplosive) {
@@ -409,6 +423,22 @@ class BotDutchStrategy {
       phase,
     );
 
+    // Platine "race logic": en course de fin, on autorise un Dutch agressif
+    // même avant la zone "safe" classique.
+    if (profile.tier == _DutchTier.platinum &&
+        expertConclusions?.forceImmediateClose == true) {
+      final raceCap = context.bestOpponentEstimate + 1;
+      final forceRaceWinProb = _estimateRaceWinProbability(
+        myScore: myScore,
+        adjustedOpponentEstimate: raceCap,
+        context: context,
+        conclusions: expertConclusions,
+      );
+      if (myScore <= raceCap && myScore <= 6 && forceRaceWinProb >= 0.56) {
+        return true;
+      }
+    }
+
     // Duel contextuel: si le score adverse est connu (espionnage + taille main),
     // on applique directement la règle de tie-break Dutch.
     if (expertConclusions?.duelKnownOpponentScore != null &&
@@ -466,6 +496,37 @@ class BotDutchStrategy {
     final adjustedOpponentEstimate =
         (context.bestOpponentEstimate - profile.opponentEstimatePenalty)
             .clamp(0, 999);
+
+    if (profile.tier == _DutchTier.platinum &&
+        expertConclusions != null &&
+        expertConclusions.opponentCanFinishSoon) {
+      final raceAllowance = expertConclusions.duelActive
+          ? 1
+          : (context.maxBurstRisk >= 0.75 ||
+                  context.maxProjectedFinishRisk >= 0.78
+              ? 1
+              : 0);
+      final raceWindowOpen = expertConclusions.opponentMomentumHot ||
+          context.maxTempoScore >= 2.0 ||
+          context.maxBurstRisk >= 0.60 ||
+          context.maxProjectedFinishRisk >= 0.58;
+      double raceFloor = expertConclusions.forceImmediateClose ? 0.56 : 0.60;
+      if (myScore <= 2) {
+        raceFloor -= 0.03;
+      }
+      final raceWinProb = _estimateRaceWinProbability(
+        myScore: myScore,
+        adjustedOpponentEstimate: adjustedOpponentEstimate + raceAllowance,
+        context: context,
+        conclusions: expertConclusions,
+      );
+      if (raceWindowOpen &&
+          myScore <= (adjustedOpponentEstimate + raceAllowance) &&
+          myScore <= 6 &&
+          raceWinProb >= raceFloor) {
+        return true;
+      }
+    }
 
     // RÈGLE FONDAMENTALE : ne Dutch que si on pense avoir le plus petit score
     // Si même score, celui qui Dutch gagne → on autorise l'égalité
@@ -661,6 +722,11 @@ class BotDutchStrategy {
     double minEstimateConfidence = 1.0;
     double stylePressure = 0;
     int opponentCount = 0;
+    double maxTempoScore = 0;
+    double avgTempoScore = 0;
+    double maxBurstRisk = 0;
+    double maxProjectedFinishRisk = 0;
+    bool hasLatentLeader = false;
 
     for (final opponent in gs.players) {
       if (opponent.id == bot.id) continue;
@@ -694,6 +760,35 @@ class BotDutchStrategy {
       stylePressure += (style.optimization * 0.7 + style.aggression * 0.3) *
           (0.6 + fewCardsPressure * 0.8) *
           style.confidence;
+
+      if (profile.tier == _DutchTier.platinum) {
+        final tempo = _computeTempoSignalForOpponent(
+          gs,
+          opponent,
+          estimateConfidence: estimateConfidence,
+        );
+        final projectedFinishRisk = _computeProjectedFinishRisk(
+          gs,
+          opponent,
+          tempo,
+        );
+        if (tempo.tempoScore > maxTempoScore) {
+          maxTempoScore = tempo.tempoScore;
+        }
+        if (tempo.burstRisk > maxBurstRisk) {
+          maxBurstRisk = tempo.burstRisk;
+        }
+        if (projectedFinishRisk > maxProjectedFinishRisk) {
+          maxProjectedFinishRisk = projectedFinishRisk;
+        }
+        if (tempo.isLatentLeader) {
+          hasLatentLeader = true;
+        }
+        if (projectedFinishRisk >= 0.60) {
+          hasLatentLeader = true;
+        }
+        avgTempoScore += tempo.tempoScore;
+      }
     }
 
     if (opponentCount == 0) {
@@ -706,12 +801,20 @@ class BotDutchStrategy {
         tablePressure: 0,
         avgEstimateConfidence: 0,
         minEstimateConfidence: 0,
+        maxTempoScore: 0,
+        avgTempoScore: 0,
+        maxBurstRisk: 0,
+        maxProjectedFinishRisk: 0,
+        hasLatentLeader: false,
       );
     }
 
     final avgOpponentEstimate = totalOpponentEstimate / opponentCount;
     final avgOpponentCards = totalOpponentCards / opponentCount;
     final avgEstimateConfidence = totalEstimateConfidence / opponentCount;
+    final avgTempo = profile.tier == _DutchTier.platinum
+        ? avgTempoScore / opponentCount
+        : 0.0;
 
     // Pression de table 0..~2 (plus c'est haut, plus la table est "chaude")
     double tablePressure = 0;
@@ -736,7 +839,138 @@ class BotDutchStrategy {
       minEstimateConfidence: minEstimateConfidence == 1.0
           ? avgEstimateConfidence
           : minEstimateConfidence,
+      maxTempoScore: maxTempoScore,
+      avgTempoScore: avgTempo,
+      maxBurstRisk: maxBurstRisk,
+      maxProjectedFinishRisk: maxProjectedFinishRisk,
+      hasLatentLeader: hasLatentLeader,
     );
+  }
+
+  static _OpponentTempoSignal _computeTempoSignalForOpponent(
+    GameState gs,
+    Player opponent, {
+    required double estimateConfidence,
+  }) {
+    final cards = opponent.hand.length;
+    final velocity = discardTracker.getCardVelocity(
+      opponent.id,
+      gs.turnCount,
+      currentCards: cards,
+      windowTurns: 2,
+    );
+    final recentMatches3 = discardTracker.getRecentMatchCountInTurns(
+      opponent.id,
+      gs.turnCount,
+      windowTurns: 3,
+    );
+    final burstMatches = discardTracker.hasMatchBurst(
+      opponent.id,
+      gs.turnCount,
+      requiredMatches: 2,
+      withinTurns: 3,
+    );
+    final isLatentLeader = burstMatches || velocity >= 2;
+
+    final handEstimate =
+        discardTracker.estimateOpponentHand(opponent.id, cards);
+    final avgCardEstimate = cards <= 0
+        ? 0.0
+        : (handEstimate.estimatedScore / cards).clamp(1.0, 10.0);
+    final deltaScoreEstimated = (velocity * avgCardEstimate).clamp(0.0, 18.0);
+    final tempoScore =
+        (velocity + (0.35 * deltaScoreEstimated) + recentMatches3)
+            .clamp(0.0, 9.0);
+
+    double burstRisk = 0.08;
+    burstRisk += (velocity >= 2
+        ? 0.42
+        : velocity == 1
+            ? 0.18
+            : 0.0);
+    burstRisk += (burstMatches
+        ? 0.30
+        : recentMatches3 >= 2
+            ? 0.16
+            : 0.0);
+    if (cards <= 1) {
+      burstRisk += 0.35;
+    } else if (cards == 2) {
+      burstRisk += 0.25;
+    } else if (cards == 3) {
+      burstRisk += 0.12;
+    }
+    burstRisk += (1.0 - estimateConfidence) * 0.12;
+    burstRisk = burstRisk.clamp(0.0, 1.0);
+
+    return _OpponentTempoSignal(
+      tempoScore: tempoScore,
+      velocityCards: velocity,
+      recentMatches: recentMatches3,
+      isLatentLeader: isLatentLeader,
+      burstRisk: burstRisk,
+    );
+  }
+
+  static double _computeProjectedFinishRisk(
+    GameState gs,
+    Player opponent,
+    _OpponentTempoSignal tempo,
+  ) {
+    final cards = opponent.hand.length;
+    final actionsUntilTurn = _actionsUntilNextTurn(gs, opponent.id);
+    final trajectoryClean = !_recentActionContains(
+      gs,
+      opponent.name,
+      ['rate son match', 'pénalité', 'penalite'],
+      limit: 12,
+    );
+
+    double probability = 0.05;
+    if (cards <= 1) {
+      probability += 0.75;
+    } else if (cards == 2) {
+      probability += 0.42;
+    } else if (cards == 3) {
+      probability += 0.18;
+    }
+
+    if (tempo.velocityCards >= 2) {
+      probability += 0.28;
+    } else if (tempo.velocityCards == 1) {
+      probability += 0.12;
+    }
+
+    if (tempo.recentMatches >= 2) {
+      probability += 0.22;
+    } else if (tempo.recentMatches == 1) {
+      probability += 0.10;
+    }
+
+    if (tempo.isLatentLeader) {
+      probability += 0.12;
+    }
+    probability += (tempo.burstRisk * 0.20).clamp(0.0, 0.20);
+    if (actionsUntilTurn <= 1) {
+      probability += 0.20;
+    } else if (actionsUntilTurn == 2) {
+      probability += 0.10;
+    } else if (actionsUntilTurn >= 4) {
+      probability -= 0.12;
+    }
+
+    // Anti faux-burst: un joueur à 5-7 cartes ne doit pas être surévalué
+    // comme menace de finish immédiat.
+    if (cards >= 6) {
+      probability *= 0.32;
+    } else if (cards >= 5) {
+      probability *= 0.45;
+    } else if (cards == 4) {
+      probability *= 0.65;
+    }
+    probability += trajectoryClean ? 0.08 : -0.08;
+
+    return probability.clamp(0.0, 1.0);
   }
 
   /// Estime le score d'un adversaire via:
@@ -921,17 +1155,30 @@ class BotDutchStrategy {
     final duelActive = context.opponentCount == 1;
     final duelKnownOpponentScore =
         duelActive ? _resolveDuelKnownOpponentScore(gs, bot) : null;
-    final opponentCanFinishSoon = context.minOpponentCards <= 2;
+    final tempoLatentFinish = context.hasLatentLeader &&
+        context.maxTempoScore >= 2.0 &&
+        context.maxBurstRisk >= 0.45;
+    final opponentCanFinishSoon = context.minOpponentCards <= 2 ||
+        tempoLatentFinish ||
+        context.maxProjectedFinishRisk >= 0.60;
     final opponentMomentumHot = momentum.opponentJustMatched ||
         momentum.recentMatches >= 2 ||
-        momentum.longestStreak >= 2;
+        momentum.longestStreak >= 2 ||
+        context.hasLatentLeader;
     final tableExplosive = opponentCanFinishSoon ||
-        (opponentMomentumHot && context.minOpponentCards <= 3);
+        (opponentMomentumHot && context.minOpponentCards <= 3) ||
+        context.maxBurstRisk >= 0.72 ||
+        context.maxProjectedFinishRisk >= 0.75;
     final safeWindow = !tableExplosive &&
         !opponentMomentumHot &&
         context.minOpponentCards >= 4 &&
         context.tablePressure < 0.8;
-    final forceImmediateClose = opponentCanFinishSoon && opponentMomentumHot;
+    final forceImmediateClose = profile.tier == _DutchTier.platinum
+        ? (opponentCanFinishSoon &&
+            (opponentMomentumHot ||
+                context.maxBurstRisk >= 0.58 ||
+                context.maxProjectedFinishRisk >= 0.66))
+        : (opponentCanFinishSoon && opponentMomentumHot);
 
     return _ExpertDutchConclusions(
       duelActive: duelActive,
@@ -1074,6 +1321,48 @@ class BotDutchStrategy {
   }
 
   static int _minInt(int a, int b) => a < b ? a : b;
+
+  static double _estimateRaceWinProbability({
+    required int myScore,
+    required int adjustedOpponentEstimate,
+    required _DutchDecisionContext context,
+    required _ExpertDutchConclusions? conclusions,
+  }) {
+    final margin = adjustedOpponentEstimate - myScore;
+    double probability = 0.50 + (margin * 0.10);
+    probability += (context.avgEstimateConfidence - 0.50) * 0.20;
+    probability -= context.maxProjectedFinishRisk * 0.22;
+    probability -= context.maxBurstRisk * 0.10;
+
+    if (conclusions?.duelKnownOpponentScore != null) {
+      probability += 0.10;
+    } else if (conclusions?.duelActive == true) {
+      probability -= 0.04;
+    }
+
+    if (context.minEstimateConfidence < 0.25) {
+      probability -= 0.03;
+    }
+
+    return probability.clamp(0.0, 1.0);
+  }
+
+  static int _actionsUntilNextTurn(GameState gs, String playerId) {
+    final activePlayers = gs.players
+        .where((p) => !gs.eliminatedPlayerIds.contains(p.id))
+        .toList(growable: false);
+    if (activePlayers.isEmpty) return 99;
+
+    final currentId = gs.currentPlayer.id;
+    int currentIdx = activePlayers.indexWhere((p) => p.id == currentId);
+    if (currentIdx < 0) currentIdx = 0;
+    final targetIdx = activePlayers.indexWhere((p) => p.id == playerId);
+    if (targetIdx < 0) return 99;
+
+    final distance =
+        (targetIdx - currentIdx + activePlayers.length) % activePlayers.length;
+    return distance == 0 ? activePlayers.length : distance;
+  }
 
   static bool _recentActionContains(
       GameState gs, String playerName, List<String> keywords,
@@ -1266,6 +1555,11 @@ class _DutchDecisionContext {
   final double tablePressure;
   final double avgEstimateConfidence;
   final double minEstimateConfidence;
+  final double maxTempoScore;
+  final double avgTempoScore;
+  final double maxBurstRisk;
+  final double maxProjectedFinishRisk;
+  final bool hasLatentLeader;
 
   const _DutchDecisionContext({
     required this.opponentCount,
@@ -1276,6 +1570,11 @@ class _DutchDecisionContext {
     required this.tablePressure,
     required this.avgEstimateConfidence,
     required this.minEstimateConfidence,
+    required this.maxTempoScore,
+    required this.avgTempoScore,
+    required this.maxBurstRisk,
+    required this.maxProjectedFinishRisk,
+    required this.hasLatentLeader,
   });
 }
 
@@ -1308,6 +1607,22 @@ class _OpponentMomentum {
     required this.recentMatches,
     required this.longestStreak,
     required this.opponentJustMatched,
+  });
+}
+
+class _OpponentTempoSignal {
+  final double tempoScore;
+  final int velocityCards;
+  final int recentMatches;
+  final bool isLatentLeader;
+  final double burstRisk;
+
+  const _OpponentTempoSignal({
+    required this.tempoScore,
+    required this.velocityCards,
+    required this.recentMatches,
+    required this.isLatentLeader,
+    required this.burstRisk,
   });
 }
 

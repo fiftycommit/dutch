@@ -38,6 +38,8 @@ class DiscardTracker {
   final Map<String, int> _playerExchangeDiscardCount = {};
   final Map<String, int> _playerDrawnDiscardCount = {};
   final Map<String, int> _playerMatchDiscardCount = {};
+  final Map<String, List<int>> _playerMatchTurns = {};
+  final Map<String, List<_HandSnapshot>> _playerHandSnapshots = {};
 
   /// Nombre de défausses observées pour un joueur
   int getDiscardCount(String playerId) =>
@@ -90,6 +92,7 @@ class DiscardTracker {
     String? discardedBy,
     bool wasExchange = false,
     DiscardActionType? actionType,
+    int? turnCount,
   }) {
     final points = card.points;
     final value = card.value;
@@ -120,6 +123,13 @@ class DiscardTracker {
           _playerMatchDiscardCount[discardedBy] =
               (_playerMatchDiscardCount[discardedBy] ?? 0) + 1;
           _lastActionWasExchange[discardedBy] = false;
+          if (turnCount != null) {
+            final turns = _playerMatchTurns.putIfAbsent(discardedBy, () => []);
+            turns.add(turnCount);
+            if (turns.length > 32) {
+              turns.removeRange(0, turns.length - 32);
+            }
+          }
           break;
       }
     }
@@ -153,6 +163,96 @@ class DiscardTracker {
     _playerExchangeDiscardCount.clear();
     _playerDrawnDiscardCount.clear();
     _playerMatchDiscardCount.clear();
+    _playerMatchTurns.clear();
+    _playerHandSnapshots.clear();
+  }
+
+  /// Snapshot de la table à un tour donné (rotation de table).
+  /// Permet de mesurer la vélocité de réduction des mains: n(t-k) - n(t).
+  void recordTableSnapshot(GameState gs) {
+    final turn = gs.turnCount;
+    for (final player in gs.players) {
+      final snapshots =
+          _playerHandSnapshots.putIfAbsent(player.id, () => <_HandSnapshot>[]);
+      if (snapshots.isNotEmpty && snapshots.last.turn == turn) {
+        snapshots[snapshots.length - 1] =
+            _HandSnapshot(turn: turn, cards: player.hand.length);
+      } else {
+        snapshots.add(_HandSnapshot(turn: turn, cards: player.hand.length));
+      }
+      if (snapshots.length > 12) {
+        snapshots.removeRange(0, snapshots.length - 12);
+      }
+    }
+  }
+
+  /// Retourne la vélocité de cartes d'un joueur sur [windowTurns] :
+  /// n(t-windowTurns) - n(t). Positif = réduction rapide.
+  int getCardVelocity(
+    String playerId,
+    int currentTurn, {
+    int currentCards = -1,
+    int windowTurns = 2,
+  }) {
+    final snapshots = _playerHandSnapshots[playerId];
+    if (snapshots == null || snapshots.isEmpty) return 0;
+
+    final nowCards = currentCards >= 0 ? currentCards : snapshots.last.cards;
+    final targetTurn = currentTurn - windowTurns;
+
+    _HandSnapshot? anchor;
+    for (int i = snapshots.length - 1; i >= 0; i--) {
+      final snap = snapshots[i];
+      if (snap.turn <= targetTurn) {
+        anchor = snap;
+        break;
+      }
+    }
+    anchor ??= snapshots.first;
+
+    final velocity = anchor.cards - nowCards;
+    return velocity < 0 ? 0 : velocity;
+  }
+
+  /// Nombre de matchs observés sur les [windowTurns] derniers tours.
+  int getRecentMatchCountInTurns(
+    String playerId,
+    int currentTurn, {
+    int windowTurns = 3,
+  }) {
+    final turns = _playerMatchTurns[playerId];
+    if (turns == null || turns.isEmpty) return 0;
+    final floorTurn = currentTurn - windowTurns;
+    int count = 0;
+    for (final t in turns) {
+      if (t >= floorTurn) count++;
+    }
+    return count;
+  }
+
+  /// Retourne vrai si au moins [requiredMatches] matchs ont été faits
+  /// en [withinTurns] tours (détection de burst latent).
+  bool hasMatchBurst(
+    String playerId,
+    int currentTurn, {
+    int requiredMatches = 2,
+    int withinTurns = 3,
+  }) {
+    if (requiredMatches <= 1) return true;
+    final turns = _playerMatchTurns[playerId];
+    if (turns == null || turns.length < requiredMatches) return false;
+
+    int left = 0;
+    for (int right = 0; right < turns.length; right++) {
+      while (turns[right] - turns[left] > withinTurns && left < right) {
+        left++;
+      }
+      if ((right - left + 1) >= requiredMatches &&
+          turns[right] >= (currentTurn - withinTurns - 1)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -463,5 +563,15 @@ class OpponentStyleEstimate {
     required this.confidence,
     required this.avgDiscardedPoints,
     required this.observedDecisions,
+  });
+}
+
+class _HandSnapshot {
+  final int turn;
+  final int cards;
+
+  const _HandSnapshot({
+    required this.turn,
+    required this.cards,
   });
 }

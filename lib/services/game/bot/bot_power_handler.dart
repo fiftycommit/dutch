@@ -21,6 +21,9 @@ class BotPowerHandler {
   static final Random _random = Random();
   static const int _bronzeHumanValetCooldownTurns = 4;
   static const int _silverHumanValetCooldownTurns = 2;
+  static _PlatinumKillWindow? _platinumKillWindow;
+  static String _platinumKillWindowTableKey = '';
+  static int _platinumKillWindowLastTurn = -1;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TÉLÉMÉTRIE : Mesure d'impact des pouvoirs
@@ -28,8 +31,13 @@ class BotPowerHandler {
 
   /// Calcule l'avantage de table actuel du bot
   /// Positif = bot devant, Négatif = bot derrière
-  static double _calculateTableAdvantage(GameState gs, Player bot) {
-    final report = BotThreatAnalyzer.analyzeOpponents(gs, bot);
+  static double _calculateTableAdvantage(
+    GameState gs,
+    Player bot, {
+    BotDifficulty? difficulty,
+  }) {
+    final report =
+        BotThreatAnalyzer.analyzeOpponents(gs, bot, difficulty: difficulty);
     return report.bestOpponentScore - report.botExpectedScore;
   }
 
@@ -49,6 +57,10 @@ class BotPowerHandler {
     Player bot = gameState.currentPlayer;
     String val = gameState.specialCardToActivate!.value;
 
+    if (_isPlatinumDifficulty(difficulty)) {
+      _refreshPlatinumKillWindow(gameState, bot);
+    }
+
     final baseDelay = personality != null
         ? (personality.decisionSpeedMs * 0.35).round().clamp(150, 700)
         : 400;
@@ -61,7 +73,11 @@ class BotPowerHandler {
     // V et JOKER = toujours utilisés (mort subite)
     // 7 et 10 = utilisés si ça apporte de l'info utile
     // ═══════════════════════════════════════════════════════════════════════
-    final report = BotThreatAnalyzer.analyzeOpponents(gameState, bot);
+    final report = BotThreatAnalyzer.analyzeOpponents(
+      gameState,
+      bot,
+      difficulty: difficulty,
+    );
     final powerConclusions = _buildPowerUseConclusions(
       gameState: gameState,
       bot: bot,
@@ -93,7 +109,11 @@ class BotPowerHandler {
     }
 
     // TÉLÉMÉTRIE : snapshot avantage AVANT le pouvoir
-    final advantageBefore = _calculateTableAdvantage(gameState, bot);
+    final advantageBefore = _calculateTableAdvantage(
+      gameState,
+      bot,
+      difficulty: difficulty,
+    );
 
     if (val == '7') {
       _usePower7(gameState, bot, difficulty);
@@ -109,7 +129,11 @@ class BotPowerHandler {
     }
 
     // TÉLÉMÉTRIE : snapshot avantage APRÈS le pouvoir
-    final advantageAfter = _calculateTableAdvantage(gameState, bot);
+    final advantageAfter = _calculateTableAdvantage(
+      gameState,
+      bot,
+      difficulty: difficulty,
+    );
     final impactDelta = advantageAfter - advantageBefore;
 
     // Enregistrer l'impact du pouvoir
@@ -146,6 +170,8 @@ class BotPowerHandler {
 
     final isOffensive = powerValue == 'V' || powerValue == 'JOKER';
     final hasUnknown = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
+    final hasPlatinumKillWindow =
+        isPlatinum && _hasActivePlatinumKillWindow(gameState);
 
     bool shouldUsePower10 = true;
     if (powerValue == '10') {
@@ -158,7 +184,11 @@ class BotPowerHandler {
     final shouldUseInfo =
         (powerValue == '7' && (hasUnknown || isGold || isPlatinum)) ||
             (powerValue == '10' && (shouldUsePower10 || isPlatinum));
-    final shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
+    bool shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
+    if (isPlatinum && isOffensive) {
+      // Réserve Valet/Joker pour la fenêtre de kill ou les urgences.
+      shouldUsePower = hasPlatinumKillWindow || hasImmediateThreat;
+    }
     final forceUsePower7 = powerValue == '7' && (isGold || isPlatinum);
     final isSilverPower7 = isSilver && powerValue == '7';
     final shouldSkipSilverPower7ByDizziness =
@@ -581,7 +611,7 @@ class BotPowerHandler {
 
       final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
       final report = BotThreatAnalyzer.analyzeOpponents(gs, bot,
-          isHardcoreMode: isHardcore);
+          isHardcoreMode: isHardcore, difficulty: difficulty);
 
       final poolIds = threatPool.map((p) => p.id).toSet();
       final sorted = report.sortedByThreat
@@ -592,6 +622,36 @@ class BotPowerHandler {
         return (sorted[0], sorted[1]);
       }
       return (threatPool[0], threatPool[1]);
+    }
+
+    if (_isPlatinumDifficulty(difficulty)) {
+      _refreshPlatinumKillWindow(gs, bot);
+      final lockedTarget =
+          _getActivePlatinumKillTarget(gs, candidates: opponents);
+      if (lockedTarget != null) {
+        final second = opponents
+            .where((p) => p.id != lockedTarget.id)
+            .toList(growable: false)
+          ..sort((a, b) {
+            final sa = _adaptivePlatinumThreatScore(gs, bot, a, difficulty);
+            final sb = _adaptivePlatinumThreatScore(gs, bot, b, difficulty);
+            return sb.compareTo(sa);
+          });
+        if (second.isNotEmpty) {
+          Player secondTarget = second.first;
+          final isAmbiguous =
+              _isValetChoiceAmbiguous(opponents, lockedTarget, secondTarget);
+          if (isAmbiguous && !lockedTarget.isHuman && !secondTarget.isHuman) {
+            final humans = second.where((p) => p.isHuman).toList();
+            if (humans.isNotEmpty) {
+              secondTarget = humans.first;
+            }
+          }
+          if (lockedTarget.id != secondTarget.id) {
+            return (lockedTarget, secondTarget);
+          }
+        }
+      }
     }
 
     if (_isPlatinumDifficulty(difficulty)) {
@@ -742,6 +802,13 @@ class BotPowerHandler {
     if (possibleTargets.isEmpty) return null;
 
     if (_isPlatinumDifficulty(difficulty)) {
+      _refreshPlatinumKillWindow(gs, bot);
+      final lockedTarget =
+          _getActivePlatinumKillTarget(gs, candidates: possibleTargets);
+      if (lockedTarget != null) {
+        return lockedTarget;
+      }
+
       final scored = possibleTargets
           .map((p) => (
                 player: p,
@@ -755,8 +822,12 @@ class BotPowerHandler {
     }
 
     final isHardcore = BotThreatAnalyzer.isHardcoreMode(difficulty);
-    final report =
-        BotThreatAnalyzer.analyzeOpponents(gs, bot, isHardcoreMode: isHardcore);
+    final report = BotThreatAnalyzer.analyzeOpponents(
+      gs,
+      bot,
+      isHardcoreMode: isHardcore,
+      difficulty: difficulty,
+    );
 
     // Filtrer les menaces pour ne garder que ceux avec >= 2 cartes
     final validThreats =
@@ -1036,12 +1107,42 @@ class BotPowerHandler {
     final styleThreat =
         (style.optimization * 1.0 + style.aggression * 0.45) * style.confidence;
     final historyBias = _historicalRankingScore(player) * 0.35;
+    final matchCount = BotDutchStrategy.discardTracker.getMatchDiscardCount(
+      player.id,
+    );
+    final observedActions =
+        BotDutchStrategy.discardTracker.getObservedDecisionCount(player.id) +
+            matchCount;
+    final matchRate = observedActions <= 0
+        ? 0.0
+        : (matchCount / observedActions).clamp(0.0, 1.0);
+    final recentMatches = _recentSuccessfulMatchesForPlayer(gs, player);
+    final cardVelocity = BotDutchStrategy.discardTracker.getCardVelocity(
+      player.id,
+      gs.turnCount,
+      currentCards: player.hand.length,
+      windowTurns: 2,
+    );
+    final projectedFinishRisk =
+        _computeProjectedFinishRiskForPlayer(gs, player);
+    final trajectoryClean = _isTrajectoryClean(gs, player);
 
     double score = cardsThreat * 3.2 +
         scoreThreat * 1.35 +
         styleThreat * 8.0 +
         uncertaintyThreat;
     score += historyBias;
+    score += recentMatches * 2.6;
+    score += cardVelocity * 2.2;
+    score += projectedFinishRisk * 8.5;
+    if (observedActions >= 3) {
+      score += matchRate * 6.0;
+    }
+    if (trajectoryClean && (cardVelocity >= 2 || recentMatches >= 2)) {
+      score += 1.2;
+    } else if (!trajectoryClean) {
+      score -= 1.0;
+    }
 
     if (player.isHuman && player.hand.length <= 2) {
       score += 14.0;
@@ -1063,6 +1164,308 @@ class BotPowerHandler {
     final style =
         BotDutchStrategy.discardTracker.estimateOpponentStyle(playerId);
     return (style.optimization * 0.8 + style.aggression * 0.2).clamp(0.0, 1.0);
+  }
+
+  static void _refreshPlatinumKillWindow(GameState gs, Player bot) {
+    final tableKey = _tableSignature(gs);
+    final tableChanged = tableKey != _platinumKillWindowTableKey;
+    final turnReset = gs.turnCount < _platinumKillWindowLastTurn;
+    if (tableChanged || turnReset) {
+      _platinumKillWindow = null;
+      _platinumKillWindowTableKey = tableKey;
+    }
+    _platinumKillWindowLastTurn = gs.turnCount;
+
+    if (_platinumKillWindow != null &&
+        gs.turnCount > _platinumKillWindow!.expiresTurn) {
+      _platinumKillWindow = null;
+    }
+
+    final candidates = gs.players
+        .where((p) => p.id != bot.id && p.hand.isNotEmpty)
+        .toList(growable: false);
+    if (candidates.isEmpty) {
+      _platinumKillWindow = null;
+      return;
+    }
+
+    final scoredTargets = candidates.map((p) {
+      final projectedRisk = _computeProjectedFinishRiskForPlayer(gs, p);
+      final pressure = _computePlatinumKillPressure(
+        gs,
+        p,
+        projectedFinishRisk: projectedRisk,
+      );
+      return _ScoredKillTarget(
+        player: p,
+        pressure: pressure,
+        projectedFinishRisk: projectedRisk,
+      );
+    }).toList(growable: false)
+      ..sort((a, b) => b.pressure.compareTo(a.pressure));
+
+    if (scoredTargets.isEmpty) {
+      return;
+    }
+
+    final best = scoredTargets.first;
+    final existing = _getActivePlatinumKillTarget(gs, candidates: candidates);
+    if (existing != null) {
+      final existingScore =
+          scoredTargets.where((e) => e.player.id == existing.id).firstOrNull;
+      if (existingScore != null) {
+        final existingStillHot = existingScore.player.hand.length <= 2 ||
+            existingScore.projectedFinishRisk >= 0.58;
+        final challengerClearlyBetter = best.player.id != existing.id &&
+            (best.pressure >= (existingScore.pressure * 1.20) ||
+                best.projectedFinishRisk >=
+                    (existingScore.projectedFinishRisk + 0.18));
+        if (existingStillHot && !challengerClearlyBetter) {
+          _platinumKillWindow = _PlatinumKillWindow(
+            targetId: existing.id,
+            expiresTurn: gs.turnCount + 2,
+          );
+          return;
+        }
+      }
+    }
+
+    final canLockHighCardTarget =
+        best.player.hand.length <= 4 || best.projectedFinishRisk >= 0.72;
+    final shouldLock = (best.pressure >= 3.2 ||
+            best.player.hand.length <= 2 ||
+            best.projectedFinishRisk >= 0.62) &&
+        canLockHighCardTarget;
+    if (shouldLock) {
+      _platinumKillWindow = _PlatinumKillWindow(
+        targetId: best.player.id,
+        expiresTurn: gs.turnCount + 2,
+      );
+    }
+  }
+
+  static double _computePlatinumKillPressure(
+    GameState gs,
+    Player player, {
+    required double projectedFinishRisk,
+  }) {
+    final cards = player.hand.length;
+    final velocity = BotDutchStrategy.discardTracker.getCardVelocity(
+      player.id,
+      gs.turnCount,
+      currentCards: cards,
+      windowTurns: 2,
+    );
+    final recentMatches =
+        BotDutchStrategy.discardTracker.getRecentMatchCountInTurns(
+      player.id,
+      gs.turnCount,
+      windowTurns: 3,
+    );
+    final burstByMatches = BotDutchStrategy.discardTracker.hasMatchBurst(
+      player.id,
+      gs.turnCount,
+      requiredMatches: 2,
+      withinTurns: 3,
+    );
+    final latentLeader = burstByMatches || velocity >= 2;
+    final trajectoryClean = _isTrajectoryClean(gs, player);
+
+    double burstRisk = 0.08;
+    burstRisk += velocity >= 2
+        ? 0.42
+        : velocity == 1
+            ? 0.16
+            : 0.0;
+    burstRisk += burstByMatches
+        ? 0.30
+        : recentMatches >= 2
+            ? 0.14
+            : 0.0;
+    if (cards <= 1) {
+      burstRisk += 0.35;
+    } else if (cards == 2) {
+      burstRisk += 0.25;
+    } else if (cards == 3) {
+      burstRisk += 0.12;
+    }
+    burstRisk = burstRisk.clamp(0.0, 1.0);
+
+    final handEstimate =
+        BotDutchStrategy.discardTracker.estimateOpponentHand(player.id, cards);
+    final avgCardEstimate = cards <= 0
+        ? 0.0
+        : (handEstimate.estimatedScore / cards).clamp(1.0, 10.0);
+    final deltaScoreEst = (velocity * avgCardEstimate).clamp(0.0, 18.0);
+    final tempoScore =
+        (velocity + (0.35 * deltaScoreEst) + recentMatches).clamp(0.0, 9.0);
+
+    double pressure = tempoScore;
+    pressure += burstRisk * 2.6;
+    pressure += projectedFinishRisk * 4.2;
+    pressure += latentLeader ? 1.5 : 0.0;
+    if (trajectoryClean && (velocity >= 2 || recentMatches >= 2)) {
+      pressure += 1.2;
+    } else if (!trajectoryClean) {
+      pressure -= 0.8;
+    }
+    pressure += cards <= 2
+        ? 2.2
+        : cards == 3
+            ? 0.7
+            : 0.0;
+
+    if (cards >= 6) {
+      pressure *= 0.40;
+    } else if (cards >= 5) {
+      pressure *= 0.55;
+    } else if (cards == 4) {
+      pressure *= 0.78;
+    }
+    return pressure;
+  }
+
+  static double _computeProjectedFinishRiskForPlayer(
+    GameState gs,
+    Player player,
+  ) {
+    final cards = player.hand.length;
+    final actionsUntilTurn = _actionsUntilNextTurn(gs, player.id);
+    final velocity = BotDutchStrategy.discardTracker.getCardVelocity(
+      player.id,
+      gs.turnCount,
+      currentCards: cards,
+      windowTurns: 2,
+    );
+    final recentMatches =
+        BotDutchStrategy.discardTracker.getRecentMatchCountInTurns(
+      player.id,
+      gs.turnCount,
+      windowTurns: 3,
+    );
+    final burstByMatches = BotDutchStrategy.discardTracker.hasMatchBurst(
+      player.id,
+      gs.turnCount,
+      requiredMatches: 2,
+      withinTurns: 3,
+    );
+    final trajectoryClean = _isTrajectoryClean(gs, player);
+
+    double probability = 0.05;
+    if (cards <= 1) {
+      probability += 0.75;
+    } else if (cards == 2) {
+      probability += 0.42;
+    } else if (cards == 3) {
+      probability += 0.18;
+    }
+
+    if (velocity >= 2) {
+      probability += 0.28;
+    } else if (velocity == 1) {
+      probability += 0.12;
+    }
+
+    if (recentMatches >= 2) {
+      probability += 0.22;
+    } else if (recentMatches == 1) {
+      probability += 0.10;
+    }
+
+    if (burstByMatches) {
+      probability += 0.16;
+    }
+    if (actionsUntilTurn <= 1) {
+      probability += 0.20;
+    } else if (actionsUntilTurn == 2) {
+      probability += 0.10;
+    } else if (actionsUntilTurn >= 4) {
+      probability -= 0.12;
+    }
+
+    if (cards >= 6) {
+      probability *= 0.32;
+    } else if (cards >= 5) {
+      probability *= 0.45;
+    } else if (cards == 4) {
+      probability *= 0.65;
+    }
+    probability += trajectoryClean ? 0.08 : -0.08;
+
+    return probability.clamp(0.0, 1.0);
+  }
+
+  static bool _isTrajectoryClean(GameState gs, Player player) {
+    final lowerName = player.name.toLowerCase();
+    final limit = gs.actionHistory.length < 12 ? gs.actionHistory.length : 12;
+    for (int i = 0; i < limit; i++) {
+      final lower = gs.actionHistory[i].toLowerCase();
+      if (!lower.contains(lowerName)) continue;
+      if (lower.contains('rate son match') ||
+          lower.contains('pénalité') ||
+          lower.contains('penalite')) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static int _actionsUntilNextTurn(GameState gs, String playerId) {
+    final activePlayers = gs.players
+        .where((p) => !gs.eliminatedPlayerIds.contains(p.id))
+        .toList(growable: false);
+    if (activePlayers.isEmpty) return 99;
+
+    final currentId = gs.currentPlayer.id;
+    int currentIdx = activePlayers.indexWhere((p) => p.id == currentId);
+    if (currentIdx < 0) currentIdx = 0;
+    final targetIdx = activePlayers.indexWhere((p) => p.id == playerId);
+    if (targetIdx < 0) return 99;
+
+    final distance =
+        (targetIdx - currentIdx + activePlayers.length) % activePlayers.length;
+    return distance == 0 ? activePlayers.length : distance;
+  }
+
+  static Player? _getActivePlatinumKillTarget(
+    GameState gs, {
+    List<Player>? candidates,
+  }) {
+    final window = _platinumKillWindow;
+    if (window == null) return null;
+    if (gs.turnCount > window.expiresTurn) return null;
+    final pool = candidates ?? gs.players;
+    final target = pool
+        .where((p) => p.id == window.targetId && p.hand.isNotEmpty)
+        .firstOrNull;
+    return target;
+  }
+
+  static bool _hasActivePlatinumKillWindow(GameState gs) {
+    return _getActivePlatinumKillTarget(gs) != null;
+  }
+
+  static String _tableSignature(GameState gs) {
+    final ids = gs.players.map((p) => p.id).toList(growable: false)..sort();
+    return ids.join('|');
+  }
+
+  static int _recentSuccessfulMatchesForPlayer(
+    GameState gs,
+    Player player, {
+    int lookback = 14,
+  }) {
+    final playerName = player.name.trim().toLowerCase();
+    final maxEntries =
+        gs.actionHistory.length < lookback ? gs.actionHistory.length : lookback;
+    int count = 0;
+    for (int i = 0; i < maxEntries; i++) {
+      final lower = gs.actionHistory[i].toLowerCase();
+      if (lower.contains('match !') && lower.contains(playerName)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   static int _humanValetCooldownTurns(Player bot, BotDifficulty difficulty) {
@@ -1110,5 +1513,27 @@ class _PowerUseConclusions {
     required this.isSilverPower7,
     required this.shouldSkipSilverPower7ByDizziness,
     required this.passiveSkipChance,
+  });
+}
+
+class _PlatinumKillWindow {
+  final String targetId;
+  final int expiresTurn;
+
+  const _PlatinumKillWindow({
+    required this.targetId,
+    required this.expiresTurn,
+  });
+}
+
+class _ScoredKillTarget {
+  final Player player;
+  final double pressure;
+  final double projectedFinishRisk;
+
+  const _ScoredKillTarget({
+    required this.player,
+    required this.pressure,
+    required this.projectedFinishRisk,
   });
 }

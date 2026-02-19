@@ -55,3 +55,21 @@ class DrawnToHandAnimation {
     required this.size,
   });
 }
+
+class ValetSwapAnimation {
+  final int id;
+  final String playerId;
+  final String cardId;
+  final Offset start;
+  final Offset end;
+  final CardSize size;
+
+  ValetSwapAnimation({
+    required this.id,
+    required this.playerId,
+    required this.cardId,
+    required this.start,
+    required this.end,
+    required this.size,
+  });
+}
