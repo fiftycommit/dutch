@@ -228,14 +228,24 @@ class DiscardTracker {
       );
     }
 
-    // Moyenne des points défaussés
-    final avgDiscarded = history.reduce((a, b) => a + b) / history.length;
+    // Moyenne pondérée avec biais récence (les dernières actions comptent plus).
+    double weightedSum = 0;
+    double totalWeight = 0;
+    for (int i = 0; i < history.length; i++) {
+      final recency = (i + 1) / history.length; // 0..1
+      final weight = 0.55 + (recency * 0.90); // 0.55..1.45
+      weightedSum += history[i] * weight;
+      totalWeight += weight;
+    }
+    final avgDiscarded = totalWeight > 0
+        ? weightedSum / totalWeight
+        : history.reduce((a, b) => a + b) / history.length;
 
     // Si il défausse des cartes hautes (>8), il garde probablement des basses
     final likelyLowHand = avgDiscarded >= 8;
 
-    // Estimation du score basée sur les défausses
-    // Plus il défausse haut, plus son score estimé est bas
+    // Estimation du score basée sur les défausses:
+    // plus il défausse haut, plus son score estimé est bas.
     double estimatedAvgCard;
     if (avgDiscarded >= 10) {
       estimatedAvgCard = 3.0; // Il garde des très bonnes cartes
@@ -247,8 +257,35 @@ class DiscardTracker {
       estimatedAvgCard = 9.0; // Il défausse des basses → garde des hautes !
     }
 
-    // Confiance basée sur le nombre d'observations
-    final confidence = min(1.0, history.length / 5.0);
+    final decisions = getObservedDecisionCount(playerId);
+    final exchangeRate = getExchangeRate(playerId);
+    final lastExchange = lastActionWasExchange(playerId);
+
+    // Ajustements comportementaux:
+    // - garde souvent la pioche => tendance à améliorer sa main (score estimé plus bas)
+    // - vient de défausser la pioche => légère dégradation de l'estimation
+    estimatedAvgCard -= exchangeRate * 1.4;
+    if (lastExchange) {
+      estimatedAvgCard -= 0.6;
+    } else {
+      estimatedAvgCard += 0.3;
+    }
+    if (cardCount <= 2) {
+      estimatedAvgCard -= 0.4;
+    }
+    estimatedAvgCard = estimatedAvgCard.clamp(1.0, 10.0);
+
+    // Confiance: couverture + stabilité des signaux (et jamais 100% ici).
+    double variance = 0;
+    for (final value in history) {
+      final delta = value - avgDiscarded;
+      variance += delta * delta;
+    }
+    variance = history.isEmpty ? 0 : variance / history.length;
+    final volatility = (sqrt(variance) / 6.0).clamp(0.0, 1.0);
+    final coverage = ((history.length * 0.55) + (decisions * 0.45)) / 14.0;
+    final confidence =
+        (0.08 + (coverage * 0.78) - (volatility * 0.22)).clamp(0.05, 0.90);
 
     return OpponentHandEstimate(
       playerId: playerId,

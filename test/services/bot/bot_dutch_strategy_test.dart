@@ -12,6 +12,8 @@ void main() {
     late Player bot;
 
     setUp(() {
+      BotDutchStrategy.discardTracker.reset();
+
       final players = [
         Player(id: 'human', name: 'Human', isHuman: true, position: 0),
         Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1),
@@ -430,6 +432,71 @@ void main() {
         );
 
         expect(bronzeDecision, isFalse);
+      });
+    });
+
+    group('observation trace coherence', () {
+      test('open dutch trace does not expose blocking veto lines', () {
+        bot.hand = [];
+        bot.knownCards = [];
+        bot.mentalMap = [];
+
+        final trace = BotDutchStrategy.buildObservationTrace(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(trace.shouldCallDutch, isTrue);
+        expect(trace.blockers, isEmpty);
+        expect(trace.opportunities, isNotEmpty);
+      });
+
+      test('closed dutch trace does not expose green-light lines', () {
+        bot.hand = [
+          PlayingCard.create('hearts', 'D'),
+          PlayingCard.create('diamonds', 'R'),
+          PlayingCard.create('clubs', '10'),
+          PlayingCard.create('spades', '8'),
+        ];
+        bot.knownCards = List.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        final trace = BotDutchStrategy.buildObservationTrace(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.endgame,
+        );
+
+        expect(trace.shouldCallDutch, isFalse);
+        expect(trace.blockers, isNotEmpty);
+        expect(trace.opportunities, isEmpty);
+      });
+    });
+
+    group('opponent estimation', () {
+      test('confidence is bounded below 100 percent for inferred estimates',
+          () {
+        final opponent = gameState.players[0];
+
+        for (int i = 0; i < 10; i++) {
+          BotDutchStrategy.discardTracker.trackDiscard(
+            PlayingCard.create('hearts', i.isEven ? '10' : '4'),
+            discardedBy: opponent.id,
+            wasExchange: i.isEven,
+          );
+        }
+
+        final estimate = BotDutchStrategy.estimateOpponentForObserver(
+          gameState,
+          bot,
+          opponent,
+          BotDifficulty.platinum,
+        );
+
+        expect(estimate.confidence, inInclusiveRange(0.05, 0.95));
       });
     });
   });

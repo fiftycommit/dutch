@@ -108,6 +108,23 @@ class BotDutchStrategy {
     final conclusion =
         shouldCall ? 'FENETRE DUTCH OUVERTE' : 'FENETRE DUTCH FERMEE';
 
+    // Rendre le trace lisible:
+    // - si Dutch est ouvert, ne pas afficher de veto "bloquant"
+    // - si Dutch est fermé, ne pas afficher de feux verts ambigus
+    final normalizedBlockers = List<String>.from(blockers);
+    final normalizedOpportunities = List<String>.from(opportunities);
+    if (shouldCall) {
+      normalizedBlockers.clear();
+      if (normalizedOpportunities.isEmpty) {
+        normalizedOpportunities.add('fenêtre validée par contexte');
+      }
+    } else {
+      normalizedOpportunities.clear();
+      if (normalizedBlockers.isEmpty) {
+        normalizedBlockers.add('conditions insuffisantes');
+      }
+    }
+
     return BotDutchObservationTrace(
       botName: bot.name,
       tierLabel: _tierLabel(tier),
@@ -136,8 +153,54 @@ class BotDutchStrategy {
       tableExplosive: conclusions?.tableExplosive ?? false,
       safeWindow: conclusions?.safeWindow ?? false,
       forceImmediateClose: conclusions?.forceImmediateClose ?? false,
-      blockers: blockers,
-      opportunities: opportunities,
+      blockers: normalizedBlockers,
+      opportunities: normalizedOpportunities,
+    );
+  }
+
+  /// Estimation unifiée d'un adversaire (utilisée par les logs/debug).
+  /// Reprend la même logique que la décision Dutch pour éviter les écarts
+  /// "ce qu'il affiche" vs "ce qu'il décide".
+  static OpponentDutchEstimate estimateOpponentForObserver(
+    GameState gs,
+    Player observer,
+    Player opponent,
+    BotDifficulty difficulty,
+  ) {
+    if (opponent.hand.isEmpty) {
+      return const OpponentDutchEstimate(
+        estimatedScore: 0,
+        confidence: 1.0,
+      );
+    }
+
+    final profile = _profileForDifficulty(difficulty);
+    final base =
+        discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+    final style = discardTracker.estimateOpponentStyle(opponent.id);
+    final estimatedScore = _estimateOpponentScore(observer, opponent, profile);
+
+    final spiedCards = observer.getSpiedCards(opponent.id);
+    int knownSpied = 0;
+    if (spiedCards != null && spiedCards.isNotEmpty) {
+      knownSpied = spiedCards.keys
+          .where((idx) => idx >= 0 && idx < opponent.hand.length)
+          .length;
+    }
+    final spyCoverage = opponent.hand.isEmpty
+        ? 1.0
+        : (knownSpied / opponent.hand.length).clamp(0.0, 1.0);
+    final confidence = _estimateOpponentConfidence(
+      tier: profile.tier,
+      baseConfidence: base.confidence,
+      styleConfidence: style.confidence,
+      spyCoverage: spyCoverage,
+      cards: opponent.hand.length,
+    );
+
+    return OpponentDutchEstimate(
+      estimatedScore: estimatedScore,
+      confidence: confidence,
     );
   }
 
@@ -732,6 +795,28 @@ class BotDutchStrategy {
     return adjusted.clamp(0.0, 999.0);
   }
 
+  static double _estimateOpponentConfidence({
+    required _DutchTier tier,
+    required double baseConfidence,
+    required double styleConfidence,
+    required double spyCoverage,
+    required int cards,
+  }) {
+    final tierFactor = switch (tier) {
+      _DutchTier.bronze => 0.85,
+      _DutchTier.silver => 0.95,
+      _DutchTier.gold => 1.00,
+      _DutchTier.platinum => 1.05,
+    };
+
+    final cardCountBonus = cards <= 2 ? 0.08 : 0.0;
+    final blended = (baseConfidence * 0.50) +
+        (styleConfidence * 0.30) +
+        (spyCoverage * 0.25) +
+        cardCountBonus;
+    return (blended * tierFactor).clamp(0.05, 0.95);
+  }
+
   static double _spyWeightForTier(_DutchTier tier) {
     switch (tier) {
       case _DutchTier.bronze:
@@ -1216,5 +1301,15 @@ class BotDutchObservationTrace {
     required this.forceImmediateClose,
     required this.blockers,
     required this.opportunities,
+  });
+}
+
+class OpponentDutchEstimate {
+  final int estimatedScore;
+  final double confidence;
+
+  const OpponentDutchEstimate({
+    required this.estimatedScore,
+    required this.confidence,
   });
 }

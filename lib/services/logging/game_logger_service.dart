@@ -201,13 +201,29 @@ class GameLoggerService {
             continue;
           }
 
-          final estimate =
-              tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+          final difficulty = BotConfig.getDifficulty(player, null);
+          final estimate = gameState != null
+              ? BotDutchStrategy.estimateOpponentForObserver(
+                  gameState,
+                  player,
+                  opponent,
+                  difficulty,
+                )
+              : null;
+          final estimatedScore = estimate?.estimatedScore ??
+              tracker
+                  .estimateOpponentHand(opponent.id, opponent.hand.length)
+                  .estimatedScore
+                  .round();
+          final estimateConfidence = estimate?.confidence ??
+              tracker
+                  .estimateOpponentHand(opponent.id, opponent.hand.length)
+                  .confidence;
           final lastWasExchange = tracker.lastActionWasExchange(opponent.id);
           final actionInfo =
               lastWasExchange ? '🔄gardé pioche' : '❌défaussé pioche';
           buffer.writeln(
-              '│   → ${opponent.name}: ~${estimate.estimatedScore.toStringAsFixed(0)}pts ($actionInfo, conf:${(estimate.confidence * 100).toInt()}%)');
+              '│   → ${opponent.name}: ~${estimatedScore}pts ($actionInfo, conf:${(estimateConfidence * 100).toInt()}%)');
         }
       }
 
