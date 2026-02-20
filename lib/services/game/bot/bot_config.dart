@@ -9,13 +9,14 @@ import 'bot_personality.dart';
 import 'hardcore_bot_config.dart';
 
 export '../../../models/game_settings.dart' show BotBehavior, BotSkillLevel;
-export 'hardcore_bot_config.dart' show HardcoreLevel, HardcoreBotConfig, PlayerSkillEstimator;
+export 'hardcore_bot_config.dart'
+    show HardcoreLevel, HardcoreBotConfig, PlayerSkillEstimator;
 
 /// Phases de jeu du bot
 enum BotGamePhase {
-  exploration,  // Découvrir ses cartes
+  exploration, // Découvrir ses cartes
   optimization, // Optimiser son score
-  endgame,      // Rush vers Dutch
+  endgame, // Rush vers Dutch
 }
 
 /// Configuration et utilitaires pour les bots
@@ -100,6 +101,8 @@ class BotConfig {
         behaviorFactor = 0.75;
       } else if (behavior == BotBehavior.aggressive) {
         behaviorFactor = 0.85;
+      } else if (behavior == BotBehavior.moi) {
+        behaviorFactor = 0.80;
       }
 
       double difficultyFactor = 1.0;
@@ -109,7 +112,10 @@ class BotConfig {
         difficultyFactor = 0.95;
       }
 
-      final base = (personality.decisionSpeedMs * behaviorFactor * difficultyFactor * 0.6)
+      final base = (personality.decisionSpeedMs *
+              behaviorFactor *
+              difficultyFactor *
+              0.6)
           .round()
           .clamp(200, 1600);
       return base;
@@ -117,7 +123,7 @@ class BotConfig {
 
     if (behavior == BotBehavior.balanced) {
       bool criticalMoment = gameState.players.any((p) => p.hand.length <= 2);
-      
+
       switch (difficulty.name) {
         case "Bronze":
           return criticalMoment ? 700 : 450;
@@ -133,7 +139,14 @@ class BotConfig {
     }
 
     if (behavior == BotBehavior.aggressive) {
-      return difficulty.name == "Or" || difficulty.name == "Platine" ? 550 : 450;
+      return difficulty.name == "Or" || difficulty.name == "Platine"
+          ? 550
+          : 450;
+    }
+
+    if (behavior == BotBehavior.moi) {
+      final criticalMoment = gameState.players.any((p) => p.hand.length <= 2);
+      return criticalMoment ? 700 : 520;
     }
 
     return 600;
@@ -156,7 +169,8 @@ class BotConfig {
     final confusionOnSwap = (1.0 - memoryAccuracy) * 0.20;
     final reactionSpeed = (0.6 + memoryAccuracy * 0.4).clamp(0.0, 1.0);
     final matchAccuracy = (0.75 + memoryAccuracy * 0.25).clamp(0.0, 1.0);
-    final reactionMatchChance = (0.35 + (riskTolerance + powerUsageRate) * 0.3).clamp(0.0, 1.0);
+    final reactionMatchChance =
+        (0.35 + (riskTolerance + powerUsageRate) * 0.3).clamp(0.0, 1.0);
 
     return BotDifficulty(
       name: 'SBMM',
@@ -171,7 +185,7 @@ class BotConfig {
   /// Convertit le niveau de compétence en difficulté
   static BotDifficulty getSkillDifficulty(BotSkillLevel? level) {
     if (level == null) return BotDifficulty.silver;
-    
+
     switch (level) {
       case BotSkillLevel.bronze:
         return BotDifficulty.bronze;
@@ -185,10 +199,12 @@ class BotConfig {
   }
 
   /// Obtient la difficulté appropriée pour un bot
-  /// 
+  ///
   /// HARDCORE FIX: Si playerMMR est null, on utilise le skill level du bot
   /// au lieu de forcer Argent (qui rendait tous les bots trop faciles)
-  static BotDifficulty getDifficulty(Player bot, int? playerMMR, {
+  static BotDifficulty getDifficulty(
+    Player bot,
+    int? playerMMR, {
     HardcoreLevel? hardcoreLevel,
     int? playerSkillEstimate,
   }) {
@@ -199,17 +215,17 @@ class BotConfig {
         playerSkillEstimate: playerSkillEstimate ?? playerMMR ?? 0,
       );
     }
-    
+
     // Si on a des paramètres AI explicites, les utiliser
     if (bot.aiParameters != null) {
       return difficultyFromParameters(bot.aiParameters!);
     }
-    
+
     // Si on a un MMR joueur, l'utiliser pour adapter la difficulté
     if (playerMMR != null) {
       return BotDifficulty.fromMMR(playerMMR);
     }
-    
+
     // HARDCORE FIX: Au lieu de retourner Argent par défaut,
     // utiliser le skill level configuré du bot
     return getSkillDifficulty(bot.botSkillLevel);
@@ -253,9 +269,10 @@ class BotConfig {
       botParams['riskTolerance'] =
           ((botParams['aggressiveness']! + (1.0 - botParams['caution']!)) / 2)
               .clamp(0.0, 1.0);
-      botParams['powerUsageRate'] =
-          ((botParams['powerDefensiveRate']! + botParams['powerOffensiveRate']!) / 2)
-              .clamp(0.0, 1.0);
+      botParams['powerUsageRate'] = ((botParams['powerDefensiveRate']! +
+                  botParams['powerOffensiveRate']!) /
+              2)
+          .clamp(0.0, 1.0);
       botParams['scoreGapWeight'] = 0.7;
       botParams['rankPenalty'] = 0.0;
       botParams['ghostInfluence'] = 0.0;
@@ -280,19 +297,19 @@ class BotConfig {
   // Config SBMM : [default, variance, min, max] par paramètre
   // Variance = bruit aléatoire ± autour de la valeur du joueur
   static const Map<String, List<double>> _sbmmParamConfig = {
-    'aggressiveness':        [0.5,  0.08, 0.0, 1.0],
-    'caution':               [0.5,  0.08, 0.0, 1.0],
-    'dutchThreshold':        [15.0, 2.5,  5.0, 30.0],
-    'dutchQuality':          [0.5,  0.08, 0.0, 1.0],
-    'powerDefensiveRate':    [0.5,  0.08, 0.0, 1.0],
-    'powerOffensiveRate':    [0.5,  0.08, 0.0, 1.0],
-    'memoryAccuracy':        [0.7,  0.06, 0.3, 1.0],
-    'memoryRetention':       [0.7,  0.05, 0.3, 1.0],
-    'adaptability':          [0.5,  0.08, 0.0, 1.0],
-    'decisionSpeed':         [2000, 300,  500, 10000],
-    'aggressiveness_winning':[0.5,  0.08, 0.0, 1.0],
-    'aggressiveness_losing': [0.5,  0.08, 0.0, 1.0],
-    'caution_winning':       [0.5,  0.08, 0.0, 1.0],
-    'caution_losing':        [0.5,  0.08, 0.0, 1.0],
+    'aggressiveness': [0.5, 0.08, 0.0, 1.0],
+    'caution': [0.5, 0.08, 0.0, 1.0],
+    'dutchThreshold': [15.0, 2.5, 5.0, 30.0],
+    'dutchQuality': [0.5, 0.08, 0.0, 1.0],
+    'powerDefensiveRate': [0.5, 0.08, 0.0, 1.0],
+    'powerOffensiveRate': [0.5, 0.08, 0.0, 1.0],
+    'memoryAccuracy': [0.7, 0.06, 0.3, 1.0],
+    'memoryRetention': [0.7, 0.05, 0.3, 1.0],
+    'adaptability': [0.5, 0.08, 0.0, 1.0],
+    'decisionSpeed': [2000, 300, 500, 10000],
+    'aggressiveness_winning': [0.5, 0.08, 0.0, 1.0],
+    'aggressiveness_losing': [0.5, 0.08, 0.0, 1.0],
+    'caution_winning': [0.5, 0.08, 0.0, 1.0],
+    'caution_losing': [0.5, 0.08, 0.0, 1.0],
   };
 }

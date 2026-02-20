@@ -759,24 +759,6 @@ class GameProvider with ChangeNotifier implements IGameController {
     _addDutchHistory();
     _logFinalRanking(ranking);
 
-    _statsService.saveGameResult(
-      playerRank: playerRank,
-      score: _gameState!.getFinalScore(human),
-      calledDutch: calledDutch,
-      wonDutch: wonDutch,
-      hasEmptyHand: human.hand.isEmpty,
-      slotId: _currentSlotId,
-      isSBMM: _useSBMM,
-      totalPlayers: _gameState!.players.length,
-      isTournament: _gameState!.gameMode == GameMode.tournament,
-      tournamentRound: _gameState!.gameMode == GameMode.tournament
-          ? _gameState!.tournamentRound
-          : 1,
-      tournamentId: _tournamentManager.activeTournamentId,
-      actionHistory: List<String>.from(_gameState!.actionHistory),
-      gameLog: GameLoggerService.instance.getLogForCurrentRound(),
-    );
-
     // ═══════════════════════════════════════════════════════════════════════
     // TÉLÉMÉTRIE AI : Générer le résumé et stocker
     // ═══════════════════════════════════════════════════════════════════════
@@ -811,6 +793,26 @@ class GameProvider with ChangeNotifier implements IGameController {
       players: _gameState!.players,
       totalScores: totalScores,
       winner: ranking.first,
+    );
+
+    // IMPORTANT: sauvegarder les stats APRES logRoundEnd/logGameEnd,
+    // sinon le gameLog exporté depuis Statistiques est tronqué.
+    _statsService.saveGameResult(
+      playerRank: playerRank,
+      score: _gameState!.getFinalScore(human),
+      calledDutch: calledDutch,
+      wonDutch: wonDutch,
+      hasEmptyHand: human.hand.isEmpty,
+      slotId: _currentSlotId,
+      isSBMM: _useSBMM,
+      totalPlayers: _gameState!.players.length,
+      isTournament: _gameState!.gameMode == GameMode.tournament,
+      tournamentRound: _gameState!.gameMode == GameMode.tournament
+          ? _gameState!.tournamentRound
+          : 1,
+      tournamentId: _tournamentManager.activeTournamentId,
+      actionHistory: List<String>.from(_gameState!.actionHistory),
+      gameLog: GameLoggerService.instance.getLogForCurrentRound(),
     );
 
     // ═══════════════════════════════════════════════════════════════════════

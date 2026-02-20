@@ -51,6 +51,17 @@ class Player {
   /// Compteur d'action de la dernière mise à jour du hint.
   List<int?> unknownCardHintActionCount;
 
+  /// Reconstruction mémoire après un Joker subi (bots Or/Platine).
+  /// Mode binaire: aucune probabilité, uniquement déduction structurelle.
+  bool jokerInferenceActive;
+  String? jokerInferenceMode;
+  List<PlayingCard> jokerInferenceKnownPool;
+  String? jokerInferenceDoublonValue;
+  String? jokerInferenceUniqueValue;
+  int? jokerInferenceKnownUniqueIndex;
+  List<int> jokerInferenceKnownDoublonIndices;
+  int jokerInferenceActionCount;
+
   /// Mode "blackout" des bots Bronze: ils pensent connaître leurs cartes
   /// alors que leur mémoire est fausse.
   bool bronzeBlackoutActive;
@@ -86,6 +97,14 @@ class Player {
     List<double?>? unknownCardQualityHints,
     List<double?>? unknownCardHintConfidence,
     List<int?>? unknownCardHintActionCount,
+    this.jokerInferenceActive = false,
+    this.jokerInferenceMode,
+    List<PlayingCard>? jokerInferenceKnownPool,
+    this.jokerInferenceDoublonValue,
+    this.jokerInferenceUniqueValue,
+    this.jokerInferenceKnownUniqueIndex,
+    List<int>? jokerInferenceKnownDoublonIndices,
+    this.jokerInferenceActionCount = -1,
     this.bronzeBlackoutActive = false,
     this.bronzeBlackoutUntilActionCount = -1,
     this.lastBronzeBlackoutActionCount = -999,
@@ -98,7 +117,10 @@ class Player {
         spyMemory = spyMemory ?? {},
         unknownCardQualityHints = unknownCardQualityHints ?? [],
         unknownCardHintConfidence = unknownCardHintConfidence ?? [],
-        unknownCardHintActionCount = unknownCardHintActionCount ?? [];
+        unknownCardHintActionCount = unknownCardHintActionCount ?? [],
+        jokerInferenceKnownPool = jokerInferenceKnownPool ?? [],
+        jokerInferenceKnownDoublonIndices =
+            jokerInferenceKnownDoublonIndices ?? [];
 
   Player.clone(Player other)
       : id = other.id,
@@ -121,6 +143,15 @@ class Player {
         unknownCardHintConfidence = List.from(other.unknownCardHintConfidence),
         unknownCardHintActionCount =
             List.from(other.unknownCardHintActionCount),
+        jokerInferenceActive = other.jokerInferenceActive,
+        jokerInferenceMode = other.jokerInferenceMode,
+        jokerInferenceKnownPool = List.from(other.jokerInferenceKnownPool),
+        jokerInferenceDoublonValue = other.jokerInferenceDoublonValue,
+        jokerInferenceUniqueValue = other.jokerInferenceUniqueValue,
+        jokerInferenceKnownUniqueIndex = other.jokerInferenceKnownUniqueIndex,
+        jokerInferenceKnownDoublonIndices =
+            List.from(other.jokerInferenceKnownDoublonIndices),
+        jokerInferenceActionCount = other.jokerInferenceActionCount,
         bronzeBlackoutActive = other.bronzeBlackoutActive,
         bronzeBlackoutUntilActionCount = other.bronzeBlackoutUntilActionCount,
         lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount,
@@ -270,12 +301,14 @@ class Player {
     }
 
     clearUnknownCardHint(index);
+    onCardConfirmedAfterJoker(index, card);
   }
 
   void resetMentalMap() {
     mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
     knownCards = List<bool>.filled(hand.length, false, growable: true);
     resetUnknownCardHints();
+    clearJokerInference();
   }
 
   void forgetCard(int index) {
@@ -285,6 +318,247 @@ class Player {
     if (index >= 0 && index < knownCards.length) {
       knownCards[index] = false;
     }
+    clearUnknownCardHint(index);
+  }
+
+  void clearJokerInference() {
+    jokerInferenceActive = false;
+    jokerInferenceMode = null;
+    jokerInferenceKnownPool = [];
+    jokerInferenceDoublonValue = null;
+    jokerInferenceUniqueValue = null;
+    jokerInferenceKnownUniqueIndex = null;
+    jokerInferenceKnownDoublonIndices = [];
+    jokerInferenceActionCount = -1;
+  }
+
+  void setupJokerInferenceFromKnownHand({
+    required List<PlayingCard> knownHandBeforeJoker,
+    required int actionCount,
+  }) {
+    clearJokerInference();
+    if (isHuman) return;
+    if (knownHandBeforeJoker.isEmpty) return;
+    if (knownHandBeforeJoker.length != hand.length) return;
+
+    jokerInferenceActionCount = actionCount;
+    jokerInferenceKnownPool = List<PlayingCard>.from(knownHandBeforeJoker);
+
+    if (knownHandBeforeJoker.length == 2) {
+      final first = knownHandBeforeJoker[0];
+      final second = knownHandBeforeJoker[1];
+
+      // Cas trivial: deux cartes strictement équivalentes (même valeur + points).
+      // Le Joker ne change alors rien de pertinent.
+      if (first.value == second.value && first.points == second.points) {
+        for (int i = 0; i < hand.length; i++) {
+          if (i >= mentalMap.length) {
+            mentalMap.add(null);
+          }
+          if (i >= knownCards.length) {
+            knownCards.add(false);
+          }
+          mentalMap[i] = PlayingCard.create(hand[i].suit, first.value);
+          knownCards[i] = true;
+          clearUnknownCardHint(i);
+        }
+        return;
+      }
+
+      jokerInferenceActive = true;
+      jokerInferenceMode = 'two_cards';
+      return;
+    }
+
+    if (knownHandBeforeJoker.length == 3) {
+      final counts = <String, int>{};
+      for (final card in knownHandBeforeJoker) {
+        counts[card.value] = (counts[card.value] ?? 0) + 1;
+      }
+
+      String? doublonValue;
+      String? uniqueValue;
+      for (final entry in counts.entries) {
+        if (entry.value == 2) doublonValue = entry.key;
+        if (entry.value == 1) uniqueValue = entry.key;
+      }
+
+      if (doublonValue != null && uniqueValue != null) {
+        jokerInferenceActive = true;
+        jokerInferenceMode = 'three_double';
+        jokerInferenceDoublonValue = doublonValue;
+        jokerInferenceUniqueValue = uniqueValue;
+        return;
+      }
+    }
+  }
+
+  void onOwnReplacementAfterJoker({
+    required int replacedIndex,
+    required PlayingCard discardedCard,
+  }) {
+    if (!jokerInferenceActive) return;
+
+    final mode = jokerInferenceMode;
+    if (mode == 'two_cards') {
+      if (hand.length != 2 || jokerInferenceKnownPool.length != 2) {
+        clearJokerInference();
+        return;
+      }
+
+      int removedIndex =
+          jokerInferenceKnownPool.indexWhere((c) => c.id == discardedCard.id);
+      if (removedIndex == -1) {
+        removedIndex = jokerInferenceKnownPool.indexWhere(
+          (c) =>
+              c.value == discardedCard.value &&
+              c.points == discardedCard.points,
+        );
+      }
+      if (removedIndex != -1) {
+        jokerInferenceKnownPool.removeAt(removedIndex);
+      }
+
+      if (jokerInferenceKnownPool.length == 1) {
+        final otherIdx = replacedIndex == 0 ? 1 : 0;
+        _setKnownFromInference(otherIdx, jokerInferenceKnownPool.first.value);
+      }
+      clearJokerInference();
+      return;
+    }
+
+    if (mode == 'three_double') {
+      final doublonValue = jokerInferenceDoublonValue;
+      final uniqueValue = jokerInferenceUniqueValue;
+      if (doublonValue == null || uniqueValue == null || hand.length != 3) {
+        clearJokerInference();
+        return;
+      }
+
+      if (discardedCard.value == uniqueValue) {
+        for (int i = 0; i < hand.length; i++) {
+          if (i == replacedIndex) continue;
+          _setKnownFromInference(i, doublonValue);
+        }
+      } else if (discardedCard.value == doublonValue) {
+        if (jokerInferenceKnownUniqueIndex != null &&
+            jokerInferenceKnownUniqueIndex != replacedIndex) {
+          for (int i = 0; i < hand.length; i++) {
+            if (i == replacedIndex || i == jokerInferenceKnownUniqueIndex) {
+              continue;
+            }
+            _setKnownFromInference(i, doublonValue);
+          }
+        }
+      }
+
+      // Le multiset a changé (carte retirée + carte piochée), donc on stoppe
+      // cette reconstruction Joker et on repart sur l'état binaire courant.
+      clearJokerInference();
+      return;
+    }
+
+    clearJokerInference();
+  }
+
+  void onCardConfirmedAfterJoker(int index, PlayingCard knownCard) {
+    if (!jokerInferenceActive) return;
+
+    final mode = jokerInferenceMode;
+    if (mode == 'two_cards') {
+      if (hand.length != 2 || jokerInferenceKnownPool.length != 2) {
+        clearJokerInference();
+        return;
+      }
+
+      final otherIdx = index == 0 ? 1 : 0;
+      if (!knownCards[otherIdx]) {
+        PlayingCard? otherCard;
+        if (jokerInferenceKnownPool[0].id == knownCard.id) {
+          otherCard = jokerInferenceKnownPool[1];
+        } else if (jokerInferenceKnownPool[1].id == knownCard.id) {
+          otherCard = jokerInferenceKnownPool[0];
+        } else if (jokerInferenceKnownPool[0].value == knownCard.value &&
+            jokerInferenceKnownPool[0].points == knownCard.points) {
+          otherCard = jokerInferenceKnownPool[1];
+        } else if (jokerInferenceKnownPool[1].value == knownCard.value &&
+            jokerInferenceKnownPool[1].points == knownCard.points) {
+          otherCard = jokerInferenceKnownPool[0];
+        }
+
+        if (otherCard != null) {
+          _setKnownFromInference(otherIdx, otherCard.value);
+        }
+      }
+
+      if (knownCardCount >= hand.length) {
+        clearJokerInference();
+      }
+      return;
+    }
+
+    if (mode == 'three_double') {
+      final doublonValue = jokerInferenceDoublonValue;
+      final uniqueValue = jokerInferenceUniqueValue;
+      if (doublonValue == null || uniqueValue == null || hand.length != 3) {
+        clearJokerInference();
+        return;
+      }
+
+      if (knownCard.value == uniqueValue) {
+        jokerInferenceKnownUniqueIndex = index;
+        for (int i = 0; i < hand.length; i++) {
+          if (i == index) continue;
+          _setKnownFromInference(i, doublonValue);
+          if (!jokerInferenceKnownDoublonIndices.contains(i)) {
+            jokerInferenceKnownDoublonIndices.add(i);
+          }
+        }
+      } else if (knownCard.value == doublonValue) {
+        if (!jokerInferenceKnownDoublonIndices.contains(index)) {
+          jokerInferenceKnownDoublonIndices.add(index);
+        }
+
+        if (jokerInferenceKnownDoublonIndices.length >= 2) {
+          int? uniqueIdx;
+          for (final i in const [0, 1, 2]) {
+            if (!jokerInferenceKnownDoublonIndices.contains(i)) {
+              uniqueIdx = i;
+              break;
+            }
+          }
+          if (uniqueIdx != null) {
+            jokerInferenceKnownUniqueIndex = uniqueIdx;
+            _setKnownFromInference(uniqueIdx, uniqueValue);
+          }
+        } else if (jokerInferenceKnownUniqueIndex != null) {
+          for (int i = 0; i < hand.length; i++) {
+            if (i == jokerInferenceKnownUniqueIndex) continue;
+            if (i == index) continue;
+            _setKnownFromInference(i, doublonValue);
+          }
+        }
+      }
+
+      if (knownCardCount >= hand.length) {
+        clearJokerInference();
+      }
+      return;
+    }
+
+    clearJokerInference();
+  }
+
+  void _setKnownFromInference(int index, String value) {
+    if (index < 0 || index >= hand.length) return;
+    while (mentalMap.length <= index) {
+      mentalMap.add(null);
+    }
+    while (knownCards.length <= index) {
+      knownCards.add(false);
+    }
+    mentalMap[index] = PlayingCard.create(hand[index].suit, value);
+    knownCards[index] = true;
     clearUnknownCardHint(index);
   }
 
@@ -465,6 +739,8 @@ class Player {
             return "⚔️";
           case BotBehavior.balanced:
             return "🧠";
+          case BotBehavior.moi:
+            return "🦈";
         }
       }
       return "🤖";
@@ -557,6 +833,14 @@ class Player {
     Map<String, double>? aiParameters,
     int? position,
     bool? isSpectator,
+    bool? jokerInferenceActive,
+    String? jokerInferenceMode,
+    List<PlayingCard>? jokerInferenceKnownPool,
+    String? jokerInferenceDoublonValue,
+    String? jokerInferenceUniqueValue,
+    int? jokerInferenceKnownUniqueIndex,
+    List<int>? jokerInferenceKnownDoublonIndices,
+    int? jokerInferenceActionCount,
   }) {
     return Player(
       id: id ?? this.id,
@@ -579,6 +863,20 @@ class Player {
       unknownCardQualityHints: List.from(unknownCardQualityHints),
       unknownCardHintConfidence: List.from(unknownCardHintConfidence),
       unknownCardHintActionCount: List.from(unknownCardHintActionCount),
+      jokerInferenceActive: jokerInferenceActive ?? this.jokerInferenceActive,
+      jokerInferenceMode: jokerInferenceMode ?? this.jokerInferenceMode,
+      jokerInferenceKnownPool: jokerInferenceKnownPool ??
+          List<PlayingCard>.from(this.jokerInferenceKnownPool),
+      jokerInferenceDoublonValue:
+          jokerInferenceDoublonValue ?? this.jokerInferenceDoublonValue,
+      jokerInferenceUniqueValue:
+          jokerInferenceUniqueValue ?? this.jokerInferenceUniqueValue,
+      jokerInferenceKnownUniqueIndex:
+          jokerInferenceKnownUniqueIndex ?? this.jokerInferenceKnownUniqueIndex,
+      jokerInferenceKnownDoublonIndices: jokerInferenceKnownDoublonIndices ??
+          List<int>.from(this.jokerInferenceKnownDoublonIndices),
+      jokerInferenceActionCount:
+          jokerInferenceActionCount ?? this.jokerInferenceActionCount,
       bronzeBlackoutActive: bronzeBlackoutActive,
       bronzeBlackoutUntilActionCount: bronzeBlackoutUntilActionCount,
       lastBronzeBlackoutActionCount: lastBronzeBlackoutActionCount,

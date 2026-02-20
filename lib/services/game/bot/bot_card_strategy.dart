@@ -2,11 +2,13 @@ import 'dart:math';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import '../../../models/playing_card.dart';
+import '../../logging/game_logger_service.dart';
 import 'bot_difficulty.dart';
 import '../game_logic.dart';
 import 'bot_config.dart';
 import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
+import 'bot_dutch_strategy.dart';
 import 'human_threat_tracker.dart';
 
 /// Stratégie de gestion des cartes
@@ -72,6 +74,19 @@ class BotCardStrategy {
         difficulty,
         unknownIndices,
       );
+      return;
+    }
+
+    if (drawn.value == 'V' &&
+        _shouldTriggerDrawnValetPower(
+          gs,
+          bot,
+          decisionProfile,
+          tableConclusions,
+          unknownIndices,
+        )) {
+      GameLogic.discardDrawnCard(gs);
+      bot.consecutiveBadDraws++;
       return;
     }
 
@@ -445,6 +460,211 @@ class BotCardStrategy {
     final cardGap =
         tableConclusions.myCards - tableConclusions.minOpponentCards;
     return cardGap >= 2;
+  }
+
+  static bool _shouldTriggerDrawnValetPower(
+    GameState gs,
+    Player bot,
+    _CardDecisionProfile profile,
+    _CardTableConclusions tableConclusions,
+    List<int> unknownIndices,
+  ) {
+    if (!_isAdvancedCardTier(profile.tier)) return false;
+
+    final thresholdTrace = _buildValetPayloadThresholdTrace(
+      gs,
+      bot,
+      tableConclusions,
+    );
+    final payloadThreshold = thresholdTrace.finalThreshold;
+    final hasKnownHighPayload =
+        _hasKnownHighPayload(bot, minPoints: payloadThreshold);
+    final hasUnknown = unknownIndices.isNotEmpty;
+    final cardGap =
+        tableConclusions.myCards - tableConclusions.minOpponentCards;
+    final racePressure = tableConclusions.minOpponentCards <= 2 ||
+        tableConclusions.isTenseEndgame ||
+        tableConclusions.isHumanDangerous;
+    final isMoiStyle = bot.botBehavior == BotBehavior.moi;
+    final duel = gs.players.length == 2;
+    final knowsAllCards = !hasUnknown;
+    bool shouldTrigger = false;
+
+    if (duel && knowsAllCards && !hasKnownHighPayload) {
+      shouldTrigger = false;
+    } else if (isMoiStyle) {
+      if (hasKnownHighPayload && (racePressure || cardGap >= 1)) {
+        shouldTrigger = true;
+      } else if (duel && hasUnknown && cardGap >= 0) {
+        shouldTrigger = true;
+      }
+    } else if (profile.tier == _CardTier.platinum) {
+      if (duel && hasUnknown) {
+        shouldTrigger = true;
+      } else if (racePressure && (hasKnownHighPayload || hasUnknown)) {
+        shouldTrigger = true;
+      } else if (duel &&
+          tableConclusions.minOpponentCards <= 3 &&
+          hasKnownHighPayload) {
+        shouldTrigger = true;
+      }
+    } else {
+      // Or: plus sélectif, déclenche surtout quand la table accélère.
+      shouldTrigger = racePressure && hasKnownHighPayload;
+    }
+
+    _logDrawnValetDecision(
+      bot,
+      profile,
+      tableConclusions,
+      thresholdTrace,
+      shouldTrigger,
+      hasKnownHighPayload: hasKnownHighPayload,
+      hasUnknown: hasUnknown,
+      cardGap: cardGap,
+      racePressure: racePressure,
+      duel: duel,
+    );
+    return shouldTrigger;
+  }
+
+  static bool _hasKnownHighPayload(Player bot, {int minPoints = 10}) {
+    for (final card in bot.mentalMap) {
+      if (card == null) continue;
+      if (card.points >= minPoints) return true;
+    }
+    return false;
+  }
+
+  static _ValetPayloadThresholdTrace _buildValetPayloadThresholdTrace(
+    GameState gs,
+    Player bot,
+    _CardTableConclusions tableConclusions,
+  ) {
+    final tracker = BotDutchStrategy.discardTracker;
+    final opponents =
+        gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
+
+    int baseThreshold;
+    if (tableConclusions.minOpponentCards <= 2 ||
+        tableConclusions.isTenseEndgame) {
+      baseThreshold = 8;
+    } else if (tableConclusions.minOpponentCards == 3) {
+      baseThreshold = 9;
+    } else {
+      baseThreshold = 10;
+    }
+    int threshold = baseThreshold;
+    final opponentSummaries = <String>[];
+
+    for (final opponent in opponents) {
+      final decisions = tracker.getObservedDecisionCount(opponent.id);
+      if (decisions <= 0) {
+        opponentSummaries.add('${opponent.name}: no-observation');
+        continue;
+      }
+
+      final avgInstant =
+          tracker.getAverageDrawnDiscardPoints(opponent.id, lookback: 6);
+      final lowInstantRate = tracker.getLowDrawnDiscardRate(
+        opponent.id,
+        maxPoints: 4,
+        lookback: 6,
+      );
+      final recentLowInstant = tracker.hasRecentLowDrawnDiscard(
+        opponent.id,
+        maxPoints: 4,
+        lookback: 4,
+      );
+      final avgExchange =
+          tracker.getAverageExchangeDiscardPoints(opponent.id, lookback: 6);
+      final exchangeRate = tracker.getExchangeRate(opponent.id);
+      final style = tracker.estimateOpponentStyle(opponent.id);
+      final estimate =
+          tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+
+      int opponentThreshold = threshold;
+      final adjustments = <String>[];
+
+      if (recentLowInstant || lowInstantRate >= 0.45) {
+        final inferred = (avgInstant + 1.0).round().clamp(3, 8);
+        opponentThreshold = min(opponentThreshold, inferred);
+        adjustments.add('lowInstant-><=${inferred.toString()}');
+      }
+      if (exchangeRate >= 0.62 && avgExchange >= 8.0) {
+        opponentThreshold = min(opponentThreshold, 7);
+        adjustments.add('exchangeHigh-><=7');
+      }
+
+      final likelyStrongHand = estimate.confidence >= 0.30 &&
+          estimate.estimatedScore <= (opponent.hand.length * 4.5);
+      final strongOptimizer =
+          style.confidence >= 0.30 && style.optimization >= 0.65;
+      if (likelyStrongHand) {
+        opponentThreshold -= 1;
+        adjustments.add('strongHand:-1');
+      }
+      if (strongOptimizer) {
+        opponentThreshold -= 1;
+        adjustments.add('optimizer:-1');
+      }
+
+      final finalOpponentThreshold = opponentThreshold.clamp(3, 10);
+      threshold = min(threshold, opponentThreshold);
+      opponentSummaries.add(
+        '${opponent.name}: cards=${opponent.hand.length} dec=$decisions '
+        'exRate=${exchangeRate.toStringAsFixed(2)} '
+        'avgInst=${avgInstant.toStringAsFixed(2)} '
+        'lowInst=${lowInstantRate.toStringAsFixed(2)} '
+        'recentLow=$recentLowInstant '
+        'avgEx=${avgExchange.toStringAsFixed(2)} '
+        'opt=${style.optimization.toStringAsFixed(2)}/${style.confidence.toStringAsFixed(2)} '
+        'est=${estimate.estimatedScore.toStringAsFixed(1)}/${estimate.confidence.toStringAsFixed(2)} '
+        '-> th=$finalOpponentThreshold '
+        '[${adjustments.isEmpty ? 'none' : adjustments.join(', ')}]',
+      );
+    }
+
+    return _ValetPayloadThresholdTrace(
+      baseThreshold: baseThreshold,
+      finalThreshold: threshold.clamp(3, 10),
+      opponentSummaries: opponentSummaries,
+    );
+  }
+
+  static void _logDrawnValetDecision(
+    Player bot,
+    _CardDecisionProfile profile,
+    _CardTableConclusions tableConclusions,
+    _ValetPayloadThresholdTrace thresholdTrace,
+    bool shouldTrigger, {
+    required bool hasKnownHighPayload,
+    required bool hasUnknown,
+    required int cardGap,
+    required bool racePressure,
+    required bool duel,
+  }) {
+    GameLoggerService.instance.logBotDecision(
+      bot: bot,
+      decision: shouldTrigger ? 'DRAWN_VALET_USE' : 'DRAWN_VALET_SKIP',
+      context: {
+        'tier': profile.tier.name,
+        'duel': duel,
+        'cardGap': cardGap,
+        'racePressure': racePressure,
+        'hasUnknown': hasUnknown,
+        'hasKnownHighPayload': hasKnownHighPayload,
+        'table.minOpponentCards': tableConclusions.minOpponentCards,
+        'table.myCards': tableConclusions.myCards,
+        'table.isTenseEndgame': tableConclusions.isTenseEndgame,
+        'table.isHumanDangerous': tableConclusions.isHumanDangerous,
+        'threshold.base': thresholdTrace.baseThreshold,
+        'threshold.final': thresholdTrace.finalThreshold,
+        'threshold.opponents': thresholdTrace.opponentSummaries.isEmpty
+            ? 'none'
+            : thresholdTrace.opponentSummaries.join(' || '),
+      },
+    );
   }
 
   static void _handleBronzeReplacementByContext(
@@ -1094,6 +1314,11 @@ class BotCardStrategy {
       matchChance = (matchChance + 1.0) / 2;
     } else if (bot.botBehavior == BotBehavior.aggressive) {
       matchChance += 0.15; // Nouveau bonus pour aggressive
+    } else if (bot.botBehavior == BotBehavior.moi) {
+      matchChance += 0.20;
+      if (phase == BotGamePhase.endgame) {
+        matchChance += 0.10;
+      }
     }
 
     if (gameState.gameMode == GameMode.tournament) {
@@ -1255,6 +1480,18 @@ class _CardTableConclusions {
     required this.minOpponentCards,
     required this.avgOpponentCards,
     required this.myCards,
+  });
+}
+
+class _ValetPayloadThresholdTrace {
+  final int baseThreshold;
+  final int finalThreshold;
+  final List<String> opponentSummaries;
+
+  const _ValetPayloadThresholdTrace({
+    required this.baseThreshold,
+    required this.finalThreshold,
+    required this.opponentSummaries,
   });
 }
 

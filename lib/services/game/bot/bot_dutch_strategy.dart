@@ -29,7 +29,12 @@ class BotDutchStrategy {
     final perceivedScore = unknownCount == 0
         ? knownScore
         : knownScore + (expectedUnknown * unknownCount).round();
+    final unresolvedValetUncertainty =
+        (tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
+            _hasUnresolvedValetUncertainty(bot);
     final canDutchState = _canDutchStateBased(gs, bot, difficulty);
+    final canBlindDutchOnOpponentError =
+        _canBlindDutchOnOpponentError(gs, bot, tier);
     final hasOpponentWithGuaranteedZero =
         gs.players.any((p) => p.id != bot.id && p.hand.isEmpty);
     final context = _buildDecisionContext(gs, bot, profile);
@@ -57,6 +62,12 @@ class BotDutchStrategy {
     }
     if (!canDutchState) {
       blockers.add('mémoire incomplète/incertaine');
+    }
+    if (canBlindDutchOnOpponentError) {
+      opportunities.add('blind Dutch: score bas + match raté adverse');
+    }
+    if (unresolvedValetUncertainty) {
+      blockers.add('incertitude Valet non revalidée');
     }
     if (hasOpponentWithGuaranteedZero && perceivedScore > 0) {
       blockers.add('adversaire à 0 garanti');
@@ -251,6 +262,13 @@ class BotDutchStrategy {
   }) {
     final tier = _tierFromDifficulty(difficulty);
 
+    // Or/Platine: si une incertitude vient d'un Valet subi et n'est pas
+    // revalidée, Dutch est interdit.
+    if ((tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
+        _hasUnresolvedValetUncertainty(bot)) {
+      return false;
+    }
+
     // Règle premium (Or/Platine): main vide OU score 0 certain => Dutch immédiat.
     if (tier == _DutchTier.gold || tier == _DutchTier.platinum) {
       final knownUnknownCount = BotMemoryManager.getUnknownIndices(bot).length;
@@ -268,10 +286,14 @@ class BotDutchStrategy {
         if (!_canDutchStateBased(gs, bot, difficulty)) return false;
         return _shouldSilverDutch(gs, bot, difficulty, phase, personality);
       case _DutchTier.gold:
-        if (!_canDutchStateBased(gs, bot, difficulty)) return false;
+        if (!_canDutchStateBased(gs, bot, difficulty)) {
+          return _canBlindDutchOnOpponentError(gs, bot, tier);
+        }
         return _shouldGoldDutch(gs, bot, difficulty, phase, personality);
       case _DutchTier.platinum:
-        if (!_canDutchStateBased(gs, bot, difficulty)) return false;
+        if (!_canDutchStateBased(gs, bot, difficulty)) {
+          return _canBlindDutchOnOpponentError(gs, bot, tier);
+        }
         return _shouldPlatinumDutch(gs, bot, difficulty, personality);
     }
   }
@@ -308,22 +330,17 @@ class BotDutchStrategy {
     Player bot,
     BotDifficulty difficulty,
   ) {
-    // RÈGLE FONDAMENTALE : le bot doit connaître TOUTES ses cartes
+    final tier = _tierFromDifficulty(difficulty);
+    if ((tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
+        _hasUnresolvedValetUncertainty(bot)) {
+      return false;
+    }
+
+    // RÈGLE FONDAMENTALE : le bot doit connaître TOUTES ses cartes.
+    // Plus de fallback "Platine avec 1 inconnue".
     final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
     if (unknownIndices.isNotEmpty) {
-      final tier = _tierFromDifficulty(difficulty);
-      if (tier != _DutchTier.platinum || unknownIndices.length != 1) {
-        return false;
-      }
-
-      final knownCount = bot.mentalMap.where((c) => c != null).length;
-      if (knownCount < bot.hand.length - 1) {
-        return false;
-      }
-
-      final knownScore = bot.getKnownScore();
-      final expectedUnknown = BotMemoryManager.getExpectedDeckCardValue(gs);
-      return knownScore <= 1 && expectedUnknown <= 2.5;
+      return false;
     }
 
     // Vérifier que la mentalMap est cohérente
@@ -332,6 +349,55 @@ class BotDutchStrategy {
     if (knownCount < handSize) {
       return false; // Pas assez de certitude
     }
+
+    return true;
+  }
+
+  static bool _hasUnresolvedValetUncertainty(Player bot) {
+    final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
+    for (final idx in unknownIndices) {
+      if (bot.getUnknownCardHintAction(idx) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Exception contrôlée: Dutch "à l'aveugle" (Or/Platine)
+  /// uniquement en duel si:
+  /// - score perçu faible malgré inconnues,
+  /// - adversaire vient de rater un match (erreur publique),
+  /// - le bot n'est pas lui-même en séquence d'erreurs.
+  static bool _canBlindDutchOnOpponentError(
+    GameState gs,
+    Player bot,
+    _DutchTier tier,
+  ) {
+    if (tier != _DutchTier.gold && tier != _DutchTier.platinum) return false;
+
+    final opponents = gs.players.where((p) => p.id != bot.id).toList();
+    if (opponents.length != 1) return false;
+    final opponent = opponents.first;
+    if (opponent.hand.isEmpty) return false;
+
+    final unknownCount = BotMemoryManager.getUnknownIndices(bot).length;
+    if (unknownCount == 0 || unknownCount > 2) return false;
+
+    // Le bot ne force pas Dutch à l'aveugle s'il vient lui-même d'enchaîner
+    // des erreurs (match raté / pénalité).
+    if (_recentMatchFail(gs, bot) || _recentPenalty(gs, bot)) return false;
+
+    // Déclencheur unique demandé: erreur adverse explicite.
+    final opponentJustFailedMatch =
+        _recentActionContains(gs, opponent.name, ['rate son match'], limit: 8);
+    if (!opponentJustFailedMatch) return false;
+
+    final knownScore = bot.getKnownScore();
+    final expectedUnknownValue = BotMemoryManager.getExpectedDeckCardValue(gs);
+    final perceivedScore =
+        knownScore + (expectedUnknownValue * unknownCount).round();
+    final blindScoreCap = tier == _DutchTier.platinum ? 8 : 7;
+    if (perceivedScore > blindScoreCap) return false;
 
     return true;
   }

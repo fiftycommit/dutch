@@ -26,6 +26,7 @@ class GameLogic {
       p.knownCards = [];
       p.mentalMap = [];
       p.resetUnknownCardHints();
+      p.clearJokerInference();
     }
 
     GameState gameState = GameState(
@@ -152,6 +153,12 @@ class GameLogic {
     // FIX CRITIQUE : Mettre à jour la mentalMap du bot avec la nouvelle carte
     // Sinon le bot raisonne sur l'ancienne carte → décisions incohérentes
     if (!player.isHuman) {
+      // La carte remplacée est défaussée publiquement:
+      // utile pour la reconstruction post-Joker.
+      player.onOwnReplacementAfterJoker(
+        replacedIndex: cardIndex,
+        discardedCard: oldCard,
+      );
       player.updateMentalMap(cardIndex, newCard);
     }
     player.clearUnknownCardHint(cardIndex);
@@ -232,6 +239,9 @@ class GameLogic {
       if (!player.isHuman && cardIndex < player.mentalMap.length) {
         player.mentalMap.removeAt(cardIndex);
       }
+      if (!player.isHuman) {
+        player.clearJokerInference();
+      }
       if (cardIndex < player.unknownCardQualityHints.length) {
         player.unknownCardQualityHints.removeAt(cardIndex);
       }
@@ -307,6 +317,7 @@ class GameLogic {
 
     if (!player.isHuman) {
       player.mentalMap.add(null);
+      player.clearJokerInference();
     }
     player.clearUnknownCardHint(newHand.length - 1);
 
@@ -349,6 +360,12 @@ class GameLogic {
     }
     if (!p2.isHuman && idx2 < p2.mentalMap.length) {
       p2.mentalMap[idx2] = null;
+    }
+    if (!p1.isHuman) {
+      p1.clearJokerInference();
+    }
+    if (!p2.isHuman) {
+      p2.clearJokerInference();
     }
 
     final p1IgnoresSwap = _shouldBronzeIgnoreSwap(p1);
@@ -428,6 +445,19 @@ class GameLogic {
     receiver.clearUnknownCardHint(receiverIndex);
     if (receiver.isHuman) return;
 
+    // Or/Platine: modèle binaire strict (sait / sait pas).
+    // On conserve uniquement un marqueur structurel "incertitude issue d'un swap"
+    // via actionCount, sans qualité/confiance probabiliste.
+    if (_usesBinaryUnknownModel(receiver)) {
+      receiver.setUnknownCardHint(
+        receiverIndex,
+        quality: 0.0,
+        confidence: 0.0,
+        actionCount: gameState.actionCount,
+      );
+      return;
+    }
+
     final estimate = BotDutchStrategy.discardTracker
         .estimateOpponentHand(source.id, source.hand.length);
     final sourceCardAverage = source.hand.isEmpty
@@ -485,6 +515,18 @@ class GameLogic {
     return value;
   }
 
+  static bool _usesBinaryUnknownModel(Player player) {
+    if (player.isHuman) return false;
+    final skill = player.botSkillLevel;
+    return skill == BotSkillLevel.gold || skill == BotSkillLevel.platinum;
+  }
+
+  static bool _usesAdvancedJokerModel(Player player) {
+    if (player.isHuman) return false;
+    final skill = player.botSkillLevel;
+    return skill == BotSkillLevel.gold || skill == BotSkillLevel.platinum;
+  }
+
   static bool _shouldBronzeIgnoreSwap(Player player) {
     if (player.isHuman) return false;
     if (player.botSkillLevel != BotSkillLevel.bronze) return false;
@@ -520,11 +562,30 @@ class GameLogic {
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {
+    List<PlayingCard>? knownBeforeJoker;
+    if (_usesAdvancedJokerModel(targetPlayer)) {
+      final knowsAll =
+          targetPlayer.mentalMap.length >= targetPlayer.hand.length &&
+              targetPlayer.hand.isNotEmpty &&
+              targetPlayer.mentalMap
+                  .take(targetPlayer.hand.length)
+                  .every((card) => card != null);
+      if (knowsAll) {
+        knownBeforeJoker = targetPlayer.mentalMap
+            .take(targetPlayer.hand.length)
+            .whereType<PlayingCard>()
+            .map((card) => PlayingCard.create(card.suit, card.value))
+            .toList(growable: false);
+      }
+    }
+
     List<PlayingCard> shuffledHand = List.from(targetPlayer.hand);
     shuffledHand.shuffle(Random());
     targetPlayer.hand = shuffledHand;
 
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);
+    targetPlayer.resetUnknownCardHints();
+    targetPlayer.clearJokerInference();
 
     // Invalider toute la mémoire espionnage concernant ce joueur
     // Car ses cartes ont été mélangées
@@ -538,6 +599,12 @@ class GameLogic {
       targetPlayer.mentalMap = List<PlayingCard?>.filled(
           targetPlayer.hand.length, null,
           growable: true);
+      if (knownBeforeJoker != null && knownBeforeJoker.isNotEmpty) {
+        targetPlayer.setupJokerInferenceFromKnownHand(
+          knownHandBeforeJoker: knownBeforeJoker,
+          actionCount: gameState.actionCount,
+        );
+      }
     }
 
     gameState.addToHistory(

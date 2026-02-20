@@ -233,6 +233,68 @@ void main() {
 
         expect(result, isTrue);
       });
+
+      test(
+          'platinum can call blind dutch in duel with low perceived score after opponent match fail',
+          () {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+        ];
+        bot.knownCards = [true, false];
+        bot.mentalMap = [bot.hand[0], null];
+
+        gameState.players[0].hand = [
+          PlayingCard.create('clubs', '9'),
+          PlayingCard.create('spades', '10'),
+          PlayingCard.create('hearts', 'D'),
+          PlayingCard.create('diamonds', 'R'),
+        ];
+        gameState.actionHistory = [
+          '[16:20] Human rate son match (6 ≠ 7) ! Pénalité !',
+          '[16:19] Human pioche',
+        ];
+
+        final result = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(result, isTrue);
+      });
+
+      test(
+          'platinum does not call blind dutch without recent opponent match fail',
+          () {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+        ];
+        bot.knownCards = [true, false];
+        bot.mentalMap = [bot.hand[0], null];
+
+        gameState.players[0].hand = [
+          PlayingCard.create('clubs', '9'),
+          PlayingCard.create('spades', '10'),
+          PlayingCard.create('hearts', 'D'),
+          PlayingCard.create('diamonds', 'R'),
+        ];
+        gameState.actionHistory = [
+          '[16:19] Human pioche',
+          '[16:18] Human remplace son 9 par la carte piochée',
+        ];
+
+        final result = BotDutchStrategy.shouldCallDutch(
+          gameState,
+          bot,
+          BotDifficulty.platinum,
+          BotGamePhase.endgame,
+        );
+
+        expect(result, isFalse);
+      });
     });
 
     group('difficulty effects', () {

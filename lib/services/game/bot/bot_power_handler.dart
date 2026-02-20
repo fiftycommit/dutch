@@ -88,7 +88,11 @@ class BotPowerHandler {
 
     // Argent (medium): le 7 est utilisé sauf étourdissement contextuel.
     if (powerConclusions.shouldSkipSilverPower7ByDizziness) {
-      _skipPower(gameState, bot);
+      _skipPower(
+        gameState,
+        bot,
+        reason: 'Argent étourdi: skip pouvoir 7 après pression récente',
+      );
       return;
     }
 
@@ -99,12 +103,20 @@ class BotPowerHandler {
         !powerConclusions.isSilverPower7 &&
         !powerConclusions.isOffensive &&
         _random.nextDouble() < powerConclusions.passiveSkipChance) {
-      _skipPower(gameState, bot);
+      _skipPower(
+        gameState,
+        bot,
+        reason: 'Inertie volontaire: pas de menace immédiate',
+      );
       return;
     }
 
     if (!powerConclusions.shouldUsePower) {
-      _skipPower(gameState, bot);
+      _skipPower(
+        gameState,
+        bot,
+        reason: 'Contexte défavorable: fenêtre pouvoir fermée',
+      );
       return;
     }
 
@@ -115,17 +127,28 @@ class BotPowerHandler {
       difficulty: difficulty,
     );
 
+    bool powerExecuted = true;
+
     if (val == '7') {
       _usePower7(gameState, bot, difficulty);
     } else if (val == '10') {
       await _usePower10(gameState, bot, difficulty, context,
           personality: personality);
     } else if (val == 'V') {
-      await _usePowerValet(gameState, bot, difficulty, context,
+      powerExecuted = await _usePowerValet(gameState, bot, difficulty, context,
           personality: personality);
     } else if (val == 'JOKER') {
       await _usePowerJoker(gameState, bot, difficulty, context,
           personality: personality);
+    }
+
+    if (!powerExecuted) {
+      _skipPower(
+        gameState,
+        bot,
+        reason: 'Aucune cible valide au moment de l’exécution',
+      );
+      return;
     }
 
     // TÉLÉMÉTRIE : snapshot avantage APRÈS le pouvoir
@@ -163,6 +186,7 @@ class BotPowerHandler {
     final isGold = _isGoldDifficulty(difficulty);
     final isBronze = diffName == 'Bronze';
     final isSilver = diffName == 'Argent';
+    final isAdvancedPowerBot = isGold || isPlatinum;
 
     final hasImmediateThreat = report.hasOpponentWithOneCard ||
         report.minOpponentCards <= 2 ||
@@ -170,9 +194,6 @@ class BotPowerHandler {
 
     final isOffensive = powerValue == 'V' || powerValue == 'JOKER';
     final hasUnknown = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
-    final hasPlatinumKillWindow =
-        isPlatinum && _hasActivePlatinumKillWindow(gameState);
-
     bool shouldUsePower10 = true;
     if (powerValue == '10') {
       final allCardsLow = BotMemoryManager.allKnownCardsBelow(bot, 10);
@@ -185,9 +206,10 @@ class BotPowerHandler {
         (powerValue == '7' && (hasUnknown || isGold || isPlatinum)) ||
             (powerValue == '10' && (shouldUsePower10 || isPlatinum));
     bool shouldUsePower = isOffensive || shouldUseInfo || hasImmediateThreat;
-    if (isPlatinum && isOffensive) {
-      // Réserve Valet/Joker pour la fenêtre de kill ou les urgences.
-      shouldUsePower = hasPlatinumKillWindow || hasImmediateThreat;
+    if (isAdvancedPowerBot) {
+      // Règle métier: plus de "moment tranquille" sur les pouvoirs en Or/Platine.
+      // Ils jouent toujours 7/10/V/JOKER quand le pouvoir est disponible.
+      shouldUsePower = true;
     }
     final forceUsePower7 = powerValue == '7' && (isGold || isPlatinum);
     final isSilverPower7 = isSilver && powerValue == '7';
@@ -200,9 +222,7 @@ class BotPowerHandler {
             // Argent reste distrait sur les pouvoirs "confort",
             // mais n'ignore pas arbitrairement un espionnage 10.
             ? (powerValue == '10' ? 0.0 : 0.26)
-            : isGold
-                ? 0.12
-                : 0.0;
+            : 0.0;
 
     return _PowerUseConclusions(
       hasImmediateThreat: hasImmediateThreat,
@@ -464,7 +484,7 @@ class BotPowerHandler {
   // POUVOIR VALET : Échange de cartes
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> _usePowerValet(
+  static Future<bool> _usePowerValet(
     GameState gs,
     Player bot,
     BotDifficulty difficulty,
@@ -479,10 +499,77 @@ class BotPowerHandler {
     // Trouver deux cibles différentes (pas le bot lui-même)
     final targets =
         _chooseValetTargets(gs, bot, difficulty, personality: personality);
-    if (targets == null) return;
+    if (targets == null) {
+      var duelPlan = _buildDuelValetPlan(gs, bot, difficulty);
+      if (duelPlan == null &&
+          (_isGoldDifficulty(difficulty) ||
+              _isPlatinumDifficulty(difficulty))) {
+        final duelOpponents = gs.players
+            .where((p) => p.id != bot.id && p.hand.isNotEmpty)
+            .toList(growable: false);
+        if (duelOpponents.length == 1 && bot.hand.isNotEmpty) {
+          final opponent = duelOpponents.first;
+          final ownIdx = _chooseOwnCardForDuelDisruption(bot);
+          final oppIdx = _chooseOpponentCardForDuelDisruption(bot, opponent);
+          final thresholdTrace = _computeDuelValetThresholdTrace(gs, opponent);
+          _logDuelValetDecision(
+            bot,
+            decision: 'VALET_DUEL_FORCE_USE_NO_CALM_SKIP',
+            context: {
+              'opponent': opponent.name,
+              'ownIndex': ownIdx,
+              'opponentIndex': oppIdx,
+              'reason': 'advanced_bot_no_calm_skip',
+              ...thresholdTrace.toLogContext(),
+            },
+          );
+          duelPlan = _DuelValetPlan(
+            opponent: opponent,
+            ownCardIndex: ownIdx,
+            opponentCardIndex: oppIdx,
+          );
+        }
+      }
+      if (duelPlan == null) return false;
 
-    final (target1, target2) = targets;
-    if (target1.hand.isEmpty || target2.hand.isEmpty) return;
+      final opponent = duelPlan.opponent;
+      final ownIdx = duelPlan.ownCardIndex;
+      final oppIdx = duelPlan.opponentCardIndex;
+
+      if (opponent.id != bot.id) {
+        opponent.lastTargetedByPowerTurn = gs.turnCount;
+      }
+
+      GameLogic.swapCards(gs, opponent, oppIdx, bot, ownIdx);
+
+      if (opponent.isHuman) {
+        await power_notifications.showBotSwapNotification(
+          context,
+          bot,
+          opponent.name,
+          oppIdx,
+          swapPartnerName: bot.name,
+          receivedCardPosition: ownIdx + 1,
+        );
+      }
+      return true;
+    }
+
+    var (target1, target2) = targets;
+    if (_isPlatinumDifficulty(difficulty)) {
+      final aggressivePlan = _resolvePlatinumValetAggressivePlan(
+        gs,
+        bot,
+        target1,
+        target2,
+        difficulty,
+      );
+      if (aggressivePlan != null) {
+        target1 = aggressivePlan.$1;
+        target2 = aggressivePlan.$2;
+      }
+    }
+    if (target1.hand.isEmpty || target2.hand.isEmpty) return false;
 
     final humanCooldownTurns = _humanValetCooldownTurns(bot, difficulty);
     if (humanCooldownTurns > 0) {
@@ -543,6 +630,7 @@ class BotPowerHandler {
         receivedCardPosition: idx1 + 1,
       );
     }
+    return true;
   }
 
   /// Choisit DEUX cibles pour le pouvoir Valet (pas le bot lui-même)
@@ -732,6 +820,543 @@ class BotPowerHandler {
     return _random.nextInt(target.hand.length);
   }
 
+  static _DuelValetPlan? _buildDuelValetPlan(
+    GameState gs,
+    Player bot,
+    BotDifficulty difficulty, {
+    bool logDecision = true,
+  }) {
+    final opponents =
+        gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
+    if (opponents.length != 1) return null;
+    if (!(_isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty))) {
+      return null;
+    }
+
+    final opponent = opponents.first;
+    if (bot.hand.isEmpty || opponent.hand.isEmpty) return null;
+    final duel = true;
+    final hasUnknownOwn = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
+    final thresholdTrace = _computeDuelValetThresholdTrace(gs, opponent);
+    final badCardThreshold = thresholdTrace.finalThreshold;
+
+    // Si le bot connaît toute sa main et qu'elle est déjà "bonne" pour
+    // le contexte courant, il skip le Valet.
+    if (!hasUnknownOwn) {
+      final worstKnown = _worstKnownCardPoints(bot);
+      if (worstKnown >= 0 && worstKnown < badCardThreshold) {
+        if (logDecision) {
+          _logDuelValetDecision(
+            bot,
+            decision: 'VALET_DUEL_SKIP_ALL_KNOWN_GOOD',
+            context: {
+              'opponent': opponent.name,
+              'knownCards': bot.knownCardCount,
+              'handCards': bot.hand.length,
+              'worstKnown': worstKnown,
+              ...thresholdTrace.toLogContext(),
+            },
+          );
+        }
+        return null;
+      }
+    }
+
+    // Mode "no mercy": en duel, si le bot ne connaît pas toute sa main,
+    // il échange immédiatement pour déstabiliser l'adversaire:
+    // - il donne une inconnue en priorité (sinon sa pire connue),
+    // - il récupère si possible une carte adverse supposée basse (espionnée),
+    //   sinon une carte aléatoire adverse.
+    if (hasUnknownOwn) {
+      final ownIdx = _chooseOwnCardForDuelDisruption(bot);
+      final oppIdx = _chooseOpponentCardForDuelDisruption(bot, opponent);
+      if (logDecision) {
+        _logDuelValetDecision(
+          bot,
+          decision: 'VALET_DUEL_USE_UNKNOWN_DISRUPTION',
+          context: {
+            'opponent': opponent.name,
+            'ownIndex': ownIdx,
+            'opponentIndex': oppIdx,
+            'knownCards': bot.knownCardCount,
+            'handCards': bot.hand.length,
+            ...thresholdTrace.toLogContext(),
+          },
+        );
+      }
+      return _DuelValetPlan(
+        opponent: opponent,
+        ownCardIndex: ownIdx,
+        opponentCardIndex: oppIdx,
+      );
+    }
+
+    final report = BotThreatAnalyzer.analyzeOpponents(
+      gs,
+      bot,
+      difficulty: difficulty,
+    );
+    final spied = bot.getSpiedCards(opponent.id);
+    final opponentEstimate = BotDutchStrategy.estimateOpponentForObserver(
+        gs, bot, opponent, difficulty);
+    final myPerceived = _estimateBotPerceivedScore(bot);
+    final behind = myPerceived > opponentEstimate.estimatedScore;
+    final isMoiStyle = bot.botBehavior == BotBehavior.moi;
+    final underPressure = report.minOpponentCards <= 2 ||
+        report.hasOpponentWithOneCard ||
+        report.bestOpponentScore <= (myPerceived + 1.5);
+
+    final opponentVelocity = BotDutchStrategy.discardTracker.getCardVelocity(
+      opponent.id,
+      gs.turnCount,
+      currentCards: opponent.hand.length,
+      windowTurns: 2,
+    );
+    final opponentBurst = BotDutchStrategy.discardTracker.hasMatchBurst(
+      opponent.id,
+      gs.turnCount,
+      requiredMatches: 2,
+      withinTurns: 3,
+    );
+    final raceRisk =
+        opponent.hand.length <= 2 || opponentVelocity >= 2 || opponentBurst;
+    final earlyOpeningWindow =
+        gs.turnCount <= 1 || gs.actionCount <= (gs.players.length * 2);
+    final canOpeningDisruption = isMoiStyle &&
+        duel &&
+        hasUnknownOwn &&
+        opponent.hand.length >= 3 &&
+        earlyOpeningWindow;
+    final canEntropySabotage = hasUnknownOwn &&
+        raceRisk &&
+        opponent.hand.length <= 2 &&
+        (underPressure || behind);
+
+    int bestOwnIdx = 0;
+    int bestOppIdx = 0;
+    double bestGain = -9999.0;
+    bool bestOwnKnown = false;
+    bool bestOppKnown = false;
+
+    for (int ownIdx = 0; ownIdx < bot.hand.length; ownIdx++) {
+      final ownKnown = _isKnownCardForBot(bot, ownIdx);
+      final ownOut = _estimateOwnCardValueForDuelValet(bot, ownIdx);
+
+      for (int oppIdx = 0; oppIdx < opponent.hand.length; oppIdx++) {
+        final knownOpp =
+            (spied != null && spied.containsKey(oppIdx)) ? spied[oppIdx] : null;
+        final oppKnown = knownOpp != null;
+        final oppOut = knownOpp != null ? knownOpp.points.toDouble() : 6.5;
+
+        // Duel sous pression: même unknown↔unknown peut être utile pour
+        // injecter de l'entropie et casser le mapping adverse.
+        if (!ownKnown &&
+            !oppKnown &&
+            !canEntropySabotage &&
+            !canOpeningDisruption) {
+          continue;
+        }
+
+        // Gain relatif: on veut maximiser (carte donnée - carte reçue).
+        double gain = ownOut - oppOut;
+        if (behind) {
+          gain += ownOut * 0.35;
+          gain -= oppOut * 0.10;
+        } else {
+          gain += (ownOut - 4.0) * 0.10;
+        }
+        if (raceRisk && ownKnown && ownOut >= badCardThreshold) {
+          gain += 1.5;
+        }
+        if (raceRisk && oppKnown && oppOut <= 3) {
+          gain += 0.8;
+        }
+
+        if (gain > bestGain) {
+          bestGain = gain;
+          bestOwnIdx = ownIdx;
+          bestOppIdx = oppIdx;
+          bestOwnKnown = ownKnown;
+          bestOppKnown = oppKnown;
+        }
+      }
+    }
+
+    if (bestGain <= -9000) return null;
+
+    final hasKnownPayload = _hasKnownHighPayloadForDuelValet(
+      bot,
+      minPoints: badCardThreshold,
+    );
+
+    // Pas d'échange "gratuit":
+    // - on le fait en anti-burst quand la course devient fatale,
+    // - ou en sabotage clair avec payload connu (grosse carte envoyée).
+    final shouldSwapForRace = raceRisk &&
+        (underPressure || behind || (isMoiStyle && hasKnownPayload));
+    final shouldSwapForSabotage = (behind && hasKnownPayload) ||
+        (isMoiStyle &&
+            hasKnownPayload &&
+            (underPressure || opponent.hand.length <= bot.hand.length));
+    final hasInformationEdge = bestOwnKnown || bestOppKnown;
+    final shouldSwapForEntropy =
+        canEntropySabotage && !hasInformationEdge && bestGain >= -0.05;
+    final shouldSwapForOpeningDisruption =
+        canOpeningDisruption && !hasInformationEdge && bestGain >= -0.05;
+    final shouldSwap = hasInformationEdge &&
+            (shouldSwapForRace ||
+                (shouldSwapForSabotage &&
+                    bestGain >= (isMoiStyle ? 0.2 : 0.8)) ||
+                (hasUnknownOwn && bestGain >= (isMoiStyle ? 0.7 : 1.2))) ||
+        shouldSwapForEntropy ||
+        shouldSwapForOpeningDisruption;
+
+    if (!shouldSwap) {
+      if (logDecision) {
+        _logDuelValetDecision(
+          bot,
+          decision: 'VALET_DUEL_SKIP_NO_EDGE',
+          context: {
+            'opponent': opponent.name,
+            'behind': behind,
+            'underPressure': underPressure,
+            'raceRisk': raceRisk,
+            'hasKnownPayload': hasKnownPayload,
+            'hasInformationEdge': hasInformationEdge,
+            'bestGain': bestGain.toStringAsFixed(3),
+            'bestOwnKnown': bestOwnKnown,
+            'bestOppKnown': bestOppKnown,
+            'swapForRace': shouldSwapForRace,
+            'swapForSabotage': shouldSwapForSabotage,
+            'swapForEntropy': shouldSwapForEntropy,
+            'swapForOpening': shouldSwapForOpeningDisruption,
+            ...thresholdTrace.toLogContext(),
+          },
+        );
+      }
+      return null;
+    }
+
+    if (logDecision) {
+      _logDuelValetDecision(
+        bot,
+        decision: 'VALET_DUEL_USE_CONTEXTUAL_SWAP',
+        context: {
+          'opponent': opponent.name,
+          'ownIndex': bestOwnIdx,
+          'opponentIndex': bestOppIdx,
+          'behind': behind,
+          'underPressure': underPressure,
+          'raceRisk': raceRisk,
+          'hasKnownPayload': hasKnownPayload,
+          'hasInformationEdge': hasInformationEdge,
+          'bestGain': bestGain.toStringAsFixed(3),
+          'bestOwnKnown': bestOwnKnown,
+          'bestOppKnown': bestOppKnown,
+          'swapForRace': shouldSwapForRace,
+          'swapForSabotage': shouldSwapForSabotage,
+          'swapForEntropy': shouldSwapForEntropy,
+          'swapForOpening': shouldSwapForOpeningDisruption,
+          ...thresholdTrace.toLogContext(),
+        },
+      );
+    }
+    return _DuelValetPlan(
+      opponent: opponent,
+      ownCardIndex: bestOwnIdx,
+      opponentCardIndex: bestOppIdx,
+    );
+  }
+
+  static double _estimateOwnCardValueForDuelValet(Player bot, int ownIdx) {
+    if (ownIdx >= 0 && ownIdx < bot.mentalMap.length) {
+      final known = bot.mentalMap[ownIdx];
+      if (known != null) return known.points.toDouble();
+    }
+
+    final quality = bot.getUnknownCardHintQuality(ownIdx);
+    final confidence = bot.getUnknownCardHintConfidence(ownIdx);
+    if (quality != null && confidence != null) {
+      // quality > 0 => carte probablement bonne (basse), quality < 0 => mauvaise (haute)
+      final estimated = 6.5 + ((-quality) * 5.0 * confidence);
+      return estimated.clamp(0.0, 13.0);
+    }
+
+    return 6.5;
+  }
+
+  static int _chooseOwnCardForDuelDisruption(Player bot) {
+    final unknown = BotMemoryManager.getUnknownIndices(bot);
+    if (unknown.isNotEmpty) {
+      return unknown.first;
+    }
+
+    int worstIdx = 0;
+    int worstPoints = -1;
+    for (int i = 0; i < bot.hand.length; i++) {
+      final known = (i < bot.mentalMap.length) ? bot.mentalMap[i] : null;
+      if (known == null) continue;
+      if (known.points > worstPoints) {
+        worstPoints = known.points;
+        worstIdx = i;
+      }
+    }
+    return worstIdx.clamp(0, bot.hand.length - 1);
+  }
+
+  static int _chooseOpponentCardForDuelDisruption(Player bot, Player opponent) {
+    if (opponent.hand.length <= 1) return 0;
+
+    final spied = bot.getSpiedCards(opponent.id);
+    if (spied != null && spied.isNotEmpty) {
+      final knownEntries = spied.entries
+          .where((e) => e.key >= 0 && e.key < opponent.hand.length)
+          .toList(growable: false);
+      if (knownEntries.isNotEmpty) {
+        knownEntries.sort((a, b) => a.value.points.compareTo(b.value.points));
+        return knownEntries.first.key;
+      }
+    }
+
+    return _random.nextInt(opponent.hand.length);
+  }
+
+  static bool _isKnownCardForBot(Player bot, int index) {
+    if (index < 0 || index >= bot.mentalMap.length) return false;
+    return bot.mentalMap[index] != null;
+  }
+
+  static bool _hasKnownHighPayloadForDuelValet(
+    Player bot, {
+    int minPoints = 10,
+  }) {
+    for (final card in bot.mentalMap) {
+      if (card == null) continue;
+      if (card.points >= minPoints) return true;
+    }
+    return false;
+  }
+
+  static int _worstKnownCardPoints(Player bot) {
+    int worst = -1;
+    for (int i = 0; i < bot.hand.length; i++) {
+      final known = (i < bot.mentalMap.length) ? bot.mentalMap[i] : null;
+      if (known == null) continue;
+      if (known.points > worst) {
+        worst = known.points;
+      }
+    }
+    return worst;
+  }
+
+  static _DuelValetThresholdTrace _computeDuelValetThresholdTrace(
+    GameState gs,
+    Player opponent,
+  ) {
+    final tracker = BotDutchStrategy.discardTracker;
+    final decisions = tracker.getObservedDecisionCount(opponent.id);
+    final exchangeRate = tracker.getExchangeRate(opponent.id);
+    final avgInstantDiscard =
+        tracker.getAverageDrawnDiscardPoints(opponent.id, lookback: 6);
+    final avgExchangeDiscard =
+        tracker.getAverageExchangeDiscardPoints(opponent.id, lookback: 6);
+    final lowInstantRate =
+        tracker.getLowDrawnDiscardRate(opponent.id, maxPoints: 4, lookback: 6);
+    final recentLowInstant = tracker.hasRecentLowDrawnDiscard(
+      opponent.id,
+      maxPoints: 4,
+      lookback: 4,
+    );
+    final style = tracker.estimateOpponentStyle(opponent.id);
+    final estimate =
+        tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+    final adjustments = <String>[];
+
+    int baseThreshold;
+    if (opponent.hand.length <= 2) {
+      baseThreshold = 8;
+    } else if (opponent.hand.length == 3) {
+      baseThreshold = 9;
+    } else {
+      baseThreshold = 10;
+    }
+    int threshold = baseThreshold;
+
+    // Peu d'observations: garder une base prudente.
+    if (decisions <= 0) {
+      return _DuelValetThresholdTrace(
+        baseThreshold: baseThreshold,
+        finalThreshold: threshold.clamp(3, 10),
+        observedDecisions: decisions,
+        exchangeRate: exchangeRate,
+        avgInstantDiscard: avgInstantDiscard,
+        avgExchangeDiscard: avgExchangeDiscard,
+        lowInstantRate: lowInstantRate,
+        recentLowInstant: recentLowInstant,
+        styleOptimization: style.optimization,
+        styleConfidence: style.confidence,
+        estimatedScore: estimate.estimatedScore,
+        estimateConfidence: estimate.confidence,
+        adjustments: const <String>['fallback_no_observation'],
+      );
+    }
+
+    // Signal fort: l'adversaire jette instantanément des petites cartes.
+    // On réduit le seuil de payload pour le déstabiliser plus tôt.
+    if (recentLowInstant || lowInstantRate >= 0.45) {
+      final inferred = (avgInstantDiscard + 1.0).round().clamp(3, 8);
+      threshold = min(threshold, inferred);
+      adjustments.add(
+        'low_instant_discards-><=${inferred.toString()}',
+      );
+    }
+
+    // S'il remplace souvent et défausse haut, il optimise agressivement.
+    // Même une carte moyenne peut alors casser son tempo.
+    if (exchangeRate >= 0.62 && avgExchangeDiscard >= 8.0) {
+      threshold = min(threshold, 7);
+      adjustments.add('high_exchange_discards-><=7');
+    }
+
+    final likelyStrongHand = estimate.confidence >= 0.30 &&
+        estimate.estimatedScore <= (opponent.hand.length * 4.5);
+    final strongOptimizer =
+        style.confidence >= 0.30 && style.optimization >= 0.65;
+    if (likelyStrongHand) {
+      threshold -= 1;
+      adjustments.add('likely_strong_hand:-1');
+    }
+    if (strongOptimizer) {
+      threshold -= 1;
+      adjustments.add('strong_optimizer:-1');
+    }
+
+    return _DuelValetThresholdTrace(
+      baseThreshold: baseThreshold,
+      finalThreshold: threshold.clamp(3, 10),
+      observedDecisions: decisions,
+      exchangeRate: exchangeRate,
+      avgInstantDiscard: avgInstantDiscard,
+      avgExchangeDiscard: avgExchangeDiscard,
+      lowInstantRate: lowInstantRate,
+      recentLowInstant: recentLowInstant,
+      styleOptimization: style.optimization,
+      styleConfidence: style.confidence,
+      estimatedScore: estimate.estimatedScore,
+      estimateConfidence: estimate.confidence,
+      adjustments: adjustments,
+    );
+  }
+
+  static void _logDuelValetDecision(
+    Player bot, {
+    required String decision,
+    required Map<String, dynamic> context,
+  }) {
+    GameLoggerService.instance.logBotDecision(
+      bot: bot,
+      decision: decision,
+      context: context,
+    );
+  }
+
+  /// Mode "animal acculé" (Platine):
+  /// en fin de course quand le bot est derrière, le Valet bascule en
+  /// sabotage de variance: empoisonner la cible la plus dangereuse avec la
+  /// plus grosse carte connue disponible chez un donneur.
+  static (Player, Player)? _resolvePlatinumValetAggressivePlan(
+    GameState gs,
+    Player observer,
+    Player firstTarget,
+    Player secondTarget,
+    BotDifficulty difficulty,
+  ) {
+    if (!_isPlatinumDifficulty(difficulty)) return null;
+    if (firstTarget.hand.isEmpty || secondTarget.hand.isEmpty) return null;
+
+    final s1 =
+        _adaptivePlatinumThreatScore(gs, observer, firstTarget, difficulty);
+    final s2 =
+        _adaptivePlatinumThreatScore(gs, observer, secondTarget, difficulty);
+    final primary = s1 >= s2 ? firstTarget : secondTarget;
+
+    final myPerceived = _estimateBotPerceivedScore(observer);
+    final primaryEstimate = BotDutchStrategy.estimateOpponentForObserver(
+      gs,
+      observer,
+      primary,
+      difficulty,
+    );
+    final behindPrimary = myPerceived > (primaryEstimate.estimatedScore + 1);
+
+    final activeOpponents = gs.players
+        .where((p) => p.id != observer.id && p.hand.isNotEmpty)
+        .length;
+    final nearDuel = activeOpponents <= 3;
+
+    final primaryVelocity = BotDutchStrategy.discardTracker.getCardVelocity(
+      primary.id,
+      gs.turnCount,
+      currentCards: primary.hand.length,
+      windowTurns: 2,
+    );
+    final primaryBurst = BotDutchStrategy.discardTracker.hasMatchBurst(
+      primary.id,
+      gs.turnCount,
+      requiredMatches: 2,
+      withinTurns: 3,
+    );
+    final raceOn =
+        primary.hand.length <= 3 || primaryVelocity >= 2 || primaryBurst;
+
+    if (!behindPrimary || !nearDuel || !raceOn) {
+      return null;
+    }
+
+    final donorCandidates = gs.players
+        .where((p) =>
+            p.id != observer.id && p.id != primary.id && p.hand.isNotEmpty)
+        .toList(growable: false);
+    if (donorCandidates.isEmpty) return null;
+
+    final scored = donorCandidates
+        .map((p) {
+          final knownHigh = _bestKnownSpiedCardPoints(observer, p);
+          final donorThreat =
+              _adaptivePlatinumThreatScore(gs, observer, p, difficulty);
+          // On cherche un payload élevé sans "buff" un autre leader.
+          final score = (knownHigh * 3.0) - donorThreat;
+          return (player: p, knownHigh: knownHigh, score: score);
+        })
+        .where((e) => e.knownHigh >= 10)
+        .toList(growable: false)
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    if (scored.isEmpty) return null;
+
+    return (primary, scored.first.player);
+  }
+
+  static int _estimateBotPerceivedScore(Player bot) {
+    if (bot.isHuman) return bot.calculateScore();
+    final known = bot.getKnownScore();
+    final unknown = (bot.hand.length - bot.knownCardCount).clamp(0, 20);
+    return known + (unknown * 6.5).round();
+  }
+
+  static int _bestKnownSpiedCardPoints(Player observer, Player target) {
+    final spied = observer.getSpiedCards(target.id);
+    if (spied == null || spied.isEmpty) return -1;
+    int best = -1;
+    for (final entry in spied.entries) {
+      final idx = entry.key;
+      if (idx < 0 || idx >= target.hand.length) continue;
+      final points = entry.value.points;
+      if (points > best) best = points;
+    }
+    return best;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // POUVOIR JOKER : Mélanger la main d'un joueur
   // ═══════════════════════════════════════════════════════════════════════════
@@ -846,19 +1471,38 @@ class BotPowerHandler {
     return validThreats.first.player;
   }
 
-  static void _skipPower(GameState gameState, Player bot) {
+  static void _skipPower(
+    GameState gameState,
+    Player bot, {
+    String reason = 'Pas d\'avantage à utiliser ce pouvoir',
+  }) {
     final powerVal = gameState.specialCardToActivate?.value ?? '?';
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir.");
+    gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir. ($reason)");
 
     // Log
     GameLoggerService.instance.logPowerSkip(
       player: bot,
-      powerValue: int.tryParse(powerVal) ?? 0,
-      reason: 'Pas d\'avantage à utiliser ce pouvoir',
+      powerValue: _powerValueForLog(powerVal),
+      reason: reason,
     );
+  }
+
+  static int _powerValueForLog(String rawValue) {
+    switch (rawValue) {
+      case '7':
+        return 7;
+      case '10':
+        return 10;
+      case 'V':
+        return 11;
+      case 'JOKER':
+        return 0;
+      default:
+        return int.tryParse(rawValue) ?? -1;
+    }
   }
 
   static bool _isPlatinumDifficulty(BotDifficulty difficulty) {
@@ -1441,10 +2085,6 @@ class BotPowerHandler {
     return target;
   }
 
-  static bool _hasActivePlatinumKillWindow(GameState gs) {
-    return _getActivePlatinumKillTarget(gs) != null;
-  }
-
   static String _tableSignature(GameState gs) {
     final ids = gs.players.map((p) => p.id).toList(growable: false)..sort();
     return ids.join('|');
@@ -1536,4 +2176,67 @@ class _ScoredKillTarget {
     required this.pressure,
     required this.projectedFinishRisk,
   });
+}
+
+class _DuelValetPlan {
+  final Player opponent;
+  final int ownCardIndex;
+  final int opponentCardIndex;
+
+  const _DuelValetPlan({
+    required this.opponent,
+    required this.ownCardIndex,
+    required this.opponentCardIndex,
+  });
+}
+
+class _DuelValetThresholdTrace {
+  final int baseThreshold;
+  final int finalThreshold;
+  final int observedDecisions;
+  final double exchangeRate;
+  final double avgInstantDiscard;
+  final double avgExchangeDiscard;
+  final double lowInstantRate;
+  final bool recentLowInstant;
+  final double styleOptimization;
+  final double styleConfidence;
+  final double estimatedScore;
+  final double estimateConfidence;
+  final List<String> adjustments;
+
+  const _DuelValetThresholdTrace({
+    required this.baseThreshold,
+    required this.finalThreshold,
+    required this.observedDecisions,
+    required this.exchangeRate,
+    required this.avgInstantDiscard,
+    required this.avgExchangeDiscard,
+    required this.lowInstantRate,
+    required this.recentLowInstant,
+    required this.styleOptimization,
+    required this.styleConfidence,
+    required this.estimatedScore,
+    required this.estimateConfidence,
+    required this.adjustments,
+  });
+
+  Map<String, dynamic> toLogContext() {
+    return <String, dynamic>{
+      'threshold.base': baseThreshold,
+      'threshold.final': finalThreshold,
+      'threshold.adjustments':
+          adjustments.isEmpty ? 'none' : adjustments.join(' | '),
+      'obs.decisions': observedDecisions,
+      'obs.exchangeRate': exchangeRate.toStringAsFixed(2),
+      'obs.avgInstantDiscard': avgInstantDiscard.toStringAsFixed(2),
+      'obs.avgExchangeDiscard': avgExchangeDiscard.toStringAsFixed(2),
+      'obs.lowInstantRate': lowInstantRate.toStringAsFixed(2),
+      'obs.recentLowInstant': recentLowInstant,
+      'obs.styleOptimization': styleOptimization.toStringAsFixed(2),
+      'obs.styleConfidence': styleConfidence.toStringAsFixed(2),
+      'obs.estimatedScore': estimatedScore.toStringAsFixed(2),
+      'obs.estimateConfidence': estimateConfidence.toStringAsFixed(2),
+    };
+  }
 }

@@ -156,7 +156,14 @@ class BotFactory {
 
     // Platinum : logique élite (meilleurs absolus)
     if (difficulty == Difficulty.platinum) {
-      return _createEliteBots(numberOfBots, difficulty, saveSlot: saveSlot);
+      final elite =
+          await _createEliteBots(numberOfBots, difficulty, saveSlot: saveSlot);
+      // Le profil "moi" est réservé au duel 1v1.
+      // En multi-bots Platine, on garde uniquement les profils élite serveur.
+      if (numberOfBots == 1) {
+        return _injectMoiStyleForManualPlatinum(elite);
+      }
+      return elite;
     }
 
     // Mix : logique spéciale (mélange de niveaux)
@@ -670,11 +677,61 @@ class BotFactory {
         return BotBehavior.fast;
       case 'aggressive':
         return BotBehavior.aggressive;
+      case 'moi':
+      case 'mirror':
+      case 'max_style':
+        return BotBehavior.moi;
       case 'balanced':
       default:
         return BotBehavior.balanced;
     }
   }
+
+  static List<Player> _injectMoiStyleForManualPlatinum(List<Player> bots) {
+    if (bots.isEmpty) return bots;
+
+    final first = bots.first;
+    final tunedFirst = first.copyWith(
+      botBehavior: BotBehavior.moi,
+      aiParameters: _buildMoiAiParams(first.aiParameters),
+    );
+
+    return [
+      tunedFirst,
+      ...bots.skip(1),
+    ];
+  }
+
+  static Map<String, double> _buildMoiAiParams(Map<String, double>? base) {
+    final params = <String, double>{
+      if (base != null) ...base,
+    };
+
+    double read(String key, double fallback) => params[key] ?? fallback;
+
+    params['memoryAccuracy'] = _maxDouble(read('memoryAccuracy', 0.90), 0.995);
+    params['memoryRetention'] = _maxDouble(read('memoryRetention', 0.85), 0.95);
+    params['adaptability'] = _maxDouble(read('adaptability', 0.75), 0.93);
+
+    params['aggressiveness'] = _maxDouble(read('aggressiveness', 0.70), 0.84);
+    params['caution'] = _minDouble(read('caution', 0.45), 0.38);
+    params['riskTolerance'] = _maxDouble(read('riskTolerance', 0.58), 0.74);
+
+    params['powerOffensiveRate'] =
+        _maxDouble(read('powerOffensiveRate', 0.68), 0.88);
+    params['powerDefensiveRate'] =
+        _maxDouble(read('powerDefensiveRate', 0.60), 0.78);
+
+    params['dutchThreshold'] = _minDouble(read('dutchThreshold', 8.0), 6.5);
+    params['dutchQuality'] = _maxDouble(read('dutchQuality', 0.75), 0.92);
+    params['decisionSpeed'] = _minDouble(read('decisionSpeed', 1500), 900);
+    params['scoreGapWeight'] = _maxDouble(read('scoreGapWeight', 0.7), 1.05);
+
+    return params;
+  }
+
+  static double _maxDouble(double a, double b) => a > b ? a : b;
+  static double _minDouble(double a, double b) => a < b ? a : b;
 
   static Map<String, double> _extractAiParams(Map<String, dynamic> raw) {
     final params = <String, double>{};

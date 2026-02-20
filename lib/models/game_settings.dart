@@ -2,18 +2,9 @@ import 'game_state.dart';
 
 enum Difficulty { easy, medium, hard, platinum, mix }
 
-enum BotBehavior { 
-  fast,
-  aggressive,
-  balanced
-}
+enum BotBehavior { fast, aggressive, balanced, moi }
 
-enum BotSkillLevel {
-  bronze,
-  silver,
-  gold,
-  platinum
-}
+enum BotSkillLevel { bronze, silver, gold, platinum }
 
 class GameSettings {
   GameMode gameMode;
@@ -33,7 +24,7 @@ class GameSettings {
   bool animationsEnabled;
   bool cardRainEnabled;
   String playerName;
-  
+
   bool isPublic;
   int numberOfPlayers;
   String? roomName;

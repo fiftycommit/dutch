@@ -38,6 +38,8 @@ class DiscardTracker {
   final Map<String, int> _playerExchangeDiscardCount = {};
   final Map<String, int> _playerDrawnDiscardCount = {};
   final Map<String, int> _playerMatchDiscardCount = {};
+  final Map<String, List<int>> _playerExchangeDiscardPoints = {};
+  final Map<String, List<int>> _playerDrawnDiscardPoints = {};
   final Map<String, List<int>> _playerMatchTurns = {};
   final Map<String, List<_HandSnapshot>> _playerHandSnapshots = {};
 
@@ -112,11 +114,23 @@ class DiscardTracker {
         case DiscardActionType.exchangeDiscard:
           _playerExchangeDiscardCount[discardedBy] =
               (_playerExchangeDiscardCount[discardedBy] ?? 0) + 1;
+          final exchanged =
+              _playerExchangeDiscardPoints.putIfAbsent(discardedBy, () => []);
+          exchanged.add(points);
+          if (exchanged.length > 24) {
+            exchanged.removeRange(0, exchanged.length - 24);
+          }
           _lastActionWasExchange[discardedBy] = true;
           break;
         case DiscardActionType.drawnDiscard:
           _playerDrawnDiscardCount[discardedBy] =
               (_playerDrawnDiscardCount[discardedBy] ?? 0) + 1;
+          final drawn =
+              _playerDrawnDiscardPoints.putIfAbsent(discardedBy, () => []);
+          drawn.add(points);
+          if (drawn.length > 24) {
+            drawn.removeRange(0, drawn.length - 24);
+          }
           _lastActionWasExchange[discardedBy] = false;
           break;
         case DiscardActionType.matchDiscard:
@@ -163,6 +177,8 @@ class DiscardTracker {
     _playerExchangeDiscardCount.clear();
     _playerDrawnDiscardCount.clear();
     _playerMatchDiscardCount.clear();
+    _playerExchangeDiscardPoints.clear();
+    _playerDrawnDiscardPoints.clear();
     _playerMatchTurns.clear();
     _playerHandSnapshots.clear();
   }
@@ -421,6 +437,47 @@ class DiscardTracker {
     return total / history.length;
   }
 
+  /// Moyenne des cartes défaussées instantanément (drawnDiscard).
+  /// Un joueur qui jette souvent des petites cartes instant suggère
+  /// qu'un payload faible peut déjà le perturber.
+  double getAverageDrawnDiscardPoints(String playerId, {int lookback = 0}) {
+    final values = _playerDrawnDiscardPoints[playerId] ?? const <int>[];
+    return _averagePoints(values, lookback: lookback);
+  }
+
+  /// Moyenne des cartes remplacées (exchangeDiscard).
+  /// Utile pour voir si un joueur "nettoie" souvent des cartes hautes.
+  double getAverageExchangeDiscardPoints(String playerId, {int lookback = 0}) {
+    final values = _playerExchangeDiscardPoints[playerId] ?? const <int>[];
+    return _averagePoints(values, lookback: lookback);
+  }
+
+  /// Taux de défausses instantanées basses (<= maxPoints).
+  double getLowDrawnDiscardRate(
+    String playerId, {
+    int maxPoints = 4,
+    int lookback = 0,
+  }) {
+    final values = _playerDrawnDiscardPoints[playerId] ?? const <int>[];
+    if (values.isEmpty) return 0.0;
+    final sample = _tail(values, lookback);
+    if (sample.isEmpty) return 0.0;
+    final lows = sample.where((v) => v <= maxPoints).length;
+    return (lows / sample.length).clamp(0.0, 1.0);
+  }
+
+  /// Vrai si le joueur a récemment défaussé instantanément une petite carte.
+  bool hasRecentLowDrawnDiscard(
+    String playerId, {
+    int maxPoints = 4,
+    int lookback = 4,
+  }) {
+    final values = _playerDrawnDiscardPoints[playerId] ?? const <int>[];
+    if (values.isEmpty) return false;
+    final sample = _tail(values, lookback);
+    return sample.any((v) => v <= maxPoints);
+  }
+
   OpponentStyleEstimate estimateOpponentStyle(String playerId) {
     final decisions = getObservedDecisionCount(playerId);
     final exchangeRate = getExchangeRate(playerId);
@@ -454,6 +511,22 @@ class DiscardTracker {
       avgDiscardedPoints: avgDiscarded,
       observedDecisions: decisions,
     );
+  }
+
+  List<int> _tail(List<int> values, int lookback) {
+    if (values.isEmpty) return const <int>[];
+    if (lookback <= 0 || values.length <= lookback) {
+      return List<int>.from(values);
+    }
+    return List<int>.from(values.sublist(values.length - lookback));
+  }
+
+  double _averagePoints(List<int> values, {int lookback = 0}) {
+    if (values.isEmpty) return 6.5;
+    final sample = _tail(values, lookback);
+    if (sample.isEmpty) return 6.5;
+    final total = sample.reduce((a, b) => a + b);
+    return total / sample.length;
   }
 
   /// Estime le meilleur score adverse probable (le plus bas)

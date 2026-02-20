@@ -31,7 +31,8 @@ Future<void> main(List<String> args) async {
       'games=${config.games} maxTurns=${config.maxTurns} '
       'showSamples=${config.showSamples} mix=${config.mixLabel} '
       'inspectLosses=${config.inspectLosses} totalPlayers=${config.totalPlayers} '
-      'shuffleSeats=${config.shuffleSeats}',
+      'shuffleSeats=${config.shuffleSeats} '
+      'moiVsPlatinumDuel=${config.moiVsPlatinumDuel}',
     );
 
     final simulator = _LadderSimulator(config: config);
@@ -43,7 +44,9 @@ Future<void> main(List<String> args) async {
     stderr.writeln('Configuration invalide: ${e.message}');
     stderr.writeln(
       'Exemple: dart run tool/bot_ladder_cli.dart '
-      '--games=120 --bronze=3 --silver=3 --gold=3 --platinum=3',
+      '--games=120 --bronze=3 --silver=3 --gold=3 --platinum=3\n'
+      'Duel MOI vs Platine: dart run tool/bot_ladder_cli.dart '
+      '--moi-vs-platinum=true --games=200 --shuffle-seats=true',
     );
     exitCode = 64;
   }
@@ -55,6 +58,7 @@ class _CliConfig {
   final int showSamples;
   final int inspectLosses;
   final bool shuffleSeats;
+  final bool moiVsPlatinumDuel;
   final Map<BotSkillLevel, int> skillCounts;
 
   const _CliConfig({
@@ -63,12 +67,14 @@ class _CliConfig {
     required this.showSamples,
     required this.inspectLosses,
     required this.shuffleSeats,
+    required this.moiVsPlatinumDuel,
     required this.skillCounts,
   });
 
   int get totalPlayers => skillCounts.values.fold(0, (a, b) => a + b);
 
   String get mixLabel {
+    if (moiVsPlatinumDuel) return 'MOI1 P1';
     final b = skillCounts[BotSkillLevel.bronze] ?? 0;
     final s = skillCounts[BotSkillLevel.silver] ?? 0;
     final g = skillCounts[BotSkillLevel.gold] ?? 0;
@@ -83,17 +89,21 @@ class _CliConfig {
       return int.tryParse(value) ?? fallback;
     }
 
-    final bronze = readInt('--bronze', 1).clamp(0, 20);
-    final silver = readInt('--silver', 1).clamp(0, 20);
-    final gold = readInt('--gold', 1).clamp(0, 20);
-    final platinum = readInt('--platinum', 1).clamp(0, 20);
+    final moiVsPlatinumDuel = _readBoolArg(args, '--moi-vs-platinum', false);
 
-    final skillCounts = <BotSkillLevel, int>{
-      BotSkillLevel.bronze: bronze,
-      BotSkillLevel.silver: silver,
-      BotSkillLevel.gold: gold,
-      BotSkillLevel.platinum: platinum,
-    };
+    final skillCounts = moiVsPlatinumDuel
+        ? <BotSkillLevel, int>{
+            BotSkillLevel.bronze: 0,
+            BotSkillLevel.silver: 0,
+            BotSkillLevel.gold: 0,
+            BotSkillLevel.platinum: 2,
+          }
+        : <BotSkillLevel, int>{
+            BotSkillLevel.bronze: readInt('--bronze', 1).clamp(0, 20),
+            BotSkillLevel.silver: readInt('--silver', 1).clamp(0, 20),
+            BotSkillLevel.gold: readInt('--gold', 1).clamp(0, 20),
+            BotSkillLevel.platinum: readInt('--platinum', 1).clamp(0, 20),
+          };
 
     final totalPlayers = skillCounts.values.fold(0, (a, b) => a + b);
     if (totalPlayers < 2) {
@@ -106,6 +116,7 @@ class _CliConfig {
       showSamples: readInt('--samples', 5).clamp(0, 30),
       inspectLosses: readInt('--inspect-losses', 0).clamp(0, 20),
       shuffleSeats: _readBoolArg(args, '--shuffle-seats', false),
+      moiVsPlatinumDuel: moiVsPlatinumDuel,
       skillCounts: skillCounts,
     );
   }
@@ -241,6 +252,41 @@ class _LadderSimulator {
   }
 
   List<Player> _createLadderPlayers(int gameIndex) {
+    if (config.moiVsPlatinumDuel) {
+      final duelSlots = <_DuelSeatSlot>[
+        const _DuelSeatSlot(
+          idSuffix: 'moi',
+          name: 'MOI',
+          behavior: BotBehavior.moi,
+        ),
+        const _DuelSeatSlot(
+          idSuffix: 'platine',
+          name: 'PLATINE',
+          behavior: BotBehavior.balanced,
+        ),
+      ];
+
+      if (config.shuffleSeats) {
+        duelSlots.shuffle(Random((gameIndex * 1427) + 17));
+      }
+
+      final players = <Player>[];
+      for (int position = 0; position < duelSlots.length; position++) {
+        final slot = duelSlots[position];
+        players.add(
+          Player(
+            id: 'bot_${slot.idSuffix}_g$gameIndex',
+            name: slot.name,
+            isHuman: false,
+            botBehavior: slot.behavior,
+            botSkillLevel: BotSkillLevel.platinum,
+            position: position,
+          ),
+        );
+      }
+      return players;
+    }
+
     final buildOrder = <BotSkillLevel>[
       BotSkillLevel.bronze,
       BotSkillLevel.silver,
@@ -463,6 +509,18 @@ class _LadderSimulator {
   }
 }
 
+class _DuelSeatSlot {
+  final String idSuffix;
+  final String name;
+  final BotBehavior behavior;
+
+  const _DuelSeatSlot({
+    required this.idSuffix,
+    required this.name,
+    required this.behavior,
+  });
+}
+
 class _PlayerSeatSlot {
   final BotSkillLevel skill;
   final int ordinal;
@@ -574,6 +632,16 @@ class _SimulationAggregate {
 
   int _platWinBronzeLastGames = 0;
   int _orderedAverageRanksGames = 0;
+  int _duelMoiWins = 0;
+  int _duelPlatinumWins = 0;
+  int _duelMoiLasts = 0;
+  int _duelPlatinumLasts = 0;
+  int _duelMoiScoreSum = 0;
+  int _duelPlatinumScoreSum = 0;
+  final Map<int, int> _duelMoiSeatAppearances = <int, int>{};
+  final Map<int, int> _duelMoiSeatWins = <int, int>{};
+  final Map<int, int> _duelPlatinumSeatAppearances = <int, int>{};
+  final Map<int, int> _duelPlatinumSeatWins = <int, int>{};
   final List<String> _samples = [];
   final List<String> _lossInsights = [];
 
@@ -619,6 +687,34 @@ class _SimulationAggregate {
     if (winner?.skill == BotSkillLevel.platinum &&
         last?.skill == BotSkillLevel.bronze) {
       _platWinBronzeLastGames++;
+    }
+
+    if (config.moiVsPlatinumDuel) {
+      for (final outcome in result.outcomes) {
+        final isMoi = outcome.playerName == 'MOI';
+        if (isMoi) {
+          _duelMoiScoreSum += outcome.score;
+          _duelMoiSeatAppearances[outcome.seat] =
+              (_duelMoiSeatAppearances[outcome.seat] ?? 0) + 1;
+          if (outcome.rank == 1) {
+            _duelMoiWins++;
+            _duelMoiSeatWins[outcome.seat] =
+                (_duelMoiSeatWins[outcome.seat] ?? 0) + 1;
+          }
+          if (outcome.rank == result.playerCount) _duelMoiLasts++;
+          continue;
+        }
+
+        _duelPlatinumScoreSum += outcome.score;
+        _duelPlatinumSeatAppearances[outcome.seat] =
+            (_duelPlatinumSeatAppearances[outcome.seat] ?? 0) + 1;
+        if (outcome.rank == 1) {
+          _duelPlatinumWins++;
+          _duelPlatinumSeatWins[outcome.seat] =
+              (_duelPlatinumSeatWins[outcome.seat] ?? 0) + 1;
+        }
+        if (outcome.rank == result.playerCount) _duelPlatinumLasts++;
+      }
     }
 
     final avgRankBySkill = <BotSkillLevel, double>{};
@@ -689,6 +785,62 @@ class _SimulationAggregate {
     String fmtAvg(num sum, int count) {
       if (count <= 0) return '0.00';
       return (sum / count).toStringAsFixed(2);
+    }
+
+    if (config.moiVsPlatinumDuel) {
+      final lines = <String>[];
+      lines.add('--- Résumé duel MOI vs Platine ---');
+      lines.add('Games=${config.games} shuffleSeats=${config.shuffleSeats}');
+      lines.add(
+        'MOI: win=${fmtPctFromCounts(_duelMoiWins, config.games)} '
+        'last=${fmtPctFromCounts(_duelMoiLasts, config.games)} '
+        'avgScore=${fmtAvg(_duelMoiScoreSum, config.games)}',
+      );
+      lines.add(
+        'PLATINE: win=${fmtPctFromCounts(_duelPlatinumWins, config.games)} '
+        'last=${fmtPctFromCounts(_duelPlatinumLasts, config.games)} '
+        'avgScore=${fmtAvg(_duelPlatinumScoreSum, config.games)}',
+      );
+      lines.add('');
+      lines.add('--- Win% par seat ---');
+      final seats = <int>{
+        ..._duelMoiSeatAppearances.keys,
+        ..._duelPlatinumSeatAppearances.keys,
+      }.toList()
+        ..sort();
+      final moiCells = <String>[];
+      final platCells = <String>[];
+      for (final seat in seats) {
+        final moiTotal = _duelMoiSeatAppearances[seat] ?? 0;
+        final moiWins = _duelMoiSeatWins[seat] ?? 0;
+        moiCells.add(
+          'S${seat + 1}:${fmtPctFromCounts(moiWins, moiTotal)} ($moiWins/$moiTotal)',
+        );
+
+        final platTotal = _duelPlatinumSeatAppearances[seat] ?? 0;
+        final platWins = _duelPlatinumSeatWins[seat] ?? 0;
+        platCells.add(
+          'S${seat + 1}:${fmtPctFromCounts(platWins, platTotal)} ($platWins/$platTotal)',
+        );
+      }
+      lines.add('MOI      ${moiCells.join(' | ')}');
+      lines.add('PLATINE  ${platCells.join(' | ')}');
+
+      if (_samples.isNotEmpty) {
+        lines.add('');
+        lines.add('--- Exemples de parties ---');
+        for (int i = 0; i < _samples.length; i++) {
+          lines.add('#${i + 1}: ${_samples[i]}');
+        }
+      }
+      if (_lossInsights.isNotEmpty) {
+        lines.add('');
+        lines.add('--- Diagnostics ---');
+        for (int i = 0; i < _lossInsights.length; i++) {
+          lines.add('#${i + 1}: ${_lossInsights[i]}');
+        }
+      }
+      return lines.join('\n');
     }
 
     final lines = <String>[];

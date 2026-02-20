@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/bot/bot_power_handler.dart';
 import 'package:dutch_game/services/game/bot/bot_difficulty.dart';
+import 'package:dutch_game/services/game/bot/bot_dutch_strategy.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/player.dart';
@@ -13,6 +14,8 @@ void main() {
     late Player human;
 
     setUp(() {
+      BotDutchStrategy.discardTracker.reset();
+
       human = Player(id: 'human', name: 'Human', isHuman: true, position: 0);
       bot = Player(id: 'bot1', name: 'Bot 1', isHuman: false, position: 1);
 
@@ -208,6 +211,371 @@ void main() {
         expect(human.hand.length, equals(originalHumanHand.length));
       });
 
+      test('power V in duel can inject high known card into opponent',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'D'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '4'),
+          PlayingCard.create('spades', '5'),
+        ];
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        bot.rememberSpiedCard(human.id, 0, human.hand[0]);
+
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(human.hand[0].value, equals('D'));
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+      });
+
+      test('power V in duel no longer skips when fully known and calm',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', '2'),
+          PlayingCard.create('diamonds', '4'),
+          PlayingCard.create('clubs', '6'),
+          PlayingCard.create('spades', '8'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+          PlayingCard.create('spades', '7'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 4;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.gold,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+      });
+
+      test(
+          'power V in duel under pressure can swap unknown vs unknown to destabilize',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', '2'),
+          PlayingCard.create('diamonds', '4'),
+          PlayingCard.create('clubs', '6'),
+          PlayingCard.create('spades', '8'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, false, growable: true);
+        bot.mentalMap =
+            List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 10;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+        expect(human.hand[0].value, isNot(equals('A')));
+      });
+
+      test(
+          'power V in duel opening can disrupt with unknown cards for moi style',
+          () async {
+        bot = bot.copyWith(
+          botBehavior: BotBehavior.moi,
+          botSkillLevel: BotSkillLevel.platinum,
+        );
+        gameState.players[1] = bot;
+
+        bot.hand = [
+          PlayingCard.create('hearts', '2'),
+          PlayingCard.create('diamonds', '4'),
+          PlayingCard.create('clubs', '6'),
+          PlayingCard.create('spades', '8'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, false, growable: true);
+        bot.mentalMap =
+            List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+          PlayingCard.create('spades', '7'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 0;
+        gameState.actionCount = 0;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+      });
+
+      test(
+          'power V in duel no longer skips when all known cards are good under pressure',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '4'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 12;
+        gameState.actionCount = 30;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+      });
+
+      test('power V in duel treats 8 as bad card in pressured endgame',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '8'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 12;
+        gameState.actionCount = 30;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+      });
+
+      test(
+          'power V in duel adapts payload threshold when opponent rejects low instant cards',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '7'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        // L'adversaire rejette vite des petites cartes:
+        // le seuil contextuel descend et 7 devient un payload valable.
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('clubs', '3'),
+          discardedBy: human.id,
+          wasExchange: false,
+        );
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('spades', '2'),
+          discardedBy: human.id,
+          wasExchange: false,
+        );
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('diamonds', '4'),
+          discardedBy: human.id,
+          wasExchange: false,
+        );
+
+        gameState.turnCount = 12;
+        gameState.actionCount = 30;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+      });
+
+      test(
+          'power V in duel adapts payload threshold when opponent replaces high cards often',
+          () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '7'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        // L'adversaire remplace et jette des cartes hautes:
+        // signal d'optimisation, on réduit le seuil de payload.
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('clubs', 'D'),
+          discardedBy: human.id,
+          wasExchange: true,
+        );
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('spades', '10'),
+          discardedBy: human.id,
+          wasExchange: true,
+        );
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('diamonds', 'V'),
+          discardedBy: human.id,
+          wasExchange: true,
+        );
+        BotDutchStrategy.discardTracker.trackDiscard(
+          PlayingCard.create('hearts', '8'),
+          discardedBy: human.id,
+          wasExchange: true,
+        );
+
+        gameState.turnCount = 12;
+        gameState.actionCount = 30;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('Échange :')),
+          isTrue,
+        );
+      });
+
       test('power JOKER shuffles target hand', () async {
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = PlayingCard.create('hearts', 'JOKER');
@@ -217,6 +585,48 @@ void main() {
 
         // Power should complete without error
         expect(gameState.isWaitingForSpecialPower, isFalse);
+      });
+
+      test('platinum never skips JOKER in calm duel', () async {
+        bot.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+          PlayingCard.create('clubs', '3'),
+          PlayingCard.create('spades', '4'),
+        ];
+        bot.knownCards =
+            List<bool>.filled(bot.hand.length, true, growable: true);
+        bot.mentalMap = List<PlayingCard?>.from(bot.hand);
+
+        human.hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '3'),
+          PlayingCard.create('clubs', '5'),
+          PlayingCard.create('spades', '7'),
+        ];
+        human.knownCards =
+            List<bool>.filled(human.hand.length, false, growable: true);
+
+        gameState.turnCount = 1;
+        gameState.actionCount = 2;
+        gameState.isWaitingForSpecialPower = true;
+        gameState.specialCardToActivate = PlayingCard.create('hearts', 'JOKER');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gameState,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        expect(
+          gameState.actionHistory
+              .any((entry) => entry.contains('ignore son pouvoir')),
+          isFalse,
+        );
+        expect(
+          gameState.actionHistory.any((entry) => entry.contains('JOKER !')),
+          isTrue,
+        );
       });
 
       test('power 7 targets hinted unknown for platinum', () async {
@@ -789,6 +1199,71 @@ void main() {
         final exchange = gs.actionHistory
             .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
         expect(exchange, contains('Human Two'));
+      });
+
+      test(
+          'platinum behind in near-duel uses known high donor card for variance sabotage',
+          () async {
+        final main = makePlayer(
+          'main',
+          'Main',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.platinum,
+          position: 0,
+        )..initializeBotMemory();
+        final strongest = makePlayer(
+          's1',
+          'Strongest',
+          isHuman: false,
+          cards: 2,
+          skill: BotSkillLevel.platinum,
+          position: 1,
+        );
+        final contender = makePlayer(
+          'c1',
+          'Contender',
+          isHuman: false,
+          cards: 3,
+          skill: BotSkillLevel.gold,
+          position: 2,
+        );
+        final donor = makePlayer(
+          'd1',
+          'Donor',
+          isHuman: false,
+          cards: 4,
+          skill: BotSkillLevel.bronze,
+          position: 3,
+        );
+
+        main.rememberSpiedCard(
+          donor.id,
+          0,
+          PlayingCard.create('hearts', 'D'),
+        );
+
+        final gs = GameState(
+          players: [main, strongest, contender, donor],
+          deck: GameState.createFullDeck().sublist(0, 30),
+          discardPile: [PlayingCard.create('hearts', '6')],
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+        )
+          ..isWaitingForSpecialPower = true
+          ..specialCardToActivate = PlayingCard.create('hearts', 'V');
+
+        await BotPowerHandler.useBotSpecialPower(
+          gs,
+          BotDifficulty.platinum,
+          null,
+        );
+
+        final exchange = gs.actionHistory
+            .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
+        expect(exchange, contains('Strongest'));
+        expect(exchange, contains('Donor'));
+        expect(exchange.contains('Contender'), isFalse);
       });
 
       test('never targets players with zero cards', () async {

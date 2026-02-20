@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/bot/bot_card_strategy.dart';
 import 'package:dutch_game/services/game/bot/bot_difficulty.dart';
 import 'package:dutch_game/services/game/bot/bot_config.dart';
+import 'package:dutch_game/services/game/bot/bot_dutch_strategy.dart';
 import 'package:dutch_game/services/game/bot/human_threat_tracker.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/player.dart';
@@ -14,6 +15,7 @@ void main() {
 
     setUp(() {
       HumanThreatTracker().reset();
+      BotDutchStrategy.discardTracker.reset();
 
       final players = [
         Player(id: 'human', name: 'Human', isHuman: true, position: 0),
@@ -658,6 +660,39 @@ void main() {
 
         expect(gameState.drawnCard, isNull);
         expect(bot.hand[3].value, equals('10'));
+      });
+
+      test('under pressure discards drawn valet to activate power', () async {
+        gameState.players[0].hand = [
+          PlayingCard.create('hearts', 'A'),
+          PlayingCard.create('diamonds', '2'),
+        ];
+
+        bot.hand = [
+          PlayingCard.create('hearts', 'D'),
+          PlayingCard.create('diamonds', '5'),
+          PlayingCard.create('clubs', '8'),
+          PlayingCard.create('spades', 'R'),
+        ];
+        bot.knownCards = [true, true, false, false];
+        bot.mentalMap = [
+          bot.hand[0],
+          bot.hand[1],
+          null,
+          null,
+        ];
+        gameState.drawnCard = PlayingCard.create('clubs', 'V');
+
+        await BotCardStrategy.decideCardAction(
+          gameState,
+          bot,
+          BotDifficulty.gold,
+          BotGamePhase.endgame,
+        );
+
+        expect(gameState.drawnCard, isNull);
+        expect(gameState.isWaitingForSpecialPower, isTrue);
+        expect(gameState.specialCardToActivate?.value, equals('V'));
       });
     });
 
