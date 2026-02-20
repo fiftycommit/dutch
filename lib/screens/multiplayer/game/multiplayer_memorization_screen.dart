@@ -41,6 +41,8 @@ class MultiplayerMemorizationScreen extends StatelessWidget {
         config: shared.MemorizationConfig(
           localPlayer: localPlayer,
           onMemorizationComplete: (selectedIndices) async {
+            // Cache local pour l'UI: on connaît les positions vues au départ.
+            localPlayer.memorizedCardIndices = selectedIndices.toList()..sort();
             // En multiplayer, pas besoin de modifier l'état local
             // Le serveur gère tout
           },

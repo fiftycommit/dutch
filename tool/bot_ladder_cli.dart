@@ -32,7 +32,8 @@ Future<void> main(List<String> args) async {
       'showSamples=${config.showSamples} mix=${config.mixLabel} '
       'inspectLosses=${config.inspectLosses} totalPlayers=${config.totalPlayers} '
       'shuffleSeats=${config.shuffleSeats} '
-      'moiVsPlatinumDuel=${config.moiVsPlatinumDuel}',
+      'moiVsPlatinumDuel=${config.moiVsPlatinumDuel} '
+      'dealMode=${config.dealMode.name}',
     );
 
     final simulator = _LadderSimulator(config: config);
@@ -44,7 +45,7 @@ Future<void> main(List<String> args) async {
     stderr.writeln('Configuration invalide: ${e.message}');
     stderr.writeln(
       'Exemple: dart run tool/bot_ladder_cli.dart '
-      '--games=120 --bronze=3 --silver=3 --gold=3 --platinum=3\n'
+      '--games=120 --bronze=3 --silver=3 --gold=3 --platinum=3 --deal-mode=round\n'
       'Duel MOI vs Platine: dart run tool/bot_ladder_cli.dart '
       '--moi-vs-platinum=true --games=200 --shuffle-seats=true',
     );
@@ -59,6 +60,7 @@ class _CliConfig {
   final int inspectLosses;
   final bool shuffleSeats;
   final bool moiVsPlatinumDuel;
+  final DealMode dealMode;
   final Map<BotSkillLevel, int> skillCounts;
 
   const _CliConfig({
@@ -68,6 +70,7 @@ class _CliConfig {
     required this.inspectLosses,
     required this.shuffleSeats,
     required this.moiVsPlatinumDuel,
+    required this.dealMode,
     required this.skillCounts,
   });
 
@@ -117,6 +120,7 @@ class _CliConfig {
       inspectLosses: readInt('--inspect-losses', 0).clamp(0, 20),
       shuffleSeats: _readBoolArg(args, '--shuffle-seats', false),
       moiVsPlatinumDuel: moiVsPlatinumDuel,
+      dealMode: _parseDealMode(_readArgValue(args, '--deal-mode') ?? 'round'),
       skillCounts: skillCounts,
     );
   }
@@ -142,6 +146,31 @@ bool _readBoolArg(List<String> args, String key, bool fallback) {
     return false;
   }
   return fallback;
+}
+
+DealMode _parseDealMode(String raw) {
+  switch (raw.trim().toLowerCase()) {
+    case 'block':
+    case 'block-sequential':
+    case 'sequential':
+      return DealMode.blockSequential;
+    case 'round':
+    case 'round-robin':
+      return DealMode.roundRobin;
+    case 'random':
+    case 'random-indices':
+      return DealMode.randomIndices;
+    case 'disjoint':
+    case 'disjoint-values':
+    case 'no-common':
+    case 'no-shared':
+      return DealMode.disjointValues;
+    default:
+      throw FormatException(
+        'deal-mode inconnu "$raw". '
+        'Valeurs: block, round, random, disjoint',
+      );
+  }
 }
 
 class _LadderSimulator {
@@ -184,6 +213,7 @@ class _LadderSimulator {
       players: players,
       gameMode: GameMode.quick,
       difficulty: Difficulty.medium,
+      dealMode: config.dealMode,
     );
     gameState.phase = GamePhase.playing;
 
@@ -790,7 +820,10 @@ class _SimulationAggregate {
     if (config.moiVsPlatinumDuel) {
       final lines = <String>[];
       lines.add('--- Résumé duel MOI vs Platine ---');
-      lines.add('Games=${config.games} shuffleSeats=${config.shuffleSeats}');
+      lines.add(
+        'Games=${config.games} shuffleSeats=${config.shuffleSeats} '
+        'dealMode=${config.dealMode.name}',
+      );
       lines.add(
         'MOI: win=${fmtPctFromCounts(_duelMoiWins, config.games)} '
         'last=${fmtPctFromCounts(_duelMoiLasts, config.games)} '
@@ -845,7 +878,10 @@ class _SimulationAggregate {
 
     final lines = <String>[];
     lines.add('--- Résumé ladder ---');
-    lines.add('Mix: ${config.mixLabel} | joueurs=${config.totalPlayers}');
+    lines.add(
+      'Mix: ${config.mixLabel} | joueurs=${config.totalPlayers} '
+      '| dealMode=${config.dealMode.name}',
+    );
     lines.add(
       'Platine gagnant ET Bronze dernier (partie): '
       '$_platWinBronzeLastGames/${config.games} '

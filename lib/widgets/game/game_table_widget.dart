@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:dutch_game/core/interfaces/i_game_controller.dart';
@@ -175,6 +176,9 @@ class _GameTableContentState extends State<_GameTableContent>
   bool _valetHistoryInitialized = false;
   final Map<String, int> _processedValetHistoryCounts = {};
   String? _pendingSpecialPowerCardId;
+  final Map<String, Set<int>> _memorizationGlowByPlayer = {};
+  Timer? _memorizationGlowTimer;
+  bool _memorizationGlowShown = false;
 
   GameState get gs => widget.gameState;
   GameTableCallbacks get callbacks => widget.callbacks;
@@ -187,6 +191,7 @@ class _GameTableContentState extends State<_GameTableContent>
     super.initState();
     _syncHandTracking();
     _syncCardTracking();
+    _maybeStartMemorizationGlow(inInitState: true);
   }
 
   @override
@@ -203,6 +208,19 @@ class _GameTableContentState extends State<_GameTableContent>
     _checkDrawnCardAnimations();
     _checkValetSwapAnimations();
     _syncCardTracking();
+    if (gs.phase == GamePhase.setup) {
+      _memorizationGlowShown = false;
+      _memorizationGlowTimer?.cancel();
+      _memorizationGlowByPlayer.clear();
+    } else {
+      _maybeStartMemorizationGlow();
+    }
+  }
+
+  @override
+  void dispose() {
+    _memorizationGlowTimer?.cancel();
+    super.dispose();
   }
 
   Player? get _humanPlayer {
@@ -237,6 +255,51 @@ class _GameTableContentState extends State<_GameTableContent>
   bool get _canInteractWithCards {
     if (isSpectator) return false;
     return _isMyTurn || gs.phase == GamePhase.reaction;
+  }
+
+  void _maybeStartMemorizationGlow({bool inInitState = false}) {
+    if (_memorizationGlowShown || gs.phase != GamePhase.playing) return;
+
+    final highlights = <String, Set<int>>{};
+    for (final player in gs.players) {
+      if (player.memorizedCardIndices.isEmpty) continue;
+      final valid = player.memorizedCardIndices
+          .where((i) => i >= 0 && i < player.hand.length)
+          .toSet();
+      if (valid.isNotEmpty) {
+        highlights[player.id] = valid;
+      }
+    }
+
+    if (highlights.isEmpty) return;
+
+    _memorizationGlowShown = true;
+    if (inInitState) {
+      _memorizationGlowByPlayer
+        ..clear()
+        ..addAll(highlights);
+    } else {
+      setState(() {
+        _memorizationGlowByPlayer
+          ..clear()
+          ..addAll(highlights);
+      });
+    }
+
+    _memorizationGlowTimer?.cancel();
+    _memorizationGlowTimer = Timer(const Duration(milliseconds: 2600), () {
+      if (!mounted) return;
+      setState(() {
+        _memorizationGlowByPlayer.clear();
+      });
+    });
+  }
+
+  List<int>? _highlightedIndicesForPlayer(String playerId) {
+    final indices = _memorizationGlowByPlayer[playerId];
+    if (indices == null || indices.isEmpty) return null;
+    final sorted = indices.toList()..sort();
+    return sorted;
   }
 
   void _syncHandTracking() {
@@ -1843,6 +1906,7 @@ class _GameTableContentState extends State<_GameTableContent>
       handKey: _handKeys[opponent.id],
       hiddenIndices: _hiddenCardIndexByPlayer[opponent.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[opponent.id]?.toList(),
+      highlightedIndices: _highlightedIndicesForPlayer(opponent.id),
       isConnected: isConnected,
       isAfk: isAfk,
       turnStartTime: isActive ? mpConfig.turnStartTime : null,
@@ -1875,6 +1939,7 @@ class _GameTableContentState extends State<_GameTableContent>
       spacing: spacing,
       maxHeight: maxHeight,
       selectedIndices: widget.shakingCardIndices,
+      highlightedIndices: _highlightedIndicesForPlayer(human.id),
       onCardTap: callbacks.onCardTap,
       onDraw: callbacks.onDrawCard,
       onDiscard: callbacks.onDiscardDrawnCard,

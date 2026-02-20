@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
@@ -7,7 +8,16 @@ enum GameMode { quick, tournament }
 
 enum GamePhase { setup, playing, reaction, dutchCalled, ended }
 
+enum DealMode {
+  blockSequential,
+  roundRobin,
+  randomIndices,
+  disjointValues,
+}
+
 class GameState {
+  static final Random _dealRandom = Random();
+
   List<Player> players;
   GameMode gameMode;
   GamePhase phase;
@@ -29,9 +39,11 @@ class GameState {
   int get currentPlayerIndex => turnState.currentPlayerIndex;
   set currentPlayerIndex(int v) => turnState.currentPlayerIndex = v;
   bool get isWaitingForSpecialPower => turnState.isWaitingForSpecialPower;
-  set isWaitingForSpecialPower(bool v) => turnState.isWaitingForSpecialPower = v;
+  set isWaitingForSpecialPower(bool v) =>
+      turnState.isWaitingForSpecialPower = v;
   PlayingCard? get specialCardToActivate => turnState.specialCardToActivate;
-  set specialCardToActivate(PlayingCard? v) => turnState.specialCardToActivate = v;
+  set specialCardToActivate(PlayingCard? v) =>
+      turnState.specialCardToActivate = v;
   String? get dutchCallerId => turnState.dutchCallerId;
   set dutchCallerId(String? v) => turnState.dutchCallerId = v;
   DateTime? get reactionStartTime => turnState.reactionStartTime;
@@ -58,9 +70,12 @@ class GameState {
   int get tournamentRound => tournamentState.tournamentRound;
   set tournamentRound(int v) => tournamentState.tournamentRound = v;
   List<String> get eliminatedPlayerIds => tournamentState.eliminatedPlayerIds;
-  set eliminatedPlayerIds(List<String> v) => tournamentState.eliminatedPlayerIds = v;
-  Map<String, int> get tournamentCumulativeScores => tournamentState.tournamentCumulativeScores;
-  set tournamentCumulativeScores(Map<String, int> v) => tournamentState.tournamentCumulativeScores = v;
+  set eliminatedPlayerIds(List<String> v) =>
+      tournamentState.eliminatedPlayerIds = v;
+  Map<String, int> get tournamentCumulativeScores =>
+      tournamentState.tournamentCumulativeScores;
+  set tournamentCumulativeScores(Map<String, int> v) =>
+      tournamentState.tournamentCumulativeScores = v;
 
   GameState({
     required this.players,
@@ -121,14 +136,14 @@ class GameState {
 
   void nextTurn() {
     int oldIndex = currentPlayerIndex;
-    
+
     // Incrémenter le compteur d'actions à chaque passage de tour
     actionCount++;
-    
+
     do {
       currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
     } while (eliminatedPlayerIds.contains(currentPlayer.id));
-    
+
     // Incrémenter le compteur de tours quand on revient au premier joueur actif
     // (une rotation complète de la table)
     if (currentPlayerIndex <= oldIndex && players.isNotEmpty) {
@@ -167,8 +182,8 @@ class GameState {
       }
     }
     // Jokers avec couleurs différentes pour avoir des IDs uniques
-    deck.add(PlayingCard.create('hearts', 'JOKER'));    // Joker rouge
-    deck.add(PlayingCard.create('spades', 'JOKER'));    // Joker noir
+    deck.add(PlayingCard.create('hearts', 'JOKER')); // Joker rouge
+    deck.add(PlayingCard.create('spades', 'JOKER')); // Joker noir
     return deck;
   }
 
@@ -176,26 +191,115 @@ class GameState {
     deck.shuffle();
     addToHistory("🎲 Mélange aléatoire");
   }
-  
 
-  void dealCards() {
+  void dealCards({DealMode mode = DealMode.roundRobin}) {
     deck.shuffle();
     for (var player in players) {
       player.hand = [];
       player.knownCards = [];
-      for (int i = 0; i < 4; i++) {
-        if (deck.isNotEmpty) {
-          player.hand.add(deck.removeLast());
-          player.knownCards.add(false);
-        }
-      }
     }
-    _logDealResults();
+
+    switch (mode) {
+      case DealMode.blockSequential:
+        _dealBlockSequential();
+        break;
+      case DealMode.roundRobin:
+        _dealRoundRobin();
+        break;
+      case DealMode.randomIndices:
+        _dealRandomIndices();
+        break;
+      case DealMode.disjointValues:
+        _dealDisjointValues();
+        break;
+    }
+
+    _logDealResults(mode: mode);
   }
 
-  void _logDealResults() {
+  void _dealBlockSequential() {
+    for (var player in players) {
+      for (int i = 0; i < 4; i++) {
+        _dealFromTop(player);
+      }
+    }
+  }
+
+  void _dealRoundRobin() {
+    for (int i = 0; i < 4; i++) {
+      for (var player in players) {
+        _dealFromTop(player);
+      }
+    }
+  }
+
+  void _dealRandomIndices() {
+    for (var player in players) {
+      for (int i = 0; i < 4; i++) {
+        if (deck.isEmpty) return;
+        final randomIndex = _dealRandom.nextInt(deck.length);
+        final card = deck.removeAt(randomIndex);
+        player.hand.add(card);
+        player.knownCards.add(false);
+      }
+    }
+  }
+
+  void _dealDisjointValues() {
+    final usedValues = <String>{};
+
+    for (int i = 0; i < 4; i++) {
+      for (var player in players) {
+        if (deck.isEmpty) return;
+        final safeIndex = _pickIndexAvoidingValues(usedValues);
+        final card =
+            safeIndex == null ? deck.removeLast() : deck.removeAt(safeIndex);
+        player.hand.add(card);
+        player.knownCards.add(false);
+        usedValues.add(card.value);
+      }
+    }
+  }
+
+  void _dealFromTop(Player player) {
+    if (deck.isEmpty) return;
+    player.hand.add(deck.removeLast());
+    player.knownCards.add(false);
+  }
+
+  int? _pickIndexAvoidingValues(Set<String> forbiddenValues) {
+    final candidates = <int>[];
+    for (int i = 0; i < deck.length; i++) {
+      if (!forbiddenValues.contains(deck[i].value)) {
+        candidates.add(i);
+      }
+    }
+    if (candidates.isEmpty) return null;
+    return candidates[_dealRandom.nextInt(candidates.length)];
+  }
+
+  int _countValueOverlapsInHands() {
+    final valueCounts = <String, int>{};
+    for (final player in players) {
+      for (final card in player.hand) {
+        valueCounts[card.value] = (valueCounts[card.value] ?? 0) + 1;
+      }
+    }
+
+    int overlaps = 0;
+    for (final count in valueCounts.values) {
+      if (count > 1) overlaps += count - 1;
+    }
+    return overlaps;
+  }
+
+  void _logDealResults({required DealMode mode}) {
     int jokers = deck.where((c) => c.value == 'JOKER').length;
-    addToHistory("🃏 Distribution terminée ($jokers Jokers dans le deck)");
+    final overlaps = _countValueOverlapsInHands();
+    addToHistory(
+      "🃏 Distribution ${mode.name} terminée "
+      "($jokers Jokers dans le deck, overlaps=$overlaps)",
+    );
   }
 
   void shuffleDeckRandomly() {

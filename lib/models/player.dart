@@ -79,6 +79,10 @@ class Player {
   /// (espionnage, échange, joker).
   int lastTargetedByPowerTurn;
 
+  /// Index des cartes regardées pendant la phase de mémorisation initiale.
+  /// Public: on connaît les emplacements observés, pas les valeurs.
+  List<int> memorizedCardIndices;
+
   Player({
     required this.id,
     required this.name,
@@ -110,6 +114,7 @@ class Player {
     this.lastBronzeBlackoutActionCount = -999,
     this.lastBronzeValetTargetTurn = -999,
     this.lastTargetedByPowerTurn = -999,
+    List<int>? memorizedCardIndices,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
@@ -120,7 +125,8 @@ class Player {
         unknownCardHintActionCount = unknownCardHintActionCount ?? [],
         jokerInferenceKnownPool = jokerInferenceKnownPool ?? [],
         jokerInferenceKnownDoublonIndices =
-            jokerInferenceKnownDoublonIndices ?? [];
+            jokerInferenceKnownDoublonIndices ?? [],
+        memorizedCardIndices = memorizedCardIndices ?? [];
 
   Player.clone(Player other)
       : id = other.id,
@@ -156,7 +162,8 @@ class Player {
         bronzeBlackoutUntilActionCount = other.bronzeBlackoutUntilActionCount,
         lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount,
         lastBronzeValetTargetTurn = other.lastBronzeValetTargetTurn,
-        lastTargetedByPowerTurn = other.lastTargetedByPowerTurn;
+        lastTargetedByPowerTurn = other.lastTargetedByPowerTurn,
+        memorizedCardIndices = List<int>.from(other.memorizedCardIndices);
 
   int calculateScore() {
     int score = 0;
@@ -253,6 +260,7 @@ class Player {
 
   void initializeBotMemory() {
     if (isHuman) return;
+    memorizedCardIndices = [];
     if (hand.length < 2) return;
 
     mentalMap = List<PlayingCard?>.filled(hand.length, null, growable: true);
@@ -271,6 +279,7 @@ class Player {
       mentalMap[second] = hand[second];
       knownCards[first] = true;
       knownCards[second] = true;
+      memorizedCardIndices = [first, second]..sort();
 
       final areAdjacent = (first - second).abs() == 1;
       if (!areAdjacent) {
@@ -284,6 +293,7 @@ class Player {
       mentalMap[1] = hand[1];
       knownCards[0] = true;
       knownCards[1] = true;
+      memorizedCardIndices = [0, 1];
     }
 
     resetUnknownCardHints();
@@ -802,6 +812,9 @@ class Player {
               .toList() ??
           [],
       knownCards: (json['knownCards'] as List?)?.cast<bool>() ?? [],
+      memorizedCardIndices: ((json['memorizedCardIndices'] as List?) ?? [])
+          .map((e) => (e as num).toInt())
+          .toList(),
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas sérialisés
       // car ils sont gérés côté serveur pour les bots
     );
@@ -818,6 +831,7 @@ class Player {
       'isSpectator': isSpectator,
       'hand': hand.map((c) => c.toJson()).toList(),
       'knownCards': knownCards,
+      'memorizedCardIndices': memorizedCardIndices,
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas inclus
     };
   }
@@ -841,6 +855,7 @@ class Player {
     int? jokerInferenceKnownUniqueIndex,
     List<int>? jokerInferenceKnownDoublonIndices,
     int? jokerInferenceActionCount,
+    List<int>? memorizedCardIndices,
   }) {
     return Player(
       id: id ?? this.id,
@@ -882,6 +897,8 @@ class Player {
       lastBronzeBlackoutActionCount: lastBronzeBlackoutActionCount,
       lastBronzeValetTargetTurn: lastBronzeValetTargetTurn,
       lastTargetedByPowerTurn: lastTargetedByPowerTurn,
+      memorizedCardIndices:
+          memorizedCardIndices ?? List<int>.from(this.memorizedCardIndices),
     );
   }
 }

@@ -35,6 +35,8 @@ class MemorizationScreen extends StatelessWidget {
         config: shared.MemorizationConfig(
           localPlayer: humanPlayer,
           onMemorizationComplete: (selectedIndices) async {
+            humanPlayer.memorizedCardIndices = selectedIndices.toList()..sort();
+
             // Marquer les cartes comme connues
             for (int index in selectedIndices) {
               humanPlayer.knownCards[index] = true;

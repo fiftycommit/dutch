@@ -80,23 +80,29 @@ class GameTableMetrics {
     required bool isDrawnCardVisible,
   }) {
     final sideBandWidth = sideBandContentWidth + outerGap + centerGapX;
-    
-    final baseHeight = botBlockHeight + playerAreaHeight + centerMinHeight + (outerGap * 2);
+
+    final baseHeight =
+        botBlockHeight + playerAreaHeight + centerMinHeight + (outerGap * 2);
     final slack = math.max(0.0, constraints.maxHeight - baseHeight);
     final totalWeight = botBlockHeight + playerAreaHeight + centerMinHeight;
-    final centerExtra = totalWeight == 0 ? 0.0 : slack * (centerMinHeight / totalWeight);
+    final centerExtra =
+        totalWeight == 0 ? 0.0 : slack * (centerMinHeight / totalWeight);
     final gapSlack = slack - centerExtra;
     final topGap = gapSlack;
     const bottomGap = 0.0;
-    
+
     final topBandHeight = botBlockHeight + outerGap + topGap;
     final bottomBandHeight = playerAreaHeight + outerGap + bottomGap;
-    final centerWidth = math.max(0.0, constraints.maxWidth - (sideBandWidth * 2));
-    final centerHeight = math.max(0.0, constraints.maxHeight - topBandHeight - bottomBandHeight);
-    
-    final centerShiftY = (botCardHeight - playerCardHeight - topBandHeight + bottomBandHeight) / 2.0;
-    final centerShiftFraction = centerHeight == 0 
-        ? 0.0 
+    final centerWidth =
+        math.max(0.0, constraints.maxWidth - (sideBandWidth * 2));
+    final centerHeight =
+        math.max(0.0, constraints.maxHeight - topBandHeight - bottomBandHeight);
+
+    final centerShiftY =
+        (botCardHeight - playerCardHeight - topBandHeight + bottomBandHeight) /
+            2.0;
+    final centerShiftFraction = centerHeight == 0
+        ? 0.0
         : (centerShiftY / (centerHeight / 2)).clamp(-1.0, 1.0);
     final buttonMargin = isCompactMode ? 2.0 : (isMediumMode ? 12.0 : 24.0);
 
@@ -230,9 +236,11 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       overlapCards: false,
       cardGap: cardGap,
     ).totalWidth;
-    final actionLayout = actionButtonLayout(context, isCompactMode, cardMetrics);
+    final actionLayout =
+        actionButtonLayout(context, isCompactMode, cardMetrics);
     final sideButtonWidth = actionLayout.width;
-    final baseSideGap = (cardMetrics.width * (isCompactMode ? 0.08 : 0.12)).clamp(
+    final baseSideGap =
+        (cardMetrics.width * (isCompactMode ? 0.08 : 0.12)).clamp(
       ScreenUtils.spacing(context, 4.0),
       ScreenUtils.spacing(context, isCompactMode ? 12.0 : 18.0),
     );
@@ -248,7 +256,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       }
     }
     final reservedWidth = (sideButtonWidth * 2) + (sideGap * 2);
-    final maxHandWidth = math.max(cardMetrics.width, availableWidth - reservedWidth);
+    final maxHandWidth =
+        math.max(cardMetrics.width, availableWidth - reservedWidth);
     final handMaxWidth = math.min(maxHandWidth, naturalHandWidth);
 
     return PlayerAreaLayoutData(
@@ -263,8 +272,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
 
   double estimateCenterMinHeight(
       BuildContext context, GameState gs, bool isCompactMode) {
-    final cardSize =
-        cardVisualSize(context, isCompactMode ? CardSize.small : CardSize.medium);
+    final cardSize = cardVisualSize(
+        context, isCompactMode ? CardSize.small : CardSize.medium);
     final padding = isCompactMode ? 8.0 : 15.0;
     return cardSize.height + (padding * 2);
   }
@@ -299,6 +308,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required double spacing,
     double? handWidth,
     List<int>? selectedIndices,
+    List<int>? highlightedIndices,
     Function(int)? onCardTap,
     bool showCountBadge = false,
     bool isCompactMode = true,
@@ -368,6 +378,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       isActive: canInteract,
       onCardTap: onCardTap,
       selectedIndices: selectedIndices,
+      highlightedIndices: highlightedIndices,
       hiddenIndices: hiddenIndices,
       hiddenCardIds: hiddenCardIds,
       cardSize: cardSize,
@@ -404,6 +415,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     required double spacing,
     required double maxHeight,
     required List<int> selectedIndices,
+    List<int>? highlightedIndices,
     required Function(int) onCardTap,
     required VoidCallback onDraw,
     required VoidCallback onDiscard,
@@ -417,7 +429,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
-    final availableWidth = constrainedWidth ?? (screenWidth - safePadding.left - safePadding.right);
+    final availableWidth = constrainedWidth ??
+        (screenWidth - safePadding.left - safePadding.right);
     final cardMetrics = cardVisualSize(context, cardSize);
     final cardGap = ScreenUtils.spacing(context, 4.0);
     final naturalHandWidth = PlayerHandWidget.metrics(
@@ -464,6 +477,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       spacing: spacing,
       handWidth: handMaxWidth,
       selectedIndices: selectedIndices,
+      highlightedIndices: highlightedIndices,
       onCardTap: onCardTap,
       handKey: handKey,
       hiddenIndices: hiddenIndices,
@@ -531,6 +545,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     Key? handKey,
     List<int>? hiddenIndices,
     List<String>? hiddenCardIds,
+    List<int>? highlightedIndices,
   }) {
     final cardMetrics = cardVisualSize(context, cardSize);
     final overlap =
@@ -550,6 +565,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       handWidth: handWidth,
       showCountBadge: true,
       isCompactMode: isCompactMode,
+      highlightedIndices: highlightedIndices,
       onCardTap: onCardTap,
       turnStartTime: turnStartTime,
       turnDuration: turnDuration,
@@ -572,7 +588,9 @@ void handleCardTapCommon({
 }) {
   if (gs.phase == GamePhase.reaction) {
     onAttemptMatch(index);
-  } else if (gs.phase == GamePhase.playing && isLocalPlayerTurn && gs.drawnCard != null) {
+  } else if (gs.phase == GamePhase.playing &&
+      isLocalPlayerTurn &&
+      gs.drawnCard != null) {
     onReplaceCard(index);
   }
 }

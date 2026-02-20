@@ -85,6 +85,43 @@ void main() {
         expect(player.mentalMap[1], isNotNull);
       }
     });
+
+    test('initializeGame supports round-robin deal mode', () {
+      final players = createStandardPlayers(botCount: 3);
+      final gs = GameLogic.initializeGame(
+        players: players,
+        gameMode: GameMode.quick,
+        difficulty: Difficulty.medium,
+        dealMode: DealMode.roundRobin,
+      );
+
+      for (var player in gs.players) {
+        expect(player.hand.length, 4);
+      }
+      GameStateInvariants.assertNoDuplicateCards(gs);
+      expect(gs.totalCards, 54);
+    });
+
+    test('disjoint deal mode avoids shared values when feasible', () {
+      final players =
+          createStandardPlayers(botCount: 2); // 3 joueurs => 12 cartes
+      final gs = GameLogic.initializeGame(
+        players: players,
+        gameMode: GameMode.quick,
+        difficulty: Difficulty.medium,
+        dealMode: DealMode.disjointValues,
+      );
+
+      final counts = <String, int>{};
+      for (final player in gs.players) {
+        for (final card in player.hand) {
+          counts[card.value] = (counts[card.value] ?? 0) + 1;
+        }
+      }
+      final overlap =
+          counts.values.where((c) => c > 1).fold<int>(0, (a, b) => a + (b - 1));
+      expect(overlap, 0);
+    });
   });
 
   group('GameLogic - Draw Card', () {

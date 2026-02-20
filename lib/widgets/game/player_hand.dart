@@ -29,6 +29,7 @@ class PlayerHandWidget extends StatefulWidget {
   final bool isActive;
   final Function(int)? onCardTap;
   final List<int>? selectedIndices;
+  final List<int>? highlightedIndices;
   final List<int>? hiddenIndices;
   final List<String>? hiddenCardIds;
   final CardSize cardSize;
@@ -43,6 +44,7 @@ class PlayerHandWidget extends StatefulWidget {
     required this.isActive,
     this.onCardTap,
     this.selectedIndices,
+    this.highlightedIndices,
     this.hiddenIndices,
     this.hiddenCardIds,
     this.cardSize = CardSize.medium,
@@ -183,8 +185,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
           double totalWidth = metrics.totalWidth;
 
           if (widget.fitToWidth && count > 1 && totalWidth > maxWidth + 0.5) {
-            final desiredOverlap =
-                (maxWidth - metrics.cardWidth) / (count - 1);
+            final desiredOverlap = (maxWidth - metrics.cardWidth) / (count - 1);
             final minOverlap = metrics.cardWidth * 0.55;
             overlap = desiredOverlap.clamp(minOverlap, overlap);
             totalWidth = metrics.cardWidth + (count - 1) * overlap;
@@ -231,6 +232,8 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
 
   Widget _buildCard(BuildContext context, int index) {
     final isSelected = widget.selectedIndices?.contains(index) ?? false;
+    final isMemorizedHighlight =
+        widget.highlightedIndices?.contains(index) ?? false;
     final isPenaltyHighlight = _penaltyHighlightIndex == index;
     final cardId = widget.player.hand[index].id;
     final isHidden = (widget.hiddenIndices?.contains(index) ?? false) ||
@@ -238,53 +241,70 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
     const bool shouldReveal = false;
 
     final cardBody = TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
-        duration: const Duration(milliseconds: 500),
-        builder: (context, shakeValue, child) {
-          final offset = isSelected
-              ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20)
-              : 0.0;
+      tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
+      duration: const Duration(milliseconds: 500),
+      builder: (context, shakeValue, child) {
+        final offset = isSelected
+            ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20)
+            : 0.0;
 
-          return Transform.translate(
-            offset: Offset(offset, 0),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: isSelected
-                    ? Border.all(color: Colors.red, width: 3)
-                    : (isPenaltyHighlight
-                        ? Border.all(color: Colors.redAccent, width: 2)
-                        : null),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: Colors.red.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        )
-                      ]
-                    : (isPenaltyHighlight
-                        ? [
-                            BoxShadow(
-                              color: Colors.red.withValues(alpha: 0.45),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            )
-                          ]
-                        : null),
-              ),
-              child: CardWidget(
-                card: null,
-                size: widget.cardSize,
-                isRevealed: shouldReveal,
-                svgBuilder: widget.svgBuilder,
-              ),
+        return Transform.translate(
+          offset: Offset(offset, 0),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected
+                  ? Border.all(color: Colors.red, width: 3)
+                  : (isPenaltyHighlight
+                      ? Border.all(color: Colors.redAccent, width: 2)
+                      : (isMemorizedHighlight
+                          ? Border.all(color: const Color(0xFFB8FF32), width: 2)
+                          : null)),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: Colors.red.withValues(alpha: 0.5),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ]
+                  : (isPenaltyHighlight
+                      ? [
+                          BoxShadow(
+                            color: Colors.red.withValues(alpha: 0.45),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          )
+                        ]
+                      : (isMemorizedHighlight
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFFB8FF32)
+                                    .withValues(alpha: 0.65),
+                                blurRadius: 12,
+                                spreadRadius: 1.5,
+                              ),
+                              BoxShadow(
+                                color:
+                                    Colors.cyanAccent.withValues(alpha: 0.35),
+                                blurRadius: 20,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null)),
             ),
-          );
-        },
-      );
+            child: CardWidget(
+              card: null,
+              size: widget.cardSize,
+              isRevealed: shouldReveal,
+              svgBuilder: widget.svgBuilder,
+            ),
+          ),
+        );
+      },
+    );
 
     final tappable = GestureDetector(
       onTap: () {

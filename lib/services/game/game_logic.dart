@@ -15,6 +15,7 @@ class GameLogic {
     required GameMode gameMode,
     required Difficulty difficulty,
     int tournamentRound = 1,
+    DealMode dealMode = DealMode.roundRobin,
   }) {
     // Reset le tracker de défausses pour la nouvelle manche
     BotDutchStrategy.discardTracker.reset();
@@ -25,6 +26,7 @@ class GameLogic {
       p.hand = [];
       p.knownCards = [];
       p.mentalMap = [];
+      p.memorizedCardIndices = [];
       p.resetUnknownCardHints();
       p.clearJokerInference();
     }
@@ -39,7 +41,7 @@ class GameLogic {
       phase: GamePhase.setup,
     );
 
-    gameState.dealCards();
+    gameState.dealCards(mode: dealMode);
     // Appliquer la méthode de mélange choisie (chance) sur le deck restant
     gameState.smartShuffle();
 
@@ -70,6 +72,7 @@ class GameLogic {
 
   static void initialReveal(GameState gameState, List<int> selectedIndices) {
     Player human = gameState.players.firstWhere((p) => p.isHuman);
+    human.memorizedCardIndices = selectedIndices.toList()..sort();
     for (int index in selectedIndices) {
       if (index >= 0 && index < human.knownCards.length) {
         human.knownCards[index] = true;
