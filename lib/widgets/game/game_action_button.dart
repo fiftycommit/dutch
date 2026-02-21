@@ -82,13 +82,21 @@ class _GameActionButtonState extends State<GameActionButton>
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(color: baseColor, width: borderWidth),
           ),
-          child: Text(
-            widget.label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: labelColor,
-              fontSize: fontSize,
-              fontWeight: FontWeight.bold,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ),

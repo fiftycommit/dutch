@@ -22,17 +22,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _shakeForm = false;
-  bool _entered = false;
+  final bool _entered = true;
   String? _errorMessage;
   Timer? _shakeResetTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _entered = true);
-    });
   }
 
   @override
@@ -124,82 +120,86 @@ class _LoginScreenState extends State<LoginScreen> {
     return Theme(
       data: themed,
       child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[
-                Color(0xFFEEF2FF),
-                Color(0xFFF3E8FF),
-                Color(0xFFEFF6FF),
-              ],
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  Color(0xFFEEF2FF),
+                  Color(0xFFF3E8FF),
+                  Color(0xFFEFF6FF),
+                ],
+              ),
             ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: <Widget>[
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    layout.screenHorizontalPadding,
-                    layout.headerTopPadding,
-                    layout.screenHorizontalPadding,
-                    0,
-                  ),
-                  child: AnimatedOpacity(
-                    opacity: _entered || noMotion ? 1 : 0,
-                    duration: duration,
-                    child: AnimatedSlide(
-                      offset: _entered || noMotion
-                          ? Offset.zero
-                          : const Offset(0, -0.08),
+            child: SafeArea(
+              child: Column(
+                children: <Widget>[
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      layout.screenHorizontalPadding,
+                      layout.headerTopPadding,
+                      layout.screenHorizontalPadding,
+                      0,
+                    ),
+                    child: AnimatedOpacity(
+                      opacity: _entered || noMotion ? 1 : 0,
                       duration: duration,
-                      curve: Curves.easeOutCubic,
-                      child: _buildHeader(layout),
+                      child: AnimatedSlide(
+                        offset: _entered || noMotion
+                            ? Offset.zero
+                            : const Offset(0, -0.08),
+                        duration: duration,
+                        curve: Curves.easeOutCubic,
+                        child: _buildHeader(layout),
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        layout.screenHorizontalPadding,
-                        layout.formTopPadding,
-                        layout.screenHorizontalPadding,
-                        layout.formBottomPadding,
-                      ),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: TweenAnimationBuilder<double>(
-                          duration: noMotion
-                              ? Duration.zero
-                              : const Duration(milliseconds: 360),
-                          curve: Curves.easeOut,
-                          tween: Tween<double>(
-                            begin: 0,
-                            end: _shakeForm ? 1 : 0,
-                          ),
-                          builder: (context, value, child) {
-                            final translate = math.sin(value * math.pi * 9) *
-                                11 *
-                                (1 - value);
-                            return Transform.translate(
-                              offset: Offset(translate, 0),
-                              child: child,
-                            );
-                          },
-                          child: AnimatedOpacity(
-                            opacity: _entered || noMotion ? 1 : 0,
-                            duration: duration,
-                            child: AnimatedSlide(
-                              offset: _entered || noMotion
-                                  ? Offset.zero
-                                  : const Offset(0, 0.06),
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          layout.screenHorizontalPadding,
+                          layout.formTopPadding,
+                          layout.screenHorizontalPadding,
+                          layout.formBottomPadding,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: TweenAnimationBuilder<double>(
+                            duration: noMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 360),
+                            curve: Curves.easeOut,
+                            tween: Tween<double>(
+                              begin: 0,
+                              end: _shakeForm ? 1 : 0,
+                            ),
+                            builder: (context, value, child) {
+                              final translate = math.sin(value * math.pi * 9) *
+                                  11 *
+                                  (1 - value);
+                              return Transform.translate(
+                                offset: Offset(translate, 0),
+                                child: child,
+                              );
+                            },
+                            child: AnimatedOpacity(
+                              opacity: _entered || noMotion ? 1 : 0,
                               duration: duration,
-                              curve: Curves.easeOutCubic,
-                              child: _buildForm(
-                                layout: layout,
-                                loading: authProvider.isLoading,
+                              child: AnimatedSlide(
+                                offset: _entered || noMotion
+                                    ? Offset.zero
+                                    : const Offset(0, 0.06),
+                                duration: duration,
+                                curve: Curves.easeOutCubic,
+                                child: _buildForm(
+                                  layout: layout,
+                                  loading: authProvider.isLoading,
+                                ),
                               ),
                             ),
                           ),
@@ -207,8 +207,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -232,26 +232,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 size: layout.backIconSize,
                 color: const Color(0xFF334155),
               ),
-            ),
-          ),
-        ),
-        SizedBox(width: layout.headerGap),
-        ShaderMask(
-          shaderCallback: (Rect bounds) {
-            return const LinearGradient(
-              colors: <Color>[
-                Color(0xFF4F46E5),
-                Color(0xFF7C3AED),
-                Color(0xFF2563EB)
-              ],
-            ).createShader(bounds);
-          },
-          child: Text(
-            'Multijoueur',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: layout.headerTitleSize,
-              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -423,11 +403,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(
-                      'Se connecter',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: layout.buttonTextSize,
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Se connecter',
+                        maxLines: 1,
+                        overflow: TextOverflow.visible,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: layout.buttonTextSize,
+                        ),
                       ),
                     ),
             ),
@@ -501,33 +486,33 @@ class _LoginScreenState extends State<LoginScreen> {
       style: const TextStyle(
         color: Colors.white,
         fontWeight: FontWeight.w500,
-        fontSize: 16,
+        fontSize: 14,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(
           color: Color(0xFF94A3B8),
           fontWeight: FontWeight.w500,
-          fontSize: 16,
+          fontSize: 14,
         ),
-        prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 21),
+        prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
         suffixIcon: suffix,
         filled: true,
         fillColor: const Color(0xFF334155),
-        contentPadding: const EdgeInsets.symmetric(vertical: 17),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
             color: hasError ? const Color(0xFFF43F5E) : Colors.transparent,
             width: hasError ? 1.5 : 0,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
             color: hasError ? const Color(0xFFF43F5E) : const Color(0xFF6366F1),
             width: 1.8,
@@ -599,31 +584,31 @@ class _AuthLayout {
     final isDesktop = width >= 1100;
 
     return _AuthLayout(
-      screenHorizontalPadding: isDesktop ? 28 : (isLandscape ? 12 : 16),
-      headerTopPadding: isLandscape ? 8 : 14,
-      formTopPadding: isLandscape ? 6 : 18,
-      formBottomPadding: isLandscape ? 8 : 18,
-      backButtonRadius: isLandscape ? 14 : 18,
-      backButtonPadding: isLandscape ? 9 : 12,
-      backIconSize: isLandscape ? 20 : 24,
-      headerGap: isLandscape ? 10 : 12,
-      headerTitleSize: isDesktop ? 46 : (isLandscape ? 30 : 42),
-      iconContainerSize: isLandscape ? 72 : 84,
-      iconSize: isLandscape ? 38 : 48,
-      spaceAfterIcon: isLandscape ? 10 : 18,
-      formTitleSize: isDesktop ? 62 : (isLandscape ? 38 : 56),
-      spaceAfterTitle: isLandscape ? 4 : 8,
-      subtitleSize: isLandscape ? 12 : 16,
-      spaceBeforeFields: isLandscape ? 12 : 22,
+      screenHorizontalPadding: isDesktop ? 28 : (isLandscape ? 12 : 14),
+      headerTopPadding: isLandscape ? 8 : 12,
+      formTopPadding: isLandscape ? 6 : 12,
+      formBottomPadding: isLandscape ? 8 : 14,
+      backButtonRadius: isLandscape ? 14 : 16,
+      backButtonPadding: isLandscape ? 9 : 10,
+      backIconSize: isLandscape ? 20 : 21,
+      headerGap: isLandscape ? 10 : 10,
+      headerTitleSize: isDesktop ? 42 : (isLandscape ? 26 : 32),
+      iconContainerSize: isLandscape ? 68 : 72,
+      iconSize: isLandscape ? 34 : 40,
+      spaceAfterIcon: isLandscape ? 10 : 14,
+      formTitleSize: isDesktop ? 56 : (isLandscape ? 32 : 42),
+      spaceAfterTitle: isLandscape ? 4 : 6,
+      subtitleSize: isLandscape ? 11 : 13,
+      spaceBeforeFields: isLandscape ? 10 : 16,
       fieldGap: isLandscape ? 8 : 12,
-      suffixIconSize: isLandscape ? 20 : 22,
-      errorSize: isLandscape ? 12 : 13,
-      spaceBeforeButton: isLandscape ? 10 : 14,
-      buttonHeight: isLandscape ? 48 : 58,
-      buttonRadius: isLandscape ? 16 : 20,
-      buttonTextSize: isLandscape ? 18 : 22,
-      spaceAfterButton: isLandscape ? 8 : 10,
-      linkSize: isLandscape ? 12 : 16,
+      suffixIconSize: isLandscape ? 18 : 19,
+      errorSize: isLandscape ? 11 : 12,
+      spaceBeforeButton: isLandscape ? 8 : 12,
+      buttonHeight: isLandscape ? 44 : 50,
+      buttonRadius: isLandscape ? 14 : 16,
+      buttonTextSize: isLandscape ? 16 : 18,
+      spaceAfterButton: isLandscape ? 6 : 8,
+      linkSize: isLandscape ? 11 : 14,
     );
   }
 }

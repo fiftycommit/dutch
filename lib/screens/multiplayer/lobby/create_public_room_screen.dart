@@ -13,7 +13,7 @@ class CreatePublicRoomScreen extends StatefulWidget {
 }
 
 class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
-  final _nameController = TextEditingController(text: 'Joueur');
+  String _playerName = 'Joueur';
   final _roomNameController = TextEditingController();
   bool _isCreating = false;
   final SocialHubRepository _socialRepository = SocialHubRepository();
@@ -29,33 +29,40 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
     if (!mounted || profile == null) {
       return;
     }
-    if (_nameController.text.trim().isEmpty ||
-        _nameController.text.trim() == 'Joueur') {
-      _nameController.text = profile.displayName;
+    final profileName = profile.displayName.trim();
+    if (profileName.isNotEmpty) _playerName = profileName;
+  }
+
+  Future<String> _resolvePlayerName() async {
+    final cached = _playerName.trim();
+    if (cached.isNotEmpty && cached != 'Joueur') {
+      return cached;
     }
+
+    final profile = await _socialRepository.getProfile();
+    final resolved = profile?.displayName.trim() ?? '';
+    if (resolved.isNotEmpty) {
+      _playerName = resolved;
+      return resolved;
+    }
+    return cached.isNotEmpty ? cached : 'Joueur';
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _roomNameController.dispose();
     super.dispose();
   }
 
   Future<void> _createRoom() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
-
     setState(() => _isCreating = true);
 
     try {
       final provider = context.read<MultiplayerGameProvider>();
+      final playerName = await _resolvePlayerName();
       final roomName = _roomNameController.text.trim();
       await provider.createPublicRoom(
-        playerName: name,
+        playerName: playerName,
         roomName: roomName.isEmpty ? null : roomName,
       );
 
@@ -109,7 +116,7 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'CRÉER UNE PARTIE',
+                      'CRÉER UN SALON PUBLIC',
                       style: TextStyle(
                         color: Colors.amber,
                         fontSize: 20,
@@ -145,98 +152,41 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // Row avec pseudo et nom du salon
-                                    Row(
-                                      children: [
-                                        // Champ pseudo
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _nameController,
-                                            enabled: !_isCreating,
-                                            textCapitalization:
-                                                TextCapitalization.words,
-                                            maxLength: 20,
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 14,
-                                            ),
-                                            decoration: InputDecoration(
-                                              labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(
-                                                  color: Colors.black87,
-                                                  fontSize: 12),
-                                              counterText: '',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 12),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              prefixIcon: const Icon(
-                                                  Icons.person,
-                                                  color: Colors.blue,
-                                                  size: 18),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: const BorderSide(
-                                                    color: Colors.blue,
-                                                    width: 2),
-                                              ),
-                                            ),
-                                          ),
+                                    TextField(
+                                      controller: _roomNameController,
+                                      enabled: !_isCreating,
+                                      textCapitalization:
+                                          TextCapitalization.words,
+                                      maxLength: 30,
+                                      style: const TextStyle(
+                                        color: Colors.black87,
+                                        fontSize: 14,
+                                      ),
+                                      decoration: InputDecoration(
+                                        labelText: 'Nom du salon (optionnel)',
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87,
+                                            fontSize: 12),
+                                        counterText: '',
+                                        isDense: true,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 12),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade100,
+                                        prefixIcon: const Icon(Icons.label,
+                                            color: Colors.blue, size: 18),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                         ),
-                                        const SizedBox(width: 12),
-                                        // Champ nom du salon
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _roomNameController,
-                                            enabled: !_isCreating,
-                                            textCapitalization:
-                                                TextCapitalization.words,
-                                            maxLength: 30,
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 14,
-                                            ),
-                                            decoration: InputDecoration(
-                                              labelText:
-                                                  'Nom du salon (optionnel)',
-                                              labelStyle: const TextStyle(
-                                                  color: Colors.black87,
-                                                  fontSize: 12),
-                                              counterText: '',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 12),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              prefixIcon: const Icon(
-                                                  Icons.label,
-                                                  color: Colors.blue,
-                                                  size: 18),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: const BorderSide(
-                                                    color: Colors.blue,
-                                                    width: 2),
-                                              ),
-                                            ),
-                                          ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                              color: Colors.blue, width: 2),
                                         ),
-                                      ],
+                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     // Bouton creer
@@ -325,7 +275,7 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                     ),
                                     SizedBox(height: isMobile ? 16 : 24),
                                     Text(
-                                      'Partie Publique',
+                                      'Salon Public',
                                       style: TextStyle(
                                         fontSize: isMobile ? 24 : 28,
                                         fontWeight: FontWeight.bold,
@@ -334,7 +284,7 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                     ),
                                     SizedBox(height: isMobile ? 8 : 12),
                                     Text(
-                                      'Créez une room et attendez que d\'autres joueurs vous rejoignent',
+                                      'Créez un salon et attendez que d\'autres joueurs vous rejoignent',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: isMobile ? 14 : 16,
@@ -342,40 +292,6 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       ),
                                     ),
                                     SizedBox(height: isMobile ? 24 : 32),
-                                    TextField(
-                                      controller: _nameController,
-                                      enabled: !_isCreating,
-                                      textCapitalization:
-                                          TextCapitalization.words,
-                                      maxLength: 20,
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontSize: 16,
-                                      ),
-                                      decoration: InputDecoration(
-                                        labelText: 'Votre nom',
-                                        labelStyle: const TextStyle(
-                                            color: Colors.black87),
-                                        hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(
-                                            color: Colors.black54),
-                                        filled: true,
-                                        fillColor: Colors.grey.shade100,
-                                        prefixIcon: const Icon(Icons.person,
-                                            color: Colors.blue),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          borderSide: const BorderSide(
-                                              color: Colors.blue, width: 2),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(height: isMobile ? 16 : 20),
                                     TextField(
                                       controller: _roomNameController,
                                       enabled: !_isCreating,

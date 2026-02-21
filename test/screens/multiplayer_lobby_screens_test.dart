@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dutch_game/models/game_state.dart';
 
 // These tests verify the UI layout behavior for compact vs standard modes
 // without depending on the actual provider implementation
 
 void main() {
   group('JoinPrivateRoomScreen Layout Tests', () {
-    testWidgets('shows full form in standard layout (height >= 400)', (tester) async {
+    testWidgets('shows full form in standard layout (height >= 400)',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 600);
       tester.view.devicePixelRatio = 1.0;
 
@@ -29,8 +29,11 @@ void main() {
                   children: [
                     Icon(Icons.vpn_key, size: 60),
                     Text('Rejoindre un Salon'),
-                    TextField(decoration: InputDecoration(labelText: 'Code du salon')),
-                    TextField(decoration: InputDecoration(labelText: 'Ton pseudo')),
+                    TextField(
+                        decoration:
+                            InputDecoration(labelText: 'Code du salon')),
+                    TextField(
+                        decoration: InputDecoration(labelText: 'Ton pseudo')),
                     ElevatedButton(onPressed: () {}, child: Text('REJOINDRE')),
                   ],
                 );
@@ -49,7 +52,8 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('shows compact layout on small landscape (height < 400)', (tester) async {
+    testWidgets('shows compact layout on small landscape (height < 400)',
+        (tester) async {
       // Compact landscape: height < 400 and width > height
       tester.view.physicalSize = const Size(800, 350);
       tester.view.devicePixelRatio = 1.0;
@@ -66,9 +70,15 @@ void main() {
                   // Compact mode - no icon/title, just row with fields
                   return Row(
                     children: [
-                      Expanded(child: TextField(decoration: InputDecoration(labelText: 'Code du salon'))),
+                      Expanded(
+                          child: TextField(
+                              decoration:
+                                  InputDecoration(labelText: 'Code du salon'))),
                       SizedBox(width: 12),
-                      Expanded(child: TextField(decoration: InputDecoration(labelText: 'Ton pseudo'))),
+                      Expanded(
+                          child: TextField(
+                              decoration:
+                                  InputDecoration(labelText: 'Ton pseudo'))),
                     ],
                   );
                 }
@@ -118,9 +128,10 @@ void main() {
                 return Column(
                   children: [
                     Icon(Icons.public, size: 60),
-                    Text('Partie Publique'),
-                    TextField(decoration: InputDecoration(labelText: 'Ton pseudo')),
-                    TextField(decoration: InputDecoration(labelText: 'Nom du salon (optionnel)')),
+                    Text('Salon Public'),
+                    TextField(
+                        decoration: InputDecoration(
+                            labelText: 'Nom du salon (optionnel)')),
                   ],
                 );
               },
@@ -129,14 +140,15 @@ void main() {
         ),
       );
 
-      expect(find.text('Partie Publique'), findsOneWidget);
+      expect(find.text('Salon Public'), findsOneWidget);
       expect(find.byIcon(Icons.public), findsOneWidget);
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('shows compact layout on small landscape screens', (tester) async {
+    testWidgets('shows compact layout on small landscape screens',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 350);
       tester.view.devicePixelRatio = 1.0;
 
@@ -149,19 +161,15 @@ void main() {
                     constraints.maxWidth > constraints.maxHeight;
 
                 if (isCompactLandscape) {
-                  return Row(
-                    children: [
-                      Expanded(child: TextField(decoration: InputDecoration(labelText: 'Ton pseudo'))),
-                      SizedBox(width: 12),
-                      Expanded(child: TextField(decoration: InputDecoration(labelText: 'Nom du salon (optionnel)'))),
-                    ],
-                  );
+                  return TextField(
+                      decoration: InputDecoration(
+                          labelText: 'Nom du salon (optionnel)'));
                 }
 
                 return Column(
                   children: [
                     Icon(Icons.public, size: 60),
-                    Text('Partie Publique'),
+                    Text('Salon Public'),
                   ],
                 );
               },
@@ -171,11 +179,10 @@ void main() {
       );
 
       // Compact mode should NOT show title and icon
-      expect(find.text('Partie Publique'), findsNothing);
+      expect(find.text('Salon Public'), findsNothing);
       expect(find.byIcon(Icons.public), findsNothing);
 
-      // Should show fields
-      expect(find.text('Ton pseudo'), findsOneWidget);
+      // Should show room name field only
       expect(find.text('Nom du salon (optionnel)'), findsOneWidget);
 
       tester.view.resetPhysicalSize();
@@ -184,7 +191,7 @@ void main() {
   });
 
   group('CreatePrivateRoomScreen Layout Tests', () {
-    testWidgets('shows standard layout with mode selector on large screens', (tester) async {
+    testWidgets('shows standard layout on large screens', (tester) async {
       tester.view.physicalSize = const Size(800, 600);
       tester.view.devicePixelRatio = 1.0;
 
@@ -204,16 +211,8 @@ void main() {
                   children: [
                     Icon(Icons.lock_outline, size: 60),
                     Text('Salon Prive'),
-                    TextField(decoration: InputDecoration(labelText: 'Ton pseudo')),
-                    DropdownButtonFormField<GameMode>(
-                      initialValue: GameMode.quick,
-                      decoration: InputDecoration(labelText: 'Mode de jeu'),
-                      items: [
-                        DropdownMenuItem(value: GameMode.quick, child: Text('Partie rapide')),
-                        DropdownMenuItem(value: GameMode.tournament, child: Text('Tournoi')),
-                      ],
-                      onChanged: (_) {},
-                    ),
+                    ElevatedButton(
+                        onPressed: () {}, child: Text('CREER LE SALON')),
                   ],
                 );
               },
@@ -224,7 +223,7 @@ void main() {
 
       expect(find.text('Salon Prive'), findsOneWidget);
       expect(find.byIcon(Icons.lock_outline), findsOneWidget);
-      expect(find.text('Mode de jeu'), findsOneWidget);
+      expect(find.text('CREER LE SALON'), findsOneWidget);
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
@@ -243,23 +242,8 @@ void main() {
                     constraints.maxWidth > constraints.maxHeight;
 
                 if (isCompactLandscape) {
-                  return Row(
-                    children: [
-                      Expanded(child: TextField(decoration: InputDecoration(labelText: 'Ton pseudo'))),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<GameMode>(
-                          initialValue: GameMode.quick,
-                          decoration: InputDecoration(labelText: 'Mode de jeu'),
-                          items: [
-                            DropdownMenuItem(value: GameMode.quick, child: Text('Rapide')),
-                            DropdownMenuItem(value: GameMode.tournament, child: Text('Tournoi')),
-                          ],
-                          onChanged: (_) {},
-                        ),
-                      ),
-                    ],
-                  );
+                  return ElevatedButton(
+                      onPressed: () {}, child: Text('CREER LE SALON'));
                 }
 
                 return Column(
@@ -278,44 +262,8 @@ void main() {
       expect(find.text('Salon Prive'), findsNothing);
       expect(find.byIcon(Icons.lock_outline), findsNothing);
 
-      // Should show fields in row
-      expect(find.text('Ton pseudo'), findsOneWidget);
-      expect(find.text('Mode de jeu'), findsOneWidget);
-
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    testWidgets('game mode dropdown shows both options', (tester) async {
-      tester.view.physicalSize = const Size(800, 600);
-      tester.view.devicePixelRatio = 1.0;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DropdownButtonFormField<GameMode>(
-              initialValue: GameMode.quick,
-              decoration: InputDecoration(labelText: 'Mode de jeu'),
-              items: [
-                DropdownMenuItem(value: GameMode.quick, child: Text('Partie rapide')),
-                DropdownMenuItem(value: GameMode.tournament, child: Text('Tournoi')),
-              ],
-              onChanged: (_) {},
-            ),
-          ),
-        ),
-      );
-
-      // Find and tap the dropdown
-      final dropdown = find.byType(DropdownButtonFormField<GameMode>);
-      expect(dropdown, findsOneWidget);
-
-      await tester.tap(dropdown);
-      await tester.pumpAndSettle();
-
-      // Should show both options
-      expect(find.text('Partie rapide'), findsWidgets);
-      expect(find.text('Tournoi'), findsWidgets);
+      // Should still show create button
+      expect(find.text('CREER LE SALON'), findsOneWidget);
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
@@ -323,7 +271,8 @@ void main() {
   });
 
   group('Compact Landscape Detection', () {
-    testWidgets('isCompactLandscape is true when height < 400 and landscape', (tester) async {
+    testWidgets('isCompactLandscape is true when height < 400 and landscape',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 350);
       tester.view.devicePixelRatio = 1.0;
 
@@ -350,7 +299,8 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('isCompactLandscape is false when height >= 400', (tester) async {
+    testWidgets('isCompactLandscape is false when height >= 400',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 600);
       tester.view.devicePixelRatio = 1.0;
 
@@ -377,7 +327,9 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('isCompactLandscape is false in portrait even with small height', (tester) async {
+    testWidgets(
+        'isCompactLandscape is false in portrait even with small height',
+        (tester) async {
       // Portrait mode: width < height
       tester.view.physicalSize = const Size(350, 800);
       tester.view.devicePixelRatio = 1.0;

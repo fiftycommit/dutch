@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../models/game_settings.dart';
-import '../../../../../models/game_state.dart';
 import '../../../../../services/social/social_hub_repository.dart';
 
 class CreatePrivateRoomScreen extends StatefulWidget {
@@ -16,8 +15,7 @@ class CreatePrivateRoomScreen extends StatefulWidget {
 }
 
 class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
-  final _nameController = TextEditingController(text: 'Joueur');
-  GameMode _gameMode = GameMode.quick;
+  String _playerName = 'Joueur';
   bool _isCreating = false;
   final SocialHubRepository _socialRepository = SocialHubRepository();
 
@@ -32,38 +30,41 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
     if (!mounted || profile == null) {
       return;
     }
-    if (_nameController.text.trim().isEmpty ||
-        _nameController.text.trim() == 'Joueur') {
-      _nameController.text = profile.displayName;
+    final profileName = profile.displayName.trim();
+    if (profileName.isNotEmpty) {
+      _playerName = profileName;
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
+  Future<String> _resolvePlayerName() async {
+    final cached = _playerName.trim();
+    if (cached.isNotEmpty && cached != 'Joueur') {
+      return cached;
+    }
+
+    final profile = await _socialRepository.getProfile();
+    final resolved = profile?.displayName.trim() ?? '';
+    if (resolved.isNotEmpty) {
+      _playerName = resolved;
+      return resolved;
+    }
+    return cached.isNotEmpty ? cached : 'Joueur';
   }
 
   Future<void> _createRoom() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
-
     setState(() => _isCreating = true);
 
     try {
       final provider = context.read<MultiplayerGameProvider>();
+      final playerName = await _resolvePlayerName();
       await provider.createRoom(
         settings: GameSettings(
-          gameMode: _gameMode,
           numberOfPlayers: 4,
           isPublic: false,
           minPlayers: 2,
           maxPlayers: 4,
         ),
-        playerName: name,
+        playerName: playerName,
       );
 
       if (!mounted) return;
@@ -152,103 +153,7 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // Row avec pseudo et mode de jeu
-                                    Row(
-                                      children: [
-                                        // Champ pseudo
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _nameController,
-                                            enabled: !_isCreating,
-                                            textCapitalization:
-                                                TextCapitalization.words,
-                                            maxLength: 20,
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 14,
-                                            ),
-                                            decoration: InputDecoration(
-                                              labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(
-                                                  color: Colors.black87,
-                                                  fontSize: 12),
-                                              counterText: '',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 12),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.person,
-                                                  color: Colors.blue.shade700,
-                                                  size: 18),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                    color: Colors.blue.shade700,
-                                                    width: 2),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        // Mode de jeu
-                                        Expanded(
-                                          child:
-                                              DropdownButtonFormField<GameMode>(
-                                            initialValue: _gameMode,
-                                            isDense: true,
-                                            decoration: InputDecoration(
-                                              labelText: 'Mode de jeu',
-                                              labelStyle:
-                                                  const TextStyle(fontSize: 12),
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 8),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.gamepad,
-                                                  color: Colors.blue.shade700,
-                                                  size: 18),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: GameMode.quick,
-                                                child: Text('Rapide',
-                                                    style: TextStyle(
-                                                        fontSize: 13)),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: GameMode.tournament,
-                                                child: Text('Tournoi',
-                                                    style: TextStyle(
-                                                        fontSize: 13)),
-                                              ),
-                                            ],
-                                            onChanged: _isCreating
-                                                ? null
-                                                : (value) {
-                                                    if (value != null) {
-                                                      setState(() =>
-                                                          _gameMode = value);
-                                                    }
-                                                  },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 4),
                                     // Bouton creer
                                     SizedBox(
                                       width: double.infinity,
@@ -350,74 +255,6 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
                                         fontSize: isMobile ? 14 : 16,
                                         color: Colors.black87,
                                       ),
-                                    ),
-                                    SizedBox(height: isMobile ? 24 : 32),
-                                    TextField(
-                                      controller: _nameController,
-                                      enabled: !_isCreating,
-                                      textCapitalization:
-                                          TextCapitalization.words,
-                                      maxLength: 20,
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontSize: 16,
-                                      ),
-                                      decoration: InputDecoration(
-                                        labelText: 'Ton pseudo',
-                                        labelStyle: const TextStyle(
-                                            color: Colors.black87),
-                                        hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(
-                                            color: Colors.black54),
-                                        filled: true,
-                                        fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.person,
-                                            color: Colors.blue.shade700),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          borderSide: BorderSide(
-                                              color: Colors.blue.shade700,
-                                              width: 2),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(height: isMobile ? 16 : 20),
-                                    DropdownButtonFormField<GameMode>(
-                                      initialValue: _gameMode,
-                                      decoration: InputDecoration(
-                                        labelText: 'Mode de jeu',
-                                        filled: true,
-                                        fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.gamepad,
-                                            color: Colors.blue.shade700),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                      ),
-                                      items: const [
-                                        DropdownMenuItem(
-                                          value: GameMode.quick,
-                                          child: Text('Partie rapide'),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: GameMode.tournament,
-                                          child: Text('Tournoi'),
-                                        ),
-                                      ],
-                                      onChanged: _isCreating
-                                          ? null
-                                          : (value) {
-                                              if (value != null) {
-                                                setState(
-                                                    () => _gameMode = value);
-                                              }
-                                            },
                                     ),
                                     SizedBox(height: isMobile ? 24 : 32),
                                     SizedBox(

@@ -81,6 +81,7 @@ class FriendsApiService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
   final AuthService _authService;
   DateTime? _lastOfflineLogAt;
+  DateTime? _lastResponseIssueLogAt;
 
   FriendsApiService(this._authService);
 
@@ -109,6 +110,48 @@ class FriendsApiService {
     return reachable;
   }
 
+  void _debugResponseIssue(String message) {
+    if (!kDebugMode) return;
+    final now = DateTime.now();
+    if (_lastResponseIssueLogAt == null ||
+        now.difference(_lastResponseIssueLogAt!) >=
+            const Duration(seconds: 4)) {
+      _lastResponseIssueLogAt = now;
+      debugPrint(message);
+    }
+  }
+
+  Map<String, dynamic>? _decodeJsonResponse(
+    http.Response response, {
+    required String endpoint,
+  }) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _debugResponseIssue(
+        '$endpoint: status ${response.statusCode} (body non exploitable)',
+      );
+      return null;
+    }
+
+    final contentType = (response.headers['content-type'] ?? '').toLowerCase();
+    if (!contentType.contains('application/json')) {
+      _debugResponseIssue(
+        '$endpoint: réponse non-JSON ($contentType), probablement HTML/proxy.',
+      );
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      _debugResponseIssue('$endpoint: payload JSON inattendu.');
+      return null;
+    } catch (e) {
+      _debugResponseIssue('$endpoint: JSON invalide ($e)');
+      return null;
+    }
+  }
+
   Future<List<FriendInfo>> getFriends() async {
     if (!await _canReachBackend()) {
       return [];
@@ -121,7 +164,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'getFriends');
+      if (data == null) return [];
       if (data['success'] == true) {
         return (data['friends'] as List)
             .map((f) => FriendInfo.fromJson(f))
@@ -147,7 +191,13 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'getRequests');
+      if (data == null) {
+        return (
+          incoming: <FriendRequestInfo>[],
+          outgoing: <FriendRequestInfo>[]
+        );
+      }
       if (data['success'] == true) {
         final incoming = (data['incoming'] as List)
             .map((r) => FriendRequestInfo.fromJson(r))
@@ -177,7 +227,10 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'sendRequest');
+      if (data == null) {
+        return (success: false, error: 'Réponse serveur invalide');
+      }
       return (
         success: data['success'] == true,
         error: data['error'] as String?
@@ -200,7 +253,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'acceptRequest');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -220,7 +274,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'rejectRequest');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -240,7 +295,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'cancelRequest');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -259,7 +315,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'removeFriend');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -279,7 +336,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'blockUser');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -298,7 +356,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'unblockUser');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;
@@ -317,7 +376,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'getBlockedUsers');
+      if (data == null) return [];
       if (data['success'] == true) {
         return (data['blocked'] as List)
             .map((b) => BlockedUserInfo.fromJson(b))
@@ -343,7 +403,8 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
+      final data = _decodeJsonResponse(response, endpoint: 'inviteToRoom');
+      if (data == null) return false;
       return data['success'] == true;
     } catch (e) {
       return false;

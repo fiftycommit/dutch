@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../auth/auth_service.dart';
@@ -45,14 +47,16 @@ class PushNotificationService {
         );
       }
 
-      _fcmToken = await messaging.getToken(
-        vapidKey: kIsWeb && _webVapidKey.isNotEmpty ? _webVapidKey : null,
-      );
+      _fcmToken = await _obtainFcmToken(messaging);
       if (kDebugMode) debugPrint('Push: FCM token=$_fcmToken');
 
       if (_fcmToken != null) {
         final platform = _devicePlatformLabel;
         await authService.registerDeviceToken(_fcmToken!, platform);
+      } else if (kDebugMode && _isApplePlatform) {
+        debugPrint(
+          'Push: APNS token pas encore prêt, enregistrement FCM différé.',
+        );
       }
 
       messaging.onTokenRefresh.listen((newToken) async {
@@ -73,6 +77,33 @@ class PushNotificationService {
       if (kDebugMode) debugPrint('Push: initialisé');
     } catch (e) {
       if (kDebugMode) debugPrint('Push: init failed: $e');
+    }
+  }
+
+  Future<String?> _obtainFcmToken(FirebaseMessaging messaging) async {
+    if (_isApplePlatform) {
+      // iOS: APNS peut arriver après le boot de l'app.
+      for (var attempt = 0; attempt < 6; attempt++) {
+        try {
+          final apns = await messaging.getAPNSToken();
+          if (apns != null && apns.isNotEmpty) {
+            break;
+          }
+        } catch (_) {
+          // continue retry
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
+    }
+
+    try {
+      return await messaging.getToken(
+        vapidKey: kIsWeb && _webVapidKey.isNotEmpty ? _webVapidKey : null,
+      );
+    } catch (e) {
+      // Ne bloque pas tout le flux push si le token n'est pas prêt.
+      if (kDebugMode) debugPrint('Push: getToken deferred: $e');
+      return null;
     }
   }
 

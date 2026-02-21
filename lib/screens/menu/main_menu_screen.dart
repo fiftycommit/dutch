@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/game_provider.dart';
+import '../../providers/multiplayer_game_provider.dart';
 import '../../services/ui/stats_service.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/ui_constants.dart';
@@ -46,6 +47,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     2: 'Joueur 2',
     3: 'Joueur 3',
   };
+  Future<void>? _multiplayerWarmupFuture;
   bool isLoading = true;
   bool _isProfileStackOpen = false;
 
@@ -70,6 +72,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     unawaited(GameProvider.checkForAbandonedGame());
     // Précache les SVGs restants en arrière-plan (non bloquant)
     unawaited(SvgPrecacheService().precacheRemainingSvgs());
+    // Préparer l'entrée multijoueur après le 1er frame pour éviter
+    // des notifyListeners() pendant la phase de build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_ensureMultiplayerWarmupStarted());
+    });
   }
 
   @override
@@ -118,6 +126,41 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   Future<void> _saveSelectedSlot(int slotId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('lastSelectedSlot', slotId);
+  }
+
+  Future<void> _ensureMultiplayerWarmupStarted() {
+    final current = _multiplayerWarmupFuture;
+    if (current != null) {
+      return current;
+    }
+    late final Future<void> next;
+    next = _warmupMultiplayerEntry().whenComplete(() {
+      if (identical(_multiplayerWarmupFuture, next)) {
+        _multiplayerWarmupFuture = null;
+      }
+    });
+    _multiplayerWarmupFuture = next;
+    return next;
+  }
+
+  Future<void> _warmupMultiplayerEntry() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isInitialized) {
+        await authProvider.init();
+      }
+      if (!mounted || !authProvider.isLoggedIn) {
+        return;
+      }
+
+      final multiProvider = context.read<MultiplayerGameProvider>();
+      final freshToken = await authProvider.getFreshToken();
+      multiProvider.setAuthToken(freshToken);
+      await multiProvider.init();
+      unawaited(multiProvider.getMyRooms());
+    } catch (_) {
+      // Warmup optionnel: ignorer les erreurs sans bloquer l'UI.
+    }
   }
 
   String _slotNameKey(int slotId) => 'slot_name_$slotId';
@@ -200,6 +243,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
   /// Naviguer vers le menu multijoueur
   Future<void> _goToMultiplayer() async {
+    unawaited(_ensureMultiplayerWarmupStarted());
     var authProvider = context.read<AuthProvider>();
     if (!authProvider.isInitialized) {
       await authProvider.init();
@@ -213,6 +257,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       if (!authProvider.isLoggedIn) return;
     }
 
+    unawaited(_ensureMultiplayerWarmupStarted());
     await context.push('/multiplayer');
   }
 
@@ -543,7 +588,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   }
 
   /// Layout paysage (iPhone petit écran + desktop/web grand écran)
-  Widget _buildLandscapeLayout(BuildContext context, bool isLoggedIn, bool isCompact) {
+  Widget _buildLandscapeLayout(
+      BuildContext context, bool isLoggedIn, bool isCompact) {
     final showLabels = !isCompact;
     final buttonSpacing = isCompact ? 18.0 : 20.0;
     final titleSize = isCompact ? 44.0 : 52.0;
@@ -662,8 +708,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           LabeledIconButton(
                             icon: Icons.settings,
                             label: 'Réglages',
-                            onPressed: () =>
-                                context.go('/settings?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .go('/settings?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 20),
                           LabeledIconButton(
@@ -682,15 +728,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           LabeledIconButton(
                             icon: Icons.psychology,
                             label: 'Profil IA',
-                            onPressed: () =>
-                                context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .go('/ai-profile?slot=${selectedSlot ?? 1}'),
                           ),
                         ]
                       : [
                           SmallIconButton(
                             icon: Icons.settings,
-                            onPressed: () =>
-                                context.go('/settings?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .go('/settings?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 18),
                           SmallIconButton(
@@ -706,8 +752,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           const SizedBox(width: 18),
                           SmallIconButton(
                             icon: Icons.psychology,
-                            onPressed: () =>
-                                context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .go('/ai-profile?slot=${selectedSlot ?? 1}'),
                           ),
                         ],
                 ),
@@ -774,13 +820,13 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     const CircularProgressIndicator(color: Colors.amber)
                   else
                     _buildProfileSelectionBox(
-                        compact: false,
-                        radius: 12,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
-                        ),
+                      compact: false,
+                      radius: 12,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
                       ),
+                    ),
                   SizedBox(height: spacing3),
                   KeyedSubtree(
                     key: _btn1Key,
@@ -875,8 +921,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         child: LabeledIconButton(
                           icon: Icons.psychology,
                           label: 'Profil IA',
-                          onPressed: () =>
-                              context.go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                          onPressed: () => context
+                              .go('/ai-profile?slot=${selectedSlot ?? 1}'),
                         ),
                       ),
                     ],
