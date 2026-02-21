@@ -669,6 +669,32 @@ class Player {
     }
   }
 
+  /// Réindexe la mémoire espionnée après qu'un adversaire a retiré
+  /// une carte de sa main à [removedIndex] (ex: MATCH).
+  void reindexSpiedCardsAfterRemoval(
+    String opponentId, {
+    required int removedIndex,
+    required int newHandSize,
+  }) {
+    final source = spyMemory[opponentId];
+    if (source == null || source.isEmpty) return;
+
+    final reindexed = <int, PlayingCard>{};
+    for (final entry in source.entries) {
+      final idx = entry.key;
+      if (idx == removedIndex) continue;
+      final shifted = idx > removedIndex ? idx - 1 : idx;
+      if (shifted < 0 || shifted >= newHandSize) continue;
+      reindexed[shifted] = entry.value;
+    }
+
+    if (reindexed.isEmpty) {
+      spyMemory.remove(opponentId);
+    } else {
+      spyMemory[opponentId] = reindexed;
+    }
+  }
+
   /// Retourne le score estimé d'un adversaire basé sur les cartes espionnées
   int getEstimatedOpponentScore(String opponentId, int opponentHandSize) {
     if (!spyMemory.containsKey(opponentId)) {

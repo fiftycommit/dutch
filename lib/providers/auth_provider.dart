@@ -65,11 +65,11 @@ class AuthProvider with ChangeNotifier {
     return _token;
   }
 
-  Future<AuthResult> login(String email, String password) async {
+  Future<AuthResult> login(String identifier, String password) async {
     _isLoading = true;
     notifyListeners();
 
-    final result = await _authService.login(email, password);
+    final result = await _authService.login(identifier, password);
 
     if (result.success) {
       _user = result.user;

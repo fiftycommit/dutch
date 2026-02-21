@@ -199,8 +199,21 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   }
 
   /// Naviguer vers le menu multijoueur
-  void _goToMultiplayer() {
-    context.go('/multiplayer');
+  Future<void> _goToMultiplayer() async {
+    var authProvider = context.read<AuthProvider>();
+    if (!authProvider.isInitialized) {
+      await authProvider.init();
+    }
+    if (!mounted) return;
+
+    if (!authProvider.isLoggedIn) {
+      final loggedIn = await context.push<bool>('/login');
+      if (!mounted || loggedIn != true) return;
+      authProvider = context.read<AuthProvider>();
+      if (!authProvider.isLoggedIn) return;
+    }
+
+    await context.push('/multiplayer');
   }
 
   void _shakeSlots() {

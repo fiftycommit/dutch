@@ -71,8 +71,11 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
     }
   }
 
-  void _goBack() {
-    context.go('/multiplayer/mode-selection');
+  Future<void> _goBack() async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && mounted) {
+      context.go('/multiplayer/join-selection');
+    }
   }
 
   String _getTierFromMMR(int? mmr) {

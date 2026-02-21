@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { firestoreService } from '../services/FirestoreService';
+import { auth } from '../services/FirebaseAdmin';
 import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
@@ -11,6 +12,7 @@ const authLimiter = rateLimit({
   max: 30,
   message: { success: false, error: 'Trop de tentatives, réessayez dans 15 minutes' },
 });
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── Les routes register/login/forgot-password/reset-password sont supprimées ──
 // L'authentification est désormais gérée côté client par Firebase Auth SDK.
@@ -45,6 +47,54 @@ router.get('/check-username', async (req, res) => {
   }
   const available = await firestoreService.isUsernameAvailable(username);
   res.json({ available });
+});
+
+// GET /api/auth/resolve-login?identifier=xxx
+// Résout email|username vers l'email Firebase utilisé pour sign-in.
+router.get('/resolve-login', authLimiter, async (req, res) => {
+  const rawIdentifier = typeof req.query.identifier === 'string'
+    ? req.query.identifier.trim()
+    : '';
+
+  if (!rawIdentifier) {
+    res.status(400).json({ success: false, error: 'Identifiant requis' });
+    return;
+  }
+
+  if (emailRegex.test(rawIdentifier)) {
+    res.json({ success: true, loginEmail: rawIdentifier.toLowerCase() });
+    return;
+  }
+
+  const normalizedUsername = rawIdentifier.toLowerCase();
+  const userByUsername = await firestoreService.getUserByUsername(normalizedUsername);
+  if (!userByUsername) {
+    res.status(404).json({ success: false, error: 'Identifiant introuvable' });
+    return;
+  }
+
+  let loginEmail = userByUsername.data.email?.trim().toLowerCase() || null;
+
+  if (!loginEmail && auth) {
+    try {
+      const userRecord = await auth.getUser(userByUsername.uid);
+      loginEmail = userRecord.email?.trim().toLowerCase() || null;
+    } catch {
+      loginEmail = null;
+    }
+  }
+
+  if (!loginEmail || !emailRegex.test(loginEmail)) {
+    res.status(404).json({ success: false, error: 'Identifiant introuvable' });
+    return;
+  }
+
+  // Backfill opportuniste pour accélérer les prochaines résolutions.
+  if (userByUsername.data.email !== loginEmail) {
+    void firestoreService.updateUser(userByUsername.uid, { email: loginEmail });
+  }
+
+  res.json({ success: true, loginEmail });
 });
 
 // PUT /api/auth/profile

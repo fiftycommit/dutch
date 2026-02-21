@@ -5,6 +5,13 @@ import 'package:go_router/go_router.dart';
 class CreateModeSelectionScreen extends StatelessWidget {
   const CreateModeSelectionScreen({super.key});
 
+  Future<void> _handleBack(BuildContext context) async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && context.mounted) {
+      context.go('/multiplayer');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,7 +32,7 @@ class CreateModeSelectionScreen extends StatelessWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.go('/multiplayer'),
+                      onPressed: () => _handleBack(context),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -47,7 +54,7 @@ class CreateModeSelectionScreen extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    
+
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
@@ -65,18 +72,22 @@ class CreateModeSelectionScreen extends StatelessWidget {
                                 _ModeCard(
                                   icon: Icons.lock_outline,
                                   title: 'Salon Privé',
-                                  description: 'Crée un salon et partage le code à tes amis',
+                                  description:
+                                      'Crée un salon et partage le code à tes amis',
                                   color: Colors.blue.shade700,
-                                  onTap: () => context.go('/multiplayer/create-private'),
+                                  onTap: () => context
+                                      .push('/multiplayer/create-private'),
                                   badge: 'CODE',
                                 ),
                                 SizedBox(height: isMobile ? 16 : 20),
                                 _ModeCard(
                                   icon: Icons.public,
                                   title: 'Salon Public',
-                                  description: 'Crée un salon visible par tous les joueurs',
+                                  description:
+                                      'Crée un salon visible par tous les joueurs',
                                   color: Colors.green.shade700,
-                                  onTap: () => context.go('/multiplayer/create-public'),
+                                  onTap: () => context
+                                      .push('/multiplayer/create-public'),
                                   badge: 'OUVERT',
                                 ),
                               ],

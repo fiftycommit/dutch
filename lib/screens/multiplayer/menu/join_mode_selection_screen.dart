@@ -5,6 +5,13 @@ import 'package:go_router/go_router.dart';
 class JoinModeSelectionScreen extends StatelessWidget {
   const JoinModeSelectionScreen({super.key});
 
+  Future<void> _handleBack(BuildContext context) async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && context.mounted) {
+      context.go('/multiplayer');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,7 +32,7 @@ class JoinModeSelectionScreen extends StatelessWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => context.go('/multiplayer'),
+                      onPressed: () => _handleBack(context),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -47,7 +54,7 @@ class JoinModeSelectionScreen extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final isMobile = constraints.maxWidth < 600;
-                    
+
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
@@ -65,18 +72,22 @@ class JoinModeSelectionScreen extends StatelessWidget {
                                 _ModeCard(
                                   icon: Icons.vpn_key,
                                   title: 'Salon Privé',
-                                  description: 'Entre le code à 6 caractères pour rejoindre',
+                                  description:
+                                      'Entre le code à 6 caractères pour rejoindre',
                                   color: Colors.orange.shade700,
-                                  onTap: () => context.go('/multiplayer/join-private'),
+                                  onTap: () =>
+                                      context.push('/multiplayer/join-private'),
                                   badge: 'CODE',
                                 ),
                                 SizedBox(height: isMobile ? 16 : 20),
                                 _ModeCard(
                                   icon: Icons.list_alt,
                                   title: 'Salon Public',
-                                  description: 'Parcours la liste des salons ouverts',
+                                  description:
+                                      'Parcours la liste des salons ouverts',
                                   color: Colors.purple.shade700,
-                                  onTap: () => context.go('/multiplayer/matchmaking'),
+                                  onTap: () =>
+                                      context.push('/multiplayer/matchmaking'),
                                   badge: 'LISTE',
                                 ),
                               ],

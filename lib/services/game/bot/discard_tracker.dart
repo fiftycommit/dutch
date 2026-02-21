@@ -43,6 +43,21 @@ class DiscardTracker {
   final Map<String, List<int>> _playerMatchTurns = {};
   final Map<String, List<_HandSnapshot>> _playerHandSnapshots = {};
 
+  /// Signaux publics duel:
+  /// - indices remplacés observés (sans valeur de la carte gardée),
+  /// - plafond estimé par index après remplacement (oldDiscard + marge),
+  /// - indices vus au départ (mémorisation publique),
+  /// - volume d'utilisation des pouvoirs.
+  final Map<String, List<int>> _playerReplacedIndexHistory = {};
+  final Map<String, Map<int, int>> _playerReplacedIndexCounts = {};
+  final Map<String, Map<int, double>> _playerIndexUpperBounds = {};
+  final Map<String, Map<int, int>> _playerVisibleSwapByIndexCount = {};
+  final Map<String, int> _playerVisibleSwapCount = {};
+  final Map<String, Set<int>> _playerPublicStartKnownIndices = {};
+  final Map<String, int> _playerPowerUseCount = {};
+  final Map<String, List<int>> _playerPowerUseTurns = {};
+  final Map<String, int> _playerRoundStartScore = {};
+
   /// Nombre de défausses observées pour un joueur
   int getDiscardCount(String playerId) =>
       _playerDiscardHistory[playerId]?.length ?? 0;
@@ -72,6 +87,25 @@ class DiscardTracker {
     13: 2, // Rois noirs uniquement (rouges = 0)
   };
 
+  /// Cartes totales par valeur faciale.
+  /// Utile pour exploiter _seenByValue (et non seulement les points).
+  static const Map<String, int> totalCardsByValue = {
+    'A': 4,
+    '2': 4,
+    '3': 4,
+    '4': 4,
+    '5': 4,
+    '6': 4,
+    '7': 4,
+    '8': 4,
+    '9': 4,
+    '10': 4,
+    'V': 4,
+    'D': 4,
+    'R': 4,
+    'JOKER': 2,
+  };
+
   /// Nombre total de cartes basses (≤4 pts) dans le jeu
   static const int totalLowCards = 4 + 4 + 4 + 4 + 4; // As(1) + 2 + 3 + 4 = 20
 
@@ -95,6 +129,7 @@ class DiscardTracker {
     bool wasExchange = false,
     DiscardActionType? actionType,
     int? turnCount,
+    int? replacedIndex,
   }) {
     final points = card.points;
     final value = card.value;
@@ -121,6 +156,13 @@ class DiscardTracker {
             exchanged.removeRange(0, exchanged.length - 24);
           }
           _lastActionWasExchange[discardedBy] = true;
+          if (replacedIndex != null) {
+            _recordReplacementIndexObservation(
+              discardedBy,
+              replacedIndex: replacedIndex,
+              discardedPoints: points,
+            );
+          }
           break;
         case DiscardActionType.drawnDiscard:
           _playerDrawnDiscardCount[discardedBy] =
@@ -147,6 +189,128 @@ class DiscardTracker {
           break;
       }
     }
+  }
+
+  /// Enregistre qu'un joueur a utilisé un pouvoir (look/spy/valet/joker).
+  void recordPowerUse(
+    String playerId, {
+    int? turnCount,
+  }) {
+    _playerPowerUseCount[playerId] = (_playerPowerUseCount[playerId] ?? 0) + 1;
+    if (turnCount != null) {
+      final turns = _playerPowerUseTurns.putIfAbsent(playerId, () => <int>[]);
+      turns.add(turnCount);
+      if (turns.length > 32) {
+        turns.removeRange(0, turns.length - 32);
+      }
+    }
+  }
+
+  int getPowerUseCount(String playerId) => _playerPowerUseCount[playerId] ?? 0;
+
+  void recordRoundStartScore(String playerId, int score) {
+    _playerRoundStartScore[playerId] = score;
+  }
+
+  int getRoundStartScore(String playerId, {int fallback = 0}) {
+    return _playerRoundStartScore[playerId] ?? fallback;
+  }
+
+  int getRecentPowerUseCountInTurns(
+    String playerId,
+    int currentTurn, {
+    int windowTurns = 4,
+  }) {
+    final turns = _playerPowerUseTurns[playerId];
+    if (turns == null || turns.isEmpty) return 0;
+    final floorTurn = currentTurn - windowTurns;
+    int count = 0;
+    for (final turn in turns) {
+      if (turn >= floorTurn) count++;
+    }
+    return count;
+  }
+
+  /// Mémorisation publique observée (indices vus au départ).
+  /// Les valeurs restent cachées.
+  void observePublicMemorizedIndices(
+    String playerId,
+    Iterable<int> indices,
+    int handSize,
+  ) {
+    if (handSize <= 0) return;
+    final valid = indices.where((idx) => idx >= 0 && idx < handSize).toSet();
+    if (valid.isEmpty) return;
+    final observed =
+        _playerPublicStartKnownIndices.putIfAbsent(playerId, () => <int>{});
+    observed.addAll(valid);
+  }
+
+  int getObservedStartKnownCount(String playerId, int handSize) {
+    if (handSize <= 0) return 0;
+    final observed = _playerPublicStartKnownIndices[playerId];
+    if (observed == null || observed.isEmpty) return 0;
+    return observed.where((idx) => idx >= 0 && idx < handSize).length;
+  }
+
+  double getObservedStartKnownRatio(String playerId, int handSize) {
+    if (handSize <= 0) return 0.0;
+    final count = getObservedStartKnownCount(playerId, handSize);
+    return (count / handSize).clamp(0.0, 1.0);
+  }
+
+  Map<int, int> getObservedReplacementIndexCounts(
+      String playerId, int handSize) {
+    if (handSize <= 0) return const <int, int>{};
+    final source = _playerReplacedIndexCounts[playerId];
+    if (source == null || source.isEmpty) return const <int, int>{};
+
+    final filtered = <int, int>{};
+    for (final entry in source.entries) {
+      if (entry.key < 0 || entry.key >= handSize) continue;
+      filtered[entry.key] = entry.value;
+    }
+    return filtered;
+  }
+
+  Map<int, double> getObservedIndexUpperBounds(String playerId, int handSize) {
+    if (handSize <= 0) return const <int, double>{};
+    final source = _playerIndexUpperBounds[playerId];
+    if (source == null || source.isEmpty) return const <int, double>{};
+
+    final filtered = <int, double>{};
+    for (final entry in source.entries) {
+      if (entry.key < 0 || entry.key >= handSize) continue;
+      filtered[entry.key] = entry.value;
+    }
+    return filtered;
+  }
+
+  /// Retourne l'index adverse le plus susceptible de contenir une carte basse:
+  /// - souvent remplacé,
+  /// - plafond estimé bas.
+  int? pickLikelyStrongIndex(String playerId, int handSize) {
+    if (handSize <= 0) return null;
+    final counts = getObservedReplacementIndexCounts(playerId, handSize);
+    final bounds = getObservedIndexUpperBounds(playerId, handSize);
+    if (counts.isEmpty && bounds.isEmpty) return null;
+    final swapNoise = _playerVisibleSwapByIndexCount[playerId];
+
+    int? bestIdx;
+    double bestScore = -9999;
+    for (int idx = 0; idx < handSize; idx++) {
+      final count = counts[idx] ?? 0;
+      final bound = bounds[idx] ?? 9.5;
+      final noisePenalty = min((swapNoise?[idx] ?? 0), 4) * 1.10;
+      final score = (count * 1.20) + ((13.0 - bound) * 0.80) - noisePenalty;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = idx;
+      }
+    }
+
+    if (bestIdx == null) return null;
+    return bestScore >= 1.0 ? bestIdx : null;
   }
 
   /// Retourne true si la dernière action du joueur était un échange
@@ -181,6 +345,15 @@ class DiscardTracker {
     _playerDrawnDiscardPoints.clear();
     _playerMatchTurns.clear();
     _playerHandSnapshots.clear();
+    _playerReplacedIndexHistory.clear();
+    _playerReplacedIndexCounts.clear();
+    _playerIndexUpperBounds.clear();
+    _playerVisibleSwapByIndexCount.clear();
+    _playerVisibleSwapCount.clear();
+    _playerPublicStartKnownIndices.clear();
+    _playerPowerUseCount.clear();
+    _playerPowerUseTurns.clear();
+    _playerRoundStartScore.clear();
   }
 
   /// Snapshot de la table à un tour donné (rotation de table).
@@ -188,6 +361,11 @@ class DiscardTracker {
   void recordTableSnapshot(GameState gs) {
     final turn = gs.turnCount;
     for (final player in gs.players) {
+      observePublicMemorizedIndices(
+        player.id,
+        player.memorizedCardIndices,
+        player.hand.length,
+      );
       final snapshots =
           _playerHandSnapshots.putIfAbsent(player.id, () => <_HandSnapshot>[]);
       if (snapshots.isNotEmpty && snapshots.last.turn == turn) {
@@ -290,6 +468,75 @@ class DiscardTracker {
     final total = totalCardsByPoints[points] ?? 4;
     final remaining = remainingCount(points);
     return remaining / total;
+  }
+
+  /// Nombre de cartes d'une valeur faciale déjà vues.
+  int seenCountByValue(String value) => _seenByValue[value] ?? 0;
+
+  /// Nombre de cartes d'une valeur faciale restantes.
+  int remainingCountByValue(String value) {
+    final total = totalCardsByValue[value] ?? 4;
+    return max(0, total - seenCountByValue(value));
+  }
+
+  /// Proba qu'une valeur faciale soit encore disponible.
+  double probabilityValueRemaining(String value) {
+    final total = totalCardsByValue[value] ?? 4;
+    if (total <= 0) return 0.0;
+    return (remainingCountByValue(value) / total).clamp(0.0, 1.0);
+  }
+
+  /// Nombre estimé de cartes encore inconnues en jeu.
+  int get remainingUnknownCardsByValue {
+    int remaining = 0;
+    for (final entry in totalCardsByValue.entries) {
+      remaining += remainingCountByValue(entry.key);
+    }
+    return max(remaining, 1);
+  }
+
+  /// Proba de piocher une carte de points <= [maxPoints].
+  double probabilityDrawAtOrBelow(int maxPoints) {
+    int favorable = 0;
+    int total = 0;
+    for (final entry in totalCardsByPoints.entries) {
+      final points = entry.key;
+      final rem = remainingCount(points);
+      if (rem <= 0) continue;
+      total += rem;
+      if (points <= maxPoints) favorable += rem;
+    }
+    if (total <= 0) return 0.0;
+    return (favorable / total).clamp(0.0, 1.0);
+  }
+
+  /// Espérance de points d'une carte future.
+  double expectedDrawnPoints() {
+    int total = 0;
+    double weighted = 0;
+    for (final entry in totalCardsByPoints.entries) {
+      final points = entry.key;
+      final rem = remainingCount(points);
+      if (rem <= 0) continue;
+      total += rem;
+      weighted += points * rem;
+    }
+    if (total <= 0) return 6.5;
+    return weighted / total;
+  }
+
+  /// Proba approximative de recroiser [value] dans les cartes inconnues.
+  /// [knownOwned] = nombre de cartes déjà connues de cette valeur chez soi.
+  double estimateFutureMatchProbability(
+    String value, {
+    int knownOwned = 0,
+  }) {
+    final remainingByValue = remainingCountByValue(value);
+    final available = max(0, remainingByValue - knownOwned);
+    if (available <= 0) return 0.0;
+    final pool = remainingUnknownCardsByValue;
+    if (pool <= 0) return 0.0;
+    return (available / pool).clamp(0.0, 1.0);
   }
 
   /// Nombre total de cartes basses (≤4) restantes
@@ -483,20 +730,26 @@ class DiscardTracker {
     final exchangeRate = getExchangeRate(playerId);
     final avgDiscarded = getAverageDiscardedPoints(playerId);
     final matchCount = getMatchDiscardCount(playerId);
+    final powerUses = getPowerUseCount(playerId);
 
     // Confiance rapide mais bornée: le Platine doit s'adapter tôt.
-    final confidence = (decisions / 4.0).clamp(0.15, 1.0);
+    final confidence =
+        ((decisions / 4.0) + (powerUses / 12.0)).clamp(0.15, 1.0);
     final highDiscardSignal = ((avgDiscarded - 5.5) / 6.0).clamp(0.0, 1.0);
     final matchSignal = (matchCount / 3.0).clamp(0.0, 1.0);
+    final powerSignal = (powerUses / 5.0).clamp(0.0, 1.0);
 
     // 0..1 : capacité probable à optimiser sa main.
-    final optimization =
-        (highDiscardSignal * 0.55 + exchangeRate * 0.30 + matchSignal * 0.15)
-            .clamp(0.0, 1.0);
+    final optimization = (highDiscardSignal * 0.50 +
+            exchangeRate * 0.28 +
+            matchSignal * 0.12 +
+            powerSignal * 0.10)
+        .clamp(0.0, 1.0);
 
     // 0..1 : profil opportuniste/agressif (beaucoup d'échanges).
     final aggression =
-        (exchangeRate * 0.75 + matchSignal * 0.25).clamp(0.0, 1.0);
+        (exchangeRate * 0.66 + matchSignal * 0.22 + powerSignal * 0.12)
+            .clamp(0.0, 1.0);
 
     // 0..1 : tendance à varier ses décisions (plus c'est haut, plus c'est dur à lire).
     final unpredictability =
@@ -511,6 +764,172 @@ class DiscardTracker {
       avgDiscardedPoints: avgDiscarded,
       observedDecisions: decisions,
     );
+  }
+
+  OpponentIndexIntel estimateOpponentIndexIntel(String playerId, int handSize) {
+    if (handSize <= 0) {
+      return OpponentIndexIntel(
+        playerId: playerId,
+        estimatedScoreCeiling: 0.0,
+        estimatedCardCeiling: 0.0,
+        confidence: 1.0,
+        observedReplacements: 0,
+        indexCoverage: 0.0,
+        dominantIndexReuse: 0.0,
+        startKnownRatio: 0.0,
+        lowRejectRate: 0.0,
+        powerUses: getPowerUseCount(playerId),
+        visibleSwapRatio: 0.0,
+      );
+    }
+
+    final history = _playerReplacedIndexHistory[playerId] ?? const <int>[];
+    final observedReplacements = history.length;
+    final counts = _playerReplacedIndexCounts[playerId] ?? const <int, int>{};
+    final caps = _playerIndexUpperBounds[playerId] ?? const <int, double>{};
+
+    int dominantIndexCount = 0;
+    int uniqueValidIndices = 0;
+    for (final entry in counts.entries) {
+      final idx = entry.key;
+      final count = entry.value;
+      if (idx < 0 || idx >= handSize) continue;
+      uniqueValidIndices++;
+      if (count > dominantIndexCount) dominantIndexCount = count;
+    }
+
+    final indexCoverage =
+        handSize <= 0 ? 0.0 : (uniqueValidIndices / handSize).clamp(0.0, 1.0);
+    final dominantIndexReuse = observedReplacements <= 0
+        ? 0.0
+        : (dominantIndexCount / observedReplacements).clamp(0.0, 1.0);
+
+    final capValues = <double>[];
+    for (final entry in caps.entries) {
+      final idx = entry.key;
+      if (idx < 0 || idx >= handSize) continue;
+      capValues.add(entry.value);
+    }
+
+    final baseCardCeiling = capValues.isEmpty
+        ? 8.8
+        : capValues.reduce((a, b) => a + b) / capValues.length;
+    final startKnownRatio = getObservedStartKnownRatio(playerId, handSize);
+    final lowRejectRate =
+        getLowDrawnDiscardRate(playerId, maxPoints: 4, lookback: 8);
+    final recentLowReject =
+        hasRecentLowDrawnDiscard(playerId, maxPoints: 4, lookback: 4);
+    final powerUses = getPowerUseCount(playerId);
+    final observedDecisions = getObservedDecisionCount(playerId);
+    final visibleSwapCount = _playerVisibleSwapCount[playerId] ?? 0;
+    final visibleSwapRatio = observedReplacements <= 0
+        ? 0.0
+        : (visibleSwapCount / observedReplacements).clamp(0.0, 1.0);
+
+    double cardCeiling = baseCardCeiling;
+    cardCeiling -= startKnownRatio * 0.90;
+    cardCeiling -= lowRejectRate * 1.40;
+    cardCeiling -= indexCoverage * 0.75;
+    if (recentLowReject) {
+      cardCeiling -= 0.30;
+    }
+    if (dominantIndexReuse >= 0.60 && observedReplacements >= 3) {
+      cardCeiling -= 0.25;
+    }
+    if (powerUses >= 3) {
+      cardCeiling -= 0.35;
+    } else if (powerUses >= 1) {
+      cardCeiling -= 0.15;
+    }
+    cardCeiling += visibleSwapRatio * 2.10;
+    if (visibleSwapCount >= 2) {
+      cardCeiling += 0.35;
+    }
+    cardCeiling = cardCeiling.clamp(1.1, 10.0);
+
+    final estimatedScoreCeiling = cardCeiling * handSize;
+
+    double confidence = 0.10;
+    confidence += (min(observedReplacements, 8) / 8.0) * 0.45;
+    confidence += (min(observedDecisions, 10) / 10.0) * 0.25;
+    confidence += startKnownRatio * 0.15;
+    confidence += (min(powerUses, 6) / 6.0) * 0.10;
+    if (capValues.isEmpty) confidence -= 0.12;
+    confidence -= visibleSwapRatio * 0.22;
+    confidence = confidence.clamp(0.05, 0.92);
+
+    return OpponentIndexIntel(
+      playerId: playerId,
+      estimatedScoreCeiling: estimatedScoreCeiling,
+      estimatedCardCeiling: cardCeiling,
+      confidence: confidence,
+      observedReplacements: observedReplacements,
+      indexCoverage: indexCoverage,
+      dominantIndexReuse: dominantIndexReuse,
+      startKnownRatio: startKnownRatio,
+      lowRejectRate: lowRejectRate,
+      powerUses: powerUses,
+      visibleSwapRatio: visibleSwapRatio,
+    );
+  }
+
+  /// Enregistre un index remplacé publiquement (ex: pouvoir Valet).
+  /// Contrairement à un échange avec défausse, on ne connaît pas la valeur
+  /// de la carte déplacée, donc aucun plafond par points n'est appliqué.
+  void observeVisibleReplacementIndex(
+    String playerId, {
+    required int replacedIndex,
+  }) {
+    _recordReplacementIndexVisibility(
+      playerId,
+      replacedIndex: replacedIndex,
+    );
+
+    _playerVisibleSwapCount[playerId] =
+        (_playerVisibleSwapCount[playerId] ?? 0) + 1;
+    final byIndex = _playerVisibleSwapByIndexCount.putIfAbsent(
+        playerId, () => <int, int>{});
+    byIndex[replacedIndex] = (byIndex[replacedIndex] ?? 0) + 1;
+
+    // L'index a été modifié par un Valet: l'ancien plafond de valeur
+    // observé via échanges ne s'applique plus sur cet emplacement.
+    final bounds = _playerIndexUpperBounds[playerId];
+    bounds?.remove(replacedIndex);
+  }
+
+  void _recordReplacementIndexObservation(
+    String playerId, {
+    required int replacedIndex,
+    required int discardedPoints,
+  }) {
+    _recordReplacementIndexVisibility(
+      playerId,
+      replacedIndex: replacedIndex,
+    );
+
+    final bounds =
+        _playerIndexUpperBounds.putIfAbsent(playerId, () => <int, double>{});
+    final proposed = (discardedPoints + 1.5).clamp(1.0, 13.0).toDouble();
+    final previous = bounds[replacedIndex] ?? 13.0;
+    bounds[replacedIndex] = min(previous, proposed);
+  }
+
+  void _recordReplacementIndexVisibility(
+    String playerId, {
+    required int replacedIndex,
+  }) {
+    if (replacedIndex < 0) return;
+
+    final history =
+        _playerReplacedIndexHistory.putIfAbsent(playerId, () => <int>[]);
+    history.add(replacedIndex);
+    if (history.length > 40) {
+      history.removeRange(0, history.length - 40);
+    }
+
+    final counts =
+        _playerReplacedIndexCounts.putIfAbsent(playerId, () => <int, int>{});
+    counts[replacedIndex] = (counts[replacedIndex] ?? 0) + 1;
   }
 
   List<int> _tail(List<int> values, int lookback) {
@@ -636,6 +1055,34 @@ class OpponentStyleEstimate {
     required this.confidence,
     required this.avgDiscardedPoints,
     required this.observedDecisions,
+  });
+}
+
+class OpponentIndexIntel {
+  final String playerId;
+  final double estimatedScoreCeiling;
+  final double estimatedCardCeiling;
+  final double confidence;
+  final int observedReplacements;
+  final double indexCoverage;
+  final double dominantIndexReuse;
+  final double startKnownRatio;
+  final double lowRejectRate;
+  final int powerUses;
+  final double visibleSwapRatio;
+
+  OpponentIndexIntel({
+    required this.playerId,
+    required this.estimatedScoreCeiling,
+    required this.estimatedCardCeiling,
+    required this.confidence,
+    required this.observedReplacements,
+    required this.indexCoverage,
+    required this.dominantIndexReuse,
+    required this.startKnownRatio,
+    required this.lowRejectRate,
+    required this.powerUses,
+    required this.visibleSwapRatio,
   });
 }
 

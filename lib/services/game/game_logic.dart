@@ -42,6 +42,15 @@ class GameLogic {
     );
 
     gameState.dealCards(mode: dealMode);
+
+    // Snapshot de départ pour les modèles de décision (ex: style "moi").
+    for (final player in players) {
+      BotDutchStrategy.discardTracker.recordRoundStartScore(
+        player.id,
+        player.calculateScore(),
+      );
+    }
+
     // Appliquer la méthode de mélange choisie (chance) sur le deck restant
     gameState.smartShuffle();
 
@@ -78,6 +87,11 @@ class GameLogic {
         human.knownCards[index] = true;
       }
     }
+    BotDutchStrategy.discardTracker.observePublicMemorizedIndices(
+      human.id,
+      human.memorizedCardIndices,
+      human.hand.length,
+    );
     gameState.addToHistory("Vous avez mémorisé vos cartes.");
   }
 
@@ -196,6 +210,7 @@ class GameLogic {
       discardedBy: player.id,
       wasExchange: true,
       actionType: DiscardActionType.exchangeDiscard,
+      replacedIndex: cardIndex,
     );
 
     // Log
@@ -257,11 +272,15 @@ class GameLogic {
 
       _maybeBronzeForgetAfterReactionMatch(gameState, player, playerCard);
 
-      // BUGFIX: Invalider TOUTE la mémoire espionnage sur ce joueur
-      // Car les indices des cartes ont changé après le match
+      // Le joueur a retiré une carte: les indices espionnés après cette
+      // position sont décalés. On réindexe au lieu d'effacer toute l'info.
       for (final bot in gameState.players) {
         if (!bot.isHuman) {
-          bot.forgetSpiedCards(player.id);
+          bot.reindexSpiedCardsAfterRemoval(
+            player.id,
+            removedIndex: cardIndex,
+            newHandSize: player.hand.length,
+          );
         }
       }
 
@@ -329,6 +348,10 @@ class GameLogic {
 
   static void lookAtCard(GameState gameState, Player target, int cardIndex) {
     if (cardIndex >= 0 && cardIndex < target.knownCards.length) {
+      BotDutchStrategy.discardTracker.recordPowerUse(
+        gameState.currentPlayer.id,
+        turnCount: gameState.turnCount,
+      );
       gameState.addToHistory(
           "${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
     }
@@ -343,8 +366,23 @@ class GameLogic {
       return;
     }
 
+    BotDutchStrategy.discardTracker.recordPowerUse(
+      gameState.currentPlayer.id,
+      turnCount: gameState.turnCount,
+    );
+    BotDutchStrategy.discardTracker.observeVisibleReplacementIndex(
+      p1.id,
+      replacedIndex: idx1,
+    );
+    BotDutchStrategy.discardTracker.observeVisibleReplacementIndex(
+      p2.id,
+      replacedIndex: idx2,
+    );
+
     final c1 = p1.hand[idx1];
     final c2 = p2.hand[idx2];
+    final p1KnownBeforeSwap = _knownOwnCardBeforeSwap(p1, idx1);
+    final p2KnownBeforeSwap = _knownOwnCardBeforeSwap(p2, idx2);
     final p1HintQuality = p1.getUnknownCardHintQuality(idx1);
     final p1HintConfidence = p1.getUnknownCardHintConfidence(idx1);
     final p1HintAction = p1.getUnknownCardHintAction(idx1);
@@ -412,12 +450,36 @@ class GameLogic {
       sourceHintActionCount: p1HintAction,
     );
 
-    // Invalider la mémoire espionnage pour tous les bots
-    // Car les cartes ont changé de place
-    for (final player in gameState.players) {
-      if (!player.isHuman) {
-        player.invalidateSpiedCard(p1.id, idx1);
-        player.invalidateSpiedCard(p2.id, idx2);
+    // Le swap est visible (indices), et une connaissance exacte peut se
+    // propager si elle existait déjà avant l'échange.
+    for (final observer in gameState.players) {
+      if (observer.isHuman) continue;
+
+      final knownP1FromSpy = observer.getSpiedCards(p1.id)?[idx1];
+      final knownP2FromSpy = observer.getSpiedCards(p2.id)?[idx2];
+
+      final knownP1 = observer.id == p1.id
+          ? (p1KnownBeforeSwap ?? knownP1FromSpy)
+          : knownP1FromSpy;
+      final knownP2 = observer.id == p2.id
+          ? (p2KnownBeforeSwap ?? knownP2FromSpy)
+          : knownP2FromSpy;
+
+      observer.invalidateSpiedCard(p1.id, idx1);
+      observer.invalidateSpiedCard(p2.id, idx2);
+
+      if (knownP1 != null) {
+        observer.rememberSpiedCard(p2.id, idx2, knownP1);
+      }
+      if (knownP2 != null) {
+        observer.rememberSpiedCard(p1.id, idx1, knownP2);
+      }
+
+      if (observer.id == p1.id && !p1IgnoresSwap && knownP2 != null) {
+        p1.updateMentalMap(idx1, knownP2);
+      }
+      if (observer.id == p2.id && !p2IgnoresSwap && knownP1 != null) {
+        p2.updateMentalMap(idx2, knownP1);
       }
     }
 
@@ -434,6 +496,16 @@ class GameLogic {
       card1: c1,
       card2: c2,
     );
+  }
+
+  static PlayingCard? _knownOwnCardBeforeSwap(Player player, int index) {
+    if (player.isHuman) return null;
+    if (index < 0 || index >= player.hand.length) return null;
+    if (index >= player.knownCards.length || !player.knownCards[index]) {
+      return null;
+    }
+    if (index >= player.mentalMap.length) return null;
+    return player.mentalMap[index];
   }
 
   static void _applySwapUnknownHint(
@@ -565,6 +637,11 @@ class GameLogic {
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {
+    BotDutchStrategy.discardTracker.recordPowerUse(
+      gameState.currentPlayer.id,
+      turnCount: gameState.turnCount,
+    );
+
     List<PlayingCard>? knownBeforeJoker;
     if (_usesAdvancedJokerModel(targetPlayer)) {
       final knowsAll =

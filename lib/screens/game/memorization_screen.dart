@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/game_state.dart';
 import '../../providers/game_provider.dart';
+import '../../services/game/game_logic.dart';
 import '../../utils/ui_constants.dart';
 import '../shared/unified_memorization_screen.dart' as shared;
 
@@ -35,12 +36,7 @@ class MemorizationScreen extends StatelessWidget {
         config: shared.MemorizationConfig(
           localPlayer: humanPlayer,
           onMemorizationComplete: (selectedIndices) async {
-            humanPlayer.memorizedCardIndices = selectedIndices.toList()..sort();
-
-            // Marquer les cartes comme connues
-            for (int index in selectedIndices) {
-              humanPlayer.knownCards[index] = true;
-            }
+            GameLogic.initialReveal(gameState, selectedIndices.toList());
 
             // Réinitialiser les cartes connues de tous les joueurs
             for (var p in gameState.players) {

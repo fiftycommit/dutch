@@ -1,10 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../utils/ui_constants.dart';
+import '../multiplayer/ui/multiplayer_motion.dart';
+import '../multiplayer/ui/multiplayer_ui_tokens.dart';
+import '../multiplayer/ui/multiplayer_ui_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -27,6 +32,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool? _usernameAvailable;
   Timer? _usernameCheckTimer;
   bool _checkingUsername = false;
+  bool _shakeForm = false;
+  Timer? _shakeResetTimer;
 
   static final _usernameRegex = RegExp(r'^[a-zA-Z0-9._-]{3,20}$');
   static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
@@ -39,6 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _usernameCheckTimer?.cancel();
+    _shakeResetTimer?.cancel();
     super.dispose();
   }
 
@@ -69,8 +77,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_usernameAvailable == false) return;
+    if (!_formKey.currentState!.validate() || _usernameAvailable == false) {
+      _triggerShake();
+      return;
+    }
 
     setState(() => _errorMessage = null);
 
@@ -86,249 +96,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (result.success) {
       TextInput.finishAutofillContext();
-      context.go('/multiplayer');
+      final didPop = await Navigator.of(context).maybePop(true);
+      if (!didPop && mounted) {
+        context.go('/multiplayer');
+      }
     } else {
       setState(() => _errorMessage = result.error);
+      _triggerShake();
     }
+  }
+
+  Future<void> _handleBackToLogin() async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && mounted) {
+      context.go('/login');
+    }
+  }
+
+  void _triggerShake() {
+    setState(() => _shakeForm = true);
+    _shakeResetTimer?.cancel();
+    _shakeResetTimer = Timer(const Duration(milliseconds: 320), () {
+      if (!mounted) return;
+      setState(() => _shakeForm = false);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final motionEnabled = MultiplayerUiTokens.motionEnabled(context);
 
     return Scaffold(
-      backgroundColor: AppColors.gameBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/login'),
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: AutofillGroup(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(Icons.person_add, color: Colors.amber, size: 64),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Creer un compte',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Username
-                    TextFormField(
-                      controller: _usernameController,
-                      autofillHints: const [AutofillHints.newUsername],
-                      textInputAction: TextInputAction.next,
-                      style: const TextStyle(color: Colors.white),
-                      onChanged: _onUsernameChanged,
-                      decoration: _inputDecoration(
-                              'Nom d\'utilisateur', Icons.alternate_email)
-                          .copyWith(
-                        suffixIcon: _checkingUsername
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.amber),
-                                ),
-                              )
-                            : _usernameAvailable == true
-                                ? const Icon(Icons.check_circle,
-                                    color: AppColors.success)
-                                : _usernameAvailable == false
-                                    ? const Icon(Icons.cancel,
-                                        color: AppColors.error)
-                                    : null,
-                        helperText:
-                            'Entre 3 et 20 caracteres (lettres, chiffres, . _ -)',
-                        helperStyle: const TextStyle(
-                            color: AppColors.textHint, fontSize: 12),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Requis';
-                        }
-                        if (!_usernameRegex.hasMatch(v.trim())) {
-                          return '3-20 caracteres, lettres/chiffres/._- uniquement';
-                        }
-                        if (_usernameAvailable == false) {
-                          return 'Ce nom est deja pris';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Display name
-                    TextFormField(
-                      controller: _displayNameController,
-                      autofillHints: const [AutofillHints.nickname],
-                      textInputAction: TextInputAction.next,
-                      style: const TextStyle(color: Colors.white),
-                      decoration:
-                          _inputDecoration('Pseudo (nom affiche)', Icons.badge),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Requis';
-                        if (v.trim().length > 24) return 'Max 24 caracteres';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Email
-                    TextFormField(
-                      controller: _emailController,
-                      autofillHints: const [AutofillHints.email],
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      style: const TextStyle(color: Colors.white),
-                      decoration:
-                          _inputDecoration('Email', Icons.email_outlined),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Requis';
-                        if (!_emailRegex.hasMatch(v.trim())) {
-                          return 'Email invalide';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Password
-                    TextFormField(
-                      controller: _passwordController,
-                      autofillHints: const [AutofillHints.newPassword],
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.next,
-                      style: const TextStyle(color: Colors.white),
-                      decoration:
-                          _inputDecoration('Mot de passe', Icons.lock).copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: AppColors.textDisabled,
-                          ),
-                          onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
-                        helperText: 'Minimum 6 caracteres',
-                        helperStyle: const TextStyle(
-                            color: AppColors.textHint, fontSize: 12),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Requis';
-                        if (v.length < 6) return 'Minimum 6 caracteres';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Confirm password
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirm,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _register(),
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration(
-                              'Confirmer le mot de passe', Icons.lock_outline)
-                          .copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirm
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: AppColors.textDisabled,
-                          ),
-                          onPressed: () => setState(
-                              () => _obscureConfirm = !_obscureConfirm),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Requis';
-                        }
-                        if (v != _passwordController.text) {
-                          return 'Les mots de passe ne correspondent pas';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Error message
-                    if (_errorMessage != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(
-                              color: AppColors.error, fontSize: 14),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    // Register button
-                    SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: authProvider.isLoading ? null : _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: authProvider.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.black),
-                              )
-                            : const Text(
-                                'Creer mon compte',
-                                style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Login link
-                    TextButton(
-                      onPressed: () => context.go('/login'),
-                      child: const Text(
-                        'Deja un compte ? Se connecter',
-                        style: TextStyle(color: Colors.amber, fontSize: 14),
-                      ),
-                    ),
-                  ],
+      body: Container(
+        decoration: MultiplayerUiTokens.pageBg,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              children: <Widget>[
+                fadeInUp(
+                  delay: motionEnabled ? staggerIndexDelay(0) : Duration.zero,
+                  child: MpHeader(
+                    title: 'S\'inscrire',
+                    onBack: _handleBackToLogin,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: fadeInUp(
+                          delay: motionEnabled
+                              ? staggerIndexDelay(1)
+                              : Duration.zero,
+                          child: _buildRegisterCard(authProvider),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -336,24 +167,329 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: AppColors.textDisabled),
-      prefixIcon: Icon(icon, color: AppColors.textDisabled),
-      filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.1),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+  Widget _buildRegisterCard(AuthProvider authProvider) {
+    final compact = MediaQuery.of(context).size.width < 420;
+
+    return AutofillGroup(
+      child: shakeOnError(
+        shake: _shakeForm,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 108,
+                  height: 108,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        AppColors.primary.withValues(alpha: 0.95),
+                        AppColors.primaryDark.withValues(alpha: 0.9),
+                      ],
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 18,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.person_add_alt_1,
+                      color: Colors.white, size: 52),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Créer un compte',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: compact ? 40 : 52,
+                  fontWeight: FontWeight.w800,
+                  height: 1.05,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Rejoins la communauté Dutch',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: compact ? 14 : 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 26),
+              _buildField(
+                controller: _usernameController,
+                hintText: 'Nom d\'utilisateur',
+                icon: Icons.person_outline_rounded,
+                textInputAction: TextInputAction.next,
+                autofillHints: const <String>[AutofillHints.newUsername],
+                onChanged: _onUsernameChanged,
+                suffixIcon: _checkingUsername
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      )
+                    : _usernameAvailable == true
+                        ? const Icon(Icons.check_circle,
+                            color: AppColors.success)
+                        : _usernameAvailable == false
+                            ? const Icon(Icons.cancel, color: AppColors.error)
+                            : null,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Requis';
+                  if (!_usernameRegex.hasMatch(v.trim())) {
+                    return '3-20 caractères, lettres/chiffres/._-';
+                  }
+                  if (_usernameAvailable == false) {
+                    return 'Ce nom est déjà pris';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Entre 3 et 20 caractères (lettres, chiffres, . _ -)',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textHint,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _displayNameController,
+                hintText: 'Pseudo (nom affiché)',
+                icon: Icons.badge_outlined,
+                textInputAction: TextInputAction.next,
+                autofillHints: const <String>[AutofillHints.nickname],
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Requis';
+                  if (v.trim().length > 24) return 'Max 24 caractères';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _emailController,
+                hintText: 'Email',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const <String>[AutofillHints.email],
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Requis';
+                  if (!_emailRegex.hasMatch(v.trim())) {
+                    return 'Ce n\'est pas un mail valide';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _passwordController,
+                hintText: 'Mot de passe',
+                icon: Icons.lock_outline_rounded,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.next,
+                autofillHints: const <String>[AutofillHints.newPassword],
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textDisabled,
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Requis';
+                  if (v.length < 6) return 'Minimum 6 caractères';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _confirmPasswordController,
+                hintText: 'Confirmer le mot de passe',
+                icon: Icons.lock_outline_rounded,
+                obscureText: _obscureConfirm,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _register(),
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() => _obscureConfirm = !_obscureConfirm);
+                  },
+                  icon: Icon(
+                    _obscureConfirm
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textDisabled,
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Requis';
+                  if (v != _passwordController.text) {
+                    return 'Les mots de passe ne correspondent pas';
+                  }
+                  return null;
+                },
+              ),
+              if (_errorMessage != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    _errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 60,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        AppColors.primary.withValues(alpha: 0.98),
+                        AppColors.primaryDark.withValues(alpha: 0.96),
+                      ],
+                    ),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: authProvider.isLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      disabledBackgroundColor: Colors.transparent,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: authProvider.isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : const Text(
+                            'Créer mon compte',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _handleBackToLogin,
+                child: const Text(
+                  'Déjà un compte ? Se connecter',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.amber, width: 2),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    String? Function(String?)? validator,
+    ValueChanged<String>? onFieldSubmitted,
+    TextInputAction? textInputAction,
+    Widget? suffixIcon,
+    Iterable<String>? autofillHints,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      validator: validator,
+      onFieldSubmitted: onFieldSubmitted,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      onChanged: onChanged,
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+        fontSize: 18,
       ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.error),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintStyle: const TextStyle(
+          color: AppColors.textDisabled,
+          fontWeight: FontWeight.w500,
+          fontSize: 17,
+        ),
+        prefixIcon: Icon(icon, color: AppColors.textDisabled),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: const Color(0xDD4E6B58),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.9),
+            width: 2,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
       ),
     );
   }

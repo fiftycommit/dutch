@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import 'bot_config.dart';
@@ -5,6 +7,7 @@ import 'bot_difficulty.dart';
 import 'bot_personality.dart';
 import 'bot_memory_manager.dart';
 import 'discard_tracker.dart';
+import 'duel_tuning.dart';
 
 /// Stratégie de décision pour appeler Dutch
 /// Logique multi‑paramètres (sans seuils de score fixes)
@@ -210,9 +213,16 @@ class BotDutchStrategy {
     }
 
     final profile = _profileForDifficulty(difficulty);
+    discardTracker.observePublicMemorizedIndices(
+      opponent.id,
+      opponent.memorizedCardIndices,
+      opponent.hand.length,
+    );
     final base =
         discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
     final style = discardTracker.estimateOpponentStyle(opponent.id);
+    final indexIntel = discardTracker.estimateOpponentIndexIntel(
+        opponent.id, opponent.hand.length);
     final estimatedScore = _estimateOpponentScore(observer, opponent, profile);
 
     final spiedCards = observer.getSpiedCards(opponent.id);
@@ -229,6 +239,7 @@ class BotDutchStrategy {
       tier: profile.tier,
       baseConfidence: base.confidence,
       styleConfidence: style.confidence,
+      indexIntelConfidence: indexIntel.confidence,
       spyCoverage: spyCoverage,
       cards: opponent.hand.length,
     );
@@ -480,6 +491,11 @@ class BotDutchStrategy {
 
     final context = _buildDecisionContext(gs, bot, profile);
     if (context.opponentCount == 0) return false;
+    final duelOpponent = context.opponentCount == 1
+        ? gs.players.where((p) => p.id != bot.id).firstOrNull
+        : null;
+    final duelAgainstHumanOrMoi = duelOpponent != null &&
+        (duelOpponent.isHuman || duelOpponent.botBehavior == BotBehavior.moi);
 
     final expertConclusions = _buildExpertDutchConclusions(
       gs,
@@ -488,6 +504,18 @@ class BotDutchStrategy {
       context,
       phase,
     );
+
+    final moiDuelRushMode = profile.tier == _DutchTier.platinum &&
+        bot.botBehavior == BotBehavior.moi &&
+        context.opponentCount == 1 &&
+        unknownCount == 0 &&
+        context.minOpponentCards <= 2;
+    if (moiDuelRushMode &&
+        myScore <=
+            (context.bestOpponentEstimate + DuelTuning.moiDuelDutchAllowance) &&
+        myScore <= DuelTuning.moiDuelDutchScoreCap) {
+      return true;
+    }
 
     // Platine "race logic": en course de fin, on autorise un Dutch agressif
     // même avant la zone "safe" classique.
@@ -562,6 +590,15 @@ class BotDutchStrategy {
     final adjustedOpponentEstimate =
         (context.bestOpponentEstimate - profile.opponentEstimatePenalty)
             .clamp(0, 999);
+
+    if (profile.tier == _DutchTier.platinum &&
+        duelAgainstHumanOrMoi &&
+        expertConclusions != null &&
+        expertConclusions.opponentCanFinishSoon &&
+        myScore <= (adjustedOpponentEstimate + 2) &&
+        myScore <= 6) {
+      return true;
+    }
 
     if (profile.tier == _DutchTier.platinum &&
         expertConclusions != null &&
@@ -793,6 +830,7 @@ class BotDutchStrategy {
     double maxBurstRisk = 0;
     double maxProjectedFinishRisk = 0;
     bool hasLatentLeader = false;
+    double vulnerabilityRelief = 0;
 
     for (final opponent in gs.players) {
       if (opponent.id == bot.id) continue;
@@ -803,13 +841,17 @@ class BotDutchStrategy {
       if (cards < minOpponentCards) {
         minOpponentCards = cards;
       }
+      final targetedRecently = opponent.lastTargetedByPowerTurn >= 0 &&
+          (gs.turnCount - opponent.lastTargetedByPowerTurn) <= 2;
 
       final estimated = opponent.hand.isEmpty
           ? 0
           : _estimateOpponentScore(bot, opponent, profile);
-      totalOpponentEstimate += estimated;
-      if (estimated < bestOpponentEstimate) {
-        bestOpponentEstimate = estimated;
+      final adjustedEstimate =
+          estimated + (targetedRecently ? (cards <= 2 ? 2 : 1) : 0);
+      totalOpponentEstimate += adjustedEstimate;
+      if (adjustedEstimate < bestOpponentEstimate) {
+        bestOpponentEstimate = adjustedEstimate;
       }
       final estimateConfidence = _estimateOpponentConfidenceForContext(
         bot,
@@ -826,6 +868,9 @@ class BotDutchStrategy {
       stylePressure += (style.optimization * 0.7 + style.aggression * 0.3) *
           (0.6 + fewCardsPressure * 0.8) *
           style.confidence;
+      if (targetedRecently) {
+        vulnerabilityRelief += cards <= 2 ? 0.18 : 0.10;
+      }
 
       if (profile.tier == _DutchTier.platinum) {
         final tempo = _computeTempoSignalForOpponent(
@@ -891,6 +936,7 @@ class BotDutchStrategy {
     }
     tablePressure += ((8 - avgOpponentEstimate) / 12).clamp(-0.3, 0.6);
     tablePressure += ((stylePressure / opponentCount) * 0.55).clamp(0.0, 0.7);
+    tablePressure -= (vulnerabilityRelief / opponentCount).clamp(0.0, 0.25);
     tablePressure = tablePressure.clamp(0.0, 2.0);
 
     return _DutchDecisionContext(
@@ -1048,6 +1094,13 @@ class BotDutchStrategy {
     Player opponent,
     _DutchDecisionProfile profile,
   ) {
+    discardTracker.observePublicMemorizedIndices(
+      opponent.id,
+      opponent.memorizedCardIndices,
+      opponent.hand.length,
+    );
+    final indexIntel = discardTracker.estimateOpponentIndexIntel(
+        opponent.id, opponent.hand.length);
     final discardEstimate = discardTracker
         .estimateOpponentHand(opponent.id, opponent.hand.length)
         .estimatedScore;
@@ -1061,14 +1114,29 @@ class BotDutchStrategy {
 
     final spiedCards = observer.getSpiedCards(opponent.id);
     if (spiedCards == null || spiedCards.isEmpty || opponent.hand.isEmpty) {
-      return styledEstimate.round();
+      final withIntel = _applyIndexIntelToOpponentEstimate(
+        styledEstimate,
+        indexIntel,
+        profile.tier,
+      );
+      return withIntel.round();
     }
 
-    final knownSpied = spiedCards.keys
-        .where((idx) => idx >= 0 && idx < opponent.hand.length)
-        .length;
+    int knownSpied = 0;
+    int knownSpiedScoreFloor = 0;
+    for (final entry in spiedCards.entries) {
+      final idx = entry.key;
+      if (idx < 0 || idx >= opponent.hand.length) continue;
+      knownSpied++;
+      knownSpiedScoreFloor += entry.value.points;
+    }
     if (knownSpied == 0) {
-      return styledEstimate.round();
+      final withIntel = _applyIndexIntelToOpponentEstimate(
+        styledEstimate,
+        indexIntel,
+        profile.tier,
+      );
+      return withIntel.round();
     }
 
     final spyCoverage = (knownSpied / opponent.hand.length).clamp(0.0, 1.0);
@@ -1080,7 +1148,15 @@ class BotDutchStrategy {
 
     final blended =
         (styledEstimate * (1 - spyWeight)) + (spiedEstimate * spyWeight);
-    return blended.round();
+    final withIntel = _applyIndexIntelToOpponentEstimate(
+      blended,
+      indexIntel,
+      profile.tier,
+    );
+    // Faits certains: un score adverse ne peut pas être inférieur
+    // à la somme des cartes explicitement connues.
+    final factualFloor = knownSpiedScoreFloor.toDouble();
+    return max(withIntel, factualFloor).round();
   }
 
   static double _applyStyleToOpponentEstimate(
@@ -1132,10 +1208,53 @@ class BotDutchStrategy {
     return adjusted.clamp(0.0, 999.0);
   }
 
+  static double _applyIndexIntelToOpponentEstimate(
+    double estimate,
+    OpponentIndexIntel indexIntel,
+    _DutchTier tier,
+  ) {
+    double adjusted = estimate;
+
+    if (indexIntel.confidence >= 0.18 && indexIntel.estimatedScoreCeiling > 0) {
+      final capWeight = switch (tier) {
+        _DutchTier.bronze => 0.10,
+        _DutchTier.silver => 0.18,
+        _DutchTier.gold => 0.38,
+        _DutchTier.platinum => 0.58,
+      };
+      final cappedScore = min(adjusted, indexIntel.estimatedScoreCeiling);
+      adjusted = (adjusted * (1 - capWeight)) + (cappedScore * capWeight);
+    }
+
+    double duelThreatBias = 0.0;
+    switch (tier) {
+      case _DutchTier.bronze:
+        duelThreatBias = 0.0;
+        break;
+      case _DutchTier.silver:
+        duelThreatBias = indexIntel.startKnownRatio * 0.30;
+        break;
+      case _DutchTier.gold:
+        duelThreatBias = indexIntel.startKnownRatio * 0.70 +
+            indexIntel.lowRejectRate * 0.55 +
+            (indexIntel.powerUses >= 2 ? 0.30 : 0.0);
+        break;
+      case _DutchTier.platinum:
+        duelThreatBias = indexIntel.startKnownRatio * 1.10 +
+            indexIntel.lowRejectRate * 0.95 +
+            (min(indexIntel.powerUses, 6) / 6.0) * 0.90;
+        break;
+    }
+    adjusted -= duelThreatBias * indexIntel.confidence;
+
+    return adjusted.clamp(0.0, 999.0);
+  }
+
   static double _estimateOpponentConfidence({
     required _DutchTier tier,
     required double baseConfidence,
     required double styleConfidence,
+    required double indexIntelConfidence,
     required double spyCoverage,
     required int cards,
   }) {
@@ -1149,6 +1268,7 @@ class BotDutchStrategy {
     final cardCountBonus = cards <= 2 ? 0.08 : 0.0;
     final blended = (baseConfidence * 0.50) +
         (styleConfidence * 0.30) +
+        (indexIntelConfidence * 0.20) +
         (spyCoverage * 0.25) +
         cardCountBonus;
     return (blended * tierFactor).clamp(0.05, 0.95);
@@ -1161,9 +1281,16 @@ class BotDutchStrategy {
   ) {
     if (opponent.hand.isEmpty) return 1.0;
 
+    discardTracker.observePublicMemorizedIndices(
+      opponent.id,
+      opponent.memorizedCardIndices,
+      opponent.hand.length,
+    );
     final base =
         discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
     final style = discardTracker.estimateOpponentStyle(opponent.id);
+    final indexIntel = discardTracker.estimateOpponentIndexIntel(
+        opponent.id, opponent.hand.length);
     final spied = observer.getSpiedCards(opponent.id);
     int knownSpied = 0;
     if (spied != null && spied.isNotEmpty) {
@@ -1179,6 +1306,7 @@ class BotDutchStrategy {
       tier: tier,
       baseConfidence: base.confidence,
       styleConfidence: style.confidence,
+      indexIntelConfidence: indexIntel.confidence,
       spyCoverage: spyCoverage,
       cards: opponent.hand.length,
     );

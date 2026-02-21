@@ -11,6 +11,7 @@ import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
 import 'bot_dutch_strategy.dart';
 import 'bot_personality.dart';
+import 'duel_tuning.dart';
 import 'bot_power_notifications_stub.dart'
     if (dart.library.ui) 'bot_power_notifications_flutter.dart'
     as power_notifications;
@@ -816,6 +817,16 @@ class BotPowerHandler {
       }
     }
 
+    final canUseIndexIntel =
+        _isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty);
+    if (canUseIndexIntel) {
+      final likelyStrongIdx = BotDutchStrategy.discardTracker
+          .pickLikelyStrongIndex(target.id, target.hand.length);
+      if (likelyStrongIdx != null) {
+        return likelyStrongIdx;
+      }
+    }
+
     // Sans info fiable, le bot ne voit pas les cartes cachées de la cible.
     return _random.nextInt(target.hand.length);
   }
@@ -834,6 +845,8 @@ class BotPowerHandler {
     }
 
     final opponent = opponents.first;
+    final antiHumanLikeOpponent =
+        opponent.isHuman || opponent.botBehavior == BotBehavior.moi;
     if (bot.hand.isEmpty || opponent.hand.isEmpty) return null;
     final duel = true;
     final hasUnknownOwn = BotMemoryManager.getUnknownIndices(bot).isNotEmpty;
@@ -845,20 +858,22 @@ class BotPowerHandler {
     if (!hasUnknownOwn) {
       final worstKnown = _worstKnownCardPoints(bot);
       if (worstKnown >= 0 && worstKnown < badCardThreshold) {
-        if (logDecision) {
-          _logDuelValetDecision(
-            bot,
-            decision: 'VALET_DUEL_SKIP_ALL_KNOWN_GOOD',
-            context: {
-              'opponent': opponent.name,
-              'knownCards': bot.knownCardCount,
-              'handCards': bot.hand.length,
-              'worstKnown': worstKnown,
-              ...thresholdTrace.toLogContext(),
-            },
-          );
+        if (!antiHumanLikeOpponent) {
+          if (logDecision) {
+            _logDuelValetDecision(
+              bot,
+              decision: 'VALET_DUEL_SKIP_ALL_KNOWN_GOOD',
+              context: {
+                'opponent': opponent.name,
+                'knownCards': bot.knownCardCount,
+                'handCards': bot.hand.length,
+                'worstKnown': worstKnown,
+                ...thresholdTrace.toLogContext(),
+              },
+            );
+          }
+          return null;
         }
-        return null;
       }
     }
 
@@ -922,7 +937,7 @@ class BotPowerHandler {
         opponent.hand.length <= 2 || opponentVelocity >= 2 || opponentBurst;
     final earlyOpeningWindow =
         gs.turnCount <= 1 || gs.actionCount <= (gs.players.length * 2);
-    final canOpeningDisruption = isMoiStyle &&
+    final canOpeningDisruption = (isMoiStyle || antiHumanLikeOpponent) &&
         duel &&
         hasUnknownOwn &&
         opponent.hand.length >= 3 &&
@@ -993,21 +1008,30 @@ class BotPowerHandler {
     // - on le fait en anti-burst quand la course devient fatale,
     // - ou en sabotage clair avec payload connu (grosse carte envoyée).
     final shouldSwapForRace = raceRisk &&
-        (underPressure || behind || (isMoiStyle && hasKnownPayload));
+        (underPressure ||
+            behind ||
+            (isMoiStyle && hasKnownPayload) ||
+            antiHumanLikeOpponent);
     final shouldSwapForSabotage = (behind && hasKnownPayload) ||
         (isMoiStyle &&
             hasKnownPayload &&
-            (underPressure || opponent.hand.length <= bot.hand.length));
+            (underPressure || opponent.hand.length <= bot.hand.length)) ||
+        (antiHumanLikeOpponent && (hasKnownPayload || bestGain >= 0.2));
     final hasInformationEdge = bestOwnKnown || bestOppKnown;
     final shouldSwapForEntropy =
         canEntropySabotage && !hasInformationEdge && bestGain >= -0.05;
     final shouldSwapForOpeningDisruption =
         canOpeningDisruption && !hasInformationEdge && bestGain >= -0.05;
+    final sabotageGainFloor = antiHumanLikeOpponent
+        ? DuelTuning.duelHumanLikeSabotageGainFloor
+        : (isMoiStyle ? 0.2 : 0.8);
+    final unknownGainFloor = antiHumanLikeOpponent
+        ? DuelTuning.duelHumanLikeUnknownGainFloor
+        : (isMoiStyle ? 0.7 : 1.2);
     final shouldSwap = hasInformationEdge &&
             (shouldSwapForRace ||
-                (shouldSwapForSabotage &&
-                    bestGain >= (isMoiStyle ? 0.2 : 0.8)) ||
-                (hasUnknownOwn && bestGain >= (isMoiStyle ? 0.7 : 1.2))) ||
+                (shouldSwapForSabotage && bestGain >= sabotageGainFloor) ||
+                (hasUnknownOwn && bestGain >= unknownGainFloor)) ||
         shouldSwapForEntropy ||
         shouldSwapForOpeningDisruption;
 
@@ -1118,6 +1142,12 @@ class BotPowerHandler {
       }
     }
 
+    final likelyStrongIdx = BotDutchStrategy.discardTracker
+        .pickLikelyStrongIndex(opponent.id, opponent.hand.length);
+    if (likelyStrongIdx != null) {
+      return likelyStrongIdx;
+    }
+
     return _random.nextInt(opponent.hand.length);
   }
 
@@ -1154,6 +1184,11 @@ class BotPowerHandler {
     Player opponent,
   ) {
     final tracker = BotDutchStrategy.discardTracker;
+    tracker.observePublicMemorizedIndices(
+      opponent.id,
+      opponent.memorizedCardIndices,
+      opponent.hand.length,
+    );
     final decisions = tracker.getObservedDecisionCount(opponent.id);
     final exchangeRate = tracker.getExchangeRate(opponent.id);
     final avgInstantDiscard =
@@ -1170,7 +1205,21 @@ class BotPowerHandler {
     final style = tracker.estimateOpponentStyle(opponent.id);
     final estimate =
         tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+    final indexIntel =
+        tracker.estimateOpponentIndexIntel(opponent.id, opponent.hand.length);
+    final powerUses = tracker.getPowerUseCount(opponent.id);
+    final recentPowerUses = tracker.getRecentPowerUseCountInTurns(
+      opponent.id,
+      gs.turnCount,
+      windowTurns: 4,
+    );
+    final deckLowChance = tracker.probabilityDrawAtOrBelow(4);
+    final deckExpectedPoints = tracker.expectedDrawnPoints();
+    final targetedRecently = opponent.lastTargetedByPowerTurn >= 0 &&
+        (gs.turnCount - opponent.lastTargetedByPowerTurn) <= 2;
     final adjustments = <String>[];
+    final antiHumanLikeOpponent =
+        opponent.isHuman || opponent.botBehavior == BotBehavior.moi;
 
     int baseThreshold;
     if (opponent.hand.length <= 2) {
@@ -1182,11 +1231,21 @@ class BotPowerHandler {
     }
     int threshold = baseThreshold;
 
+    if (antiHumanLikeOpponent) {
+      threshold -= DuelTuning.duelAntiHumanLikeThresholdDrop;
+      adjustments
+          .add('anti_human_like:-${DuelTuning.duelAntiHumanLikeThresholdDrop}');
+    }
+    if (targetedRecently) {
+      threshold -= 1;
+      adjustments.add('targeted_recently:-1');
+    }
+
     // Peu d'observations: garder une base prudente.
     if (decisions <= 0) {
       return _DuelValetThresholdTrace(
         baseThreshold: baseThreshold,
-        finalThreshold: threshold.clamp(3, 10),
+        finalThreshold: threshold.clamp(2, 10),
         observedDecisions: decisions,
         exchangeRate: exchangeRate,
         avgInstantDiscard: avgInstantDiscard,
@@ -1197,6 +1256,11 @@ class BotPowerHandler {
         styleConfidence: style.confidence,
         estimatedScore: estimate.estimatedScore,
         estimateConfidence: estimate.confidence,
+        indexIntelCeiling: indexIntel.estimatedScoreCeiling,
+        indexIntelConfidence: indexIntel.confidence,
+        startKnownRatio: indexIntel.startKnownRatio,
+        powerUses: powerUses,
+        recentPowerUses: recentPowerUses,
         adjustments: const <String>['fallback_no_observation'],
       );
     }
@@ -1231,9 +1295,34 @@ class BotPowerHandler {
       adjustments.add('strong_optimizer:-1');
     }
 
+    final intelIndicatesStrongHand = indexIntel.confidence >= 0.22 &&
+        indexIntel.estimatedScoreCeiling <= (opponent.hand.length * 5.2);
+    if (intelIndicatesStrongHand) {
+      threshold = min(threshold, DuelTuning.duelIntelStrongCapThreshold);
+      adjustments.add(
+          'index_intel_strong-><=${DuelTuning.duelIntelStrongCapThreshold}');
+    }
+
+    if (indexIntel.startKnownRatio >= 0.45) {
+      threshold -= 1;
+      adjustments.add('start_known_ratio:-1');
+    }
+
+    if (powerUses >= 3 || recentPowerUses >= 2) {
+      threshold -= 1;
+      adjustments.add('power_pressure:-1');
+    }
+    if (deckLowChance <= 0.25 || deckExpectedPoints >= 7.2) {
+      threshold -= 1;
+      adjustments.add('deck_dry:-1');
+    } else if (deckLowChance >= 0.46 && deckExpectedPoints <= 5.8) {
+      threshold += 1;
+      adjustments.add('deck_rich:+1');
+    }
+
     return _DuelValetThresholdTrace(
       baseThreshold: baseThreshold,
-      finalThreshold: threshold.clamp(3, 10),
+      finalThreshold: threshold.clamp(2, 10),
       observedDecisions: decisions,
       exchangeRate: exchangeRate,
       avgInstantDiscard: avgInstantDiscard,
@@ -1244,6 +1333,11 @@ class BotPowerHandler {
       styleConfidence: style.confidence,
       estimatedScore: estimate.estimatedScore,
       estimateConfidence: estimate.confidence,
+      indexIntelCeiling: indexIntel.estimatedScoreCeiling,
+      indexIntelConfidence: indexIntel.confidence,
+      startKnownRatio: indexIntel.startKnownRatio,
+      powerUses: powerUses,
+      recentPowerUses: recentPowerUses,
       adjustments: adjustments,
     );
   }
@@ -1736,6 +1830,11 @@ class BotPowerHandler {
     Player player,
     BotDifficulty difficulty,
   ) {
+    BotDutchStrategy.discardTracker.observePublicMemorizedIndices(
+      player.id,
+      player.memorizedCardIndices,
+      player.hand.length,
+    );
     final handEstimate = BotDutchStrategy.estimateOpponentForObserver(
       gs,
       observer,
@@ -1744,6 +1843,8 @@ class BotPowerHandler {
     );
     final style =
         BotDutchStrategy.discardTracker.estimateOpponentStyle(player.id);
+    final indexIntel = BotDutchStrategy.discardTracker
+        .estimateOpponentIndexIntel(player.id, player.hand.length);
     final cardsThreat = ((6 - player.hand.length).clamp(0, 5)).toDouble();
     final scoreThreat = (18.0 - handEstimate.estimatedScore).clamp(0.0, 18.0);
     final uncertaintyThreat =
@@ -1770,6 +1871,9 @@ class BotPowerHandler {
     final projectedFinishRisk =
         _computeProjectedFinishRiskForPlayer(gs, player);
     final trajectoryClean = _isTrajectoryClean(gs, player);
+    final intelGap =
+        ((player.hand.length * 6.5) - indexIntel.estimatedScoreCeiling)
+            .clamp(0.0, 18.0);
 
     double score = cardsThreat * 3.2 +
         scoreThreat * 1.35 +
@@ -1788,8 +1892,22 @@ class BotPowerHandler {
       score -= 1.0;
     }
 
+    if (indexIntel.confidence >= 0.18) {
+      score += intelGap * 0.65 * indexIntel.confidence;
+      score += indexIntel.startKnownRatio * 4.0 * indexIntel.confidence;
+      score += indexIntel.lowRejectRate * 2.6 * indexIntel.confidence;
+    }
+    if (indexIntel.powerUses >= 2) {
+      score += (min(indexIntel.powerUses, 6) * 0.55);
+    }
+
     if (player.isHuman && player.hand.length <= 2) {
       score += 14.0;
+    }
+    if (player.isHuman || player.botBehavior == BotBehavior.moi) {
+      score += player.hand.length <= 3
+          ? DuelTuning.humanLikeThreatBonusLowCards
+          : DuelTuning.humanLikeThreatBonusNormalCards;
     }
     if (BotDutchStrategy.discardTracker.lastActionWasExchange(player.id)) {
       score += 1.8;
@@ -1973,6 +2091,11 @@ class BotPowerHandler {
     GameState gs,
     Player player,
   ) {
+    BotDutchStrategy.discardTracker.observePublicMemorizedIndices(
+      player.id,
+      player.memorizedCardIndices,
+      player.hand.length,
+    );
     final cards = player.hand.length;
     final actionsUntilTurn = _actionsUntilNextTurn(gs, player.id);
     final velocity = BotDutchStrategy.discardTracker.getCardVelocity(
@@ -1993,6 +2116,8 @@ class BotPowerHandler {
       requiredMatches: 2,
       withinTurns: 3,
     );
+    final indexIntel = BotDutchStrategy.discardTracker
+        .estimateOpponentIndexIntel(player.id, cards);
     final trajectoryClean = _isTrajectoryClean(gs, player);
 
     double probability = 0.05;
@@ -2034,6 +2159,20 @@ class BotPowerHandler {
     } else if (cards == 4) {
       probability *= 0.65;
     }
+
+    if (indexIntel.confidence >= 0.20 && cards > 0) {
+      final capThreat = ((cards * 6.0) - indexIntel.estimatedScoreCeiling)
+          .clamp(0.0, cards * 6.0);
+      final normalizedCapThreat =
+          cards <= 0 ? 0.0 : (capThreat / (cards * 6.0)).clamp(0.0, 1.0);
+      probability += normalizedCapThreat * 0.20 * indexIntel.confidence;
+      probability += indexIntel.startKnownRatio * 0.10 * indexIntel.confidence;
+      probability += indexIntel.lowRejectRate * 0.08 * indexIntel.confidence;
+      if (indexIntel.powerUses >= 2) {
+        probability += 0.05;
+      }
+    }
+
     probability += trajectoryClean ? 0.08 : -0.08;
 
     return probability.clamp(0.0, 1.0);
@@ -2203,6 +2342,11 @@ class _DuelValetThresholdTrace {
   final double styleConfidence;
   final double estimatedScore;
   final double estimateConfidence;
+  final double indexIntelCeiling;
+  final double indexIntelConfidence;
+  final double startKnownRatio;
+  final int powerUses;
+  final int recentPowerUses;
   final List<String> adjustments;
 
   const _DuelValetThresholdTrace({
@@ -2218,6 +2362,11 @@ class _DuelValetThresholdTrace {
     required this.styleConfidence,
     required this.estimatedScore,
     required this.estimateConfidence,
+    required this.indexIntelCeiling,
+    required this.indexIntelConfidence,
+    required this.startKnownRatio,
+    required this.powerUses,
+    required this.recentPowerUses,
     required this.adjustments,
   });
 
@@ -2237,6 +2386,11 @@ class _DuelValetThresholdTrace {
       'obs.styleConfidence': styleConfidence.toStringAsFixed(2),
       'obs.estimatedScore': estimatedScore.toStringAsFixed(2),
       'obs.estimateConfidence': estimateConfidence.toStringAsFixed(2),
+      'obs.indexIntelCeiling': indexIntelCeiling.toStringAsFixed(2),
+      'obs.indexIntelConfidence': indexIntelConfidence.toStringAsFixed(2),
+      'obs.startKnownRatio': startKnownRatio.toStringAsFixed(2),
+      'obs.powerUses': powerUses,
+      'obs.recentPowerUses': recentPowerUses,
     };
   }
 }

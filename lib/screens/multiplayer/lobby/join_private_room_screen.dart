@@ -85,6 +85,13 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
     );
   }
 
+  Future<void> _handleBack() async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && mounted) {
+      context.go('/multiplayer/join-selection');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,8 +112,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () =>
-                          context.go('/multiplayer/mode-selection'),
+                      onPressed: _handleBack,
                     ),
                     const SizedBox(width: 12),
                     const Text(

@@ -38,6 +38,7 @@ class AuthResult {
 
 class AuthService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
+  static final RegExp _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
@@ -143,10 +144,27 @@ class AuthService {
     }
   }
 
-  Future<AuthResult> login(String email, String password) async {
+  Future<AuthResult> login(String identifier, String password) async {
     try {
+      final rawIdentifier = identifier.trim();
+      if (rawIdentifier.isEmpty) {
+        return const AuthResult(
+            success: false, error: 'Email ou pseudo requis');
+      }
+      if (password.isEmpty) {
+        return const AuthResult(success: false, error: 'Mot de passe requis');
+      }
+
+      final resolvedEmail = await _resolveEmailForLogin(rawIdentifier);
+      if (resolvedEmail == null) {
+        return const AuthResult(
+          success: false,
+          error: 'Email ou pseudo introuvable',
+        );
+      }
+
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
+        email: resolvedEmail,
         password: password,
       );
 
@@ -176,6 +194,94 @@ class AuthService {
       return AuthResult(
           success: false, error: 'Impossible de contacter le serveur');
     }
+  }
+
+  Future<String?> _resolveEmailForLogin(String identifier) async {
+    final normalized = identifier.trim();
+    if (_emailRegex.hasMatch(normalized)) {
+      return normalized.toLowerCase();
+    }
+
+    final resolvedFromIdentifier =
+        await _resolveEmailFromIdentifier(normalized);
+    if (resolvedFromIdentifier != null) {
+      return resolvedFromIdentifier;
+    }
+
+    final resolvedFromServer = await _resolveEmailFromUsername(normalized);
+    if (resolvedFromServer != null) {
+      return resolvedFromServer;
+    }
+
+    return null;
+  }
+
+  Future<String?> _resolveEmailFromIdentifier(String identifier) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              '$_baseUrl/api/auth/resolve-login?identifier=${Uri.encodeComponent(identifier)}',
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      return _extractEmailFromLookupPayload(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _resolveEmailFromUsername(String username) async {
+    try {
+      final normalizedUsername = username.trim().toLowerCase();
+      final response = await http
+          .get(
+            Uri.parse(
+              '$_baseUrl/api/auth/check-username?username=${Uri.encodeComponent(normalizedUsername)}',
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      return _extractEmailFromLookupPayload(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractEmailFromLookupPayload(dynamic payload) {
+    if (payload is! Map) return null;
+
+    final userMap = payload['user'];
+    final dataMap = payload['data'];
+
+    final candidates = <dynamic>[
+      payload['email'],
+      payload['resolvedEmail'],
+      payload['loginEmail'],
+      payload['identifierEmail'],
+      if (userMap is Map) userMap['email'],
+      if (dataMap is Map) dataMap['email'],
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate is! String) continue;
+      final normalized = candidate.trim().toLowerCase();
+      if (_emailRegex.hasMatch(normalized)) {
+        return normalized;
+      }
+    }
+    return null;
   }
 
   Future<AuthResult> forgotPassword(String email) async {
@@ -357,7 +463,7 @@ class AuthService {
       case 'weak-password':
         return 'Mot de passe trop faible (min 6 caractères)';
       case 'user-not-found':
-        return 'Aucun compte trouvé avec cet email';
+        return 'Aucun compte trouvé avec cet email ou pseudo';
       case 'wrong-password':
         return 'Mot de passe incorrect';
       case 'invalid-credential':

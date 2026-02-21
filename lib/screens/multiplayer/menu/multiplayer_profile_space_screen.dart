@@ -3,12 +3,22 @@ import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
+import 'package:dutch_game/screens/multiplayer/ui/multiplayer_motion.dart';
+import 'package:dutch_game/screens/multiplayer/ui/multiplayer_ui_tokens.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+enum MultiplayerProfileTab { profile, friends, blocked }
+
 class MultiplayerProfileSpaceScreen extends StatefulWidget {
-  const MultiplayerProfileSpaceScreen({super.key});
+  const MultiplayerProfileSpaceScreen({
+    super.key,
+    this.initialTab = MultiplayerProfileTab.profile,
+  });
+
+  final MultiplayerProfileTab initialTab;
 
   @override
   State<MultiplayerProfileSpaceScreen> createState() =>
@@ -40,12 +50,15 @@ class _MultiplayerProfileSpaceScreenState
   bool _loading = true;
   bool _savingProfile = false;
   bool _deletingAccount = false;
+  bool _editingProfile = false;
   String? _pseudoError;
   String? _usernameError;
+  late MultiplayerProfileTab _activeTab;
 
   @override
   void initState() {
     super.initState();
+    _activeTab = widget.initialTab;
     final authProvider = context.read<AuthProvider>();
     _friendsApi = FriendsApiService(authProvider.authService);
     _loadData();
@@ -270,6 +283,7 @@ class _MultiplayerProfileSpaceScreenState
     }
     setState(() {
       _savingProfile = false;
+      _editingProfile = false;
     });
     _showSnackBar('Profil mis a jour.');
   }
@@ -633,61 +647,315 @@ class _MultiplayerProfileSpaceScreenState
   @override
   Widget build(BuildContext context) {
     final isLoggedIn = context.watch<AuthProvider>().isLoggedIn;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1223),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B1223),
-        foregroundColor: Colors.white,
-        title: const Text(
-          'Mon profil',
-          style: TextStyle(fontWeight: FontWeight.w700),
+      body: Container(
+        decoration: MultiplayerUiTokens.pageBg,
+        child: SafeArea(
+          child: Column(
+            children: <Widget>[
+              _buildTopHeader(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: tabContentTransition(
+                          child: KeyedSubtree(
+                            key: ValueKey<MultiplayerProfileTab>(_activeTab),
+                            child: _buildTabContent(isLoggedIn),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _loading ? null : _loadData,
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Rafraichir',
+      ),
+    );
+  }
+
+  Widget _buildTopHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: <Color>[
+            AppColors.primary.withValues(alpha: 0.95),
+            AppColors.primaryDark.withValues(alpha: 0.95),
+          ],
+        ),
+      ),
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              IconButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+              ),
+              const Expanded(
+                child: Text(
+                  'Mon Profil',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _tabButton(
+                  icon: Icons.person_outline,
+                  label: 'Profil',
+                  tab: MultiplayerProfileTab.profile,
+                ),
+              ),
+              Expanded(
+                child: _tabButton(
+                  icon: Icons.group_outlined,
+                  label: 'Amis',
+                  tab: MultiplayerProfileTab.friends,
+                ),
+              ),
+              Expanded(
+                child: _tabButton(
+                  icon: Icons.block_outlined,
+                  label: 'Bloqués',
+                  tab: MultiplayerProfileTab.blocked,
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: <Widget>[
-                _sectionCard(
-                  icon: Icons.badge_outlined,
-                  title: 'Profil',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Text(
-                        'Pseudo',
+    );
+  }
+
+  Widget _tabButton({
+    required IconData icon,
+    required String label,
+    required MultiplayerProfileTab tab,
+  }) {
+    final selected = _activeTab == tab;
+    return InkWell(
+      onTap: () {
+        if (!mounted) return;
+        setState(() => _activeTab = tab);
+      },
+      child: AnimatedContainer(
+        duration: MultiplayerUiTokens.motionFast,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? Colors.white : Colors.transparent,
+              width: 2.2,
+            ),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              icon,
+              color:
+                  selected ? Colors.white : Colors.white.withValues(alpha: 0.7),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.75),
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(bool isLoggedIn) {
+    return switch (_activeTab) {
+      MultiplayerProfileTab.profile => _buildProfileTab(isLoggedIn),
+      MultiplayerProfileTab.friends => _buildFriendsTab(),
+      MultiplayerProfileTab.blocked => _buildBlockedTab(),
+    };
+  }
+
+  Widget _buildProfileTab(bool isLoggedIn) {
+    return ListView(
+      key: const ValueKey<String>('profile_tab_list'),
+      children: <Widget>[
+        _sectionCard(
+          icon: Icons.badge_outlined,
+          title: 'Profil',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: AppColors.primaryDark,
+                    child: Text(
+                      (_pseudoController.text.isEmpty
+                              ? 'J'
+                              : _pseudoController.text.characters.first)
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 26,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          _pseudoController.text.isEmpty
+                              ? 'Pseudo'
+                              : _pseudoController.text,
+                          style: const TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 24,
+                          ),
+                        ),
+                        Text(
+                          '@${_usernameController.text}',
+                          style: const TextStyle(
+                            color: Color(0xFF4B5563),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _savingProfile
+                        ? null
+                        : () {
+                            setState(() {
+                              _editingProfile = !_editingProfile;
+                              if (!_editingProfile) {
+                                _pseudoError = null;
+                                _usernameError = null;
+                              }
+                            });
+                          },
+                    icon: Icon(
+                      _editingProfile
+                          ? Icons.close_rounded
+                          : Icons.edit_rounded,
+                      color: const Color(0xFF1F2937),
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ),
+              if (_editingProfile) ...<Widget>[
+                const SizedBox(height: 12),
+                const Text(
+                  'Pseudo',
+                  style: TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _pseudoController,
+                  onChanged: (_) => _validateLive(),
+                  textCapitalization: TextCapitalization.words,
+                  maxLength: 24,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Ton pseudo',
+                    errorText: _pseudoError,
+                    filled: true,
+                    fillColor: Colors.white,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: _pseudoError == null
+                            ? const Color(0xFFD1D5DB)
+                            : const Color(0xFFB91C1C),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: _pseudoError == null
+                            ? const Color(0xFF4F46E5)
+                            : const Color(0xFFB91C1C),
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Nom d utilisateur',
+                  style: TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: const Text(
+                        '@',
                         style: TextStyle(
                           color: Color(0xFF111827),
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _pseudoController,
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _usernameController,
                         onChanged: (_) => _validateLive(),
-                        textCapitalization: TextCapitalization.words,
-                        maxLength: 24,
+                        textCapitalization: TextCapitalization.none,
+                        maxLength: 20,
                         style: const TextStyle(
                           color: Color(0xFF111827),
                           fontWeight: FontWeight.w600,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Ton pseudo',
-                          errorText: _pseudoError,
+                          hintText: 'pegga.pig',
+                          errorText: _usernameError,
                           filled: true,
                           fillColor: Colors.white,
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                              color: _pseudoError == null
+                              color: _usernameError == null
                                   ? const Color(0xFFD1D5DB)
                                   : const Color(0xFFB91C1C),
                             ),
@@ -695,7 +963,7 @@ class _MultiplayerProfileSpaceScreenState
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                              color: _pseudoError == null
+                              color: _usernameError == null
                                   ? const Color(0xFF4F46E5)
                                   : const Color(0xFFB91C1C),
                               width: 1.4,
@@ -703,328 +971,338 @@ class _MultiplayerProfileSpaceScreenState
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Nom d utilisateur',
-                        style: TextStyle(
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ),
+                  ],
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _profile?.roomInviteNotificationsEnabled ?? false,
+                  onChanged: _toggleInviteNotifications,
+                  title: const Text(
+                    'Notifications d invitation',
+                    style: TextStyle(color: Color(0xFF111827)),
+                  ),
+                  subtitle: const Text(
+                    'Push cross-device a brancher coté compte.',
+                    style: TextStyle(color: Color(0xFF374151)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: <Widget>[
+                      OutlinedButton(
+                        onPressed: _savingProfile
+                            ? null
+                            : () {
+                                setState(() {
+                                  _editingProfile = false;
+                                  _pseudoError = null;
+                                  _usernameError = null;
+                                });
+                              },
+                        child: const Text('Annuler'),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Container(
-                            margin: const EdgeInsets.only(top: 12),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: const Text(
-                              '@',
-                              style: TextStyle(
-                                color: Color(0xFF111827),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: _usernameController,
-                              onChanged: (_) => _validateLive(),
-                              textCapitalization: TextCapitalization.none,
-                              maxLength: 20,
-                              style: const TextStyle(
-                                color: Color(0xFF111827),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'pegga.pig',
-                                errorText: _usernameError,
-                                filled: true,
-                                fillColor: Colors.white,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: _usernameError == null
-                                        ? const Color(0xFFD1D5DB)
-                                        : const Color(0xFFB91C1C),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: _usernameError == null
-                                        ? const Color(0xFF4F46E5)
-                                        : const Color(0xFFB91C1C),
-                                    width: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        value:
-                            _profile?.roomInviteNotificationsEnabled ?? false,
-                        onChanged: _toggleInviteNotifications,
-                        title: const Text(
-                          'Notifications d invitation',
-                          style: TextStyle(color: Color(0xFF111827)),
-                        ),
-                        subtitle: const Text(
-                          'Push cross-device a brancher cote compte.',
-                          style: TextStyle(color: Color(0xFF374151)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.icon(
-                          onPressed: _savingProfile ? null : _saveProfile,
-                          icon: const Icon(Icons.save_outlined),
-                          label: _savingProfile
-                              ? const Text('Enregistrement...')
-                              : const Text('Enregistrer'),
-                        ),
+                      FilledButton.icon(
+                        onPressed: _savingProfile ? null : _saveProfile,
+                        icon: const Icon(Icons.save_outlined),
+                        label: _savingProfile
+                            ? const Text('Enregistrement...')
+                            : const Text('Enregistrer'),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                _sectionCard(
-                  icon: Icons.people_alt_outlined,
-                  title: 'Amis et demandes',
-                  trailing: FilledButton.icon(
-                    onPressed: _openAddFriendDialog,
-                    icon: const Icon(Icons.person_add_alt_1),
-                    label: const Text('Ajouter'),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        '${_friends.length} ami(s) • ${_incomingRequests.length} demande(s) recue(s)',
-                        style: const TextStyle(
-                          color: Color(0xFF374151),
-                          fontWeight: FontWeight.w600,
-                        ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _sectionCard(
+          icon: Icons.meeting_room_outlined,
+          title: 'Salons où je suis hôte',
+          child: _hostRooms.isEmpty
+              ? const Text(
+                  'Aucun salon hôte enregistré.',
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                )
+              : Column(
+                  children: _hostRooms.map((room) {
+                    final statusLabel = _statusLabelForRoom(room.roomCode);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      const SizedBox(height: 10),
-                      if (_incomingRequests.isEmpty)
-                        const Text(
-                          'Aucune demande recue pour le moment.',
-                          style: TextStyle(color: Color(0xFF6B7280)),
-                        )
-                      else
-                        ..._incomingRequests.map((request) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: const Color(0xFFE5E7EB)),
-                            ),
-                            child: Row(
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        request.displayName,
-                                        style: const TextStyle(
-                                          color: Color(0xFF111827),
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      Text(
-                                        '@${request.username}',
-                                        style: const TextStyle(
-                                          color: Color(0xFF4B5563),
-                                        ),
-                                      ),
-                                    ],
+                                Text(
+                                  room.roomCode,
+                                  style: const TextStyle(
+                                    color: Color(0xFF111827),
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.3,
                                   ),
                                 ),
-                                TextButton(
-                                  onPressed: () => _declineIncomingRequest(
-                                    request.username,
+                                Text(
+                                  'Ajouté le ${_formatDate(room.joinedAt)}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF4B5563),
+                                    fontSize: 12,
                                   ),
-                                  child: const Text('Refuser'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => _acceptIncomingRequest(
-                                    request.username,
-                                  ),
-                                  child: const Text('Accepter'),
                                 ),
                               ],
                             ),
-                          );
-                        }),
-                      if (_outgoingRequests.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Demandes envoyees',
-                          style: TextStyle(
-                            color: Color(0xFF111827),
-                            fontWeight: FontWeight.w700,
                           ),
+                          Chip(label: Text(statusLabel)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        if (isLoggedIn) ...<Widget>[
+          const SizedBox(height: 12),
+          _sectionCard(
+            icon: Icons.warning_amber_rounded,
+            title: 'Zone sensible',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Supprimer le compte efface le profil, les amis, les demandes et les tokens push.',
+                  style: TextStyle(color: Color(0xFF4B5563)),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: <Widget>[
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/change-password'),
+                        icon: const Icon(Icons.password_outlined),
+                        label: const Text('Changer mon mot de passe'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed:
+                            _deletingAccount ? null : _openDeleteAccountDialog,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFB91C1C),
+                          side: const BorderSide(color: Color(0xFFB91C1C)),
                         ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _outgoingRequests
-                              .map(
-                                (request) => Chip(
-                                  label: Text('@${request.username}'),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
+                        icon: const Icon(Icons.delete_forever_outlined),
+                        label: const Text('Supprimer mon compte'),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                _sectionCard(
-                  icon: Icons.block_outlined,
-                  title: 'Personnes bloquees',
-                  child: _blockedUsers.isEmpty
-                      ? const Text(
-                          'Aucune personne bloquee.',
-                          style: TextStyle(color: Color(0xFF6B7280)),
-                        )
-                      : Column(
-                          children: _blockedUsers.map((username) {
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                '@$username',
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFriendsTab() {
+    return ListView(
+      key: const ValueKey<String>('friends_tab_list'),
+      children: <Widget>[
+        _sectionCard(
+          icon: Icons.people_alt_outlined,
+          title: 'Amis et demandes',
+          trailing: FilledButton.icon(
+            onPressed: _openAddFriendDialog,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Ajouter'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                '${_friends.length} ami(s) • ${_incomingRequests.length} demande(s) reçue(s)',
+                style: const TextStyle(
+                  color: Color(0xFF374151),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (_friends.isNotEmpty) ...<Widget>[
+                const Text(
+                  'Mes amis',
+                  style: TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ..._friends.map((friend) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(Icons.person, color: Color(0xFF4B5563)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                friend.displayName,
                                 style: const TextStyle(
                                   color: Color(0xFF111827),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              trailing: OutlinedButton(
-                                onPressed: () => _unblockUser(username),
-                                child: const Text('Debloquer'),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                ),
-                const SizedBox(height: 12),
-                _sectionCard(
-                  icon: Icons.meeting_room_outlined,
-                  title: 'Salons ou je suis hote',
-                  child: _hostRooms.isEmpty
-                      ? const Text(
-                          'Aucun salon hote enregistre.',
-                          style: TextStyle(color: Color(0xFF6B7280)),
-                        )
-                      : Column(
-                          children: _hostRooms.map((room) {
-                            final statusLabel =
-                                _statusLabelForRoom(room.roomCode);
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: const Color(0xFFE5E7EB)),
-                              ),
-                              child: Row(
-                                children: <Widget>[
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    color: Color(0xFFF59E0B),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          room.roomCode,
-                                          style: const TextStyle(
-                                            color: Color(0xFF111827),
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.3,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Ajoute le ${_formatDate(room.joinedAt)}',
-                                          style: const TextStyle(
-                                            color: Color(0xFF4B5563),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Chip(label: Text(statusLabel)),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                ),
-                if (isLoggedIn) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _sectionCard(
-                    icon: Icons.warning_amber_rounded,
-                    title: 'Zone sensible',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const Text(
-                          'Supprimer le compte efface le profil, les amis, les demandes et les tokens push.',
-                          style: TextStyle(color: Color(0xFF4B5563)),
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.end,
-                            children: <Widget>[
-                              OutlinedButton.icon(
-                                onPressed: () => context.go('/change-password'),
-                                icon: const Icon(Icons.password_outlined),
-                                label: const Text('Changer mon mot de passe'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _deletingAccount
-                                    ? null
-                                    : _openDeleteAccountDialog,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFB91C1C),
-                                  side: const BorderSide(
-                                      color: Color(0xFFB91C1C)),
+                              Text(
+                                '@${friend.username}',
+                                style: const TextStyle(
+                                  color: Color(0xFF4B5563),
                                 ),
-                                icon: const Icon(Icons.delete_forever_outlined),
-                                label: const Text('Supprimer mon compte'),
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  );
+                }),
+                const SizedBox(height: 10),
               ],
-            ),
+              if (_incomingRequests.isEmpty)
+                const Text(
+                  'Aucune demande reçue pour le moment.',
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                )
+              else
+                ..._incomingRequests.map((request) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                request.displayName,
+                                style: const TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '@${request.username}',
+                                style: const TextStyle(
+                                  color: Color(0xFF4B5563),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              _declineIncomingRequest(request.username),
+                          child: const Text('Refuser'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              _acceptIncomingRequest(request.username),
+                          child: const Text('Accepter'),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              if (_outgoingRequests.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                const Text(
+                  'Demandes envoyées',
+                  style: TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _outgoingRequests
+                      .map((request) =>
+                          Chip(label: Text('@${request.username}')))
+                      .toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBlockedTab() {
+    return ListView(
+      key: const ValueKey<String>('blocked_tab_list'),
+      children: <Widget>[
+        _sectionCard(
+          icon: Icons.block_outlined,
+          title: 'Personnes bloquées',
+          child: _blockedUsers.isEmpty
+              ? const Text(
+                  'Aucune personne bloquée.',
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                )
+              : Column(
+                  children: _blockedUsers.map((username) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '@$username',
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      trailing: OutlinedButton(
+                        onPressed: () => _unblockUser(username),
+                        child: const Text('Débloquer'),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
     );
   }
 
@@ -1036,9 +1314,16 @@ class _MultiplayerProfileSpaceScreenState
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: Colors.white.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(

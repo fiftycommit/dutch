@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -119,6 +121,16 @@ class AppRouter {
     return _defaultSafeBg;
   }
 
+  static Page<void> _adaptivePage({
+    required GoRouterState state,
+    required Widget child,
+  }) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      return CupertinoPage<void>(key: state.pageKey, child: child);
+    }
+    return MaterialPage<void>(key: state.pageKey, child: child);
+  }
+
   static GoRouter createRouter(BuildContext context) {
     final router = GoRouter(
       navigatorKey: _rootNavigatorKey,
@@ -128,7 +140,8 @@ class AppRouter {
         // ShellRoute pour envelopper toutes les pages avec SelectionArea
         // (nécessite d'être à l'intérieur du Navigator pour avoir accès à l'Overlay)
         ShellRoute(
-          builder: (context, state, child) => SelectionArea(child: child),
+          builder: (context, state, child) =>
+              kIsWeb ? SelectionArea(child: child) : child,
           routes: [
             // ============ ÉCRAN DE CHARGEMENT ============
             GoRoute(
@@ -141,15 +154,23 @@ class AppRouter {
             GoRoute(
               path: '/',
               name: 'home',
-              pageBuilder: (context, state) => CustomTransitionPage(
-                key: state.pageKey,
-                child: const MainMenuScreen(),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-                transitionDuration: const Duration(milliseconds: 300),
-              ),
+              pageBuilder: (context, state) {
+                if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+                  return CupertinoPage<void>(
+                    key: state.pageKey,
+                    child: const MainMenuScreen(),
+                  );
+                }
+                return CustomTransitionPage(
+                  key: state.pageKey,
+                  child: const MainMenuScreen(),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+                  transitionDuration: const Duration(milliseconds: 300),
+                );
+              },
             ),
 
             // ============ MODE SOLO ============
@@ -228,25 +249,34 @@ class AppRouter {
             GoRoute(
               path: '/login',
               name: 'login',
-              builder: (context, state) => _DeferredScreen(
-                loader: login.loadLibrary,
-                builder: () => login.LoginScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: login.loadLibrary,
+                  builder: () => login.LoginScreen(),
+                ),
               ),
             ),
             GoRoute(
               path: '/register',
               name: 'register',
-              builder: (context, state) => _DeferredScreen(
-                loader: register.loadLibrary,
-                builder: () => register.RegisterScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: register.loadLibrary,
+                  builder: () => register.RegisterScreen(),
+                ),
               ),
             ),
             GoRoute(
               path: '/forgot-password',
               name: 'forgotPassword',
-              builder: (context, state) => _DeferredScreen(
-                loader: forgot_pwd.loadLibrary,
-                builder: () => forgot_pwd.ForgotPasswordScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: forgot_pwd.loadLibrary,
+                  builder: () => forgot_pwd.ForgotPasswordScreen(),
+                ),
               ),
             ),
 
@@ -254,9 +284,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer',
               name: 'multiplayer',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_menu.loadLibrary,
-                builder: () => mp_menu.MultiplayerMenuScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_menu.loadLibrary,
+                  builder: () => mp_menu.MultiplayerMenuScreen(),
+                ),
               ),
             ),
 
@@ -264,9 +297,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/mode-selection',
               name: 'multiplayerModeSelection',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_mode.loadLibrary,
-                builder: () => mp_mode.MultiplayerModeSelectionScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_mode.loadLibrary,
+                  builder: () => mp_mode.MultiplayerModeSelectionScreen(),
+                ),
               ),
             ),
 
@@ -274,9 +310,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/create-selection',
               name: 'createModeSelection',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_create_mode.loadLibrary,
-                builder: () => mp_create_mode.CreateModeSelectionScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_create_mode.loadLibrary,
+                  builder: () => mp_create_mode.CreateModeSelectionScreen(),
+                ),
               ),
             ),
 
@@ -284,9 +323,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/join-selection',
               name: 'joinModeSelection',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_join_mode.loadLibrary,
-                builder: () => mp_join_mode.JoinModeSelectionScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_join_mode.loadLibrary,
+                  builder: () => mp_join_mode.JoinModeSelectionScreen(),
+                ),
               ),
             ),
 
@@ -294,9 +336,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/create-private',
               name: 'createPrivateRoom',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_create_private.loadLibrary,
-                builder: () => mp_create_private.CreatePrivateRoomScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_create_private.loadLibrary,
+                  builder: () => mp_create_private.CreatePrivateRoomScreen(),
+                ),
               ),
             ),
 
@@ -304,9 +349,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/create-public',
               name: 'createPublicRoom',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_create_public.loadLibrary,
-                builder: () => mp_create_public.CreatePublicRoomScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_create_public.loadLibrary,
+                  builder: () => mp_create_public.CreatePublicRoomScreen(),
+                ),
               ),
             ),
 
@@ -314,9 +362,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/join-private',
               name: 'joinPrivateRoom',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_join_private.loadLibrary,
-                builder: () => mp_join_private.JoinPrivateRoomScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_join_private.loadLibrary,
+                  builder: () => mp_join_private.JoinPrivateRoomScreen(),
+                ),
               ),
             ),
 
@@ -324,9 +375,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/matchmaking',
               name: 'publicMatchmaking',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_matchmaking.loadLibrary,
-                builder: () => mp_matchmaking.PublicMatchmakingScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_matchmaking.loadLibrary,
+                  builder: () => mp_matchmaking.PublicMatchmakingScreen(),
+                ),
               ),
             ),
 
@@ -334,9 +388,12 @@ class AppRouter {
             GoRoute(
               path: '/lobby',
               name: 'lobby',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_lobby.loadLibrary,
-                builder: () => mp_lobby.MultiplayerLobbyScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_lobby.loadLibrary,
+                  builder: () => mp_lobby.MultiplayerLobbyScreen(),
+                ),
               ),
             ),
 
@@ -362,31 +419,40 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/memorization',
               name: 'multiplayerMemorization',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_memo.loadLibrary,
-                builder: () => mp_memo.MultiplayerMemorizationScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_memo.loadLibrary,
+                  builder: () => mp_memo.MultiplayerMemorizationScreen(),
+                ),
               ),
             ),
             GoRoute(
               path: '/multiplayer/game',
               name: 'multiplayerGame',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_game.loadLibrary,
-                builder: () => mp_game.MultiplayerGameScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_game.loadLibrary,
+                  builder: () => mp_game.MultiplayerGameScreen(),
+                ),
               ),
             ),
             GoRoute(
               path: '/multiplayer/results',
               name: 'multiplayerResults',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final gameProvider = Provider.of<MultiplayerGameProvider>(
                     context,
                     listen: false);
-                return _DeferredScreen(
-                  loader: mp_results.loadLibrary,
-                  builder: () => mp_results.MultiplayerResultsScreen(
-                    gameState: gameProvider.gameState!,
-                    localPlayerId: gameProvider.playerId,
+                return _adaptivePage(
+                  state: state,
+                  child: _DeferredScreen(
+                    loader: mp_results.loadLibrary,
+                    builder: () => mp_results.MultiplayerResultsScreen(
+                      gameState: gameProvider.gameState!,
+                      localPlayerId: gameProvider.playerId,
+                    ),
                   ),
                 );
               },
@@ -394,9 +460,12 @@ class AppRouter {
             GoRoute(
               path: '/multiplayer/dutch-reveal',
               name: 'multiplayerDutchReveal',
-              builder: (context, state) => _DeferredScreen(
-                loader: mp_dutch.loadLibrary,
-                builder: () => mp_dutch.MultiplayerDutchRevealScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: mp_dutch.loadLibrary,
+                  builder: () => mp_dutch.MultiplayerDutchRevealScreen(),
+                ),
               ),
             ),
           ],

@@ -33,6 +33,8 @@ Future<void> main(List<String> args) async {
       'inspectLosses=${config.inspectLosses} totalPlayers=${config.totalPlayers} '
       'shuffleSeats=${config.shuffleSeats} '
       'moiVsPlatinumDuel=${config.moiVsPlatinumDuel} '
+      'duelMoiBehavior=${config.duelMoiBehavior.name} '
+      'duelPlatinumBehavior=${config.duelPlatinumBehavior.name} '
       'dealMode=${config.dealMode.name}',
     );
 
@@ -47,7 +49,8 @@ Future<void> main(List<String> args) async {
       'Exemple: dart run tool/bot_ladder_cli.dart '
       '--games=120 --bronze=3 --silver=3 --gold=3 --platinum=3 --deal-mode=round\n'
       'Duel MOI vs Platine: dart run tool/bot_ladder_cli.dart '
-      '--moi-vs-platinum=true --games=200 --shuffle-seats=true',
+      '--moi-vs-platinum=true --games=200 --shuffle-seats=true '
+      '--duel-plat-behavior=balanced|aggressive|fast|moi',
     );
     exitCode = 64;
   }
@@ -60,6 +63,8 @@ class _CliConfig {
   final int inspectLosses;
   final bool shuffleSeats;
   final bool moiVsPlatinumDuel;
+  final BotBehavior duelMoiBehavior;
+  final BotBehavior duelPlatinumBehavior;
   final DealMode dealMode;
   final Map<BotSkillLevel, int> skillCounts;
 
@@ -70,6 +75,8 @@ class _CliConfig {
     required this.inspectLosses,
     required this.shuffleSeats,
     required this.moiVsPlatinumDuel,
+    required this.duelMoiBehavior,
+    required this.duelPlatinumBehavior,
     required this.dealMode,
     required this.skillCounts,
   });
@@ -77,7 +84,9 @@ class _CliConfig {
   int get totalPlayers => skillCounts.values.fold(0, (a, b) => a + b);
 
   String get mixLabel {
-    if (moiVsPlatinumDuel) return 'MOI1 P1';
+    if (moiVsPlatinumDuel) {
+      return 'MOI(${duelMoiBehavior.name}) vs P(${duelPlatinumBehavior.name})';
+    }
     final b = skillCounts[BotSkillLevel.bronze] ?? 0;
     final s = skillCounts[BotSkillLevel.silver] ?? 0;
     final g = skillCounts[BotSkillLevel.gold] ?? 0;
@@ -93,6 +102,14 @@ class _CliConfig {
     }
 
     final moiVsPlatinumDuel = _readBoolArg(args, '--moi-vs-platinum', false);
+    final duelMoiBehavior = _parseBotBehavior(
+      _readArgValue(args, '--duel-moi-behavior') ?? 'moi',
+      argName: '--duel-moi-behavior',
+    );
+    final duelPlatinumBehavior = _parseBotBehavior(
+      _readArgValue(args, '--duel-plat-behavior') ?? 'balanced',
+      argName: '--duel-plat-behavior',
+    );
 
     final skillCounts = moiVsPlatinumDuel
         ? <BotSkillLevel, int>{
@@ -120,6 +137,8 @@ class _CliConfig {
       inspectLosses: readInt('--inspect-losses', 0).clamp(0, 20),
       shuffleSeats: _readBoolArg(args, '--shuffle-seats', false),
       moiVsPlatinumDuel: moiVsPlatinumDuel,
+      duelMoiBehavior: duelMoiBehavior,
+      duelPlatinumBehavior: duelPlatinumBehavior,
       dealMode: _parseDealMode(_readArgValue(args, '--deal-mode') ?? 'round'),
       skillCounts: skillCounts,
     );
@@ -169,6 +188,26 @@ DealMode _parseDealMode(String raw) {
       throw FormatException(
         'deal-mode inconnu "$raw". '
         'Valeurs: block, round, random, disjoint',
+      );
+  }
+}
+
+BotBehavior _parseBotBehavior(
+  String raw, {
+  required String argName,
+}) {
+  switch (raw.trim().toLowerCase()) {
+    case 'balanced':
+      return BotBehavior.balanced;
+    case 'aggressive':
+      return BotBehavior.aggressive;
+    case 'fast':
+      return BotBehavior.fast;
+    case 'moi':
+      return BotBehavior.moi;
+    default:
+      throw FormatException(
+        '$argName invalide "$raw". Valeurs: balanced, aggressive, fast, moi',
       );
   }
 }
@@ -284,15 +323,15 @@ class _LadderSimulator {
   List<Player> _createLadderPlayers(int gameIndex) {
     if (config.moiVsPlatinumDuel) {
       final duelSlots = <_DuelSeatSlot>[
-        const _DuelSeatSlot(
+        _DuelSeatSlot(
           idSuffix: 'moi',
           name: 'MOI',
-          behavior: BotBehavior.moi,
+          behavior: config.duelMoiBehavior,
         ),
-        const _DuelSeatSlot(
+        _DuelSeatSlot(
           idSuffix: 'platine',
           name: 'PLATINE',
-          behavior: BotBehavior.balanced,
+          behavior: config.duelPlatinumBehavior,
         ),
       ];
 

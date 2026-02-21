@@ -9,7 +9,9 @@ import 'bot_config.dart';
 import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
 import 'bot_dutch_strategy.dart';
+import 'duel_tuning.dart';
 import 'human_threat_tracker.dart';
+import 'moi_ml_profile.dart';
 
 /// Stratégie de gestion des cartes
 /// Principe GRASP: Information Expert - Décide quoi faire avec les cartes
@@ -254,13 +256,60 @@ class BotCardStrategy {
     }
 
     bool isBadDraw = false;
-    final requiredImprovement = _requiredImprovement(
+    final baseRequiredImprovement = _requiredImprovement(
       decisionProfile,
       phase,
       isTenseEndgame,
       personality,
     );
+    final deckPressureBias = _deckImprovementBias(tableConclusions);
+    final requiredImprovement =
+        (baseRequiredImprovement + deckPressureBias).clamp(0, 4);
     final improvement = worstKnownValue - drawnVal;
+
+    final isMoiMl = bot.botBehavior == BotBehavior.moi && MoiMlProfile.enabled;
+    if (isMoiMl &&
+        decisionProfile.tier != _CardTier.bronze &&
+        worstKnownIdx != -1) {
+      final preTurnScore = bot.calculateScore();
+      final startHandScore = BotDutchStrategy.discardTracker.getRoundStartScore(
+        bot.id,
+        fallback: preTurnScore,
+      );
+      final powersUsed = BotDutchStrategy.discardTracker.getPowerUseCount(
+        bot.id,
+      );
+      final isPowerCard = MoiMlProfile.isPowerCardValue(drawn.value);
+
+      final keepProbability = MoiMlProfile.predictKeepProbability(
+        drawnPoints: drawnVal,
+        improvement: improvement,
+        preTurnScore: preTurnScore,
+        startHandScore: startHandScore,
+        handSize: bot.hand.length,
+        turnIndex: tableConclusions.myTurnsPlayed,
+        powersUsed: powersUsed,
+        isPowerCard: isPowerCard,
+      );
+
+      if (keepProbability >= MoiMlProfile.keepThreshold) {
+        final worsenTolerance = MoiMlProfile.softWorsenTolerance(
+          startHandScore: startHandScore,
+          powersUsed: powersUsed,
+          isPowerCard: isPowerCard,
+        );
+        if (improvement >= -worsenTolerance) {
+          _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+          bot.consecutiveBadDraws = 0;
+          return;
+        }
+      } else if (keepProbability <= MoiMlProfile.forceDiscardThreshold &&
+          improvement <= 1) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
+        return;
+      }
+    }
 
     // Bronze "glouton": court-terme uniquement.
     // Il garde seulement si l'amélioration immédiate est stricte.
@@ -284,6 +333,17 @@ class BotCardStrategy {
             drawnVal,
             worstKnownValue,
             decisionProfile,
+          )) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else if (worstKnownIdx != -1 &&
+          _shouldKeepForDeckPressure(
+            gs,
+            bot,
+            drawn,
+            worstKnownValue: worstKnownValue,
+            tableConclusions: tableConclusions,
+            profile: decisionProfile,
           )) {
         _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
         bot.consecutiveBadDraws = 0;
@@ -313,6 +373,17 @@ class BotCardStrategy {
         )) {
       // En table tendue, mieux vaut parfois garder une carte moyenne
       // plutôt que d'offrir une carte "matchable" à l'humain.
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
+    } else if (worstKnownIdx != -1 &&
+        _shouldKeepForDeckPressure(
+          gs,
+          bot,
+          drawn,
+          worstKnownValue: worstKnownValue,
+          tableConclusions: tableConclusions,
+          profile: decisionProfile,
+        )) {
       _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
       bot.consecutiveBadDraws = 0;
     } else {
@@ -386,13 +457,19 @@ class BotCardStrategy {
     final replaceGain =
         worstKnownValue > drawn.points ? worstKnownValue - drawn.points : 0;
     final tempoGain = drawn.points + (tableConclusions.myCards <= 2 ? 2 : 1);
-    final chainRisk = BotMemoryManager.getMatchProbability(gs, bot, drawn.value)
+    final knownOwned = _countKnownValue(bot, drawn.value);
+    final chainRisk = BotDutchStrategy.discardTracker
+        .estimateFutureMatchProbability(
+          drawn.value,
+          knownOwned: knownOwned,
+        )
         .clamp(0.0, 1.0);
 
     final forceTempo = tableConclusions.isTenseEndgame ||
         phase == BotGamePhase.endgame ||
         tableConclusions.minOpponentCards <= 2 ||
         tableConclusions.isHumanDangerous ||
+        tableConclusions.wasRecentlyTargeted ||
         tableConclusions.myCards <= 3;
 
     if (onlyWhenForceTempo && !forceTempo) return false;
@@ -487,6 +564,10 @@ class BotCardStrategy {
         tableConclusions.isHumanDangerous;
     final isMoiStyle = bot.botBehavior == BotBehavior.moi;
     final duel = gs.players.length == 2;
+    final duelOpponent =
+        duel ? gs.players.where((p) => p.id != bot.id).firstOrNull : null;
+    final duelAgainstHumanOrMoi = duelOpponent != null &&
+        (duelOpponent.isHuman || duelOpponent.botBehavior == BotBehavior.moi);
     final knowsAllCards = !hasUnknown;
     bool shouldTrigger = false;
 
@@ -500,6 +581,10 @@ class BotCardStrategy {
       }
     } else if (profile.tier == _CardTier.platinum) {
       if (duel && hasUnknown) {
+        shouldTrigger = true;
+      } else if (duelAgainstHumanOrMoi &&
+          duel &&
+          (hasUnknown || cardGap >= 0)) {
         shouldTrigger = true;
       } else if (racePressure && (hasKnownHighPayload || hasUnknown)) {
         shouldTrigger = true;
@@ -558,6 +643,11 @@ class BotCardStrategy {
     final opponentSummaries = <String>[];
 
     for (final opponent in opponents) {
+      tracker.observePublicMemorizedIndices(
+        opponent.id,
+        opponent.memorizedCardIndices,
+        opponent.hand.length,
+      );
       final decisions = tracker.getObservedDecisionCount(opponent.id);
       if (decisions <= 0) {
         opponentSummaries.add('${opponent.name}: no-observation');
@@ -582,9 +672,31 @@ class BotCardStrategy {
       final style = tracker.estimateOpponentStyle(opponent.id);
       final estimate =
           tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
+      final indexIntel =
+          tracker.estimateOpponentIndexIntel(opponent.id, opponent.hand.length);
+      final powerUses = tracker.getPowerUseCount(opponent.id);
+      final recentPowerUses = tracker.getRecentPowerUseCountInTurns(
+        opponent.id,
+        gs.turnCount,
+        windowTurns: 4,
+      );
+      final antiHumanLikeOpponent =
+          opponent.isHuman || opponent.botBehavior == BotBehavior.moi;
+      final targetedRecently = opponent.lastTargetedByPowerTurn >= 0 &&
+          (gs.turnCount - opponent.lastTargetedByPowerTurn) <= 2;
 
       int opponentThreshold = threshold;
       final adjustments = <String>[];
+
+      if (antiHumanLikeOpponent) {
+        opponentThreshold -= DuelTuning.duelAntiHumanLikeThresholdDrop;
+        adjustments
+            .add('antiHumanLike:-${DuelTuning.duelAntiHumanLikeThresholdDrop}');
+      }
+      if (targetedRecently) {
+        opponentThreshold -= 1;
+        adjustments.add('targetedRecently:-1');
+      }
 
       if (recentLowInstant || lowInstantRate >= 0.45) {
         final inferred = (avgInstant + 1.0).round().clamp(3, 8);
@@ -609,7 +721,24 @@ class BotCardStrategy {
         adjustments.add('optimizer:-1');
       }
 
-      final finalOpponentThreshold = opponentThreshold.clamp(3, 10);
+      final intelIndicatesStrongHand = indexIntel.confidence >= 0.22 &&
+          indexIntel.estimatedScoreCeiling <= (opponent.hand.length * 5.2);
+      if (intelIndicatesStrongHand) {
+        opponentThreshold =
+            min(opponentThreshold, DuelTuning.duelIntelStrongCapThreshold);
+        adjustments
+            .add('indexIntel-><=${DuelTuning.duelIntelStrongCapThreshold}');
+      }
+      if (indexIntel.startKnownRatio >= 0.45) {
+        opponentThreshold -= 1;
+        adjustments.add('startKnown:-1');
+      }
+      if (powerUses >= 3 || recentPowerUses >= 2) {
+        opponentThreshold -= 1;
+        adjustments.add('powerPressure:-1');
+      }
+
+      final finalOpponentThreshold = opponentThreshold.clamp(2, 10);
       threshold = min(threshold, opponentThreshold);
       opponentSummaries.add(
         '${opponent.name}: cards=${opponent.hand.length} dec=$decisions '
@@ -620,6 +749,9 @@ class BotCardStrategy {
         'avgEx=${avgExchange.toStringAsFixed(2)} '
         'opt=${style.optimization.toStringAsFixed(2)}/${style.confidence.toStringAsFixed(2)} '
         'est=${estimate.estimatedScore.toStringAsFixed(1)}/${estimate.confidence.toStringAsFixed(2)} '
+        'idxIntel=${indexIntel.estimatedScoreCeiling.toStringAsFixed(1)}/${indexIntel.confidence.toStringAsFixed(2)} '
+        'startKnown=${indexIntel.startKnownRatio.toStringAsFixed(2)} '
+        'pwr=$powerUses/$recentPowerUses '
         '-> th=$finalOpponentThreshold '
         '[${adjustments.isEmpty ? 'none' : adjustments.join(', ')}]',
       );
@@ -627,7 +759,7 @@ class BotCardStrategy {
 
     return _ValetPayloadThresholdTrace(
       baseThreshold: baseThreshold,
-      finalThreshold: threshold.clamp(3, 10),
+      finalThreshold: threshold.clamp(2, 10),
       opponentSummaries: opponentSummaries,
     );
   }
@@ -711,6 +843,8 @@ class BotCardStrategy {
     BotDifficulty difficulty,
     List<int> unknownIndices,
   ) {
+    final table = _buildTableConclusions(gs, bot, HumanThreatTracker());
+
     // Argent (contextuel simple):
     // - 7: remplacer une connue >7, sinon défausser pour déclencher le pouvoir.
     // - sinon: remplacer la 1ère inconnue, sinon améliorer la pire connue.
@@ -777,6 +911,17 @@ class BotCardStrategy {
             drawnVal,
             worstKnownValue,
             _decisionProfileForDifficulty(difficulty),
+          )) {
+        _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+        bot.consecutiveBadDraws = 0;
+      } else if (worstKnownIdx != -1 &&
+          _shouldKeepForDeckPressure(
+            gs,
+            bot,
+            drawn,
+            worstKnownValue: worstKnownValue,
+            tableConclusions: table,
+            profile: _decisionProfileForDifficulty(difficulty),
           )) {
         _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
         bot.consecutiveBadDraws = 0;
@@ -926,6 +1071,17 @@ class BotCardStrategy {
         )) {
       _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
       bot.consecutiveBadDraws = 0;
+    } else if (worstKnownIdx != -1 &&
+        _shouldKeepForDeckPressure(
+          gs,
+          bot,
+          drawn,
+          worstKnownValue: worstKnownValue,
+          tableConclusions: table,
+          profile: _decisionProfileForDifficulty(difficulty),
+        )) {
+      _replaceCard(gs, bot, worstKnownIdx, drawn, difficulty);
+      bot.consecutiveBadDraws = 0;
     } else {
       GameLogic.discardDrawnCard(gs);
       bot.consecutiveBadDraws++;
@@ -983,11 +1139,14 @@ class BotCardStrategy {
     final playersCount = gs.players.isEmpty ? 1 : gs.players.length;
     final myTurnsPlayed = gs.actionCount ~/ playersCount;
     final isLateGame = myTurnsPlayed >= 7;
+    final wasRecentlyTargeted = bot.lastTargetedByPowerTurn >= 0 &&
+        (gs.turnCount - bot.lastTargetedByPowerTurn) <= 2;
 
     final isTenseEndgame = (myCards <= 2 && avgOthersCards <= 3) ||
         minOthersCards <= 2 ||
         isLateGame ||
-        isHumanDangerous;
+        isHumanDangerous ||
+        wasRecentlyTargeted;
 
     return _CardTableConclusions(
       isHumanDangerous: isHumanDangerous,
@@ -996,6 +1155,7 @@ class BotCardStrategy {
       minOpponentCards: minOthersCards,
       avgOpponentCards: avgOthersCards,
       myCards: myCards,
+      wasRecentlyTargeted: wasRecentlyTargeted,
     );
   }
 
@@ -1081,6 +1241,69 @@ class BotCardStrategy {
     }
 
     return required.clamp(0, 4);
+  }
+
+  static int _deckImprovementBias(_CardTableConclusions tableConclusions) {
+    final tracker = BotDutchStrategy.discardTracker;
+    final lowDrawChance = tracker.probabilityDrawAtOrBelow(4);
+    final expectedPoints = tracker.expectedDrawnPoints();
+
+    int bias = 0;
+    if (lowDrawChance <= 0.26 || expectedPoints >= 7.2) {
+      // Deck sec: accepter des gains plus faibles.
+      bias -= 1;
+    } else if (lowDrawChance >= 0.44 && expectedPoints <= 5.8) {
+      // Deck riche: on peut être plus sélectif.
+      bias += 1;
+    }
+    if (tableConclusions.wasRecentlyTargeted) {
+      // Sous pression, éviter de sur-attendre une meilleure pioche.
+      bias -= 1;
+    }
+    return bias;
+  }
+
+  static bool _shouldKeepForDeckPressure(
+    GameState gs,
+    Player bot,
+    PlayingCard drawn, {
+    required int worstKnownValue,
+    required _CardTableConclusions tableConclusions,
+    required _CardDecisionProfile profile,
+  }) {
+    if (worstKnownValue < 0) return false;
+
+    final tracker = BotDutchStrategy.discardTracker;
+    final lowDrawChance = tracker.probabilityDrawAtOrBelow(4);
+    final expectedPoints = tracker.expectedDrawnPoints();
+    final remainingSameValue = tracker.remainingCountByValue(drawn.value);
+    final isPowerCard = MoiMlProfile.isPowerCardValue(drawn.value);
+
+    int allowedWorsening = 0;
+    if (lowDrawChance <= 0.28) allowedWorsening += 1;
+    if (expectedPoints >= 7.0) allowedWorsening += 1;
+    if (tableConclusions.wasRecentlyTargeted) allowedWorsening += 1;
+    if (profile.tier == _CardTier.platinum &&
+        tableConclusions.minOpponentCards <= 2) {
+      allowedWorsening += 1;
+    }
+    if (isPowerCard && remainingSameValue <= 1) {
+      allowedWorsening += 1;
+    }
+
+    final worsening = drawn.points - worstKnownValue;
+    if (worsening <= 0) return true;
+    if (!isPowerCard && drawn.points >= 11) return false;
+    return worsening <= allowedWorsening;
+  }
+
+  static int _countKnownValue(Player bot, String value) {
+    int count = 0;
+    for (final card in bot.mentalMap) {
+      if (card == null) continue;
+      if (card.value == value) count++;
+    }
+    return count;
   }
 
   static bool _shouldReplaceKnownCard(
@@ -1298,6 +1521,20 @@ class BotCardStrategy {
         break;
     }
 
+    final isPlatinumTier =
+        _tierFromDifficulty(difficulty) == _CardTier.platinum;
+    final duelOpponent =
+        gameState.players.where((p) => p.id != bot.id).firstOrNull;
+    final duelAgainstHumanOrMoi = gameState.players.length == 2 &&
+        duelOpponent != null &&
+        (duelOpponent.isHuman || duelOpponent.botBehavior == BotBehavior.moi);
+    if (isPlatinumTier && duelAgainstHumanOrMoi) {
+      matchChance += DuelTuning.platinumDuelMatchBonus;
+      if (phase == BotGamePhase.endgame) {
+        matchChance += DuelTuning.platinumDuelMatchEndgameBonus;
+      }
+    }
+
     // AMÉLIORATION : Bonus plus élevé pour beaucoup de cartes
     if (bot.hand.length >= 5) {
       matchChance += 0.25; // Augmenté de 0.15 à 0.25
@@ -1472,6 +1709,7 @@ class _CardTableConclusions {
   final int minOpponentCards;
   final double avgOpponentCards;
   final int myCards;
+  final bool wasRecentlyTargeted;
 
   const _CardTableConclusions({
     required this.isHumanDangerous,
@@ -1480,6 +1718,7 @@ class _CardTableConclusions {
     required this.minOpponentCards,
     required this.avgOpponentCards,
     required this.myCards,
+    required this.wasRecentlyTargeted,
   });
 }
 
