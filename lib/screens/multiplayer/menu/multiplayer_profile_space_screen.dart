@@ -3,11 +3,9 @@ import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
-import 'package:dutch_game/screens/multiplayer/ui/multiplayer_motion.dart';
-import 'package:dutch_game/screens/multiplayer/ui/multiplayer_ui_tokens.dart';
-import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 enum MultiplayerProfileTab { profile, friends, blocked }
@@ -644,44 +642,85 @@ class _MultiplayerProfileSpaceScreenState
     return '$day/$month/$year';
   }
 
+  Future<void> _handleBack() async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!didPop && mounted) {
+      context.go('/multiplayer');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLoggedIn = context.watch<AuthProvider>().isLoggedIn;
+    final themed = Theme.of(context).copyWith(
+      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+    );
     return Scaffold(
-      body: Container(
-        decoration: MultiplayerUiTokens.pageBg,
-        child: SafeArea(
-          child: Column(
-            children: <Widget>[
-              _buildTopHeader(),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: tabContentTransition(
-                          child: KeyedSubtree(
-                            key: ValueKey<MultiplayerProfileTab>(_activeTab),
-                            child: _buildTabContent(isLoggedIn),
-                          ),
-                        ),
-                      ),
-              ),
-            ],
+      body: Theme(
+        data: themed,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color(0xFFEEF2FF),
+                Color(0xFFF3E8FF),
+                Color(0xFFEFF6FF),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final spec = _ProfileLayoutSpec.from(context, constraints);
+                return Column(
+                  children: <Widget>[
+                    _buildTopHeader(spec),
+                    Expanded(
+                      child: _loading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF6366F1),
+                              ),
+                            )
+                          : Padding(
+                              padding: EdgeInsets.all(spec.contentPadding),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 170),
+                                child: KeyedSubtree(
+                                  key: ValueKey<MultiplayerProfileTab>(
+                                    _activeTab,
+                                  ),
+                                  child: _buildTabContent(isLoggedIn, spec),
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTopHeader() {
+  Widget _buildTopHeader(_ProfileLayoutSpec spec) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        spec.headerHorizontalPadding,
+        spec.headerTopPadding,
+        spec.headerHorizontalPadding,
+        spec.headerBottomPadding,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
-            AppColors.primary.withValues(alpha: 0.95),
-            AppColors.primaryDark.withValues(alpha: 0.95),
+            const Color(0xFFFBBF24).withValues(alpha: 0.98),
+            const Color(0xFFF97316).withValues(alpha: 0.98),
           ],
         ),
       ),
@@ -689,25 +728,36 @@ class _MultiplayerProfileSpaceScreenState
         children: <Widget>[
           Row(
             children: <Widget>[
-              IconButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(spec.backRadius),
+                  onTap: _handleBack,
+                  child: Padding(
+                    padding: EdgeInsets.all(spec.backPadding),
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: spec.backIconSize,
+                    ),
+                  ),
+                ),
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Mon Profil',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: spec.titleSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const SizedBox(width: 48),
+              SizedBox(width: spec.backSlotWidth),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: spec.tabsTopGap),
           Row(
             children: <Widget>[
               Expanded(
@@ -715,6 +765,7 @@ class _MultiplayerProfileSpaceScreenState
                   icon: Icons.person_outline,
                   label: 'Profil',
                   tab: MultiplayerProfileTab.profile,
+                  spec: spec,
                 ),
               ),
               Expanded(
@@ -722,6 +773,7 @@ class _MultiplayerProfileSpaceScreenState
                   icon: Icons.group_outlined,
                   label: 'Amis',
                   tab: MultiplayerProfileTab.friends,
+                  spec: spec,
                 ),
               ),
               Expanded(
@@ -729,6 +781,7 @@ class _MultiplayerProfileSpaceScreenState
                   icon: Icons.block_outlined,
                   label: 'Bloqués',
                   tab: MultiplayerProfileTab.blocked,
+                  spec: spec,
                 ),
               ),
             ],
@@ -742,6 +795,7 @@ class _MultiplayerProfileSpaceScreenState
     required IconData icon,
     required String label,
     required MultiplayerProfileTab tab,
+    required _ProfileLayoutSpec spec,
   }) {
     final selected = _activeTab == tab;
     return InkWell(
@@ -750,13 +804,13 @@ class _MultiplayerProfileSpaceScreenState
         setState(() => _activeTab = tab);
       },
       child: AnimatedContainer(
-        duration: MultiplayerUiTokens.motionFast,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(vertical: spec.tabVerticalPadding),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
               color: selected ? Colors.white : Colors.transparent,
-              width: 2.2,
+              width: spec.tabIndicatorWidth,
             ),
           ),
         ),
@@ -765,10 +819,11 @@ class _MultiplayerProfileSpaceScreenState
           children: <Widget>[
             Icon(
               icon,
+              size: spec.tabIconSize,
               color:
                   selected ? Colors.white : Colors.white.withValues(alpha: 0.7),
             ),
-            const SizedBox(height: 3),
+            SizedBox(height: spec.tabLabelGap),
             Text(
               label,
               style: TextStyle(
@@ -776,7 +831,7 @@ class _MultiplayerProfileSpaceScreenState
                     ? Colors.white
                     : Colors.white.withValues(alpha: 0.75),
                 fontWeight: FontWeight.w700,
-                fontSize: 14,
+                fontSize: spec.tabLabelSize,
               ),
             ),
           ],
@@ -785,571 +840,1020 @@ class _MultiplayerProfileSpaceScreenState
     );
   }
 
-  Widget _buildTabContent(bool isLoggedIn) {
+  Widget _buildTabContent(bool isLoggedIn, _ProfileLayoutSpec spec) {
     return switch (_activeTab) {
-      MultiplayerProfileTab.profile => _buildProfileTab(isLoggedIn),
-      MultiplayerProfileTab.friends => _buildFriendsTab(),
-      MultiplayerProfileTab.blocked => _buildBlockedTab(),
+      MultiplayerProfileTab.profile => _buildProfileTab(isLoggedIn, spec),
+      MultiplayerProfileTab.friends => _buildFriendsTab(spec),
+      MultiplayerProfileTab.blocked => _buildBlockedTab(spec),
     };
   }
 
-  Widget _buildProfileTab(bool isLoggedIn) {
-    return ListView(
-      key: const ValueKey<String>('profile_tab_list'),
-      children: <Widget>[
-        _sectionCard(
-          icon: Icons.badge_outlined,
-          title: 'Profil',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildProfileTab(bool isLoggedIn, _ProfileLayoutSpec spec) {
+    return SingleChildScrollView(
+      key: const ValueKey<String>('profile_tab_scroll'),
+      child: Column(
+        children: <Widget>[
+          _buildProfileIdentityCard(spec),
+          SizedBox(height: spec.sectionGap),
+          _buildSecurityCard(isLoggedIn, spec),
+          if (_hostRooms.isNotEmpty) ...<Widget>[
+            SizedBox(height: spec.sectionGap),
+            _buildHostRoomsCard(spec),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileIdentityCard(_ProfileLayoutSpec spec) {
+    final pseudo = _pseudoController.text.trim();
+    final username = _usernameController.text.trim();
+    final avatarLabel =
+        (pseudo.isEmpty ? 'J' : pseudo.characters.first).toUpperCase();
+
+    return _surfaceCard(
+      spec: spec,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: AppColors.primaryDark,
-                    child: Text(
-                      (_pseudoController.text.isEmpty
-                              ? 'J'
-                              : _pseudoController.text.characters.first)
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
+              Container(
+                width: spec.avatarSize,
+                height: spec.avatarSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: <Color>[
+                      const Color(0xFFFBBF24).withValues(alpha: 0.98),
+                      const Color(0xFFF97316).withValues(alpha: 0.98),
+                    ],
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  avatarLabel,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: spec.avatarTextSize,
+                  ),
+                ),
+              ),
+              SizedBox(width: spec.identityGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      pseudo.isEmpty ? 'Pseudo' : pseudo,
+                      style: TextStyle(
+                        color: const Color(0xFF1E293B),
                         fontWeight: FontWeight.w800,
-                        fontSize: 26,
+                        fontSize: spec.identityTitleSize,
                       ),
                     ),
+                    Text(
+                      '@${username.isEmpty ? 'username' : username}',
+                      style: TextStyle(
+                        color: const Color(0xFF475569),
+                        fontWeight: FontWeight.w700,
+                        fontSize: spec.identitySubtitleSize,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _savingProfile
+                    ? null
+                    : () {
+                        setState(() {
+                          _editingProfile = !_editingProfile;
+                          if (!_editingProfile) {
+                            _pseudoError = null;
+                            _usernameError = null;
+                          }
+                        });
+                      },
+                icon: Icon(
+                  _editingProfile ? Icons.close_rounded : Icons.edit_rounded,
+                  color: const Color(0xFF4F46E5),
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFE4E4F0),
+                ),
+              ),
+            ],
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: !_editingProfile
+                ? const SizedBox(
+                    key: ValueKey<String>('profile_edit_closed'),
+                    height: 0,
+                  )
+                : Padding(
+                    key: const ValueKey<String>('profile_edit_open'),
+                    padding: EdgeInsets.only(top: spec.editTopGap),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _fieldLabel('Pseudo', spec),
+                        SizedBox(height: spec.labelGap),
+                        TextField(
+                          controller: _pseudoController,
+                          onChanged: (_) => _validateLive(),
+                          textCapitalization: TextCapitalization.words,
+                          maxLength: 24,
+                          style: const TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          decoration: _profileInputDecoration(
+                            hintText: 'Ton pseudo',
+                            errorText: _pseudoError,
+                            spec: spec,
+                          ),
+                        ),
+                        SizedBox(height: spec.fieldBlockGap),
+                        _fieldLabel('Nom d\'utilisateur', spec),
+                        SizedBox(height: spec.labelGap),
+                        Row(
+                          children: <Widget>[
+                            const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: Text(
+                                '@',
+                                style: TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _usernameController,
+                                onChanged: (_) => _validateLive(),
+                                textCapitalization: TextCapitalization.none,
+                                maxLength: 20,
+                                style: const TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                decoration: _profileInputDecoration(
+                                  hintText: 'pegga.pig',
+                                  errorText: _usernameError,
+                                  spec: spec,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value:
+                              _profile?.roomInviteNotificationsEnabled ?? false,
+                          onChanged: _toggleInviteNotifications,
+                          title: Text(
+                            'Notifications d\'invitation',
+                            style: TextStyle(
+                              color: const Color(0xFF1E293B),
+                              fontWeight: FontWeight.w700,
+                              fontSize: spec.smallTextSize,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Activer les invitations de salon.',
+                            style: TextStyle(
+                              color: const Color(0xFF64748B),
+                              fontSize: spec.tinyTextSize,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: spec.buttonsTopGap),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _savingProfile
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _editingProfile = false;
+                                          _pseudoError = null;
+                                          _usernameError = null;
+                                        });
+                                      },
+                                style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: spec.buttonVerticalPadding,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Annuler',
+                                  style:
+                                      TextStyle(fontSize: spec.smallTextSize),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: spec.actionsGap),
+                            Expanded(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(spec.buttonRadius),
+                                  gradient: LinearGradient(
+                                    colors: <Color>[
+                                      const Color(0xFFFBBF24)
+                                          .withValues(alpha: 0.98),
+                                      const Color(0xFFF97316)
+                                          .withValues(alpha: 0.98),
+                                    ],
+                                  ),
+                                ),
+                                child: ElevatedButton.icon(
+                                  onPressed:
+                                      _savingProfile ? null : _saveProfile,
+                                  icon: _savingProfile
+                                      ? SizedBox(
+                                          width: spec.loaderSize,
+                                          height: spec.loaderSize,
+                                          child:
+                                              const CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.black,
+                                          ),
+                                        )
+                                      : const Icon(Icons.save_outlined),
+                                  label: Text(
+                                    _savingProfile
+                                        ? 'Enregistrement...'
+                                        : 'Enregistrer',
+                                    style: TextStyle(
+                                      fontSize: spec.smallTextSize,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    elevation: 0,
+                                    backgroundColor: Colors.transparent,
+                                    disabledBackgroundColor: Colors.transparent,
+                                    foregroundColor: Colors.black,
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: spec.buttonVerticalPadding,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        spec.buttonRadius,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSecurityCard(bool isLoggedIn, _ProfileLayoutSpec spec) {
+    return _surfaceCard(
+      spec: spec,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Sécurité',
+            style: TextStyle(
+              color: const Color(0xFF1E293B),
+              fontWeight: FontWeight.w800,
+              fontSize: spec.sectionTitleSize,
+            ),
+          ),
+          SizedBox(height: spec.securityGap),
+          if (!isLoggedIn)
+            Text(
+              'Connecte-toi pour accéder aux actions de sécurité.',
+              style: TextStyle(
+                color: const Color(0xFF64748B),
+                fontSize: spec.smallTextSize,
+              ),
+            )
+          else ...<Widget>[
+            _securityActionTile(
+              spec: spec,
+              icon: Icons.lock_outline_rounded,
+              title: 'Changer le mot de passe',
+              onTap: () => context.go('/change-password'),
+            ),
+            SizedBox(height: spec.securityItemGap),
+            _dangerActionTile(
+              spec: spec,
+              icon: Icons.person_remove_alt_1_rounded,
+              title: 'Supprimer mon compte',
+              subtitle: 'Action irréversible',
+              onTap: _deletingAccount ? null : _openDeleteAccountDialog,
+            ),
+            if (_deletingAccount) ...<Widget>[
+              SizedBox(height: spec.securityItemGap),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHostRoomsCard(_ProfileLayoutSpec spec) {
+    return _surfaceCard(
+      spec: spec,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Salons où je suis hôte',
+            style: TextStyle(
+              color: const Color(0xFF1E293B),
+              fontWeight: FontWeight.w800,
+              fontSize: spec.sectionTitleSize,
+            ),
+          ),
+          SizedBox(height: spec.securityGap),
+          ..._hostRooms.map((room) {
+            final statusLabel = _statusLabelForRoom(room.roomCode);
+            return Container(
+              margin: EdgeInsets.only(bottom: spec.listItemGap),
+              padding: EdgeInsets.all(spec.listItemPadding),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(spec.innerRadius),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.star_rounded, color: Color(0xFFF59E0B)),
+                  SizedBox(width: spec.identityGap),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          _pseudoController.text.isEmpty
-                              ? 'Pseudo'
-                              : _pseudoController.text,
-                          style: const TextStyle(
-                            color: Color(0xFF111827),
+                          room.roomCode,
+                          style: TextStyle(
+                            color: const Color(0xFF111827),
                             fontWeight: FontWeight.w800,
-                            fontSize: 24,
+                            letterSpacing: 1.2,
+                            fontSize: spec.smallTextSize,
                           ),
                         ),
                         Text(
-                          '@${_usernameController.text}',
-                          style: const TextStyle(
-                            color: Color(0xFF4B5563),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
+                          'Ajouté le ${_formatDate(room.joinedAt)}',
+                          style: TextStyle(
+                            color: const Color(0xFF64748B),
+                            fontSize: spec.tinyTextSize,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: _savingProfile
-                        ? null
-                        : () {
-                            setState(() {
-                              _editingProfile = !_editingProfile;
-                              if (!_editingProfile) {
-                                _pseudoError = null;
-                                _usernameError = null;
-                              }
-                            });
-                          },
-                    icon: Icon(
-                      _editingProfile
-                          ? Icons.close_rounded
-                          : Icons.edit_rounded,
-                      color: const Color(0xFF1F2937),
+                  Chip(label: Text(statusLabel)),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFriendsTab(_ProfileLayoutSpec spec) {
+    final hasData = _friends.isNotEmpty ||
+        _incomingRequests.isNotEmpty ||
+        _outgoingRequests.isNotEmpty;
+
+    return SingleChildScrollView(
+      key: const ValueKey<String>('friends_tab_scroll'),
+      child: _surfaceCard(
+        spec: spec,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (!hasData)
+              _buildEmptyFriendsState(spec)
+            else ...<Widget>[
+              Row(
+                children: <Widget>[
+                  Text(
+                    'Amis et demandes',
+                    style: TextStyle(
+                      color: const Color(0xFF1E293B),
+                      fontWeight: FontWeight.w800,
+                      fontSize: spec.sectionTitleSize,
                     ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.72),
+                  ),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _openAddFriendDialog,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFF59E0B),
+                    ),
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: Text(
+                      'Ajouter',
+                      style: TextStyle(fontSize: spec.smallTextSize),
                     ),
                   ),
                 ],
               ),
-              if (_editingProfile) ...<Widget>[
-                const SizedBox(height: 12),
-                const Text(
-                  'Pseudo',
+              SizedBox(height: spec.securityGap),
+              Text(
+                '${_friends.length} ami(s) • ${_incomingRequests.length} demande(s) reçue(s)',
+                style: TextStyle(
+                  color: const Color(0xFF475569),
+                  fontWeight: FontWeight.w600,
+                  fontSize: spec.smallTextSize,
+                ),
+              ),
+              SizedBox(height: spec.securityGap),
+              if (_friends.isNotEmpty) ...<Widget>[
+                _subTitle('Mes amis', spec),
+                SizedBox(height: spec.labelGap),
+                ..._friends.map((friend) => _friendTile(friend, spec)),
+                SizedBox(height: spec.fieldBlockGap),
+              ],
+              _subTitle('Demandes reçues', spec),
+              SizedBox(height: spec.labelGap),
+              if (_incomingRequests.isEmpty)
+                Text(
+                  'Aucune demande reçue pour le moment.',
                   style: TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF64748B),
+                    fontSize: spec.smallTextSize,
                   ),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _pseudoController,
-                  onChanged: (_) => _validateLive(),
-                  textCapitalization: TextCapitalization.words,
-                  maxLength: 24,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Ton pseudo',
-                    errorText: _pseudoError,
-                    filled: true,
-                    fillColor: Colors.white,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: _pseudoError == null
-                            ? const Color(0xFFD1D5DB)
-                            : const Color(0xFFB91C1C),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: _pseudoError == null
-                            ? const Color(0xFF4F46E5)
-                            : const Color(0xFFB91C1C),
-                        width: 1.4,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Nom d utilisateur',
-                  style: TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: const Text(
-                        '@',
-                        style: TextStyle(
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
+                )
+              else
+                ..._incomingRequests
+                    .map((request) => _incomingRequestTile(request, spec)),
+              if (_outgoingRequests.isNotEmpty) ...<Widget>[
+                SizedBox(height: spec.fieldBlockGap),
+                _subTitle('Demandes envoyées', spec),
+                SizedBox(height: spec.labelGap),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _outgoingRequests
+                      .map(
+                        (request) => Chip(
+                          label: Text('@${request.username}'),
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _usernameController,
-                        onChanged: (_) => _validateLive(),
-                        textCapitalization: TextCapitalization.none,
-                        maxLength: 20,
-                        style: const TextStyle(
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'pegga.pig',
-                          errorText: _usernameError,
-                          filled: true,
-                          fillColor: Colors.white,
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: _usernameError == null
-                                  ? const Color(0xFFD1D5DB)
-                                  : const Color(0xFFB91C1C),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: _usernameError == null
-                                  ? const Color(0xFF4F46E5)
-                                  : const Color(0xFFB91C1C),
-                              width: 1.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _profile?.roomInviteNotificationsEnabled ?? false,
-                  onChanged: _toggleInviteNotifications,
-                  title: const Text(
-                    'Notifications d invitation',
-                    style: TextStyle(color: Color(0xFF111827)),
-                  ),
-                  subtitle: const Text(
-                    'Push cross-device a brancher coté compte.',
-                    style: TextStyle(color: Color(0xFF374151)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.end,
-                    children: <Widget>[
-                      OutlinedButton(
-                        onPressed: _savingProfile
-                            ? null
-                            : () {
-                                setState(() {
-                                  _editingProfile = false;
-                                  _pseudoError = null;
-                                  _usernameError = null;
-                                });
-                              },
-                        child: const Text('Annuler'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: _savingProfile ? null : _saveProfile,
-                        icon: const Icon(Icons.save_outlined),
-                        label: _savingProfile
-                            ? const Text('Enregistrement...')
-                            : const Text('Enregistrer'),
-                      ),
-                    ],
-                  ),
+                      )
+                      .toList(),
                 ),
               ],
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyFriendsState(_ProfileLayoutSpec spec) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: spec.emptyVerticalPadding),
+      child: Column(
+        children: <Widget>[
+          Icon(
+            Icons.group_add_outlined,
+            size: spec.emptyIconSize,
+            color: const Color(0xFF4F46E5),
           ),
-        ),
-        const SizedBox(height: 12),
-        _sectionCard(
-          icon: Icons.meeting_room_outlined,
-          title: 'Salons où je suis hôte',
-          child: _hostRooms.isEmpty
-              ? const Text(
-                  'Aucun salon hôte enregistré.',
-                  style: TextStyle(color: Color(0xFF6B7280)),
-                )
-              : Column(
-                  children: _hostRooms.map((room) {
-                    final statusLabel = _statusLabelForRoom(room.roomCode);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          const Icon(
-                            Icons.star_rounded,
-                            color: Color(0xFFF59E0B),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  room.roomCode,
-                                  style: const TextStyle(
-                                    color: Color(0xFF111827),
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.3,
-                                  ),
-                                ),
-                                Text(
-                                  'Ajouté le ${_formatDate(room.joinedAt)}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF4B5563),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Chip(label: Text(statusLabel)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-        ),
-        if (isLoggedIn) ...<Widget>[
-          const SizedBox(height: 12),
-          _sectionCard(
-            icon: Icons.warning_amber_rounded,
-            title: 'Zone sensible',
+          SizedBox(height: spec.labelGap),
+          Text(
+            'Aucun ami pour le moment.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: const Color(0xFF334155),
+              fontWeight: FontWeight.w700,
+              fontSize: spec.sectionTitleSize,
+            ),
+          ),
+          SizedBox(height: spec.labelGap),
+          Text(
+            'Ajoutez-en avec le bouton + !',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: spec.smallTextSize,
+            ),
+          ),
+          SizedBox(height: spec.buttonsTopGap),
+          FloatingActionButton(
+            heroTag: 'add_friend_fab',
+            backgroundColor: const Color(0xFFF59E0B),
+            foregroundColor: Colors.white,
+            onPressed: _openAddFriendDialog,
+            child: const Icon(Icons.person_add_alt_1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _friendTile(FriendEntry friend, _ProfileLayoutSpec spec) {
+    return Container(
+      margin: EdgeInsets.only(bottom: spec.listItemGap),
+      padding: EdgeInsets.all(spec.listItemPadding),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.person_outline, color: Color(0xFF475569)),
+          SizedBox(width: spec.identityGap),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
-                  'Supprimer le compte efface le profil, les amis, les demandes et les tokens push.',
-                  style: TextStyle(color: Color(0xFF4B5563)),
+                Text(
+                  friend.displayName,
+                  style: TextStyle(
+                    color: const Color(0xFF1E293B),
+                    fontWeight: FontWeight.w700,
+                    fontSize: spec.smallTextSize,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.end,
-                    children: <Widget>[
-                      OutlinedButton.icon(
-                        onPressed: () => context.go('/change-password'),
-                        icon: const Icon(Icons.password_outlined),
-                        label: const Text('Changer mon mot de passe'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            _deletingAccount ? null : _openDeleteAccountDialog,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFB91C1C),
-                          side: const BorderSide(color: Color(0xFFB91C1C)),
-                        ),
-                        icon: const Icon(Icons.delete_forever_outlined),
-                        label: const Text('Supprimer mon compte'),
-                      ),
-                    ],
+                Text(
+                  '@${friend.username}',
+                  style: TextStyle(
+                    color: const Color(0xFF64748B),
+                    fontSize: spec.tinyTextSize,
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
-  Widget _buildFriendsTab() {
-    return ListView(
-      key: const ValueKey<String>('friends_tab_list'),
-      children: <Widget>[
-        _sectionCard(
-          icon: Icons.people_alt_outlined,
-          title: 'Amis et demandes',
-          trailing: FilledButton.icon(
-            onPressed: _openAddFriendDialog,
-            icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('Ajouter'),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                '${_friends.length} ami(s) • ${_incomingRequests.length} demande(s) reçue(s)',
-                style: const TextStyle(
-                  color: Color(0xFF374151),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              if (_friends.isNotEmpty) ...<Widget>[
-                const Text(
-                  'Mes amis',
+  Widget _incomingRequestTile(
+      FriendRequestEntry request, _ProfileLayoutSpec spec) {
+    return Container(
+      margin: EdgeInsets.only(bottom: spec.listItemGap),
+      padding: EdgeInsets.all(spec.listItemPadding),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  request.displayName,
                   style: TextStyle(
-                    color: Color(0xFF111827),
+                    color: const Color(0xFF1E293B),
                     fontWeight: FontWeight.w700,
+                    fontSize: spec.smallTextSize,
                   ),
                 ),
-                const SizedBox(height: 6),
-                ..._friends.map((friend) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(Icons.person, color: Color(0xFF4B5563)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                friend.displayName,
-                                style: const TextStyle(
-                                  color: Color(0xFF111827),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                '@${friend.username}',
-                                style: const TextStyle(
-                                  color: Color(0xFF4B5563),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 10),
-              ],
-              if (_incomingRequests.isEmpty)
-                const Text(
-                  'Aucune demande reçue pour le moment.',
-                  style: TextStyle(color: Color(0xFF6B7280)),
-                )
-              else
-                ..._incomingRequests.map((request) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                request.displayName,
-                                style: const TextStyle(
-                                  color: Color(0xFF111827),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                '@${request.username}',
-                                style: const TextStyle(
-                                  color: Color(0xFF4B5563),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () =>
-                              _declineIncomingRequest(request.username),
-                          child: const Text('Refuser'),
-                        ),
-                        FilledButton(
-                          onPressed: () =>
-                              _acceptIncomingRequest(request.username),
-                          child: const Text('Accepter'),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              if (_outgoingRequests.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 10),
-                const Text(
-                  'Demandes envoyées',
+                Text(
+                  '@${request.username}',
                   style: TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF64748B),
+                    fontSize: spec.tinyTextSize,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _outgoingRequests
-                      .map((request) =>
-                          Chip(label: Text('@${request.username}')))
-                      .toList(),
-                ),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+          TextButton(
+            onPressed: () => _declineIncomingRequest(request.username),
+            child: Text(
+              'Refuser',
+              style: TextStyle(fontSize: spec.tinyTextSize),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => _acceptIncomingRequest(request.username),
+            child: Text(
+              'Accepter',
+              style: TextStyle(fontSize: spec.tinyTextSize),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildBlockedTab() {
-    return ListView(
-      key: const ValueKey<String>('blocked_tab_list'),
-      children: <Widget>[
-        _sectionCard(
-          icon: Icons.block_outlined,
-          title: 'Personnes bloquées',
-          child: _blockedUsers.isEmpty
-              ? const Text(
-                  'Aucune personne bloquée.',
-                  style: TextStyle(color: Color(0xFF6B7280)),
-                )
-              : Column(
-                  children: _blockedUsers.map((username) {
+  Widget _buildBlockedTab(_ProfileLayoutSpec spec) {
+    return SingleChildScrollView(
+      key: const ValueKey<String>('blocked_tab_scroll'),
+      child: _surfaceCard(
+        spec: spec,
+        child: _blockedUsers.isEmpty
+            ? Padding(
+                padding:
+                    EdgeInsets.symmetric(vertical: spec.emptyVerticalPadding),
+                child: Column(
+                  children: <Widget>[
+                    Icon(
+                      Icons.block_outlined,
+                      size: spec.emptyIconSize,
+                      color: const Color(0xFF94A3B8),
+                    ),
+                    SizedBox(height: spec.labelGap),
+                    Text(
+                      'Aucun utilisateur bloqué.',
+                      style: TextStyle(
+                        color: const Color(0xFF475569),
+                        fontWeight: FontWeight.w600,
+                        fontSize: spec.sectionTitleSize,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Personnes bloquées',
+                    style: TextStyle(
+                      color: const Color(0xFF1E293B),
+                      fontWeight: FontWeight.w800,
+                      fontSize: spec.sectionTitleSize,
+                    ),
+                  ),
+                  SizedBox(height: spec.securityGap),
+                  ..._blockedUsers.map((username) {
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         '@$username',
-                        style: const TextStyle(
-                          color: Color(0xFF111827),
+                        style: TextStyle(
+                          color: const Color(0xFF1E293B),
                           fontWeight: FontWeight.w700,
+                          fontSize: spec.smallTextSize,
                         ),
                       ),
                       trailing: OutlinedButton(
                         onPressed: () => _unblockUser(username),
-                        child: const Text('Débloquer'),
+                        child: Text(
+                          'Débloquer',
+                          style: TextStyle(fontSize: spec.tinyTextSize),
+                        ),
                       ),
                     );
-                  }).toList(),
-                ),
-        ),
-      ],
+                  }),
+                ],
+              ),
+      ),
     );
   }
 
-  Widget _sectionCard({
-    required IconData icon,
-    required String title,
+  Widget _surfaceCard({
+    required _ProfileLayoutSpec spec,
     required Widget child,
-    Widget? trailing,
   }) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        borderRadius: BorderRadius.circular(spec.cardRadius),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.74)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.09),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
+      padding: EdgeInsets.all(spec.cardPadding),
+      child: child,
+    );
+  }
+
+  Widget _securityActionTile({
+    required _ProfileLayoutSpec spec,
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFE4EBF4),
+      borderRadius: BorderRadius.circular(spec.innerRadius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: spec.tileHorizontalPadding,
+            vertical: spec.tileVerticalPadding,
+          ),
+          child: Row(
             children: <Widget>[
-              Icon(icon, color: const Color(0xFF111827)),
-              const SizedBox(width: 8),
+              Icon(icon,
+                  color: const Color(0xFF334155), size: spec.tileIconSize),
+              SizedBox(width: spec.identityGap),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
+                  style: TextStyle(
+                    color: const Color(0xFF1E293B),
+                    fontWeight: FontWeight.w600,
+                    fontSize: spec.smallTextSize,
                   ),
                 ),
               ),
-              if (trailing != null) trailing,
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF334155)),
             ],
           ),
-          const SizedBox(height: 10),
-          child,
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _dangerActionTile({
+    required _ProfileLayoutSpec spec,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFFDEAEA),
+      borderRadius: BorderRadius.circular(spec.innerRadius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: spec.tileHorizontalPadding,
+            vertical: spec.tileVerticalPadding,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(icon,
+                  color: const Color(0xFFDC2626), size: spec.tileIconSize),
+              SizedBox(width: spec.identityGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: const Color(0xFFDC2626),
+                        fontWeight: FontWeight.w700,
+                        fontSize: spec.smallTextSize,
+                      ),
+                    ),
+                    SizedBox(height: spec.labelGap / 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: const Color(0xFFEF4444),
+                        fontSize: spec.tinyTextSize,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldLabel(String label, _ProfileLayoutSpec spec) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: const Color(0xFF1E293B),
+        fontWeight: FontWeight.w700,
+        fontSize: spec.smallTextSize,
+      ),
+    );
+  }
+
+  Widget _subTitle(String label, _ProfileLayoutSpec spec) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: const Color(0xFF1E293B),
+        fontWeight: FontWeight.w700,
+        fontSize: spec.smallTextSize,
+      ),
+    );
+  }
+
+  InputDecoration _profileInputDecoration({
+    required String hintText,
+    required String? errorText,
+    required _ProfileLayoutSpec spec,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      errorText: errorText,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spec.tileHorizontalPadding,
+        vertical: spec.tileVerticalPadding,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        borderSide: BorderSide(
+          color: errorText == null
+              ? const Color(0xFFD1D5DB)
+              : const Color(0xFFB91C1C),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(spec.innerRadius),
+        borderSide: BorderSide(
+          color: errorText == null
+              ? const Color(0xFF4F46E5)
+              : const Color(0xFFB91C1C),
+          width: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileLayoutSpec {
+  const _ProfileLayoutSpec({
+    required this.headerHorizontalPadding,
+    required this.headerTopPadding,
+    required this.headerBottomPadding,
+    required this.backPadding,
+    required this.backRadius,
+    required this.backIconSize,
+    required this.backSlotWidth,
+    required this.titleSize,
+    required this.tabsTopGap,
+    required this.tabVerticalPadding,
+    required this.tabIndicatorWidth,
+    required this.tabIconSize,
+    required this.tabLabelGap,
+    required this.tabLabelSize,
+    required this.contentPadding,
+    required this.maxContentWidth,
+    required this.cardRadius,
+    required this.cardPadding,
+    required this.sectionGap,
+    required this.sectionTitleSize,
+    required this.avatarSize,
+    required this.avatarTextSize,
+    required this.identityGap,
+    required this.identityTitleSize,
+    required this.identitySubtitleSize,
+    required this.editTopGap,
+    required this.fieldBlockGap,
+    required this.labelGap,
+    required this.smallTextSize,
+    required this.tinyTextSize,
+    required this.buttonsTopGap,
+    required this.actionsGap,
+    required this.buttonVerticalPadding,
+    required this.buttonRadius,
+    required this.loaderSize,
+    required this.securityGap,
+    required this.securityItemGap,
+    required this.innerRadius,
+    required this.tileHorizontalPadding,
+    required this.tileVerticalPadding,
+    required this.tileIconSize,
+    required this.listItemGap,
+    required this.listItemPadding,
+    required this.emptyVerticalPadding,
+    required this.emptyIconSize,
+  });
+
+  final double headerHorizontalPadding;
+  final double headerTopPadding;
+  final double headerBottomPadding;
+  final double backPadding;
+  final double backRadius;
+  final double backIconSize;
+  final double backSlotWidth;
+  final double titleSize;
+  final double tabsTopGap;
+  final double tabVerticalPadding;
+  final double tabIndicatorWidth;
+  final double tabIconSize;
+  final double tabLabelGap;
+  final double tabLabelSize;
+  final double contentPadding;
+  final double maxContentWidth;
+  final double cardRadius;
+  final double cardPadding;
+  final double sectionGap;
+  final double sectionTitleSize;
+  final double avatarSize;
+  final double avatarTextSize;
+  final double identityGap;
+  final double identityTitleSize;
+  final double identitySubtitleSize;
+  final double editTopGap;
+  final double fieldBlockGap;
+  final double labelGap;
+  final double smallTextSize;
+  final double tinyTextSize;
+  final double buttonsTopGap;
+  final double actionsGap;
+  final double buttonVerticalPadding;
+  final double buttonRadius;
+  final double loaderSize;
+  final double securityGap;
+  final double securityItemGap;
+  final double innerRadius;
+  final double tileHorizontalPadding;
+  final double tileVerticalPadding;
+  final double tileIconSize;
+  final double listItemGap;
+  final double listItemPadding;
+  final double emptyVerticalPadding;
+  final double emptyIconSize;
+
+  factory _ProfileLayoutSpec.from(
+    BuildContext context,
+    BoxConstraints constraints,
+  ) {
+    final media = MediaQuery.of(context);
+    final width = constraints.maxWidth;
+    final isLandscapeCompact =
+        media.orientation == Orientation.landscape && width < 1024;
+    final isLarge = width >= 1024;
+
+    return _ProfileLayoutSpec(
+      headerHorizontalPadding: isLandscapeCompact ? 10 : 14,
+      headerTopPadding: isLandscapeCompact ? 8 : 10,
+      headerBottomPadding: isLandscapeCompact ? 8 : 10,
+      backPadding: isLandscapeCompact ? 6 : 8,
+      backRadius: isLandscapeCompact ? 12 : 14,
+      backIconSize: isLandscapeCompact ? 22 : 24,
+      backSlotWidth: isLandscapeCompact ? 36 : 40,
+      titleSize: isLandscapeCompact ? 26 : 34,
+      tabsTopGap: isLandscapeCompact ? 6 : 8,
+      tabVerticalPadding: isLandscapeCompact ? 6 : 8,
+      tabIndicatorWidth: 2.2,
+      tabIconSize: isLandscapeCompact ? 18 : 20,
+      tabLabelGap: 2,
+      tabLabelSize: isLandscapeCompact ? 12 : 14,
+      contentPadding: isLandscapeCompact ? 10 : 14,
+      maxContentWidth: isLarge ? 960 : 760,
+      cardRadius: isLandscapeCompact ? 14 : 18,
+      cardPadding: isLandscapeCompact ? 12 : 16,
+      sectionGap: isLandscapeCompact ? 10 : 12,
+      sectionTitleSize: isLandscapeCompact ? 18 : 20,
+      avatarSize: isLandscapeCompact ? 56 : 64,
+      avatarTextSize: isLandscapeCompact ? 24 : 28,
+      identityGap: isLandscapeCompact ? 10 : 12,
+      identityTitleSize: isLandscapeCompact ? 28 : 34,
+      identitySubtitleSize: isLandscapeCompact ? 15 : 18,
+      editTopGap: isLandscapeCompact ? 10 : 12,
+      fieldBlockGap: isLandscapeCompact ? 10 : 12,
+      labelGap: isLandscapeCompact ? 4 : 6,
+      smallTextSize: isLandscapeCompact ? 13 : 14,
+      tinyTextSize: isLandscapeCompact ? 11 : 12,
+      buttonsTopGap: isLandscapeCompact ? 10 : 12,
+      actionsGap: isLandscapeCompact ? 8 : 10,
+      buttonVerticalPadding: isLandscapeCompact ? 10 : 12,
+      buttonRadius: isLandscapeCompact ? 12 : 14,
+      loaderSize: 16,
+      securityGap: isLandscapeCompact ? 10 : 12,
+      securityItemGap: isLandscapeCompact ? 8 : 10,
+      innerRadius: isLandscapeCompact ? 10 : 12,
+      tileHorizontalPadding: isLandscapeCompact ? 10 : 12,
+      tileVerticalPadding: isLandscapeCompact ? 10 : 12,
+      tileIconSize: isLandscapeCompact ? 18 : 20,
+      listItemGap: isLandscapeCompact ? 6 : 8,
+      listItemPadding: isLandscapeCompact ? 8 : 10,
+      emptyVerticalPadding: isLandscapeCompact ? 46 : 56,
+      emptyIconSize: isLandscapeCompact ? 50 : 60,
     );
   }
 }

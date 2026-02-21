@@ -1,15 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
-import '../../utils/ui_constants.dart';
-import '../multiplayer/ui/multiplayer_motion.dart';
-import '../multiplayer/ui/multiplayer_ui_tokens.dart';
-import '../multiplayer/ui/multiplayer_ui_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,29 +17,37 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
-  final _displayNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
-  String? _errorMessage;
   bool? _usernameAvailable;
-  Timer? _usernameCheckTimer;
   bool _checkingUsername = false;
   bool _shakeForm = false;
+  bool _entered = false;
+  String? _errorMessage;
+
+  Timer? _usernameCheckTimer;
   Timer? _shakeResetTimer;
 
   static final _usernameRegex = RegExp(r'^[a-zA-Z0-9._-]{3,20}$');
   static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _entered = true);
+    });
+  }
+
+  @override
   void dispose() {
     _usernameController.dispose();
-    _displayNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -53,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _onUsernameChanged(String value) {
     _usernameCheckTimer?.cancel();
 
-    if (!_usernameRegex.hasMatch(value)) {
+    if (!_usernameRegex.hasMatch(value.trim())) {
       setState(() {
         _usernameAvailable = null;
         _checkingUsername = false;
@@ -63,21 +69,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _checkingUsername = true);
 
-    _usernameCheckTimer = Timer(const Duration(milliseconds: 500), () async {
+    _usernameCheckTimer = Timer(const Duration(milliseconds: 450), () async {
       final authProvider = context.read<AuthProvider>();
       final available =
-          await authProvider.authService.checkUsernameAvailable(value);
-      if (mounted && _usernameController.text == value) {
-        setState(() {
-          _usernameAvailable = available;
-          _checkingUsername = false;
-        });
+          await authProvider.authService.checkUsernameAvailable(value.trim());
+
+      if (!mounted || _usernameController.text.trim() != value.trim()) {
+        return;
       }
+      setState(() {
+        _usernameAvailable = available;
+        _checkingUsername = false;
+      });
     });
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate() || _usernameAvailable == false) {
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (username.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        confirmPassword.isEmpty) {
+      setState(() => _errorMessage = 'Tous les champs sont obligatoires');
+      _triggerShake();
+      return;
+    }
+    if (!_usernameRegex.hasMatch(username)) {
+      setState(
+        () => _errorMessage =
+            'Nom d\'utilisateur invalide (3-20, lettres/chiffres/._-)',
+      );
+      _triggerShake();
+      return;
+    }
+    if (_usernameAvailable == false) {
+      setState(() => _errorMessage = 'Ce nom d\'utilisateur est déjà pris');
+      _triggerShake();
+      return;
+    }
+    if (!_emailRegex.hasMatch(email)) {
+      setState(() => _errorMessage = 'Ce n\'est pas un mail valide');
+      _triggerShake();
+      return;
+    }
+    if (password.length < 6) {
+      setState(
+        () => _errorMessage =
+            'Le mot de passe doit contenir au moins 6 caractères',
+      );
+      _triggerShake();
+      return;
+    }
+    if (password != confirmPassword) {
+      setState(() => _errorMessage = 'Les mots de passe ne correspondent pas');
       _triggerShake();
       return;
     }
@@ -86,10 +134,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final result = await authProvider.register(
-      _usernameController.text.trim(),
-      _displayNameController.text.trim(),
-      _emailController.text.trim(),
-      _passwordController.text,
+      username,
+      username,
+      email,
+      password,
     );
 
     if (!mounted) return;
@@ -116,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _triggerShake() {
     setState(() => _shakeForm = true);
     _shakeResetTimer?.cancel();
-    _shakeResetTimer = Timer(const Duration(milliseconds: 320), () {
+    _shakeResetTimer = Timer(const Duration(milliseconds: 360), () {
       if (!mounted) return;
       setState(() => _shakeForm = false);
     });
@@ -125,35 +173,98 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final motionEnabled = MultiplayerUiTokens.motionEnabled(context);
+    final media = MediaQuery.of(context);
+    final noMotion = media.disableAnimations;
+    final duration =
+        noMotion ? Duration.zero : const Duration(milliseconds: 180);
 
-    return Scaffold(
-      body: Container(
-        decoration: MultiplayerUiTokens.pageBg,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+    final layout = _AuthLayout.from(media);
+    final themed = Theme.of(context).copyWith(
+      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+    );
+
+    return Theme(
+      data: themed,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color(0xFFEEF2FF),
+                Color(0xFFF3E8FF),
+                Color(0xFFEFF6FF),
+              ],
+            ),
+          ),
+          child: SafeArea(
             child: Column(
               children: <Widget>[
-                fadeInUp(
-                  delay: motionEnabled ? staggerIndexDelay(0) : Duration.zero,
-                  child: MpHeader(
-                    title: 'S\'inscrire',
-                    onBack: _handleBackToLogin,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    layout.screenHorizontalPadding,
+                    layout.headerTopPadding,
+                    layout.screenHorizontalPadding,
+                    0,
+                  ),
+                  child: AnimatedOpacity(
+                    opacity: _entered || noMotion ? 1 : 0,
+                    duration: duration,
+                    child: AnimatedSlide(
+                      offset: _entered || noMotion
+                          ? Offset.zero
+                          : const Offset(0, -0.08),
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      child: _buildHeader(layout),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 20),
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                      padding: EdgeInsets.fromLTRB(
+                        layout.screenHorizontalPadding,
+                        layout.formTopPadding,
+                        layout.screenHorizontalPadding,
+                        layout.formBottomPadding,
+                      ),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: fadeInUp(
-                          delay: motionEnabled
-                              ? staggerIndexDelay(1)
-                              : Duration.zero,
-                          child: _buildRegisterCard(authProvider),
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: TweenAnimationBuilder<double>(
+                          duration: noMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 360),
+                          curve: Curves.easeOut,
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: _shakeForm ? 1 : 0,
+                          ),
+                          builder: (context, value, child) {
+                            final translate = math.sin(value * math.pi * 9) *
+                                11 *
+                                (1 - value);
+                            return Transform.translate(
+                              offset: Offset(translate, 0),
+                              child: child,
+                            );
+                          },
+                          child: AnimatedOpacity(
+                            opacity: _entered || noMotion ? 1 : 0,
+                            duration: duration,
+                            child: AnimatedSlide(
+                              offset: _entered || noMotion
+                                  ? Offset.zero
+                                  : const Offset(0, 0.06),
+                              duration: duration,
+                              curve: Curves.easeOutCubic,
+                              child: _buildForm(
+                                layout: layout,
+                                loading: authProvider.isLoading,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -167,147 +278,152 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildRegisterCard(AuthProvider authProvider) {
-    final compact = MediaQuery.of(context).size.width < 420;
+  Widget _buildHeader(_AuthLayout layout) {
+    return Row(
+      children: <Widget>[
+        Material(
+          color: Colors.white.withValues(alpha: 0.62),
+          borderRadius: BorderRadius.circular(layout.backButtonRadius),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(layout.backButtonRadius),
+            onTap: _handleBackToLogin,
+            child: Padding(
+              padding: EdgeInsets.all(layout.backButtonPadding),
+              child: Icon(
+                Icons.arrow_back,
+                size: layout.backIconSize,
+                color: const Color(0xFF334155),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: layout.headerGap),
+        ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return const LinearGradient(
+              colors: <Color>[
+                Color(0xFF4F46E5),
+                Color(0xFF7C3AED),
+                Color(0xFF2563EB)
+              ],
+            ).createShader(bounds);
+          },
+          child: Text(
+            'S\'inscrire',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: layout.headerTitleSize,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-    return AutofillGroup(
-      child: shakeOnError(
-        shake: _shakeForm,
-        child: Form(
-          key: _formKey,
+  Widget _buildForm({
+    required _AuthLayout layout,
+    required bool loading,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: layout.iconContainerSize,
+            height: layout.iconContainerSize,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[Color(0xFFF59E0B), Color(0xFFF97316)],
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x33F59E0B),
+                  blurRadius: 22,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.person_outline_rounded,
+              color: Colors.white,
+              size: layout.iconSize,
+            ),
+          ),
+        ),
+        SizedBox(height: layout.spaceAfterIcon),
+        Text(
+          'Créer un compte',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: const Color(0xFF334155),
+            fontSize: layout.formTitleSize,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        SizedBox(height: layout.spaceAfterTitle),
+        Text(
+          'Rejoins la communauté Dutch',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: const Color(0xFF64748B),
+            fontSize: layout.subtitleSize,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: layout.spaceBeforeFields),
+        AutofillGroup(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: 108,
-                  height: 108,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: LinearGradient(
-                      colors: <Color>[
-                        AppColors.primary.withValues(alpha: 0.95),
-                        AppColors.primaryDark.withValues(alpha: 0.9),
-                      ],
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 18,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.person_add_alt_1,
-                      color: Colors.white, size: 52),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Créer un compte',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: compact ? 40 : 52,
-                  fontWeight: FontWeight.w800,
-                  height: 1.05,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Rejoins la communauté Dutch',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: compact ? 14 : 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 26),
-              _buildField(
+              _field(
                 controller: _usernameController,
                 hintText: 'Nom d\'utilisateur',
-                icon: Icons.person_outline_rounded,
+                icon: Icons.person_outline,
                 textInputAction: TextInputAction.next,
                 autofillHints: const <String>[AutofillHints.newUsername],
                 onChanged: _onUsernameChanged,
-                suffixIcon: _checkingUsername
+                suffix: _checkingUsername
                     ? const Padding(
                         padding: EdgeInsets.all(12),
                         child: SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: AppColors.primary,
+                            color: Color(0xFFF59E0B),
                           ),
                         ),
                       )
                     : _usernameAvailable == true
                         ? const Icon(Icons.check_circle,
-                            color: AppColors.success)
+                            color: Color(0xFF22C55E))
                         : _usernameAvailable == false
-                            ? const Icon(Icons.cancel, color: AppColors.error)
+                            ? const Icon(Icons.cancel, color: Color(0xFFF43F5E))
                             : null,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Requis';
-                  if (!_usernameRegex.hasMatch(v.trim())) {
-                    return '3-20 caractères, lettres/chiffres/._-';
-                  }
-                  if (_usernameAvailable == false) {
-                    return 'Ce nom est déjà pris';
-                  }
-                  return null;
-                },
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Entre 3 et 20 caractères (lettres, chiffres, . _ -)',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textHint,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildField(
-                controller: _displayNameController,
-                hintText: 'Pseudo (nom affiché)',
-                icon: Icons.badge_outlined,
-                textInputAction: TextInputAction.next,
-                autofillHints: const <String>[AutofillHints.nickname],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Requis';
-                  if (v.trim().length > 24) return 'Max 24 caractères';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildField(
+              SizedBox(height: layout.fieldGap),
+              _field(
                 controller: _emailController,
                 hintText: 'Email',
-                icon: Icons.email_outlined,
+                icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const <String>[AutofillHints.email],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Requis';
-                  if (!_emailRegex.hasMatch(v.trim())) {
-                    return 'Ce n\'est pas un mail valide';
-                  }
-                  return null;
-                },
               ),
-              const SizedBox(height: 12),
-              _buildField(
+              SizedBox(height: layout.fieldGap),
+              _field(
                 controller: _passwordController,
                 hintText: 'Mot de passe',
-                icon: Icons.lock_outline_rounded,
+                icon: Icons.lock_outline,
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.next,
                 autofillHints: const <String>[AutofillHints.newPassword],
-                suffixIcon: IconButton(
+                suffix: IconButton(
+                  splashRadius: 18,
                   onPressed: () {
                     setState(() => _obscurePassword = !_obscurePassword);
                   },
@@ -315,24 +431,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _obscurePassword
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: AppColors.textDisabled,
+                    color: const Color(0xFF94A3B8),
+                    size: layout.suffixIconSize,
                   ),
                 ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Requis';
-                  if (v.length < 6) return 'Minimum 6 caractères';
-                  return null;
-                },
               ),
-              const SizedBox(height: 12),
-              _buildField(
+              SizedBox(height: layout.fieldGap),
+              _field(
                 controller: _confirmPasswordController,
                 hintText: 'Confirmer le mot de passe',
-                icon: Icons.lock_outline_rounded,
+                icon: Icons.lock_outline,
                 obscureText: _obscureConfirm,
                 textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _register(),
-                suffixIcon: IconButton(
+                onSubmitted: (_) => _register(),
+                suffix: IconButton(
+                  splashRadius: 18,
                   onPressed: () {
                     setState(() => _obscureConfirm = !_obscureConfirm);
                   },
@@ -340,157 +453,271 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _obscureConfirm
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: AppColors.textDisabled,
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Requis';
-                  if (v != _passwordController.text) {
-                    return 'Les mots de passe ne correspondent pas';
-                  }
-                  return null;
-                },
-              ),
-              if (_errorMessage != null) ...<Widget>[
-                const SizedBox(height: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 60,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: LinearGradient(
-                      colors: <Color>[
-                        AppColors.primary.withValues(alpha: 0.98),
-                        AppColors.primaryDark.withValues(alpha: 0.96),
-                      ],
-                    ),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: authProvider.isLoading ? null : _register,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      disabledBackgroundColor: Colors.transparent,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child: authProvider.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              color: Colors.black,
-                            ),
-                          )
-                        : const Text(
-                            'Créer mon compte',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 20,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: _handleBackToLogin,
-                child: const Text(
-                  'Déjà un compte ? Se connecter',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
+                    color: const Color(0xFF94A3B8),
+                    size: layout.suffixIconSize,
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 170),
+          child: _errorMessage == null
+              ? const SizedBox(height: 0)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AF43F5E),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: const Color(0xFFF43F5E), width: 1.4),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: const Color(0xFFE11D48),
+                        fontSize: layout.errorSize,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        SizedBox(height: layout.spaceBeforeButton),
+        SizedBox(
+          height: layout.buttonHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(layout.buttonRadius),
+              gradient: const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: <Color>[Color(0xFFF59E0B), Color(0xFFF97316)],
+              ),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x38F59E0B),
+                  blurRadius: 16,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: loading ? null : _register,
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                backgroundColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(layout.buttonRadius),
+                ),
+              ),
+              child: loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      'Créer mon compte',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: layout.buttonTextSize,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        SizedBox(height: layout.spaceAfterButton),
+        TextButton(
+          onPressed: _handleBackToLogin,
+          style: TextButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+          ),
+          child: RichText(
+            text: TextSpan(
+              text: 'Déjà un compte ? ',
+              style: TextStyle(
+                color: const Color(0xFF334155),
+                fontWeight: FontWeight.w500,
+                fontSize: layout.linkSize,
+              ),
+              children: const <InlineSpan>[
+                TextSpan(
+                  text: 'Se connecter',
+                  style: TextStyle(
+                    color: Color(0xFF4F46E5),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildField({
+  Widget _field({
     required TextEditingController controller,
     required String hintText,
     required IconData icon,
     TextInputType? keyboardType,
-    bool obscureText = false,
-    String? Function(String?)? validator,
-    ValueChanged<String>? onFieldSubmitted,
     TextInputAction? textInputAction,
-    Widget? suffixIcon,
+    bool obscureText = false,
     Iterable<String>? autofillHints,
+    ValueChanged<String>? onSubmitted,
     ValueChanged<String>? onChanged,
+    Widget? suffix,
   }) {
-    return TextFormField(
+    final hasError = _errorMessage != null;
+    return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      obscureText: obscureText,
-      validator: validator,
-      onFieldSubmitted: onFieldSubmitted,
       textInputAction: textInputAction,
+      obscureText: obscureText,
       autofillHints: autofillHints,
+      onSubmitted: onSubmitted,
       onChanged: onChanged,
       style: const TextStyle(
         color: Colors.white,
-        fontWeight: FontWeight.w600,
-        fontSize: 18,
+        fontWeight: FontWeight.w500,
+        fontSize: 16,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(
-          color: AppColors.textDisabled,
+          color: Color(0xFF94A3B8),
           fontWeight: FontWeight.w500,
-          fontSize: 17,
+          fontSize: 16,
         ),
-        prefixIcon: Icon(icon, color: AppColors.textDisabled),
-        suffixIcon: suffixIcon,
+        prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 21),
+        suffixIcon: suffix,
         filled: true,
-        fillColor: const Color(0xDD4E6B58),
+        fillColor: const Color(0xFF334155),
+        contentPadding: const EdgeInsets.symmetric(vertical: 17),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           borderSide: BorderSide.none,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
           borderSide: BorderSide(
-            color: AppColors.primary.withValues(alpha: 0.9),
-            width: 2,
+            color: hasError ? const Color(0xFFF43F5E) : Colors.transparent,
+            width: hasError ? 1.5 : 0,
           ),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide(
+            color: hasError ? const Color(0xFFF43F5E) : const Color(0xFFF59E0B),
+            width: 1.8,
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _AuthLayout {
+  const _AuthLayout({
+    required this.screenHorizontalPadding,
+    required this.headerTopPadding,
+    required this.formTopPadding,
+    required this.formBottomPadding,
+    required this.backButtonRadius,
+    required this.backButtonPadding,
+    required this.backIconSize,
+    required this.headerGap,
+    required this.headerTitleSize,
+    required this.iconContainerSize,
+    required this.iconSize,
+    required this.spaceAfterIcon,
+    required this.formTitleSize,
+    required this.spaceAfterTitle,
+    required this.subtitleSize,
+    required this.spaceBeforeFields,
+    required this.fieldGap,
+    required this.suffixIconSize,
+    required this.errorSize,
+    required this.spaceBeforeButton,
+    required this.buttonHeight,
+    required this.buttonRadius,
+    required this.buttonTextSize,
+    required this.spaceAfterButton,
+    required this.linkSize,
+  });
+
+  final double screenHorizontalPadding;
+  final double headerTopPadding;
+  final double formTopPadding;
+  final double formBottomPadding;
+  final double backButtonRadius;
+  final double backButtonPadding;
+  final double backIconSize;
+  final double headerGap;
+  final double headerTitleSize;
+  final double iconContainerSize;
+  final double iconSize;
+  final double spaceAfterIcon;
+  final double formTitleSize;
+  final double spaceAfterTitle;
+  final double subtitleSize;
+  final double spaceBeforeFields;
+  final double fieldGap;
+  final double suffixIconSize;
+  final double errorSize;
+  final double spaceBeforeButton;
+  final double buttonHeight;
+  final double buttonRadius;
+  final double buttonTextSize;
+  final double spaceAfterButton;
+  final double linkSize;
+
+  factory _AuthLayout.from(MediaQueryData media) {
+    final width = media.size.width;
+    final isLandscape = media.orientation == Orientation.landscape;
+    final isDesktop = width >= 1100;
+
+    return _AuthLayout(
+      screenHorizontalPadding: isDesktop ? 28 : (isLandscape ? 12 : 16),
+      headerTopPadding: isLandscape ? 8 : 14,
+      formTopPadding: isLandscape ? 6 : 18,
+      formBottomPadding: isLandscape ? 8 : 18,
+      backButtonRadius: isLandscape ? 14 : 18,
+      backButtonPadding: isLandscape ? 9 : 12,
+      backIconSize: isLandscape ? 20 : 24,
+      headerGap: isLandscape ? 10 : 12,
+      headerTitleSize: isDesktop ? 44 : (isLandscape ? 28 : 40),
+      iconContainerSize: isLandscape ? 72 : 84,
+      iconSize: isLandscape ? 38 : 48,
+      spaceAfterIcon: isLandscape ? 10 : 18,
+      formTitleSize: isDesktop ? 58 : (isLandscape ? 34 : 50),
+      spaceAfterTitle: isLandscape ? 4 : 8,
+      subtitleSize: isLandscape ? 12 : 16,
+      spaceBeforeFields: isLandscape ? 12 : 20,
+      fieldGap: isLandscape ? 8 : 12,
+      suffixIconSize: isLandscape ? 20 : 22,
+      errorSize: isLandscape ? 12 : 13,
+      spaceBeforeButton: isLandscape ? 10 : 14,
+      buttonHeight: isLandscape ? 48 : 58,
+      buttonRadius: isLandscape ? 16 : 20,
+      buttonTextSize: isLandscape ? 17 : 21,
+      spaceAfterButton: isLandscape ? 8 : 10,
+      linkSize: isLandscape ? 12 : 16,
     );
   }
 }

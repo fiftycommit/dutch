@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
 import '../auth/auth_service.dart';
+import '../network/network_probe_service.dart';
 
 class FriendInfo {
   final String userId;
@@ -79,6 +80,7 @@ class BlockedUserInfo {
 class FriendsApiService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
   final AuthService _authService;
+  DateTime? _lastOfflineLogAt;
 
   FriendsApiService(this._authService);
 
@@ -90,7 +92,27 @@ class FriendsApiService {
     };
   }
 
+  Future<bool> _canReachBackend() async {
+    final reachable = await NetworkProbeService.canReachBackend(
+      timeout: const Duration(milliseconds: 900),
+    );
+    if (!reachable && kDebugMode) {
+      final now = DateTime.now();
+      if (_lastOfflineLogAt == null ||
+          now.difference(_lastOfflineLogAt!) >= const Duration(seconds: 5)) {
+        _lastOfflineLogAt = now;
+        debugPrint(
+          'Friends API skipped: backend unreachable (network/CORS).',
+        );
+      }
+    }
+    return reachable;
+  }
+
   Future<List<FriendInfo>> getFriends() async {
+    if (!await _canReachBackend()) {
+      return [];
+    }
     try {
       final response = await http
           .get(
@@ -114,6 +136,9 @@ class FriendsApiService {
 
   Future<({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
       getRequests() async {
+    if (!await _canReachBackend()) {
+      return (incoming: <FriendRequestInfo>[], outgoing: <FriendRequestInfo>[]);
+    }
     try {
       final response = await http
           .get(
@@ -140,6 +165,9 @@ class FriendsApiService {
   }
 
   Future<({bool success, String? error})> sendRequest(String username) async {
+    if (!await _canReachBackend()) {
+      return (success: false, error: 'Serveur indisponible');
+    }
     try {
       final response = await http
           .post(
@@ -160,6 +188,9 @@ class FriendsApiService {
   }
 
   Future<bool> acceptRequest(String requestId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .post(
@@ -177,6 +208,9 @@ class FriendsApiService {
   }
 
   Future<bool> rejectRequest(String requestId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .post(
@@ -194,6 +228,9 @@ class FriendsApiService {
   }
 
   Future<bool> cancelRequest(String requestId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .post(
@@ -211,6 +248,9 @@ class FriendsApiService {
   }
 
   Future<bool> removeFriend(String userId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .delete(
@@ -227,6 +267,9 @@ class FriendsApiService {
   }
 
   Future<bool> blockUser(String userId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .post(
@@ -244,6 +287,9 @@ class FriendsApiService {
   }
 
   Future<bool> unblockUser(String userId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .delete(
@@ -260,6 +306,9 @@ class FriendsApiService {
   }
 
   Future<List<BlockedUserInfo>> getBlockedUsers() async {
+    if (!await _canReachBackend()) {
+      return [];
+    }
     try {
       final response = await http
           .get(
@@ -281,6 +330,9 @@ class FriendsApiService {
   }
 
   Future<bool> inviteToRoom(String roomCode, String friendUserId) async {
+    if (!await _canReachBackend()) {
+      return false;
+    }
     try {
       final response = await http
           .post(

@@ -1,20 +1,17 @@
 import 'dart:async';
 
-import 'package:dutch_game/screens/multiplayer/ui/multiplayer_motion.dart';
-import 'package:dutch_game/screens/multiplayer/ui/multiplayer_ui_tokens.dart';
-import 'package:dutch_game/screens/multiplayer/ui/multiplayer_ui_widgets.dart';
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/screens/multiplayer/menu/multiplayer_profile_space_screen.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
-import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 class MultiplayerMenuScreen extends StatefulWidget {
@@ -27,6 +24,7 @@ class MultiplayerMenuScreen extends StatefulWidget {
 class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   final SocialHubRepository _socialRepository = SocialHubRepository();
   late final FriendsApiService _friendsApi;
+  final LayerLink _userMenuAnchor = LayerLink();
 
   SocialProfile? _profile;
   List<FriendInfo> _friends = <FriendInfo>[];
@@ -661,225 +659,155 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final motionEnabled = MultiplayerUiTokens.motionEnabled(context);
-    final orientation = MediaQuery.of(context).orientation;
-    return Scaffold(
-      body: Stack(
-        children: <Widget>[
-          Container(
-            decoration: MultiplayerUiTokens.pageBg,
-            child: const SizedBox.expand(),
-          ),
-          if (_showUserMenu)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  if (!mounted) return;
-                  setState(() => _showUserMenu = false);
-                },
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final isLarge = width >= 1100;
+    final isLandscapeMobile =
+        !isLarge && media.orientation == Orientation.landscape && width >= 700;
+    final compactHeader = width < 980;
+
+    final themed = Theme.of(context).copyWith(
+      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+    );
+
+    return Theme(
+      data: themed,
+      child: Scaffold(
+        body: Stack(
+          children: <Widget>[
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    Color(0xFFEEF2FF),
+                    Color(0xFFF3E8FF),
+                    Color(0xFFEFF6FF),
+                  ],
+                ),
               ),
             ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                children: <Widget>[
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final compact = constraints.maxWidth < 780;
-                      return _buildHeader(compact: compact);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final useTwoColumns = constraints.maxWidth >= 980 ||
-                            (orientation == Orientation.landscape &&
-                                constraints.maxWidth >= 700);
-
-                        if (useTwoColumns) {
-                          return Row(
-                            children: <Widget>[
-                              Expanded(
-                                flex: 10,
-                                child: Column(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: fadeInUp(
-                                        delay: motionEnabled
-                                            ? staggerIndexDelay(0)
-                                            : Duration.zero,
-                                        child: _buildActionTile(
-                                          icon: Icons.home_outlined,
-                                          title: 'Créer un salon',
-                                          subtitle:
-                                              'Lance un salon privé ou public.',
-                                          accent: AppColors.primary,
-                                          onTap: () async {
-                                            if (!await _ensureProfileReady()) {
-                                              return;
-                                            }
-                                            if (!context.mounted) {
-                                              return;
-                                            }
-                                            await context.push(
-                                              '/multiplayer/create-selection',
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Expanded(
-                                      child: fadeInUp(
-                                        delay: motionEnabled
-                                            ? staggerIndexDelay(1)
-                                            : Duration.zero,
-                                        child: _buildActionTile(
-                                          icon: Icons.lock_open_rounded,
-                                          title: 'Rejoindre un salon',
-                                          subtitle:
-                                              'Code privé, matchmaking public, ou reprise.',
-                                          accent: AppColors.primaryDark,
-                                          onTap: () async {
-                                            if (!await _ensureProfileReady()) {
-                                              return;
-                                            }
-                                            if (!context.mounted) {
-                                              return;
-                                            }
-                                            await context.push(
-                                              '/multiplayer/join-selection',
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                flex: 9,
-                                child: fadeInUp(
-                                  delay: motionEnabled
-                                      ? staggerIndexDelay(2)
-                                      : Duration.zero,
-                                  child: _buildMyRoomsCard(),
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        return ListView(
-                          children: <Widget>[
-                            fadeInUp(
-                              delay: motionEnabled
-                                  ? staggerIndexDelay(0)
-                                  : Duration.zero,
-                              child: _buildActionTile(
-                                icon: Icons.home_outlined,
-                                title: 'Créer un salon',
-                                subtitle: 'Lance un salon privé ou public.',
-                                accent: AppColors.primary,
-                                onTap: () async {
-                                  if (!await _ensureProfileReady()) {
-                                    return;
-                                  }
-                                  if (!context.mounted) {
-                                    return;
-                                  }
-                                  await context.push(
-                                    '/multiplayer/create-selection',
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            fadeInUp(
-                              delay: motionEnabled
-                                  ? staggerIndexDelay(1)
-                                  : Duration.zero,
-                              child: _buildActionTile(
-                                icon: Icons.lock_open_rounded,
-                                title: 'Rejoindre un salon',
-                                subtitle:
-                                    'Code privé, matchmaking public, ou reprise.',
-                                accent: AppColors.primaryDark,
-                                onTap: () async {
-                                  if (!await _ensureProfileReady()) {
-                                    return;
-                                  }
-                                  if (!context.mounted) {
-                                    return;
-                                  }
-                                  await context.push(
-                                    '/multiplayer/join-selection',
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            fadeInUp(
-                              delay: motionEnabled
-                                  ? staggerIndexDelay(2)
-                                  : Duration.zero,
-                              child: SizedBox(
-                                height: 440,
-                                child: _buildMyRoomsCard(),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+            SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  isLarge ? 14 : 12,
+                  isLarge ? 12 : 10,
+                  isLarge ? 14 : 12,
+                  12,
+                ),
+                child: Column(
+                  children: <Widget>[
+                    _buildHeader(compact: compactHeader),
+                    SizedBox(height: isLarge ? 14 : 12),
+                    Expanded(
+                      child: isLarge
+                          ? _buildDesktopSplitLayout()
+                          : isLandscapeMobile
+                              ? _buildMobileLandscapeLayout()
+                              : _buildMobilePortraitLayout(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_showUserMenu) ...<Widget>[
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    if (!mounted) return;
+                    setState(() => _showUserMenu = false);
+                  },
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: false,
+                  child: CompositedTransformFollower(
+                    link: _userMenuAnchor,
+                    showWhenUnlinked: false,
+                    targetAnchor: Alignment.bottomRight,
+                    followerAnchor: Alignment.topRight,
+                    offset: const Offset(0, 10),
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: _buildUserMenuPanel(),
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }
 
+  Future<void> _openCreateSelection() async {
+    if (!await _ensureProfileReady()) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await context.push('/multiplayer/create-selection');
+  }
+
+  Future<void> _openJoinSelection() async {
+    if (!await _ensureProfileReady()) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await context.push('/multiplayer/join-selection');
+  }
+
   Widget _buildHeader({required bool compact}) {
     final pendingCount = _incomingRequests.length + _outgoingRequests.length;
-    final pills = <Widget>[
-      _buildUserPill(),
-      MpPill(
-        icon: Icons.group_outlined,
-        label: '${_friends.length} amis',
-        onTap: () => _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
-      ),
-      if (pendingCount > 0)
-        MpPill(
-          icon: Icons.mark_email_unread_outlined,
-          label: '$pendingCount demandes',
-          onTap: () => _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
-        ),
-    ];
-
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          MpHeader(
-            title: 'Multijoueur',
-            onBack: _handleBackToHome,
+          Row(
+            children: <Widget>[
+              _backButton(),
+              const SizedBox(width: 12),
+              _title(),
+            ],
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: <Widget>[
-                ...pills.expand((w) sync* {
-                  yield w;
-                  yield const SizedBox(width: 8);
-                }),
+                _buildUserPill(),
+                const SizedBox(width: 8),
+                _pillButton(
+                  icon: Icons.group_outlined,
+                  label: '${_friends.length} amis',
+                  onTap: () {
+                    unawaited(
+                      _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
+                    );
+                  },
+                ),
+                if (pendingCount > 0) ...<Widget>[
+                  const SizedBox(width: 8),
+                  _pillButton(
+                    icon: Icons.mark_email_unread_outlined,
+                    label: '$pendingCount demandes',
+                    onTap: () {
+                      unawaited(
+                        _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -890,106 +818,166 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     return Row(
       children: <Widget>[
         Expanded(
-          child: MpHeader(
-            title: 'Multijoueur',
-            onBack: _handleBackToHome,
-          ),
-        ),
+            child: Row(children: <Widget>[
+          _backButton(),
+          const SizedBox(width: 12),
+          _title()
+        ])),
         const SizedBox(width: 10),
-        ...pills.expand((w) sync* {
-          yield w;
-          yield const SizedBox(width: 8);
-        }),
+        _buildUserPill(),
+        const SizedBox(width: 8),
+        _pillButton(
+          icon: Icons.group_outlined,
+          label: '${_friends.length} amis',
+          onTap: () {
+            unawaited(_openProfileSpaceWithTab(MultiplayerProfileTab.friends));
+          },
+        ),
+        if (pendingCount > 0) ...<Widget>[
+          const SizedBox(width: 8),
+          _pillButton(
+            icon: Icons.mark_email_unread_outlined,
+            label: '$pendingCount demandes',
+            onTap: () {
+              unawaited(
+                  _openProfileSpaceWithTab(MultiplayerProfileTab.friends));
+            },
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildUserPill() {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        MpPill(
-          icon: Icons.person_outline,
-          label: '@$_username',
-          onTap: () {
-            setState(() => _showUserMenu = !_showUserMenu);
-          },
+  Widget _backButton() {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.62),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: _handleBackToHome,
+        child: const Padding(
+          padding: EdgeInsets.all(12),
+          child: Icon(Icons.arrow_back, size: 24, color: Color(0xFF334155)),
         ),
-        Positioned(
-          top: 50,
-          right: 0,
-          child: dropdownScaleFade(
-            visible: _showUserMenu,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 240,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECEFF6),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: 18,
-                      spreadRadius: 0.3,
-                    ),
-                  ],
+      ),
+    );
+  }
+
+  Widget _title() {
+    return ShaderMask(
+      shaderCallback: (Rect bounds) {
+        return const LinearGradient(
+          colors: <Color>[
+            Color(0xFF4F46E5),
+            Color(0xFF7C3AED),
+            Color(0xFF2563EB)
+          ],
+        ).createShader(bounds);
+      },
+      child: const Text(
+        'Multijoueur',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 46,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserPill() {
+    return CompositedTransformTarget(
+      link: _userMenuAnchor,
+      child: _pillButton(
+        icon: Icons.person_outline,
+        label: '@$_username',
+        withChevron: true,
+        chevronUp: _showUserMenu,
+        onTap: () {
+          setState(() => _showUserMenu = !_showUserMenu);
+        },
+      ),
+    );
+  }
+
+  Widget _buildUserMenuPanel() {
+    return AnimatedOpacity(
+      opacity: _showUserMenu ? 1 : 0,
+      duration: const Duration(milliseconds: 160),
+      child: AnimatedScale(
+        scale: _showUserMenu ? 1 : 0.96,
+        alignment: Alignment.topRight,
+        duration: const Duration(milliseconds: 160),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 248,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            _displayName,
-                            style: const TextStyle(
-                              color: Color(0xFF1F2937),
-                              fontWeight: FontWeight.w800,
-                              fontSize: 20,
-                            ),
-                          ),
-                          Text(
-                            '@$_username',
-                            style: const TextStyle(
-                              color: Color(0xFF4B5563),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                            ),
-                          ),
-                        ],
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        _displayName,
+                        style: const TextStyle(
+                          color: Color(0xFF1F2937),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 32,
+                          height: 1.0,
+                        ),
                       ),
-                    ),
-                    const Divider(height: 1),
-                    _menuAction(
-                      icon: Icons.account_circle_outlined,
-                      label: 'Mon Profil',
-                      onTap: () => _openProfileSpaceWithTab(
-                        MultiplayerProfileTab.profile,
+                      Text(
+                        '@$_username',
+                        style: const TextStyle(
+                          color: Color(0xFF4B5563),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                        ),
                       ),
-                    ),
-                    _menuAction(
-                      icon: Icons.group_outlined,
-                      label: 'Mes Amis',
-                      onTap: () => _openProfileSpaceWithTab(
-                        MultiplayerProfileTab.friends,
-                      ),
-                    ),
-                    _menuAction(
-                      icon: Icons.logout_rounded,
-                      label: 'Déconnexion',
-                      color: const Color(0xFFB91C1C),
-                      onTap: _logout,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+                const Divider(height: 1),
+                _menuAction(
+                  icon: Icons.account_circle_outlined,
+                  label: 'Mon Profil',
+                  onTap: () => _openProfileSpaceWithTab(
+                    MultiplayerProfileTab.profile,
+                  ),
+                ),
+                _menuAction(
+                  icon: Icons.group_outlined,
+                  label: 'Mes Amis',
+                  onTap: () => _openProfileSpaceWithTab(
+                    MultiplayerProfileTab.friends,
+                  ),
+                ),
+                _menuAction(
+                  icon: Icons.logout_rounded,
+                  label: 'Déconnexion',
+                  color: const Color(0xFFDC2626),
+                  onTap: _logout,
+                ),
+              ],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -1013,8 +1001,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
               label,
               style: TextStyle(
                 color: color,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -1023,211 +1011,529 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     );
   }
 
-  Widget _buildActionTile({
+  Widget _pillButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool withChevron = false,
+    bool chevronUp = false,
+  }) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 19, color: const Color(0xFF334155)),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF334155),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+              if (withChevron) ...<Widget>[
+                const SizedBox(width: 6),
+                Icon(
+                  chevronUp ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: const Color(0xFF334155),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
     required Color accent,
     required Future<void> Function() onTap,
+    bool compact = false,
+    bool centerVertically = false,
   }) {
-    return MpActionCard(
-      icon: icon,
-      title: title,
-      subtitle: subtitle,
-      accent: accent,
-      onTap: onTap,
-    );
-  }
+    final iconSize = compact ? 24.0 : 28.0;
+    final iconBox = compact ? 52.0 : 58.0;
+    final titleSize = compact ? 16.0 : 20.0;
+    final subtitleSize = compact ? 14.0 : 16.0;
+    final actionSize = compact ? 14.0 : 16.0;
 
-  Widget _buildMyRoomsCard() {
-    return MpSectionCard(
-      icon: Icons.meeting_room_outlined,
-      title: 'Mes salons',
-      trailing: IconButton(
-        onPressed: _loadingRooms ? null : _loadMyRooms,
-        icon: const Icon(
-          Icons.refresh_rounded,
-          color: MultiplayerUiTokens.onSurfacePrimary,
-        ),
-        tooltip: 'Rafraichir',
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text(
-            'Salons en attente. Tu peux les rejoindre sans les supprimer de ta liste.',
-            style: TextStyle(
-              color: MultiplayerUiTokens.onSurfaceSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+    final rowContent = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Container(
+          width: iconBox,
+          height: iconBox,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(compact ? 14 : 16),
+            gradient: LinearGradient(
+              colors: <Color>[
+                accent.withValues(alpha: 0.95),
+                accent.withValues(alpha: 0.72),
+              ],
             ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: accent.withValues(alpha: 0.25),
+                blurRadius: compact ? 10 : 14,
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: _loadingRooms
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: AppColors.primary,
+          child: Icon(icon, color: Colors.white, size: iconSize),
+        ),
+        SizedBox(width: compact ? 12 : 14),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: TextStyle(
+                  color: const Color(0xFF334155),
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+              SizedBox(height: compact ? 6 : 8),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: const Color(0xFF475569),
+                  fontSize: subtitleSize,
+                  fontWeight: FontWeight.w400,
+                  height: 1.3,
+                ),
+              ),
+              SizedBox(height: compact ? 10 : 14),
+              Row(
+                children: <Widget>[
+                  Text(
+                    'Ouvrir',
+                    style: TextStyle(
+                      color: const Color(0xFF4F46E5),
+                      fontWeight: FontWeight.w500,
+                      fontSize: actionSize,
                     ),
-                  )
-                : _myRooms.isEmpty
-                    ? const MpEmptyState(
-                        icon: Icons.meeting_room_outlined,
-                        title: 'Aucun salon',
-                      )
-                    : ListView.separated(
-                        itemCount: _myRooms.length,
-                        itemBuilder: (context, index) {
-                          final room = _myRooms[index];
-                          final activeInfo = _activeRoomInfo(room.roomCode);
-                          final status =
-                              activeInfo?['status'] as String? ?? 'offline';
-                          final playerCount =
-                              activeInfo?['playerCount'] as int?;
+                  ),
+                  SizedBox(width: compact ? 5 : 8),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: const Color(0xFF4F46E5),
+                    size: compact ? 17 : 20,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
 
-                          final isActive = status != 'offline';
-                          final statusLabel = switch (status) {
-                            'waiting' => 'En attente',
-                            'playing' => 'En cours',
-                            'ended' => 'Terminé',
-                            'closing' => 'Fermeture',
-                            _ => 'Hors ligne',
-                          };
-
-                          final statusColor = isActive
-                              ? const Color(0xFF22C55E)
-                              : const Color(0xFF9CA3AF);
-
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.82),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.7),
-                              ),
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor:
-                                      AppColors.primary.withValues(alpha: 0.2),
-                                  child: Icon(
-                                    room.isHost ? Icons.star : Icons.group,
-                                    color: const Color(0xFFB45309),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Row(
-                                        children: <Widget>[
-                                          Text(
-                                            room.roomCode,
-                                            style: const TextStyle(
-                                              color: MultiplayerUiTokens
-                                                  .onSurfacePrimary,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 2,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 7,
-                                              vertical: 3,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: statusColor.withValues(
-                                                  alpha: 0.2),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: statusColor.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              statusLabel,
-                                              style: TextStyle(
-                                                color: statusColor,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        room.isHost
-                                            ? 'Hôte • ${playerCount ?? 0} joueur(s)'
-                                            : 'Participant • ${playerCount ?? 0} joueur(s)',
-                                        style: const TextStyle(
-                                          color: MultiplayerUiTokens
-                                              .onSurfaceSecondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                FilledButton(
-                                  onPressed: isActive
-                                      ? () => _rejoinRoom(room.roomCode)
-                                      : null,
-                                  style: FilledButton.styleFrom(
-                                    visualDensity: VisualDensity.compact,
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.black,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Rejoindre'),
-                                ),
-                                PopupMenuButton<String>(
-                                  iconColor:
-                                      MultiplayerUiTokens.onSurfaceSecondary,
-                                  onSelected: (action) {
-                                    if (action == 'remove_saved') {
-                                      _removeSavedRoom(room.roomCode);
-                                    } else if (action == 'invite_friends') {
-                                      _inviteFriendsToRoom(room.roomCode);
-                                    }
-                                  },
-                                  itemBuilder: (context) =>
-                                      <PopupMenuEntry<String>>[
-                                    const PopupMenuItem(
-                                      value: 'invite_friends',
-                                      child: Text('Inviter des amis'),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'remove_saved',
-                                      child: Text('Retirer de Mes salons'),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        separatorBuilder: (_, __) => const SizedBox(height: 9),
-                      ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(compact ? 16 : 20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.75)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.09),
+            blurRadius: compact ? 12 : 16,
+            spreadRadius: 0.4,
           ),
         ],
       ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(compact ? 16 : 20),
+          onTap: () async => onTap(),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 14 : 20),
+            child: centerVertically
+                ? SizedBox.expand(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: rowContent,
+                    ),
+                  )
+                : rowContent,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyRoomsCard({
+    required String helperText,
+    required String emptyLabel,
+    bool compact = false,
+  }) {
+    final headerSize = compact ? 14.0 : 20.0;
+    final helperSize = compact ? 12.0 : 13.0;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(compact ? 16 : 20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: compact ? 12 : 16,
+            spreadRadius: 0.4,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, compact ? 10 : 14,
+            compact ? 12 : 16, compact ? 8 : 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.meeting_room_outlined,
+                  color: const Color(0xFF4F46E5),
+                  size: compact ? 18 : 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Mes salons',
+                    style: TextStyle(
+                      color: const Color(0xFF334155),
+                      fontSize: headerSize,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loadingRooms ? null : _loadMyRooms,
+                  icon: Icon(
+                    Icons.refresh_rounded,
+                    size: compact ? 20 : 22,
+                    color: const Color(0xFF4F46E5),
+                  ),
+                  tooltip: 'Rafraichir',
+                ),
+              ],
+            ),
+            Text(
+              helperText,
+              style: TextStyle(
+                color: const Color(0xFF475569),
+                fontSize: helperSize,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _loadingRooms
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Color(0xFF4F46E5),
+                      ),
+                    )
+                  : _myRooms.isEmpty
+                      ? Center(
+                          child: Text(
+                            emptyLabel,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: const Color(0xFF64748B),
+                              fontSize: compact ? 12 : 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _myRooms.length,
+                          itemBuilder: (context, index) => _buildRoomTile(
+                            room: _myRooms[index],
+                            compact: compact,
+                          ),
+                          separatorBuilder: (_, __) =>
+                              SizedBox(height: compact ? 7 : 9),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoomTile({
+    required SavedRoom room,
+    required bool compact,
+  }) {
+    final activeInfo = _activeRoomInfo(room.roomCode);
+    final status = activeInfo?['status'] as String? ?? 'offline';
+    final playerCount = activeInfo?['playerCount'] as int?;
+
+    final isActive = status != 'offline';
+    final statusLabel = switch (status) {
+      'waiting' => 'En attente',
+      'playing' => 'En cours',
+      'ended' => 'Terminé',
+      'closing' => 'Fermeture',
+      _ => 'Hors ligne',
+    };
+    final statusColor =
+        isActive ? const Color(0xFF22C55E) : const Color(0xFF9CA3AF);
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 8 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: <Widget>[
+          CircleAvatar(
+            radius: compact ? 16 : 20,
+            backgroundColor: const Color(0x14F59E0B),
+            child: Icon(
+              room.isHost ? Icons.star : Icons.group,
+              size: compact ? 16 : 20,
+              color: const Color(0xFFB45309),
+            ),
+          ),
+          SizedBox(width: compact ? 8 : 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: <Widget>[
+                    Text(
+                      room.roomCode,
+                      style: TextStyle(
+                        color: const Color(0xFF334155),
+                        fontWeight: FontWeight.w800,
+                        fontSize: compact ? 12 : 13,
+                        letterSpacing: compact ? 1.5 : 2,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: compact ? 10 : 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  room.isHost
+                      ? 'Hôte • ${playerCount ?? 0} joueur(s)'
+                      : 'Participant • ${playerCount ?? 0} joueur(s)',
+                  style: TextStyle(
+                    color: const Color(0xFF64748B),
+                    fontSize: compact ? 11 : 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: compact ? 6 : 8),
+          FilledButton(
+            onPressed: isActive ? () => _rejoinRoom(room.roomCode) : null,
+            style: FilledButton.styleFrom(
+              visualDensity:
+                  compact ? VisualDensity.compact : VisualDensity.standard,
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 12,
+                vertical: compact ? 8 : 10,
+              ),
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Rejoindre',
+              style: TextStyle(fontSize: compact ? 11 : 12),
+            ),
+          ),
+          PopupMenuButton<String>(
+            iconColor: const Color(0xFF64748B),
+            onSelected: (action) {
+              if (action == 'remove_saved') {
+                _removeSavedRoom(room.roomCode);
+              } else if (action == 'invite_friends') {
+                _inviteFriendsToRoom(room.roomCode);
+              }
+            },
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem(
+                value: 'invite_friends',
+                child: Text('Inviter des amis'),
+              ),
+              const PopupMenuItem(
+                value: 'remove_saved',
+                child: Text('Retirer de Mes salons'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobilePortraitLayout() {
+    return ListView(
+      children: <Widget>[
+        _buildMenuActionCard(
+          icon: Icons.home_outlined,
+          title: 'Créer un salon',
+          subtitle: 'Lance un salon privé ou public et invite ton groupe.',
+          accent: const Color(0xFFF59E0B),
+          onTap: _openCreateSelection,
+        ),
+        const SizedBox(height: 12),
+        _buildMenuActionCard(
+          icon: Icons.lock_open_rounded,
+          title: 'Rejoindre un salon',
+          subtitle:
+              'Saisis un code privé ou rejoins une partie publique disponible.',
+          accent: const Color(0xFFF97316),
+          onTap: _openJoinSelection,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 430,
+          child: _buildMyRoomsCard(
+            helperText:
+                'Salons en attente / arrière-plan. Tu peux rejoindre sans les supprimer de la liste.',
+            emptyLabel: 'Aucun salon enregistré.',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLandscapeLayout() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: _buildMenuActionCard(
+                  icon: Icons.home_outlined,
+                  title: 'Créer un salon',
+                  subtitle: 'Lance un salon privé ou public.',
+                  accent: const Color(0xFFF59E0B),
+                  compact: true,
+                  centerVertically: true,
+                  onTap: _openCreateSelection,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _buildMenuActionCard(
+                  icon: Icons.lock_open_rounded,
+                  title: 'Rejoindre un salon',
+                  subtitle: 'Code privé ou partie publique.',
+                  accent: const Color(0xFFF97316),
+                  compact: true,
+                  centerVertically: true,
+                  onTap: _openJoinSelection,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildMyRoomsCard(
+            helperText:
+                'Salons en attente. Tu peux rejoindre sans les supprimer.',
+            emptyLabel: 'Aucun salon',
+            compact: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopSplitLayout() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: _buildMenuActionCard(
+                  icon: Icons.home_outlined,
+                  title: 'Créer un salon',
+                  subtitle: 'Lance un salon privé ou public.',
+                  accent: const Color(0xFFF59E0B),
+                  centerVertically: true,
+                  onTap: _openCreateSelection,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: _buildMenuActionCard(
+                  icon: Icons.lock_open_rounded,
+                  title: 'Rejoindre un salon',
+                  subtitle: 'Code privé ou partie publique.',
+                  accent: const Color(0xFFF97316),
+                  centerVertically: true,
+                  onTap: _openJoinSelection,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildMyRoomsCard(
+            helperText:
+                'Salons en attente. Tu peux rejoindre sans les supprimer.',
+            emptyLabel: 'Aucun salon',
+          ),
+        ),
+      ],
     );
   }
 }

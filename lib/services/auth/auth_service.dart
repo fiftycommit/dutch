@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
+import '../network/network_probe_service.dart';
 
 class UserInfo {
   final String id;
@@ -52,6 +53,17 @@ class AuthService {
     final token = await getStoredToken();
     final fbUser = _firebaseAuth.currentUser;
     if (token == null || fbUser == null) return null;
+
+    final canReachBackend = await NetworkProbeService.canReachBackend(
+      timeout: const Duration(milliseconds: 900),
+    );
+    if (!canReachBackend) {
+      return UserInfo(
+        id: fbUser.uid,
+        username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+        displayName: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+      );
+    }
 
     try {
       final response = await http.get(
@@ -217,6 +229,11 @@ class AuthService {
   }
 
   Future<String?> _resolveEmailFromIdentifier(String identifier) async {
+    final canReachBackend = await NetworkProbeService.canReachBackend(
+      timeout: const Duration(milliseconds: 900),
+    );
+    if (!canReachBackend) return null;
+
     try {
       final response = await http
           .get(
@@ -238,6 +255,11 @@ class AuthService {
   }
 
   Future<String?> _resolveEmailFromUsername(String username) async {
+    final canReachBackend = await NetworkProbeService.canReachBackend(
+      timeout: const Duration(milliseconds: 900),
+    );
+    if (!canReachBackend) return null;
+
     try {
       final normalizedUsername = username.trim().toLowerCase();
       final response = await http
