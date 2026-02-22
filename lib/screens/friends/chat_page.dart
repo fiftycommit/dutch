@@ -641,70 +641,55 @@ class _InputBarState extends State<_InputBar> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.hasWallpaper
-        ? Colors.white.withValues(alpha: 0.80)
-        : Colors.white;
-
-    return Container(
+    return Padding(
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
         top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
-      decoration: BoxDecoration(
-        color: bg,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // + button
+          // + button — même couleur que le textField, icône noire
           GestureDetector(
             onTap: widget.onPlusPressed,
             child: Container(
               width: 36,
               height: 36,
-              margin: const EdgeInsets.only(bottom: 2),
               decoration: const BoxDecoration(
-                color: Color(0xFFE5E7EB),
+                color: Color(0xFFF3F4F6),
                 shape: BoxShape.circle,
               ),
-              child:
-                  const Icon(Icons.add, color: Color(0xFF374151), size: 22),
+              child: const Icon(Icons.add, color: Colors.black, size: 22),
             ),
           ),
           const SizedBox(width: 8),
 
-          // Text field
+          // Text field — compact, même hauteur que les boutons
           Expanded(
             child: _recording
                 ? Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                    height: 36,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.mic, color: Colors.red, size: 18),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.mic, color: Colors.red, size: 16),
+                        const SizedBox(width: 6),
                         const Expanded(
                           child: Text('Enregistrement…',
                               style: TextStyle(
-                                  color: Color(0xFF374151), fontSize: 14)),
+                                  color: Color(0xFF374151), fontSize: 13)),
                         ),
                         GestureDetector(
                           onTap: _cancelRecord,
                           child: const Icon(Icons.delete_outline,
-                              color: Color(0xFF9CA3AF), size: 20),
+                              color: Color(0xFF9CA3AF), size: 18),
                         ),
                       ],
                     ),
@@ -716,17 +701,18 @@ class _InputBarState extends State<_InputBar> {
                     maxLines: null,
                     keyboardType: TextInputType.multiline,
                     style: const TextStyle(
-                        color: Color(0xFF111827), fontSize: 14),
+                        color: Color(0xFF111827), fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Message…',
                       hintStyle:
-                          const TextStyle(color: Color(0xFF9CA3AF)),
+                          const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
                       filled: true,
                       fillColor: const Color(0xFFF3F4F6),
+                      isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                          horizontal: 14, vertical: 9),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -734,16 +720,15 @@ class _InputBarState extends State<_InputBar> {
           ),
           const SizedBox(width: 8),
 
-          // Send or mic button
+          // Bouton droit : vert si peut envoyer, bleu (mic) sinon
           if (_hasText)
             GestureDetector(
               onTap: widget.onSend,
               child: Container(
                 width: 36,
                 height: 36,
-                margin: const EdgeInsets.only(bottom: 2),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF4F46E5),
+                  color: Color(0xFF4feb69),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.arrow_upward,
@@ -757,15 +742,15 @@ class _InputBarState extends State<_InputBar> {
               child: Container(
                 width: 36,
                 height: 36,
-                margin: const EdgeInsets.only(bottom: 2),
                 decoration: BoxDecoration(
-                  color: _recording ? Colors.red : const Color(0xFFE5E7EB),
+                  color: _recording
+                      ? Colors.red
+                      : const Color(0xFF21a1f4),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.mic,
-                  color:
-                      _recording ? Colors.white : const Color(0xFF374151),
+                  color: _recording ? Colors.white : Colors.black,
                   size: 20,
                 ),
               ),
