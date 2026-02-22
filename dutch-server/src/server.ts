@@ -17,6 +17,7 @@ import authRoutes from './routes/authRoutes';
 import friendsRoutes from './routes/friendsRoutes';
 import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
+import chatKeyRoutes from './routes/chatKeyRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
@@ -254,6 +255,9 @@ export function startServer() {
 
   // Routes Admin (gestion des utilisateurs)
   app.use('/api/admin', adminRoutes);
+
+  // Routes Chat keys (chiffrement E2E)
+  app.use('/api/chats', chatKeyRoutes);
 
   // Dashboard admin
   app.get('/admin', (req, res) => {
