@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
@@ -33,7 +37,8 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  String? _wallpaperPath;
+  String? _wallpaperUrl;
+  StreamSubscription<DocumentSnapshot>? _wallpaperSub;
 
   @override
   void initState() {
@@ -41,40 +46,65 @@ class _ChatPageState extends State<ChatPage> {
     _chatService = PrivateChatService();
     _myUserId = context.read<AuthProvider>().user!.id;
     _chatId = PrivateChatService.chatId(_myUserId, widget.friendUserId);
-    _loadWallpaper();
+    _listenWallpaper();
   }
 
-  Future<void> _loadWallpaper() async {
-    final prefs = await SharedPreferences.getInstance();
-    final path = prefs.getString('wallpaper_$_chatId');
-    if (path != null && File(path).existsSync()) {
-      setState(() => _wallpaperPath = path);
-    }
+  void _listenWallpaper() {
+    _wallpaperSub = FirebaseFirestore.instance
+        .collection('private_chats')
+        .doc(_chatId)
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) return;
+      final data = doc.data();
+      final url = data?['wallpaperUrl'] as String?;
+      setState(() => _wallpaperUrl = url);
+    });
   }
 
   Future<void> _pickWallpaper() async {
     final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: ImageSource.gallery);
+    XFile? xfile;
+    try {
+      xfile = await picker.pickImage(source: ImageSource.gallery);
+    } catch (e) {
+      return;
+    }
     if (xfile == null) return;
 
-    // Copier dans le dossier app pour que ça persiste
-    final dir = await getApplicationDocumentsDirectory();
-    final dest = File('${dir.path}/wallpaper_$_chatId.jpg');
-    await File(xfile.path).copy(dest.path);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('wallpaper_$_chatId', dest.path);
-    setState(() => _wallpaperPath = dest.path);
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('chat_wallpapers/$_chatId.jpg');
+    if (kIsWeb) {
+      final bytes = await xfile.readAsBytes();
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+    } else {
+      await ref.putFile(
+          File(xfile.path), SettableMetadata(contentType: 'image/jpeg'));
+    }
+    final url = await ref.getDownloadURL();
+    await FirebaseFirestore.instance
+        .collection('private_chats')
+        .doc(_chatId)
+        .set({'wallpaperUrl': url}, SetOptions(merge: true));
   }
 
   Future<void> _removeWallpaper() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('wallpaper_$_chatId');
-    setState(() => _wallpaperPath = null);
+    await FirebaseFirestore.instance
+        .collection('private_chats')
+        .doc(_chatId)
+        .update({'wallpaperUrl': FieldValue.delete()});
+    try {
+      await FirebaseStorage.instance
+          .ref()
+          .child('chat_wallpapers/$_chatId.jpg')
+          .delete();
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _wallpaperSub?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -105,10 +135,20 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _pickImage(ImageSource source) async {
     Navigator.pop(context);
     final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: source, imageQuality: 85);
+    XFile? xfile;
+    try {
+      xfile = await picker.pickImage(source: source, imageQuality: 85);
+    } catch (e) {
+      return;
+    }
     if (xfile == null) return;
-    final file = File(xfile.path);
-    await _chatService.sendImage(_chatId, _myUserId, file);
+    if (kIsWeb) {
+      final bytes = await xfile.readAsBytes();
+      await _chatService.sendImageBytes(_chatId, _myUserId, bytes);
+    } else {
+      final file = File(xfile.path);
+      await _chatService.sendImage(_chatId, _myUserId, file);
+    }
     _scrollToBottom();
   }
 
@@ -141,14 +181,15 @@ class _ChatPageState extends State<ChatPage> {
               title: const Text('Bibliothèque photos'),
               onTap: () => _pickImage(ImageSource.gallery),
             ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF10B981),
-                child: Icon(Icons.camera_alt, color: Colors.white),
+            if (!kIsWeb)
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF10B981),
+                  child: Icon(Icons.camera_alt, color: Colors.white),
+                ),
+                title: const Text('Appareil photo'),
+                onTap: () => _pickImage(ImageSource.camera),
               ),
-              title: const Text('Appareil photo'),
-              onTap: () => _pickImage(ImageSource.camera),
-            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -188,7 +229,7 @@ class _ChatPageState extends State<ChatPage> {
                 _pickWallpaper();
               },
             ),
-            if (_wallpaperPath != null)
+            if (_wallpaperUrl != null)
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFEF4444),
@@ -209,7 +250,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hasWallpaper = _wallpaperPath != null;
+    final hasWallpaper = _wallpaperUrl != null;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -254,7 +295,7 @@ class _ChatPageState extends State<ChatPage> {
           decoration: hasWallpaper
               ? BoxDecoration(
                   image: DecorationImage(
-                    image: FileImage(File(_wallpaperPath!)),
+                    image: NetworkImage(_wallpaperUrl!),
                     fit: BoxFit.cover,
                   ),
                 )
@@ -561,6 +602,8 @@ class _AudioBubbleState extends State<_AudioBubble> {
 
 // ─── Input bar ────────────────────────────────────────────────────────────────
 
+enum _RecordState { idle, recording, preview }
+
 class _InputBar extends StatefulWidget {
   const _InputBar({
     required this.controller,
@@ -590,10 +633,14 @@ class _InputBar extends StatefulWidget {
 
 class _InputBarState extends State<_InputBar> {
   bool _hasText = false;
-  bool _recording = false;
+  _RecordState _recordState = _RecordState.idle;
   final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _previewPlayer = AudioPlayer();
   DateTime? _recordStart;
   String? _recordPath;
+  int _elapsedSeconds = 0;
+  Timer? _timer;
+  bool _previewPlaying = false;
 
   @override
   void initState() {
@@ -602,11 +649,16 @@ class _InputBarState extends State<_InputBar> {
       final has = widget.controller.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
     });
+    _previewPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _previewPlaying = false);
+    });
   }
 
   @override
   void dispose() {
     _recorder.dispose();
+    _previewPlayer.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -618,27 +670,59 @@ class _InputBarState extends State<_InputBar> {
         '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.aacLc), path: _recordPath!);
+    _elapsedSeconds = 0;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsedSeconds++);
+    });
     setState(() {
-      _recording = true;
+      _recordState = _RecordState.recording;
       _recordStart = DateTime.now();
     });
   }
 
   Future<void> _stopRecord() async {
+    _timer?.cancel();
     await _recorder.stop();
+    setState(() => _recordState = _RecordState.preview);
+  }
+
+  Future<void> _cancelRecord() async {
+    _timer?.cancel();
+    await _recorder.stop();
+    await _previewPlayer.stop();
+    setState(() {
+      _recordState = _RecordState.idle;
+      _previewPlaying = false;
+    });
+  }
+
+  Future<void> _sendAudio() async {
+    final path = _recordPath;
+    if (path == null) return;
     final durationMs =
         DateTime.now().difference(_recordStart!).inMilliseconds;
-    final path = _recordPath;
-    setState(() => _recording = false);
-    if (path == null) return;
+    await _previewPlayer.stop();
+    setState(() {
+      _recordState = _RecordState.idle;
+      _previewPlaying = false;
+    });
     await widget.chatService
         .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
     widget.onMediaSent();
   }
 
-  Future<void> _cancelRecord() async {
-    await _recorder.stop();
-    setState(() => _recording = false);
+  Future<void> _togglePreview() async {
+    if (_previewPlaying) {
+      await _previewPlayer.pause();
+      setState(() => _previewPlaying = false);
+    } else {
+      await _previewPlayer.play(DeviceFileSource(_recordPath!));
+      setState(() => _previewPlaying = true);
+    }
+  }
+
+  String _fmtSeconds(int s) {
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
   @override
@@ -650,115 +734,214 @@ class _InputBarState extends State<_InputBar> {
         top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
+      child: _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    switch (_recordState) {
+      case _RecordState.recording:
+        return _buildRecordingBar();
+      case _RecordState.preview:
+        return _buildPreviewBar();
+      case _RecordState.idle:
+        return _buildIdleBar();
+    }
+  }
+
+  Widget _buildRecordingBar() {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(26),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // + button — gris visible, icône noire
+          // Pulsing red mic
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.8, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            builder: (_, v, child) => Transform.scale(scale: v, child: child),
+            child: const Icon(Icons.mic, color: Colors.red, size: 24),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _fmtSeconds(_elapsedSeconds),
+            style: const TextStyle(
+                color: Colors.red, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('Appuie pour arrêter',
+                style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+          ),
           GestureDetector(
-            onTap: widget.onPlusPressed,
+            onTap: _cancelRecord,
+            child: const Icon(Icons.delete_outline,
+                color: Color(0xFF9CA3AF), size: 22),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _stopRecord,
             child: Container(
               width: 36,
               height: 36,
               decoration: const BoxDecoration(
-                color: Color(0xFFD1D5DB),
+                color: Colors.red,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.add, color: Color(0xFF111827), size: 22),
+              child: const Icon(Icons.stop, color: Colors.white, size: 20),
             ),
           ),
-          const SizedBox(width: 8),
-
-          // Text field — compact, même hauteur que les boutons
-          Expanded(
-            child: _recording
-                ? Container(
-                    height: 36,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.mic, color: Colors.red, size: 16),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text('Enregistrement…',
-                              style: TextStyle(
-                                  color: Color(0xFF374151), fontSize: 13)),
-                        ),
-                        GestureDetector(
-                          onTap: _cancelRecord,
-                          child: const Icon(Icons.delete_outline,
-                              color: Color(0xFF9CA3AF), size: 18),
-                        ),
-                      ],
-                    ),
-                  )
-                : TextField(
-                    controller: widget.controller,
-                    focusNode: widget.focusNode,
-                    textCapitalization: TextCapitalization.sentences,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    style: const TextStyle(
-                        color: Color(0xFF111827), fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Message…',
-                      hintStyle:
-                          const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                      filled: true,
-                      fillColor: const Color(0xFFF3F4F6),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 8),
-
-          // Bouton droit : vert si peut envoyer, bleu (mic) sinon
-          if (_hasText)
-            GestureDetector(
-              onTap: widget.onSend,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF4feb69),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_upward,
-                    color: Colors.white, size: 20),
-              ),
-            )
-          else
-            GestureDetector(
-              onLongPressStart: (_) => _startRecord(),
-              onLongPressEnd: (_) => _stopRecord(),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _recording
-                      ? Colors.red
-                      : const Color(0xFF21a1f4),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.mic,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPreviewBar() {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _togglePreview,
+            child: Icon(
+              _previewPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_filled,
+              color: const Color(0xFF21a1f4),
+              size: 34,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.graphic_eq, color: Color(0xFF6B7280), size: 20),
+          const SizedBox(width: 4),
+          Text(
+            _fmtSeconds(_elapsedSeconds),
+            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: _cancelRecord,
+            child: const Icon(Icons.delete_outline,
+                color: Color(0xFFEF4444), size: 22),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _sendAudio,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Color(0xFF4feb69),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.send, color: Colors.white, size: 18),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIdleBar() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // + button
+        GestureDetector(
+          onTap: widget.onPlusPressed,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              color: Color(0xFFD1D5DB),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.add, color: Color(0xFF111827), size: 22),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Text field with Enter = send, Shift+Enter = newline
+        Expanded(
+          child: Focus(
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.enter &&
+                  !HardwareKeyboard.instance.isShiftPressed) {
+                if (_hasText) widget.onSend();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: TextField(
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              textCapitalization: TextCapitalization.sentences,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              style:
+                  const TextStyle(color: Color(0xFF111827), fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Message…',
+                hintStyle: const TextStyle(
+                    color: Color(0xFF9CA3AF), fontSize: 13),
+                filled: true,
+                fillColor: const Color(0xFFF3F4F6),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 9),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Right button: send (green) or mic (blue/tap to start)
+        if (_hasText)
+          GestureDetector(
+            onTap: widget.onSend,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Color(0xFF4feb69),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_upward,
+                  color: Colors.white, size: 20),
+            ),
+          )
+        else
+          GestureDetector(
+            onTap: _startRecord,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Color(0xFF21a1f4),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.mic,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

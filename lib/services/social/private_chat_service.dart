@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
@@ -117,6 +118,24 @@ class PrivateChatService {
       'senderId': senderId,
       'type': 'text',
       'text': payload,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> sendImageBytes(
+      String cId, String senderId, List<int> bytes) async {
+    final ref = _storage
+        .ref()
+        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await ref.putData(
+        Uint8List.fromList(bytes),
+        SettableMetadata(contentType: 'image/jpeg'));
+    final url = await ref.getDownloadURL();
+    await _messages(cId).add({
+      'senderId': senderId,
+      'type': 'image',
+      'text': '',
+      'mediaUrl': url,
       'timestamp': FieldValue.serverTimestamp(),
     });
   }

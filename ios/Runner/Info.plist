@@ -49,5 +49,11 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Utilisé pour envoyer des photos dans le chat</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Utilisé pour envoyer des photos dans le chat</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Utilisé pour envoyer des messages vocaux</string>
 </dict>
 </plist>
