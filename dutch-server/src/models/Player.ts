@@ -16,6 +16,7 @@ export enum BotSkillLevel {
 export interface Player {
   id: string;
   name: string;
+  username?: string;
   isHuman: boolean;
   clientId?: string;
   userId?: string;
@@ -42,11 +43,13 @@ export function createPlayer(
   botBehavior?: BotBehavior,
   botSkillLevel?: BotSkillLevel,
   clientId?: string,
-  userId?: string
+  userId?: string,
+  username?: string
 ): Player {
   return {
     id,
     name,
+    username,
     isHuman,
     clientId,
     userId,

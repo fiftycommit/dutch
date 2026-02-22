@@ -7,48 +7,102 @@ import { AuthenticatedSocket } from '../middleware/socketAuthMiddleware';
 import { FriendsService } from '../services/FriendsService';
 import { firestoreService } from '../services/FirestoreService';
 import { PushNotificationService } from '../services/PushNotificationService';
+import {
+  FIREBASE_UNAVAILABLE_ERROR_CODE,
+  isRoomRegistryUnavailableError,
+  roomRegistryService,
+} from '../services/RoomRegistryService';
 
 export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: Server) {
   const authSocket = socket as AuthenticatedSocket;
   const socketUser = authSocket.data.user;
 
-  socket.on('room:create', (data, callback) => {
+  const firebaseDownPayload = {
+    success: false,
+    errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+    error:
+      'Service multijoueur temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/',
+  };
+
+  const authRequiredPayload = {
+    success: false,
+    errorCode: 'AUTH_REQUIRED',
+    error: 'Connexion requise pour le multijoueur.',
+  };
+
+  const handleRegistryError = (error: unknown, callback: (payload: Record<string, unknown>) => void) => {
+    if (isRoomRegistryUnavailableError(error)) {
+      callback(firebaseDownPayload);
+      return true;
+    }
+    return false;
+  };
+
+  socket.on('room:create', async (data, callback) => {
     try {
-      // Utiliser le nom du compte si authentifié, sinon sanitize le nom fourni
-      const playerName = socketUser?.displayName
-        || ValidationService.sanitizePlayerName(data.playerName);
+      if (!socketUser?.uid) {
+        callback(authRequiredPayload);
+        return;
+      }
+      roomRegistryService.ensureAvailable();
+
+      // Utiliser le nom du compte authentifié
+      const playerName = socketUser.displayName || 'Joueur';
 
       const room = roomManager.createRoom(
         socket.id,
         data.settings,
         playerName,
         data.clientId,
-        socketUser?.uid
+        socketUser?.uid,
+        socketUser?.username
       );
       socket.join(room.id);
-      roomManager.broadcastPresence(room.id);
-
-      console.log(`Room created: ${room.id} by ${socket.id}`);
+      let createdPublicRoom = false;
 
       // Si c'est une room publique, l'ajouter au service
       if (data.settings?.isPublic === true) {
         onPublicRoomCreated(
           room.id,
-          data.playerName || 'Joueur',
+          playerName,
           data.settings.gameMode || 'quick',
           data.settings.numberOfPlayers || 4,
           undefined,
           data.settings.roomName
         );
+        createdPublicRoom = true;
       }
 
-      // Sauvegarder en DB si authentifié
-      if (socketUser?.uid) {
-        firestoreService.saveRoomToUser(socketUser.uid, room.id, true).catch(() => { /* best effort */ });
+      const localHost = room.players.find((p) => p.id === socket.id);
+      try {
+        await roomRegistryService.upsertRoom(room);
+        if (localHost) {
+          await roomRegistryService.upsertMember(room, localHost);
+        }
+        roomRegistryService.bindSocketMembership(socket.id, room.id, socketUser.uid);
+      } catch (syncError) {
+        socket.leave(room.id);
+        roomManager.handleLeave(room.id, socket.id);
+        if (createdPublicRoom) {
+          onPublicRoomPlayerLeft(room.id, 0);
+        }
+        if (handleRegistryError(syncError, callback)) {
+          return;
+        }
+        throw syncError;
       }
+
+      roomManager.broadcastPresence(room.id);
+      console.log(`Room created: ${room.id} by ${socket.id}`);
+
+      // Sauvegarder en DB si authentifié
+      firestoreService.saveRoomToUser(socketUser.uid, room.id, true).catch(() => { /* best effort */ });
 
       callback({ success: true, roomCode: room.id, room });
     } catch (error: any) {
+      if (handleRegistryError(error, callback)) {
+        return;
+      }
       console.error('Error creating room:', error);
       callback({ success: false, error: error.message });
     }
@@ -57,6 +111,15 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
   socket.on('room:join', async (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
+      if (!roomCode) {
+        callback({ success: false, error: 'Code de salon invalide' });
+        return;
+      }
+      if (!socketUser?.uid) {
+        callback(authRequiredPayload);
+        return;
+      }
+      roomRegistryService.ensureAvailable();
 
       // Rate limit sur les tentatives de join
       const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket.handshake.address);
@@ -65,15 +128,40 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         return;
       }
 
-      const playerName = socketUser?.displayName
-        || ValidationService.sanitizePlayerName(data.playerName);
+      const playerName = socketUser.displayName || 'Joueur';
+
+      const duplicateConnected = roomManager.findConnectedPlayerByUserId(
+        roomCode,
+        socketUser.uid
+      );
+      if (duplicateConnected && duplicateConnected.id !== socket.id) {
+        io?.to(duplicateConnected.id).emit('room:duplicate_login_attempt', {
+          roomCode,
+          attemptedAt: Date.now(),
+        });
+        callback({
+          success: false,
+          errorCode: 'ALREADY_IN_ROOM',
+          error:
+            'Tu es déjà dans ce salon sur un autre appareil. Reviens sur ta session active.',
+        });
+        return;
+      }
+
+      roomManager.detachIdentityFromOtherRooms(roomCode, {
+        socketId: socket.id,
+        userId: socketUser.uid,
+        username: socketUser.username,
+        clientId: data.clientId?.toString(),
+      });
 
       const result = roomManager.joinRoom(
         roomCode,
         socket.id,
         playerName,
         data.clientId,
-        socketUser?.uid
+        socketUser.uid,
+        socketUser.username
       );
 
       if (result.error || !result.room) {
@@ -82,6 +170,28 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       socket.join(roomCode);
+
+      const localPlayer =
+        result.player ??
+        result.room.players.find(
+          (p) => p.id === socket.id || p.userId?.trim() === socketUser.uid
+        );
+
+      try {
+        await roomRegistryService.upsertRoom(result.room);
+        if (localPlayer) {
+          await roomRegistryService.upsertMember(result.room, localPlayer);
+        }
+        roomRegistryService.bindSocketMembership(socket.id, roomCode, socketUser.uid);
+      } catch (syncError) {
+        socket.leave(roomCode);
+        roomManager.handleLeave(roomCode, socket.id);
+        if (handleRegistryError(syncError, callback)) {
+          return;
+        }
+        throw syncError;
+      }
+
       if (result.player) {
         roomManager.notifyPlayerJoined(roomCode, result.player);
       }
@@ -94,13 +204,14 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       // Sauvegarder en DB si authentifié
-      if (socketUser?.uid) {
-        firestoreService.saveRoomToUser(socketUser.uid, roomCode, false).catch(() => { /* best effort */ });
-      }
+      firestoreService.saveRoomToUser(socketUser.uid, roomCode, false).catch(() => { /* best effort */ });
 
       console.log(`Player ${socket.id} joined room ${roomCode}`);
       callback({ success: true, room: result.room });
     } catch (error: any) {
+      if (handleRegistryError(error, callback)) {
+        return;
+      }
       console.error('Error joining room:', error);
       callback({ success: false, error: error.message });
     }
@@ -196,7 +307,8 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
   });
 
   socket.on('room:leave', (data) => {
-    const { roomCode } = data;
+    const roomCode = data?.roomCode?.toString().toUpperCase();
+    if (!roomCode) return;
     socket.leave(roomCode);
     roomManager.handleLeave(roomCode, socket.id);
 
@@ -207,6 +319,25 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     } else {
       // La room n'existe plus, la supprimer du service public
       onPublicRoomPlayerLeft(roomCode, 0);
+    }
+
+    if (socketUser?.uid) {
+      roomRegistryService.unbindSocketMembership(socket.id);
+      void roomRegistryService
+        .removeMember(roomCode, socketUser.uid)
+        .then(async () => {
+          const room = roomManager.getRoom(roomCode);
+          if (room) {
+            await roomRegistryService.upsertRoom(room);
+          } else {
+            await roomRegistryService.archiveRoom(roomCode, [socketUser.uid]);
+          }
+        })
+        .catch((error) => {
+          if (!isRoomRegistryUnavailableError(error)) {
+            console.error('Error syncing leave to room registry:', error);
+          }
+        });
     }
 
     console.log(`Player ${socket.id} left room ${roomCode}`);
@@ -222,6 +353,12 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         socket.leave(roomCode);
         // Supprimer du service de rooms publiques
         onPublicRoomPlayerLeft(roomCode, 0);
+        roomRegistryService.unbindSocketMembership(socket.id);
+        void roomRegistryService.archiveRoom(roomCode).catch((error) => {
+          if (!isRoomRegistryUnavailableError(error)) {
+            console.error('Error archiving room in room registry:', error);
+          }
+        });
         console.log(`Room ${roomCode} closed by host ${socket.id}`);
       }
 
@@ -239,6 +376,27 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       const success = roomManager.transferHost(roomCode, socket.id);
 
       if (success) {
+        if (socketUser?.uid) {
+          const room = roomManager.getRoom(roomCode);
+          const requester = room?.players.find((p) => p.id === socket.id);
+          if (room && requester) {
+            void roomRegistryService
+              .upsertRoom(room)
+              .then(async () => {
+                await roomRegistryService.upsertMember(room, requester);
+                roomRegistryService.bindSocketMembership(
+                  socket.id,
+                  roomCode,
+                  socketUser.uid
+                );
+              })
+              .catch((error) => {
+                if (!isRoomRegistryUnavailableError(error)) {
+                  console.error('Error syncing host transfer to room registry:', error);
+                }
+              });
+          }
+        }
         console.log(`Host transferred to ${socket.id} in room ${roomCode}`);
       }
 
@@ -269,15 +427,64 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
   // Récupérer les rooms actives où le joueur est présent
   socket.on('room:my_active', (data, callback) => {
     try {
-      const clientId = data?.clientId?.toString();
       const userId = socketUser?.uid;
+      if (!userId) {
+        callback({ ...authRequiredPayload, rooms: [] });
+        return;
+      }
+      roomRegistryService.ensureAvailable();
 
-      const rooms = roomManager.getActiveRoomsForMember({
-        userId,
-        clientId,
-      });
-      callback({ rooms });
+      void roomRegistryService.syncFromRoomManager(roomManager);
+
+      roomRegistryService
+        .getUserActiveRooms(userId)
+        .then(async (entries) => {
+          const rooms: Array<{ roomCode: string; status: string; playerCount: number; isHost: boolean }> = [];
+          const staleRoomCodes: string[] = [];
+
+          for (const entry of entries) {
+            const room = roomManager.getRoom(entry.roomCode);
+            if (!room || room.status === 'closing') {
+              staleRoomCodes.push(entry.roomCode);
+              continue;
+            }
+            const member = room.players.find(
+              (player) => player.isHuman && player.userId?.trim() === userId
+            );
+            if (!member) {
+              staleRoomCodes.push(entry.roomCode);
+              continue;
+            }
+            const host = room.players.find((p) => p.id === room.hostPlayerId);
+            const isHost = host?.userId?.trim() === userId;
+            const active = roomManager.checkActiveRooms([entry.roomCode])[0];
+            rooms.push({
+              roomCode: entry.roomCode,
+              status: active?.status ?? room.status,
+              playerCount: active?.playerCount ?? entry.playerCount,
+              isHost,
+            });
+          }
+
+          for (const staleCode of staleRoomCodes) {
+            await roomRegistryService.removeActiveRoomForUser(userId, staleCode);
+          }
+
+          callback({ success: true, rooms });
+        })
+        .catch((error) => {
+          if (isRoomRegistryUnavailableError(error)) {
+            callback({ ...firebaseDownPayload, rooms: [] });
+            return;
+          }
+          console.error('Error getting my active rooms:', error);
+          callback({ rooms: [] });
+        });
     } catch (error: any) {
+      if (isRoomRegistryUnavailableError(error)) {
+        callback({ ...firebaseDownPayload, rooms: [] });
+        return;
+      }
       console.error('Error getting my active rooms:', error);
       callback({ rooms: [] });
     }
@@ -330,6 +537,10 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
       const targetClientId = data.clientId?.toString();
+      const roomBefore = roomManager.getRoom(roomCode);
+      const kickedUid = roomBefore?.players.find(
+        (p) => p.clientId === targetClientId
+      )?.userId;
 
       if (!targetClientId) {
         callback({ success: false, error: 'clientId requis' });
@@ -339,6 +550,21 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       const success = roomManager.kickPlayer(roomCode, socket.id, targetClientId);
 
       if (success) {
+        if (kickedUid) {
+          void roomRegistryService.removeMember(roomCode, kickedUid).catch((error) => {
+            if (!isRoomRegistryUnavailableError(error)) {
+              console.error('Error syncing kick to room registry:', error);
+            }
+          });
+        }
+        const updatedRoom = roomManager.getRoom(roomCode);
+        if (updatedRoom) {
+          void roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
+            if (!isRoomRegistryUnavailableError(error)) {
+              console.error('Error updating room after kick:', error);
+            }
+          });
+        }
         console.log(`Player ${targetClientId} kicked from ${roomCode} (can rejoin)`);
       }
 
@@ -371,6 +597,10 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
       const targetClientId = data.clientId?.toString();
+      const roomBefore = roomManager.getRoom(roomCode);
+      const bannedUid = roomBefore?.players.find(
+        (p) => p.clientId === targetClientId
+      )?.userId;
 
       if (!targetClientId) {
         callback({ success: false, error: 'clientId requis' });
@@ -380,6 +610,21 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       const success = roomManager.banPlayer(roomCode, socket.id, targetClientId);
 
       if (success) {
+        if (bannedUid) {
+          void roomRegistryService.removeMember(roomCode, bannedUid).catch((error) => {
+            if (!isRoomRegistryUnavailableError(error)) {
+              console.error('Error syncing ban to room registry:', error);
+            }
+          });
+        }
+        const updatedRoom = roomManager.getRoom(roomCode);
+        if (updatedRoom) {
+          void roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
+            if (!isRoomRegistryUnavailableError(error)) {
+              console.error('Error updating room after ban:', error);
+            }
+          });
+        }
         console.log(`Player ${targetClientId} BANNED from ${roomCode}`);
       }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -44,7 +45,8 @@ class SocketConnectionHandler {
   String? get clientId => _clientId;
   int get latencyMs => _latencyMs;
   int get serverTimeOffsetMs => _serverTimeOffsetMs;
-  int get serverNowMs => DateTime.now().millisecondsSinceEpoch + _serverTimeOffsetMs;
+  int get serverNowMs =>
+      DateTime.now().millisecondsSinceEpoch + _serverTimeOffsetMs;
   SocketConnectionState get connectionState => _connectionState;
 
   Future<String> ensureClientId() async {
@@ -55,9 +57,32 @@ class SocketConnectionHandler {
   }
 
   String? _authToken;
+  String? _authUid;
+
+  String? _extractUidFromJwt(String? token) {
+    if (token == null || token.isEmpty) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is! Map<String, dynamic>) return null;
+      return (payload['user_id'] ?? payload['sub'])?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
 
   void setAuthToken(String? token) {
+    final newUid = _extractUidFromJwt(token);
+    final identityChanged = (_authUid ?? '') != (newUid ?? '');
     _authToken = token;
+    _authUid = newUid;
+    if (identityChanged && isConnected) {
+      // Force un nouveau handshake Socket.IO avec le bon compte.
+      disconnect();
+    }
   }
 
   Future<void> connect(void Function(io.Socket) setupListeners) async {
@@ -120,7 +145,8 @@ class SocketConnectionHandler {
     }
   }
 
-  void handleDisconnect(String reason, void Function(io.Socket) setupListeners) {
+  void handleDisconnect(
+      String reason, void Function(io.Socket) setupListeners) {
     if (kDebugMode) debugPrint('❌ Déconnecté du serveur: $reason');
     _stopPingLoop();
     _latencyMs = 0;
@@ -131,9 +157,11 @@ class SocketConnectionHandler {
     }
   }
 
-  Future<void> _attemptReconnect(void Function(io.Socket) setupListeners) async {
+  Future<void> _attemptReconnect(
+      void Function(io.Socket) setupListeners) async {
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      if (kDebugMode) debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
+      if (kDebugMode)
+        debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
       _setConnectionState(SocketConnectionState.disconnected);
       onError?.call('Connexion perdue. Veuillez réessayer.');
       return;
@@ -144,7 +172,8 @@ class SocketConnectionHandler {
     final delay = Duration(seconds: pow(2, _reconnectAttempts).toInt());
     _reconnectAttempts++;
 
-    debugPrint('🔄 Tentative de reconnexion $_reconnectAttempts/$_maxReconnectAttempts dans ${delay.inSeconds}s...');
+    debugPrint(
+        '🔄 Tentative de reconnexion $_reconnectAttempts/$_maxReconnectAttempts dans ${delay.inSeconds}s...');
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () async {
@@ -156,13 +185,15 @@ class SocketConnectionHandler {
         await connect(setupListeners);
 
         if (isConnected && lastRoomCode != null && lastPlayerName != null) {
-          if (kDebugMode) debugPrint('🔄 Tentative de rejoindre la room $lastRoomCode...');
+          if (kDebugMode)
+            debugPrint('🔄 Tentative de rejoindre la room $lastRoomCode...');
           try {
             await onReconnectToRoom?.call(lastRoomCode!, lastPlayerName!);
             if (kDebugMode) debugPrint('✅ Room rejointe après reconnexion');
             flushPendingActions();
           } catch (e) {
-            if (kDebugMode) debugPrint('⚠️ Impossible de rejoindre la room: $e');
+            if (kDebugMode)
+              debugPrint('⚠️ Impossible de rejoindre la room: $e');
           }
         }
       } catch (e) {
@@ -175,7 +206,9 @@ class SocketConnectionHandler {
   void flushPendingActions() {
     if (pendingActions.isEmpty) return;
 
-    if (kDebugMode) debugPrint('📤 Envoi de ${pendingActions.length} action(s) en attente...');
+    if (kDebugMode)
+      debugPrint(
+          '📤 Envoi de ${pendingActions.length} action(s) en attente...');
 
     for (final action in pendingActions) {
       final event = action['event'] as String;
@@ -201,7 +234,8 @@ class SocketConnectionHandler {
     if (_socket == null || !_socket!.connected) return;
 
     final clientTime = DateTime.now().millisecondsSinceEpoch;
-    _socket!.emitWithAck('client:ping', {'clientTime': clientTime}, ack: (response) {
+    _socket!.emitWithAck('client:ping', {'clientTime': clientTime},
+        ack: (response) {
       final now = DateTime.now().millisecondsSinceEpoch;
       final rtt = (now - clientTime).clamp(0, 10000);
       _latencyMs = rtt;

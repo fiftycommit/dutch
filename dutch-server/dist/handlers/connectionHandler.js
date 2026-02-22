@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupConnectionHandler = setupConnectionHandler;
+const RoomRegistryService_1 = require("../services/RoomRegistryService");
 function setupConnectionHandler(socket, roomManager) {
     socket.on('client:ping', (data, callback) => {
         roomManager.touchPlayer(socket.id);
@@ -26,6 +27,9 @@ function setupConnectionHandler(socket, roomManager) {
     socket.on('disconnect', () => {
         console.log(`Client disconnected: ${socket.id}`);
         roomManager.handleDisconnect(socket.id);
+        void RoomRegistryService_1.roomRegistryService.handleSocketDisconnected(socket.id).catch((error) => {
+            console.error('Room registry disconnect sync error:', error);
+        });
         // Note: Les rooms publiques vides sont nettoyées automatiquement
         // par le publicRoomService toutes les minutes
     });

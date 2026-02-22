@@ -72,6 +72,17 @@ class RoomManager {
     getRoom(roomCode) {
         return this.rooms.get(roomCode);
     }
+    findConnectedPlayerByUserId(roomCode, userId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return undefined;
+        const normalizedUserId = userId.trim();
+        const now = this.now();
+        return room.players.find((p) => p.isHuman &&
+            p.userId?.trim() === normalizedUserId &&
+            (p.connected ?? false) &&
+            !this.isPlayerStale(p, now));
+    }
     getRoomCount() {
         return this.rooms.size;
     }
@@ -127,12 +138,12 @@ class RoomManager {
         this.actionTimers.clear();
         this.rooms.clear();
     }
-    createRoom(hostSocketId, settings, playerName, clientId, userId) {
+    createRoom(hostSocketId, settings, playerName, clientId, userId, username) {
         const normalizedSettings = this.normalizeSettings(settings);
         const roomCode = this.generateRoomCode();
         const expiresAt = this.now() + this.roomTtlMs;
         const room = (0, Room_1.createRoom)(roomCode, hostSocketId, normalizedSettings, expiresAt);
-        const hostPlayer = (0, Player_1.createPlayer)(hostSocketId, playerName || 'Hôte', true, 0, undefined, undefined, clientId, userId);
+        const hostPlayer = (0, Player_1.createPlayer)(hostSocketId, playerName || 'Hôte', true, 0, undefined, undefined, clientId, userId, username);
         hostPlayer.connected = true;
         hostPlayer.focused = true;
         hostPlayer.lastSeenAt = this.now();
@@ -141,41 +152,65 @@ class RoomManager {
         this.rooms.set(roomCode, room);
         return room;
     }
-    joinRoom(roomCode, socketId, playerName, clientId, userId) {
+    joinRoom(roomCode, socketId, playerName, clientId, userId, username) {
         const room = this.rooms.get(roomCode);
         if (!room) {
             return { error: 'Room introuvable' };
         }
         this.pruneWaitingRoom(room);
         this.ensureHost(room);
+        const normalizedUserId = userId?.trim();
+        const normalizedUsername = username?.trim().toLowerCase();
+        const normalizedClientId = clientId?.trim();
         // Vérifier si le joueur a été BANNI (pas juste kické)
-        if (clientId && room.bannedClientIds?.has(clientId)) {
+        if (normalizedClientId && room.bannedClientIds?.has(normalizedClientId)) {
             return { error: 'Vous avez été banni de cette room' };
         }
-        if (clientId) {
-            const existing = room.players.find((p) => p.clientId === clientId);
-            if (existing) {
-                // Allow rejoining even if playing
-                const previousId = existing.id;
-                existing.id = socketId;
-                if (playerName) {
-                    existing.name = playerName;
-                }
-                existing.isHuman = true;
-                existing.connected = true;
-                existing.focused = true;
-                existing.lastSeenAt = this.now();
-                // Clear any pending presence check for this player
-                const pendingCheck = this.presenceChecks.get(roomCode);
-                if (pendingCheck && pendingCheck.playerId === previousId) {
-                    this.clearPresenceCheck(roomCode, previousId);
-                }
-                if (room.hostPlayerId === previousId) {
-                    room.hostPlayerId = socketId;
-                }
-                this.touchRoom(room);
-                return { room, player: existing };
+        const matchesIdentity = (player) => {
+            if (!player.isHuman)
+                return false;
+            if (normalizedUserId) {
+                return player.userId?.trim() == normalizedUserId;
             }
+            if (normalizedUsername) {
+                return player.username?.trim().toLowerCase() == normalizedUsername;
+            }
+            if (normalizedClientId) {
+                return player.clientId?.trim() == normalizedClientId;
+            }
+            return false;
+        };
+        const existing = room.players.find(matchesIdentity);
+        if (existing) {
+            // Allow rejoining even if playing
+            const previousId = existing.id;
+            existing.id = socketId;
+            if (playerName) {
+                existing.name = playerName;
+            }
+            if (normalizedUsername) {
+                existing.username = normalizedUsername;
+            }
+            if (normalizedUserId) {
+                existing.userId = normalizedUserId;
+            }
+            if (normalizedClientId) {
+                existing.clientId = normalizedClientId;
+            }
+            existing.isHuman = true;
+            existing.connected = true;
+            existing.focused = true;
+            existing.lastSeenAt = this.now();
+            // Clear any pending presence check for this player
+            const pendingCheck = this.presenceChecks.get(roomCode);
+            if (pendingCheck && pendingCheck.playerId === previousId) {
+                this.clearPresenceCheck(roomCode, previousId);
+            }
+            if (room.hostPlayerId === previousId) {
+                room.hostPlayerId = socketId;
+            }
+            this.touchRoom(room);
+            return { room, player: existing };
         }
         // Si la partie est en cours, on rejoint comme SPECTATEUR
         const isSpectator = (room.status !== Room_1.RoomStatus.waiting && room.status !== Room_1.RoomStatus.ended);
@@ -186,7 +221,7 @@ class RoomManager {
         if (!isSpectator && this.activePlayerCount(room) >= maxPlayers) {
             return { error: 'Room pleine' };
         }
-        const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, clientId, userId);
+        const player = (0, Player_1.createPlayer)(socketId, playerName || `Joueur ${room.players.length + 1}`, true, room.players.length, undefined, undefined, normalizedClientId, normalizedUserId, normalizedUsername);
         player.connected = true;
         player.focused = true;
         player.lastSeenAt = this.now();
@@ -907,6 +942,44 @@ class RoomManager {
         }
         this.cleanupRooms();
     }
+    /**
+     * Retire un joueur des autres rooms avant un nouveau join.
+     * Empêche les doublons cross-room quand le socket/client réutilise une session.
+     */
+    detachIdentityFromOtherRooms(targetRoomCode, params) {
+        const normalizedTarget = targetRoomCode.toUpperCase();
+        const userId = params.userId?.trim();
+        const username = params.username?.trim().toLowerCase();
+        const clientId = params.clientId?.trim();
+        const matchesIdentity = (player) => {
+            if (!player.isHuman)
+                return false;
+            if (player.id === params.socketId)
+                return true;
+            if (userId && player.userId?.trim() === userId)
+                return true;
+            if (!userId && username && player.username?.trim().toLowerCase() === username) {
+                return true;
+            }
+            if (!userId && !username && clientId && player.clientId?.trim() === clientId) {
+                return true;
+            }
+            return false;
+        };
+        const leaves = [];
+        for (const room of this.rooms.values()) {
+            if (room.id.toUpperCase() === normalizedTarget)
+                continue;
+            for (const player of room.players) {
+                if (matchesIdentity(player)) {
+                    leaves.push({ roomCode: room.id, playerId: player.id });
+                }
+            }
+        }
+        for (const leave of leaves) {
+            this.handleLeave(leave.roomCode, leave.playerId);
+        }
+    }
     checkGameEndCondition(roomCode) {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
@@ -1400,8 +1473,9 @@ class RoomManager {
      */
     getActiveRoomsForMember(params) {
         const userId = params.userId?.trim();
+        const username = params.username?.trim().toLowerCase();
         const clientId = params.clientId?.trim();
-        if (!userId && !clientId) {
+        if (!userId && !username && !clientId) {
             return [];
         }
         const matchesMember = (player) => {
@@ -1409,7 +1483,10 @@ class RoomManager {
                 return false;
             if (userId && player.userId === userId)
                 return true;
-            if (clientId && player.clientId === clientId)
+            if (!userId && username && player.username?.trim().toLowerCase() === username) {
+                return true;
+            }
+            if (!userId && !username && clientId && player.clientId === clientId)
                 return true;
             return false;
         };

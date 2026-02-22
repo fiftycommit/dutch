@@ -77,10 +77,20 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
+    const statusUrl = 'https://downdetector.com/status/firebase/';
+    final hasStatusUrl = message.contains(statusUrl);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+        action: hasStatusUrl
+            ? SnackBarAction(
+                label: 'Copier lien',
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: statusUrl));
+                },
+              )
+            : null,
       ),
     );
   }

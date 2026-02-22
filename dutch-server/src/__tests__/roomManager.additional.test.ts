@@ -106,6 +106,33 @@ test('joinRoom with existing clientId reconnects player', (t) => {
   assert.equal(player!.connected, true);
 });
 
+test('findConnectedPlayerByUserId returns only connected/still-active member', (t) => {
+  const { manager } = createManager();
+  t.after(() => manager.dispose());
+
+  const room = manager.createRoom(
+    'host-uid',
+    {
+      minPlayers: 2,
+      maxPlayers: 4,
+      fillBots: false,
+    },
+    'Host',
+    'host-client',
+    'uid-host',
+    'host'
+  );
+
+  manager.joinRoom(room.id, 'player-socket', 'Player', 'player-client', 'uid-player', 'player');
+  const connected = manager.findConnectedPlayerByUserId(room.id, 'uid-player');
+  assert.ok(connected);
+  assert.equal(connected?.id, 'player-socket');
+
+  manager.handleDisconnect('player-socket');
+  const disconnected = manager.findConnectedPlayerByUserId(room.id, 'uid-player');
+  assert.equal(disconnected, undefined);
+});
+
 // ============ Tests handleLeave ============
 
 test('handleLeave removes or disconnects player from room', (t) => {

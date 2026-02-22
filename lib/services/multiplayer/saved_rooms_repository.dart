@@ -38,13 +38,18 @@ class SavedRoomsRepository {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
 
   AuthService? _authService;
+  String? _authToken;
 
   void setAuthService(AuthService? authService) {
     _authService = authService;
   }
 
+  void setAuthToken(String? token) {
+    _authToken = token;
+  }
+
   Future<Map<String, String>?> _authHeaders() async {
-    final token = await _authService?.getStoredToken();
+    final token = _authToken ?? await _authService?.getStoredToken();
     if (token == null) return null;
     return {
       'Content-Type': 'application/json',
@@ -57,22 +62,30 @@ class SavedRoomsRepository {
     final headers = await _authHeaders();
     if (headers != null) {
       try {
-        final response = await http.get(
-          Uri.parse('$_baseUrl/api/rooms/mine'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 10));
+        final response = await http
+            .get(
+              Uri.parse('$_baseUrl/api/rooms/mine'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 10));
 
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          return (data['rooms'] as List).map((r) => SavedRoom(
-            roomCode: r['roomCode'] as String,
-            isHost: r['isHost'] as bool,
-            joinedAt: DateTime.tryParse(r['joinedAt'] as String? ?? '') ?? DateTime.now(),
-          )).toList();
+          return (data['rooms'] as List)
+              .map((r) => SavedRoom(
+                    roomCode: r['roomCode'] as String,
+                    isHost: r['isHost'] as bool,
+                    joinedAt:
+                        DateTime.tryParse(r['joinedAt'] as String? ?? '') ??
+                            DateTime.now(),
+                  ))
+              .toList();
         }
       } catch (e) {
         if (kDebugMode) debugPrint('getMyRooms server error: $e');
       }
+      // Compte authentifié: ne pas fallback local cross-compte.
+      return <SavedRoom>[];
     }
 
     // Fallback local
@@ -84,21 +97,24 @@ class SavedRoomsRepository {
   }
 
   Future<void> saveRoom(String roomCode, {required bool isHost}) async {
-    // Sauvegarder côté serveur
+    // Sauvegarder côté serveur (compte authentifié)
     final headers = await _authHeaders();
     if (headers != null) {
       try {
-        await http.post(
-          Uri.parse('$_baseUrl/api/rooms/save'),
-          headers: headers,
-          body: jsonEncode({'roomCode': roomCode, 'isHost': isHost}),
-        ).timeout(const Duration(seconds: 10));
+        await http
+            .post(
+              Uri.parse('$_baseUrl/api/rooms/save'),
+              headers: headers,
+              body: jsonEncode({'roomCode': roomCode, 'isHost': isHost}),
+            )
+            .timeout(const Duration(seconds: 10));
       } catch (e) {
         if (kDebugMode) debugPrint('saveRoom server error: $e');
       }
+      return;
     }
 
-    // Aussi sauvegarder localement
+    // Mode invité: sauvegarder localement
     final prefs = await SharedPreferences.getInstance();
     final rooms = await _getLocalRooms(prefs);
 
@@ -120,20 +136,23 @@ class SavedRoomsRepository {
   }
 
   Future<void> removeRoom(String roomCode) async {
-    // Supprimer côté serveur
+    // Supprimer côté serveur (compte authentifié)
     final headers = await _authHeaders();
     if (headers != null) {
       try {
-        await http.delete(
-          Uri.parse('$_baseUrl/api/rooms/$roomCode'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 10));
+        await http
+            .delete(
+              Uri.parse('$_baseUrl/api/rooms/$roomCode'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 10));
       } catch (e) {
         if (kDebugMode) debugPrint('removeRoom server error: $e');
       }
+      return;
     }
 
-    // Supprimer localement
+    // Mode invité: supprimer localement
     final prefs = await SharedPreferences.getInstance();
     final rooms = await _getLocalRooms(prefs);
     rooms.removeWhere((r) => r.roomCode == roomCode);

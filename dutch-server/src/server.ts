@@ -19,6 +19,7 @@ import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
+import { roomRegistryService } from './services/RoomRegistryService';
 
 const startedAt = new Date().toISOString();
 
@@ -160,6 +161,7 @@ export function startServer() {
   });
 
   const roomManager = new RoomManager(io);
+  roomRegistryService.startPeriodicSync(roomManager);
 
   io.on('connection', (socket) => {
     const user = socket.data.user;

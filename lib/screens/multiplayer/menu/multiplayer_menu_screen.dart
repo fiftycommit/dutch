@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -174,30 +175,6 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
           )
           .where((room) => room.roomCode.isNotEmpty)
           .toList();
-    } else {
-      // Fallback rétrocompatible: historique sauvegardé + check d'activité.
-      final savedRooms = await provider.getMyRooms();
-      visibleRooms = savedRooms;
-      if (savedRooms.isNotEmpty) {
-        final roomCodes = savedRooms.map((room) => room.roomCode).toList();
-        final checkedRooms = await provider.checkActiveRooms(roomCodes);
-        activeRooms = checkedRooms ?? <Map<String, dynamic>>[];
-
-        if (checkedRooms != null) {
-          final activeByCode = <String, Map<String, dynamic>>{
-            for (final room in activeRooms)
-              ((room['roomCode'] as String?) ?? '').toUpperCase():
-                  Map<String, dynamic>.from(room),
-          };
-          visibleRooms = savedRooms.where((saved) {
-            final info = activeByCode[saved.roomCode.toUpperCase()];
-            if (info == null) return false;
-            final rawStatus = (info['status'] as String?)?.toLowerCase();
-            if (rawStatus == null || rawStatus.isEmpty) return true;
-            return rawStatus != 'offline';
-          }).toList();
-        }
-      }
     }
 
     if (!mounted) {
@@ -689,6 +666,15 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
 
   Future<void> _rejoinRoom(String roomCode) async {
     final provider = context.read<MultiplayerGameProvider>();
+    final normalizedTarget = roomCode.toUpperCase();
+    final currentCode = provider.roomCode?.toUpperCase();
+    if (currentCode == normalizedTarget &&
+        (provider.isInLobby || provider.isPlaying)) {
+      if (!mounted) return;
+      context.go('/lobby');
+      return;
+    }
+
     try {
       await provider.joinRoom(
         roomCode: roomCode,
@@ -714,10 +700,20 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     if (!mounted) {
       return;
     }
+    const statusUrl = 'https://downdetector.com/status/firebase/';
+    final hasStatusUrl = message.contains(statusUrl);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        action: hasStatusUrl
+            ? SnackBarAction(
+                label: 'Copier lien',
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: statusUrl));
+                },
+              )
+            : null,
       ),
     );
   }

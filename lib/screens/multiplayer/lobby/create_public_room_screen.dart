@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -77,10 +78,20 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
+    const statusUrl = 'https://downdetector.com/status/firebase/';
+    final hasStatusUrl = message.contains(statusUrl);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+        action: hasStatusUrl
+            ? SnackBarAction(
+                label: 'Copier lien',
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: statusUrl));
+                },
+              )
+            : null,
       ),
     );
   }

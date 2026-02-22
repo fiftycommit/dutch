@@ -72,6 +72,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onEmoteReceived;
   Function(Map<String, dynamic>)? onTournamentEliminated;
   Function(Map<String, dynamic>)? onTournamentEnded;
+  Function(Map<String, dynamic>)? onDuplicateLoginAttempt;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONNEXION
@@ -91,6 +92,7 @@ class MultiplayerService {
   /// Setter pour le token d'authentification (appelé par le provider)
   void setAuthToken(String? token) {
     _connectionHandler.setAuthToken(token);
+    _roomsRepository.setAuthToken(token);
   }
 
   Future<void> connect() async {
@@ -180,7 +182,18 @@ class MultiplayerService {
       'room:my_active',
       {'clientId': resolvedClientId},
       ack: (response) {
-        if (response == null || response['rooms'] == null) {
+        if (response == null) {
+          completer.complete(null);
+          return;
+        }
+        if (response is Map && response['success'] == false) {
+          if (kDebugMode) {
+            debugPrint('⚠️ room:my_active error: ${_socketErrorMessage(response)}');
+          }
+          completer.complete(null);
+          return;
+        }
+        if (response['rooms'] == null) {
           completer.complete(null);
           return;
         }
@@ -226,7 +239,7 @@ class MultiplayerService {
         _roomsRepository.saveRoom(response['roomCode'] as String, isHost: true);
         completer.complete(response['roomCode']);
       } else {
-        completer.completeError(response['error'] ?? 'Erreur inconnue');
+        completer.completeError(_socketErrorMessage(response));
       }
     });
 
@@ -285,7 +298,7 @@ class MultiplayerService {
         _roomsRepository.saveRoom(roomCode.toUpperCase(), isHost: false);
         completer.complete(response['room'] as Map<String, dynamic>?);
       } else {
-        completer.completeError(response['error'] ?? 'Erreur inconnue');
+        completer.completeError(_socketErrorMessage(response));
       }
     });
 
@@ -541,6 +554,11 @@ class MultiplayerService {
     socket.on('tournament:ended', (data) {
       if (data is Map) onTournamentEnded?.call(data.cast<String, dynamic>());
     });
+    socket.on('room:duplicate_login_attempt', (data) {
+      if (data is Map) {
+        onDuplicateLoginAttempt?.call(data.cast<String, dynamic>());
+      }
+    });
 
     socket.on('game:full_state', (data) {
       if (data is Map) {
@@ -563,6 +581,22 @@ class MultiplayerService {
         } catch (_) {}
       }
     });
+  }
+
+  String _socketErrorMessage(dynamic response) {
+    if (response is! Map) return 'Erreur inconnue';
+    final code = response['errorCode']?.toString();
+    final fallback = response['error']?.toString() ?? 'Erreur inconnue';
+    switch (code) {
+      case 'BACKEND_UNAVAILABLE_FIREBASE':
+        return 'Service multijoueur temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/';
+      case 'ALREADY_IN_ROOM':
+        return 'Tu es déjà dans ce salon sur un autre appareil.';
+      case 'AUTH_REQUIRED':
+        return 'Connexion requise pour le multijoueur.';
+      default:
+        return fallback;
+    }
   }
 
   void _handleGameStateUpdate(dynamic data) {

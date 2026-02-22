@@ -25,6 +25,7 @@ const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
+const RoomRegistryService_1 = require("./services/RoomRegistryService");
 const startedAt = new Date().toISOString();
 function renderHomePage(roomCount) {
     return `
@@ -157,6 +158,7 @@ function startServer() {
         }
     });
     const roomManager = new RoomManager_1.RoomManager(io);
+    RoomRegistryService_1.roomRegistryService.startPeriodicSync(roomManager);
     io.on('connection', (socket) => {
         const user = socket.data.user;
         const userInfo = user ? ` (user: ${user.username})` : ' (guest)';

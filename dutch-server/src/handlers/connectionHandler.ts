@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
+import { roomRegistryService } from '../services/RoomRegistryService';
 
 export function setupConnectionHandler(socket: Socket, roomManager: RoomManager) {
   socket.on(
@@ -30,6 +31,9 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
     roomManager.handleDisconnect(socket.id);
+    void roomRegistryService.handleSocketDisconnected(socket.id).catch((error) => {
+      console.error('Room registry disconnect sync error:', error);
+    });
     // Note: Les rooms publiques vides sont nettoyées automatiquement
     // par le publicRoomService toutes les minutes
   });

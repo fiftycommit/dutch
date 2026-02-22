@@ -83,6 +83,22 @@ function createManager(options = {}) {
     strict_1.default.equal(player.id, 'new-socket');
     strict_1.default.equal(player.connected, true);
 });
+(0, node_test_1.default)('findConnectedPlayerByUserId returns only connected/still-active member', (t) => {
+    const { manager } = createManager();
+    t.after(() => manager.dispose());
+    const room = manager.createRoom('host-uid', {
+        minPlayers: 2,
+        maxPlayers: 4,
+        fillBots: false,
+    }, 'Host', 'host-client', 'uid-host', 'host');
+    manager.joinRoom(room.id, 'player-socket', 'Player', 'player-client', 'uid-player', 'player');
+    const connected = manager.findConnectedPlayerByUserId(room.id, 'uid-player');
+    strict_1.default.ok(connected);
+    strict_1.default.equal(connected?.id, 'player-socket');
+    manager.handleDisconnect('player-socket');
+    const disconnected = manager.findConnectedPlayerByUserId(room.id, 'uid-player');
+    strict_1.default.equal(disconnected, undefined);
+});
 // ============ Tests handleLeave ============
 (0, node_test_1.default)('handleLeave removes or disconnects player from room', (t) => {
     const { manager } = createManager();

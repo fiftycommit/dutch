@@ -406,6 +406,12 @@ class MultiplayerGameProvider
     _multiplayerService.onEmoteReceived = _handleEmoteReceived;
     _multiplayerService.onTournamentEliminated = _handleTournamentEliminated;
     _multiplayerService.onTournamentEnded = _handleTournamentEnded;
+    _multiplayerService.onDuplicateLoginAttempt = (_) {
+      _eventController.add(GameEvent(
+        GameEventType.info,
+        'Tentative de connexion détectée sur ce salon depuis un autre appareil.',
+      ));
+    };
   }
 
   void _handleEmoteReceived(Map<String, dynamic> data) {

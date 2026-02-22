@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { firestoreService } from '../services/FirestoreService';
+import {
+  FIREBASE_UNAVAILABLE_ERROR_CODE,
+  isRoomRegistryUnavailableError,
+  roomRegistryService,
+} from '../services/RoomRegistryService';
 
 const router = Router();
 
@@ -10,17 +15,27 @@ router.get('/mine', requireAuth, async (req, res) => {
   const uid = authReq.user!.uid;
 
   try {
-    const rooms = await firestoreService.getUserRooms(uid);
+    const rooms = await roomRegistryService.getUserActiveRooms(uid);
 
     res.json({
       success: true,
       rooms: rooms.map(r => ({
         roomCode: r.roomCode,
         isHost: r.isHost,
-        joinedAt: r.joinedAt?.toDate?.()?.toISOString() || '',
+        status: r.status,
+        playerCount: r.playerCount,
+        joinedAt: r.updatedAt?.toDate?.()?.toISOString() || '',
       })),
     });
   } catch (e) {
+    if (isRoomRegistryUnavailableError(e)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error: 'Service multiplayer indisponible. Vérifie Firebase.',
+      });
+      return;
+    }
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
