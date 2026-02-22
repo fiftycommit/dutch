@@ -508,8 +508,9 @@ class MultiplayerService {
 
     socket.on('room:kicked', (data) {
       // Kické mais peut revenir
-      if (_currentRoomCode != null)
+      if (_currentRoomCode != null) {
         _roomsRepository.removeRoom(_currentRoomCode!);
+      }
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onKicked?.call(data.cast<String, dynamic>());
@@ -517,8 +518,9 @@ class MultiplayerService {
 
     socket.on('room:banned', (data) {
       // Banni définitivement - ne peut plus revenir
-      if (_currentRoomCode != null)
+      if (_currentRoomCode != null) {
         _roomsRepository.removeRoom(_currentRoomCode!);
+      }
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onBanned?.call(data.cast<String, dynamic>());
@@ -531,8 +533,9 @@ class MultiplayerService {
       if (data is Map) onPlayerAfk?.call(data.cast<String, dynamic>());
     });
     socket.on('special_power:targeted', (data) {
-      if (data is Map)
+      if (data is Map) {
         onSpecialPowerTargeted?.call(data.cast<String, dynamic>());
+      }
     });
     socket.on('special_power:swap_notification', (data) {
       if (data is Map) onSwapNotification?.call(data.cast<String, dynamic>());
@@ -548,8 +551,9 @@ class MultiplayerService {
       if (data is Map) onEmoteReceived?.call(data.cast<String, dynamic>());
     });
     socket.on('tournament:eliminated', (data) {
-      if (data is Map)
+      if (data is Map) {
         onTournamentEliminated?.call(data.cast<String, dynamic>());
+      }
     });
     socket.on('tournament:ended', (data) {
       if (data is Map) onTournamentEnded?.call(data.cast<String, dynamic>());
@@ -576,8 +580,9 @@ class MultiplayerService {
         try {
           final cardJson = data['card'] as Map<String, dynamic>?;
           final targetName = data['targetPlayerName'] as String? ?? 'Inconnu';
-          if (cardJson != null)
+          if (cardJson != null) {
             onSpiedCard?.call(PlayingCard.fromJson(cardJson), targetName);
+          }
         } catch (_) {}
       }
     });

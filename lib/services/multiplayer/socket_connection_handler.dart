@@ -160,8 +160,9 @@ class SocketConnectionHandler {
   Future<void> _attemptReconnect(
       void Function(io.Socket) setupListeners) async {
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
+      }
       _setConnectionState(SocketConnectionState.disconnected);
       onError?.call('Connexion perdue. Veuillez réessayer.');
       return;
@@ -185,15 +186,17 @@ class SocketConnectionHandler {
         await connect(setupListeners);
 
         if (isConnected && lastRoomCode != null && lastPlayerName != null) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint('🔄 Tentative de rejoindre la room $lastRoomCode...');
+          }
           try {
             await onReconnectToRoom?.call(lastRoomCode!, lastPlayerName!);
             if (kDebugMode) debugPrint('✅ Room rejointe après reconnexion');
             flushPendingActions();
           } catch (e) {
-            if (kDebugMode)
+            if (kDebugMode) {
               debugPrint('⚠️ Impossible de rejoindre la room: $e');
+            }
           }
         }
       } catch (e) {
@@ -206,9 +209,10 @@ class SocketConnectionHandler {
   void flushPendingActions() {
     if (pendingActions.isEmpty) return;
 
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint(
           '📤 Envoi de ${pendingActions.length} action(s) en attente...');
+    }
 
     for (final action in pendingActions) {
       final event = action['event'] as String;
