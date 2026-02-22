@@ -43,7 +43,7 @@ dependencies:
 
   # Media
   image_picker: ^1.1.2
-  record: ^5.2.0
+  record: ^6.2.0
   url_launcher: ^6.3.1
 
   # Routing

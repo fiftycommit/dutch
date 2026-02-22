@@ -593,6 +593,7 @@ class _InputBarState extends State<_InputBar> {
   bool _recording = false;
   final AudioRecorder _recorder = AudioRecorder();
   DateTime? _recordStart;
+  String? _recordPath;
 
   @override
   void initState() {
@@ -613,10 +614,10 @@ class _InputBarState extends State<_InputBar> {
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) return;
     final dir = await getTemporaryDirectory();
-    final path =
+    _recordPath =
         '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+        const RecordConfig(encoder: AudioEncoder.aacLc), path: _recordPath!);
     setState(() {
       _recording = true;
       _recordStart = DateTime.now();
@@ -624,9 +625,10 @@ class _InputBarState extends State<_InputBar> {
   }
 
   Future<void> _stopRecord() async {
-    final path = await _recorder.stop();
+    await _recorder.stop();
     final durationMs =
         DateTime.now().difference(_recordStart!).inMilliseconds;
+    final path = _recordPath;
     setState(() => _recording = false);
     if (path == null) return;
     await widget.chatService
