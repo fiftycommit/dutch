@@ -859,10 +859,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   _pillButton(
                     icon: Icons.mark_email_unread_outlined,
                     label: '$pendingCount demandes',
-                    onTap: () {
-                      unawaited(
-                        _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
-                      );
+                    onTap: () async {
+                      await context.push('/friends');
+                      if (mounted) {
+                        await Future.wait<void>(
+                            [_loadSocialData(), _loadMyRooms()]);
+                      }
                     },
                   ),
                 ],
@@ -904,8 +906,11 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     final pill = _pillButton(
       icon: Icons.group_outlined,
       label: '${_friends.length} amis',
-      onTap: () {
-        unawaited(_openProfileSpaceWithTab(MultiplayerProfileTab.friends));
+      onTap: () async {
+        await context.push('/friends');
+        if (mounted) {
+          await Future.wait<void>([_loadSocialData(), _loadMyRooms()]);
+        }
       },
     );
     if (incomingCount <= 0) {
@@ -1092,7 +1097,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
         await _openProfileSpaceWithTab(MultiplayerProfileTab.profile);
         break;
       case 'friends':
-        await _openProfileSpaceWithTab(MultiplayerProfileTab.friends);
+        await context.push('/friends');
+        if (mounted) {
+          await Future.wait<void>([_loadSocialData(), _loadMyRooms()]);
+        }
         break;
       case 'logout':
         await _logout();

@@ -53,6 +53,8 @@ import '../screens/multiplayer/game/multiplayer_results_screen.dart'
     deferred as mp_results;
 import '../screens/multiplayer/game/multiplayer_dutch_reveal_screen.dart'
     deferred as mp_dutch;
+import '../screens/friends/friends_page.dart' deferred as friends_page;
+import '../screens/friends/chat_page.dart' deferred as friends_chat;
 
 /// Widget wrapper pour charger un module deferred avant d'afficher l'écran
 class _DeferredScreen extends StatelessWidget {
@@ -413,6 +415,36 @@ class AppRouter {
                   playerName: playerName,
                 );
               },
+            ),
+
+            // ============ AMIS (deferred) ============
+            GoRoute(
+              path: '/friends',
+              name: 'friends',
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: friends_page.loadLibrary,
+                  builder: () => friends_page.FriendsPage(),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/friends/chat/:friendUserId',
+              name: 'friendChat',
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: _DeferredScreen(
+                  loader: friends_chat.loadLibrary,
+                  builder: () => friends_chat.ChatPage(
+                    friendUserId: state.pathParameters['friendUserId']!,
+                    friendDisplayName:
+                        (state.extra as String?) ??
+                        state.uri.queryParameters['name'] ??
+                        '',
+                  ),
+                ),
+              ),
             ),
 
             // Routes pour les phases de jeu multiplayer
