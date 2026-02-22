@@ -77,6 +77,26 @@ class BlockedUserInfo {
   }
 }
 
+class UserLookupInfo {
+  final String userId;
+  final String username;
+  final String displayName;
+
+  const UserLookupInfo({
+    required this.userId,
+    required this.username,
+    required this.displayName,
+  });
+
+  factory UserLookupInfo.fromJson(Map<String, dynamic> json) {
+    return UserLookupInfo(
+      userId: json['id']?.toString() ?? '',
+      username: json['username'] as String? ?? '',
+      displayName: json['displayName'] as String? ?? '',
+    );
+  }
+}
+
 class FriendsApiService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
   final AuthService _authService;
@@ -240,6 +260,57 @@ class FriendsApiService {
     }
   }
 
+  Future<({bool exists, UserLookupInfo? user, String? error})>
+      lookupUserByUsername(String username) async {
+    if (!await _canReachBackend()) {
+      return (exists: false, user: null, error: 'Serveur indisponible');
+    }
+    final normalized = username.trim();
+    if (normalized.isEmpty) {
+      return (exists: false, user: null, error: 'Nom d utilisateur requis');
+    }
+    try {
+      final uri = Uri.parse('$_baseUrl/api/friends/lookup')
+          .replace(queryParameters: {'username': normalized});
+      final response = await http
+          .get(
+            uri,
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 404) {
+        return (exists: false, user: null, error: 'Utilisateur introuvable');
+      }
+
+      final data =
+          _decodeJsonResponse(response, endpoint: 'lookupUserByUsername');
+      if (data == null) {
+        return (exists: false, user: null, error: 'Réponse serveur invalide');
+      }
+
+      if (data['success'] == true &&
+          data['exists'] == true &&
+          data['user'] is Map) {
+        return (
+          exists: true,
+          user: UserLookupInfo.fromJson(
+            Map<String, dynamic>.from(data['user'] as Map),
+          ),
+          error: null,
+        );
+      }
+
+      return (
+        exists: false,
+        user: null,
+        error: data['error']?.toString() ?? 'Utilisateur introuvable',
+      );
+    } catch (_) {
+      return (exists: false, user: null, error: 'Erreur reseau');
+    }
+  }
+
   Future<bool> acceptRequest(String requestId) async {
     if (!await _canReachBackend()) {
       return false;
@@ -389,9 +460,12 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> inviteToRoom(String roomCode, String friendUserId) async {
+  Future<({bool success, String? error})> inviteToRoom(
+    String roomCode,
+    String friendUserId,
+  ) async {
     if (!await _canReachBackend()) {
-      return false;
+      return (success: false, error: 'Serveur indisponible');
     }
     try {
       final response = await http
@@ -403,11 +477,24 @@ class FriendsApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      final data = _decodeJsonResponse(response, endpoint: 'inviteToRoom');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map<String, dynamic>
+          ? decoded
+          : (decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : <String, dynamic>{});
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return (
+          success: false,
+          error: data['error']?.toString() ?? 'Erreur lors de l\'envoi',
+        );
+      }
+      return (
+        success: data['success'] == true,
+        error: data['error']?.toString(),
+      );
+    } catch (_) {
+      return (success: false, error: 'Erreur reseau');
     }
   }
 }

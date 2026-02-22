@@ -3,6 +3,7 @@ import { FriendsService } from '../services/FriendsService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { FIREBASE_UNAVAILABLE_ERROR_CODE } from '../services/RoomRegistryService';
+import { firestoreService } from '../services/FirestoreService';
 
 const router = Router();
 
@@ -38,6 +39,36 @@ router.get('/requests', async (req, res) => {
     res.json({ success: true, incoming, outgoing });
   } catch (error) {
     console.error('friends requests error:', error);
+    if (isFirestoreUnavailable(error)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error:
+          'Service social temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/',
+      });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/friends/lookup?username=foo
+router.get('/lookup', async (req, res) => {
+  try {
+    const username = typeof req.query.username === 'string'
+      ? req.query.username.trim()
+      : '';
+    if (!username) {
+      res.status(400).json({ success: false, error: 'Nom d\'utilisateur requis' });
+      return;
+    }
+    const lookup = await FriendsService.lookupUserByUsername(username);
+    if (!lookup.exists || !lookup.user) {
+      res.status(404).json({ success: false, exists: false, error: 'Utilisateur introuvable' });
+      return;
+    }
+    res.json({ success: true, exists: true, user: lookup.user });
+  } catch (error) {
     if (isFirestoreUnavailable(error)) {
       res.status(503).json({
         success: false,
@@ -129,6 +160,59 @@ router.post('/cancel', async (req, res) => {
   }
 
   res.json(result);
+});
+
+// POST /api/friends/invite
+router.post('/invite', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const { roomCode, friendUserId } = req.body;
+
+    const normalizedRoomCode = typeof roomCode === 'string'
+      ? roomCode.trim().toUpperCase()
+      : '';
+    const normalizedFriendUserId = typeof friendUserId === 'string'
+      ? friendUserId.trim()
+      : '';
+
+    if (!normalizedRoomCode || !normalizedFriendUserId) {
+      res.status(400).json({ success: false, error: 'roomCode et friendUserId requis' });
+      return;
+    }
+
+    const friends = await FriendsService.getFriends(authReq.user!.uid);
+    const isFriend = friends.some((friend) => friend.userId === normalizedFriendUserId);
+    if (!isFriend) {
+      res.status(403).json({ success: false, error: 'Ce joueur n\'est pas ton ami' });
+      return;
+    }
+
+    const sender = await firestoreService.getUser(authReq.user!.uid);
+    const inviterName =
+      sender?.displayName?.trim() ||
+      sender?.username?.trim() ||
+      authReq.user!.email ||
+      'Un ami';
+
+    await PushNotificationService.notifyRoomInvite(
+      normalizedFriendUserId,
+      inviterName,
+      normalizedRoomCode
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    if (isFirestoreUnavailable(error)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error:
+          'Service social temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/',
+      });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
 });
 
 // DELETE /api/friends/:userId

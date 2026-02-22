@@ -22,10 +22,12 @@ class MultiplayerMenuScreen extends StatefulWidget {
   State<MultiplayerMenuScreen> createState() => _MultiplayerMenuScreenState();
 }
 
-class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
+class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
+    with SingleTickerProviderStateMixin {
   final SocialHubRepository _socialRepository = SocialHubRepository();
   late final FriendsApiService _friendsApi;
   final GlobalKey _userPillKey = GlobalKey();
+  late final AnimationController _incomingRequestPulseController;
 
   SocialProfile? _profile;
   List<FriendInfo> _friends = <FriendInfo>[];
@@ -41,6 +43,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   @override
   void initState() {
     super.initState();
+    _incomingRequestPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    );
     final authProvider = context.read<AuthProvider>();
     _friendsApi = FriendsApiService(authProvider.authService);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,7 +105,11 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
       if (!mounted) return;
       setState(() {
         _profile = profile;
+        _friends = <FriendInfo>[];
+        _incomingRequests = <FriendRequestInfo>[];
+        _outgoingRequests = <FriendRequestInfo>[];
       });
+      _syncIncomingRequestPulse();
       return;
     }
 
@@ -118,6 +128,19 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
       _incomingRequests = requests.incoming;
       _outgoingRequests = requests.outgoing;
     });
+    _syncIncomingRequestPulse();
+  }
+
+  void _syncIncomingRequestPulse() {
+    final hasIncoming = _incomingRequests.isNotEmpty;
+    if (hasIncoming) {
+      if (!_incomingRequestPulseController.isAnimating) {
+        _incomingRequestPulseController.repeat(reverse: true);
+      }
+      return;
+    }
+    _incomingRequestPulseController.stop();
+    _incomingRequestPulseController.value = 0;
   }
 
   SocialProfile _buildProfileFromAuth(AuthProvider authProvider) {
@@ -730,6 +753,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   }
 
   @override
+  void dispose() {
+    _incomingRequestPulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final width = media.size.width;
@@ -805,6 +834,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
 
   Widget _buildHeader({required bool compact}) {
     final pendingCount = _incomingRequests.length + _outgoingRequests.length;
+    final incomingCount = _incomingRequests.length;
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -823,15 +853,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
               children: <Widget>[
                 _buildUserPill(),
                 const SizedBox(width: 8),
-                _pillButton(
-                  icon: Icons.group_outlined,
-                  label: '${_friends.length} amis',
-                  onTap: () {
-                    unawaited(
-                      _openProfileSpaceWithTab(MultiplayerProfileTab.friends),
-                    );
-                  },
-                ),
+                _buildFriendsCountPill(incomingCount: incomingCount),
                 if (pendingCount > 0) ...<Widget>[
                   const SizedBox(width: 8),
                   _pillButton(
@@ -862,13 +884,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
         const SizedBox(width: 10),
         _buildUserPill(),
         const SizedBox(width: 8),
-        _pillButton(
-          icon: Icons.group_outlined,
-          label: '${_friends.length} amis',
-          onTap: () {
-            unawaited(_openProfileSpaceWithTab(MultiplayerProfileTab.friends));
-          },
-        ),
+        _buildFriendsCountPill(incomingCount: incomingCount),
         if (pendingCount > 0) ...<Widget>[
           const SizedBox(width: 8),
           _pillButton(
@@ -881,6 +897,34 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildFriendsCountPill({required int incomingCount}) {
+    final pill = _pillButton(
+      icon: Icons.group_outlined,
+      label: '${_friends.length} amis',
+      onTap: () {
+        unawaited(_openProfileSpaceWithTab(MultiplayerProfileTab.friends));
+      },
+    );
+    if (incomingCount <= 0) {
+      return pill;
+    }
+    return AnimatedBuilder(
+      animation: _incomingRequestPulseController,
+      builder: (context, child) {
+        final pulse = _incomingRequestPulseController.value;
+        final scale = 1 + (pulse * 0.04);
+        return Transform.scale(
+          scale: scale,
+          child: Opacity(
+            opacity: 0.78 + (pulse * 0.22),
+            child: child,
+          ),
+        );
+      },
+      child: pill,
     );
   }
 

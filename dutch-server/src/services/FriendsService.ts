@@ -141,6 +141,28 @@ export class FriendsService {
     return { success: true, requestId, toUserId: target.uid };
   }
 
+  static async lookupUserByUsername(username: string): Promise<{
+    exists: boolean;
+    user?: PublicUser;
+  }> {
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) {
+      return { exists: false };
+    }
+    const target = await firestoreService.getUserByUsername(normalized);
+    if (!target) {
+      return { exists: false };
+    }
+    return {
+      exists: true,
+      user: {
+        id: target.uid,
+        username: target.data.username,
+        displayName: target.data.displayName,
+      },
+    };
+  }
+
   static async acceptRequest(userId: string, requestId: string): Promise<{ success: boolean; error?: string; toUserId?: string }> {
     const result = await firestoreService.acceptFriendRequest(requestId);
     if (!result) {

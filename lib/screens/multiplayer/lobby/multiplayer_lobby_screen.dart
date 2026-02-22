@@ -15,7 +15,6 @@ import 'widgets/lobby_chat_panel.dart';
 import 'widgets/lobby_players_panel.dart';
 import 'widgets/lobby_room_info.dart';
 
-
 class MultiplayerLobbyScreen extends StatefulWidget {
   const MultiplayerLobbyScreen({super.key});
 
@@ -38,8 +37,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _provider =
-          Provider.of<MultiplayerGameProvider>(context, listen: false);
+      _provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
       _eventSubscription = _provider!.events.listen((event) {
         if (!mounted) return;
         _handleGameEvent(event);
@@ -241,7 +239,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                               if (showPublicBadge)
                                 LobbyPublicBadge(uiScale: heightScale)
                               else if (showRoomCode)
-                                LobbyRoomCodeCard(provider: provider, uiScale: heightScale),
+                                LobbyRoomCodeCard(
+                                    provider: provider, uiScale: heightScale),
                               if (provider.roomSettings != null)
                                 LobbySettingsRow(
                                   provider: provider,
@@ -301,8 +300,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     double f(double size) => size * scale;
 
     return Padding(
-      padding:
-          EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
+      padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
       child: Row(
         children: [
           // Bouton Quitter/Fermer
@@ -746,15 +744,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Widget _buildBottomButtons(
-    BuildContext context,
-    MultiplayerGameProvider provider,
-    ColorScheme colors,
-    bool canStart,
-    int connectedHumans,
-    int maxPlayers,
-    int minPlayers,
-    {bool compact = false}
-  ) {
+      BuildContext context,
+      MultiplayerGameProvider provider,
+      ColorScheme colors,
+      bool canStart,
+      int connectedHumans,
+      int maxPlayers,
+      int minPlayers,
+      {bool compact = false}) {
     final scale = _uiScale(context);
     double f(double size) => size * scale;
     // Si la partie est en cours, afficher le bouton "Regarder"
@@ -766,8 +763,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           icon: Icon(Icons.visibility, size: f(18)),
           label: const Text('REGARDER LA PARTIE'),
           style: ElevatedButton.styleFrom(
-            padding:
-                EdgeInsets.symmetric(vertical: f(compact ? 12 : 16)),
+            padding: EdgeInsets.symmetric(vertical: f(compact ? 12 : 16)),
             backgroundColor: colors.tertiary,
             foregroundColor: Colors.white,
             elevation: 4,
@@ -860,12 +856,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ),
             label: Text(provider.isReady ? 'Pret' : 'Passer pret'),
             style: ElevatedButton.styleFrom(
-              padding:
-                  EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
+              padding: EdgeInsets.symmetric(vertical: f(compact ? 12 : 14)),
               backgroundColor:
                   provider.isReady ? colors.tertiary : Colors.white,
-              foregroundColor:
-                  provider.isReady ? Colors.white : colors.primary,
+              foregroundColor: provider.isReady ? Colors.white : colors.primary,
               elevation: provider.isReady ? 6 : 2,
             ),
           ),
@@ -910,7 +904,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     int maxPlayers,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    
+
     // Si on a déjà le maximum de joueurs, lancer directement
     if (connectedHumans >= maxPlayers) {
       await provider.startGame(fillBots: false);
@@ -931,13 +925,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       maxPlayers,
       provider,
     );
-    
+
     if (result == null) return; // Annulé
-    
+
     final numberOfBots = result['numberOfBots'] as int;
     final useSBMM = result['useSBMM'] as bool;
     final botDifficulty = result['botDifficulty'] as int?;
-    
+
     // Démarrer la partie avec les paramètres de bots
     if (numberOfBots > 0) {
       await provider.startGame(
@@ -949,7 +943,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     } else {
       await provider.startGame(fillBots: false);
     }
-    
+
     if (!mounted) return;
     if (provider.errorMessage != null) {
       messenger.showSnackBar(
@@ -990,7 +984,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Nombre de bots
                 const Text(
                   'Nombre de bots',
@@ -1012,12 +1006,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                     ),
                   ),
                 ),
-                
+
                 if (numberOfBots > 0) ...[
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 16),
-                  
+
                   // Mode SBMM ou Manuel
                   const Text(
                     'Niveau des bots',
@@ -1037,7 +1031,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                       setState(() => useSBMM = value);
                     },
                   ),
-                  
+
                   if (!useSBMM) ...[
                     const SizedBox(height: 8),
                     SegmentedButton<int>(
@@ -1108,7 +1102,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.people_outline, size: 48, color: Colors.grey),
+                    const Icon(Icons.people_outline,
+                        size: 48, color: Colors.grey),
                     const SizedBox(height: 12),
                     Text(
                       friends.isEmpty
@@ -1133,7 +1128,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                         icon: const Icon(Icons.send, color: Colors.green),
                         tooltip: 'Inviter',
                         onPressed: () async {
-                          final success = await friendsApi.inviteToRoom(
+                          final result = await friendsApi.inviteToRoom(
                             roomCode,
                             friend.userId,
                           );
@@ -1143,11 +1138,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                             ScaffoldMessenger.of(this.context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  success
+                                  result.success
                                       ? 'Invitation envoyée à ${friend.displayName}'
-                                      : 'Erreur lors de l\'envoi',
+                                      : (result.error?.trim().isNotEmpty == true
+                                          ? result.error!
+                                          : 'Erreur lors de l\'envoi'),
                                 ),
-                                backgroundColor: success ? Colors.green : Colors.red,
+                                backgroundColor:
+                                    result.success ? Colors.green : Colors.red,
                               ),
                             );
                           }
@@ -1174,5 +1172,4 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       return player['connected'] != false;
     }).length;
   }
-
 }

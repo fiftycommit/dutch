@@ -309,14 +309,25 @@ class _MultiplayerProfileSpaceScreenState
 
   Future<void> _openAddFriendDialog() async {
     final usernameController = TextEditingController();
+    final usernameFocusNode = FocusNode();
     String? error;
     bool busy = false;
+    bool focusRequested = false;
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setLocalState) {
+            if (!focusRequested) {
+              focusRequested = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (dialogContext.mounted) {
+                  usernameFocusNode.requestFocus();
+                }
+              });
+            }
+
             Future<void> submit() async {
               if (busy) {
                 return;
@@ -354,6 +365,16 @@ class _MultiplayerProfileSpaceScreenState
 
               final authProvider = context.read<AuthProvider>();
               if (authProvider.isLoggedIn) {
+                final lookup =
+                    await _friendsApi.lookupUserByUsername(normalizedUsername);
+                if (!lookup.exists) {
+                  setLocalState(() {
+                    busy = false;
+                    error = lookup.error ?? 'Utilisateur introuvable';
+                  });
+                  return;
+                }
+
                 // Envoyer via l'API serveur
                 final result =
                     await _friendsApi.sendRequest(normalizedUsername);
@@ -405,6 +426,8 @@ class _MultiplayerProfileSpaceScreenState
                     const SizedBox(height: 6),
                     TextField(
                       controller: usernameController,
+                      focusNode: usernameFocusNode,
+                      autofocus: true,
                       textCapitalization: TextCapitalization.none,
                       maxLength: 20,
                       style: const TextStyle(
@@ -455,6 +478,9 @@ class _MultiplayerProfileSpaceScreenState
         );
       },
     );
+
+    usernameFocusNode.dispose();
+    usernameController.dispose();
   }
 
   Future<void> _acceptIncomingRequest(String username) async {
