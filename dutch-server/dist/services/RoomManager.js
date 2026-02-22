@@ -1396,6 +1396,44 @@ class RoomManager {
         return result;
     }
     /**
+     * Récupère les rooms actives où le joueur est présent (par userId ou clientId)
+     */
+    getActiveRoomsForMember(params) {
+        const userId = params.userId?.trim();
+        const clientId = params.clientId?.trim();
+        if (!userId && !clientId) {
+            return [];
+        }
+        const matchesMember = (player) => {
+            if (!player.isHuman)
+                return false;
+            if (userId && player.userId === userId)
+                return true;
+            if (clientId && player.clientId === clientId)
+                return true;
+            return false;
+        };
+        const result = [];
+        for (const room of this.rooms.values()) {
+            if (room.status === Room_1.RoomStatus.closing) {
+                continue;
+            }
+            const isMember = room.players.some(matchesMember);
+            if (!isMember) {
+                continue;
+            }
+            const host = room.players.find((p) => p.id === room.hostPlayerId);
+            const isHost = host ? matchesMember(host) : false;
+            result.push({
+                roomCode: room.id,
+                status: room.status,
+                playerCount: this.activePlayerCount(room),
+                isHost,
+            });
+        }
+        return result;
+    }
+    /**
      * Change le mode de jeu (hôte uniquement, en lobby)
      */
     setGameMode(roomCode, socketId, mode) {

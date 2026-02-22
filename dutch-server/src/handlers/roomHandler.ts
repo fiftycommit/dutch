@@ -266,6 +266,23 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     }
   });
 
+  // Récupérer les rooms actives où le joueur est présent
+  socket.on('room:my_active', (data, callback) => {
+    try {
+      const clientId = data?.clientId?.toString();
+      const userId = socketUser?.uid;
+
+      const rooms = roomManager.getActiveRoomsForMember({
+        userId,
+        clientId,
+      });
+      callback({ rooms });
+    } catch (error: any) {
+      console.error('Error getting my active rooms:', error);
+      callback({ rooms: [] });
+    }
+  });
+
   // Changer le mode de jeu (hôte uniquement, en lobby)
   socket.on('room:set_game_mode', (data, callback) => {
     try {

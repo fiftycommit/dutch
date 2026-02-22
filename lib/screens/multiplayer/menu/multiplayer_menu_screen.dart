@@ -148,13 +148,56 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     });
 
     final provider = context.read<MultiplayerGameProvider>();
-    final savedRooms = await provider.getMyRooms();
+    final myActiveRooms = await provider.getMyActiveRooms();
 
     List<Map<String, dynamic>> activeRooms = <Map<String, dynamic>>[];
-    if (savedRooms.isNotEmpty) {
-      final roomCodes = savedRooms.map((room) => room.roomCode).toList();
-      activeRooms = await provider.checkActiveRooms(roomCodes) ??
-          <Map<String, dynamic>>[];
+    List<SavedRoom> visibleRooms = <SavedRoom>[];
+
+    if (myActiveRooms != null) {
+      final activeByCode = <String, Map<String, dynamic>>{};
+      for (final room in myActiveRooms) {
+        final code = ((room['roomCode'] as String?) ?? '').toUpperCase();
+        if (code.isEmpty) continue;
+        final status = (room['status'] as String?)?.toLowerCase();
+        if (status == 'offline') continue;
+        activeByCode[code] = Map<String, dynamic>.from(room);
+      }
+
+      activeRooms = activeByCode.values.toList();
+      visibleRooms = activeRooms
+          .map(
+            (room) => SavedRoom(
+              roomCode: ((room['roomCode'] as String?) ?? '').toUpperCase(),
+              isHost: room['isHost'] == true,
+              joinedAt: DateTime.now(),
+            ),
+          )
+          .where((room) => room.roomCode.isNotEmpty)
+          .toList();
+    } else {
+      // Fallback rétrocompatible: historique sauvegardé + check d'activité.
+      final savedRooms = await provider.getMyRooms();
+      visibleRooms = savedRooms;
+      if (savedRooms.isNotEmpty) {
+        final roomCodes = savedRooms.map((room) => room.roomCode).toList();
+        final checkedRooms = await provider.checkActiveRooms(roomCodes);
+        activeRooms = checkedRooms ?? <Map<String, dynamic>>[];
+
+        if (checkedRooms != null) {
+          final activeByCode = <String, Map<String, dynamic>>{
+            for (final room in activeRooms)
+              ((room['roomCode'] as String?) ?? '').toUpperCase():
+                  Map<String, dynamic>.from(room),
+          };
+          visibleRooms = savedRooms.where((saved) {
+            final info = activeByCode[saved.roomCode.toUpperCase()];
+            if (info == null) return false;
+            final rawStatus = (info['status'] as String?)?.toLowerCase();
+            if (rawStatus == null || rawStatus.isEmpty) return true;
+            return rawStatus != 'offline';
+          }).toList();
+        }
+      }
     }
 
     if (!mounted) {
@@ -162,7 +205,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     }
 
     setState(() {
-      _myRooms = savedRooms;
+      _myRooms = visibleRooms;
       _activeRooms = activeRooms;
       _loadingRooms = false;
     });
@@ -634,8 +677,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
   }
 
   Map<String, dynamic>? _activeRoomInfo(String roomCode) {
+    final normalized = roomCode.toUpperCase();
     for (final room in _activeRooms) {
-      if ((room['roomCode'] as String?) == roomCode) {
+      final activeCode = ((room['roomCode'] as String?) ?? '').toUpperCase();
+      if (activeCode == normalized) {
         return room;
       }
     }
@@ -1284,7 +1329,13 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
     required bool compact,
   }) {
     final activeInfo = _activeRoomInfo(room.roomCode);
-    final status = activeInfo?['status'] as String? ?? 'offline';
+    final status = (() {
+      final raw = (activeInfo?['status'] as String?)?.toLowerCase();
+      if (raw == null || raw.isEmpty) {
+        return activeInfo == null ? 'offline' : 'waiting';
+      }
+      return raw;
+    })();
     final playerCount = activeInfo?['playerCount'] as int?;
 
     final isActive = status != 'offline';
@@ -1445,8 +1496,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
         Expanded(
           child: _buildMyRoomsCard(
             helperText:
-                'Salons en attente / arrière-plan. Tu peux rejoindre sans les supprimer de la liste.',
-            emptyLabel: 'Aucun salon enregistré.',
+                'Salons actifs où tu es membre. Les salons fermés disparaissent automatiquement.',
+            emptyLabel: 'Aucun salon actif.',
             compact: true,
           ),
         ),
@@ -1490,8 +1541,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
         Expanded(
           child: _buildMyRoomsCard(
             helperText:
-                'Salons en attente. Tu peux rejoindre sans les supprimer.',
-            emptyLabel: 'Aucun salon',
+                'Salons actifs où tu es membre. Les salons fermés disparaissent automatiquement.',
+            emptyLabel: 'Aucun salon actif.',
             compact: true,
           ),
         ),
@@ -1533,8 +1584,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
         Expanded(
           child: _buildMyRoomsCard(
             helperText:
-                'Salons en attente. Tu peux rejoindre sans les supprimer.',
-            emptyLabel: 'Aucun salon',
+                'Salons actifs où tu es membre. Les salons fermés disparaissent automatiquement.',
+            emptyLabel: 'Aucun salon actif.',
           ),
         ),
       ],

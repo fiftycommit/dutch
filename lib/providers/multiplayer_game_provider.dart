@@ -984,6 +984,8 @@ class MultiplayerGameProvider
   }
 
   Future<List<SavedRoom>> getMyRooms() => _multiplayerService.getMyRooms();
+  Future<List<Map<String, dynamic>>?> getMyActiveRooms() =>
+      _multiplayerService.getMyActiveRooms(clientId: clientId);
   Future<void> removeRoom(String roomCode) =>
       _multiplayerService.removeSavedRoom(roomCode);
 

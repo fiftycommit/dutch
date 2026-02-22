@@ -39,7 +39,8 @@ class MultiplayerService {
   int get latencyMs => _connectionHandler.latencyMs;
   int get serverTimeOffsetMs => _connectionHandler.serverTimeOffsetMs;
   int get serverNowMs => _connectionHandler.serverNowMs;
-  SocketConnectionState get connectionState => _connectionHandler.connectionState;
+  SocketConnectionState get connectionState =>
+      _connectionHandler.connectionState;
   String? get currentRoomCode => _currentRoomCode;
 
   // Callbacks pour les événements
@@ -93,7 +94,8 @@ class MultiplayerService {
   }
 
   Future<void> connect() async {
-    _connectionHandler.onConnectionStateChanged = onSocketConnectionStateChanged;
+    _connectionHandler.onConnectionStateChanged =
+        onSocketConnectionStateChanged;
     _connectionHandler.onError = onError;
     await _connectionHandler.connect(_setupEventListeners);
   }
@@ -108,7 +110,8 @@ class MultiplayerService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Future<List<SavedRoom>> getMyRooms() => _roomsRepository.getMyRooms();
-  Future<void> removeSavedRoom(String roomCode) => _roomsRepository.removeRoom(roomCode);
+  Future<void> removeSavedRoom(String roomCode) =>
+      _roomsRepository.removeRoom(roomCode);
 
   Future<void> cleanupInactiveRooms() async {
     final myRooms = await _roomsRepository.getMyRooms();
@@ -122,28 +125,84 @@ class MultiplayerService {
     await _roomsRepository.cleanupInactiveRooms(activeCodes);
   }
 
-  Future<List<Map<String, dynamic>>?> checkActiveRooms(List<String> roomCodes) async {
-    if (!isConnected || roomCodes.isEmpty) return null;
+  Future<List<Map<String, dynamic>>?> checkActiveRooms(
+      List<String> roomCodes) async {
+    if (roomCodes.isEmpty) return <Map<String, dynamic>>[];
+
+    try {
+      if (!isConnected) await connect();
+    } catch (_) {
+      return null;
+    }
+    if (!isConnected || socket == null) return null;
 
     final completer = Completer<List<Map<String, dynamic>>?>();
 
-    socket?.emitWithAck('room:check_active', {'roomCodes': roomCodes}, ack: (response) {
+    socket?.emitWithAck('room:check_active', {'roomCodes': roomCodes},
+        ack: (response) {
       if (response == null || response['rooms'] == null) {
         completer.complete(null);
         return;
       }
-      final rooms = (response['rooms'] as List).map((r) => Map<String, dynamic>.from(r as Map)).toList();
+      final rooms = (response['rooms'] as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
       completer.complete(rooms);
     });
 
-    return completer.future;
+    return completer.future.timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => null,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>?> getMyActiveRooms(
+      {String? clientId}) async {
+    try {
+      if (!isConnected) await connect();
+    } catch (_) {
+      return null;
+    }
+    if (!isConnected || socket == null) return null;
+
+    String? resolvedClientId = clientId;
+    if (resolvedClientId == null || resolvedClientId.trim().isEmpty) {
+      try {
+        resolvedClientId = await _connectionHandler.ensureClientId();
+      } catch (_) {
+        resolvedClientId = null;
+      }
+    }
+
+    final completer = Completer<List<Map<String, dynamic>>?>();
+
+    socket?.emitWithAck(
+      'room:my_active',
+      {'clientId': resolvedClientId},
+      ack: (response) {
+        if (response == null || response['rooms'] == null) {
+          completer.complete(null);
+          return;
+        }
+        final rooms = (response['rooms'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        completer.complete(rooms);
+      },
+    );
+
+    return completer.future.timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => null,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GESTION DES ROOMS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<String?> createRoom({required GameSettings settings, required String playerName}) async {
+  Future<String?> createRoom(
+      {required GameSettings settings, required String playerName}) async {
     if (!isConnected) await connect();
 
     final completer = Completer<String?>();
@@ -182,10 +241,14 @@ class MultiplayerService {
     try {
       socket!.emitWithAck('rooms:getPublic', {}, ack: (response) {
         if (completer.isCompleted) return;
-        if (response == null) { completer.complete([]); return; }
+        if (response == null) {
+          completer.complete([]);
+          return;
+        }
         if (response is Map && response['success'] == true) {
           final rooms = response['rooms'] as List<dynamic>?;
-          completer.complete(rooms?.map((r) => r as Map<String, dynamic>).toList() ?? []);
+          completer.complete(
+              rooms?.map((r) => r as Map<String, dynamic>).toList() ?? []);
         } else {
           completer.complete([]);
         }
@@ -195,10 +258,12 @@ class MultiplayerService {
       completer.complete([]);
     }
 
-    return completer.future.timeout(const Duration(seconds: 5), onTimeout: () => []);
+    return completer.future
+        .timeout(const Duration(seconds: 5), onTimeout: () => []);
   }
 
-  Future<Map<String, dynamic>?> joinRoom({required String roomCode, required String playerName}) async {
+  Future<Map<String, dynamic>?> joinRoom(
+      {required String roomCode, required String playerName}) async {
     if (!isConnected) await connect();
 
     final completer = Completer<Map<String, dynamic>?>();
@@ -239,7 +304,8 @@ class MultiplayerService {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:close', {'roomCode': _currentRoomCode}, ack: (response) {
+    socket?.emitWithAck('room:close', {'roomCode': _currentRoomCode},
+        ack: (response) {
       final success = response?['success'] == true;
       if (success) {
         _roomsRepository.removeRoom(_currentRoomCode!);
@@ -255,7 +321,8 @@ class MultiplayerService {
   Future<bool> becomeHost(String roomCode) async {
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:transfer_host', {'roomCode': roomCode}, ack: (response) {
+    socket?.emitWithAck('room:transfer_host', {'roomCode': roomCode},
+        ack: (response) {
       final success = response?['success'] == true;
       if (success) {
         _currentRoomCode = roomCode;
@@ -268,11 +335,18 @@ class MultiplayerService {
     return completer.future;
   }
 
-  Future<bool> startGame({bool fillBots = false, int? numberOfBots, bool? useSBMM, int? botDifficulty}) async {
+  Future<bool> startGame(
+      {bool fillBots = false,
+      int? numberOfBots,
+      bool? useSBMM,
+      int? botDifficulty}) async {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    final data = <String, dynamic>{'roomCode': _currentRoomCode, 'fillBots': fillBots};
+    final data = <String, dynamic>{
+      'roomCode': _currentRoomCode,
+      'fillBots': fillBots
+    };
     if (numberOfBots != null) data['numberOfBots'] = numberOfBots;
     if (useSBMM != null) data['useSBMM'] = useSBMM;
     if (botDifficulty != null) data['botDifficulty'] = botDifficulty;
@@ -288,7 +362,8 @@ class MultiplayerService {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:restart', {'roomCode': _currentRoomCode}, ack: (response) {
+    socket?.emitWithAck('room:restart', {'roomCode': _currentRoomCode},
+        ack: (response) {
       completer.complete(response?['success'] == true);
     });
 
@@ -299,7 +374,9 @@ class MultiplayerService {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:kick', {'roomCode': _currentRoomCode, 'clientId': clientId}, ack: (response) {
+    socket?.emitWithAck(
+        'room:kick', {'roomCode': _currentRoomCode, 'clientId': clientId},
+        ack: (response) {
       completer.complete(response?['success'] == true);
     });
 
@@ -311,7 +388,9 @@ class MultiplayerService {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:ban', {'roomCode': _currentRoomCode, 'clientId': clientId}, ack: (response) {
+    socket?.emitWithAck(
+        'room:ban', {'roomCode': _currentRoomCode, 'clientId': clientId},
+        ack: (response) {
       completer.complete(response?['success'] == true);
     });
 
@@ -322,14 +401,16 @@ class MultiplayerService {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
-    socket?.emitWithAck('room:set_game_mode', {'roomCode': _currentRoomCode, 'gameMode': gameMode}, ack: (response) {
+    socket?.emitWithAck('room:set_game_mode',
+        {'roomCode': _currentRoomCode, 'gameMode': gameMode}, ack: (response) {
       completer.complete(response?['success'] == true);
     });
 
     return completer.future;
   }
 
-  Future<bool> updateRoomSettings({int? botDifficulty, int? luckDifficulty}) async {
+  Future<bool> updateRoomSettings(
+      {int? botDifficulty, int? luckDifficulty}) async {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();
 
@@ -354,13 +435,18 @@ class MultiplayerService {
   void takeFromDiscard() => _actionsEmitter.takeFromDiscard();
   void callDutch() => _actionsEmitter.callDutch();
   void attemptMatch(int cardIndex) => _actionsEmitter.attemptMatch(cardIndex);
-  void usePower7LookOwnCard(int cardIndex) => _actionsEmitter.usePower7LookOwnCard(cardIndex);
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) => _actionsEmitter.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex);
-  void usePowerValetSwap(int p1, int c1, int p2, int c2) => _actionsEmitter.usePowerValetSwap(p1, c1, p2, c2);
-  void usePowerJokerShuffle(int targetPlayerIndex) => _actionsEmitter.usePowerJokerShuffle(targetPlayerIndex);
+  void usePower7LookOwnCard(int cardIndex) =>
+      _actionsEmitter.usePower7LookOwnCard(cardIndex);
+  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
+      _actionsEmitter.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex);
+  void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
+      _actionsEmitter.usePowerValetSwap(p1, c1, p2, c2);
+  void usePowerJokerShuffle(int targetPlayerIndex) =>
+      _actionsEmitter.usePowerJokerShuffle(targetPlayerIndex);
   void skipSpecialPower() => _actionsEmitter.skipSpecialPower();
   void setReady(bool ready) => _actionsEmitter.setReady(ready);
-  void sendChatMessage(String message) => _actionsEmitter.sendChatMessage(message);
+  void sendChatMessage(String message) =>
+      _actionsEmitter.sendChatMessage(message);
   void setFocused(bool focused) => _actionsEmitter.setFocused(focused);
   void confirmPresence() => _actionsEmitter.confirmPresence();
   void markReady() => _actionsEmitter.markReady();
@@ -377,7 +463,8 @@ class MultiplayerService {
     });
 
     socket.on('disconnect', (reason) {
-      _connectionHandler.handleDisconnect(reason.toString(), _setupEventListeners);
+      _connectionHandler.handleDisconnect(
+          reason.toString(), _setupEventListeners);
     });
 
     socket.on('connect_error', (error) {
@@ -387,16 +474,29 @@ class MultiplayerService {
     socket.on('game:state_update', (data) => _handleGameStateUpdate(data));
     socket.on('room:player_joined', (data) => onPlayerJoined?.call(data));
     socket.on('error', (error) => onError?.call(error.toString()));
-    socket.on('presence:update', (data) { if (data is Map) onPresenceUpdate?.call(data.cast<String, dynamic>()); });
-    socket.on('presence:check', (data) { if (data is Map) onPresenceCheck?.call(data.cast<String, dynamic>()); });
-    socket.on('chat:message', (data) { if (data is Map) onChatMessage?.call(data.cast<String, dynamic>()); });
-    socket.on('room:closed', (data) { if (data is Map) onRoomClosed?.call(data.cast<String, dynamic>()); });
-    socket.on('game:all_ready', (data) { if (data is Map) onGameAllReady?.call(data.cast<String, dynamic>()); });
-    socket.on('room:restarted', (data) { if (data is Map) onRoomRestarted?.call(data.cast<String, dynamic>()); });
-    
+    socket.on('presence:update', (data) {
+      if (data is Map) onPresenceUpdate?.call(data.cast<String, dynamic>());
+    });
+    socket.on('presence:check', (data) {
+      if (data is Map) onPresenceCheck?.call(data.cast<String, dynamic>());
+    });
+    socket.on('chat:message', (data) {
+      if (data is Map) onChatMessage?.call(data.cast<String, dynamic>());
+    });
+    socket.on('room:closed', (data) {
+      if (data is Map) onRoomClosed?.call(data.cast<String, dynamic>());
+    });
+    socket.on('game:all_ready', (data) {
+      if (data is Map) onGameAllReady?.call(data.cast<String, dynamic>());
+    });
+    socket.on('room:restarted', (data) {
+      if (data is Map) onRoomRestarted?.call(data.cast<String, dynamic>());
+    });
+
     socket.on('room:kicked', (data) {
       // Kické mais peut revenir
-      if (_currentRoomCode != null) _roomsRepository.removeRoom(_currentRoomCode!);
+      if (_currentRoomCode != null)
+        _roomsRepository.removeRoom(_currentRoomCode!);
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onKicked?.call(data.cast<String, dynamic>());
@@ -404,28 +504,51 @@ class MultiplayerService {
 
     socket.on('room:banned', (data) {
       // Banni définitivement - ne peut plus revenir
-      if (_currentRoomCode != null) _roomsRepository.removeRoom(_currentRoomCode!);
+      if (_currentRoomCode != null)
+        _roomsRepository.removeRoom(_currentRoomCode!);
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onBanned?.call(data.cast<String, dynamic>());
     });
-    
-    socket.on('player:left', (data) { if (data is Map) onPlayerLeft?.call(data.cast<String, dynamic>()); });
-    socket.on('player:afk', (data) { if (data is Map) onPlayerAfk?.call(data.cast<String, dynamic>()); });
-    socket.on('special_power:targeted', (data) { if (data is Map) onSpecialPowerTargeted?.call(data.cast<String, dynamic>()); });
-    socket.on('special_power:swap_notification', (data) { if (data is Map) onSwapNotification?.call(data.cast<String, dynamic>()); });
-    socket.on('special_power:joker_notification', (data) { if (data is Map) onJokerNotification?.call(data.cast<String, dynamic>()); });
-    socket.on('special_power:spy_notification', (data) { if (data is Map) onSpyNotification?.call(data.cast<String, dynamic>()); });
 
-    socket.on('game:emote', (data) { if (data is Map) onEmoteReceived?.call(data.cast<String, dynamic>()); });
-    socket.on('tournament:eliminated', (data) { if (data is Map) onTournamentEliminated?.call(data.cast<String, dynamic>()); });
-    socket.on('tournament:ended', (data) { if (data is Map) onTournamentEnded?.call(data.cast<String, dynamic>()); });
+    socket.on('player:left', (data) {
+      if (data is Map) onPlayerLeft?.call(data.cast<String, dynamic>());
+    });
+    socket.on('player:afk', (data) {
+      if (data is Map) onPlayerAfk?.call(data.cast<String, dynamic>());
+    });
+    socket.on('special_power:targeted', (data) {
+      if (data is Map)
+        onSpecialPowerTargeted?.call(data.cast<String, dynamic>());
+    });
+    socket.on('special_power:swap_notification', (data) {
+      if (data is Map) onSwapNotification?.call(data.cast<String, dynamic>());
+    });
+    socket.on('special_power:joker_notification', (data) {
+      if (data is Map) onJokerNotification?.call(data.cast<String, dynamic>());
+    });
+    socket.on('special_power:spy_notification', (data) {
+      if (data is Map) onSpyNotification?.call(data.cast<String, dynamic>());
+    });
+
+    socket.on('game:emote', (data) {
+      if (data is Map) onEmoteReceived?.call(data.cast<String, dynamic>());
+    });
+    socket.on('tournament:eliminated', (data) {
+      if (data is Map)
+        onTournamentEliminated?.call(data.cast<String, dynamic>());
+    });
+    socket.on('tournament:ended', (data) {
+      if (data is Map) onTournamentEnded?.call(data.cast<String, dynamic>());
+    });
 
     socket.on('game:full_state', (data) {
       if (data is Map) {
         final gameStateJson = data['gameState'] as Map<String, dynamic>?;
         if (gameStateJson != null) {
-          try { onGameStateUpdate?.call(GameState.fromJson(gameStateJson)); } catch (_) {}
+          try {
+            onGameStateUpdate?.call(GameState.fromJson(gameStateJson));
+          } catch (_) {}
         }
       }
     });
@@ -435,7 +558,8 @@ class MultiplayerService {
         try {
           final cardJson = data['card'] as Map<String, dynamic>?;
           final targetName = data['targetPlayerName'] as String? ?? 'Inconnu';
-          if (cardJson != null) onSpiedCard?.call(PlayingCard.fromJson(cardJson), targetName);
+          if (cardJson != null)
+            onSpiedCard?.call(PlayingCard.fromJson(cardJson), targetName);
         } catch (_) {}
       }
     });
@@ -457,13 +581,15 @@ class MultiplayerService {
     if (reactionTimeMs is int) onReactionTimeConfig?.call(reactionTimeMs);
 
     if (gameStateJson != null) {
-      try { 
+      try {
         onGameStateUpdate?.call(GameState.fromJson(gameStateJson));
-        
+
         // Extraire la carte préchargée pour optimiser l'affichage de la pioche
-        final preloadedCardJson = gameStateJson['preloadedDeckCard'] as Map<String, dynamic>?;
+        final preloadedCardJson =
+            gameStateJson['preloadedDeckCard'] as Map<String, dynamic>?;
         if (preloadedCardJson != null) {
-          onPreloadedDeckCardUpdate?.call(PlayingCard.fromJson(preloadedCardJson));
+          onPreloadedDeckCardUpdate
+              ?.call(PlayingCard.fromJson(preloadedCardJson));
         } else {
           onPreloadedDeckCardUpdate?.call(null);
         }
