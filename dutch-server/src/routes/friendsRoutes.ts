@@ -2,8 +2,22 @@ import { Router } from 'express';
 import { FriendsService } from '../services/FriendsService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { FIREBASE_UNAVAILABLE_ERROR_CODE } from '../services/RoomRegistryService';
 
 const router = Router();
+
+function isFirestoreUnavailable(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: string | number }).code;
+  const message = String((error as { message?: unknown }).message ?? '').toLowerCase();
+  return (
+    code === 'unavailable' ||
+    code === 'failed-precondition' ||
+    code === 14 ||
+    code === 9 ||
+    message.includes('firestore non initialisé')
+  );
+}
 
 // Toutes les routes nécessitent l'authentification
 router.use(requireAuth);
@@ -17,10 +31,24 @@ router.get('/', async (req, res) => {
 
 // GET /api/friends/requests
 router.get('/requests', async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const incoming = await FriendsService.getIncomingRequests(authReq.user!.uid);
-  const outgoing = await FriendsService.getOutgoingRequests(authReq.user!.uid);
-  res.json({ success: true, incoming, outgoing });
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const incoming = await FriendsService.getIncomingRequests(authReq.user!.uid);
+    const outgoing = await FriendsService.getOutgoingRequests(authReq.user!.uid);
+    res.json({ success: true, incoming, outgoing });
+  } catch (error) {
+    console.error('friends requests error:', error);
+    if (isFirestoreUnavailable(error)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error:
+          'Service social temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/',
+      });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
 });
 
 // POST /api/friends/request

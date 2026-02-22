@@ -25,6 +25,17 @@ export interface DeviceToken {
     updatedAt: admin.firestore.Timestamp;
 }
 
+function isFirestoreMissingIndexError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) return false;
+    const code = (error as { code?: string | number }).code;
+    const message = String((error as { message?: unknown }).message ?? '').toLowerCase();
+    return (
+        code === 'failed-precondition' ||
+        code === 9 ||
+        (message.includes('index') && message.includes('create'))
+    );
+}
+
 class FirestoreServiceClass {
     private get db() {
         if (!firestore) throw new Error('Firestore non initialisé');
@@ -217,31 +228,53 @@ class FirestoreServiceClass {
     }
 
     async getPendingRequestsTo(uid: string): Promise<Array<{ id: string; fromUid: string; createdAt: admin.firestore.Timestamp }>> {
-        const snap = await this.db.collection('friendRequests')
+        const baseQuery = this.db.collection('friendRequests')
             .where('toUid', '==', uid)
-            .where('status', '==', 'pending')
-            .orderBy('createdAt', 'desc')
-            .get();
+            .where('status', '==', 'pending');
 
-        return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
+        let snap: FirebaseFirestore.QuerySnapshot;
+        try {
+            snap = await baseQuery.orderBy('createdAt', 'desc').get();
+        } catch (error) {
+            if (!isFirestoreMissingIndexError(error)) throw error;
+            snap = await baseQuery.get();
+        }
+
+        const requests = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
             id: d.id,
             fromUid: d.data().fromUid as string,
-            createdAt: d.data().createdAt as admin.firestore.Timestamp,
+            createdAt:
+                (d.data().createdAt as admin.firestore.Timestamp | undefined)
+                ?? admin.firestore.Timestamp.fromMillis(0),
         }));
+
+        requests.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+        return requests;
     }
 
     async getPendingRequestsFrom(uid: string): Promise<Array<{ id: string; toUid: string; createdAt: admin.firestore.Timestamp }>> {
-        const snap = await this.db.collection('friendRequests')
+        const baseQuery = this.db.collection('friendRequests')
             .where('fromUid', '==', uid)
-            .where('status', '==', 'pending')
-            .orderBy('createdAt', 'desc')
-            .get();
+            .where('status', '==', 'pending');
 
-        return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
+        let snap: FirebaseFirestore.QuerySnapshot;
+        try {
+            snap = await baseQuery.orderBy('createdAt', 'desc').get();
+        } catch (error) {
+            if (!isFirestoreMissingIndexError(error)) throw error;
+            snap = await baseQuery.get();
+        }
+
+        const requests = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
             id: d.id,
             toUid: d.data().toUid as string,
-            createdAt: d.data().createdAt as admin.firestore.Timestamp,
+            createdAt:
+                (d.data().createdAt as admin.firestore.Timestamp | undefined)
+                ?? admin.firestore.Timestamp.fromMillis(0),
         }));
+
+        requests.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+        return requests;
     }
 
     async acceptFriendRequest(requestId: string): Promise<{ fromUid: string; toUid: string } | null> {
