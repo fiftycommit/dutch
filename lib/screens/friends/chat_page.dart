@@ -651,17 +651,17 @@ class _InputBarState extends State<_InputBar> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // + button — même couleur que le textField, icône noire
+          // + button — gris visible, icône noire
           GestureDetector(
             onTap: widget.onPlusPressed,
             child: Container(
               width: 36,
               height: 36,
               decoration: const BoxDecoration(
-                color: Color(0xFFF3F4F6),
+                color: Color(0xFFD1D5DB),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.add, color: Colors.black, size: 22),
+              child: const Icon(Icons.add, color: Color(0xFF111827), size: 22),
             ),
           ),
           const SizedBox(width: 8),
@@ -750,7 +750,7 @@ class _InputBarState extends State<_InputBar> {
                 ),
                 child: Icon(
                   Icons.mic,
-                  color: _recording ? Colors.white : Colors.black,
+                  color: Colors.white,
                   size: 20,
                 ),
               ),
