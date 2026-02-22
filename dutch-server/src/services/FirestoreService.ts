@@ -357,31 +357,6 @@ class FirestoreServiceClass {
         return doc.exists;
     }
 
-    // ─── Room History (optionnel, pour persistence) ───────────────────────
-
-    async saveRoomToUser(uid: string, roomCode: string, isHost: boolean): Promise<void> {
-        await this.db.collection('users').doc(uid).collection('rooms').doc(roomCode).set({
-            isHost,
-            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-    }
-
-    async getUserRooms(uid: string): Promise<Array<{ roomCode: string; isHost: boolean; joinedAt: admin.firestore.Timestamp }>> {
-        const snap = await this.db.collection('users').doc(uid).collection('rooms')
-            .orderBy('joinedAt', 'desc')
-            .limit(10)
-            .get();
-
-        return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
-            roomCode: d.id,
-            isHost: d.data().isHost as boolean,
-            joinedAt: d.data().joinedAt as admin.firestore.Timestamp,
-        }));
-    }
-
-    async removeUserRoom(uid: string, roomCode: string): Promise<void> {
-        await this.db.collection('users').doc(uid).collection('rooms').doc(roomCode).delete();
-    }
 }
 
 export const firestoreService = new FirestoreServiceClass();

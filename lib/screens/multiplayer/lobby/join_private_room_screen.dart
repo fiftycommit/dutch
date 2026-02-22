@@ -14,7 +14,7 @@ class JoinPrivateRoomScreen extends StatefulWidget {
 }
 
 class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
-  final _nameController = TextEditingController(text: 'Joueur');
+  String _playerName = 'Joueur';
   final _codeController = TextEditingController();
   bool _isJoining = false;
   final SocialHubRepository _socialRepository = SocialHubRepository();
@@ -30,27 +30,36 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
     if (!mounted || profile == null) {
       return;
     }
-    if (_nameController.text.trim().isEmpty ||
-        _nameController.text.trim() == 'Joueur') {
-      _nameController.text = profile.displayName;
+    final profileName = profile.displayName.trim();
+    if (profileName.isNotEmpty && _playerName != profileName) {
+      setState(() {
+        _playerName = profileName;
+      });
     }
+  }
+
+  Future<String> _resolvePlayerName() async {
+    final profile = await _socialRepository.getProfile();
+    final profileName = profile?.displayName.trim() ?? '';
+    if (profileName.isNotEmpty) {
+      if (_playerName != profileName && mounted) {
+        setState(() {
+          _playerName = profileName;
+        });
+      }
+      return profileName;
+    }
+    return _playerName;
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _codeController.dispose();
     super.dispose();
   }
 
   Future<void> _joinRoom() async {
-    final name = _nameController.text.trim();
     final code = _codeController.text.trim().toUpperCase();
-
-    if (name.isEmpty) {
-      _showError('Veuillez entrer votre nom');
-      return;
-    }
 
     if (code.length != 6) {
       _showError('Le code doit contenir 6 caractères');
@@ -61,9 +70,10 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
 
     try {
       final provider = context.read<MultiplayerGameProvider>();
+      final playerName = await _resolvePlayerName();
       await provider.joinRoom(
         roomCode: code,
-        playerName: name,
+        playerName: playerName,
       );
 
       if (!mounted) return;
@@ -171,7 +181,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    // Row avec code et pseudo
+                                    // Row avec code + identité du compte connecté
                                     Row(
                                       children: [
                                         // Champ code
@@ -223,46 +233,43 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 12),
-                                        // Champ pseudo
+                                        // Identité connectée (lecture seule)
                                         Expanded(
-                                          child: TextField(
-                                            controller: _nameController,
-                                            enabled: !_isJoining,
-                                            textCapitalization:
-                                                TextCapitalization.words,
-                                            maxLength: 20,
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 14,
+                                          child: Container(
+                                            height: 48,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: Colors.grey.shade300,
+                                              ),
                                             ),
-                                            decoration: InputDecoration(
-                                              labelText: 'Ton pseudo',
-                                              labelStyle: const TextStyle(
-                                                  color: Colors.black87,
-                                                  fontSize: 12),
-                                              counterText: '',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 12),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              prefixIcon: Icon(Icons.person,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.person,
+                                                  size: 18,
                                                   color: Colors.orange.shade700,
-                                                  size: 18),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                    color:
-                                                        Colors.orange.shade700,
-                                                    width: 2),
-                                              ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    _playerName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color: Colors.black87,
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),
@@ -416,38 +423,37 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       ),
                                     ),
                                     SizedBox(height: isMobile ? 16 : 20),
-                                    TextField(
-                                      controller: _nameController,
-                                      enabled: !_isJoining,
-                                      textCapitalization:
-                                          TextCapitalization.words,
-                                      maxLength: 20,
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontSize: 16,
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
                                       ),
-                                      decoration: InputDecoration(
-                                        labelText: 'Ton pseudo',
-                                        labelStyle: const TextStyle(
-                                            color: Colors.black87),
-                                        hintText: 'Entrez votre nom',
-                                        hintStyle: const TextStyle(
-                                            color: Colors.black54),
-                                        filled: true,
-                                        fillColor: Colors.grey.shade100,
-                                        prefixIcon: Icon(Icons.person,
-                                            color: Colors.orange.shade700),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
                                         ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          borderSide: BorderSide(
-                                              color: Colors.orange.shade700,
-                                              width: 2),
-                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.person,
+                                              color: Colors.orange.shade700),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _playerName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     SizedBox(height: isMobile ? 24 : 32),

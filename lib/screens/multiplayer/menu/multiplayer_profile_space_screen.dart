@@ -148,19 +148,26 @@ class _MultiplayerProfileSpaceScreenState
       blocked = await _socialRepository.getBlockedUsers();
     }
 
-    final allRooms = await provider.getMyRooms();
-    final hostRooms = allRooms.where((room) => room.isHost).toList();
-    final hostCodes = hostRooms.map((room) => room.roomCode).toList();
-    final activeRooms = hostCodes.isEmpty
-        ? <Map<String, dynamic>>[]
-        : await provider.checkActiveRooms(hostCodes) ??
-            <Map<String, dynamic>>[];
-
-    final activeByCode = <String, Map<String, dynamic>>{
-      for (final room in activeRooms)
-        ((room['roomCode'] as String?) ?? '').toUpperCase():
-            Map<String, dynamic>.from(room),
-    };
+    final myActiveRooms =
+        await provider.getMyActiveRooms() ?? <Map<String, dynamic>>[];
+    final activeByCode = <String, Map<String, dynamic>>{};
+    final hostRooms = <SavedRoom>[];
+    for (final room in myActiveRooms) {
+      final roomCode = ((room['roomCode'] as String?) ?? '').toUpperCase();
+      if (roomCode.isEmpty) {
+        continue;
+      }
+      activeByCode[roomCode] = Map<String, dynamic>.from(room);
+      if (room['isHost'] == true) {
+        hostRooms.add(
+          SavedRoom(
+            roomCode: roomCode,
+            isHost: true,
+            joinedAt: DateTime.now(),
+          ),
+        );
+      }
+    }
 
     final reservedUsernames = await _socialRepository.getReservedUsernames(
       exceptUsername: profile?.username,

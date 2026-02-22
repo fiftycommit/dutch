@@ -57,12 +57,14 @@ class MockMultiplayerService extends MultiplayerService {
   int get serverTimeOffsetMs => _mockServerTimeOffsetMs;
 
   @override
-  int get serverNowMs => DateTime.now().millisecondsSinceEpoch + _mockServerTimeOffsetMs;
+  int get serverNowMs =>
+      DateTime.now().millisecondsSinceEpoch + _mockServerTimeOffsetMs;
 
   void setPlayerId(String? id) => _mockPlayerId = id;
   void setClientId(String? id) => _mockClientId = id;
   void setConnected(bool connected) => _mockIsConnected = connected;
-  void setConnectionState(SocketConnectionState state) => _mockConnectionState = state;
+  void setConnectionState(SocketConnectionState state) =>
+      _mockConnectionState = state;
 
   @override
   Future<void> connect() async {
@@ -90,17 +92,31 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  Future<Map<String, dynamic>?> joinRoom({required String roomCode, required String playerName}) async {
+  Future<Map<String, dynamic>?> joinRoom(
+      {required String roomCode, required String playerName}) async {
     joinRoomCount++;
-    return mockJoinRoomResult ?? {
-      'roomCode': roomCode,
-      'hostPlayerId': 'host_player',
-      'settings': GameSettings().toJson(),
-      'players': [
-        {'id': 'host_player', 'clientId': 'host_client', 'name': 'Host', 'isHuman': true, 'ready': true},
-        {'id': _mockPlayerId, 'clientId': _mockClientId, 'name': playerName, 'isHuman': true, 'ready': false},
-      ],
-    };
+    return mockJoinRoomResult ??
+        {
+          'roomCode': roomCode,
+          'hostPlayerId': 'host_player',
+          'settings': GameSettings().toJson(),
+          'players': [
+            {
+              'id': 'host_player',
+              'clientId': 'host_client',
+              'name': 'Host',
+              'isHuman': true,
+              'ready': true
+            },
+            {
+              'id': _mockPlayerId,
+              'clientId': _mockClientId,
+              'name': playerName,
+              'isHuman': true,
+              'ready': false
+            },
+          ],
+        };
   }
 
   @override
@@ -115,7 +131,11 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  Future<bool> startGame({bool fillBots = false, int? numberOfBots, bool? useSBMM, int? botDifficulty}) async {
+  Future<bool> startGame(
+      {bool fillBots = false,
+      int? numberOfBots,
+      bool? useSBMM,
+      int? botDifficulty}) async {
     startGameCount++;
     return mockStartGameResult;
   }
@@ -172,14 +192,6 @@ class MockMultiplayerService extends MultiplayerService {
 
   @override
   Future<bool> checkServerHealth() async => true;
-
-  @override
-  Future<void> cleanupInactiveRooms() async {
-    // No-op for testing
-  }
-
-  @override
-  Future<List<SavedRoom>> getMyRooms() async => [];
 
   void reset() {
     connectCount = 0;

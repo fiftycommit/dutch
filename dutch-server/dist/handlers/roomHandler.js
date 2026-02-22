@@ -66,8 +66,6 @@ function setupRoomHandler(socket, roomManager, io) {
             }
             roomManager.broadcastPresence(room.id);
             console.log(`Room created: ${room.id} by ${socket.id}`);
-            // Sauvegarder en DB si authentifié
-            FirestoreService_1.firestoreService.saveRoomToUser(socketUser.uid, room.id, true).catch(() => { });
             callback({ success: true, roomCode: room.id, room });
         }
         catch (error) {
@@ -147,8 +145,6 @@ function setupRoomHandler(socket, roomManager, io) {
             if (result.room) {
                 (0, publicRoomHandlers_1.onPublicRoomPlayerJoined)(roomCode, result.room.players.length);
             }
-            // Sauvegarder en DB si authentifié
-            FirestoreService_1.firestoreService.saveRoomToUser(socketUser.uid, roomCode, false).catch(() => { });
             console.log(`Player ${socket.id} joined room ${roomCode}`);
             callback({ success: true, room: result.room });
         }
@@ -329,22 +325,6 @@ function setupRoomHandler(socket, roomManager, io) {
         catch (error) {
             console.error('Error transferring host:', error);
             callback({ success: false, error: error.message });
-        }
-    });
-    // Vérifier quelles rooms sont actives
-    socket.on('room:check_active', (data, callback) => {
-        try {
-            const roomCodes = data.roomCodes;
-            if (!roomCodes || !Array.isArray(roomCodes)) {
-                callback({ rooms: [] });
-                return;
-            }
-            const activeRooms = roomManager.checkActiveRooms(roomCodes);
-            callback({ rooms: activeRooms });
-        }
-        catch (error) {
-            console.error('Error checking active rooms:', error);
-            callback({ rooms: [] });
         }
     });
     // Récupérer les rooms actives où le joueur est présent

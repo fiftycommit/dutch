@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
+import '../../../../../providers/auth_provider.dart';
 import '../../../../../utils/ui_constants.dart';
 import 'dart:async';
 
@@ -37,9 +38,9 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
   Future<void> _loadPublicRooms() async {
     final provider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
-    
+
     final rooms = await provider.getPublicRooms();
-    
+
     if (mounted) {
       setState(() {
         _publicRooms = rooms;
@@ -51,13 +52,13 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
   Future<void> _joinRoom(String roomCode, String playerName) async {
     final provider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
-    
+
     try {
       await provider.joinRoom(
         roomCode: roomCode,
         playerName: playerName,
       );
-      
+
       if (!mounted) return;
       context.go('/lobby');
     } catch (e) {
@@ -71,6 +72,19 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
     }
   }
 
+  String _connectedPlayerName() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final displayName = authProvider.user?.displayName.trim() ?? '';
+    if (displayName.isNotEmpty) {
+      return displayName;
+    }
+    final username = authProvider.user?.username.trim() ?? '';
+    if (username.isNotEmpty) {
+      return username;
+    }
+    return 'Joueur';
+  }
+
   Future<void> _goBack() async {
     final didPop = await Navigator.of(context).maybePop();
     if (!didPop && mounted) {
@@ -80,7 +94,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
 
   String _getTierFromMMR(int? mmr) {
     if (mmr == null) return 'Bronze';
-    
+
     // Même logique que CompetitiveService._getTier()
     if (mmr >= 2200) return 'Diamant';
     if (mmr >= 1900) return 'Platine';
@@ -184,7 +198,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
-        
+
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -232,7 +246,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
-        
+
         return ListView.builder(
           padding: EdgeInsets.all(isMobile ? 16 : 20),
           itemCount: _publicRooms!.length,
@@ -247,7 +261,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
             final tier = _getTierFromMMR(hostMMR);
             final tierColor = _getTierColor(tier);
             final tierIcon = _getTierIcon(tier);
-            
+
             return Card(
               margin: EdgeInsets.only(bottom: isMobile ? 12 : 16),
               color: Colors.white.withValues(alpha: 0.95),
@@ -389,23 +403,15 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
   }
 
   void _showJoinDialog(String roomCode) {
-    final nameController = TextEditingController(text: 'Joueur');
-    
+    final playerName = _connectedPlayerName();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rejoindre le salon'),
-        content: TextField(
-          controller: nameController,
+        content: Text(
+          'Tu vas rejoindre ce salon en tant que "$playerName".',
           style: const TextStyle(color: Colors.black87),
-          decoration: const InputDecoration(
-            labelText: 'Votre nom',
-            hintText: 'Entrez votre nom',
-            labelStyle: TextStyle(color: Colors.black87),
-            hintStyle: TextStyle(color: Colors.black54),
-            counterStyle: TextStyle(color: Colors.black54),
-          ),
-          maxLength: 20,
         ),
         actions: [
           TextButton(
@@ -415,7 +421,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _joinRoom(roomCode, nameController.text.trim());
+              _joinRoom(roomCode, playerName);
             },
             child: const Text('Rejoindre'),
           ),

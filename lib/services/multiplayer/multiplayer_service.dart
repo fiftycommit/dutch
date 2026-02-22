@@ -111,52 +111,8 @@ class MultiplayerService {
   // ROOMS SAUVEGARDÉES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<List<SavedRoom>> getMyRooms() => _roomsRepository.getMyRooms();
   Future<void> removeSavedRoom(String roomCode) =>
       _roomsRepository.removeRoom(roomCode);
-
-  Future<void> cleanupInactiveRooms() async {
-    final myRooms = await _roomsRepository.getMyRooms();
-    if (myRooms.isEmpty) return;
-
-    final roomCodes = myRooms.map((r) => r.roomCode).toList();
-    final activeRooms = await checkActiveRooms(roomCodes);
-    if (activeRooms == null) return;
-
-    final activeCodes = activeRooms.map((r) => r['roomCode'] as String).toSet();
-    await _roomsRepository.cleanupInactiveRooms(activeCodes);
-  }
-
-  Future<List<Map<String, dynamic>>?> checkActiveRooms(
-      List<String> roomCodes) async {
-    if (roomCodes.isEmpty) return <Map<String, dynamic>>[];
-
-    try {
-      if (!isConnected) await connect();
-    } catch (_) {
-      return null;
-    }
-    if (!isConnected || socket == null) return null;
-
-    final completer = Completer<List<Map<String, dynamic>>?>();
-
-    socket?.emitWithAck('room:check_active', {'roomCodes': roomCodes},
-        ack: (response) {
-      if (response == null || response['rooms'] == null) {
-        completer.complete(null);
-        return;
-      }
-      final rooms = (response['rooms'] as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
-      completer.complete(rooms);
-    });
-
-    return completer.future.timeout(
-      const Duration(seconds: 6),
-      onTimeout: () => null,
-    );
-  }
 
   Future<List<Map<String, dynamic>>?> getMyActiveRooms(
       {String? clientId}) async {
@@ -188,7 +144,8 @@ class MultiplayerService {
         }
         if (response is Map && response['success'] == false) {
           if (kDebugMode) {
-            debugPrint('⚠️ room:my_active error: ${_socketErrorMessage(response)}');
+            debugPrint(
+                '⚠️ room:my_active error: ${_socketErrorMessage(response)}');
           }
           completer.complete(null);
           return;
@@ -236,7 +193,6 @@ class MultiplayerService {
       if (response['success'] == true) {
         _currentRoomCode = response['roomCode'];
         _connectionHandler.lastRoomCode = response['roomCode'];
-        _roomsRepository.saveRoom(response['roomCode'] as String, isHost: true);
         completer.complete(response['roomCode']);
       } else {
         completer.completeError(_socketErrorMessage(response));
@@ -295,7 +251,6 @@ class MultiplayerService {
       if (response['success'] == true) {
         _currentRoomCode = roomCode.toUpperCase();
         _connectionHandler.lastRoomCode = roomCode.toUpperCase();
-        _roomsRepository.saveRoom(roomCode.toUpperCase(), isHost: false);
         completer.complete(response['room'] as Map<String, dynamic>?);
       } else {
         completer.completeError(_socketErrorMessage(response));
@@ -321,7 +276,6 @@ class MultiplayerService {
         ack: (response) {
       final success = response?['success'] == true;
       if (success) {
-        _roomsRepository.removeRoom(_currentRoomCode!);
         _connectionHandler.lastRoomCode = null;
         _currentRoomCode = null;
       }
@@ -340,7 +294,6 @@ class MultiplayerService {
       if (success) {
         _currentRoomCode = roomCode;
         _connectionHandler.lastRoomCode = roomCode;
-        _roomsRepository.saveRoom(roomCode, isHost: true);
       }
       completer.complete(success);
     });
@@ -508,9 +461,6 @@ class MultiplayerService {
 
     socket.on('room:kicked', (data) {
       // Kické mais peut revenir
-      if (_currentRoomCode != null) {
-        _roomsRepository.removeRoom(_currentRoomCode!);
-      }
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onKicked?.call(data.cast<String, dynamic>());
@@ -518,9 +468,6 @@ class MultiplayerService {
 
     socket.on('room:banned', (data) {
       // Banni définitivement - ne peut plus revenir
-      if (_currentRoomCode != null) {
-        _roomsRepository.removeRoom(_currentRoomCode!);
-      }
       _currentRoomCode = null;
       _connectionHandler.lastRoomCode = null;
       if (data is Map) onBanned?.call(data.cast<String, dynamic>());

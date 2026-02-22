@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { firestoreService } from '../services/FirestoreService';
 import {
   FIREBASE_UNAVAILABLE_ERROR_CODE,
   isRoomRegistryUnavailableError,
@@ -8,6 +7,8 @@ import {
 } from '../services/RoomRegistryService';
 
 const router = Router();
+const firebaseDownError =
+  'Service multijoueur temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/';
 
 // GET /api/rooms/mine — Récupérer les rooms de l'utilisateur
 router.get('/mine', requireAuth, async (req, res) => {
@@ -32,7 +33,7 @@ router.get('/mine', requireAuth, async (req, res) => {
       res.status(503).json({
         success: false,
         errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
-        error: 'Service multiplayer indisponible. Vérifie Firebase.',
+        error: firebaseDownError,
       });
       return;
     }
@@ -40,35 +41,24 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/rooms/save — Sauvegarder une room
-router.post('/save', requireAuth, async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const uid = authReq.user!.uid;
-  const { roomCode, isHost } = req.body;
-
-  if (!roomCode || typeof roomCode !== 'string') {
-    res.status(400).json({ success: false, error: 'roomCode requis' });
-    return;
-  }
-
-  try {
-    await firestoreService.saveRoomToUser(uid, roomCode.toUpperCase(), !!isHost);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: 'Erreur serveur' });
-  }
-});
-
-// DELETE /api/rooms/:roomCode — Supprimer une room sauvegardée
+// DELETE /api/rooms/:roomCode — Retirer une room active de "Mes salons"
 router.delete('/:roomCode', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const uid = authReq.user!.uid;
   const roomCode = (req.params.roomCode as string).toUpperCase();
 
   try {
-    await firestoreService.removeUserRoom(uid, roomCode);
+    await roomRegistryService.removeActiveRoomForUser(uid, roomCode);
     res.json({ success: true });
   } catch (e) {
+    if (isRoomRegistryUnavailableError(e)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error: firebaseDownError,
+      });
+      return;
+    }
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });

@@ -157,7 +157,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       final freshToken = await authProvider.getFreshToken();
       multiProvider.setAuthToken(freshToken);
       await multiProvider.init();
-      unawaited(multiProvider.getMyRooms());
+      unawaited(multiProvider.getMyActiveRooms());
     } catch (_) {
       // Warmup optionnel: ignorer les erreurs sans bloquer l'UI.
     }

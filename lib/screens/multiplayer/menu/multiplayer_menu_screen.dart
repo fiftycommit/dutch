@@ -691,9 +691,13 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen> {
 
   Future<void> _removeSavedRoom(String roomCode) async {
     final provider = context.read<MultiplayerGameProvider>();
-    await provider.removeRoom(roomCode);
-    await _loadMyRooms();
-    _showSnackBar('Room $roomCode retiree de Mes salons.');
+    try {
+      await provider.removeRoom(roomCode);
+      await _loadMyRooms();
+      _showSnackBar('Room $roomCode retiree de Mes salons.');
+    } catch (error) {
+      _showSnackBar(error.toString(), isError: true);
+    }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
