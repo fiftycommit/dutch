@@ -81,6 +81,22 @@ class AuthProvider with ChangeNotifier {
     return result;
   }
 
+  Future<AuthResult> loginWithGoogle() async {
+    _isLoading = true;
+    notifyListeners();
+
+    final result = await _authService.signInWithGoogle();
+
+    if (result.success) {
+      _user = result.user;
+      _token = result.token;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return result;
+  }
+
   Future<AuthResult> register(String username, String displayName, String email,
       String password) async {
     _isLoading = true;

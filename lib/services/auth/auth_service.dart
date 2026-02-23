@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
 import '../network/network_probe_service.dart';
@@ -100,6 +101,58 @@ class AuthService {
 
   Future<bool> isLoggedIn() async {
     return _firebaseAuth.currentUser != null;
+  }
+
+  // Web Client ID (Firebase Console → Auth → Google → Web SDK configuration)
+  // Requis uniquement pour le web, ignoré sur iOS/Android
+  static const _webClientId =
+      '751846261054-afco12nm8efkbngi43hp6rstp8ur2flj.apps.googleusercontent.com';
+
+  Future<AuthResult> signInWithGoogle() async {
+    try {
+      // 1. Déclencher le flux OAuth Google
+      final googleSignIn = GoogleSignIn(
+        clientId: kIsWeb ? _webClientId : null,
+      );
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        // L'utilisateur a annulé
+        return const AuthResult(success: false, error: 'Connexion annulée');
+      }
+
+      // 2. Récupérer les tokens Google
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // 3. Se connecter à Firebase avec le credential Google
+      final userCredential =
+          await _firebaseAuth.signInWithCredential(credential);
+      final token = await userCredential.user?.getIdToken();
+
+      if (token == null || userCredential.user == null) {
+        return const AuthResult(
+            success: false, error: 'Erreur de connexion Google');
+      }
+
+      // 4. Hydrater le profil (Firestore ou fallback Firebase)
+      final user = await fetchProfile() ??
+          UserInfo(
+            id: userCredential.user!.uid,
+            username: googleUser.email.split('@').first,
+            displayName: googleUser.displayName ?? googleUser.email,
+          );
+
+      return AuthResult(success: true, token: token, user: user);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Google Sign-In error: $e');
+      return const AuthResult(
+          success: false, error: 'Impossible de se connecter avec Google');
+    }
   }
 
   Future<AuthResult> register(String username, String displayName, String email,

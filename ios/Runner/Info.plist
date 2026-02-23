@@ -55,5 +55,18 @@
 	<string>Utilisé pour envoyer des photos dans le chat</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Utilisé pour envoyer des messages vocaux</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Valeur REVERSED_CLIENT_ID du nouveau GoogleService-Info.plist téléchargé depuis Firebase -->
+				<!-- Exemple : com.googleusercontent.apps.751846261054-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -->
+				<string>com.googleusercontent.apps.751846261054-istm3u30c0p35nptqpiudv90fn7ml521</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

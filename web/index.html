@@ -10,6 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
   <!-- SEO -->
+  <!-- Google Sign-In (Web Client ID — Firebase Console → Auth → Google → Config SDK Web) -->
+  <meta name="google-signin-client_id"
+    content="751846261054-afco12nm8efkbngi43hp6rstp8ur2flj.apps.googleusercontent.com">
   <title>Dutch Game — Jeu de cartes en ligne multijoueur</title>
   <meta name="description"
     content="Dutch Game est un jeu de cartes stratégique jouable en ligne. Découvrez les règles, le gameplay et le mode multijoueur.">
@@ -37,7 +40,8 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       width: 100%;
@@ -47,7 +51,10 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    flutter-view, flt-glass-pane, #flt-glass-pane, #flutter_target {
+    flutter-view,
+    flt-glass-pane,
+    #flt-glass-pane,
+    #flutter_target {
       background: transparent !important;
     }
 
@@ -179,24 +186,24 @@
     _updateSafeBgFromRoute();
     window.addEventListener('popstate', _updateSafeBgFromRoute);
     var _origPushState = history.pushState.bind(history);
-    history.pushState = function() {
+    history.pushState = function () {
       _origPushState.apply(history, arguments);
       _updateSafeBgFromRoute();
     };
     var _origReplaceState = history.replaceState.bind(history);
-    history.replaceState = function() {
+    history.replaceState = function () {
       _origReplaceState.apply(history, arguments);
       _updateSafeBgFromRoute();
     };
 
-    window.setSafeBg = function(value) {
+    window.setSafeBg = function (value) {
       document.documentElement.style.background = value;
       document.body.style.background = value;
       window._fixFlutterBg();
     };
 
     // Force Flutter view + Shadow DOM to transparent so body bg shows through
-    window._fixFlutterBg = function() {
+    window._fixFlutterBg = function () {
       var fv = document.querySelector('flutter-view');
       if (!fv) return;
       fv.style.background = 'transparent';
@@ -214,7 +221,7 @@
     };
 
     // Watch for Flutter view creation and fix background
-    new MutationObserver(function(mutations) {
+    new MutationObserver(function (mutations) {
       if (document.querySelector('flutter-view')) {
         window._fixFlutterBg();
       }

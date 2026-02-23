@@ -12,7 +12,20 @@
           "package_name": "com.max.dutch_game"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "751846261054-kopmkcplug67l57qmonbv0ios7b3h286.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.max.dutch_game",
+            "certificate_hash": "ee19a3c2083f63a47d06cc4e60a22daaa3458624"
+          }
+        },
+        {
+          "client_id": "751846261054-afco12nm8efkbngi43hp6rstp8ur2flj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCH0yDjB0v_qU0Him383AoRVC3bI5oP-to"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "751846261054-afco12nm8efkbngi43hp6rstp8ur2flj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "751846261054-istm3u30c0p35nptqpiudv90fn7ml521.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.max.dutchGame"
+              }
+            }
+          ]
         }
       }
     }
