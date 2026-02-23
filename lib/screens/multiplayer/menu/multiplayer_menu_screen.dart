@@ -105,13 +105,15 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
 
     // Si on arrive depuis une notification "Invitation salon", rejoindre directement
     if (!mounted) return;
-    final joinRoomCode = GoRouterState.of(context).uri.queryParameters['joinRoom'];
+    final joinRoomCode =
+        GoRouterState.of(context).uri.queryParameters['joinRoom'];
     if (joinRoomCode != null && joinRoomCode.isNotEmpty) {
-      final playerName = _profile?.displayName?.trim().isNotEmpty == true
-          ? _profile!.displayName!
+      final playerName = _profile?.displayName.trim().isNotEmpty == true
+          ? _profile!.displayName
           : 'Joueur';
       try {
-        await multiProvider.joinRoom(roomCode: joinRoomCode, playerName: playerName);
+        await multiProvider.joinRoom(
+            roomCode: joinRoomCode, playerName: playerName);
         if (mounted) context.push('/lobby');
       } catch (_) {
         // Silencieux — le salon peut être plein ou expiré
@@ -148,7 +150,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     if (!mounted) return;
 
     final friends = results[0] as List<FriendInfo>;
-    final requests = results[1] as ({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing});
+    final requests = results[1] as ({
+      List<FriendRequestInfo> incoming,
+      List<FriendRequestInfo> outgoing
+    });
     setState(() {
       _profile = seededProfile;
       _friends = friends;
@@ -529,7 +534,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                   ),
                                   decoration: InputDecoration(
                                     hintText: 'pegga.pig',
-                                    hintStyle: TextStyle(color: dlgCs.textSecondary),
+                                    hintStyle:
+                                        TextStyle(color: dlgCs.textSecondary),
                                     errorText: usernameError,
                                     filled: true,
                                     fillColor: dlgCs.surfaceHigh,
@@ -758,7 +764,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? MultiplayerColors.danger : MultiplayerColors.success,
+        backgroundColor:
+            isError ? MultiplayerColors.danger : MultiplayerColors.success,
         action: hasStatusUrl
             ? SnackBarAction(
                 label: 'Copier lien',
@@ -1406,8 +1413,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       'closing' => 'Fermeture',
       _ => 'Hors ligne',
     };
-    final statusColor =
-        isActive ? _cs.success : _cs.textSecondary;
+    final statusColor = isActive ? _cs.success : _cs.textSecondary;
 
     return Container(
       padding: EdgeInsets.symmetric(
