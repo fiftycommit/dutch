@@ -69,7 +69,7 @@ router.get('/:friendId/key', requireAuth, async (req, res) => {
 router.post('/:chatId/notify', requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const senderId = authReq.user!.uid;
-  const { chatId } = req.params;
+  const chatId = req.params.chatId as string;
   const { recipientId, senderName, preview } = req.body as {
     recipientId?: string;
     senderName?: string;
