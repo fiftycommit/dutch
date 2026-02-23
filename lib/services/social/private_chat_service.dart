@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 
 import 'chat_crypto_service.dart';
 
@@ -52,14 +53,17 @@ class PrivateChatService {
   final FirebaseFirestore _db;
   final FirebaseStorage _storage;
   final ChatCryptoService _crypto;
+  final http.Client _httpClient;
 
   PrivateChatService({
     FirebaseFirestore? db,
     FirebaseStorage? storage,
     ChatCryptoService? crypto,
+    http.Client? httpClient,
   })  : _db = db ?? FirebaseFirestore.instance,
         _storage = storage ?? FirebaseStorage.instance,
-        _crypto = crypto ?? ChatCryptoService();
+        _crypto = crypto ?? ChatCryptoService(),
+        _httpClient = httpClient ?? http.Client();
 
   /// Identifiant déterministe : toujours le plus petit userId en premier.
   static String chatId(String myId, String friendId) {
@@ -170,5 +174,30 @@ class PrivateChatService {
       'audioDurationMs': durationMs,
       'timestamp': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Web uniquement : fetch le blob URL et upload les bytes vers Firebase Storage.
+  Future<void> sendAudioFromUrl(
+      String cId, String senderId, String blobUrl, int durationMs) async {
+    // Fetch le blob depuis le navigateur
+    final http = await _fetchBytes(blobUrl);
+    final ref = _storage
+        .ref()
+        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
+    await ref.putData(http, SettableMetadata(contentType: 'audio/m4a'));
+    final url = await ref.getDownloadURL();
+    await _messages(cId).add({
+      'senderId': senderId,
+      'type': 'audio',
+      'text': '',
+      'mediaUrl': url,
+      'audioDurationMs': durationMs,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<Uint8List> _fetchBytes(String url) async {
+    final response = await _httpClient.get(Uri.parse(url));
+    return response.bodyBytes;
   }
 }

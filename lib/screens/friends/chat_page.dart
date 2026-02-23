@@ -68,25 +68,38 @@ class _ChatPageState extends State<ChatPage> {
     try {
       xfile = await picker.pickImage(source: ImageSource.gallery);
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur sélection image: $e')),
+        );
+      }
       return;
     }
     if (xfile == null) return;
 
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('chat_wallpapers/$_chatId.jpg');
-    if (kIsWeb) {
-      final bytes = await xfile.readAsBytes();
-      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-    } else {
-      await ref.putFile(
-          File(xfile.path), SettableMetadata(contentType: 'image/jpeg'));
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('chat_wallpapers/$_chatId.jpg');
+      if (kIsWeb) {
+        final bytes = await xfile.readAsBytes();
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        await ref.putFile(
+            File(xfile.path), SettableMetadata(contentType: 'image/jpeg'));
+      }
+      final url = await ref.getDownloadURL();
+      await FirebaseFirestore.instance
+          .collection('private_chats')
+          .doc(_chatId)
+          .set({'wallpaperUrl': url}, SetOptions(merge: true));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur upload: $e')),
+        );
+      }
     }
-    final url = await ref.getDownloadURL();
-    await FirebaseFirestore.instance
-        .collection('private_chats')
-        .doc(_chatId)
-        .set({'wallpaperUrl': url}, SetOptions(merge: true));
   }
 
   Future<void> _removeWallpaper() async {
@@ -137,19 +150,36 @@ class _ChatPageState extends State<ChatPage> {
     final picker = ImagePicker();
     XFile? xfile;
     try {
-      xfile = await picker.pickImage(source: source, imageQuality: 85);
+      xfile = await picker.pickImage(
+        source: source,
+        imageQuality: kIsWeb ? null : 85, // imageQuality non supporté sur web
+      );
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur sélection photo: $e')),
+        );
+      }
       return;
     }
     if (xfile == null) return;
-    if (kIsWeb) {
-      final bytes = await xfile.readAsBytes();
-      await _chatService.sendImageBytes(_chatId, _myUserId, bytes);
-    } else {
-      final file = File(xfile.path);
-      await _chatService.sendImage(_chatId, _myUserId, file);
+
+    try {
+      if (kIsWeb) {
+        final bytes = await xfile.readAsBytes();
+        await _chatService.sendImageBytes(_chatId, _myUserId, bytes);
+      } else {
+        final file = File(xfile.path);
+        await _chatService.sendImage(_chatId, _myUserId, file);
+      }
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur envoi photo: $e')),
+        );
+      }
     }
-    _scrollToBottom();
   }
 
   void _showPlusMenu() {
@@ -663,26 +693,51 @@ class _InputBarState extends State<_InputBar> {
   }
 
   Future<void> _startRecord() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) return;
-    final dir = await getTemporaryDirectory();
-    _recordPath =
-        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc), path: _recordPath!);
-    _elapsedSeconds = 0;
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _elapsedSeconds++);
-    });
-    setState(() {
-      _recordState = _RecordState.recording;
-      _recordStart = DateTime.now();
-    });
+    try {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permission micro refusée')),
+          );
+        }
+        return;
+      }
+
+      String path;
+      if (kIsWeb) {
+        // Sur web, record_web gère le stockage en mémoire
+        path = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      } else {
+        final dir = await getTemporaryDirectory();
+        path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      }
+      _recordPath = path;
+
+      await _recorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      _elapsedSeconds = 0;
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _elapsedSeconds++);
+      });
+      setState(() {
+        _recordState = _RecordState.recording;
+        _recordStart = DateTime.now();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur micro: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _stopRecord() async {
     _timer?.cancel();
-    await _recorder.stop();
+    // Sur web, stop() retourne le blob URL — on le capture
+    final path = await _recorder.stop();
+    if (path != null) _recordPath = path;
     setState(() => _recordState = _RecordState.preview);
   }
 
@@ -706,8 +761,15 @@ class _InputBarState extends State<_InputBar> {
       _recordState = _RecordState.idle;
       _previewPlaying = false;
     });
-    await widget.chatService
-        .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
+    if (kIsWeb) {
+      // Sur web, path est un blob URL — on ne peut pas créer un File
+      // On envoie directement via URL (le blob est accessible localement)
+      await widget.chatService
+          .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
+    } else {
+      await widget.chatService
+          .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
+    }
     widget.onMediaSent();
   }
 
@@ -716,7 +778,10 @@ class _InputBarState extends State<_InputBar> {
       await _previewPlayer.pause();
       setState(() => _previewPlaying = false);
     } else {
-      await _previewPlayer.play(DeviceFileSource(_recordPath!));
+      final source = kIsWeb
+          ? UrlSource(_recordPath!)         // blob URL sur web
+          : DeviceFileSource(_recordPath!); // fichier local sur mobile
+      await _previewPlayer.play(source);
       setState(() => _previewPlaying = true);
     }
   }
