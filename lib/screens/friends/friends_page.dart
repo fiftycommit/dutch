@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../utils/ui_constants.dart';
 import '../../services/social/friends_api_service.dart';
 
 class FriendsPage extends StatefulWidget {
@@ -66,7 +67,7 @@ class _FriendsPageState extends State<FriendsPage>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
       backgroundColor:
-          isError ? Colors.red.shade700 : Colors.green.shade700,
+          isError ? MultiplayerColors.of(context).danger : MultiplayerColors.of(context).success,
     ));
   }
 
@@ -146,7 +147,7 @@ class _FriendsPageState extends State<FriendsPage>
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: MultiplayerColors.of(context).separator,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -172,14 +173,14 @@ class _FriendsPageState extends State<FriendsPage>
                 ),
                 Text(
                   '@${friend.username}',
-                  style: const TextStyle(
-                      color: Color(0xFF64748B), fontSize: 14),
+                  style: TextStyle(
+                      color: MultiplayerColors.of(context).textSecondary, fontSize: 14),
                 ),
                 const SizedBox(height: 20),
                 _BottomSheetAction(
                   icon: Icons.chat_bubble_outline_rounded,
                   label: 'Message',
-                  color: const Color(0xFF4F46E5),
+                  color: MultiplayerColors.of(context).primary,
                   onTap: () {
                     Navigator.of(sheetCtx).pop();
                     context.push(
@@ -192,7 +193,7 @@ class _FriendsPageState extends State<FriendsPage>
                 _BottomSheetAction(
                   icon: Icons.person_remove_outlined,
                   label: 'Supprimer',
-                  color: Colors.orange.shade700,
+                  color: MultiplayerColors.of(context).warning,
                   onTap: () {
                     Navigator.of(sheetCtx).pop();
                     unawaited(_confirmRemoveFriend(friend));
@@ -202,7 +203,7 @@ class _FriendsPageState extends State<FriendsPage>
                 _BottomSheetAction(
                   icon: Icons.block_rounded,
                   label: 'Bloquer',
-                  color: Colors.red.shade700,
+                  color: MultiplayerColors.of(context).danger,
                   onTap: () {
                     Navigator.of(sheetCtx).pop();
                     unawaited(_confirmBlockFriend(friend));
@@ -301,26 +302,16 @@ class _FriendsPageState extends State<FriendsPage>
       data: themed,
       child: Scaffold(
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFEEF2FF),
-                Color(0xFFF3E8FF),
-                Color(0xFFEFF6FF),
-              ],
-            ),
-          ),
+          color: MultiplayerColors.of(context).background,
           child: SafeArea(
             child: Column(
               children: [
                 _buildHeader(),
                 Expanded(
                   child: _loading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
-                              color: Color(0xFF4F46E5)),
+                              color: MultiplayerColors.of(context).primary),
                         )
                       : TabBarView(
                           controller: _tabController,
@@ -362,7 +353,7 @@ class _FriendsPageState extends State<FriendsPage>
           Row(
             children: [
               Material(
-                color: Colors.white.withValues(alpha: 0.62),
+                color: MultiplayerColors.of(context).surface,
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
@@ -370,39 +361,27 @@ class _FriendsPageState extends State<FriendsPage>
                     final didPop = await Navigator.of(context).maybePop();
                     if (!didPop && mounted) context.go('/multiplayer');
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
                     child:
-                        Icon(Icons.arrow_back, size: 24, color: Color(0xFF334155)),
+                        Icon(Icons.arrow_back, size: 24, color: MultiplayerColors.of(context).textPrimary),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              ShaderMask(
-                shaderCallback: (bounds) {
-                  return const LinearGradient(
-                    colors: [
-                      Color(0xFF4F46E5),
-                      Color(0xFF7C3AED),
-                      Color(0xFF2563EB)
-                    ],
-                  ).createShader(bounds);
-                },
-                blendMode: BlendMode.srcIn,
-                child: const Text(
-                  'Mes Amis',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Text(
+                'Mes Amis',
+                style: TextStyle(
+                  color: MultiplayerColors.of(context).textPrimary,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const Spacer(),
               IconButton(
                 onPressed: _loading ? null : _loadData,
-                icon: const Icon(Icons.refresh_rounded,
-                    color: Color(0xFF4F46E5)),
+                icon: Icon(Icons.refresh_rounded,
+                    color: MultiplayerColors.of(context).primary),
                 tooltip: 'Rafraîchir',
               ),
             ],
@@ -410,9 +389,9 @@ class _FriendsPageState extends State<FriendsPage>
           const SizedBox(height: 8),
           TabBar(
             controller: _tabController,
-            labelColor: const Color(0xFF4F46E5),
-            unselectedLabelColor: const Color(0xFF64748B),
-            indicatorColor: const Color(0xFF4F46E5),
+            labelColor: MultiplayerColors.of(context).primary,
+            unselectedLabelColor: MultiplayerColors.of(context).textSecondary,
+            indicatorColor: MultiplayerColors.of(context).primary,
             indicatorSize: TabBarIndicatorSize.tab,
             tabs: [
               const Tab(
@@ -532,12 +511,13 @@ class _FriendTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        border: Border.all(color: cs.separator),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -550,26 +530,24 @@ class _FriendTile extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFFEEF2FF),
+          backgroundColor: cs.surfaceHigh,
           child: Text(
             friend.displayName.isNotEmpty
                 ? friend.displayName[0].toUpperCase()
                 : '?',
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF4F46E5),
+              color: cs.primary,
             ),
           ),
         ),
         title: Text(
           friend.displayName,
-          style:
-              const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.textPrimary),
         ),
         subtitle: Text(
           '@${friend.username}',
-          style:
-              const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          style: TextStyle(color: cs.textSecondary, fontSize: 13),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -578,14 +556,13 @@ class _FriendTile extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF22C55E),
+                decoration: BoxDecoration(
+                  color: cs.success,
                   shape: BoxShape.circle,
                 ),
               ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded,
-                color: Color(0xFF94A3B8)),
+            Icon(Icons.chevron_right_rounded, color: cs.separator),
           ],
         ),
       ),
@@ -647,10 +624,10 @@ class _RequestsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (incoming.isEmpty && outgoing.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Aucune demande en attente.',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 16),
+          style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
         ),
       );
     }
@@ -692,10 +669,11 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Color(0xFF334155),
+        style: TextStyle(
+          color: MultiplayerColors.of(context).textSecondary,
           fontWeight: FontWeight.w700,
           fontSize: 13,
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -717,13 +695,14 @@ class _RequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        border: Border.all(color: cs.separator),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -734,14 +713,14 @@ class _RequestTile extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: const Color(0xFFEEF2FF),
+            backgroundColor: cs.surfaceHigh,
             child: Text(
               info.displayName.isNotEmpty
                   ? info.displayName[0].toUpperCase()
                   : '?',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF4F46E5),
+                color: cs.primary,
               ),
             ),
           ),
@@ -751,32 +730,32 @@ class _RequestTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(info.displayName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14, color: cs.textPrimary)),
                 Text('@${info.username}',
-                    style: const TextStyle(
-                        color: Color(0xFF64748B), fontSize: 12)),
+                    style: TextStyle(
+                        color: cs.textSecondary, fontSize: 12)),
               ],
             ),
           ),
           if (isIncoming) ...[
             IconButton(
               onPressed: onAccept,
-              icon: const Icon(Icons.check_circle_outline_rounded,
-                  color: Color(0xFF22C55E)),
+              icon: Icon(Icons.check_circle_outline_rounded,
+                  color: cs.success),
               tooltip: 'Accepter',
             ),
             IconButton(
               onPressed: onRejectOrCancel,
-              icon: const Icon(Icons.cancel_outlined,
-                  color: Color(0xFFEF4444)),
+              icon: Icon(Icons.cancel_outlined,
+                  color: cs.danger),
               tooltip: 'Refuser',
             ),
           ] else
             TextButton(
               onPressed: onRejectOrCancel,
-              child: const Text('Annuler',
-                  style: TextStyle(color: Color(0xFF64748B))),
+              child: Text('Annuler',
+                  style: TextStyle(color: cs.textSecondary)),
             ),
         ],
       ),
@@ -828,10 +807,10 @@ class _BlockedTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (blocked.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Aucun utilisateur bloqué.',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 16),
+          style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
         ),
       );
     }
@@ -840,15 +819,16 @@ class _BlockedTab extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       itemCount: blocked.length,
       itemBuilder: (context, index) {
+        final cs = MultiplayerColors.of(context);
         final user = blocked[index];
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.82),
+            color: cs.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+            border: Border.all(color: cs.separator),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
@@ -859,14 +839,14 @@ class _BlockedTab extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFFFEF2F2),
+                backgroundColor: cs.danger.withValues(alpha: 0.12),
                 child: Text(
                   user.displayName.isNotEmpty
                       ? user.displayName[0].toUpperCase()
                       : '?',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFDC2626),
+                    color: cs.danger,
                   ),
                 ),
               ),
@@ -876,18 +856,18 @@ class _BlockedTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.displayName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14, color: cs.textPrimary)),
                     Text('@${user.username}',
-                        style: const TextStyle(
-                            color: Color(0xFF64748B), fontSize: 12)),
+                        style: TextStyle(
+                            color: cs.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
               TextButton(
                 onPressed: () => _unblock(context, user),
-                child: const Text('Débloquer',
-                    style: TextStyle(color: Color(0xFF4F46E5))),
+                child: Text('Débloquer',
+                    style: TextStyle(color: cs.primary)),
               ),
             ],
           ),

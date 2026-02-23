@@ -124,17 +124,9 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: HitTestBehavior.translucent,
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color(0xFFEEF2FF),
-                  Color(0xFFF3E8FF),
-                  Color(0xFFEFF6FF),
-                ],
-              ),
-            ),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF000000)
+                : const Color(0xFFF2F2F7),
             child: SafeArea(
               child: Column(
                 children: <Widget>[
@@ -220,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Row(
       children: <Widget>[
         Material(
-          color: Colors.white.withValues(alpha: 0.62),
+          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2E) : Colors.white.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(layout.backButtonRadius),
           child: InkWell(
             borderRadius: BorderRadius.circular(layout.backButtonRadius),
@@ -230,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Icon(
                 Icons.arrow_back,
                 size: layout.backIconSize,
-                color: const Color(0xFF334155),
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF334155),
               ),
             ),
           ),
@@ -278,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'Connexion',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: const Color(0xFF334155),
+            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF334155),
             fontSize: layout.formTitleSize,
             fontWeight: FontWeight.w800,
           ),
@@ -288,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'Connecte-toi pour jouer en multijoueur',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: const Color(0xFF64748B),
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFAEAEB2) : const Color(0xFF64748B),
             fontSize: layout.subtitleSize,
             fontWeight: FontWeight.w500,
           ),
@@ -428,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Text(
             'Mot de passe oublié ?',
             style: TextStyle(
-              color: const Color(0xFF4F46E5),
+              color: const Color(0xFF0A84FF),
               fontWeight: FontWeight.w500,
               fontSize: layout.linkSize,
             ),
@@ -444,7 +436,7 @@ class _LoginScreenState extends State<LoginScreen> {
             text: TextSpan(
               text: 'Pas encore de compte ? ',
               style: TextStyle(
-                color: const Color(0xFF334155),
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF334155),
                 fontWeight: FontWeight.w500,
                 fontSize: layout.linkSize,
               ),
@@ -452,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextSpan(
                   text: 'S\'inscrire',
                   style: TextStyle(
-                    color: Color(0xFF4F46E5),
+                    color: const Color(0xFF0A84FF),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -498,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen> {
         prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
         suffixIcon: suffix,
         filled: true,
-        fillColor: const Color(0xFF334155),
+        fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2E) : const Color(0xFF334155),
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
@@ -514,7 +506,7 @@ class _LoginScreenState extends State<LoginScreen> {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: hasError ? const Color(0xFFF43F5E) : const Color(0xFF6366F1),
+            color: hasError ? const Color(0xFFFF453A) : const Color(0xFF0A84FF),
             width: 1.8,
           ),
         ),

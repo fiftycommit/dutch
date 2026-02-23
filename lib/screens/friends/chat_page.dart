@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/social/private_chat_service.dart';
+import '../../utils/ui_constants.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -119,7 +120,6 @@ class _ChatPageState extends State<ChatPage> {
       _isTyping = typing;
       _chatService.updateTyping(_chatId, _myUserId, typing);
     }
-    // Auto-clear typing après 4s d'inactivité
     _typingDebounce?.cancel();
     if (typing) {
       _typingDebounce = Timer(const Duration(seconds: 4), () {
@@ -194,7 +194,6 @@ class _ChatPageState extends State<ChatPage> {
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    // Effacer le typing au départ
     _chatService.updateTyping(_chatId, _myUserId, false);
     super.dispose();
   }
@@ -230,7 +229,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       xfile = await picker.pickImage(
         source: source,
-        imageQuality: kIsWeb ? null : 50, // compression agressive
+        imageQuality: kIsWeb ? null : 50,
         maxWidth: 1200,
         maxHeight: 1200,
       );
@@ -263,9 +262,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _showPlusMenu() {
+    final cs = MultiplayerColors.of(context);
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -278,26 +278,28 @@ class _ChatPageState extends State<ChatPage> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D5DB),
+                color: cs.separator,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF4F46E5),
-                child: Icon(Icons.photo_library, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: cs.primary,
+                child: const Icon(Icons.photo_library, color: Colors.white),
               ),
-              title: const Text('Bibliothèque photos'),
+              title: Text('Bibliothèque photos',
+                  style: TextStyle(color: cs.textPrimary)),
               onTap: () => _pickImage(ImageSource.gallery),
             ),
             if (!kIsWeb)
               ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF10B981),
-                  child: Icon(Icons.camera_alt, color: Colors.white),
+                leading: CircleAvatar(
+                  backgroundColor: cs.success,
+                  child: const Icon(Icons.camera_alt, color: Colors.white),
                 ),
-                title: const Text('Appareil photo'),
+                title: Text('Appareil photo',
+                    style: TextStyle(color: cs.textPrimary)),
                 onTap: () => _pickImage(ImageSource.camera),
               ),
             const SizedBox(height: 8),
@@ -308,9 +310,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _showAppBarMenu() {
+    final cs = MultiplayerColors.of(context);
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -323,17 +326,18 @@ class _ChatPageState extends State<ChatPage> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D5DB),
+                color: cs.separator,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF8B5CF6),
-                child: Icon(Icons.wallpaper, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: cs.primary,
+                child: const Icon(Icons.wallpaper, color: Colors.white),
               ),
-              title: const Text('Changer le fond d\'écran'),
+              title: Text('Changer le fond d\'écran',
+                  style: TextStyle(color: cs.textPrimary)),
               onTap: () {
                 Navigator.pop(context);
                 _pickWallpaper();
@@ -341,11 +345,12 @@ class _ChatPageState extends State<ChatPage> {
             ),
             if (_wallpaperUrl != null)
               ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFEF4444),
-                  child: Icon(Icons.delete_outline, color: Colors.white),
+                leading: CircleAvatar(
+                  backgroundColor: cs.danger,
+                  child: const Icon(Icons.delete_outline, color: Colors.white),
                 ),
-                title: const Text('Supprimer le fond d\'écran'),
+                title: Text('Supprimer le fond d\'écran',
+                    style: TextStyle(color: cs.textPrimary)),
                 onTap: () {
                   Navigator.pop(context);
                   _removeWallpaper();
@@ -360,22 +365,23 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     final hasWallpaper = _wallpaperUrl != null;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: cs.background,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF4F46E5),
+          backgroundColor: cs.appBar,
           foregroundColor: Colors.white,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 widget.friendDisplayName,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 16),
               ),
               Row(
                 children: const [
@@ -412,7 +418,7 @@ class _ChatPageState extends State<ChatPage> {
                     fit: BoxFit.cover,
                   ),
                 )
-              : const BoxDecoration(color: Color(0xFFF0F2F5)),
+              : BoxDecoration(color: cs.background),
           child: Column(
             children: [
               Expanded(
@@ -422,22 +428,18 @@ class _ChatPageState extends State<ChatPage> {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting &&
                         _olderMessages.isEmpty) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF4F46E5)),
+                      return Center(
+                        child: CircularProgressIndicator(color: cs.primary),
                       );
                     }
 
                     final streamMessages = snapshot.data ?? [];
-
-                    // Fusionner olderMessages + streamMessages (dédupliqués par id)
                     final seenIds = <String>{};
                     final allMessages = <ChatMessage>[];
                     for (final m in [..._olderMessages, ...streamMessages]) {
                       if (seenIds.add(m.id)) allMessages.add(m);
                     }
 
-                    // Stocker le doc le plus ancien pour la pagination
                     if (streamMessages.isNotEmpty &&
                         _olderMessages.isEmpty &&
                         streamMessages.first.snapshot != null) {
@@ -450,15 +452,13 @@ class _ChatPageState extends State<ChatPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.35),
+                            color: cs.surfaceHigh.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             'Envoie le premier message à ${widget.friendDisplayName} !',
                             style: TextStyle(
-                              color: hasWallpaper
-                                  ? Colors.white
-                                  : const Color(0xFF64748B),
+                              color: cs.textSecondary,
                               fontSize: 14,
                             ),
                             textAlign: TextAlign.center,
@@ -479,42 +479,40 @@ class _ChatPageState extends State<ChatPage> {
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 12),
-                      itemCount:
-                          allMessages.length +
+                      itemCount: allMessages.length +
                           (_hasMoreMessages || _loadingMore ? 1 : 0) +
                           (_friendIsTyping ? 1 : 0),
                       itemBuilder: (context, index) {
-                        // Header : load more ou spinner
                         if (index == 0 &&
                             (_hasMoreMessages || _loadingMore)) {
                           if (_loadingMore) {
-                            return const Padding(
-                              padding: EdgeInsets.all(8),
+                            return Padding(
+                              padding: const EdgeInsets.all(8),
                               child: Center(
-                                  child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF4F46E5)),
-                              )),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: cs.primary),
+                                ),
+                              ),
                             );
                           }
                           return TextButton(
                             onPressed: _loadMore,
-                            child: const Text('Charger les messages précédents',
-                                style: TextStyle(
-                                    color: Color(0xFF4F46E5), fontSize: 13)),
+                            child: Text(
+                              'Charger les messages précédents',
+                              style: TextStyle(color: cs.primary, fontSize: 13),
+                            ),
                           );
                         }
 
                         final msgOffset =
                             (_hasMoreMessages || _loadingMore) ? 1 : 0;
 
-                        // Typing indicator en bas
                         if (_friendIsTyping &&
                             index == allMessages.length + msgOffset) {
-                          return _TypingBubble(hasWallpaper: hasWallpaper);
+                          return _TypingBubble(cs: cs);
                         }
 
                         final msgIndex = index - msgOffset;
@@ -525,12 +523,13 @@ class _ChatPageState extends State<ChatPage> {
                             _friendReadAt != null &&
                             _friendReadAt!.isAfter(msg.timestamp);
                         return _MessageBubble(
-                            message: msg,
-                            isMe: isMe,
-                            hasWallpaper: hasWallpaper,
-                            showReceipt: showReceipt,
-                            friendReadAt:
-                                showReceipt ? _friendReadAt : null);
+                          message: msg,
+                          isMe: isMe,
+                          cs: cs,
+                          hasWallpaper: hasWallpaper,
+                          showReceipt: showReceipt,
+                          friendReadAt: showReceipt ? _friendReadAt : null,
+                        );
                       },
                     );
                   },
@@ -545,7 +544,7 @@ class _ChatPageState extends State<ChatPage> {
                 myUserId: _myUserId,
                 chatService: _chatService,
                 onMediaSent: _scrollToBottom,
-                hasWallpaper: hasWallpaper,
+                cs: cs,
               ),
             ],
           ),
@@ -558,8 +557,8 @@ class _ChatPageState extends State<ChatPage> {
 // ─── Typing bubble ────────────────────────────────────────────────────────────
 
 class _TypingBubble extends StatefulWidget {
-  const _TypingBubble({required this.hasWallpaper});
-  final bool hasWallpaper;
+  const _TypingBubble({required this.cs});
+  final MultiplayerColorScheme cs;
 
   @override
   State<_TypingBubble> createState() => _TypingBubbleState();
@@ -567,65 +566,63 @@ class _TypingBubble extends StatefulWidget {
 
 class _TypingBubbleState extends State<_TypingBubble>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _dot1, _dot2, _dot3;
+  late AnimationController _ctrl;
+  late Animation<double> _d1, _d2, _d3;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _ctrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900))
       ..repeat();
-    _dot1 = Tween(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.4)));
-    _dot2 = Tween(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: const Interval(0.2, 0.6)));
-    _dot3 = Tween(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: const Interval(0.4, 0.8)));
+    _d1 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.4)));
+    _d2 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _ctrl, curve: const Interval(0.2, 0.6)));
+    _d3 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _ctrl, curve: const Interval(0.4, 0.8)));
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = widget.cs;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: widget.hasWallpaper
-              ? Colors.white.withValues(alpha: 0.88)
-              : Colors.white.withValues(alpha: 0.95),
+          color: cs.receivedBubble,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
             bottomLeft: Radius.circular(4),
-            bottomRight: Radius.circular(16),
+            bottomRight: Radius.circular(18),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black
-                  .withValues(alpha: widget.hasWallpaper ? 0.18 : 0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
         child: AnimatedBuilder(
-          animation: _controller,
+          animation: _ctrl,
           builder: (_, __) => Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _dot(_dot1.value),
+              _dot(_d1.value, cs),
               const SizedBox(width: 4),
-              _dot(_dot2.value),
+              _dot(_d2.value, cs),
               const SizedBox(width: 4),
-              _dot(_dot3.value),
+              _dot(_d3.value, cs),
             ],
           ),
         ),
@@ -633,13 +630,12 @@ class _TypingBubbleState extends State<_TypingBubble>
     );
   }
 
-  Widget _dot(double v) => Container(
+  Widget _dot(double v, MultiplayerColorScheme cs) => Container(
         width: 8,
         height: 8,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Color.lerp(
-              const Color(0xFFD1D5DB), const Color(0xFF4F46E5), v),
+          color: Color.lerp(cs.separator, cs.primary, v),
         ),
       );
 }
@@ -650,6 +646,7 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    required this.cs,
     required this.hasWallpaper,
     this.showReceipt = false,
     this.friendReadAt,
@@ -657,6 +654,7 @@ class _MessageBubble extends StatelessWidget {
 
   final ChatMessage message;
   final bool isMe;
+  final MultiplayerColorScheme cs;
   final bool hasWallpaper;
   final bool showReceipt;
   final DateTime? friendReadAt;
@@ -670,13 +668,21 @@ class _MessageBubble extends StatelessWidget {
       return 'Lu à $h:$m';
     }
     const jours = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
-    const mois = ['jan.', 'fév.', 'mar.', 'avr.', 'mai', 'juin',
-        'juil.', 'août', 'sep.', 'oct.', 'nov.', 'déc.'];
+    const mois = [
+      'jan.', 'fév.', 'mar.', 'avr.', 'mai', 'juin',
+      'juil.', 'août', 'sep.', 'oct.', 'nov.', 'déc.'
+    ];
     return 'Lu ${jours[dt.weekday - 1]} ${dt.day} ${mois[dt.month - 1]}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final bubbleColor = isMe
+        ? cs.sentBubble
+        : hasWallpaper
+            ? cs.receivedBubble.withValues(alpha: 0.92)
+            : cs.receivedBubble;
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
@@ -688,23 +694,18 @@ class _MessageBubble extends StatelessWidget {
             constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.72),
             decoration: BoxDecoration(
-              color: isMe
-                  ? const Color(0xFF4F46E5)
-                  : hasWallpaper
-                      ? Colors.white.withValues(alpha: 0.88)
-                      : Colors.white.withValues(alpha: 0.95),
+              color: bubbleColor,
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(isMe ? 16 : 4),
-                bottomRight: Radius.circular(isMe ? 4 : 16),
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: Radius.circular(isMe ? 18 : 4),
+                bottomRight: Radius.circular(isMe ? 4 : 18),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black
-                      .withValues(alpha: hasWallpaper ? 0.18 : 0.06),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withValues(alpha: 0.07),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
@@ -715,10 +716,7 @@ class _MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 6, right: 2),
               child: Text(
                 _formatReadAt(friendReadAt!),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF9CA3AF),
-                ),
+                style: TextStyle(fontSize: 11, color: cs.textSecondary),
               ),
             )
           else
@@ -729,36 +727,36 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _bubbleContent(bool isMe, BuildContext context) {
+    final textColor = isMe ? Colors.white : cs.textPrimary;
+    final linkColor = isMe ? Colors.white70 : cs.primary;
+
     switch (message.type) {
       case ChatMessageType.image:
         final radius = BorderRadius.only(
-          topLeft: const Radius.circular(16),
-          topRight: const Radius.circular(16),
-          bottomLeft: Radius.circular(isMe ? 16 : 4),
-          bottomRight: Radius.circular(isMe ? 4 : 16),
+          topLeft: const Radius.circular(18),
+          topRight: const Radius.circular(18),
+          bottomLeft: Radius.circular(isMe ? 18 : 4),
+          bottomRight: Radius.circular(isMe ? 4 : 18),
         );
         return GestureDetector(
           onTap: () => _openFullScreen(context, message.mediaUrl ?? ''),
           child: ClipRRect(
             borderRadius: radius,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 220,
-                maxHeight: 180,
-              ),
+              constraints:
+                  const BoxConstraints(maxWidth: 220, maxHeight: 180),
               child: Image.network(
                 message.mediaUrl ?? '',
                 fit: BoxFit.cover,
                 width: 220,
-                cacheWidth: 440, // 2x pour les écrans Retina
+                cacheWidth: 440,
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
                     : const SizedBox(
                         width: 220,
                         height: 140,
                         child: Center(
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2)),
+                            child: CircularProgressIndicator(strokeWidth: 2)),
                       ),
               ),
             ),
@@ -767,17 +765,19 @@ class _MessageBubble extends StatelessWidget {
 
       case ChatMessageType.audio:
         return _AudioBubble(
-            mediaUrl: message.mediaUrl ?? '',
-            durationMs: message.audioDurationMs ?? 0,
-            isMe: isMe);
+          mediaUrl: message.mediaUrl ?? '',
+          durationMs: message.audioDurationMs ?? 0,
+          isMe: isMe,
+          cs: cs,
+        );
 
       case ChatMessageType.text:
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: _LinkifiedText(
             text: message.text,
-            textColor: isMe ? Colors.white : Colors.black87,
-            linkColor: isMe ? Colors.white70 : const Color(0xFF4F46E5),
+            textColor: textColor,
+            linkColor: linkColor,
           ),
         );
     }
@@ -810,19 +810,17 @@ void _openFullScreen(BuildContext context, String url) {
 // ─── Linkified text ───────────────────────────────────────────────────────────
 
 class _LinkifiedText extends StatelessWidget {
-  const _LinkifiedText(
-      {required this.text,
-      required this.textColor,
-      required this.linkColor});
+  const _LinkifiedText({
+    required this.text,
+    required this.textColor,
+    required this.linkColor,
+  });
 
   final String text;
   final Color textColor;
   final Color linkColor;
 
-  static final _urlRegex = RegExp(
-    r'https?://[^\s]+',
-    caseSensitive: false,
-  );
+  static final _urlRegex = RegExp(r'https?://[^\s]+', caseSensitive: false);
 
   @override
   Widget build(BuildContext context) {
@@ -846,8 +844,8 @@ class _LinkifiedText extends StatelessWidget {
         alignment: PlaceholderAlignment.baseline,
         baseline: TextBaseline.alphabetic,
         child: GestureDetector(
-          onTap: () => launchUrl(Uri.parse(url),
-              mode: LaunchMode.externalApplication),
+          onTap: () =>
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
           child: Text(
             url,
             style: TextStyle(
@@ -875,14 +873,17 @@ class _LinkifiedText extends StatelessWidget {
 // ─── Audio bubble ─────────────────────────────────────────────────────────────
 
 class _AudioBubble extends StatefulWidget {
-  const _AudioBubble(
-      {required this.mediaUrl,
-      required this.durationMs,
-      required this.isMe});
+  const _AudioBubble({
+    required this.mediaUrl,
+    required this.durationMs,
+    required this.isMe,
+    required this.cs,
+  });
 
   final String mediaUrl;
   final int durationMs;
   final bool isMe;
+  final MultiplayerColorScheme cs;
 
   @override
   State<_AudioBubble> createState() => _AudioBubbleState();
@@ -918,7 +919,7 @@ class _AudioBubbleState extends State<_AudioBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isMe ? Colors.white : const Color(0xFF4F46E5);
+    final color = widget.isMe ? Colors.white : widget.cs.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
@@ -961,7 +962,7 @@ class _InputBar extends StatefulWidget {
     required this.myUserId,
     required this.chatService,
     required this.onMediaSent,
-    required this.hasWallpaper,
+    required this.cs,
   });
 
   final TextEditingController controller;
@@ -972,7 +973,7 @@ class _InputBar extends StatefulWidget {
   final String myUserId;
   final PrivateChatService chatService;
   final VoidCallback onMediaSent;
-  final bool hasWallpaper;
+  final MultiplayerColorScheme cs;
 
   @override
   State<_InputBar> createState() => _InputBarState();
@@ -1026,7 +1027,8 @@ class _InputBarState extends State<_InputBar> {
         path = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       } else {
         final dir = await getTemporaryDirectory();
-        path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        path =
+            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       }
       _recordPath = path;
 
@@ -1077,11 +1079,11 @@ class _InputBarState extends State<_InputBar> {
       _previewPlaying = false;
     });
     if (kIsWeb) {
-      await widget.chatService
-          .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
+      await widget.chatService.sendAudioFromUrl(
+          widget.chatId, widget.myUserId, path, durationMs);
     } else {
-      await widget.chatService
-          .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
+      await widget.chatService.sendAudio(
+          widget.chatId, widget.myUserId, File(path), durationMs);
     }
     widget.onMediaSent();
   }
@@ -1099,40 +1101,41 @@ class _InputBarState extends State<_InputBar> {
     }
   }
 
-  String _fmtSeconds(int s) {
-    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-  }
+  String _fmtSeconds(int s) =>
+      '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final cs = widget.cs;
+    return Container(
+      color: cs.inputBar,
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
         top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
-      child: _buildContent(),
+      child: _buildContent(cs),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(MultiplayerColorScheme cs) {
     switch (_recordState) {
       case _RecordState.recording:
-        return _buildRecordingBar();
+        return _buildRecordingBar(cs);
       case _RecordState.preview:
-        return _buildPreviewBar();
+        return _buildPreviewBar(cs);
       case _RecordState.idle:
-        return _buildIdleBar();
+        return _buildIdleBar(cs);
     }
   }
 
-  Widget _buildRecordingBar() {
+  Widget _buildRecordingBar(MultiplayerColorScheme cs) {
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: cs.surfaceHigh,
         borderRadius: BorderRadius.circular(26),
       ),
       child: Row(
@@ -1141,23 +1144,24 @@ class _InputBarState extends State<_InputBar> {
             tween: Tween(begin: 0.8, end: 1.0),
             duration: const Duration(milliseconds: 600),
             builder: (_, v, child) => Transform.scale(scale: v, child: child),
-            child: const Icon(Icons.mic, color: Colors.red, size: 24),
+            child: Icon(Icons.mic, color: cs.danger, size: 24),
           ),
           const SizedBox(width: 10),
           Text(
             _fmtSeconds(_elapsedSeconds),
-            style: const TextStyle(
-                color: Colors.red, fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: cs.danger,
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text('Appuie pour arrêter',
-                style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                style: TextStyle(color: cs.textSecondary, fontSize: 12)),
           ),
           GestureDetector(
             onTap: _cancelRecord,
-            child: const Icon(Icons.delete_outline,
-                color: Color(0xFF9CA3AF), size: 22),
+            child: Icon(Icons.delete_outline, color: cs.textSecondary, size: 22),
           ),
           const SizedBox(width: 8),
           GestureDetector(
@@ -1165,10 +1169,8 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(
+                  color: cs.danger, shape: BoxShape.circle),
               child: const Icon(Icons.stop, color: Colors.white, size: 20),
             ),
           ),
@@ -1177,12 +1179,12 @@ class _InputBarState extends State<_InputBar> {
     );
   }
 
-  Widget _buildPreviewBar() {
+  Widget _buildPreviewBar(MultiplayerColorScheme cs) {
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: cs.surfaceHigh,
         borderRadius: BorderRadius.circular(26),
       ),
       child: Row(
@@ -1193,22 +1195,19 @@ class _InputBarState extends State<_InputBar> {
               _previewPlaying
                   ? Icons.pause_circle_filled
                   : Icons.play_circle_filled,
-              color: const Color(0xFF21a1f4),
+              color: cs.primary,
               size: 34,
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.graphic_eq, color: Color(0xFF6B7280), size: 20),
+          Icon(Icons.graphic_eq, color: cs.textSecondary, size: 20),
           const SizedBox(width: 4),
-          Text(
-            _fmtSeconds(_elapsedSeconds),
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-          ),
+          Text(_fmtSeconds(_elapsedSeconds),
+              style: TextStyle(color: cs.textSecondary, fontSize: 12)),
           const Spacer(),
           GestureDetector(
             onTap: _cancelRecord,
-            child: const Icon(Icons.delete_outline,
-                color: Color(0xFFEF4444), size: 22),
+            child: Icon(Icons.delete_outline, color: cs.danger, size: 22),
           ),
           const SizedBox(width: 12),
           GestureDetector(
@@ -1216,10 +1215,8 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                color: Color(0xFF4feb69),
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(
+                  color: cs.success, shape: BoxShape.circle),
               child: const Icon(Icons.send, color: Colors.white, size: 18),
             ),
           ),
@@ -1228,7 +1225,7 @@ class _InputBarState extends State<_InputBar> {
     );
   }
 
-  Widget _buildIdleBar() {
+  Widget _buildIdleBar(MultiplayerColorScheme cs) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -1238,16 +1235,16 @@ class _InputBarState extends State<_InputBar> {
           child: Container(
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(
-              color: Color(0xFFD1D5DB),
+            decoration: BoxDecoration(
+              color: cs.surfaceHigh,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.add, color: Color(0xFF111827), size: 22),
+            child: Icon(Icons.add, color: cs.textPrimary, size: 22),
           ),
         ),
         const SizedBox(width: 8),
 
-        // Text field with Enter = send, Shift+Enter = newline
+        // TextField
         Expanded(
           child: Focus(
             onKeyEvent: (node, event) {
@@ -1265,14 +1262,13 @@ class _InputBarState extends State<_InputBar> {
               textCapitalization: TextCapitalization.sentences,
               maxLines: null,
               keyboardType: TextInputType.multiline,
-              style:
-                  const TextStyle(color: Color(0xFF111827), fontSize: 13),
+              style: TextStyle(color: cs.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Message…',
-                hintStyle: const TextStyle(
-                    color: Color(0xFF9CA3AF), fontSize: 13),
+                hintStyle:
+                    TextStyle(color: cs.textSecondary, fontSize: 13),
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: cs.surfaceHigh,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 9),
@@ -1286,17 +1282,15 @@ class _InputBarState extends State<_InputBar> {
         ),
         const SizedBox(width: 8),
 
-        // Right button: send (green) or mic (blue)
+        // Send / mic button
         if (_hasText)
           GestureDetector(
             onTap: widget.onSend,
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                color: Color(0xFF4feb69),
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(
+                  color: cs.primary, shape: BoxShape.circle),
               child: const Icon(Icons.arrow_upward,
                   color: Colors.white, size: 20),
             ),
@@ -1307,15 +1301,9 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                color: Color(0xFF21a1f4),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.mic,
-                color: Colors.white,
-                size: 20,
-              ),
+              decoration: BoxDecoration(
+                  color: cs.surfaceHigh, shape: BoxShape.circle),
+              child: Icon(Icons.mic, color: cs.primary, size: 20),
             ),
           ),
       ],

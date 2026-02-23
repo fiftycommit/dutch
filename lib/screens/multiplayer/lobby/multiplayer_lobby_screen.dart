@@ -108,22 +108,22 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     switch (event.type) {
       case GameEventType.playerJoined:
         message = event.message;
-        color = Colors.green.shade800;
+        color = MultiplayerColors.success;
         icon = Icons.person_add;
         break;
       case GameEventType.playerLeft:
         message = event.message;
-        color = Colors.orange.shade800;
+        color = MultiplayerColors.warning;
         icon = Icons.person_remove;
         break;
       case GameEventType.error:
         message = event.message;
-        color = Colors.red.shade800;
+        color = MultiplayerColors.danger;
         icon = Icons.error;
         break;
       case GameEventType.kicked:
         message = event.message;
-        color = Colors.red.shade900;
+        color = MultiplayerColors.kicked;
         icon = Icons.block;
         break;
       case GameEventType.gameStarted:
@@ -133,7 +133,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         break;
       case GameEventType.info:
         message = event.message;
-        color = Colors.blue.shade800;
+        color = MultiplayerColors.info;
         break;
     }
 
@@ -475,7 +475,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             content: Text(success
                 ? 'Paramètres mis à jour'
                 : 'Erreur lors de la mise à jour'),
-            backgroundColor: success ? Colors.green : Colors.red,
+            backgroundColor: success ? MultiplayerColors.success : MultiplayerColors.danger,
           ),
         );
       }
@@ -1125,7 +1125,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                       title: Text(friend.displayName),
                       subtitle: Text('@${friend.username}'),
                       trailing: IconButton(
-                        icon: const Icon(Icons.send, color: Colors.green),
+                        icon: const Icon(Icons.send, color: MultiplayerColors.success),
                         tooltip: 'Inviter',
                         onPressed: () async {
                           final result = await friendsApi.inviteToRoom(
@@ -1145,7 +1145,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                           : 'Erreur lors de l\'envoi'),
                                 ),
                                 backgroundColor:
-                                    result.success ? Colors.green : Colors.red,
+                                    result.success ? MultiplayerColors.success : MultiplayerColors.danger,
                               ),
                             );
                           }

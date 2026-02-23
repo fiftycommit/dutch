@@ -191,17 +191,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           behavior: HitTestBehavior.translucent,
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color(0xFFEEF2FF),
-                  Color(0xFFF3E8FF),
-                  Color(0xFFEFF6FF),
-                ],
-              ),
-            ),
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
             child: SafeArea(
               child: Column(
                 children: <Widget>[
@@ -287,7 +277,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Row(
       children: <Widget>[
         Material(
-          color: Colors.white.withValues(alpha: 0.62),
+          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2E) : Colors.white.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(layout.backButtonRadius),
           child: InkWell(
             borderRadius: BorderRadius.circular(layout.backButtonRadius),
@@ -297,7 +287,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Icon(
                 Icons.arrow_back,
                 size: layout.backIconSize,
-                color: const Color(0xFF334155),
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF334155),
               ),
             ),
           ),
@@ -345,7 +335,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Créer un compte',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: const Color(0xFF334155),
+            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF1E293B),
             fontSize: layout.formTitleSize,
             fontWeight: FontWeight.w800,
           ),
@@ -355,7 +345,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Rejoins la communauté Dutch',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: const Color(0xFF64748B),
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFAEAEB2) : const Color(0xFF64748B),
             fontSize: layout.subtitleSize,
             fontWeight: FontWeight.w500,
           ),
@@ -611,7 +601,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : null),
         suffixIcon: suffix,
         filled: true,
-        fillColor: const Color(0xFF334155),
+        fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2E) : const Color(0xFF334155),
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),

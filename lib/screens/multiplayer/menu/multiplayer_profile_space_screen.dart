@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:dutch_game/providers/auth_provider.dart' as app_auth;
+import 'package:dutch_game/providers/settings_provider.dart';
+import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:provider/provider.dart';
 
 enum MultiplayerProfileTab { profile, friends, blocked }
@@ -89,7 +92,7 @@ class _MultiplayerProfileSpaceScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
-      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+      backgroundColor: isError ? MultiplayerColors.danger : MultiplayerColors.success,
     ));
   }
 
@@ -141,16 +144,16 @@ class _MultiplayerProfileSpaceScreenState
                 autofocus: true,
                 maxLength: 24,
                 textCapitalization: TextCapitalization.words,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(label: 'Nouveau pseudo', error: fieldError),
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, label: 'Nouveau pseudo', error: fieldError),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: pwdCtrl,
                 obscureText: true,
-                style: const TextStyle(color: Color(0xFF111827)),
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
                 decoration:
-                    _dlgInput(label: 'Mot de passe actuel', error: pwdError),
+                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
               ),
             ]),
           ),
@@ -243,8 +246,8 @@ class _MultiplayerProfileSpaceScreenState
                 autofocus: true,
                 maxLength: 20,
                 textCapitalization: TextCapitalization.none,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, 
                   label: 'Nouveau nom d\'utilisateur',
                   error: fieldError,
                   prefixText: '@',
@@ -254,9 +257,9 @@ class _MultiplayerProfileSpaceScreenState
               TextField(
                 controller: pwdCtrl,
                 obscureText: true,
-                style: const TextStyle(color: Color(0xFF111827)),
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
                 decoration:
-                    _dlgInput(label: 'Mot de passe actuel', error: pwdError),
+                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
               ),
             ]),
           ),
@@ -351,17 +354,17 @@ class _MultiplayerProfileSpaceScreenState
                 controller: ctrl,
                 autofocus: true,
                 keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, 
                     label: 'Nouvelle adresse email', error: fieldError),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: pwdCtrl,
                 obscureText: true,
-                style: const TextStyle(color: Color(0xFF111827)),
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
                 decoration:
-                    _dlgInput(label: 'Mot de passe actuel', error: pwdError),
+                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
               ),
             ]),
           ),
@@ -453,8 +456,8 @@ class _MultiplayerProfileSpaceScreenState
               TextField(
                 controller: currentCtrl,
                 obscureText: obscureCurrent,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, 
                   label: 'Mot de passe actuel',
                   suffixIcon: _eyeIcon(obscureCurrent,
                       () => setLocal(() => obscureCurrent = !obscureCurrent)),
@@ -464,8 +467,8 @@ class _MultiplayerProfileSpaceScreenState
               TextField(
                 controller: newCtrl,
                 obscureText: obscureNew,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, 
                   label: 'Nouveau mot de passe',
                   suffixIcon: _eyeIcon(
                       obscureNew, () => setLocal(() => obscureNew = !obscureNew)),
@@ -475,8 +478,8 @@ class _MultiplayerProfileSpaceScreenState
               TextField(
                 controller: confirmCtrl,
                 obscureText: obscureConfirm,
-                style: const TextStyle(color: Color(0xFF111827)),
-                decoration: _dlgInput(
+                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, 
                   label: 'Confirmer',
                   suffixIcon: _eyeIcon(obscureConfirm,
                       () => setLocal(() => obscureConfirm = !obscureConfirm)),
@@ -567,19 +570,10 @@ class _MultiplayerProfileSpaceScreenState
 
     return Theme(
       data: themed,
+      child: SelectionContainer.disabled(
       child: Scaffold(
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFEEF2FF),
-                Color(0xFFF3E8FF),
-                Color(0xFFEFF6FF),
-              ],
-            ),
-          ),
+          color: MultiplayerColors.of(context).background,
           child: SafeArea(
             child: Column(
               children: [
@@ -588,7 +582,7 @@ class _MultiplayerProfileSpaceScreenState
                   child: _loading
                       ? const Center(
                           child: CircularProgressIndicator(
-                              color: Color(0xFF6366F1)))
+                              color: MultiplayerColors.primary))
                       : TabBarView(
                           controller: _tabController,
                           children: [
@@ -615,7 +609,7 @@ class _MultiplayerProfileSpaceScreenState
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -720,6 +714,8 @@ class _InfosTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final cs = MultiplayerColors.of(context);
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       children: [
@@ -752,16 +748,16 @@ class _InfosTab extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 pseudo.isNotEmpty ? pseudo : '—',
-                style: const TextStyle(
-                  color: Color(0xFF1E293B),
+                style: TextStyle(
+                  color: cs.textPrimary,
                   fontWeight: FontWeight.w800,
                   fontSize: 22,
                 ),
               ),
               Text(
                 username.isNotEmpty ? '@$username' : '—',
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
+                style: TextStyle(
+                  color: cs.textSecondary,
                   fontSize: 14,
                 ),
               ),
@@ -771,12 +767,12 @@ class _InfosTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // Liste style annuaire
-        _sectionLabel('Compte'),
+        _sectionLabel(context, 'Compte'),
         const SizedBox(height: 8),
         _InfoCard(children: [
           _InfoRow(
             icon: Icons.person_outline_rounded,
-            iconColor: const Color(0xFF4F46E5),
+            iconColor: MultiplayerColors.primary,
             label: 'Pseudo',
             value: pseudo.isNotEmpty ? pseudo : '—',
             onTap: onEditPseudo,
@@ -800,28 +796,37 @@ class _InfosTab extends StatelessWidget {
         ]),
 
         const SizedBox(height: 20),
-        _sectionLabel('Sécurité'),
+        _sectionLabel(context, 'Sécurité'),
         const SizedBox(height: 8),
         _InfoCard(children: [
           _InfoRow(
             icon: Icons.lock_outline_rounded,
-            iconColor: const Color(0xFFF59E0B),
+            iconColor: MultiplayerColors.primary,
             label: 'Mot de passe',
             value: '••••••••',
             onTap: onChangePassword,
           ),
         ]),
+
+        const SizedBox(height: 20),
+        _sectionLabel(context, 'Apparence'),
+        const SizedBox(height: 8),
+        _ThemePicker(
+          current: settings.appTheme,
+          onChanged: settings.setAppTheme,
+        ),
       ],
     );
   }
 
-  Widget _sectionLabel(String text) {
+  Widget _sectionLabel(BuildContext context, String text) {
+    final cs = MultiplayerColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
-          color: Color(0xFF94A3B8),
+        style: TextStyle(
+          color: cs.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
@@ -838,11 +843,12 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.88),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+        border: Border.all(color: cs.separator),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.07),
@@ -873,6 +879,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
@@ -888,7 +895,7 @@ class _InfoRow extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
+                  color: iconColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: iconColor, size: 18),
@@ -897,8 +904,8 @@ class _InfoRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF1E293B),
+                  style: TextStyle(
+                    color: cs.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -908,15 +915,15 @@ class _InfoRow extends StatelessWidget {
                 value,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
+                style: TextStyle(
+                  color: cs.textSecondary,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded,
-                  color: Color(0xFFCBD5E1), size: 18),
+              Icon(Icons.chevron_right_rounded,
+                  color: cs.separator, size: 18),
             ],
           ),
         ),
@@ -930,12 +937,12 @@ class _RowDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(
+    return Divider(
       height: 1,
       thickness: 1,
       indent: 48,
       endIndent: 0,
-      color: Color(0xFFF1F5F9),
+      color: MultiplayerColors.of(context).separator,
     );
   }
 }
@@ -1078,8 +1085,8 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                 TextField(
                   controller: _pwdCtrl,
                   obscureText: _obscure,
-                  style: const TextStyle(color: Color(0xFF111827)),
-                  decoration: _dlgInput(
+                  style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                  decoration: _dlgInput(context, 
                     label: 'Mot de passe actuel',
                     error: _error,
                     suffixIcon: IconButton(
@@ -1134,22 +1141,23 @@ class _FriendsListTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
     if (friends.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.group_off_outlined,
-                size: 56, color: Color(0xFF94A3B8)),
-            SizedBox(height: 12),
+                size: 56, color: cs.textSecondary),
+            const SizedBox(height: 12),
             Text(
               'Aucun ami pour l\'instant.',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
+              style: TextStyle(color: cs.textSecondary, fontSize: 15),
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
               'Va dans "Mes Amis" pour en ajouter.',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              style: TextStyle(color: cs.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -1182,9 +1190,9 @@ class _FriendsListTab extends StatelessWidget {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.88),
+            color: cs.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+            border: Border.all(color: cs.separator),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
@@ -1196,31 +1204,30 @@ class _FriendsListTab extends StatelessWidget {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFFEEF2FF),
+              backgroundColor: cs.surfaceHigh,
               child: Text(
                 initial,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF4F46E5),
+                  color: cs.primary,
                 ),
               ),
             ),
             title: Text(
               friend.displayName,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 15),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 15, color: cs.textPrimary),
             ),
             subtitle: Text(
               '@${friend.username}',
-              style: const TextStyle(
-                  color: Color(0xFF64748B), fontSize: 13),
+              style: TextStyle(color: cs.textSecondary, fontSize: 13),
             ),
             trailing: friend.isOnline
                 ? Container(
                     width: 10,
                     height: 10,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF22C55E),
+                    decoration: BoxDecoration(
+                      color: cs.success,
                       shape: BoxShape.circle,
                     ),
                   )
@@ -1232,45 +1239,125 @@ class _FriendsListTab extends StatelessWidget {
   }
 }
 
+// ─── Theme Picker ─────────────────────────────────────────────────────────────
+
+class _ThemePicker extends StatelessWidget {
+  const _ThemePicker({required this.current, required this.onChanged});
+
+  final AppTheme current;
+  final ValueChanged<AppTheme> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
+    const options = [
+      (AppTheme.light,  Icons.wb_sunny_outlined,    'Clair'),
+      (AppTheme.dark,   Icons.nights_stay_outlined,  'Sombre'),
+      (AppTheme.green,  Icons.park_outlined,         'Vert'),
+      (AppTheme.system, Icons.phone_iphone_outlined, 'Système'),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.separator),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: options.map((opt) {
+          final (theme, icon, label) = opt;
+          final selected = current == theme;
+          // Pour "Vert", la couleur de sélection est verte
+          final selectionColor = theme == AppTheme.green
+              ? const Color(0xFF4CAF50)
+              : cs.primary;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(theme),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? selectionColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 22,
+                      color: selected ? Colors.white : cs.textSecondary,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : cs.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/// InputDecoration pour les dialogs : label et texte saisi en noir.
-InputDecoration _dlgInput({
+/// InputDecoration pour les dialogs — s'adapte au mode clair/sombre.
+InputDecoration _dlgInput(
+  BuildContext context, {
   required String label,
   String? error,
   String? prefixText,
   Widget? suffixIcon,
 }) {
-  const labelStyle = TextStyle(
-    color: Color(0xFF374151),
+  final cs = MultiplayerColors.of(context);
+  final labelStyle = TextStyle(
+    color: cs.textSecondary,
     fontWeight: FontWeight.w600,
     fontSize: 14,
   );
   return InputDecoration(
     labelText: label,
     labelStyle: labelStyle,
-    floatingLabelStyle:
-        const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w700),
+    floatingLabelStyle: TextStyle(color: cs.textPrimary, fontWeight: FontWeight.w700),
     errorText: error,
     prefixText: prefixText,
     suffixIcon: suffixIcon,
     filled: true,
-    fillColor: const Color(0xFFF9FAFB),
+    fillColor: cs.surfaceHigh,
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+      borderSide: BorderSide(color: cs.separator),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6),
+      borderSide: BorderSide(color: cs.primary, width: 1.6),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFFDC2626)),
+      borderSide: BorderSide(color: cs.danger),
     ),
     focusedErrorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.6),
+      borderSide: BorderSide(color: cs.danger, width: 1.6),
     ),
   );
 }

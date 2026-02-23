@@ -3,6 +3,140 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/game_settings.dart';
+import '../providers/settings_provider.dart';
+
+/// Schéma de couleurs pour l'espace multijoueur — light ou dark.
+class MultiplayerColorScheme {
+  const MultiplayerColorScheme({
+    required this.primary,
+    required this.background,
+    required this.surface,
+    required this.surfaceHigh,
+    required this.appBar,
+    required this.inputBar,
+    required this.sentBubble,
+    required this.receivedBubble,
+    required this.textPrimary,
+    required this.textBody,
+    required this.textSecondary,
+    required this.separator,
+    required this.success,
+    required this.danger,
+    required this.kicked,
+    required this.warning,
+    required this.info,
+  });
+
+  final Color primary;
+  final Color background;
+  final Color surface;       // cards, sheets
+  final Color surfaceHigh;   // éléments surélevés (bulles reçues, input)
+  final Color appBar;
+  final Color inputBar;
+  final Color sentBubble;
+  final Color receivedBubble;
+  final Color textPrimary;
+  final Color textBody;      // texte secondaire légèrement atténué
+  final Color textSecondary;
+  final Color separator;
+  final Color success;
+  final Color danger;
+  final Color kicked;        // même que danger, sémantique explicite
+  final Color warning;
+  final Color info;
+}
+
+/// Couleurs de l'espace multijoueur — palette iOS system (sobre, Apple-style).
+/// Utiliser [MultiplayerColors.of(context)] dans les widgets.
+class MultiplayerColors {
+  MultiplayerColors._();
+
+  /// Retourne le schéma adapté au thème choisi (clair / sombre / vert / système).
+  static MultiplayerColorScheme of(BuildContext context) {
+    try {
+      final appTheme = Provider.of<SettingsProvider>(context, listen: false).appTheme;
+      if (appTheme == AppTheme.green) return green;
+    } catch (_) {}
+    return Theme.of(context).brightness == Brightness.dark ? dark : light;
+  }
+
+  static const light = MultiplayerColorScheme(
+    primary:         Color(0xFF007AFF),
+    background:      Color(0xFFF2F2F7),
+    surface:         Color(0xFFFFFFFF),
+    surfaceHigh:     Color(0xFFE9E9EB),
+    appBar:          Color(0xFF007AFF),
+    inputBar:        Color(0xFFF2F2F7),
+    sentBubble:      Color(0xFF007AFF),
+    receivedBubble:  Color(0xFFFFFFFF),
+    textPrimary:     Color(0xFF000000),
+    textBody:        Color(0xFF1C1C1E),
+    textSecondary:   Color(0xFF6E6E73),
+    separator:       Color(0xFFC6C6C8),
+    success:         Color(0xFF34C759),
+    danger:          Color(0xFFFF3B30),
+    kicked:          Color(0xFFFF3B30),
+    warning:         Color(0xFFFF9500),
+    info:            Color(0xFF007AFF),
+  );
+
+  static const dark = MultiplayerColorScheme(
+    primary:         Color(0xFF0A84FF),
+    background:      Color(0xFF000000),
+    surface:         Color(0xFF1C1C1E),
+    surfaceHigh:     Color(0xFF2C2C2E),
+    appBar:          Color(0xFF1E1E1E),
+    inputBar:        Color(0xFF1C1C1E),
+    sentBubble:      Color(0xFF0A84FF),
+    receivedBubble:  Color(0xFF3A3A3C),
+    textPrimary:     Color(0xFFFFFFFF),
+    textBody:        Color(0xFFEBEBF5),
+    textSecondary:   Color(0xFFAEAEB2),
+    separator:       Color(0xFF38383A),
+    success:         Color(0xFF30D158),
+    danger:          Color(0xFFFF453A),
+    kicked:          Color(0xFFFF453A),
+    warning:         Color(0xFFFF9F0A),
+    info:            Color(0xFF0A84FF),
+  );
+
+  /// Palette verte — inspirée du fond du jeu solo (AppColors.gradientTop/Bottom).
+  static const green = MultiplayerColorScheme(
+    primary:         Color(0xFF4CAF50),   // vert vif Apple-style
+    background:      Color(0xFF0D1F15),   // proche de gradientTop
+    surface:         Color(0xFF1A3A28),   // proche de gradientBottom
+    surfaceHigh:     Color(0xFF234D35),   // légèrement plus clair
+    appBar:          Color(0xFF1A3A28),
+    inputBar:        Color(0xFF1A3A28),
+    sentBubble:      Color(0xFF4CAF50),
+    receivedBubble:  Color(0xFF234D35),
+    textPrimary:     Color(0xFFFFFFFF),
+    textBody:        Color(0xFFE8F5E9),   // blanc légèrement vert
+    textSecondary:   Color(0xFFA8C5A8),   // vert grisé lisible
+    separator:       Color(0xFF2E5C3D),
+    success:         Color(0xFF66BB6A),
+    danger:          Color(0xFFFF453A),
+    kicked:          Color(0xFFFF453A),
+    warning:         Color(0xFFFFB300),
+    info:            Color(0xFF4CAF50),
+  );
+
+  // Fallbacks statiques (light) pour les rares cas sans contexte
+  static const Color primary       = Color(0xFF007AFF);
+  static const Color success       = Color(0xFF34C759);
+  static const Color danger        = Color(0xFFFF3B30);
+  static const Color kicked        = Color(0xFFFF3B30);
+  static const Color warning       = Color(0xFFFF9500);
+  static const Color info          = Color(0xFF007AFF);
+  static const Color textPrimary   = Color(0xFF000000);
+  static const Color textBody      = Color(0xFF1C1C1E);
+  static const Color textSecondary = Color(0xFF6E6E73);
+  static const Color background    = Color(0xFFF2F2F7);
+  static const Color createAccent  = Color(0xFF007AFF);
+  static const Color joinAccent    = Color(0xFF007AFF);
+}
 
 /// Couleurs avec contraste WCAG AA minimum (4.5:1 pour texte normal)
 class AppColors {

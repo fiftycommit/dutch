@@ -6,6 +6,7 @@ import 'package:dutch_game/screens/multiplayer/menu/multiplayer_profile_space_sc
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
+import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
@@ -27,6 +28,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   final SocialHubRepository _socialRepository = SocialHubRepository();
   late final FriendsApiService _friendsApi;
   final GlobalKey _userPillKey = GlobalKey();
+
+  MultiplayerColorScheme get _cs => MultiplayerColors.of(context);
   late final AnimationController _incomingRequestPulseController;
 
   SocialProfile? _profile;
@@ -407,15 +410,16 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                 await _loadSocialData();
               }
 
+              final dlgCs = MultiplayerColors.of(context);
               return PopScope(
                 canPop: !forceCompletion,
                 child: AlertDialog(
-                  backgroundColor: const Color(0xFFF6F4FB),
+                  backgroundColor: dlgCs.surface,
                   title: Text(
                     forceCompletion ? 'Complete ton profil' : 'Mon profil',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
+                      color: dlgCs.textPrimary,
                     ),
                   ),
                   content: SizedBox(
@@ -425,10 +429,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          const Text(
+                          Text(
                             'Pseudo',
                             style: TextStyle(
-                              color: Color(0xFF111827),
+                              color: dlgCs.textPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -438,23 +442,22 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                             textCapitalization: TextCapitalization.words,
                             maxLength: 24,
                             onChanged: (_) => runLiveValidation(),
-                            style: const TextStyle(
-                              color: Color(0xFF111827),
+                            style: TextStyle(
+                              color: dlgCs.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                             decoration: InputDecoration(
                               hintText: 'Ton pseudo',
-                              hintStyle:
-                                  const TextStyle(color: Color(0xFF6B7280)),
+                              hintStyle: TextStyle(color: dlgCs.textSecondary),
                               errorText: pseudoError,
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: dlgCs.surfaceHigh,
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
                                   color: pseudoError == null
-                                      ? const Color(0xFFD1D5DB)
-                                      : const Color(0xFFB91C1C),
+                                      ? dlgCs.separator
+                                      : dlgCs.danger,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
@@ -462,17 +465,17 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                 borderSide: BorderSide(
                                   width: 1.4,
                                   color: pseudoError == null
-                                      ? const Color(0xFF4F46E5)
-                                      : const Color(0xFFB91C1C),
+                                      ? dlgCs.primary
+                                      : dlgCs.danger,
                                 ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 10),
-                          const Text(
+                          Text(
                             'Nom d utilisateur',
                             style: TextStyle(
-                              color: Color(0xFF111827),
+                              color: dlgCs.textPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -484,10 +487,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                 margin: const EdgeInsets.only(top: 12),
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 10),
-                                child: const Text(
+                                child: Text(
                                   '@',
                                   style: TextStyle(
-                                    color: Color(0xFF111827),
+                                    color: dlgCs.textPrimary,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 18,
                                   ),
@@ -499,23 +502,22 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                   textCapitalization: TextCapitalization.none,
                                   maxLength: 20,
                                   onChanged: (_) => runLiveValidation(),
-                                  style: const TextStyle(
-                                    color: Color(0xFF111827),
+                                  style: TextStyle(
+                                    color: dlgCs.textPrimary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                   decoration: InputDecoration(
                                     hintText: 'pegga.pig',
-                                    hintStyle: const TextStyle(
-                                        color: Color(0xFF6B7280)),
+                                    hintStyle: TextStyle(color: dlgCs.textSecondary),
                                     errorText: usernameError,
                                     filled: true,
-                                    fillColor: Colors.white,
+                                    fillColor: dlgCs.surfaceHigh,
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide(
                                         color: usernameError == null
-                                            ? const Color(0xFFD1D5DB)
-                                            : const Color(0xFFB91C1C),
+                                            ? dlgCs.separator
+                                            : dlgCs.danger,
                                       ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
@@ -523,8 +525,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                       borderSide: BorderSide(
                                         width: 1.4,
                                         color: usernameError == null
-                                            ? const Color(0xFF4F46E5)
-                                            : const Color(0xFFB91C1C),
+                                            ? dlgCs.primary
+                                            : dlgCs.danger,
                                       ),
                                     ),
                                   ),
@@ -541,13 +543,13 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                                 inviteNotificationsEnabled = value;
                               });
                             },
-                            title: const Text(
+                            title: Text(
                               'Notifications d invitation de salon',
-                              style: TextStyle(color: Color(0xFF111827)),
+                              style: TextStyle(color: dlgCs.textPrimary),
                             ),
-                            subtitle: const Text(
+                            subtitle: Text(
                               'Base locale activee. Push cross-device a brancher cote compte.',
-                              style: TextStyle(color: Color(0xFF374151)),
+                              style: TextStyle(color: dlgCs.textSecondary),
                             ),
                           ),
                         ],
@@ -735,7 +737,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        backgroundColor: isError ? MultiplayerColors.danger : MultiplayerColors.success,
         action: hasStatusUrl
             ? SnackBarAction(
                 label: 'Copier lien',
@@ -779,19 +781,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       child: Scaffold(
         body: Stack(
           children: <Widget>[
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    Color(0xFFEEF2FF),
-                    Color(0xFFF3E8FF),
-                    Color(0xFFEFF6FF),
-                  ],
-                ),
-              ),
-            ),
+            Container(color: MultiplayerColors.of(context).background),
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -938,14 +928,14 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
 
   Widget _backButton() {
     return Material(
-      color: Colors.white.withValues(alpha: 0.62),
+      color: _cs.surface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: _handleBackToHome,
-        child: const Padding(
-          padding: EdgeInsets.all(12),
-          child: Icon(Icons.arrow_back, size: 24, color: Color(0xFF334155)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Icon(Icons.arrow_back, size: 24, color: _cs.textPrimary),
         ),
       ),
     );
@@ -954,24 +944,13 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   Widget _title() {
     final width = MediaQuery.of(context).size.width;
     final titleSize = width < 480 ? 22.0 : (width < 980 ? 30.0 : 42.0);
-    return ShaderMask(
-      shaderCallback: (Rect bounds) {
-        return const LinearGradient(
-          colors: <Color>[
-            Color(0xFF4F46E5),
-            Color(0xFF7C3AED),
-            Color(0xFF2563EB)
-          ],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.srcIn,
-      child: Text(
-        'Multijoueur',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: titleSize,
-          fontWeight: FontWeight.w700,
-        ),
+    return Text(
+      'Multijoueur',
+      style: TextStyle(
+        color: _cs.textPrimary,
+        fontSize: titleSize,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.5,
       ),
     );
   }
@@ -1023,10 +1002,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       context: context,
       position: position,
       elevation: 0,
-      color: const Color(0xFFF8FAFC).withValues(alpha: 0.95),
+      color: _cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        side: BorderSide(color: _cs.separator, width: 1),
       ),
       items: <PopupMenuEntry<String>>[
         PopupMenuItem<String>(
@@ -1040,8 +1019,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
               children: <Widget>[
                 Text(
                   _displayName,
-                  style: const TextStyle(
-                    color: Color(0xFF1F2937),
+                  style: TextStyle(
+                    color: _cs.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                     height: 1.1,
@@ -1051,8 +1030,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                 ),
                 Text(
                   '@$_username',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
+                  style: TextStyle(
+                    color: _cs.textSecondary,
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
                   ),
@@ -1121,7 +1100,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     bool chevronUp = false,
   }) {
     return Material(
-      color: Colors.white.withValues(alpha: 0.7),
+      color: _cs.surface,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
@@ -1131,12 +1110,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 16, color: const Color(0xFF334155)),
+              Icon(icon, size: 16, color: _cs.textBody),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Color(0xFF334155),
+                style: TextStyle(
+                  color: _cs.textBody,
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),
@@ -1146,7 +1125,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                 Icon(
                   chevronUp ? Icons.expand_less : Icons.expand_more,
                   size: 14,
-                  color: const Color(0xFF334155),
+                  color: _cs.textBody,
                 ),
               ],
             ],
@@ -1203,7 +1182,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
               Text(
                 title,
                 style: TextStyle(
-                  color: const Color(0xFF334155),
+                  color: _cs.textPrimary,
                   fontSize: titleSize,
                   fontWeight: FontWeight.w700,
                   height: 1.1,
@@ -1213,7 +1192,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: const Color(0xFF475569),
+                  color: _cs.textSecondary,
                   fontSize: subtitleSize,
                   fontWeight: FontWeight.w400,
                   height: 1.25,
@@ -1225,7 +1204,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   Text(
                     'Ouvrir',
                     style: TextStyle(
-                      color: const Color(0xFF4F46E5),
+                      color: MultiplayerColors.primary,
                       fontWeight: FontWeight.w500,
                       fontSize: actionSize,
                     ),
@@ -1233,7 +1212,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   SizedBox(width: compact ? 5 : 8),
                   Icon(
                     Icons.arrow_forward_rounded,
-                    color: const Color(0xFF4F46E5),
+                    color: MultiplayerColors.primary,
                     size: compact ? 15 : 18,
                   ),
                 ],
@@ -1246,9 +1225,9 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
+        color: _cs.surface,
         borderRadius: BorderRadius.circular(compact ? 16 : 20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.75)),
+        border: Border.all(color: _cs.separator),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.09),
@@ -1287,9 +1266,9 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     final helperSize = compact ? 10.5 : 12.0;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
+        color: _cs.surface,
         borderRadius: BorderRadius.circular(compact ? 16 : 20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        border: Border.all(color: _cs.separator),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -1308,7 +1287,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
               children: <Widget>[
                 Icon(
                   Icons.meeting_room_outlined,
-                  color: const Color(0xFF4F46E5),
+                  color: MultiplayerColors.primary,
                   size: compact ? 18 : 20,
                 ),
                 const SizedBox(width: 8),
@@ -1316,7 +1295,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   child: Text(
                     'Mes salons',
                     style: TextStyle(
-                      color: const Color(0xFF334155),
+                      color: _cs.textPrimary,
                       fontSize: headerSize,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1327,7 +1306,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   icon: Icon(
                     Icons.refresh_rounded,
                     size: compact ? 18 : 22,
-                    color: const Color(0xFF4F46E5),
+                    color: MultiplayerColors.primary,
                   ),
                   tooltip: 'Rafraichir',
                 ),
@@ -1336,7 +1315,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
             Text(
               helperText,
               style: TextStyle(
-                color: const Color(0xFF475569),
+                color: _cs.textSecondary,
                 fontSize: helperSize,
                 fontWeight: FontWeight.w500,
                 height: 1.3,
@@ -1348,7 +1327,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   ? const Center(
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        color: Color(0xFF4F46E5),
+                        color: MultiplayerColors.primary,
                       ),
                     )
                   : _myRooms.isEmpty
@@ -1357,7 +1336,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                             emptyLabel,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: const Color(0xFF64748B),
+                              color: _cs.textSecondary,
                               fontSize: compact ? 11 : 13,
                               fontWeight: FontWeight.w500,
                             ),
@@ -1402,7 +1381,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       _ => 'Hors ligne',
     };
     final statusColor =
-        isActive ? const Color(0xFF22C55E) : const Color(0xFF9CA3AF);
+        isActive ? _cs.success : _cs.textSecondary;
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -1410,19 +1389,19 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
         vertical: compact ? 8 : 10,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: _cs.surface,
         borderRadius: BorderRadius.circular(compact ? 12 : 14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+        border: Border.all(color: _cs.separator),
       ),
       child: Row(
         children: <Widget>[
           CircleAvatar(
             radius: compact ? 16 : 20,
-            backgroundColor: const Color(0x14F59E0B),
+            backgroundColor: MultiplayerColors.primary.withValues(alpha: 0.1),
             child: Icon(
               room.isHost ? Icons.star : Icons.group,
               size: compact ? 16 : 20,
-              color: const Color(0xFFB45309),
+              color: MultiplayerColors.primary,
             ),
           ),
           SizedBox(width: compact ? 8 : 10),
@@ -1438,7 +1417,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     Text(
                       room.roomCode,
                       style: TextStyle(
-                        color: const Color(0xFF334155),
+                        color: _cs.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: compact ? 12 : 13,
                         letterSpacing: compact ? 1.5 : 2,
@@ -1473,7 +1452,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                       ? 'Hôte • ${playerCount ?? 0} joueur(s)'
                       : 'Participant • ${playerCount ?? 0} joueur(s)',
                   style: TextStyle(
-                    color: const Color(0xFF64748B),
+                    color: _cs.textSecondary,
                     fontSize: compact ? 11 : 12,
                   ),
                 ),
@@ -1490,7 +1469,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                 horizontal: compact ? 10 : 12,
                 vertical: compact ? 8 : 10,
               ),
-              backgroundColor: const Color(0xFF6366F1),
+              backgroundColor: MultiplayerColors.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1502,7 +1481,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
             ),
           ),
           PopupMenuButton<String>(
-            iconColor: const Color(0xFF64748B),
+            iconColor: _cs.textSecondary,
             onSelected: (action) {
               if (action == 'remove_saved') {
                 _removeSavedRoom(room.roomCode);
@@ -1533,7 +1512,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           icon: Icons.home_outlined,
           title: 'Créer un salon',
           subtitle: 'Lance un salon privé ou public et invite ton groupe.',
-          accent: const Color(0xFFF59E0B),
+          accent: MultiplayerColors.createAccent,
           compact: true,
           onTap: _openCreateSelection,
         ),
@@ -1543,7 +1522,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           title: 'Rejoindre un salon',
           subtitle:
               'Saisis un code privé ou rejoins une partie publique disponible.',
-          accent: const Color(0xFFF97316),
+          accent: MultiplayerColors.joinAccent,
           compact: true,
           onTap: _openJoinSelection,
         ),
@@ -1571,7 +1550,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   icon: Icons.home_outlined,
                   title: 'Créer un salon',
                   subtitle: 'Lance un salon privé ou public.',
-                  accent: const Color(0xFFF59E0B),
+                  accent: MultiplayerColors.createAccent,
                   compact: true,
                   centerVertically: true,
                   onTap: _openCreateSelection,
@@ -1583,7 +1562,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   icon: Icons.lock_open_rounded,
                   title: 'Rejoindre un salon',
                   subtitle: 'Code privé ou partie publique.',
-                  accent: const Color(0xFFF97316),
+                  accent: MultiplayerColors.joinAccent,
                   compact: true,
                   centerVertically: true,
                   onTap: _openJoinSelection,
@@ -1616,7 +1595,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   icon: Icons.home_outlined,
                   title: 'Créer un salon',
                   subtitle: 'Lance un salon privé ou public.',
-                  accent: const Color(0xFFF59E0B),
+                  accent: MultiplayerColors.createAccent,
                   centerVertically: true,
                   onTap: _openCreateSelection,
                 ),
@@ -1627,7 +1606,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   icon: Icons.lock_open_rounded,
                   title: 'Rejoindre un salon',
                   subtitle: 'Code privé ou partie publique.',
-                  accent: const Color(0xFFF97316),
+                  accent: MultiplayerColors.joinAccent,
                   centerVertically: true,
                   onTap: _openJoinSelection,
                 ),
@@ -1652,23 +1631,24 @@ class _UserMenuItem extends StatelessWidget {
   const _UserMenuItem({
     required this.icon,
     required this.label,
-    this.color = const Color(0xFF1F2937),
+    this.color,
   });
 
   final IconData icon;
   final String label;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? MultiplayerColors.of(context).textPrimary;
     return Row(
       children: <Widget>[
-        Icon(icon, color: color, size: 16),
+        Icon(icon, color: effectiveColor, size: 16),
         const SizedBox(width: 10),
         Text(
           label,
           style: TextStyle(
-            color: color,
+            color: effectiveColor,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),

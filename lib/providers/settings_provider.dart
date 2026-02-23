@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
 import '../services/ui/haptic_service.dart';
@@ -20,6 +21,8 @@ class SettingsProvider with ChangeNotifier {
   bool get animationsEnabled => _settings.animationsEnabled;
   bool get cardRainEnabled => _settings.cardRainEnabled;
   bool get useSBMM => _settings.useSBMM;
+  AppTheme get appTheme => _settings.appTheme;
+  ThemeMode get themeMode => _settings.appTheme.themeMode;
 
   Difficulty get botDifficulty => _settings.botDifficulty;
   int get reactionTimeMs => _settings.reactionTimeMs;
@@ -66,6 +69,12 @@ class SettingsProvider with ChangeNotifier {
 
   void setReactionTime(int ms) {
     _settings = _settings.copyWith(reactionTimeMs: ms);
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setAppTheme(AppTheme theme) {
+    _settings = _settings.copyWith(appTheme: theme);
     _saveSettings();
     notifyListeners();
   }

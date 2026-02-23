@@ -238,22 +238,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       switch (event.type) {
         case GameEventType.playerLeft:
           message = event.message;
-          color = Colors.orange.shade800;
+          color = MultiplayerColors.warning;
           icon = Icons.person_remove;
           break;
         case GameEventType.error:
           message = event.message;
-          color = Colors.red.shade800;
+          color = MultiplayerColors.danger;
           icon = Icons.error;
           break;
         case GameEventType.kicked:
           message = event.message;
-          color = Colors.red.shade900;
+          color = MultiplayerColors.kicked;
           icon = Icons.block;
           break;
         case GameEventType.info:
           message = event.message;
-          color = Colors.blue.shade800;
+          color = MultiplayerColors.info;
           break;
         default:
           break;
@@ -362,7 +362,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         if (gameState == null) {
           return const Scaffold(
             backgroundColor: AppColors.gradientBottom,
-            body: Center(child: CircularProgressIndicator(color: Colors.amber)),
+            body: Center(child: CircularProgressIndicator(color: AppColors.textPrimary)),
           );
         }
 

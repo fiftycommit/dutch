@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'game_state.dart';
 
 enum Difficulty { easy, medium, hard, platinum, mix }
@@ -5,6 +6,21 @@ enum Difficulty { easy, medium, hard, platinum, mix }
 enum BotBehavior { fast, aggressive, balanced, moi }
 
 enum BotSkillLevel { bronze, silver, gold, platinum }
+
+/// Thème visuel de l'application.
+/// [system] suit le réglage de l'appareil, [green] applique la palette verte du jeu solo.
+enum AppTheme { system, light, dark, green }
+
+extension AppThemeExt on AppTheme {
+  ThemeMode get themeMode {
+    switch (this) {
+      case AppTheme.system: return ThemeMode.system;
+      case AppTheme.light:  return ThemeMode.light;
+      case AppTheme.dark:   return ThemeMode.dark;
+      case AppTheme.green:  return ThemeMode.dark; // dark brightness, green palette
+    }
+  }
+}
 
 class GameSettings {
   GameMode gameMode;
@@ -28,6 +44,7 @@ class GameSettings {
   bool isPublic;
   int numberOfPlayers;
   String? roomName;
+  AppTheme appTheme;
 
   GameSettings({
     this.gameMode = GameMode.quick,
@@ -48,6 +65,7 @@ class GameSettings {
     this.isPublic = false,
     this.numberOfPlayers = 4,
     this.roomName,
+    this.appTheme = AppTheme.dark,
   });
 
   GameSettings copyWith({
@@ -69,6 +87,7 @@ class GameSettings {
     bool? isPublic,
     int? numberOfPlayers,
     String? roomName,
+    AppTheme? appTheme,
   }) {
     return GameSettings(
       gameMode: gameMode ?? this.gameMode,
@@ -89,6 +108,7 @@ class GameSettings {
       isPublic: isPublic ?? this.isPublic,
       numberOfPlayers: numberOfPlayers ?? this.numberOfPlayers,
       roomName: roomName ?? this.roomName,
+      appTheme: appTheme ?? this.appTheme,
     );
   }
 
@@ -112,6 +132,7 @@ class GameSettings {
       isPublic: json['isPublic'] ?? false,
       numberOfPlayers: json['numberOfPlayers'] ?? 4,
       roomName: json['roomName'],
+      appTheme: AppTheme.values[json['appTheme'] ?? 2], // default: dark
     );
   }
 
@@ -135,6 +156,7 @@ class GameSettings {
       'isPublic': isPublic,
       'numberOfPlayers': numberOfPlayers,
       if (roomName != null) 'roomName': roomName,
+      'appTheme': appTheme.index,
     };
   }
 }
