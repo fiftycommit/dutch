@@ -23,6 +23,7 @@ const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const friendsRoutes_1 = __importDefault(require("./routes/friendsRoutes"));
 const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
+const chatKeyRoutes_1 = __importDefault(require("./routes/chatKeyRoutes"));
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const RoomRegistryService_1 = require("./services/RoomRegistryService");
@@ -233,6 +234,8 @@ function startServer() {
     app.use('/api/rooms', roomRoutes_1.default);
     // Routes Admin (gestion des utilisateurs)
     app.use('/api/admin', adminRoutes_1.default);
+    // Routes Chat keys (chiffrement E2E)
+    app.use('/api/chats', chatKeyRoutes_1.default);
     // Dashboard admin
     app.get('/admin', (req, res) => {
         res.sendFile(path_1.default.join(__dirname, '../public/admin.html'));

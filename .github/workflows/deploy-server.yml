@@ -117,9 +117,10 @@ jobs:
             # ── Backend ──
             echo "🔨 Building backend..."
             cd /root/apps/dutch-server
-            npm install --omit=dev 2>&1 || true
-            npm install typescript @types/node @types/express @types/cors 2>&1 || true
+            # Install ALL deps (including devDeps needed for tsc)
+            npm install 2>&1 || true
             npm run build || { echo "❌ Build failed"; exit 1; }
+            # Remove devDeps after build
             npm prune --production 2>&1 || true
 
             # ML data dirs
@@ -166,8 +167,8 @@ jobs:
             pm2 start ecosystem.config.cjs
             pm2 save
 
-            # Quick health check
-            sleep 3
+            # Quick health check (wait longer for initialization)
+            sleep 8
             if curl -sf http://localhost:3000/health > /dev/null; then
               echo "✅ Backend is healthy!"
             else
