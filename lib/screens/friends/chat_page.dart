@@ -51,6 +51,13 @@ class _ChatPageState extends State<ChatPage> {
   bool _loadingMore = false;
   DocumentSnapshot? _oldestDoc;
 
+  // Anti-scintillement : suivi du nombre de messages pour scroll conditionnel
+  int _lastMessageCount = 0;
+
+  // Mode sélection
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
   // Typing debounce
   Timer? _typingDebounce;
   bool _isTyping = false;
@@ -72,10 +79,6 @@ class _ChatPageState extends State<ChatPage> {
         .metaStream(_chatId, widget.friendUserId)
         .listen((meta) {
       if (!mounted) return;
-      if (meta.wallpaperUrl != _wallpaperUrl && meta.wallpaperUrl != null) {
-        imageCache.evict(NetworkImage(meta.wallpaperUrl!));
-        imageCache.clear();
-      }
       setState(() {
         _wallpaperUrl = meta.wallpaperUrl;
         _friendReadAt = meta.friendReadAt;
@@ -127,6 +130,141 @@ class _ChatPageState extends State<ChatPage> {
         _isTyping = false;
       });
     }
+  }
+
+  void _enterSelectionMode(String firstId) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds
+        ..clear()
+        ..add(firstId);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedForMe() async {
+    final ids = List<String>.from(_selectedIds);
+    _exitSelectionMode();
+    for (final id in ids) {
+      await _chatService.deleteMessageForMe(_chatId, id, _myUserId);
+    }
+  }
+
+  Future<void> _deleteSelectedForAll(List<ChatMessage> allMessages) async {
+    final ids = List<String>.from(_selectedIds);
+    // Vérifier que tous les messages sélectionnés sont les miens
+    final myMessages = allMessages
+        .where((m) => ids.contains(m.id) && m.senderId == _myUserId)
+        .map((m) => m.id)
+        .toSet();
+    final notMine = ids.where((id) => !myMessages.contains(id)).toList();
+    if (notMine.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Seuls tes propres messages peuvent être supprimés pour tous.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    _exitSelectionMode();
+    for (final id in ids) {
+      await _chatService.deleteMessageForAll(_chatId, id);
+    }
+  }
+
+  void _showDeleteDialog(List<ChatMessage> allMessages) {
+    final cs = MultiplayerColors.of(context);
+    final count = _selectedIds.length;
+    final allMine = allMessages
+        .where((m) => _selectedIds.contains(m.id))
+        .every((m) => m.senderId == _myUserId);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.separator,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                '$count message${count > 1 ? 's' : ''} sélectionné${count > 1 ? 's' : ''}',
+                style: TextStyle(
+                  color: cs.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: cs.warning.withValues(alpha: 0.15),
+                child: Icon(Icons.person_off_outlined, color: cs.warning),
+              ),
+              title: Text('Supprimer pour moi',
+                  style: TextStyle(color: cs.textPrimary)),
+              subtitle: Text('Visible uniquement pour toi',
+                  style: TextStyle(color: cs.textSecondary, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteSelectedForMe();
+              },
+            ),
+            if (allMine)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: cs.danger.withValues(alpha: 0.15),
+                  child: Icon(Icons.delete_forever_outlined, color: cs.danger),
+                ),
+                title: Text('Supprimer pour tous',
+                    style: TextStyle(color: cs.danger)),
+                subtitle: Text('Retiré de la conversation',
+                    style: TextStyle(color: cs.textSecondary, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteSelectedForAll(allMessages);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickWallpaper() async {
@@ -369,85 +507,67 @@ class _ChatPageState extends State<ChatPage> {
     final hasWallpaper = _wallpaperUrl != null;
 
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        if (_selectionMode) _exitSelectionMode();
+      },
       child: Scaffold(
         backgroundColor: cs.background,
-        appBar: AppBar(
-          backgroundColor: cs.appBar,
-          foregroundColor: Colors.white,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.friendDisplayName,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-              Row(
-                children: const [
-                  Icon(Icons.lock, size: 10, color: Color(0xFFBFDBFE)),
-                  SizedBox(width: 3),
-                  Text(
-                    'Messagerie sécurisée',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFFBFDBFE),
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.more_vert),
-              onPressed: _showAppBarMenu,
-            ),
-          ],
-          elevation: 0,
-        ),
-        body: Container(
-          key: ValueKey(_wallpaperUrl),
-          decoration: hasWallpaper
-              ? BoxDecoration(
-                  image: DecorationImage(
-                    image: NetworkImage(
-                      '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
-                    ),
-                    fit: BoxFit.cover,
-                  ),
-                )
-              : BoxDecoration(color: cs.background),
-          child: Column(
-            children: [
-              Expanded(
-                child: StreamBuilder<List<ChatMessage>>(
-                  stream: _chatService.messagesStream(
-                      _chatId, widget.friendUserId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting &&
-                        _olderMessages.isEmpty) {
-                      return Center(
-                        child: CircularProgressIndicator(color: cs.primary),
-                      );
-                    }
+        appBar: _selectionMode
+            ? _buildSelectionAppBar(cs)
+            : _buildNormalAppBar(cs),
+        body: StreamBuilder<List<ChatMessage>>(
+          stream: _chatService.messagesStream(_chatId, widget.friendUserId),
+          builder: (context, snapshot) {
+            final streamMessages = snapshot.data ?? [];
+            final seenIds = <String>{};
+            final allMessages = <ChatMessage>[];
+            for (final m in [..._olderMessages, ...streamMessages]) {
+              // Filtrer les messages supprimés
+              if (m.deletedForAll) continue;
+              if (m.deletedFor.contains(_myUserId)) continue;
+              if (seenIds.add(m.id)) allMessages.add(m);
+            }
 
-                    final streamMessages = snapshot.data ?? [];
-                    final seenIds = <String>{};
-                    final allMessages = <ChatMessage>[];
-                    for (final m in [..._olderMessages, ...streamMessages]) {
-                      if (seenIds.add(m.id)) allMessages.add(m);
-                    }
+            if (streamMessages.isNotEmpty &&
+                _olderMessages.isEmpty &&
+                streamMessages.first.snapshot != null) {
+              _oldestDoc = streamMessages.first.snapshot;
+            }
 
-                    if (streamMessages.isNotEmpty &&
-                        _olderMessages.isEmpty &&
-                        streamMessages.first.snapshot != null) {
-                      _oldestDoc = streamMessages.first.snapshot;
-                    }
+            // Scroll uniquement quand de nouveaux messages arrivent
+            if (allMessages.length > _lastMessageCount && _olderMessages.isEmpty) {
+              _lastMessageCount = allMessages.length;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _scrollToBottom();
+              });
+              _chatService.markAsRead(_chatId, _myUserId);
+            } else if (allMessages.length != _lastMessageCount) {
+              _lastMessageCount = allMessages.length;
+            }
 
-                    if (allMessages.isEmpty) {
-                      return Center(
+            return Container(
+              decoration: hasWallpaper
+                  ? BoxDecoration(
+                      image: DecorationImage(
+                        image: NetworkImage(
+                          '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
+                        ),
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : BoxDecoration(color: cs.background),
+              child: Column(
+                children: [
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      _olderMessages.isEmpty && allMessages.isEmpty)
+                    Expanded(
+                      child: Center(
+                          child: CircularProgressIndicator(color: cs.primary)),
+                    )
+                  else if (allMessages.isEmpty)
+                    Expanded(
+                      child: Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 10),
@@ -458,98 +578,225 @@ class _ChatPageState extends State<ChatPage> {
                           child: Text(
                             'Envoie le premier message à ${widget.friendDisplayName} !',
                             style: TextStyle(
-                              color: cs.textSecondary,
-                              fontSize: 14,
-                            ),
+                                color: cs.textSecondary, fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
                         ),
-                      );
-                    }
-
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (_olderMessages.isEmpty) _scrollToBottom();
-                    });
-                    _chatService.markAsRead(_chatId, _myUserId);
-
-                    final lastMyIndex = allMessages.lastIndexWhere(
-                        (m) => m.senderId == _myUserId);
-
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      itemCount: allMessages.length +
-                          (_hasMoreMessages || _loadingMore ? 1 : 0) +
-                          (_friendIsTyping ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == 0 &&
-                            (_hasMoreMessages || _loadingMore)) {
-                          if (_loadingMore) {
-                            return Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: cs.primary),
-                                ),
-                              ),
-                            );
-                          }
-                          return TextButton(
-                            onPressed: _loadMore,
-                            child: Text(
-                              'Charger les messages précédents',
-                              style: TextStyle(color: cs.primary, fontSize: 13),
-                            ),
-                          );
-                        }
-
-                        final msgOffset =
-                            (_hasMoreMessages || _loadingMore) ? 1 : 0;
-
-                        if (_friendIsTyping &&
-                            index == allMessages.length + msgOffset) {
-                          return _TypingBubble(cs: cs);
-                        }
-
-                        final msgIndex = index - msgOffset;
-                        final msg = allMessages[msgIndex];
-                        final isMe = msg.senderId == _myUserId;
-                        final showReceipt = isMe &&
-                            msgIndex == lastMyIndex &&
-                            _friendReadAt != null &&
-                            _friendReadAt!.isAfter(msg.timestamp);
-                        return _MessageBubble(
-                          message: msg,
-                          isMe: isMe,
-                          cs: cs,
-                          hasWallpaper: hasWallpaper,
-                          showReceipt: showReceipt,
-                          friendReadAt: showReceipt ? _friendReadAt : null,
-                        );
-                      },
-                    );
-                  },
-                ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: _buildMessageList(
+                          allMessages: allMessages, cs: cs, hasWallpaper: hasWallpaper),
+                    ),
+                  // Barre de suppression en mode sélection
+                  if (_selectionMode)
+                    _buildSelectionBar(cs, allMessages)
+                  else
+                    _InputBar(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      onSend: _send,
+                      onPlusPressed: _showPlusMenu,
+                      chatId: _chatId,
+                      myUserId: _myUserId,
+                      chatService: _chatService,
+                      onMediaSent: _scrollToBottom,
+                      cs: cs,
+                    ),
+                ],
               ),
-              _InputBar(
-                controller: _controller,
-                focusNode: _focusNode,
-                onSend: _send,
-                onPlusPressed: _showPlusMenu,
-                chatId: _chatId,
-                myUserId: _myUserId,
-                chatService: _chatService,
-                onMediaSent: _scrollToBottom,
-                cs: cs,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  AppBar _buildNormalAppBar(MultiplayerColorScheme cs) {
+    return AppBar(
+      backgroundColor: cs.appBar,
+      foregroundColor: Colors.white,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.friendDisplayName,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          ),
+          const Row(
+            children: [
+              Icon(Icons.lock, size: 10, color: Color(0xFFBFDBFE)),
+              SizedBox(width: 3),
+              Text(
+                'Messagerie sécurisée',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFFBFDBFE),
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
+      actions: [
+        // Bouton de sélection dédié sur web
+        if (kIsWeb)
+          IconButton(
+            icon: const Icon(Icons.checklist_rounded),
+            tooltip: 'Sélectionner des messages',
+            onPressed: () => setState(() => _selectionMode = true),
+          ),
+        IconButton(
+          icon: const Icon(Icons.more_vert),
+          onPressed: _showAppBarMenu,
+        ),
+      ],
+      elevation: 0,
+    );
+  }
+
+  AppBar _buildSelectionAppBar(MultiplayerColorScheme cs) {
+    return AppBar(
+      backgroundColor: cs.primary,
+      foregroundColor: Colors.white,
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: _exitSelectionMode,
+      ),
+      title: Text(
+        _selectedIds.isEmpty
+            ? 'Sélectionner'
+            : '${_selectedIds.length} sélectionné${_selectedIds.length > 1 ? 's' : ''}',
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+      elevation: 0,
+    );
+  }
+
+  Widget _buildSelectionBar(
+      MultiplayerColorScheme cs, List<ChatMessage> allMessages) {
+    final hasSelection = _selectedIds.isNotEmpty;
+    final allMine = hasSelection &&
+        allMessages
+            .where((m) => _selectedIds.contains(m.id))
+            .every((m) => m.senderId == _myUserId);
+
+    return Container(
+      color: cs.surface,
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        top: 10,
+        bottom: MediaQuery.of(context).padding.bottom + 10,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: hasSelection ? _deleteSelectedForMe : null,
+              icon: const Icon(Icons.person_off_outlined, size: 18),
+              label: const Text('Pour moi'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.warning,
+                side: BorderSide(color: cs.warning.withValues(alpha: 0.6)),
+              ),
+            ),
+          ),
+          if (allMine) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: hasSelection
+                    ? () => _deleteSelectedForAll(allMessages)
+                    : null,
+                icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                label: const Text('Pour tous'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.danger,
+                  side: BorderSide(color: cs.danger.withValues(alpha: 0.6)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageList({
+    required List<ChatMessage> allMessages,
+    required MultiplayerColorScheme cs,
+    required bool hasWallpaper,
+  }) {
+    final lastMyIndex =
+        allMessages.lastIndexWhere((m) => m.senderId == _myUserId);
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      itemCount: allMessages.length +
+          (_hasMoreMessages || _loadingMore ? 1 : 0) +
+          (_friendIsTyping && !_selectionMode ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == 0 && (_hasMoreMessages || _loadingMore)) {
+          if (_loadingMore) {
+            return Padding(
+              padding: const EdgeInsets.all(8),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: cs.primary),
+                ),
+              ),
+            );
+          }
+          return TextButton(
+            onPressed: _loadMore,
+            child: Text(
+              'Charger les messages précédents',
+              style: TextStyle(color: cs.primary, fontSize: 13),
+            ),
+          );
+        }
+
+        final msgOffset = (_hasMoreMessages || _loadingMore) ? 1 : 0;
+
+        if (!_selectionMode &&
+            _friendIsTyping &&
+            index == allMessages.length + msgOffset) {
+          return _TypingBubble(cs: cs);
+        }
+
+        final msgIndex = index - msgOffset;
+        if (msgIndex < 0 || msgIndex >= allMessages.length) {
+          return const SizedBox.shrink();
+        }
+        final msg = allMessages[msgIndex];
+        final isMe = msg.senderId == _myUserId;
+        final showReceipt = isMe &&
+            msgIndex == lastMyIndex &&
+            _friendReadAt != null &&
+            _friendReadAt!.isAfter(msg.timestamp);
+        final isSelected = _selectedIds.contains(msg.id);
+
+        return _MessageBubble(
+          key: ValueKey(msg.id),
+          message: msg,
+          isMe: isMe,
+          cs: cs,
+          hasWallpaper: hasWallpaper,
+          showReceipt: showReceipt,
+          friendReadAt: showReceipt ? _friendReadAt : null,
+          selectionMode: _selectionMode,
+          isSelected: isSelected,
+          onLongPress: () => _enterSelectionMode(msg.id),
+          onTap: _selectionMode ? () => _toggleSelection(msg.id) : null,
+        );
+      },
     );
   }
 }
@@ -644,12 +891,17 @@ class _TypingBubbleState extends State<_TypingBubble>
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    super.key,
     required this.message,
     required this.isMe,
     required this.cs,
     required this.hasWallpaper,
     this.showReceipt = false,
     this.friendReadAt,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onLongPress,
+    this.onTap,
   });
 
   final ChatMessage message;
@@ -658,6 +910,10 @@ class _MessageBubble extends StatelessWidget {
   final bool hasWallpaper;
   final bool showReceipt;
   final DateTime? friendReadAt;
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onTap;
 
   String _formatReadAt(DateTime dt) {
     final now = DateTime.now();
@@ -683,47 +939,86 @@ class _MessageBubble extends StatelessWidget {
             ? cs.receivedBubble.withValues(alpha: 0.92)
             : cs.receivedBubble;
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(bottom: 2),
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(isMe ? 18 : 4),
-                bottomRight: Radius.circular(isMe ? 4 : 18),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.07),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
+    final bubble = GestureDetector(
+      onLongPress: onLongPress,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        color: isSelected
+            ? cs.primary.withValues(alpha: 0.18)
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Row(
+          mainAxisAlignment:
+              isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Checkbox côté gauche pour les messages reçus
+            if (selectionMode && !isMe)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: AnimatedScale(
+                  scale: selectionMode ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: _SelectionCircle(isSelected: isSelected, cs: cs),
                 ),
-              ],
-            ),
-            child: _bubbleContent(isMe, context),
-          ),
-          if (showReceipt && friendReadAt != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6, right: 2),
-              child: Text(
-                _formatReadAt(friendReadAt!),
-                style: TextStyle(fontSize: 11, color: cs.textSecondary),
               ),
-            )
-          else
-            const SizedBox(height: 6),
-        ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.72),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(18),
+                        topRight: const Radius.circular(18),
+                        bottomLeft: Radius.circular(isMe ? 18 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 18),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.07),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: _bubbleContent(isMe, context),
+                  ),
+                  if (showReceipt && friendReadAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6, right: 2),
+                      child: Text(
+                        _formatReadAt(friendReadAt!),
+                        style: TextStyle(fontSize: 11, color: cs.textSecondary),
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 6),
+                ],
+              ),
+            ),
+            // Checkbox côté droit pour mes messages
+            if (selectionMode && isMe)
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: AnimatedScale(
+                  scale: selectionMode ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: _SelectionCircle(isSelected: isSelected, cs: cs),
+                ),
+              ),
+          ],
+        ),
       ),
     );
+
+    return bubble;
   }
 
   Widget _bubbleContent(bool isMe, BuildContext context) {
@@ -781,6 +1076,34 @@ class _MessageBubble extends StatelessWidget {
           ),
         );
     }
+  }
+}
+
+// ─── Cercle de sélection ─────────────────────────────────────────────────────
+
+class _SelectionCircle extends StatelessWidget {
+  const _SelectionCircle({required this.isSelected, required this.cs});
+  final bool isSelected;
+  final MultiplayerColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isSelected ? cs.primary : Colors.transparent,
+        border: Border.all(
+          color: isSelected ? cs.primary : cs.textSecondary,
+          width: 2,
+        ),
+      ),
+      child: isSelected
+          ? const Icon(Icons.check, size: 14, color: Colors.white)
+          : null,
+    );
   }
 }
 

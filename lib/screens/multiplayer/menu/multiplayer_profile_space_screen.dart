@@ -1253,7 +1253,7 @@ class _ThemePicker extends StatelessWidget {
     const options = [
       (AppTheme.light,  Icons.wb_sunny_outlined,    'Clair'),
       (AppTheme.dark,   Icons.nights_stay_outlined,  'Sombre'),
-      (AppTheme.green,  Icons.park_outlined,         'Vert'),
+      (AppTheme.green,  Icons.eco_outlined,            'Vert'),
       (AppTheme.system, Icons.phone_iphone_outlined, 'Système'),
     ];
 

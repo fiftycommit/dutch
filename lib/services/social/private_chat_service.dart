@@ -21,6 +21,8 @@ class ChatMessage {
   final int? audioDurationMs;
   final DateTime timestamp;
   final DocumentSnapshot? snapshot; // pour la pagination
+  final List<String> deletedFor;   // UIDs pour qui le message est caché
+  final bool deletedForAll;         // supprimé pour tout le monde
 
   const ChatMessage({
     required this.id,
@@ -31,6 +33,8 @@ class ChatMessage {
     this.mediaUrl,
     this.audioDurationMs,
     this.snapshot,
+    this.deletedFor = const [],
+    this.deletedForAll = false,
   });
 
   factory ChatMessage.fromDoc(DocumentSnapshot doc, {required String decryptedText}) {
@@ -41,6 +45,10 @@ class ChatMessage {
         : typeStr == 'audio'
             ? ChatMessageType.audio
             : ChatMessageType.text;
+    final deletedFor = (data['deletedFor'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList() ??
+        const [];
     return ChatMessage(
       id: doc.id,
       senderId: data['senderId'] as String? ?? '',
@@ -50,6 +58,8 @@ class ChatMessage {
       audioDurationMs: data['audioDurationMs'] as int?,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       snapshot: doc,
+      deletedFor: deletedFor,
+      deletedForAll: data['deletedForAll'] as bool? ?? false,
     );
   }
 }
@@ -284,6 +294,21 @@ class PrivateChatService {
   Future<Uint8List> _fetchBytes(String url) async {
     final response = await _httpClient.get(Uri.parse(url));
     return response.bodyBytes;
+  }
+
+  /// Supprime un message uniquement pour [myUserId] (les autres le voient toujours).
+  Future<void> deleteMessageForMe(
+      String cId, String messageId, String myUserId) async {
+    await _messages(cId).doc(messageId).update({
+      'deletedFor': FieldValue.arrayUnion([myUserId]),
+    });
+  }
+
+  /// Supprime un message pour tout le monde (marque deletedForAll = true).
+  Future<void> deleteMessageForAll(String cId, String messageId) async {
+    await _messages(cId).doc(messageId).update({
+      'deletedForAll': true,
+    });
   }
 
   /// Envoie une push notification au destinataire (best-effort, silencieux en cas d'erreur).
