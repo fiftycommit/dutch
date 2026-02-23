@@ -43,10 +43,15 @@ class _FriendsPageState extends State<FriendsPage>
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    final friends = await _friendsApi.getFriends();
-    final requests = await _friendsApi.getRequests();
-    final blocked = await _friendsApi.getBlockedUsers();
+    final results = await Future.wait([
+      _friendsApi.getFriends(),
+      _friendsApi.getRequests(),
+      _friendsApi.getBlockedUsers(),
+    ]);
     if (!mounted) return;
+    final friends = results[0] as List<FriendInfo>;
+    final requests = results[1] as ({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing});
+    final blocked = results[2] as List<BlockedUserInfo>;
     setState(() {
       _friends = friends;
       _incomingRequests = requests.incoming;

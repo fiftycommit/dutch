@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createHmac, randomBytes } from 'crypto';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { firestore } from '../services/FirebaseAdmin';
+import { PushNotificationService } from '../services/PushNotificationService';
 
 const router = Router();
 
@@ -59,6 +60,43 @@ router.get('/:friendId/key', requireAuth, async (req, res) => {
     res.json({ success: true, key });
   } catch (err) {
     console.error('[chatKey] Erreur:', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/chats/:chatId/notify
+// Envoie une push notification au destinataire d'un message.
+router.post('/:chatId/notify', requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const senderId = authReq.user!.uid;
+  const { chatId } = req.params;
+  const { recipientId, senderName, preview } = req.body as {
+    recipientId?: string;
+    senderName?: string;
+    preview?: string;
+  };
+
+  if (!recipientId || !senderName) {
+    res.status(400).json({ success: false, error: 'recipientId et senderName requis' });
+    return;
+  }
+
+  // Vérifier que le sender fait partie du chat (chatId = sorted(uid1, uid2))
+  const parts = chatId.split('_');
+  if (!parts.includes(senderId)) {
+    res.status(403).json({ success: false, error: 'Accès refusé' });
+    return;
+  }
+
+  try {
+    await PushNotificationService.sendToUser(recipientId, {
+      title: senderName,
+      body: preview || '📩 Nouveau message',
+      data: { type: 'chat_message', chatId, senderId },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[chatNotify] Erreur:', err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });

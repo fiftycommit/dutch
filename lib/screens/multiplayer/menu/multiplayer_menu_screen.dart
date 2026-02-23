@@ -88,9 +88,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     final multiProvider = context.read<MultiplayerGameProvider>();
     final freshToken = await authProvider.getFreshToken();
     multiProvider.setAuthToken(freshToken);
-    await multiProvider.init();
-
     await Future.wait<void>(<Future<void>>[
+      multiProvider.init(),
       _loadSocialData(),
       _loadMyRooms(),
     ]);
@@ -117,11 +116,15 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     // échoue (500, réseau instable, etc.) pour ne pas bloquer Rejoindre/Créer.
     final seededProfile = _buildProfileFromAuth(authProvider);
 
-    final friends = await _friendsApi.getFriends();
-    final requests = await _friendsApi.getRequests();
+    final results = await Future.wait([
+      _friendsApi.getFriends(),
+      _friendsApi.getRequests(),
+    ]);
 
     if (!mounted) return;
 
+    final friends = results[0] as List<FriendInfo>;
+    final requests = results[1] as ({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing});
     setState(() {
       _profile = seededProfile;
       _friends = friends;

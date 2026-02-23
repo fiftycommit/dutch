@@ -103,6 +103,11 @@ class FriendsApiService {
   DateTime? _lastOfflineLogAt;
   DateTime? _lastResponseIssueLogAt;
 
+  // Cache du probe réseau : valide 5 secondes pour éviter N sondes successives
+  static DateTime? _lastProbeAt;
+  static bool _lastProbeResult = true;
+  static const _probeCacheDuration = Duration(seconds: 5);
+
   FriendsApiService(this._authService);
 
   Future<Map<String, String>> _headers() async {
@@ -114,11 +119,18 @@ class FriendsApiService {
   }
 
   Future<bool> _canReachBackend() async {
+    final now = DateTime.now();
+    // Retourner le résultat mis en cache si récent
+    if (_lastProbeAt != null &&
+        now.difference(_lastProbeAt!) < _probeCacheDuration) {
+      return _lastProbeResult;
+    }
     final reachable = await NetworkProbeService.canReachBackend(
       timeout: const Duration(milliseconds: 900),
     );
+    _lastProbeAt = now;
+    _lastProbeResult = reachable;
     if (!reachable && kDebugMode) {
-      final now = DateTime.now();
       if (_lastOfflineLogAt == null ||
           now.difference(_lastOfflineLogAt!) >= const Duration(seconds: 5)) {
         _lastOfflineLogAt = now;

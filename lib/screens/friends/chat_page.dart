@@ -37,8 +37,22 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+
+  // Meta (wallpaper, read receipts, typing)
   String? _wallpaperUrl;
-  StreamSubscription<DocumentSnapshot>? _wallpaperSub;
+  DateTime? _friendReadAt;
+  bool _friendIsTyping = false;
+  StreamSubscription<ChatMeta>? _metaSub;
+
+  // Pagination
+  final List<ChatMessage> _olderMessages = [];
+  bool _hasMoreMessages = true;
+  bool _loadingMore = false;
+  DocumentSnapshot? _oldestDoc;
+
+  // Typing debounce
+  Timer? _typingDebounce;
+  bool _isTyping = false;
 
   @override
   void initState() {
@@ -46,27 +60,83 @@ class _ChatPageState extends State<ChatPage> {
     _chatService = PrivateChatService();
     _myUserId = context.read<AuthProvider>().user!.id;
     _chatId = PrivateChatService.chatId(_myUserId, widget.friendUserId);
-    _listenWallpaper();
+    _listenMeta();
+    _chatService.markAsRead(_chatId, _myUserId);
+    _scrollController.addListener(_onScroll);
+    _controller.addListener(_onTextChanged);
   }
 
-  void _listenWallpaper() {
-    _wallpaperSub = FirebaseFirestore.instance
-        .collection('private_chats')
-        .doc(_chatId)
-        .snapshots()
-        .listen((doc) {
+  void _listenMeta() {
+    _metaSub = _chatService
+        .metaStream(_chatId, widget.friendUserId)
+        .listen((meta) {
       if (!mounted) return;
-      final data = doc.data();
-      final url = data?['wallpaperUrl'] as String?;
-      setState(() => _wallpaperUrl = url);
+      if (meta.wallpaperUrl != _wallpaperUrl && meta.wallpaperUrl != null) {
+        imageCache.evict(NetworkImage(meta.wallpaperUrl!));
+        imageCache.clear();
+      }
+      setState(() {
+        _wallpaperUrl = meta.wallpaperUrl;
+        _friendReadAt = meta.friendReadAt;
+        _friendIsTyping = meta.friendIsTyping;
+      });
     });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels <= 60 &&
+        !_loadingMore &&
+        _hasMoreMessages &&
+        _oldestDoc != null) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || _oldestDoc == null) return;
+    setState(() => _loadingMore = true);
+    try {
+      final older = await _chatService.loadMoreMessages(
+          _chatId, widget.friendUserId, _oldestDoc!);
+      if (older.isEmpty) {
+        setState(() => _hasMoreMessages = false);
+      } else {
+        setState(() {
+          _olderMessages.insertAll(0, older);
+          if (older.first.snapshot != null) {
+            _oldestDoc = older.first.snapshot;
+          }
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _onTextChanged() {
+    final typing = _controller.text.trim().isNotEmpty;
+    if (typing != _isTyping) {
+      _isTyping = typing;
+      _chatService.updateTyping(_chatId, _myUserId, typing);
+    }
+    // Auto-clear typing après 4s d'inactivité
+    _typingDebounce?.cancel();
+    if (typing) {
+      _typingDebounce = Timer(const Duration(seconds: 4), () {
+        _chatService.updateTyping(_chatId, _myUserId, false);
+        _isTyping = false;
+      });
+    }
   }
 
   Future<void> _pickWallpaper() async {
     final picker = ImagePicker();
     XFile? xfile;
     try {
-      xfile = await picker.pickImage(source: ImageSource.gallery);
+      xfile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: kIsWeb ? null : 60,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -117,10 +187,15 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
-    _wallpaperSub?.cancel();
+    _metaSub?.cancel();
+    _typingDebounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    // Effacer le typing au départ
+    _chatService.updateTyping(_chatId, _myUserId, false);
     super.dispose();
   }
 
@@ -128,6 +203,9 @@ class _ChatPageState extends State<ChatPage> {
     final text = _controller.text;
     if (text.trim().isEmpty) return;
     _controller.clear();
+    _typingDebounce?.cancel();
+    _chatService.updateTyping(_chatId, _myUserId, false);
+    _isTyping = false;
     await _chatService.sendMessage(
         _chatId, _myUserId, text, widget.friendUserId);
     _scrollToBottom();
@@ -152,7 +230,9 @@ class _ChatPageState extends State<ChatPage> {
     try {
       xfile = await picker.pickImage(
         source: source,
-        imageQuality: kIsWeb ? null : 85, // imageQuality non supporté sur web
+        imageQuality: kIsWeb ? null : 50, // compression agressive
+        maxWidth: 1200,
+        maxHeight: 1200,
       );
     } catch (e) {
       if (mounted) {
@@ -322,10 +402,13 @@ class _ChatPageState extends State<ChatPage> {
           elevation: 0,
         ),
         body: Container(
+          key: ValueKey(_wallpaperUrl),
           decoration: hasWallpaper
               ? BoxDecoration(
                   image: DecorationImage(
-                    image: NetworkImage(_wallpaperUrl!),
+                    image: NetworkImage(
+                      '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
+                    ),
                     fit: BoxFit.cover,
                   ),
                 )
@@ -337,14 +420,31 @@ class _ChatPageState extends State<ChatPage> {
                   stream: _chatService.messagesStream(
                       _chatId, widget.friendUserId),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        _olderMessages.isEmpty) {
                       return const Center(
                         child: CircularProgressIndicator(
                             color: Color(0xFF4F46E5)),
                       );
                     }
-                    final messages = snapshot.data ?? [];
-                    if (messages.isEmpty) {
+
+                    final streamMessages = snapshot.data ?? [];
+
+                    // Fusionner olderMessages + streamMessages (dédupliqués par id)
+                    final seenIds = <String>{};
+                    final allMessages = <ChatMessage>[];
+                    for (final m in [..._olderMessages, ...streamMessages]) {
+                      if (seenIds.add(m.id)) allMessages.add(m);
+                    }
+
+                    // Stocker le doc le plus ancien pour la pagination
+                    if (streamMessages.isNotEmpty &&
+                        _olderMessages.isEmpty &&
+                        streamMessages.first.snapshot != null) {
+                      _oldestDoc = streamMessages.first.snapshot;
+                    }
+
+                    if (allMessages.isEmpty) {
                       return Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -366,21 +466,71 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       );
                     }
+
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _scrollToBottom();
+                      if (_olderMessages.isEmpty) _scrollToBottom();
                     });
+                    _chatService.markAsRead(_chatId, _myUserId);
+
+                    final lastMyIndex = allMessages.lastIndexWhere(
+                        (m) => m.senderId == _myUserId);
+
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 12),
-                      itemCount: messages.length,
+                      itemCount:
+                          allMessages.length +
+                          (_hasMoreMessages || _loadingMore ? 1 : 0) +
+                          (_friendIsTyping ? 1 : 0),
                       itemBuilder: (context, index) {
-                        final msg = messages[index];
+                        // Header : load more ou spinner
+                        if (index == 0 &&
+                            (_hasMoreMessages || _loadingMore)) {
+                          if (_loadingMore) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Center(
+                                  child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF4F46E5)),
+                              )),
+                            );
+                          }
+                          return TextButton(
+                            onPressed: _loadMore,
+                            child: const Text('Charger les messages précédents',
+                                style: TextStyle(
+                                    color: Color(0xFF4F46E5), fontSize: 13)),
+                          );
+                        }
+
+                        final msgOffset =
+                            (_hasMoreMessages || _loadingMore) ? 1 : 0;
+
+                        // Typing indicator en bas
+                        if (_friendIsTyping &&
+                            index == allMessages.length + msgOffset) {
+                          return _TypingBubble(hasWallpaper: hasWallpaper);
+                        }
+
+                        final msgIndex = index - msgOffset;
+                        final msg = allMessages[msgIndex];
                         final isMe = msg.senderId == _myUserId;
+                        final showReceipt = isMe &&
+                            msgIndex == lastMyIndex &&
+                            _friendReadAt != null &&
+                            _friendReadAt!.isAfter(msg.timestamp);
                         return _MessageBubble(
                             message: msg,
                             isMe: isMe,
-                            hasWallpaper: hasWallpaper);
+                            hasWallpaper: hasWallpaper,
+                            showReceipt: showReceipt,
+                            friendReadAt:
+                                showReceipt ? _friendReadAt : null);
                       },
                     );
                   },
@@ -405,69 +555,213 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-// ─── Message bubble ──────────────────────────────────────────────────────────
+// ─── Typing bubble ────────────────────────────────────────────────────────────
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble(
-      {required this.message, required this.isMe, required this.hasWallpaper});
-
-  final ChatMessage message;
-  final bool isMe;
+class _TypingBubble extends StatefulWidget {
+  const _TypingBubble({required this.hasWallpaper});
   final bool hasWallpaper;
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _dot1, _dot2, _dot3;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat();
+    _dot1 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.4)));
+    _dot2 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: const Interval(0.2, 0.6)));
+    _dot3 = Tween(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: const Interval(0.4, 0.8)));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isMe
-              ? const Color(0xFF4F46E5)
-              : hasWallpaper
-                  ? Colors.white.withValues(alpha: 0.88)
-                  : Colors.white.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
+          color: widget.hasWallpaper
+              ? Colors.white.withValues(alpha: 0.88)
+              : Colors.white.withValues(alpha: 0.95),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(16),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: hasWallpaper ? 0.18 : 0.06),
+              color: Colors.black
+                  .withValues(alpha: widget.hasWallpaper ? 0.18 : 0.06),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: _bubbleContent(isMe),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (_, __) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _dot(_dot1.value),
+              const SizedBox(width: 4),
+              _dot(_dot2.value),
+              const SizedBox(width: 4),
+              _dot(_dot3.value),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _bubbleContent(bool isMe) {
+  Widget _dot(double v) => Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color.lerp(
+              const Color(0xFFD1D5DB), const Color(0xFF4F46E5), v),
+        ),
+      );
+}
+
+// ─── Message bubble ──────────────────────────────────────────────────────────
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.hasWallpaper,
+    this.showReceipt = false,
+    this.friendReadAt,
+  });
+
+  final ChatMessage message;
+  final bool isMe;
+  final bool hasWallpaper;
+  final bool showReceipt;
+  final DateTime? friendReadAt;
+
+  String _formatReadAt(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inHours < 24 && now.day == dt.day) {
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return 'Lu à $h:$m';
+    }
+    const jours = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+    const mois = ['jan.', 'fév.', 'mar.', 'avr.', 'mai', 'juin',
+        'juil.', 'août', 'sep.', 'oct.', 'nov.', 'déc.'];
+    return 'Lu ${jours[dt.weekday - 1]} ${dt.day} ${mois[dt.month - 1]}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 2),
+            constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72),
+            decoration: BoxDecoration(
+              color: isMe
+                  ? const Color(0xFF4F46E5)
+                  : hasWallpaper
+                      ? Colors.white.withValues(alpha: 0.88)
+                      : Colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(isMe ? 16 : 4),
+                bottomRight: Radius.circular(isMe ? 4 : 16),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black
+                      .withValues(alpha: hasWallpaper ? 0.18 : 0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: _bubbleContent(isMe, context),
+          ),
+          if (showReceipt && friendReadAt != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6, right: 2),
+              child: Text(
+                _formatReadAt(friendReadAt!),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _bubbleContent(bool isMe, BuildContext context) {
     switch (message.type) {
       case ChatMessageType.image:
-        return ClipRRect(
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
-          ),
-          child: Image.network(
-            message.mediaUrl ?? '',
-            fit: BoxFit.cover,
-            loadingBuilder: (_, child, progress) => progress == null
-                ? child
-                : const SizedBox(
-                    height: 120,
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
+        final radius = BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(isMe ? 16 : 4),
+          bottomRight: Radius.circular(isMe ? 4 : 16),
+        );
+        return GestureDetector(
+          onTap: () => _openFullScreen(context, message.mediaUrl ?? ''),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 220,
+                maxHeight: 180,
+              ),
+              child: Image.network(
+                message.mediaUrl ?? '',
+                fit: BoxFit.cover,
+                width: 220,
+                cacheWidth: 440, // 2x pour les écrans Retina
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const SizedBox(
+                        width: 220,
+                        height: 140,
+                        child: Center(
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+              ),
+            ),
           ),
         );
 
@@ -488,6 +782,29 @@ class _MessageBubble extends StatelessWidget {
         );
     }
   }
+}
+
+void _openFullScreen(BuildContext context, String url) {
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black87,
+      barrierDismissible: true,
+      pageBuilder: (ctx, _, __) => GestureDetector(
+        onTap: () => Navigator.of(ctx).pop(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 // ─── Linkified text ───────────────────────────────────────────────────────────
@@ -706,7 +1023,6 @@ class _InputBarState extends State<_InputBar> {
 
       String path;
       if (kIsWeb) {
-        // Sur web, record_web gère le stockage en mémoire
         path = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       } else {
         final dir = await getTemporaryDirectory();
@@ -735,7 +1051,6 @@ class _InputBarState extends State<_InputBar> {
 
   Future<void> _stopRecord() async {
     _timer?.cancel();
-    // Sur web, stop() retourne le blob URL — on le capture
     final path = await _recorder.stop();
     if (path != null) _recordPath = path;
     setState(() => _recordState = _RecordState.preview);
@@ -762,8 +1077,6 @@ class _InputBarState extends State<_InputBar> {
       _previewPlaying = false;
     });
     if (kIsWeb) {
-      // Sur web, path est un blob URL — on ne peut pas créer un File
-      // On envoie directement via URL (le blob est accessible localement)
       await widget.chatService
           .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
     } else {
@@ -779,8 +1092,8 @@ class _InputBarState extends State<_InputBar> {
       setState(() => _previewPlaying = false);
     } else {
       final source = kIsWeb
-          ? UrlSource(_recordPath!)         // blob URL sur web
-          : DeviceFileSource(_recordPath!); // fichier local sur mobile
+          ? UrlSource(_recordPath!)
+          : DeviceFileSource(_recordPath!);
       await _previewPlayer.play(source);
       setState(() => _previewPlaying = true);
     }
@@ -824,7 +1137,6 @@ class _InputBarState extends State<_InputBar> {
       ),
       child: Row(
         children: [
-          // Pulsing red mic
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.8, end: 1.0),
             duration: const Duration(milliseconds: 600),
@@ -974,7 +1286,7 @@ class _InputBarState extends State<_InputBar> {
         ),
         const SizedBox(width: 8),
 
-        // Right button: send (green) or mic (blue/tap to start)
+        // Right button: send (green) or mic (blue)
         if (_hasText)
           GestureDetector(
             onTap: widget.onSend,
