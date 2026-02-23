@@ -143,12 +143,18 @@ class FirestoreServiceClass {
     // ─── Device Tokens ───────────────────────────────────────────────────
 
     async registerDeviceToken(uid: string, token: string, platform: string): Promise<void> {
-        await this.db.collection('users').doc(uid)
-            .collection('deviceTokens').doc(token).set({
-                token,
-                platform,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+        const col = this.db.collection('users').doc(uid).collection('deviceTokens');
+        // Supprimer les anciens tokens de la même plateforme (évite les doublons de notif)
+        const oldSnap = await col.where('platform', '==', platform).get();
+        const deletions = oldSnap.docs
+            .filter((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id !== token)
+            .map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.ref.delete());
+        await Promise.all(deletions);
+        await col.doc(token).set({
+            token,
+            platform,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
     }
 
     async removeDeviceToken(uid: string, token: string): Promise<void> {

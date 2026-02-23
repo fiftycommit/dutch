@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:dutch_game/providers/settings_provider.dart';
+import 'package:dutch_game/widgets/card_rain_background.dart';
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/providers/auth_provider.dart';
 import 'package:dutch_game/screens/multiplayer/menu/multiplayer_profile_space_screen.dart';
@@ -54,6 +56,10 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     _friendsApi = FriendsApiService(authProvider.authService);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Écouter les auto-joins (ami qui nous ajoute) pour rafraîchir "Mes salons"
+      context.read<MultiplayerGameProvider>().onRoomAutoJoined = (roomCode) {
+        if (mounted) unawaited(_loadMyRooms());
+      };
       unawaited(_bootstrap());
     });
   }
@@ -96,6 +102,21 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       _loadSocialData(),
       _loadMyRooms(),
     ]);
+
+    // Si on arrive depuis une notification "Invitation salon", rejoindre directement
+    if (!mounted) return;
+    final joinRoomCode = GoRouterState.of(context).uri.queryParameters['joinRoom'];
+    if (joinRoomCode != null && joinRoomCode.isNotEmpty) {
+      final playerName = _profile?.displayName?.trim().isNotEmpty == true
+          ? _profile!.displayName!
+          : 'Joueur';
+      try {
+        await multiProvider.joinRoom(roomCode: joinRoomCode, playerName: playerName);
+        if (mounted) context.push('/lobby');
+      } catch (_) {
+        // Silencieux — le salon peut être plein ou expiré
+      }
+    }
   }
 
   Future<void> _loadSocialData() async {
@@ -781,7 +802,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       child: Scaffold(
         body: Stack(
           children: <Widget>[
-            Container(color: MultiplayerColors.of(context).background),
+            Positioned.fill(
+              child: Container(decoration: AppDecorations.pageBackground),
+            ),
+            if (context.watch<SettingsProvider>().cardRainEnabled &&
+                context.watch<SettingsProvider>().animationsEnabled)
+              const Positioned.fill(child: CardRainBackground()),
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(

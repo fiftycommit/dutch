@@ -254,6 +254,13 @@ class MultiplayerGameProvider
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
+  /// Appelé quand l'ami nous a ajouté automatiquement à un salon.
+  /// La UI peut s'abonner pour rafraîchir "Mes salons".
+  Function(String roomCode)? onRoomAutoJoined;
+
+  String? _lastPlayerName;
+  void setPlayerName(String name) => _lastPlayerName = name;
+
   MultiplayerGameProvider({MultiplayerService? multiplayerService})
       : _multiplayerService = multiplayerService ?? MultiplayerService() {
     WidgetsBinding.instance.addObserver(this);
@@ -411,6 +418,23 @@ class MultiplayerGameProvider
         'Tentative de connexion détectée sur ce salon depuis un autre appareil.',
       ));
     };
+    _multiplayerService.onRoomInviteReceived = (roomCode, fromDisplayName) {
+      _handleAutoJoinFromInvite(roomCode);
+    };
+  }
+
+  Future<void> _handleAutoJoinFromInvite(String roomCode) async {
+    // Ne pas rejoindre si on est déjà dans une partie en cours
+    if (_isPlaying) return;
+    // Ne pas rejoindre si on est déjà dans ce salon
+    if (_roomCode?.toUpperCase() == roomCode.toUpperCase()) return;
+    try {
+      final name = _lastPlayerName ?? 'Joueur';
+      await joinRoom(roomCode: roomCode, playerName: name);
+      onRoomAutoJoined?.call(roomCode);
+    } catch (_) {
+      // Silencieux — l'invitation peut échouer si la room est pleine, etc.
+    }
   }
 
   void _handleEmoteReceived(Map<String, dynamic> data) {
@@ -635,6 +659,7 @@ class MultiplayerGameProvider
     try {
       _connectionManager.setConnecting(true);
       _notificationManager.clearError();
+      _lastPlayerName = playerName;
 
       final room = await _multiplayerService.joinRoom(
           roomCode: roomCode, playerName: playerName);

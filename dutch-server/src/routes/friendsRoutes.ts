@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { FriendsService } from '../services/FriendsService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { FIREBASE_UNAVAILABLE_ERROR_CODE } from '../services/RoomRegistryService';
+import { FIREBASE_UNAVAILABLE_ERROR_CODE, roomRegistryService } from '../services/RoomRegistryService';
 import { firestoreService } from '../services/FirestoreService';
 
 const router = Router();
@@ -199,6 +199,12 @@ router.post('/invite', async (req, res) => {
       inviterName,
       normalizedRoomCode
     );
+
+    // Enregistrer le salon dans activeRooms de l'ami → apparaît dans "Mes salons"
+    // même s'il n'est pas encore connecté via socket.
+    roomRegistryService.registerInvitedMember(normalizedRoomCode, normalizedFriendUserId).catch(() => {
+      // Non-critique : silencieux si la room n'existe pas encore côté Firestore
+    });
 
     res.json({ success: true });
   } catch (error) {

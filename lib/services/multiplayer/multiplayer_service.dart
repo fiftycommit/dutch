@@ -73,6 +73,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onTournamentEliminated;
   Function(Map<String, dynamic>)? onTournamentEnded;
   Function(Map<String, dynamic>)? onDuplicateLoginAttempt;
+  Function(String roomCode, String fromDisplayName)? onRoomInviteReceived;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONNEXION
@@ -522,7 +523,17 @@ class MultiplayerService {
       }
     });
 
-    socket.on('game:spied_card', (data) {
+    socket.on('room:invite', (data) {
+    if (data is Map) {
+      final roomCode = data['roomCode'] as String?;
+      final fromDisplayName = data['fromDisplayName'] as String? ?? 'Un ami';
+      if (roomCode != null) {
+        onRoomInviteReceived?.call(roomCode.toUpperCase(), fromDisplayName);
+      }
+    }
+  });
+
+  socket.on('game:spied_card', (data) {
       if (data is Map) {
         try {
           final cardJson = data['card'] as Map<String, dynamic>?;

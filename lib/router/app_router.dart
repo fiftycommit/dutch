@@ -25,7 +25,6 @@ import '../screens/game/dutch_reveal_screen.dart';
 
 // ── Deferred imports (loaded on demand) ──
 import '../screens/auth/login_screen.dart' deferred as login;
-import '../screens/auth/register_screen.dart' deferred as register;
 import '../screens/auth/forgot_password_screen.dart' deferred as forgot_pwd;
 import '../screens/multiplayer/menu/multiplayer_menu_screen.dart'
     deferred as mp_menu;
@@ -265,8 +264,8 @@ class AppRouter {
               pageBuilder: (context, state) => _adaptivePage(
                 state: state,
                 child: _DeferredScreen(
-                  loader: register.loadLibrary,
-                  builder: () => register.RegisterScreen(),
+                  loader: login.loadLibrary,
+                  builder: () => login.LoginScreen(startWithRegister: true),
                 ),
               ),
             ),

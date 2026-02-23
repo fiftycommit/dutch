@@ -217,16 +217,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             child: Scaffold(
               resizeToAvoidBottomInset: true,
               body: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colors.primary.withValues(alpha: 0.92),
-                      colors.secondary.withValues(alpha: 0.92),
-                    ],
-                  ),
-                ),
+                decoration: AppDecorations.pageBackground,
                 child: SafeArea(
                   child: Column(
                     children: [

@@ -382,6 +382,39 @@ class RoomRegistryService {
       return player.connected !== false;
     }).length;
   }
+
+  /**
+   * Enregistre l'ami invité dans son sous-collection activeRooms, sans qu'il
+   * ait besoin d'être connecté via socket. Le salon apparaît ainsi dans "Mes salons".
+   */
+  async registerInvitedMember(roomCode: string, friendUid: string): Promise<void> {
+    if (!firestore) return;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const expiresAtMs = Date.now() + DEFAULT_ROOM_TTL_MS;
+
+    // Récupère le statut actuel de la room depuis Firestore (best-effort)
+    let status = 'waiting';
+    try {
+      const roomDoc = await firestore.collection('multiplayer_rooms').doc(roomCode).get();
+      if (roomDoc.exists) status = (roomDoc.data()?.status as string) || 'waiting';
+    } catch (_) {}
+
+    await firestore
+      .collection('users')
+      .doc(friendUid)
+      .collection('activeRooms')
+      .doc(roomCode)
+      .set(
+        {
+          roomCode,
+          isHost: false,
+          status,
+          updatedAt: now,
+          expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
+        },
+        { merge: true }
+      );
+  }
 }
 
 export const roomRegistryService = new RoomRegistryService();

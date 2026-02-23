@@ -181,9 +181,13 @@ class _DutchGameAppState extends State<DutchGameApp> {
     if (!isLoggedIn) return;
 
     _pushInitialized = true;
-    unawaited(
-      PushNotificationService().init(context.read<AuthProvider>().authService),
-    );
+    final push = PushNotificationService();
+    push.onRoomInviteTapped = (roomCode) {
+      // Naviguer vers le menu multijoueur avec le code salon en paramètre
+      // Le menu gérera le join automatique au chargement.
+      _router?.go('/multiplayer?joinRoom=$roomCode');
+    };
+    unawaited(push.init(context.read<AuthProvider>().authService));
   }
 
   @override
