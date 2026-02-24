@@ -109,6 +109,17 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Crée le profil sur le serveur après inscription Google
+  Future<void> saveGoogleProfile({
+    required String username,
+    required String displayName,
+  }) async {
+    await _authService.saveProfile(
+      username: username,
+      displayName: displayName,
+    );
+  }
+
   /// Met à jour le username local après le choix de l'utilisateur
   void setUsername(String username) {
     if (_user != null) {

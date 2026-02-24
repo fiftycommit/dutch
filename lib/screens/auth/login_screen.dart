@@ -139,8 +139,13 @@ class _LoginScreenState extends State<LoginScreen>
         await auth.signOut();
         return;
       }
-      // Mettre à jour le username dans le provider puis naviguer
+      // Mettre à jour le username dans le provider
       auth.setUsername(chosenUsername);
+      // Créer le profil sur le serveur (collection users dans Firestore)
+      await auth.saveGoogleProfile(
+        username: chosenUsername,
+        displayName: result.user?.displayName ?? '',
+      );
     }
 
     await _completeAuthSuccess();

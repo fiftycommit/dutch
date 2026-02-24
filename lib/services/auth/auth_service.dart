@@ -69,7 +69,8 @@ class AuthService {
   }
 
   /// Récupère le profil complet depuis le serveur (username + displayName)
-  Future<UserInfo?> fetchProfile() async {
+  /// Vérifie si le profil existe côté serveur (sans fallback)
+  Future<UserInfo?> fetchServerProfile() async {
     final token = await getStoredToken();
     final fbUser = _firebaseAuth.currentUser;
     if (token == null || fbUser == null) return null;
@@ -77,14 +78,7 @@ class AuthService {
     final canReachBackend = await NetworkProbeService.canReachBackend(
       timeout: const Duration(milliseconds: 900),
     );
-    if (!canReachBackend) {
-      return UserInfo(
-        id: fbUser.uid,
-        username: _normalizeUsername(
-            fbUser.email?.split('@').first ?? fbUser.displayName ?? ''),
-        displayName: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
-      );
-    }
+    if (!canReachBackend) return null;
 
     try {
       final response = await http.get(
@@ -104,10 +98,20 @@ class AuthService {
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('fetchProfile error: $e');
+      if (kDebugMode) debugPrint('fetchServerProfile error: $e');
     }
 
+    return null;
+  }
+
+  Future<UserInfo?> fetchProfile() async {
+    final serverProfile = await fetchServerProfile();
+    if (serverProfile != null) return serverProfile;
+
     // Fallback sur Firebase Auth (mieux que rien)
+    final fbUser = _firebaseAuth.currentUser;
+    if (fbUser == null) return null;
+
     return UserInfo(
       id: fbUser.uid,
       username: _normalizeUsername(
@@ -140,7 +144,8 @@ class AuthService {
         }
 
         final fbUser = userCredential.user!;
-        final existingProfile = await fetchProfile();
+        // Vérifier si le profil existe dans Firestore (pas de fallback)
+        final existingProfile = await fetchServerProfile();
         if (existingProfile != null) {
           return AuthResult(success: true, token: token, user: existingProfile);
         }
@@ -185,7 +190,8 @@ class AuthService {
               success: false, error: 'Erreur de connexion Google');
         }
 
-        final existingProfile = await fetchProfile();
+        // Vérifier si le profil existe dans Firestore (pas de fallback)
+        final existingProfile = await fetchServerProfile();
         if (existingProfile != null) {
           return AuthResult(success: true, token: token, user: existingProfile);
         }
@@ -533,6 +539,33 @@ class AuthService {
       return data['available'] == true;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Crée le profil Firestore après inscription Google (username + displayName)
+  Future<void> saveProfile({
+    required String username,
+    required String displayName,
+  }) async {
+    final token = await getStoredToken();
+    if (token == null) return;
+
+    try {
+      await http
+          .put(
+            Uri.parse('$_baseUrl/api/auth/profile'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'username': username,
+              'displayName': displayName,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      if (kDebugMode) debugPrint('saveProfile error: $e');
     }
   }
 
