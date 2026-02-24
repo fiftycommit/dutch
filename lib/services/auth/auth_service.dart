@@ -205,8 +205,40 @@ class AuthService {
         );
       }
     } on FirebaseAuthException catch (e) {
+      // Keychain fallback : l'auth Google a pu réussir malgré l'erreur
+      final fbUser = _firebaseAuth.currentUser;
+      if (fbUser != null) {
+        final token = await fbUser.getIdToken();
+        final profile = await fetchProfile();
+        if (profile != null) {
+          return AuthResult(success: true, token: token, user: profile);
+        }
+        final suggested = _normalizeUsername(
+            fbUser.email?.split('@').first ?? fbUser.displayName ?? '');
+        return AuthResult(
+          success: true, token: token,
+          user: UserInfo(id: fbUser.uid, username: suggested, displayName: fbUser.displayName ?? ''),
+          needsUsernameSetup: true, suggestedUsername: suggested,
+        );
+      }
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
+      // Keychain fallback
+      final fbUser = _firebaseAuth.currentUser;
+      if (fbUser != null) {
+        final token = await fbUser.getIdToken();
+        final profile = await fetchProfile();
+        if (profile != null) {
+          return AuthResult(success: true, token: token, user: profile);
+        }
+        final suggested = _normalizeUsername(
+            fbUser.email?.split('@').first ?? fbUser.displayName ?? '');
+        return AuthResult(
+          success: true, token: token,
+          user: UserInfo(id: fbUser.uid, username: suggested, displayName: fbUser.displayName ?? ''),
+          needsUsernameSetup: true, suggestedUsername: suggested,
+        );
+      }
       if (kDebugMode) debugPrint('Google Sign-In error: $e');
       return const AuthResult(
           success: false, error: 'Impossible de se connecter avec Google');
@@ -217,18 +249,29 @@ class AuthService {
       String password) async {
     try {
       // 1. Créer le compte Firebase
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      try {
+        await _firebaseAuth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } catch (e) {
+        // Sur macOS, keychain peut échouer mais le compte est créé
+        if (_firebaseAuth.currentUser == null ||
+            _firebaseAuth.currentUser!.email != email) {
+          rethrow;
+        }
+        if (kDebugMode) debugPrint('Register keychain warning: $e');
+      }
+
+      final fbUser = _firebaseAuth.currentUser!;
 
       // 2. Mettre le displayName dans Firebase Auth
-      await credential.user?.updateDisplayName(displayName);
+      await fbUser.updateDisplayName(displayName);
 
       // 3. Récupérer le token
-      final token = await credential.user?.getIdToken();
+      final token = await fbUser.getIdToken();
 
-      if (token == null || credential.user == null) {
+      if (token == null) {
         return const AuthResult(
             success: false, error: 'Erreur de création de compte');
       }
@@ -253,15 +296,34 @@ class AuthService {
       }
 
       final user = UserInfo(
-        id: credential.user!.uid,
+        id: fbUser.uid,
         username: username,
         displayName: displayName,
       );
 
       return AuthResult(success: true, token: token, user: user);
     } on FirebaseAuthException catch (e) {
+      // Même pattern : vérifier si l'auth a réussi malgré l'erreur keychain
+      final fbUser = _firebaseAuth.currentUser;
+      if (fbUser != null && fbUser.email == email) {
+        final token = await fbUser.getIdToken();
+        return AuthResult(
+          success: true,
+          token: token,
+          user: UserInfo(id: fbUser.uid, username: username, displayName: displayName),
+        );
+      }
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
+      final fbUser = _firebaseAuth.currentUser;
+      if (fbUser != null && fbUser.email == email) {
+        final token = await fbUser.getIdToken();
+        return AuthResult(
+          success: true,
+          token: token,
+          user: UserInfo(id: fbUser.uid, username: username, displayName: displayName),
+        );
+      }
       if (kDebugMode) debugPrint('Register error: $e');
       return AuthResult(success: false, error: 'Impossible de créer le compte');
     }
@@ -286,10 +348,32 @@ class AuthService {
         );
       }
 
-      final credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: resolvedEmail,
-        password: password,
-      );
+      UserCredential credential;
+      try {
+        credential = await _firebaseAuth.signInWithEmailAndPassword(
+          email: resolvedEmail,
+          password: password,
+        );
+      } catch (e) {
+        // Sur macOS, le Keychain peut échouer après un login réussi.
+        // Vérifier si l'utilisateur est quand même connecté.
+        final fallbackUser = _firebaseAuth.currentUser;
+        if (fallbackUser != null && fallbackUser.email == resolvedEmail) {
+          final token = await fallbackUser.getIdToken();
+          final user = await fetchProfile() ??
+              UserInfo(
+                id: fallbackUser.uid,
+                username: fallbackUser.displayName ??
+                    fallbackUser.email?.split('@').first ??
+                    '',
+                displayName: fallbackUser.displayName ??
+                    fallbackUser.email?.split('@').first ??
+                    '',
+              );
+          return AuthResult(success: true, token: token, user: user);
+        }
+        rethrow;
+      }
 
       final token = await credential.user?.getIdToken();
 

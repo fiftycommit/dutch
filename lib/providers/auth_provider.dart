@@ -29,9 +29,13 @@ class AuthProvider with ChangeNotifier {
       // Charger l'utilisateur courant (session persistée par Firebase)
       final fbUser = fb.FirebaseAuth.instance.currentUser;
       if (fbUser != null) {
-        _token = await fbUser.getIdToken();
-        // Récupérer le vrai profil (username) depuis Firestore
-        _user = await _authService.fetchProfile();
+        try {
+          _token = await fbUser.getIdToken();
+          _user = await _authService.fetchProfile();
+        } catch (e) {
+          // Sur macOS, keychain peut échouer - ignorer silencieusement
+          if (kDebugMode) debugPrint('Auth init token/profile error: $e');
+        }
       }
 
       // Écouter les changements d'état auth
@@ -132,6 +136,7 @@ class AuthProvider with ChangeNotifier {
     if (result.success) {
       _user = result.user;
       _token = result.token;
+      _isInitialized = true;
     }
 
     _isLoading = false;

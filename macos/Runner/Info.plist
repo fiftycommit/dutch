@@ -28,5 +28,20 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dutch a besoin du micro pour envoyer des messages vocaux.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Dutch a besoin de la caméra pour prendre des photos.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.751846261054-kk21vskfoul52c094ke0nb7ha5p46m9t</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>google-sign-in</string>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -41,6 +42,7 @@ class _ChatPageState extends State<ChatPage> {
 
   // Meta (wallpaper, read receipts, typing)
   String? _wallpaperUrl;
+  bool _wallpaperIsDark = true;
   DateTime? _friendReadAt;
   bool _friendIsTyping = false;
   StreamSubscription<ChatMeta>? _metaSub;
@@ -75,16 +77,68 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _listenMeta() {
-    _metaSub = _chatService
-        .metaStream(_chatId, widget.friendUserId)
-        .listen((meta) {
+    _metaSub =
+        _chatService.metaStream(_chatId, widget.friendUserId).listen((meta) {
       if (!mounted) return;
+      final oldUrl = _wallpaperUrl;
       setState(() {
         _wallpaperUrl = meta.wallpaperUrl;
         _friendReadAt = meta.friendReadAt;
         _friendIsTyping = meta.friendIsTyping;
       });
+      if (meta.wallpaperUrl != oldUrl) {
+        _analyzeWallpaperBrightness(meta.wallpaperUrl);
+      }
     });
+  }
+
+  Future<void> _analyzeWallpaperBrightness(String? url) async {
+    if (url == null) {
+      if (mounted) setState(() => _wallpaperIsDark = true);
+      return;
+    }
+    try {
+      final completer = Completer<ui.Image>();
+      final provider = NetworkImage('$url&t=${url.hashCode}');
+      final stream = provider.resolve(ImageConfiguration.empty);
+      late ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (info, _) {
+          completer.complete(info.image);
+          stream.removeListener(listener);
+        },
+        onError: (e, _) {
+          if (!completer.isCompleted) completer.completeError(e);
+          stream.removeListener(listener);
+        },
+      );
+      stream.addListener(listener);
+      final image = await completer.future;
+      // Sample a small area to determine brightness
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) return;
+      final pixels = byteData.buffer.asUint8List();
+      double totalLuminance = 0;
+      int sampleCount = 0;
+      // Sample every Nth pixel for performance
+      final step = (pixels.length ~/ 4) > 500 ? (pixels.length ~/ 4) ~/ 500 : 1;
+      for (int i = 0; i < pixels.length; i += step * 4) {
+        final r = pixels[i] / 255.0;
+        final g = pixels[i + 1] / 255.0;
+        final b = pixels[i + 2] / 255.0;
+        // Relative luminance (sRGB)
+        totalLuminance += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        sampleCount++;
+      }
+      final avgLuminance = sampleCount > 0 ? totalLuminance / sampleCount : 0.5;
+      if (mounted) {
+        setState(() => _wallpaperIsDark = avgLuminance < 0.5);
+      }
+    } catch (_) {
+      // On error, default to dark
+      if (mounted) setState(() => _wallpaperIsDark = true);
+    }
   }
 
   void _onScroll() {
@@ -212,9 +266,8 @@ class _ChatPageState extends State<ChatPage> {
     if (xfile == null) return;
 
     try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('chat_wallpapers/$_chatId.jpg');
+      final ref =
+          FirebaseStorage.instance.ref().child('chat_wallpapers/$_chatId.jpg');
       if (kIsWeb) {
         final bytes = await xfile.readAsBytes();
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
@@ -431,6 +484,8 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final cs = MultiplayerColors.of(context);
     final hasWallpaper = _wallpaperUrl != null;
+    final wallpaperTextColor =
+        hasWallpaper ? (_wallpaperIsDark ? Colors.white : Colors.black) : null;
 
     return GestureDetector(
       onTap: () {
@@ -439,9 +494,8 @@ class _ChatPageState extends State<ChatPage> {
       },
       child: Scaffold(
         backgroundColor: cs.background,
-        appBar: _selectionMode
-            ? _buildSelectionAppBar(cs)
-            : _buildNormalAppBar(cs),
+        appBar:
+            _selectionMode ? _buildSelectionAppBar(cs) : _buildNormalAppBar(cs),
         body: StreamBuilder<List<ChatMessage>>(
           stream: _chatService.messagesStream(_chatId, widget.friendUserId),
           builder: (context, snapshot) {
@@ -462,7 +516,8 @@ class _ChatPageState extends State<ChatPage> {
             }
 
             // Scroll uniquement quand de nouveaux messages arrivent
-            if (allMessages.length > _lastMessageCount && _olderMessages.isEmpty) {
+            if (allMessages.length > _lastMessageCount &&
+                _olderMessages.isEmpty) {
               _lastMessageCount = allMessages.length;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) _scrollToBottom();
@@ -486,7 +541,8 @@ class _ChatPageState extends State<ChatPage> {
               child: Column(
                 children: [
                   if (snapshot.connectionState == ConnectionState.waiting &&
-                      _olderMessages.isEmpty && allMessages.isEmpty)
+                      _olderMessages.isEmpty &&
+                      allMessages.isEmpty)
                     Expanded(
                       child: Center(
                           child: CircularProgressIndicator(color: cs.primary)),
@@ -504,7 +560,8 @@ class _ChatPageState extends State<ChatPage> {
                           child: Text(
                             'Envoie le premier message à ${widget.friendDisplayName} !',
                             style: TextStyle(
-                                color: cs.textSecondary, fontSize: 14),
+                                color: wallpaperTextColor ?? cs.textSecondary,
+                                fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -513,7 +570,10 @@ class _ChatPageState extends State<ChatPage> {
                   else
                     Expanded(
                       child: _buildMessageList(
-                          allMessages: allMessages, cs: cs, hasWallpaper: hasWallpaper),
+                          allMessages: allMessages,
+                          cs: cs,
+                          hasWallpaper: hasWallpaper,
+                          wallpaperIsDark: _wallpaperIsDark),
                     ),
                   // Barre de suppression en mode sélection
                   if (_selectionMode)
@@ -655,6 +715,7 @@ class _ChatPageState extends State<ChatPage> {
     required List<ChatMessage> allMessages,
     required MultiplayerColorScheme cs,
     required bool hasWallpaper,
+    required bool wallpaperIsDark,
   }) {
     final lastMyIndex =
         allMessages.lastIndexWhere((m) => m.senderId == _myUserId);
@@ -715,6 +776,7 @@ class _ChatPageState extends State<ChatPage> {
           isMe: isMe,
           cs: cs,
           hasWallpaper: hasWallpaper,
+          wallpaperIsDark: wallpaperIsDark,
           showReceipt: showReceipt,
           friendReadAt: showReceipt ? _friendReadAt : null,
           selectionMode: _selectionMode,
@@ -822,6 +884,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isMe,
     required this.cs,
     required this.hasWallpaper,
+    this.wallpaperIsDark = true,
     this.showReceipt = false,
     this.friendReadAt,
     this.selectionMode = false,
@@ -834,6 +897,7 @@ class _MessageBubble extends StatelessWidget {
   final bool isMe;
   final MultiplayerColorScheme cs;
   final bool hasWallpaper;
+  final bool wallpaperIsDark;
   final bool showReceipt;
   final DateTime? friendReadAt;
   final bool selectionMode;
@@ -851,8 +915,18 @@ class _MessageBubble extends StatelessWidget {
     }
     const jours = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
     const mois = [
-      'jan.', 'fév.', 'mar.', 'avr.', 'mai', 'juin',
-      'juil.', 'août', 'sep.', 'oct.', 'nov.', 'déc.'
+      'jan.',
+      'fév.',
+      'mar.',
+      'avr.',
+      'mai',
+      'juin',
+      'juil.',
+      'août',
+      'sep.',
+      'oct.',
+      'nov.',
+      'déc.'
     ];
     return 'Lu ${jours[dt.weekday - 1]} ${dt.day} ${mois[dt.month - 1]}';
   }
@@ -921,7 +995,13 @@ class _MessageBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 6, right: 2),
                       child: Text(
                         _formatReadAt(friendReadAt!),
-                        style: TextStyle(fontSize: 11, color: cs.textSecondary),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: hasWallpaper
+                                ? (wallpaperIsDark
+                                    ? Colors.white70
+                                    : Colors.black54)
+                                : cs.textSecondary),
                       ),
                     )
                   else
@@ -964,8 +1044,7 @@ class _MessageBubble extends StatelessWidget {
           child: ClipRRect(
             borderRadius: radius,
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: 220, maxHeight: 180),
+              constraints: const BoxConstraints(maxWidth: 220, maxHeight: 180),
               child: Image.network(
                 message.mediaUrl ?? '',
                 fit: BoxFit.cover,
@@ -1276,13 +1355,12 @@ class _InputBarState extends State<_InputBar> {
         path = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       } else {
         final dir = await getTemporaryDirectory();
-        path =
-            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       }
       _recordPath = path;
 
-      await _recorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc),
+          path: path);
       _elapsedSeconds = 0;
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() => _elapsedSeconds++);
@@ -1320,19 +1398,18 @@ class _InputBarState extends State<_InputBar> {
   Future<void> _sendAudio() async {
     final path = _recordPath;
     if (path == null) return;
-    final durationMs =
-        DateTime.now().difference(_recordStart!).inMilliseconds;
+    final durationMs = DateTime.now().difference(_recordStart!).inMilliseconds;
     await _previewPlayer.stop();
     setState(() {
       _recordState = _RecordState.idle;
       _previewPlaying = false;
     });
     if (kIsWeb) {
-      await widget.chatService.sendAudioFromUrl(
-          widget.chatId, widget.myUserId, path, durationMs);
+      await widget.chatService
+          .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
     } else {
-      await widget.chatService.sendAudio(
-          widget.chatId, widget.myUserId, File(path), durationMs);
+      await widget.chatService
+          .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
     }
     widget.onMediaSent();
   }
@@ -1342,9 +1419,8 @@ class _InputBarState extends State<_InputBar> {
       await _previewPlayer.pause();
       setState(() => _previewPlaying = false);
     } else {
-      final source = kIsWeb
-          ? UrlSource(_recordPath!)
-          : DeviceFileSource(_recordPath!);
+      final source =
+          kIsWeb ? UrlSource(_recordPath!) : DeviceFileSource(_recordPath!);
       await _previewPlayer.play(source);
       setState(() => _previewPlaying = true);
     }
@@ -1399,9 +1475,7 @@ class _InputBarState extends State<_InputBar> {
           Text(
             _fmtSeconds(_elapsedSeconds),
             style: TextStyle(
-                color: cs.danger,
-                fontSize: 14,
-                fontWeight: FontWeight.w600),
+                color: cs.danger, fontSize: 14, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1410,7 +1484,8 @@ class _InputBarState extends State<_InputBar> {
           ),
           GestureDetector(
             onTap: _cancelRecord,
-            child: Icon(Icons.delete_outline, color: cs.textSecondary, size: 22),
+            child:
+                Icon(Icons.delete_outline, color: cs.textSecondary, size: 22),
           ),
           const SizedBox(width: 8),
           GestureDetector(
@@ -1418,8 +1493,8 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                  color: cs.danger, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: cs.danger, shape: BoxShape.circle),
               child: const Icon(Icons.stop, color: Colors.white, size: 20),
             ),
           ),
@@ -1464,8 +1539,8 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                  color: cs.success, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: cs.success, shape: BoxShape.circle),
               child: const Icon(Icons.send, color: Colors.white, size: 18),
             ),
           ),
@@ -1514,13 +1589,12 @@ class _InputBarState extends State<_InputBar> {
               style: TextStyle(color: cs.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Message…',
-                hintStyle:
-                    TextStyle(color: cs.textSecondary, fontSize: 13),
+                hintStyle: TextStyle(color: cs.textSecondary, fontSize: 13),
                 filled: true,
                 fillColor: cs.surfaceHigh,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 9),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
                   borderSide: BorderSide.none,
@@ -1538,10 +1612,10 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                  color: cs.primary, shape: BoxShape.circle),
-              child: const Icon(Icons.arrow_upward,
-                  color: Colors.white, size: 20),
+              decoration:
+                  BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+              child:
+                  const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
             ),
           )
         else
@@ -1550,8 +1624,8 @@ class _InputBarState extends State<_InputBar> {
             child: Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                  color: cs.surfaceHigh, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: cs.surfaceHigh, shape: BoxShape.circle),
               child: Icon(Icons.mic, color: cs.primary, size: 20),
             ),
           ),

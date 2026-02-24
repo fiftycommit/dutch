@@ -19,6 +19,7 @@ import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
 import 'services/push/push_notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 
@@ -48,6 +49,12 @@ void main() async {
     ]),
   ]);
 
+  // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
+  // setPersistence n'est supporté que sur le web
+  if (kIsWeb) {
+    await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+  }
+
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Initialiser le service locator avec tous les services
@@ -71,7 +78,8 @@ void main() async {
 ThemeData _buildLightTheme() => ThemeData(
       brightness: Brightness.light,
       primarySwatch: Colors.green,
-      scaffoldBackgroundColor: kIsWeb ? Colors.transparent : AppColors.gradientBottom,
+      scaffoldBackgroundColor:
+          kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
       fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.light(
@@ -81,7 +89,8 @@ ThemeData _buildLightTheme() => ThemeData(
         surface: Color(0xFFFFFFFF),
       ),
       textTheme: const TextTheme(
-        headlineLarge: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+        headlineLarge: TextStyle(
+            color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
         bodyLarge: TextStyle(color: Colors.white, fontSize: 16),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -90,14 +99,16 @@ ThemeData _buildLightTheme() => ThemeData(
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
 
 ThemeData _buildDarkTheme() => ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: kIsWeb ? Colors.transparent : AppColors.gradientBottom,
+      scaffoldBackgroundColor:
+          kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
       fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.dark(
@@ -112,7 +123,8 @@ ThemeData _buildDarkTheme() => ThemeData(
         elevation: 0,
       ),
       textTheme: const TextTheme(
-        headlineLarge: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+        headlineLarge: TextStyle(
+            color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
         bodyLarge: TextStyle(color: Colors.white, fontSize: 16),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -121,14 +133,16 @@ ThemeData _buildDarkTheme() => ThemeData(
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
 
 ThemeData _buildGreenTheme() => ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: kIsWeb ? Colors.transparent : AppColors.gradientBottom,
+      scaffoldBackgroundColor:
+          kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
       fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.dark(
@@ -143,7 +157,8 @@ ThemeData _buildGreenTheme() => ThemeData(
         elevation: 0,
       ),
       textTheme: const TextTheme(
-        headlineLarge: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+        headlineLarge: TextStyle(
+            color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
         bodyLarge: TextStyle(color: Colors.white, fontSize: 16),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -152,7 +167,8 @@ ThemeData _buildGreenTheme() => ThemeData(
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -210,8 +226,8 @@ class _DutchGameAppState extends State<DutchGameApp> {
         builder: (context) {
           final isLoggedIn =
               context.select<AuthProvider, bool>((auth) => auth.isLoggedIn);
-          final appTheme = context.select<SettingsProvider, AppTheme>(
-              (s) => s.appTheme);
+          final appTheme =
+              context.select<SettingsProvider, AppTheme>((s) => s.appTheme);
           _initPush(context, isLoggedIn);
           // Créer le router une seule fois pour éviter de reset la navigation
           _router ??= AppRouter.createRouter(context);
@@ -222,7 +238,9 @@ class _DutchGameAppState extends State<DutchGameApp> {
             debugShowCheckedModeBanner: false,
             themeMode: appTheme.themeMode,
             theme: _buildLightTheme(),
-            darkTheme: appTheme == AppTheme.green ? _buildGreenTheme() : _buildDarkTheme(),
+            darkTheme: appTheme == AppTheme.green
+                ? _buildGreenTheme()
+                : _buildDarkTheme(),
           );
         },
       ),
