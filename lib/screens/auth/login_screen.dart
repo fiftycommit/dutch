@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:sign_in_button/sign_in_button.dart';
 
 import '../../providers/auth_provider.dart';
 
@@ -118,9 +119,142 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final result = await auth.loginWithGoogle();
     if (!mounted) return;
-    result.success
-        ? await _completeAuthSuccess()
-        : _setError(result.error ?? 'Erreur Google');
+
+    if (!result.success) {
+      if (result.error != 'Connexion annulée') {
+        _setError(result.error ?? 'Erreur Google');
+      }
+      return;
+    }
+
+    if (result.needsUsernameSetup) {
+      // Nouveau compte Google : demander/confirmer le username
+      final chosenUsername = await _showUsernamePickerDialog(
+        suggested: result.suggestedUsername ?? '',
+        displayName: result.user?.displayName ?? '',
+      );
+      if (!mounted) return;
+      if (chosenUsername == null) {
+        // L'utilisateur a annulé — on déconnecte Firebase
+        await auth.signOut();
+        return;
+      }
+      // Mettre à jour le username dans le provider puis naviguer
+      auth.setUsername(chosenUsername);
+    }
+
+    await _completeAuthSuccess();
+  }
+
+  /// Dialog de choix du username après connexion Google
+  Future<String?> _showUsernamePickerDialog({
+    required String suggested,
+    required String displayName,
+  }) async {
+    final ctrl = TextEditingController(text: suggested);
+    String? error;
+    bool checking = false;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          Future<void> validate() async {
+            final val = ctrl.text.trim();
+            if (val.length < 3) {
+              setState(() => error = 'Minimum 3 caractères');
+              return;
+            }
+            if (!RegExp(r'^[a-zA-Z0-9._-]{3,20}$').hasMatch(val)) {
+              setState(() =>
+                  error = 'Lettres, chiffres, . _ - uniquement (3-20 car.)');
+              return;
+            }
+            setState(() {
+              checking = true;
+              error = null;
+            });
+            final auth = context.read<AuthProvider>();
+            final available = await auth.checkUsernameAvailable(val);
+            if (!ctx.mounted) return;
+            if (!available) {
+              setState(() {
+                checking = false;
+                error = 'Ce nom d\'utilisateur est déjà pris';
+              });
+              return;
+            }
+            Navigator.of(ctx).pop(val);
+          }
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Choisir un nom d\'utilisateur',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Color(0xFF333333))),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Bienvenue, $displayName !',
+                    style: const TextStyle(
+                        fontSize: 13, color: Color(0xFF666666))),
+                const SizedBox(height: 4),
+                const Text('Vous pouvez garder ce nom ou en choisir un autre.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  onSubmitted: (_) => validate(),
+                  decoration: InputDecoration(
+                    hintText: 'nom_utilisateur',
+                    prefixText: '@',
+                    errorText: error,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          const BorderSide(color: Color(0xFFFF4B2B), width: 2),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() => error = null),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(null),
+                child: const Text('Annuler',
+                    style: TextStyle(color: Color(0xFF999999))),
+              ),
+              ElevatedButton(
+                onPressed: checking ? null : validate,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF4B2B),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: checking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Confirmer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _login() async {
@@ -1005,8 +1139,8 @@ class _CssButtonState extends State<_CssButton> {
   }
 }
 
+/// Bouton Google officiel (sign_in_button)
 /// .social-container { margin: 20px 0 }
-/// a { border:1px solid #ddd; border-radius:50%; height:40px; width:40px; margin:0 5px }
 class _SocialRow extends StatelessWidget {
   final VoidCallback? onGoogleTap;
   const _SocialRow({this.onGoogleTap});
@@ -1014,63 +1148,17 @@ class _SocialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5),
-            child: GestureDetector(
-              onTap: onGoogleTap,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFDDDDDD), width: 1),
-                ),
-                child: const Center(child: _GoogleG()),
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: SignInButton(
+        Buttons.google,
+        text: 'Continuer avec Google',
+        onPressed: onGoogleTap ?? () {},
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
       ),
     );
   }
-}
-
-/// Logo Google "G"
-class _GoogleG extends StatelessWidget {
-  const _GoogleG();
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(20, 20), painter: _GoogleGPainter());
-}
-
-class _GoogleGPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2, cy = size.height / 2, r = size.width / 2;
-    final p = Paint()..style = PaintingStyle.fill;
-    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
-
-    p.color = const Color(0xFFEA4335);
-    canvas.drawArc(rect, -math.pi / 2, math.pi, false, p);
-    p.color = const Color(0xFF4285F4);
-    canvas.drawArc(rect, math.pi / 2, math.pi / 2, false, p);
-    p.color = const Color(0xFF34A853);
-    canvas.drawArc(rect, math.pi, math.pi / 2, false, p);
-    p.color = const Color(0xFFFBBC05);
-    canvas.drawArc(rect, -math.pi / 2, math.pi / 2, false, p);
-
-    p.color = Colors.white;
-    canvas.drawCircle(Offset(cx, cy), r * 0.55, p);
-    p.color = const Color(0xFF4285F4);
-    canvas.drawRect(Rect.fromLTWH(cx, cy - r * 0.13, r + 1, r * 0.26), p);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 /// Bouton ghost mobile

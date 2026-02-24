@@ -34,13 +34,32 @@ class AuthResult {
   final String? token;
   final UserInfo? user;
   final String? error;
+  final bool needsUsernameSetup;
+  final String? suggestedUsername;
 
-  const AuthResult({required this.success, this.token, this.user, this.error});
+  const AuthResult({
+    required this.success,
+    this.token,
+    this.user,
+    this.error,
+    this.needsUsernameSetup = false,
+    this.suggestedUsername,
+  });
 }
 
 class AuthService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
   static final RegExp _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+  /// Produit un username valide depuis n'importe quelle chaîne :
+  /// lowercase, espaces remplacés par '_', caractères non autorisés supprimés, 20 car max.
+  static String _normalizeUsername(String raw) {
+    final cleaned = raw
+        .toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^a-z0-9._-]'), '');
+    return cleaned.length > 20 ? cleaned.substring(0, 20) : cleaned;
+  }
 
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
@@ -61,7 +80,8 @@ class AuthService {
     if (!canReachBackend) {
       return UserInfo(
         id: fbUser.uid,
-        username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+        username: _normalizeUsername(
+            fbUser.email?.split('@').first ?? fbUser.displayName ?? ''),
         displayName: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
       );
     }
@@ -90,7 +110,8 @@ class AuthService {
     // Fallback sur Firebase Auth (mieux que rien)
     return UserInfo(
       id: fbUser.uid,
-      username: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
+      username: _normalizeUsername(
+          fbUser.email?.split('@').first ?? fbUser.displayName ?? ''),
       displayName: fbUser.displayName ?? fbUser.email?.split('@').first ?? '',
     );
   }
@@ -103,49 +124,86 @@ class AuthService {
     return _firebaseAuth.currentUser != null;
   }
 
-  // Web Client ID (Firebase Console → Auth → Google → Web SDK configuration)
-  // Requis uniquement pour le web, ignoré sur iOS/Android
-  static const _webClientId =
-      '751846261054-afco12nm8efkbngi43hp6rstp8ur2flj.apps.googleusercontent.com';
-
   Future<AuthResult> signInWithGoogle() async {
     try {
-      // 1. Déclencher le flux OAuth Google
-      final googleSignIn = GoogleSignIn(
-        clientId: kIsWeb ? _webClientId : null,
-      );
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        // L'utilisateur a annulé
-        return const AuthResult(success: false, error: 'Connexion annulée');
-      }
+      if (kIsWeb) {
+        // Sur web : Firebase signInWithPopup (pas de People API requise)
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..addScope('profile');
+        final userCredential = await _firebaseAuth.signInWithPopup(provider);
+        final token = await userCredential.user?.getIdToken();
 
-      // 2. Récupérer les tokens Google
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+        if (token == null || userCredential.user == null) {
+          return const AuthResult(
+              success: false, error: 'Erreur de connexion Google');
+        }
 
-      // 3. Se connecter à Firebase avec le credential Google
-      final userCredential =
-          await _firebaseAuth.signInWithCredential(credential);
-      final token = await userCredential.user?.getIdToken();
+        final fbUser = userCredential.user!;
+        final existingProfile = await fetchProfile();
+        if (existingProfile != null) {
+          return AuthResult(success: true, token: token, user: existingProfile);
+        }
 
-      if (token == null || userCredential.user == null) {
-        return const AuthResult(
-            success: false, error: 'Erreur de connexion Google');
-      }
+        // Nouveau compte : proposer le choix du username
+        final suggested = _normalizeUsername(
+            fbUser.email?.split('@').first ?? fbUser.displayName ?? '');
+        return AuthResult(
+          success: true,
+          token: token,
+          user: UserInfo(
+            id: fbUser.uid,
+            username: suggested,
+            displayName: fbUser.displayName ?? fbUser.email ?? '',
+          ),
+          needsUsernameSetup: true,
+          suggestedUsername: suggested,
+        );
+      } else {
+        // Sur iOS / Android : google_sign_in
+        final googleSignIn = GoogleSignIn(
+          clientId:
+              null, // géré par GoogleService-Info.plist / google-services.json
+        );
+        final googleUser = await googleSignIn.signIn();
+        if (googleUser == null) {
+          return const AuthResult(success: false, error: 'Connexion annulée');
+        }
 
-      // 4. Hydrater le profil (Firestore ou fallback Firebase)
-      final user = await fetchProfile() ??
-          UserInfo(
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        final userCredential =
+            await _firebaseAuth.signInWithCredential(credential);
+        final token = await userCredential.user?.getIdToken();
+
+        if (token == null || userCredential.user == null) {
+          return const AuthResult(
+              success: false, error: 'Erreur de connexion Google');
+        }
+
+        final existingProfile = await fetchProfile();
+        if (existingProfile != null) {
+          return AuthResult(success: true, token: token, user: existingProfile);
+        }
+
+        // Nouveau compte : proposer le choix du username
+        final suggested = _normalizeUsername(googleUser.email.split('@').first);
+        return AuthResult(
+          success: true,
+          token: token,
+          user: UserInfo(
             id: userCredential.user!.uid,
-            username: googleUser.email.split('@').first,
+            username: suggested,
             displayName: googleUser.displayName ?? googleUser.email,
-          );
-
-      return AuthResult(success: true, token: token, user: user);
+          ),
+          needsUsernameSetup: true,
+          suggestedUsername: suggested,
+        );
+      }
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
     } catch (e) {
@@ -431,7 +489,166 @@ class AuthService {
     }
   }
 
-  Future<AuthResult> deleteAccount(String password) async {
+  // ── Multi-provider helpers ──────────────────────────────────────────────────
+
+  /// Retourne la liste des provider IDs liés au compte ('password', 'google.com', etc.)
+  List<String> getLinkedProviders() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return [];
+    return user.providerData.map((p) => p.providerId).toList();
+  }
+
+  /// Ré-authentifie l'utilisateur selon son provider principal.
+  /// - `password` si le provider est email/mdp
+  /// - Google popup/signIn sinon
+  Future<AuthResult> reauthenticate({String? password}) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
+    }
+
+    try {
+      final providers = getLinkedProviders();
+
+      if (password != null && providers.contains('password')) {
+        // Ré-auth par email/mdp
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+        return const AuthResult(success: true);
+      }
+
+      if (providers.contains('google.com')) {
+        // Ré-auth par Google
+        if (kIsWeb) {
+          final provider = GoogleAuthProvider()
+            ..addScope('email')
+            ..addScope('profile');
+          await user.reauthenticateWithPopup(provider);
+        } else {
+          final googleUser = await GoogleSignIn().signIn();
+          if (googleUser == null) {
+            return const AuthResult(success: false, error: 'Connexion annulée');
+          }
+          final googleAuth = await googleUser.authentication;
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+          await user.reauthenticateWithCredential(credential);
+        }
+        return const AuthResult(success: true);
+      }
+
+      return const AuthResult(
+          success: false,
+          error: 'Aucune méthode de ré-authentification disponible');
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Reauthenticate error: $e');
+      return const AuthResult(
+          success: false, error: 'Erreur de ré-authentification');
+    }
+  }
+
+  /// Lie un compte Google à l'utilisateur courant
+  Future<AuthResult> linkGoogleAccount() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
+    }
+
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..addScope('profile');
+        await user.linkWithPopup(provider);
+      } else {
+        final googleUser = await GoogleSignIn().signIn();
+        if (googleUser == null) {
+          return const AuthResult(success: false, error: 'Connexion annulée');
+        }
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        await user.linkWithCredential(credential);
+      }
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'credential-already-in-use') {
+        return const AuthResult(
+            success: false,
+            error: 'Ce compte Google est déjà lié à un autre utilisateur');
+      }
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Link Google error: $e');
+      return const AuthResult(
+          success: false, error: 'Impossible de lier le compte Google');
+    }
+  }
+
+  /// Lie un email/mot de passe à l'utilisateur courant (compte Google-only)
+  Future<AuthResult> linkEmailPassword(String email, String password) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
+    }
+
+    try {
+      final credential =
+          EmailAuthProvider.credential(email: email, password: password);
+      await user.linkWithCredential(credential);
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        return const AuthResult(
+            success: false,
+            error: 'Cet email est déjà utilisé par un autre compte');
+      }
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Link email error: $e');
+      return const AuthResult(
+          success: false, error: 'Impossible de lier l\'email');
+    }
+  }
+
+  /// Délie un provider (refuse si c'est le dernier)
+  Future<AuthResult> unlinkProvider(String providerId) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'Non connecté');
+    }
+
+    final providers = getLinkedProviders();
+    if (providers.length <= 1) {
+      return const AuthResult(
+          success: false,
+          error: 'Tu dois garder au moins une méthode de connexion');
+    }
+
+    try {
+      await user.unlink(providerId);
+      return const AuthResult(success: true);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Unlink provider error: $e');
+      return const AuthResult(
+          success: false, error: 'Impossible de délier ce fournisseur');
+    }
+  }
+
+  // ── Suppression de compte ──────────────────────────────────────────────────
+
+  Future<AuthResult> deleteAccount({String? password}) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
       return const AuthResult(success: false, error: 'Non connecté');
@@ -439,11 +656,8 @@ class AuthService {
 
     try {
       // Ré-authentifier avant suppression (requis par Firebase)
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: password,
-      );
-      await user.reauthenticateWithCredential(credential);
+      final reauth = await reauthenticate(password: password);
+      if (!reauth.success) return reauth;
 
       // Supprimer côté serveur (Firestore)
       final token = await user.getIdToken();

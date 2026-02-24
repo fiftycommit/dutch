@@ -97,6 +97,30 @@ class AuthProvider with ChangeNotifier {
     return result;
   }
 
+  /// Déconnecte l'utilisateur (utilisé si l'onboarding Google est annulé)
+  Future<void> signOut() async {
+    await _authService.clearAuth();
+    _user = null;
+    _token = null;
+    notifyListeners();
+  }
+
+  /// Met à jour le username local après le choix de l'utilisateur
+  void setUsername(String username) {
+    if (_user != null) {
+      _user = UserInfo(
+        id: _user!.id,
+        username: username,
+        displayName: _user!.displayName,
+      );
+      notifyListeners();
+    }
+  }
+
+  /// Vérifie si un username est disponible sur le serveur
+  Future<bool> checkUsernameAvailable(String username) =>
+      _authService.checkUsernameAvailable(username);
+
   Future<AuthResult> register(String username, String displayName, String email,
       String password) async {
     _isLoading = true;
@@ -137,11 +161,39 @@ class AuthProvider with ChangeNotifier {
     return result;
   }
 
-  Future<AuthResult> deleteAccount(String password) async {
+  /// Retourne la liste des providers liés ('password', 'google.com', etc.)
+  List<String> getLinkedProviders() => _authService.getLinkedProviders();
+
+  /// Ré-authentifie selon le provider (Google popup ou mot de passe)
+  Future<AuthResult> reauthenticate({String? password}) =>
+      _authService.reauthenticate(password: password);
+
+  /// Lie un compte Google au compte courant
+  Future<AuthResult> linkGoogle() async {
+    final result = await _authService.linkGoogleAccount();
+    if (result.success) notifyListeners();
+    return result;
+  }
+
+  /// Lie un email/mot de passe au compte courant
+  Future<AuthResult> linkEmailPassword(String email, String password) async {
+    final result = await _authService.linkEmailPassword(email, password);
+    if (result.success) notifyListeners();
+    return result;
+  }
+
+  /// Délie un provider (refuse si dernier)
+  Future<AuthResult> unlinkProvider(String providerId) async {
+    final result = await _authService.unlinkProvider(providerId);
+    if (result.success) notifyListeners();
+    return result;
+  }
+
+  Future<AuthResult> deleteAccount({String? password}) async {
     _isLoading = true;
     notifyListeners();
 
-    final result = await _authService.deleteAccount(password);
+    final result = await _authService.deleteAccount(password: password);
 
     if (result.success) {
       _user = null;

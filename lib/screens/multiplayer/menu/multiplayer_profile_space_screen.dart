@@ -38,8 +38,7 @@ class _MultiplayerProfileSpaceScreenState
   List<FriendInfo> _friends = [];
   bool _loading = true;
 
-  String get _email =>
-      fb_auth.FirebaseAuth.instance.currentUser?.email ?? '';
+  String get _email => fb_auth.FirebaseAuth.instance.currentUser?.email ?? '';
 
   String get _pseudo => _profile?.displayName ?? '';
   String get _username => _profile?.username ?? '';
@@ -92,7 +91,8 @@ class _MultiplayerProfileSpaceScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
-      backgroundColor: isError ? MultiplayerColors.danger : MultiplayerColors.success,
+      backgroundColor:
+          isError ? MultiplayerColors.danger : MultiplayerColors.success,
     ));
   }
 
@@ -104,22 +104,17 @@ class _MultiplayerProfileSpaceScreenState
   // ── Dialogs de modification ────────────────────────────────────────────────
 
   /// Ré-authentification Firebase (nécessaire avant toute modification sensible).
-  Future<bool> _reauthenticate(String password) async {
-    final user = fb_auth.FirebaseAuth.instance.currentUser;
-    if (user == null || user.email == null) return false;
-    try {
-      final credential = fb_auth.EmailAuthProvider.credential(
-        email: user.email!,
-        password: password,
-      );
-      await user.reauthenticateWithCredential(credential);
-      return true;
-    } on fb_auth.FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        return false;
-      }
-      rethrow;
-    }
+  /// Détecte le provider et utilise la bonne méthode (Google popup ou email/mdp).
+  Future<bool> _reauthenticate({String? password}) async {
+    final authProvider = context.read<app_auth.AuthProvider>();
+    final result = await authProvider.reauthenticate(password: password);
+    return result.success;
+  }
+
+  /// Vérifie si l'utilisateur a un mot de passe lié
+  bool _hasPasswordProvider() {
+    final authProvider = context.read<app_auth.AuthProvider>();
+    return authProvider.getLinkedProviders().contains('password');
   }
 
   Future<void> _openEditPseudoDialog() async {
@@ -128,6 +123,7 @@ class _MultiplayerProfileSpaceScreenState
     String? fieldError;
     String? pwdError;
     bool saving = false;
+    final needsPwd = _hasPasswordProvider();
 
     await showDialog<void>(
       context: context,
@@ -144,17 +140,22 @@ class _MultiplayerProfileSpaceScreenState
                 autofocus: true,
                 maxLength: 24,
                 textCapitalization: TextCapitalization.words,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, label: 'Nouveau pseudo', error: fieldError),
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context,
+                    label: 'Nouveau pseudo', error: fieldError),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: pwdCtrl,
-                obscureText: true,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration:
-                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
-              ),
+              if (needsPwd) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: pwdCtrl,
+                  obscureText: true,
+                  style: TextStyle(
+                      color: MultiplayerColors.of(context).textPrimary),
+                  decoration: _dlgInput(context,
+                      label: 'Mot de passe actuel', error: pwdError),
+                ),
+              ],
             ]),
           ),
           actions: [
@@ -167,10 +168,11 @@ class _MultiplayerProfileSpaceScreenState
                   : () async {
                       final val = ctrl.text.trim();
                       if (val.isEmpty || val.length > 24) {
-                        setLocal(() => fieldError = 'Pseudo invalide (1-24 car.)');
+                        setLocal(
+                            () => fieldError = 'Pseudo invalide (1-24 car.)');
                         return;
                       }
-                      if (pwdCtrl.text.isEmpty) {
+                      if (needsPwd && pwdCtrl.text.isEmpty) {
                         setLocal(() => pwdError = 'Mot de passe requis.');
                         return;
                       }
@@ -179,12 +181,15 @@ class _MultiplayerProfileSpaceScreenState
                         fieldError = null;
                         pwdError = null;
                       });
-                      final ok = await _reauthenticate(pwdCtrl.text);
+                      final ok = await _reauthenticate(
+                          password: needsPwd ? pwdCtrl.text : null);
                       if (!ctx.mounted) return;
                       if (!ok) {
                         setLocal(() {
                           saving = false;
-                          pwdError = 'Mot de passe incorrect.';
+                          pwdError = needsPwd
+                              ? 'Mot de passe incorrect.'
+                              : 'Ré-authentification échouée.';
                         });
                         return;
                       }
@@ -225,8 +230,9 @@ class _MultiplayerProfileSpaceScreenState
     String? fieldError;
     String? pwdError;
     bool saving = false;
-    final reserved = await _socialRepository.getReservedUsernames(
-        exceptUsername: _username);
+    final needsPwd = _hasPasswordProvider();
+    final reserved =
+        await _socialRepository.getReservedUsernames(exceptUsername: _username);
 
     if (!mounted) return;
 
@@ -246,21 +252,26 @@ class _MultiplayerProfileSpaceScreenState
                 autofocus: true,
                 maxLength: 20,
                 textCapitalization: TextCapitalization.none,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, 
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(
+                  context,
                   label: 'Nouveau nom d\'utilisateur',
                   error: fieldError,
                   prefixText: '@',
                 ),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: pwdCtrl,
-                obscureText: true,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration:
-                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
-              ),
+              if (needsPwd) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: pwdCtrl,
+                  obscureText: true,
+                  style: TextStyle(
+                      color: MultiplayerColors.of(context).textPrimary),
+                  decoration: _dlgInput(context,
+                      label: 'Mot de passe actuel', error: pwdError),
+                ),
+              ],
             ]),
           ),
           actions: [
@@ -271,19 +282,18 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
-                      final norm = SocialHubRepository.normalizeUsername(
-                          ctrl.text);
+                      final norm =
+                          SocialHubRepository.normalizeUsername(ctrl.text);
                       if (!SocialHubRepository.isValidUsernameFormat(norm)) {
-                        setLocal(() => fieldError =
-                            '3-20 car. lettres/chiffres, . _ -');
+                        setLocal(() =>
+                            fieldError = '3-20 car. lettres/chiffres, . _ -');
                         return;
                       }
                       if (reserved.contains(norm)) {
-                        setLocal(() =>
-                            fieldError = 'Ce nom existe déjà.');
+                        setLocal(() => fieldError = 'Ce nom existe déjà.');
                         return;
                       }
-                      if (pwdCtrl.text.isEmpty) {
+                      if (needsPwd && pwdCtrl.text.isEmpty) {
                         setLocal(() => pwdError = 'Mot de passe requis.');
                         return;
                       }
@@ -292,12 +302,15 @@ class _MultiplayerProfileSpaceScreenState
                         fieldError = null;
                         pwdError = null;
                       });
-                      final ok = await _reauthenticate(pwdCtrl.text);
+                      final ok = await _reauthenticate(
+                          password: needsPwd ? pwdCtrl.text : null);
                       if (!ctx.mounted) return;
                       if (!ok) {
                         setLocal(() {
                           saving = false;
-                          pwdError = 'Mot de passe incorrect.';
+                          pwdError = needsPwd
+                              ? 'Mot de passe incorrect.'
+                              : 'Ré-authentification échouée.';
                         });
                         return;
                       }
@@ -338,6 +351,7 @@ class _MultiplayerProfileSpaceScreenState
     String? fieldError;
     String? pwdError;
     bool saving = false;
+    final needsPwd = _hasPasswordProvider();
 
     await showDialog<void>(
       context: context,
@@ -354,18 +368,22 @@ class _MultiplayerProfileSpaceScreenState
                 controller: ctrl,
                 autofocus: true,
                 keyboardType: TextInputType.emailAddress,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, 
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context,
                     label: 'Nouvelle adresse email', error: fieldError),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: pwdCtrl,
-                obscureText: true,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration:
-                    _dlgInput(context, label: 'Mot de passe actuel', error: pwdError),
-              ),
+              if (needsPwd) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: pwdCtrl,
+                  obscureText: true,
+                  style: TextStyle(
+                      color: MultiplayerColors.of(context).textPrimary),
+                  decoration: _dlgInput(context,
+                      label: 'Mot de passe actuel', error: pwdError),
+                ),
+              ],
             ]),
           ),
           actions: [
@@ -378,11 +396,10 @@ class _MultiplayerProfileSpaceScreenState
                   : () async {
                       final newEmail = ctrl.text.trim();
                       if (newEmail.isEmpty || !newEmail.contains('@')) {
-                        setLocal(
-                            () => fieldError = 'Email invalide.');
+                        setLocal(() => fieldError = 'Email invalide.');
                         return;
                       }
-                      if (pwdCtrl.text.isEmpty) {
+                      if (needsPwd && pwdCtrl.text.isEmpty) {
                         setLocal(() => pwdError = 'Mot de passe requis.');
                         return;
                       }
@@ -391,18 +408,20 @@ class _MultiplayerProfileSpaceScreenState
                         fieldError = null;
                         pwdError = null;
                       });
-                      final ok = await _reauthenticate(pwdCtrl.text);
+                      final ok = await _reauthenticate(
+                          password: needsPwd ? pwdCtrl.text : null);
                       if (!ctx.mounted) return;
                       if (!ok) {
                         setLocal(() {
                           saving = false;
-                          pwdError = 'Mot de passe incorrect.';
+                          pwdError = needsPwd
+                              ? 'Mot de passe incorrect.'
+                              : 'Ré-authentification échouée.';
                         });
                         return;
                       }
                       try {
-                        final user =
-                            fb_auth.FirebaseAuth.instance.currentUser!;
+                        final user = fb_auth.FirebaseAuth.instance.currentUser!;
                         await user.verifyBeforeUpdateEmail(newEmail);
                         if (!ctx.mounted) return;
                         Navigator.of(ctx).pop();
@@ -451,13 +470,16 @@ class _MultiplayerProfileSpaceScreenState
           content: SizedBox(
             width: 400,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              _warnBanner('Choisis un mot de passe fort (8+ caractères recommandé).'),
+              _warnBanner(
+                  'Choisis un mot de passe fort (8+ caractères recommandé).'),
               const SizedBox(height: 14),
               TextField(
                 controller: currentCtrl,
                 obscureText: obscureCurrent,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, 
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(
+                  context,
                   label: 'Mot de passe actuel',
                   suffixIcon: _eyeIcon(obscureCurrent,
                       () => setLocal(() => obscureCurrent = !obscureCurrent)),
@@ -467,19 +489,23 @@ class _MultiplayerProfileSpaceScreenState
               TextField(
                 controller: newCtrl,
                 obscureText: obscureNew,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, 
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(
+                  context,
                   label: 'Nouveau mot de passe',
-                  suffixIcon: _eyeIcon(
-                      obscureNew, () => setLocal(() => obscureNew = !obscureNew)),
+                  suffixIcon: _eyeIcon(obscureNew,
+                      () => setLocal(() => obscureNew = !obscureNew)),
                 ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: confirmCtrl,
                 obscureText: obscureConfirm,
-                style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                decoration: _dlgInput(context, 
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(
+                  context,
                   label: 'Confirmer',
                   suffixIcon: _eyeIcon(obscureConfirm,
                       () => setLocal(() => obscureConfirm = !obscureConfirm)),
@@ -522,7 +548,7 @@ class _MultiplayerProfileSpaceScreenState
                         saving = true;
                         error = null;
                       });
-                      final ok = await _reauthenticate(cur);
+                      final ok = await _reauthenticate(password: cur);
                       if (!ctx.mounted) return;
                       if (!ok) {
                         setLocal(() {
@@ -562,6 +588,148 @@ class _MultiplayerProfileSpaceScreenState
     confirmCtrl.dispose();
   }
 
+  // ── Link / Unlink providers ────────────────────────────────────────────────
+
+  Future<void> _linkGoogle() async {
+    final auth = context.read<app_auth.AuthProvider>();
+    final result = await auth.linkGoogle();
+    if (!mounted) return;
+    if (result.success) {
+      _showSnackBar('Compte Google lié !');
+      setState(() {});
+    } else {
+      _showSnackBar(result.error ?? 'Erreur', isError: true);
+    }
+  }
+
+  Future<void> _linkEmailPassword() async {
+    final emailCtrl = TextEditingController(text: _email);
+    final pwdCtrl = TextEditingController();
+    String? error;
+    bool saving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+        return AlertDialog(
+          title: const Text('Ajouter email / mot de passe'),
+          content: SizedBox(
+            width: 400,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _warnBanner(
+                  'Ajoute un mot de passe pour te connecter sans Google.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration: _dlgInput(context, label: 'Email'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: pwdCtrl,
+                obscureText: true,
+                style:
+                    TextStyle(color: MultiplayerColors.of(context).textPrimary),
+                decoration:
+                    _dlgInput(context, label: 'Mot de passe (min. 6 car.)'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(error!,
+                    style: const TextStyle(
+                        color: Color(0xFFDC2626), fontSize: 12)),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Annuler')),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final em = emailCtrl.text.trim();
+                      final pw = pwdCtrl.text;
+                      if (em.isEmpty || !em.contains('@')) {
+                        setLocal(() => error = 'Email invalide.');
+                        return;
+                      }
+                      if (pw.length < 6) {
+                        setLocal(() =>
+                            error = 'Mot de passe trop court (min. 6 car.).');
+                        return;
+                      }
+                      setLocal(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final auth = context.read<app_auth.AuthProvider>();
+                      final result = await auth.linkEmailPassword(em, pw);
+                      if (!ctx.mounted) return;
+                      if (!result.success) {
+                        setLocal(() {
+                          saving = false;
+                          error = result.error;
+                        });
+                        return;
+                      }
+                      Navigator.of(ctx).pop();
+                      _showSnackBar('Email / mot de passe ajouté !');
+                      setState(() {});
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Ajouter'),
+            ),
+          ],
+        );
+      }),
+    );
+    emailCtrl.dispose();
+    pwdCtrl.dispose();
+  }
+
+  Future<void> _unlinkProvider(String providerId) async {
+    final providerName =
+        providerId == 'google.com' ? 'Google' : 'Email / Mot de passe';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Délier $providerName ?'),
+        content: Text(
+            'Tu ne pourras plus te connecter avec $providerName après cette action.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C)),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Délier'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final auth = context.read<app_auth.AuthProvider>();
+    final result = await auth.unlinkProvider(providerId);
+    if (!mounted) return;
+    if (result.success) {
+      _showSnackBar('$providerName délié.');
+      setState(() {});
+    } else {
+      _showSnackBar(result.error ?? 'Erreur', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themed = Theme.of(context).copyWith(
@@ -571,7 +739,7 @@ class _MultiplayerProfileSpaceScreenState
     return Theme(
       data: themed,
       child: SelectionContainer.disabled(
-      child: Scaffold(
+          child: Scaffold(
         body: Container(
           color: MultiplayerColors.of(context).background,
           child: SafeArea(
@@ -590,10 +758,16 @@ class _MultiplayerProfileSpaceScreenState
                               pseudo: _pseudo,
                               username: _username,
                               email: _email,
+                              linkedProviders: context
+                                  .read<app_auth.AuthProvider>()
+                                  .getLinkedProviders(),
                               onEditPseudo: _openEditPseudoDialog,
                               onEditUsername: _openEditUsernameDialog,
                               onEditEmail: _openEditEmailDialog,
                               onChangePassword: _openChangePasswordDialog,
+                              onLinkGoogle: _linkGoogle,
+                              onLinkEmailPassword: _linkEmailPassword,
+                              onUnlinkProvider: _unlinkProvider,
                             ),
                             _DeleteAccountTab(
                               onShowSnackBar: _showSnackBar,
@@ -663,10 +837,10 @@ class _MultiplayerProfileSpaceScreenState
             indicatorColor: Colors.white,
             indicatorWeight: 2.5,
             dividerColor: Colors.transparent,
-            labelStyle: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 13),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            unselectedLabelStyle:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             tabs: const [
               Tab(
                 iconMargin: EdgeInsets.only(bottom: 2),
@@ -698,19 +872,27 @@ class _InfosTab extends StatelessWidget {
     required this.pseudo,
     required this.username,
     required this.email,
+    required this.linkedProviders,
     required this.onEditPseudo,
     required this.onEditUsername,
     required this.onEditEmail,
     required this.onChangePassword,
+    required this.onLinkGoogle,
+    required this.onLinkEmailPassword,
+    required this.onUnlinkProvider,
   });
 
   final String pseudo;
   final String username;
   final String email;
+  final List<String> linkedProviders;
   final VoidCallback onEditPseudo;
   final VoidCallback onEditUsername;
   final VoidCallback onEditEmail;
   final VoidCallback onChangePassword;
+  final VoidCallback onLinkGoogle;
+  final VoidCallback onLinkEmailPassword;
+  final void Function(String providerId) onUnlinkProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -737,7 +919,9 @@ class _InfosTab extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  pseudo.isNotEmpty ? pseudo.characters.first.toUpperCase() : '?',
+                  pseudo.isNotEmpty
+                      ? pseudo.characters.first.toUpperCase()
+                      : '?',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -799,13 +983,37 @@ class _InfosTab extends StatelessWidget {
         _sectionLabel(context, 'Sécurité'),
         const SizedBox(height: 8),
         _InfoCard(children: [
-          _InfoRow(
-            icon: Icons.lock_outline_rounded,
-            iconColor: MultiplayerColors.primary,
-            label: 'Mot de passe',
-            value: '••••••••',
-            onTap: onChangePassword,
+          // Google provider
+          _ProviderRow(
+            icon: Icons.g_mobiledata_rounded,
+            iconColor: const Color(0xFFDB4437),
+            label: 'Google',
+            isLinked: linkedProviders.contains('google.com'),
+            canUnlink: linkedProviders.length > 1,
+            onLink: onLinkGoogle,
+            onUnlink: () => onUnlinkProvider('google.com'),
           ),
+          const _RowDivider(),
+          // Email/password provider
+          _ProviderRow(
+            icon: Icons.email_outlined,
+            iconColor: const Color(0xFF0EA5E9),
+            label: 'Email / Mot de passe',
+            isLinked: linkedProviders.contains('password'),
+            canUnlink: linkedProviders.length > 1,
+            onLink: onLinkEmailPassword,
+            onUnlink: () => onUnlinkProvider('password'),
+          ),
+          if (linkedProviders.contains('password')) ...[
+            const _RowDivider(),
+            _InfoRow(
+              icon: Icons.lock_outline_rounded,
+              iconColor: MultiplayerColors.primary,
+              label: 'Changer mot de passe',
+              value: '••••••••',
+              onTap: onChangePassword,
+            ),
+          ],
         ]),
 
         const SizedBox(height: 20),
@@ -922,8 +1130,7 @@ class _InfoRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded,
-                  color: cs.separator, size: 18),
+              Icon(Icons.chevron_right_rounded, color: cs.separator, size: 18),
             ],
           ),
         ),
@@ -943,6 +1150,96 @@ class _RowDivider extends StatelessWidget {
       indent: 48,
       endIndent: 0,
       color: MultiplayerColors.of(context).separator,
+    );
+  }
+}
+
+class _ProviderRow extends StatelessWidget {
+  const _ProviderRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.isLinked,
+    required this.canUnlink,
+    required this.onLink,
+    required this.onUnlink,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final bool isLinked;
+  final bool canUnlink;
+  final VoidCallback onLink;
+  final VoidCallback onUnlink;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = MultiplayerColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: cs.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          if (isLinked) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Lié',
+                style: TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (canUnlink) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onUnlink,
+                child: Icon(Icons.link_off_rounded,
+                    color: cs.textSecondary, size: 18),
+              ),
+            ],
+          ] else
+            TextButton(
+              onPressed: onLink,
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Ajouter',
+                  style: TextStyle(
+                      color: Color(0xFF0EA5E9),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13)),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -967,6 +1264,14 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
   bool _obscure = true;
   bool _deleting = false;
   String? _error;
+  late bool _needsPwd;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.read<app_auth.AuthProvider>();
+    _needsPwd = auth.getLinkedProviders().contains('password');
+  }
 
   @override
   void dispose() {
@@ -975,8 +1280,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
   }
 
   Future<void> _confirmAndDelete() async {
-    final pwd = _pwdCtrl.text;
-    if (pwd.isEmpty) {
+    if (_needsPwd && _pwdCtrl.text.isEmpty) {
       setState(() => _error = 'Mot de passe requis pour confirmer.');
       return;
     }
@@ -993,8 +1297,8 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
               onPressed: () => Navigator.of(ctx).pop(false),
               child: const Text('Annuler')),
           FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C)),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Oui, supprimer'),
           ),
@@ -1009,13 +1313,14 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
     });
 
     final authProvider = context.read<app_auth.AuthProvider>();
-    final result = await authProvider.deleteAccount(pwd);
+    final result = await authProvider.deleteAccount(
+        password: _needsPwd ? _pwdCtrl.text : null);
     if (!mounted) return;
 
     if (!result.success) {
       setState(() {
         _deleting = false;
-        _error = result.error ?? 'Suppression impossible. Vérifie ton mot de passe.';
+        _error = result.error ?? 'Suppression impossible.';
       });
       return;
     }
@@ -1057,8 +1362,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                     SizedBox(height: 4),
                     Text(
                       'La suppression est irréversible. Toutes tes données disparaîtront définitivement.',
-                      style:
-                          TextStyle(color: Color(0xFFDC2626), fontSize: 13),
+                      style: TextStyle(color: Color(0xFFDC2626), fontSize: 13),
                     ),
                   ],
                 ),
@@ -1073,32 +1377,52 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Confirme avec ton mot de passe',
-                  style: TextStyle(
+                Text(
+                  _needsPwd
+                      ? 'Confirme avec ton mot de passe'
+                      : 'Confirme la suppression',
+                  style: const TextStyle(
                     color: Color(0xFF1E293B),
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
                 ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _pwdCtrl,
-                  obscureText: _obscure,
-                  style: TextStyle(color: MultiplayerColors.of(context).textPrimary),
-                  decoration: _dlgInput(context, 
-                    label: 'Mot de passe actuel',
-                    error: _error,
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      icon: Icon(
-                        _obscure ? Icons.visibility_off : Icons.visibility,
-                        color: const Color(0xFF94A3B8),
-                        size: 20,
+                if (_needsPwd) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _pwdCtrl,
+                    obscureText: _obscure,
+                    style: TextStyle(
+                        color: MultiplayerColors.of(context).textPrimary),
+                    decoration: _dlgInput(
+                      context,
+                      label: 'Mot de passe actuel',
+                      error: _error,
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                        icon: Icon(
+                          _obscure ? Icons.visibility_off : Icons.visibility,
+                          color: const Color(0xFF94A3B8),
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Tu seras redirigé vers Google pour confirmer ton identité.',
+                    style: TextStyle(color: Color(0xFF666666), fontSize: 13),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      style: const TextStyle(
+                          color: Color(0xFFDC2626), fontSize: 12),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -1147,8 +1471,7 @@ class _FriendsListTab extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.group_off_outlined,
-                size: 56, color: cs.textSecondary),
+            Icon(Icons.group_off_outlined, size: 56, color: cs.textSecondary),
             const SizedBox(height: 12),
             Text(
               'Aucun ami pour l\'instant.',
@@ -1216,7 +1539,9 @@ class _FriendsListTab extends StatelessWidget {
             title: Text(
               friend.displayName,
               style: TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 15, color: cs.textPrimary),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: cs.textPrimary),
             ),
             subtitle: Text(
               '@${friend.username}',
@@ -1251,9 +1576,9 @@ class _ThemePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = MultiplayerColors.of(context);
     const options = [
-      (AppTheme.light,  Icons.wb_sunny_outlined,    'Clair'),
-      (AppTheme.dark,   Icons.nights_stay_outlined,  'Sombre'),
-      (AppTheme.green,  Icons.eco_outlined,            'Vert'),
+      (AppTheme.light, Icons.wb_sunny_outlined, 'Clair'),
+      (AppTheme.dark, Icons.nights_stay_outlined, 'Sombre'),
+      (AppTheme.green, Icons.eco_outlined, 'Vert'),
       (AppTheme.system, Icons.phone_iphone_outlined, 'Système'),
     ];
 
@@ -1276,9 +1601,8 @@ class _ThemePicker extends StatelessWidget {
           final (theme, icon, label) = opt;
           final selected = current == theme;
           // Pour "Vert", la couleur de sélection est verte
-          final selectionColor = theme == AppTheme.green
-              ? const Color(0xFF4CAF50)
-              : cs.primary;
+          final selectionColor =
+              theme == AppTheme.green ? const Color(0xFF4CAF50) : cs.primary;
           return Expanded(
             child: GestureDetector(
               onTap: () => onChanged(theme),
@@ -1337,7 +1661,8 @@ InputDecoration _dlgInput(
   return InputDecoration(
     labelText: label,
     labelStyle: labelStyle,
-    floatingLabelStyle: TextStyle(color: cs.textPrimary, fontWeight: FontWeight.w700),
+    floatingLabelStyle:
+        TextStyle(color: cs.textPrimary, fontWeight: FontWeight.w700),
     errorText: error,
     prefixText: prefixText,
     suffixIcon: suffixIcon,
@@ -1400,4 +1725,3 @@ IconButton _eyeIcon(bool obscure, VoidCallback onTap) {
     ),
   );
 }
-
