@@ -290,9 +290,9 @@ class FirestoreServiceClass {
 
         const { fromUid, toUid } = doc.data()!;
 
-        // Accepter la demande + ajouter en ami
-        await ref.update({ status: 'accepted' });
+        // Accepter la demande + ajouter en ami + supprimer la request
         await this.addFriend(fromUid, toUid);
+        await ref.delete();
 
         return { fromUid, toUid };
     }
@@ -302,7 +302,7 @@ class FirestoreServiceClass {
         const doc = await ref.get();
         if (!doc.exists || doc.data()?.status !== 'pending') return false;
 
-        await ref.update({ status: 'rejected' });
+        await ref.delete();
         return true;
     }
 
