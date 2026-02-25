@@ -37,7 +37,6 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   SocialProfile? _profile;
   List<FriendInfo> _friends = <FriendInfo>[];
   List<FriendRequestInfo> _incomingRequests = <FriendRequestInfo>[];
-  List<FriendRequestInfo> _outgoingRequests = <FriendRequestInfo>[];
 
   List<SavedRoom> _myRooms = <SavedRoom>[];
   List<Map<String, dynamic>> _activeRooms = <Map<String, dynamic>>[];
@@ -138,7 +137,6 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
         _profile = profile;
         _friends = <FriendInfo>[];
         _incomingRequests = <FriendRequestInfo>[];
-        _outgoingRequests = <FriendRequestInfo>[];
       });
       _syncIncomingRequestPulse();
       return;
@@ -152,7 +150,6 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     setState(() {
       _friends = summary.friends;
       _incomingRequests = summary.incoming;
-      _outgoingRequests = summary.outgoing;
     });
     _syncIncomingRequestPulse();
   }
