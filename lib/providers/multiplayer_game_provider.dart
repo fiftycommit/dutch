@@ -594,7 +594,18 @@ class MultiplayerGameProvider
     final wasMyTurn = _gameState?.currentPlayer.id == playerId;
     final isNowMyTurn = gameState.currentPlayer.id == playerId &&
         gameState.phase == GamePhase.playing;
-    if (!wasMyTurn && isNowMyTurn) HapticService.importantAction();
+    if (!wasMyTurn && isNowMyTurn) {
+      HapticService.importantAction();
+      // Notification in-app si le joueur n'est pas sur l'écran de jeu
+      if (!_isInRoomScreen()) {
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.yourTurn,
+          title: 'C\'est ton tour !',
+          body: 'Reviens vite jouer ta carte',
+          route: '/multiplayer/game',
+        ));
+      }
+    }
 
     _gameState = gameState;
 

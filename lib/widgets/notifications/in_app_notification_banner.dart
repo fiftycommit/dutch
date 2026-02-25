@@ -69,6 +69,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return const Color(0xFF007AFF);
       case InAppNotificationType.wizz:
         return const Color(0xFFFF9F0A);
+      case InAppNotificationType.yourTurn:
+        return const Color(0xFF30D158);
     }
   }
 
@@ -83,6 +85,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return Icons.chat_bubble_rounded;
       case InAppNotificationType.wizz:
         return Icons.notification_important_rounded;
+      case InAppNotificationType.yourTurn:
+        return Icons.style_rounded;
     }
   }
 
@@ -97,6 +101,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return 'DUTCH · Message';
       case InAppNotificationType.wizz:
         return 'DUTCH · Wizz';
+      case InAppNotificationType.yourTurn:
+        return 'DUTCH · À toi !';
     }
   }
 

@@ -7,7 +7,8 @@ enum InAppNotificationType {
   friendAccepted,
   playerJoined,
   privateMessage,
-  wizz
+  wizz,
+  yourTurn
 }
 
 class InAppNotificationPayload {

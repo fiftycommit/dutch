@@ -66,9 +66,9 @@ export class RoomManager {
   }
 
   constructor(private io: Server, options: Partial<RoomManagerOptions> = {}) {
-    this.turnTimeoutMs = options.turnTimeoutMs ?? 70000;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? 45000;
     this.specialPowerTimeoutMs = options.specialPowerTimeoutMs ?? 45000;
-    this.presenceGraceMs = options.presenceGraceMs ?? 3000;
+    this.presenceGraceMs = options.presenceGraceMs ?? 15000;
     this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
     this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
     this.stalePlayerMs = options.stalePlayerMs ?? 15000;

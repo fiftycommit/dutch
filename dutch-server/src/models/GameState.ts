@@ -77,7 +77,7 @@ export function createGameState(
     pendingSwap: null,
     tournamentCumulativeScores: {},
     turnStartTime: null,
-    turnTimeoutMs: 70000, // 70 secondes par défaut
+    turnTimeoutMs: 45000, // 45 secondes par défaut
     readyPlayerIds: [],
   };
 }
