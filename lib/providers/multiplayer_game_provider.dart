@@ -536,6 +536,9 @@ class MultiplayerGameProvider
     try {
       final name = _lastPlayerName ?? 'Joueur';
       await joinRoom(roomCode: roomCode, playerName: name);
+      // Le joueur n'est pas dans le lobby → marquer comme non-focused
+      // Le lobby initState() appellera setScreenFocused(true) quand il s'ouvrira
+      setScreenFocused(false);
       onRoomAutoJoined?.call(roomCode);
     } catch (_) {
       // Silencieux — l'invitation peut échouer si la room est pleine, etc.
