@@ -234,7 +234,6 @@ class _DutchGameAppState extends State<DutchGameApp> {
           // Créer le router une seule fois pour éviter de reset la navigation
           _router ??= AppRouter.createRouter(context);
 
-          PushNotificationService().router = _router;
           InAppNotificationService.instance.router = _router;
 
           return MaterialApp.router(
