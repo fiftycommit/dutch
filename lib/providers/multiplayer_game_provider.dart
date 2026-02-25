@@ -633,9 +633,8 @@ class MultiplayerGameProvider
     if (isMe) {
       // Si c'est moi l'hôte, pas de notif (je me suis ajouté moi-même)
       if (!_isHost) {
-        final hostInfo = _playersInLobby
-            .where((p) => p['id'] == _hostPlayerId)
-            .firstOrNull;
+        final hostInfo =
+            _playersInLobby.where((p) => p['id'] == _hostPlayerId).firstOrNull;
         final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';
         _eventController.add(GameEvent(
             GameEventType.playerJoined, '$hostName vous a ajouté à la partie'));
@@ -731,7 +730,7 @@ class MultiplayerGameProvider
           }
         ];
         _multiplayerService.setFocused(true);
-WebSessionStorage.saveSession(_roomCode!);
+        WebSessionStorage.saveSession(_roomCode!);
       }
       _connectionManager.setConnecting(false);
     } catch (e) {
@@ -818,7 +817,7 @@ WebSessionStorage.saveSession(_roomCode!);
         ];
       }
       _multiplayerService.setFocused(true);
-WebSessionStorage.saveSession(roomCode);
+      WebSessionStorage.saveSession(roomCode);
       _connectionManager.setConnecting(false);
     } catch (e) {
       _notificationManager.setError(e.toString());
@@ -1094,6 +1093,13 @@ WebSessionStorage.saveSession(roomCode);
   }
 
   void markReady() => _multiplayerService.markReady();
+
+  /// Appelé par les écrans (lobby, game) pour signaler l'entrée/sortie de l'écran.
+  /// Distinct du lifecycle handler qui gère le passage app → arrière-plan OS.
+  void setScreenFocused(bool focused) {
+    if (!isConnected || _roomCode == null) return;
+    _multiplayerService.setFocused(focused);
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CHAT & EMOTES

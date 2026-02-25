@@ -38,6 +38,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+      // Signaler au serveur qu'on est actif dans le lobby
+      _provider!.setScreenFocused(true);
       _eventSubscription = _provider!.events.listen((event) {
         if (!mounted) return;
         _handleGameEvent(event);
@@ -76,13 +78,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 const Icon(Icons.notification_important, color: Colors.white),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text("${provider.wizzFromName ?? 'Quelqu\'un'} te rappelle !"),
+                  child: Text(
+                      "${provider.wizzFromName ?? 'Quelqu\'un'} te rappelle !"),
                 ),
               ],
             ),
             backgroundColor: Colors.amber.shade700,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(12),
             duration: const Duration(seconds: 2),
           ),
@@ -186,6 +190,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
   @override
   void dispose() {
+    // Signaler au serveur qu'on quitte le lobby (arrière-plan)
+    _provider?.setScreenFocused(false);
     _provider?.removeListener(_onProviderChanged);
     _chatController.dispose();
     _chatScrollController.dispose();
@@ -496,7 +502,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             content: Text(success
                 ? 'Paramètres mis à jour'
                 : 'Erreur lors de la mise à jour'),
-            backgroundColor: success ? MultiplayerColors.success : MultiplayerColors.danger,
+            backgroundColor:
+                success ? MultiplayerColors.success : MultiplayerColors.danger,
           ),
         );
       }
@@ -1147,8 +1154,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               ? const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.people_outline,
-                        size: 48, color: Colors.grey),
+                    Icon(Icons.people_outline, size: 48, color: Colors.grey),
                     SizedBox(height: 12),
                     Text(
                       'Aucun ami pour le moment',
@@ -1168,7 +1174,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                             : Colors.grey.withValues(alpha: 0.2),
                         child: Icon(
                           Icons.person,
-                          color: friend.isOnline ? MultiplayerColors.success : Colors.grey,
+                          color: friend.isOnline
+                              ? MultiplayerColors.success
+                              : Colors.grey,
                         ),
                       ),
                       title: Text(friend.displayName),
@@ -1176,7 +1184,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                         '@${friend.username}${friend.isOnline ? ' • En ligne' : ''}',
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.send, color: MultiplayerColors.success),
+                        icon: const Icon(Icons.send,
+                            color: MultiplayerColors.success),
                         tooltip: 'Inviter',
                         onPressed: () async {
                           final result = await friendsApi.inviteToRoom(
@@ -1195,8 +1204,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                           ? result.error!
                                           : 'Erreur lors de l\'invitation'),
                                 ),
-                                backgroundColor:
-                                    result.success ? MultiplayerColors.success : MultiplayerColors.danger,
+                                backgroundColor: result.success
+                                    ? MultiplayerColors.success
+                                    : MultiplayerColors.danger,
                               ),
                             );
                           }
