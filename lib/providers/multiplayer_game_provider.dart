@@ -686,6 +686,7 @@ class MultiplayerGameProvider
           }
         ];
         _multiplayerService.setFocused(true);
+        debugPrint('[WebRestore] saveSession(createRoom) roomCode=$_roomCode');
         WebSessionStorage.saveSession(_roomCode!);
       }
       _connectionManager.setConnecting(false);
@@ -773,6 +774,7 @@ class MultiplayerGameProvider
         ];
       }
       _multiplayerService.setFocused(true);
+      debugPrint('[WebRestore] saveSession(joinRoom) roomCode=$roomCode');
       WebSessionStorage.saveSession(roomCode);
       _connectionManager.setConnecting(false);
     } catch (e) {

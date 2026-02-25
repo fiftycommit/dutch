@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/multiplayer_game_provider.dart';
+import '../providers/auth_provider.dart';
 import '../utils/ui_constants.dart';
 import '../screens/web_splash_helper.dart'
     if (dart.library.io) '../screens/web_splash_helper_stub.dart';
@@ -205,10 +206,14 @@ class AppRouter {
                 final savedRoom = isRestorable
                     ? WebSessionStorage.getRoomCode()
                     : null;
+                final savedRoute = WebSessionStorage.getRoute();
+                debugPrint('[WebRestore] path=$path needsState=$needsState isRestorable=$isRestorable savedRoom=$savedRoom savedRoute=$savedRoute');
                 if (savedRoom != null) {
                   // Skip le splash, rejoindre directement.
-                  final targetRoute = WebSessionStorage.getRoute() ?? path;
+                  final targetRoute = savedRoute ?? path;
                   _webSplashDone = true;
+                  WebSplashHelper.flutterReady();
+                  WebSplashHelper.hideSplash();
                   return '/room/$savedRoom?restore=${Uri.encodeComponent(targetRoute)}';
                 } else {
                   _pendingDeepLink = null;
@@ -657,7 +662,7 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
   @override
   void initState() {
     super.initState();
-    _joinRoom();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _joinRoom());
   }
 
   Future<void> _joinRoom() async {
@@ -673,6 +678,25 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
       if (provider.roomCode == widget.roomCode) {
         if (mounted) context.go(target);
         return;
+      }
+
+      // Initialiser l'auth et passer le token au multiplayer service
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (!authProvider.isInitialized) {
+        await authProvider.init();
+      }
+      final token = await authProvider.getFreshToken();
+      if (token == null) {
+        throw Exception('Authentification requise');
+      }
+      provider.setAuthToken(token);
+      await provider.init();
+
+      // Attendre que le socket soit connecté (max 5s)
+      for (var i = 0; i < 50; i++) {
+        if (provider.isConnected) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!mounted) return;
       }
 
       await provider.joinRoom(
