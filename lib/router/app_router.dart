@@ -121,21 +121,11 @@ class AppRouter {
   /// Appelé par le SplashScreen une fois l'init terminée.
   static void markSplashDone() => _webSplashDone = true;
 
-  /// Route à restaurer après un rejoin réussi (reload web).
-  static String? _pendingRestoreRoute;
-
   /// Retourne le deep link en attente (et le consomme).
   static String? consumePendingDeepLink() {
     final link = _pendingDeepLink;
     _pendingDeepLink = null;
     return link;
-  }
-
-  /// Consomme la route à restaurer après rejoin.
-  static String? consumePendingRestoreRoute() {
-    final route = _pendingRestoreRoute;
-    _pendingRestoreRoute = null;
-    return route;
   }
 
   /// Routes qui nécessitent un état en mémoire (provider/socket) et ne
@@ -216,8 +206,10 @@ class AppRouter {
                     ? WebSessionStorage.getRoomCode()
                     : null;
                 if (savedRoom != null) {
-                  _pendingDeepLink = '/room/$savedRoom';
-                  _pendingRestoreRoute = WebSessionStorage.getRoute() ?? path;
+                  // Skip le splash, rejoindre directement.
+                  final targetRoute = WebSessionStorage.getRoute() ?? path;
+                  _webSplashDone = true;
+                  return '/room/$savedRoom?restore=${Uri.encodeComponent(targetRoute)}';
                 } else {
                   _pendingDeepLink = null;
                 }
@@ -497,11 +489,12 @@ class AppRouter {
                 final roomCode = state.pathParameters['roomCode']!;
                 final playerName =
                     state.uri.queryParameters['name'] ?? 'Joueur';
+                final restoreRoute = state.uri.queryParameters['restore'];
 
-                // On utilise un widget intermédiaire pour gérer la connexion
                 return _RoomJoinHandler(
                   roomCode: roomCode,
                   playerName: playerName,
+                  restoreRoute: restoreRoute,
                 );
               },
             ),
@@ -645,10 +638,12 @@ class AppRouter {
 class _RoomJoinHandler extends StatefulWidget {
   final String roomCode;
   final String playerName;
+  final String? restoreRoute;
 
   const _RoomJoinHandler({
     required this.roomCode,
     required this.playerName,
+    this.restoreRoute,
   });
 
   @override
@@ -672,12 +667,11 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
         listen: false,
       );
 
-      // Si déjà dans cette room, aller directement à la route restaurée
+      final target = widget.restoreRoute ?? '/lobby';
+
+      // Si déjà dans cette room, aller directement à la destination
       if (provider.roomCode == widget.roomCode) {
-        if (mounted) {
-          final restore = AppRouter.consumePendingRestoreRoute();
-          context.go(restore ?? '/lobby');
-        }
+        if (mounted) context.go(target);
         return;
       }
 
@@ -686,10 +680,7 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
         playerName: widget.playerName,
       );
 
-      if (mounted) {
-        final restore = AppRouter.consumePendingRestoreRoute();
-        context.go(restore ?? '/lobby');
-      }
+      if (mounted) context.go(target);
     } catch (e) {
       if (mounted) {
         setState(() {

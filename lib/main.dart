@@ -54,7 +54,7 @@ void main() async {
   // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
   // setPersistence n'est supporté que sur le web
   if (kIsWeb) {
-    await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
   }
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
