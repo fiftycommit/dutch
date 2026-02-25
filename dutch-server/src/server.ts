@@ -209,19 +209,15 @@ export function startServer() {
   });
 
   app.get('/version', (req, res) => {
-    res.json({
-      sha: process.env.GIT_SHA || null,
-      buildTime: process.env.BUILD_TIME || null,
-      startedAt,
-      nodeEnv: process.env.NODE_ENV || null,
-    });
-  });
-
-  app.get('/rooms', (req, res) => {
-    res.json(roomManager.listRooms());
+    res.json({ status: 'ok' });
   });
 
   app.get('/rooms/debug', (req, res) => {
+    const secret = req.headers['x-admin-secret'] as string | undefined;
+    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+      res.status(403).json({ error: 'Accès refusé' });
+      return;
+    }
     res.json(roomManager.listRoomsDebug());
   });
 

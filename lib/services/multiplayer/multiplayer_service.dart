@@ -428,6 +428,9 @@ class MultiplayerService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _setupEventListeners(io.Socket socket) {
+    // Nettoyer les anciens listeners pour éviter les doublons
+    socket.clearListeners();
+
     socket.on('connect', (_) {
       if (kDebugMode) debugPrint('📡 Connecté au serveur Socket.IO');
     });

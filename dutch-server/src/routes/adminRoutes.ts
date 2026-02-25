@@ -6,9 +6,16 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Admin auth middleware – vérifie le header X-Admin-Secret contre ADMIN_SECRET
 // ---------------------------------------------------------------------------
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'dutch-admin-dev-secret';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+    console.warn('⚠️ ADMIN_SECRET non défini — panel admin désactivé');
+}
 
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+    if (!ADMIN_SECRET) {
+        res.status(503).json({ success: false, error: 'Admin désactivé' });
+        return;
+    }
     const secret = req.headers['x-admin-secret'] as string | undefined;
     if (!secret || secret !== ADMIN_SECRET) {
         res.status(403).json({ success: false, error: 'Accès refusé' });

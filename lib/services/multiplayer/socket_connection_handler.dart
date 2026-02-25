@@ -27,6 +27,7 @@ class SocketConnectionHandler {
   int _latencyMs = 0;
   int _serverTimeOffsetMs = 0;
   int _reconnectAttempts = 0;
+  bool _isReconnecting = false;
   SocketConnectionState _connectionState = SocketConnectionState.disconnected;
 
   // Pour la reconnexion automatique
@@ -80,20 +81,30 @@ class SocketConnectionHandler {
     _authToken = token;
     _authUid = newUid;
     if (identityChanged && isConnected) {
-      // Force un nouveau handshake Socket.IO avec le bon compte.
       disconnect();
     }
   }
 
   Future<void> connect(void Function(io.Socket) setupListeners) async {
-    if (isConnected) return;
+    // Guard: ne jamais créer 2 connexions en parallèle
+    if (_connectionState == SocketConnectionState.connected ||
+        _connectionState == SocketConnectionState.connecting) {
+      return;
+    }
 
     _setConnectionState(SocketConnectionState.connecting);
+
+    // Nettoyer tout ancien socket résiduel
+    _socket?.clearListeners();
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
 
     final options = <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
       'reconnection': false,
+      'forceNew': true,
     };
 
     if (_authToken != null) {
@@ -128,13 +139,17 @@ class SocketConnectionHandler {
       _startPingLoop();
       if (kDebugMode) debugPrint('✅ Connecté au serveur - ID: $_playerId');
     } catch (e) {
-      _setConnectionState(SocketConnectionState.disconnected);
+      _socket?.clearListeners();
       _socket?.disconnect();
+      _socket?.dispose();
+      _socket = null;
+      _setConnectionState(SocketConnectionState.disconnected);
       throw Exception('Impossible de se connecter au serveur : $e');
     } finally {
-      _socket!.off('connect', connectHandler);
-      _socket!.off('connect_error', errorHandler);
-      _socket!.off('connect_timeout', errorHandler);
+      // Les handlers temporaires sont nettoyés même en cas de succès
+      _socket?.off('connect', connectHandler);
+      _socket?.off('connect_error', errorHandler);
+      _socket?.off('connect_timeout', errorHandler);
     }
   }
 
@@ -159,6 +174,7 @@ class SocketConnectionHandler {
 
   Future<void> _attemptReconnect(
       void Function(io.Socket) setupListeners) async {
+    if (_isReconnecting) return;
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       if (kDebugMode) {
         debugPrint('❌ Nombre maximum de tentatives de reconnexion atteint');
@@ -168,6 +184,7 @@ class SocketConnectionHandler {
       return;
     }
 
+    _isReconnecting = true;
     _setConnectionState(SocketConnectionState.reconnecting);
 
     final delay = Duration(seconds: pow(2, _reconnectAttempts).toInt());
@@ -179,11 +196,16 @@ class SocketConnectionHandler {
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () async {
       try {
+        _socket?.clearListeners();
         _socket?.disconnect();
         _socket?.dispose();
         _socket = null;
+        // Reset state pour que connect() passe le guard
+        _connectionState = SocketConnectionState.disconnected;
 
         await connect(setupListeners);
+
+        _isReconnecting = false;
 
         if (isConnected && lastRoomCode != null && lastPlayerName != null) {
           if (kDebugMode) {
@@ -201,6 +223,7 @@ class SocketConnectionHandler {
         }
       } catch (e) {
         if (kDebugMode) debugPrint('❌ Échec de la reconnexion: $e');
+        _isReconnecting = false;
         _attemptReconnect(setupListeners);
       }
     });
@@ -253,14 +276,16 @@ class SocketConnectionHandler {
 
   void disconnect() {
     if (kDebugMode) debugPrint('👋 Déconnexion du serveur');
+    _setConnectionState(SocketConnectionState.disconnected);
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _reconnectAttempts = 0;
+    _isReconnecting = false;
     _stopPingLoop();
+    _socket?.clearListeners();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
     _playerId = null;
-    _setConnectionState(SocketConnectionState.disconnected);
   }
 }

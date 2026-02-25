@@ -1097,6 +1097,41 @@ class MultiplayerGameProvider
 
   @override
   void dispose() {
+    // Nettoyer tous les callbacks pour éviter les leaks
+    _multiplayerService.onGameStateUpdate = null;
+    _multiplayerService.onPreloadedDeckCardUpdate = null;
+    _multiplayerService.onTimerUpdate = null;
+    _multiplayerService.onGameAllReady = null;
+    _multiplayerService.onPlayerJoined = null;
+    _multiplayerService.onGameStarted = null;
+    _multiplayerService.onReactionTimeConfig = null;
+    _multiplayerService.onPresenceUpdate = null;
+    _multiplayerService.onPresenceCheck = null;
+    _multiplayerService.onChatMessage = null;
+    _multiplayerService.onError = null;
+    _multiplayerService.onSocketConnectionStateChanged = null;
+    _multiplayerService.onRoomClosed = null;
+    _multiplayerService.onRoomRestarted = null;
+    _multiplayerService.onKicked = null;
+    _multiplayerService.onBanned = null;
+    _multiplayerService.onPlayerLeft = null;
+    _multiplayerService.onPlayerAfk = null;
+    _multiplayerService.onSpecialPowerTargeted = null;
+    _multiplayerService.onSpiedCard = null;
+    _multiplayerService.onSwapNotification = null;
+    _multiplayerService.onJokerNotification = null;
+    _multiplayerService.onSpyNotification = null;
+    _multiplayerService.onGamePaused = null;
+    _multiplayerService.onGameResumed = null;
+    _multiplayerService.onEmoteReceived = null;
+    _multiplayerService.onTournamentEliminated = null;
+    _multiplayerService.onTournamentEnded = null;
+    _multiplayerService.onDuplicateLoginAttempt = null;
+    _multiplayerService.onRoomInviteReceived = null;
+    _multiplayerService.onFriendRequestReceived = null;
+    _multiplayerService.onFriendAccepted = null;
+    _multiplayerService.onPrivateMessage = null;
+
     _eventController.close();
     _connectionManager.dispose();
     _timerManager.dispose();
