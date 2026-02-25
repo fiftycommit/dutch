@@ -2,7 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-enum InAppNotificationType { friendRequest, friendAccepted, playerJoined, privateMessage }
+enum InAppNotificationType {
+  friendRequest,
+  friendAccepted,
+  playerJoined,
+  privateMessage,
+  wizz
+}
 
 class InAppNotificationPayload {
   final InAppNotificationType type;

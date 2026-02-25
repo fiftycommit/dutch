@@ -491,6 +491,17 @@ class MultiplayerGameProvider
       _showWizzAnimation = true;
       HapticService.error();
       notifyListeners();
+
+      // In-app notification si on n'est pas dans le lobby
+      if (!_isInRoomScreen()) {
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.wizz,
+          title: 'On t\'attend !',
+          body: '$_wizzFromName te rappelle dans le salon',
+          route: '/lobby',
+        ));
+      }
+
       // Auto-dismiss après 2s
       Future.delayed(const Duration(seconds: 2), () {
         if (_showWizzAnimation) {

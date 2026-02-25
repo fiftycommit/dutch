@@ -39,7 +39,8 @@ class LobbyPlayersPanel extends StatelessWidget {
         builder: (context, constraints) {
           if (constraints.maxHeight < 50) {
             return const Center(
-              child: Text('...', style: TextStyle(color: AppColors.textDisabled)),
+              child:
+                  Text('...', style: TextStyle(color: AppColors.textDisabled)),
             );
           }
           return Column(
@@ -56,7 +57,7 @@ class LobbyPlayersPanel extends StatelessWidget {
                         itemCount: provider.playersInLobby.length,
                         itemBuilder: (context, index) {
                           return _buildPlayerItem(
-                            context, index, colors, isCompactLandscape);
+                              context, index, colors, isCompactLandscape);
                         },
                       ),
               ),
@@ -67,10 +68,12 @@ class LobbyPlayersPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(ColorScheme colors, bool hasScores, bool isCompactLandscape) {
+  Widget _buildHeader(
+      ColorScheme colors, bool hasScores, bool isCompactLandscape) {
     return Row(
       children: [
-        Icon(Icons.people, size: _f(isCompactLandscape ? 16 : 20), color: Colors.white),
+        Icon(Icons.people,
+            size: _f(isCompactLandscape ? 16 : 20), color: Colors.white),
         SizedBox(width: _f(6)),
         Text(
           'Joueurs ($connectedHumans/$maxPlayers)',
@@ -83,8 +86,7 @@ class LobbyPlayersPanel extends StatelessWidget {
         if (hasScores && !isCompactLandscape) ...[
           const Spacer(),
           Container(
-            padding: EdgeInsets.symmetric(
-                horizontal: _f(8), vertical: _f(3)),
+            padding: EdgeInsets.symmetric(horizontal: _f(8), vertical: _f(3)),
             decoration: BoxDecoration(
               color: colors.tertiary.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(_f(12)),
@@ -92,8 +94,7 @@ class LobbyPlayersPanel extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.emoji_events,
-                    size: _f(14), color: Colors.white),
+                Icon(Icons.emoji_events, size: _f(14), color: Colors.white),
                 SizedBox(width: _f(4)),
                 Text(
                   'Classement',
@@ -112,40 +113,43 @@ class LobbyPlayersPanel extends StatelessWidget {
   }
 
   Widget _buildPlayerItem(
-    BuildContext context, int index, ColorScheme colors, bool isCompactLandscape,
+    BuildContext context,
+    int index,
+    ColorScheme colors,
+    bool isCompactLandscape,
   ) {
     final player = provider.playersInLobby[index];
     final isYou = (player['clientId'] != null &&
             player['clientId'] == provider.clientId) ||
         (player['id'] == provider.playerId);
-    final isHost = provider.hostPlayerId != null &&
-        player['id'] == provider.hostPlayerId;
-    final presence =
-        provider.presenceByClientId[player['clientId']] ??
-            provider.presenceById[player['id']];
+    final isHost =
+        provider.hostPlayerId != null && player['id'] == provider.hostPlayerId;
+    final presence = provider.presenceByClientId[player['clientId']] ??
+        provider.presenceById[player['id']];
     final isSpectator = presence?['isSpectator'] == true;
-    final isReady = presence?['ready'] == true ||
-        player['ready'] == true;
+    final isReady = presence?['ready'] == true || player['ready'] == true;
 
     final playerClientId = player['clientId']?.toString();
     final playerScore = _getPlayerScore(playerClientId);
     final playerRank = _getPlayerRank(playerClientId);
 
     if (isCompactLandscape) {
-      return _buildCompactPlayerItem(
-        context, player, colors, isYou, isHost, isReady, isSpectator, presence);
+      return _buildCompactPlayerItem(context, player, colors, isYou, isHost,
+          isReady, isSpectator, presence);
     }
 
-    return _buildNormalPlayerItem(
-      context, player, colors, isYou, isHost, isReady, isSpectator,
-      presence, playerScore, playerRank);
+    return _buildNormalPlayerItem(context, player, colors, isYou, isHost,
+        isReady, isSpectator, presence, playerScore, playerRank);
   }
 
   Widget _buildCompactPlayerItem(
     BuildContext context,
     Map<String, dynamic> player,
     ColorScheme colors,
-    bool isYou, bool isHost, bool isReady, bool isSpectator,
+    bool isYou,
+    bool isHost,
+    bool isReady,
+    bool isSpectator,
     Map<String, dynamic>? presence,
   ) {
     return Container(
@@ -187,17 +191,19 @@ class LobbyPlayersPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (isYou)
-                  _buildMiniTag(colors.primary, 'Vous'),
-                if (isHost)
-                  _buildMiniTag(colors.secondary, 'Hote'),
+                if (isYou) _buildMiniTag(colors.primary, 'Vous'),
+                if (isHost) _buildMiniTag(colors.secondary, 'Hote'),
               ],
             ),
           ),
           if (_canWizz(player, isYou, isHost, presence))
-            Icon(Icons.notification_important,
-                color: provider.canSendWizz ? Colors.amber : Colors.grey,
-                size: _f(14)),
+            Text(
+              '🔔',
+              style: TextStyle(
+                fontSize: _f(14),
+                color: provider.canSendWizz ? null : Colors.grey,
+              ),
+            ),
           if (isReady && !isSpectator)
             Icon(Icons.check_circle, color: colors.tertiary, size: _f(14)),
           SizedBox(width: _f(4)),
@@ -211,9 +217,13 @@ class LobbyPlayersPanel extends StatelessWidget {
     BuildContext context,
     Map<String, dynamic> player,
     ColorScheme colors,
-    bool isYou, bool isHost, bool isReady, bool isSpectator,
+    bool isYou,
+    bool isHost,
+    bool isReady,
+    bool isSpectator,
     Map<String, dynamic>? presence,
-    int? playerScore, int? playerRank,
+    int? playerScore,
+    int? playerRank,
   ) {
     return Card(
       margin: EdgeInsets.only(bottom: _f(8)),
@@ -287,10 +297,8 @@ class LobbyPlayersPanel extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (isYou)
-                        _buildMiniTag(colors.primary, 'Vous'),
-                      if (isHost)
-                        _buildMiniTag(colors.secondary, 'Hote'),
+                      if (isYou) _buildMiniTag(colors.primary, 'Vous'),
+                      if (isHost) _buildMiniTag(colors.secondary, 'Hote'),
                     ],
                   ),
                   SizedBox(height: _f(2)),
@@ -352,8 +360,7 @@ class LobbyPlayersPanel extends StatelessWidget {
                   onPressed: () => _confirmKick(context, player),
                 ),
                 IconButton(
-                  icon: Icon(Icons.block,
-                      color: colors.error, size: _f(20)),
+                  icon: Icon(Icons.block, color: colors.error, size: _f(20)),
                   tooltip: 'Bannir (définitif)',
                   onPressed: () => _confirmBan(context, player, colors),
                 ),
@@ -377,21 +384,15 @@ class LobbyPlayersPanel extends StatelessWidget {
     final focused = presence?['focused'] == true;
     if (connected && focused) return false;
     // Permission: I'm host OR target is host
-    final targetIsHost = provider.hostPlayerId != null &&
-        player['id'] == provider.hostPlayerId;
+    final targetIsHost =
+        provider.hostPlayerId != null && player['id'] == provider.hostPlayerId;
     return provider.isHost || targetIsHost;
   }
 
   Widget _buildWizzButton(BuildContext context, Map<String, dynamic> player) {
     final canWizz = provider.canSendWizz;
-    return IconButton(
-      icon: Icon(
-        Icons.notification_important,
-        color: canWizz ? Colors.amber : Colors.grey,
-        size: _f(20),
-      ),
-      tooltip: canWizz ? 'Wizz !' : 'Cooldown...',
-      onPressed: canWizz
+    return GestureDetector(
+      onTap: canWizz
           ? () {
               final clientId = player['clientId'] as String?;
               if (clientId != null) {
@@ -399,10 +400,30 @@ class LobbyPlayersPanel extends StatelessWidget {
               }
             }
           : null,
+      child: Tooltip(
+        message: canWizz ? 'Wizz !' : 'Cooldown...',
+        child: Container(
+          padding: EdgeInsets.all(_f(6)),
+          decoration: BoxDecoration(
+            color: canWizz
+                ? Colors.amber.withValues(alpha: 0.2)
+                : Colors.grey.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(_f(8)),
+          ),
+          child: Text(
+            '🔔',
+            style: TextStyle(
+              fontSize: _f(18),
+              color: canWizz ? null : Colors.grey,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Future<void> _confirmKick(BuildContext context, Map<String, dynamic> player) async {
+  Future<void> _confirmKick(
+      BuildContext context, Map<String, dynamic> player) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -431,7 +452,8 @@ class LobbyPlayersPanel extends StatelessWidget {
     }
   }
 
-  Future<void> _confirmBan(BuildContext context, Map<String, dynamic> player, ColorScheme colors) async {
+  Future<void> _confirmBan(BuildContext context, Map<String, dynamic> player,
+      ColorScheme colors) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -482,10 +504,14 @@ class LobbyPlayersPanel extends StatelessWidget {
 
   Color _getRankColor(int rank) {
     switch (rank) {
-      case 1: return const Color(0xFFFFD700);
-      case 2: return const Color(0xFFC0C0C0);
-      case 3: return const Color(0xFFCD7F32);
-      default: return Colors.grey;
+      case 1:
+        return const Color(0xFFFFD700);
+      case 2:
+        return const Color(0xFFC0C0C0);
+      case 3:
+        return const Color(0xFFCD7F32);
+      default:
+        return Colors.grey;
     }
   }
 

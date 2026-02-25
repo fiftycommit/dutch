@@ -67,6 +67,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return const Color(0xFFFF9500);
       case InAppNotificationType.privateMessage:
         return const Color(0xFF007AFF);
+      case InAppNotificationType.wizz:
+        return const Color(0xFFFF9F0A);
     }
   }
 
@@ -79,6 +81,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return Icons.group_add_rounded;
       case InAppNotificationType.privateMessage:
         return Icons.chat_bubble_rounded;
+      case InAppNotificationType.wizz:
+        return Icons.notification_important_rounded;
     }
   }
 
@@ -91,6 +95,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
         return 'DUTCH · Salon';
       case InAppNotificationType.privateMessage:
         return 'DUTCH · Message';
+      case InAppNotificationType.wizz:
+        return 'DUTCH · Wizz';
     }
   }
 
@@ -113,8 +119,7 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
             if (details.velocity.pixelsPerSecond.dy < -100) _dismiss();
           },
           child: Container(
-            margin:
-                EdgeInsets.only(top: topPadding + 8, left: 10, right: 10),
+            margin: EdgeInsets.only(top: topPadding + 8, left: 10, right: 10),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: BackdropFilter(
@@ -134,7 +139,8 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+                        color:
+                            Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
                         blurRadius: 24,
                         offset: const Offset(0, 6),
                       ),
