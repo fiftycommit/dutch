@@ -262,6 +262,38 @@ class MultiplayerGameProvider
   /// La UI peut s'abonner pour rafraîchir "Mes salons".
   Function(String roomCode)? onRoomAutoJoined;
 
+  // Wizz state
+  DateTime? _lastWizzSentAt;
+  bool get canSendWizz =>
+      _lastWizzSentAt == null ||
+      DateTime.now().difference(_lastWizzSentAt!).inSeconds >= 30;
+  int get wizzCooldownRemaining {
+    if (_lastWizzSentAt == null) return 0;
+    final elapsed = DateTime.now().difference(_lastWizzSentAt!).inSeconds;
+    return (30 - elapsed).clamp(0, 30);
+  }
+
+  String? _wizzFromName;
+  String? get wizzFromName => _wizzFromName;
+  bool _showWizzAnimation = false;
+  bool get showWizzAnimation => _showWizzAnimation;
+
+  void dismissWizzAnimation() {
+    _showWizzAnimation = false;
+    _wizzFromName = null;
+    notifyListeners();
+  }
+
+  Future<bool> sendWizz(String targetClientId) async {
+    if (!canSendWizz) return false;
+    final success = await _multiplayerService.sendWizz(targetClientId);
+    if (success) {
+      _lastWizzSentAt = DateTime.now();
+      notifyListeners();
+    }
+    return success;
+  }
+
   String? _lastPlayerName;
   void setPlayerName(String name) => _lastPlayerName = name;
 
@@ -453,6 +485,20 @@ class MultiplayerGameProvider
         body: '$name est maintenant ton ami',
         route: '/friends',
       ));
+    };
+    _multiplayerService.onWizzReceived = (data) {
+      _wizzFromName = data['fromName'] as String? ?? 'Quelqu\'un';
+      _showWizzAnimation = true;
+      HapticService.error();
+      notifyListeners();
+      // Auto-dismiss après 2s
+      Future.delayed(const Duration(seconds: 2), () {
+        if (_showWizzAnimation) {
+          _showWizzAnimation = false;
+          _wizzFromName = null;
+          notifyListeners();
+        }
+      });
     };
     _multiplayerService.onPrivateMessage = (data) {
       final senderId = data['senderId'] as String?;
@@ -1136,6 +1182,9 @@ WebSessionStorage.saveSession(roomCode);
     _presenceCheckReason = null;
     _presenceCheckDeadlineMs = 0;
     _afkPlayerIds.clear();
+    _lastWizzSentAt = null;
+    _showWizzAnimation = false;
+    _wizzFromName = null;
     _chatManager.reset();
     _timerManager.reset();
     _notificationManager.reset();
@@ -1178,6 +1227,7 @@ WebSessionStorage.saveSession(roomCode);
     _multiplayerService.onFriendRequestReceived = null;
     _multiplayerService.onFriendAccepted = null;
     _multiplayerService.onPrivateMessage = null;
+    _multiplayerService.onWizzReceived = null;
 
     _eventController.close();
     _connectionManager.dispose();

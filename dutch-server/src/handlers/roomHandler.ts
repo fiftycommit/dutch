@@ -688,6 +688,91 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WIZZ - Notification pour rappeler un joueur absent du lobby
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const wizzCooldowns = new Map<string, number>(); // socketId -> last wizz timestamp
+
+  socket.on('room:wizz', async (data, callback) => {
+    try {
+      const roomCode = data.roomCode?.toString().toUpperCase();
+      const targetClientId = data.targetClientId?.toString();
+
+      if (!roomCode || !targetClientId) {
+        callback?.({ success: false, error: 'roomCode et targetClientId requis' });
+        return;
+      }
+
+      const room = roomManager.getRoom(roomCode);
+      if (!room) {
+        callback?.({ success: false, error: 'Room introuvable' });
+        return;
+      }
+
+      // Vérifier que l'expéditeur est dans la room
+      const sender = room.players.find((p) => p.id === socket.id);
+      if (!sender) {
+        callback?.({ success: false, error: 'Vous n\'êtes pas dans cette room' });
+        return;
+      }
+
+      // Trouver la cible
+      const target = room.players.find((p) => p.clientId === targetClientId);
+      if (!target) {
+        callback?.({ success: false, error: 'Joueur cible introuvable' });
+        return;
+      }
+
+      // Permission: joueur→hôte OU hôte→joueur
+      const senderIsHost = room.hostPlayerId === socket.id;
+      const targetIsHost = room.hostPlayerId === target.id;
+      if (!senderIsHost && !targetIsHost) {
+        callback?.({ success: false, error: 'Vous ne pouvez wizzer que l\'hôte (ou l\'hôte peut wizzer les autres)' });
+        return;
+      }
+
+      // Vérifier que la cible n'est pas connectée+focused (pas besoin de wizz)
+      if (target.connected !== false && target.focused === true) {
+        callback?.({ success: false, error: 'Ce joueur est déjà actif dans le lobby' });
+        return;
+      }
+
+      // Rate limit: 1 wizz / 30s par expéditeur
+      const now = Date.now();
+      const lastWizz = wizzCooldowns.get(socket.id) ?? 0;
+      if (now - lastWizz < 30000) {
+        const remaining = Math.ceil((30000 - (now - lastWizz)) / 1000);
+        callback?.({ success: false, error: `Attends encore ${remaining}s avant de re-wizzer` });
+        return;
+      }
+      wizzCooldowns.set(socket.id, now);
+
+      // Émettre au socket de la cible si connecté
+      if (target.id) {
+        io?.to(target.id).emit('room:wizz', {
+          fromName: sender.name,
+          fromId: sender.clientId,
+        });
+      }
+
+      // Push notification si la cible est déconnectée
+      if (target.connected === false && target.userId) {
+        await PushNotificationService.sendToUser(target.userId, {
+          title: 'On t\'attend !',
+          body: `${sender.name} te rappelle dans le salon`,
+          data: { type: 'room_wizz', roomCode },
+        });
+      }
+
+      console.log(`Wizz sent from ${sender.name} to ${target.name} in room ${roomCode}`);
+      callback?.({ success: true });
+    } catch (error: any) {
+      console.error('Error sending wizz:', error);
+      callback?.({ success: false, error: error.message });
+    }
+  });
+
   // Notifications friend temps réel (envoyées quand des actions friends arrivent via REST)
   // Ces listeners sont pour les événements émis par le serveur lui-même
   socket.on('friend:send_request', async (data, callback) => {

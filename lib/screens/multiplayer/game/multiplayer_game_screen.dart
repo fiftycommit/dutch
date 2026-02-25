@@ -47,7 +47,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   void initState() {
     super.initState();
     resetEndGameNavigation(); // Reset guard on screen entry
-    lockLandscapeOrientation();
+    lockLandscapeOrientation(autoFullscreenOnWeb: false);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupEventListeners();

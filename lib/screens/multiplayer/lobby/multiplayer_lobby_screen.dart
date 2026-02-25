@@ -65,6 +65,32 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       });
     }
 
+    // Wizz animation reçue
+    if (provider.showWizzAnimation) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.notification_important, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text("${provider.wizzFromName ?? 'Quelqu\'un'} te rappelle !"),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.amber.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(12),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        provider.dismissWizzAnimation();
+      });
+    }
+
     // Dialog si la room a été fermée par l'hôte
     if (provider.roomClosedByHost) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

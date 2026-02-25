@@ -194,6 +194,10 @@ class LobbyPlayersPanel extends StatelessWidget {
               ],
             ),
           ),
+          if (_canWizz(player, isYou, isHost, presence))
+            Icon(Icons.notification_important,
+                color: provider.canSendWizz ? Colors.amber : Colors.grey,
+                size: _f(14)),
           if (isReady && !isSpectator)
             Icon(Icons.check_circle, color: colors.tertiary, size: _f(14)),
           SizedBox(width: _f(4)),
@@ -331,24 +335,70 @@ class LobbyPlayersPanel extends StatelessWidget {
               Icon(Icons.visibility, color: Colors.blueGrey, size: _f(20)),
             SizedBox(width: _f(4)),
             _presenceDot(presence),
-            if (provider.isHost && !isYou) ...[
-              SizedBox(width: _f(8)),
-              IconButton(
-                icon: Icon(Icons.remove_circle_outline,
-                    color: Colors.orange, size: _f(20)),
-                tooltip: 'Exclure (peut revenir)',
-                onPressed: () => _confirmKick(context, player),
-              ),
-              IconButton(
-                icon: Icon(Icons.block,
-                    color: colors.error, size: _f(20)),
-                tooltip: 'Bannir (définitif)',
-                onPressed: () => _confirmBan(context, player, colors),
-              ),
+            if (!isYou) ...[
+              // Wizz button: visible si le joueur n'est pas connected+focused
+              // et si permission ok (on est hôte OU la cible est hôte)
+              if (_canWizz(player, isYou, isHost, presence))
+                Padding(
+                  padding: EdgeInsets.only(left: _f(4)),
+                  child: _buildWizzButton(context, player),
+                ),
+              if (provider.isHost) ...[
+                SizedBox(width: _f(4)),
+                IconButton(
+                  icon: Icon(Icons.remove_circle_outline,
+                      color: Colors.orange, size: _f(20)),
+                  tooltip: 'Exclure (peut revenir)',
+                  onPressed: () => _confirmKick(context, player),
+                ),
+                IconButton(
+                  icon: Icon(Icons.block,
+                      color: colors.error, size: _f(20)),
+                  tooltip: 'Bannir (définitif)',
+                  onPressed: () => _confirmBan(context, player, colors),
+                ),
+              ],
             ],
           ],
         ),
       ),
+    );
+  }
+
+  bool _canWizz(
+    Map<String, dynamic> player,
+    bool isYou,
+    bool isHost,
+    Map<String, dynamic>? presence,
+  ) {
+    if (isYou) return false;
+    // Target must NOT be connected+focused
+    final connected = presence?['connected'] == true;
+    final focused = presence?['focused'] == true;
+    if (connected && focused) return false;
+    // Permission: I'm host OR target is host
+    final targetIsHost = provider.hostPlayerId != null &&
+        player['id'] == provider.hostPlayerId;
+    return provider.isHost || targetIsHost;
+  }
+
+  Widget _buildWizzButton(BuildContext context, Map<String, dynamic> player) {
+    final canWizz = provider.canSendWizz;
+    return IconButton(
+      icon: Icon(
+        Icons.notification_important,
+        color: canWizz ? Colors.amber : Colors.grey,
+        size: _f(20),
+      ),
+      tooltip: canWizz ? 'Wizz !' : 'Cooldown...',
+      onPressed: canWizz
+          ? () {
+              final clientId = player['clientId'] as String?;
+              if (clientId != null) {
+                provider.sendWizz(clientId);
+              }
+            }
+          : null,
     );
   }
 

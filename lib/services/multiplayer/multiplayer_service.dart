@@ -77,6 +77,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onFriendRequestReceived;
   Function(Map<String, dynamic>)? onFriendAccepted;
   Function(Map<String, dynamic>)? onPrivateMessage;
+  Function(Map<String, dynamic>)? onWizzReceived;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONNEXION
@@ -418,6 +419,23 @@ class MultiplayerService {
   void sendChatMessage(String message) =>
       _actionsEmitter.sendChatMessage(message);
   void setFocused(bool focused) => _actionsEmitter.setFocused(focused);
+
+  Future<bool> sendWizz(String targetClientId) async {
+    if (_currentRoomCode == null) return false;
+    final completer = Completer<bool>();
+
+    socket?.emitWithAck('room:wizz', {
+      'roomCode': _currentRoomCode,
+      'targetClientId': targetClientId,
+    }, ack: (response) {
+      completer.complete(response?['success'] == true);
+    });
+
+    return completer.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => false,
+    );
+  }
   void confirmPresence() => _actionsEmitter.confirmPresence();
   void markReady() => _actionsEmitter.markReady();
   void cancelGame() => _actionsEmitter.cancelGame();
@@ -552,6 +570,12 @@ class MultiplayerService {
     socket.on('chat:private_message', (data) {
       if (data is Map) {
         onPrivateMessage?.call(data.cast<String, dynamic>());
+      }
+    });
+
+    socket.on('room:wizz', (data) {
+      if (data is Map) {
+        onWizzReceived?.call(data.cast<String, dynamic>());
       }
     });
 
