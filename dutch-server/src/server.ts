@@ -18,6 +18,7 @@ import friendsRoutes from './routes/friendsRoutes';
 import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
+import { setFriendsIo } from './routes/friendsRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
@@ -244,6 +245,7 @@ export function startServer() {
   app.use('/api/auth', authRoutes);
 
   // Routes Friends (amis, demandes, blocage)
+  setFriendsIo(io, roomManager);
   app.use('/api/friends', friendsRoutes);
 
   // Routes Rooms (salons sauvegardés)

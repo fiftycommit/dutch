@@ -1520,10 +1520,11 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
               }
             },
             itemBuilder: (context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem(
-                value: 'invite_friends',
-                child: Text('Inviter des amis'),
-              ),
+              if (room.isHost)
+                const PopupMenuItem(
+                  value: 'invite_friends',
+                  child: Text('Inviter des amis'),
+                ),
               const PopupMenuItem(
                 value: 'remove_saved',
                 child: Text('Retirer de Mes salons'),

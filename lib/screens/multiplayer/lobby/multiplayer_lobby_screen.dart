@@ -312,8 +312,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               ),
             ),
           ),
-          // Bouton inviter un ami
-          if (context.read<AuthProvider>().isLoggedIn)
+          // Bouton inviter un ami (hôte uniquement)
+          if (provider.isHost && context.read<AuthProvider>().isLoggedIn)
             IconButton(
               icon: const Icon(Icons.person_add, color: Colors.white),
               iconSize: f(22),
@@ -1099,7 +1099,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
     final friendsApi = FriendsApiService(authProvider.authService);
     final friends = await friendsApi.getFriends();
-    final onlineFriends = friends.where((f) => f.isOnline).toList();
 
     if (!mounted) return;
 
@@ -1118,32 +1117,38 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         ),
         content: SizedBox(
           width: 300,
-          child: onlineFriends.isEmpty
-              ? Column(
+          child: friends.isEmpty
+              ? const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.people_outline,
+                    Icon(Icons.people_outline,
                         size: 48, color: Colors.grey),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     Text(
-                      friends.isEmpty
-                          ? 'Aucun ami pour le moment'
-                          : 'Aucun ami en ligne',
-                      style: const TextStyle(color: Colors.grey),
+                      'Aucun ami pour le moment',
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ],
                 )
               : ListView.builder(
                   shrinkWrap: true,
-                  itemCount: onlineFriends.length,
+                  itemCount: friends.length,
                   itemBuilder: (context, index) {
-                    final friend = onlineFriends[index];
+                    final friend = friends[index];
                     return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person),
+                      leading: CircleAvatar(
+                        backgroundColor: friend.isOnline
+                            ? MultiplayerColors.success.withValues(alpha: 0.2)
+                            : Colors.grey.withValues(alpha: 0.2),
+                        child: Icon(
+                          Icons.person,
+                          color: friend.isOnline ? MultiplayerColors.success : Colors.grey,
+                        ),
                       ),
                       title: Text(friend.displayName),
-                      subtitle: Text('@${friend.username}'),
+                      subtitle: Text(
+                        '@${friend.username}${friend.isOnline ? ' • En ligne' : ''}',
+                      ),
                       trailing: IconButton(
                         icon: const Icon(Icons.send, color: MultiplayerColors.success),
                         tooltip: 'Inviter',
@@ -1159,10 +1164,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                               SnackBar(
                                 content: Text(
                                   result.success
-                                      ? 'Invitation envoyée à ${friend.displayName}'
+                                      ? '${friend.displayName} a été ajouté au salon'
                                       : (result.error?.trim().isNotEmpty == true
                                           ? result.error!
-                                          : 'Erreur lors de l\'envoi'),
+                                          : 'Erreur lors de l\'invitation'),
                                 ),
                                 backgroundColor:
                                     result.success ? MultiplayerColors.success : MultiplayerColors.danger,

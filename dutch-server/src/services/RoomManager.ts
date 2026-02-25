@@ -1502,6 +1502,55 @@ export class RoomManager {
     void this.checkAndPlayBotTurn(roomCode);
   }
 
+  /**
+   * Ajoute un joueur invité (déconnecté) dans une room en attente.
+   * Retourne le Player créé, ou null si impossible.
+   */
+  addInvitedPlayer(
+    roomCode: string,
+    userId: string,
+    username: string,
+    displayName: string
+  ): Player | null {
+    const room = this.rooms.get(roomCode);
+    if (!room) return null;
+    if (room.status !== RoomStatus.waiting) return null;
+
+    // Déjà dedans ?
+    if (room.players.some((p) => p.isHuman && p.userId?.trim() === userId.trim())) {
+      return null;
+    }
+
+    const maxPlayers =
+      typeof room.settings?.maxPlayers === 'number'
+        ? room.settings.maxPlayers
+        : 6;
+    if (this.activePlayerCount(room) >= maxPlayers) return null;
+
+    const position = room.players.length;
+    const player = createPlayer(
+      `invited-${userId}`,
+      displayName,
+      true,
+      position,
+      undefined,
+      undefined,
+      undefined,
+      userId.trim(),
+      username.trim().toLowerCase()
+    );
+    player.connected = false;
+    player.focused = false;
+    player.ready = false;
+
+    room.players.push(player);
+    this.reindexPlayers(room);
+    this.touchRoom(room);
+    this.broadcastPresence(roomCode);
+
+    return player;
+  }
+
   private activePlayerCount(room: Room): number {
     const now = this.now();
     return room.players.filter((player) => {

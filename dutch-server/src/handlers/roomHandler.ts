@@ -642,12 +642,36 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         return;
       }
 
+      const inviterName = socketUser.displayName || socketUser.username;
+
+      // Récupérer les infos de l'ami pour l'ajouter au salon
+      const friendUser = await firestoreService.getUser(friendUserId);
+      const friendDisplayName = friendUser?.displayName?.trim() || friendUser?.username?.trim() || 'Joueur';
+      const friendUsername = friendUser?.username?.trim() || '';
+
+      // Ajouter l'ami comme joueur déconnecté dans la room
+      const normalizedRoomCode = roomCode.toString().toUpperCase();
+      const player = roomManager.addInvitedPlayer(
+        normalizedRoomCode,
+        friendUserId,
+        friendUsername,
+        friendDisplayName
+      );
+      if (player) {
+        const room = roomManager.getRoom(normalizedRoomCode);
+        if (room) {
+          roomRegistryService.upsertMember(room, player).catch(() => {});
+        }
+      }
+
+      // Enregistrer le salon dans activeRooms de l'ami
+      roomRegistryService.registerInvitedMember(normalizedRoomCode, friendUserId).catch(() => {});
+
       // Notification temps réel via socket
       const friendSocketIds = FriendsService.getUserSocketIds(friendUserId);
-      const inviterName = socketUser.displayName || socketUser.username;
       for (const sid of friendSocketIds) {
         io?.to(sid).emit('room:invite', {
-          roomCode,
+          roomCode: normalizedRoomCode,
           fromUserId: socketUser.uid,
           fromUsername: socketUser.username,
           fromDisplayName: inviterName,
@@ -655,7 +679,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
 
       // Notification push
-      await PushNotificationService.notifyRoomInvite(friendUserId, inviterName, roomCode);
+      await PushNotificationService.notifyRoomInvite(friendUserId, inviterName, normalizedRoomCode);
 
       callback?.({ success: true });
     } catch (error: any) {

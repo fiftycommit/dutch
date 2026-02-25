@@ -1,11 +1,21 @@
 import { Router } from 'express';
+import { Server } from 'socket.io';
 import { FriendsService } from '../services/FriendsService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { FIREBASE_UNAVAILABLE_ERROR_CODE, roomRegistryService } from '../services/RoomRegistryService';
 import { firestoreService } from '../services/FirestoreService';
+import { RoomManager } from '../services/RoomManager';
 
 const router = Router();
+
+let friendsIo: Server | null = null;
+let friendsRoomManager: RoomManager | null = null;
+
+export function setFriendsIo(io: Server, rm: RoomManager) {
+  friendsIo = io;
+  friendsRoomManager = rm;
+}
 
 function isFirestoreUnavailable(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
@@ -222,6 +232,30 @@ router.post('/invite', async (req, res) => {
       authReq.user!.email ||
       'Un ami';
 
+    // Récupérer les infos de l'ami pour l'ajouter au salon
+    const friendUser = await firestoreService.getUser(normalizedFriendUserId);
+    const friendDisplayName = friendUser?.displayName?.trim() || friendUser?.username?.trim() || 'Joueur';
+    const friendUsername = friendUser?.username?.trim() || '';
+
+    // Ajouter l'ami comme joueur déconnecté dans la room en mémoire
+    let addedPlayer = false;
+    if (friendsRoomManager) {
+      const player = friendsRoomManager.addInvitedPlayer(
+        normalizedRoomCode,
+        normalizedFriendUserId,
+        friendUsername,
+        friendDisplayName
+      );
+      if (player) {
+        addedPlayer = true;
+        // Sync Firestore members
+        const room = friendsRoomManager.getRoom(normalizedRoomCode);
+        if (room) {
+          roomRegistryService.upsertMember(room, player).catch(() => {});
+        }
+      }
+    }
+
     await PushNotificationService.notifyRoomInvite(
       normalizedFriendUserId,
       inviterName,
@@ -229,12 +263,22 @@ router.post('/invite', async (req, res) => {
     );
 
     // Enregistrer le salon dans activeRooms de l'ami → apparaît dans "Mes salons"
-    // même s'il n'est pas encore connecté via socket.
-    roomRegistryService.registerInvitedMember(normalizedRoomCode, normalizedFriendUserId).catch(() => {
-      // Non-critique : silencieux si la room n'existe pas encore côté Firestore
-    });
+    roomRegistryService.registerInvitedMember(normalizedRoomCode, normalizedFriendUserId).catch(() => {});
 
-    res.json({ success: true });
+    // Notification temps réel si l'ami est en ligne
+    if (friendsIo) {
+      const friendSocketIds = FriendsService.getUserSocketIds(normalizedFriendUserId);
+      for (const sid of friendSocketIds) {
+        friendsIo.to(sid).emit('room:invite', {
+          roomCode: normalizedRoomCode,
+          fromUserId: authReq.user!.uid,
+          fromUsername: sender?.username || '',
+          fromDisplayName: inviterName,
+        });
+      }
+    }
+
+    res.json({ success: true, addedPlayer });
   } catch (error) {
     if (isFirestoreUnavailable(error)) {
       res.status(503).json({
