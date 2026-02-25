@@ -211,6 +211,7 @@ export class RoomManager {
     room?: Room;
     player?: Player;
     error?: string;
+    previousSocketId?: string;
   } {
     const room = this.rooms.get(roomCode);
     if (!room) {
@@ -275,7 +276,7 @@ export class RoomManager {
         room.hostPlayerId = socketId;
       }
       this.touchRoom(room);
-      return { room, player: existing };
+      return { room, player: existing, previousSocketId: previousId !== socketId ? previousId : undefined };
     }
 
     // Si la partie est en cours, on rejoint comme SPECTATEUR

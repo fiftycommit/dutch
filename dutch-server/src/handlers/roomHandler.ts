@@ -166,6 +166,14 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
         return;
       }
 
+      // Remove previous socket from room channel to avoid duplicate events
+      if (result.previousSocketId) {
+        const prevSocket = io?.sockets.sockets.get(result.previousSocketId);
+        if (prevSocket) {
+          prevSocket.leave(roomCode);
+        }
+      }
+
       socket.join(roomCode);
 
       const localPlayer =
