@@ -42,6 +42,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   List<SavedRoom> _myRooms = <SavedRoom>[];
   List<Map<String, dynamic>> _activeRooms = <Map<String, dynamic>>[];
   bool _loadingRooms = false;
+  bool _roomsLoadedOnce = false;
   bool _showingProfileGate = false;
   bool _showUserMenu = false;
 
@@ -93,6 +94,11 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       }
     }
 
+    // Hydrater le profil UI immédiatement depuis l'état auth (pas de réseau)
+    setState(() {
+      _profile = _buildProfileFromAuth(authProvider);
+    });
+
     // Passer le token Firebase au service multiplayer
     final multiProvider = context.read<MultiplayerGameProvider>();
     final freshToken = await authProvider.getFreshToken();
@@ -138,27 +144,15 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       return;
     }
 
-    // Toujours hydrater un profil UI depuis l'état auth, même si l'API social
-    // échoue (500, réseau instable, etc.) pour ne pas bloquer Rejoindre/Créer.
-    final seededProfile = _buildProfileFromAuth(authProvider);
-
-    final results = await Future.wait([
-      _friendsApi.getFriends(),
-      _friendsApi.getRequests(),
-    ]);
+    // Consomme le prefetch lancé au login, ou fait un appel normal
+    final summary = await _friendsApi.getSummaryOrPrefetched();
 
     if (!mounted) return;
 
-    final friends = results[0] as List<FriendInfo>;
-    final requests = results[1] as ({
-      List<FriendRequestInfo> incoming,
-      List<FriendRequestInfo> outgoing
-    });
     setState(() {
-      _profile = seededProfile;
-      _friends = friends;
-      _incomingRequests = requests.incoming;
-      _outgoingRequests = requests.outgoing;
+      _friends = summary.friends;
+      _incomingRequests = summary.incoming;
+      _outgoingRequests = summary.outgoing;
     });
     _syncIncomingRequestPulse();
   }
@@ -199,9 +193,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   }
 
   Future<void> _loadMyRooms() async {
-    setState(() {
-      _loadingRooms = true;
-    });
+    // Spinner uniquement lors d'un refresh manuel, pas au premier chargement
+    if (_roomsLoadedOnce) {
+      setState(() {
+        _loadingRooms = true;
+      });
+    }
 
     final provider = context.read<MultiplayerGameProvider>();
     final myActiveRooms = await provider.getMyActiveRooms();
@@ -240,6 +237,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       _myRooms = visibleRooms;
       _activeRooms = activeRooms;
       _loadingRooms = false;
+      _roomsLoadedOnce = true;
     });
   }
 

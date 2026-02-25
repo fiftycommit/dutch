@@ -38,11 +38,15 @@ export class FriendsService {
 
   static async getFriends(userId: string): Promise<FriendInfo[]> {
     const friendUids = await firestoreService.getFriends(userId);
+    if (friendUids.length === 0) return [];
+
+    const users = await Promise.all(friendUids.map(uid => firestoreService.getUser(uid)));
     const friends: FriendInfo[] = [];
 
-    for (const uid of friendUids) {
-      const user = await firestoreService.getUser(uid);
+    for (let i = 0; i < friendUids.length; i++) {
+      const user = users[i];
       if (user) {
+        const uid = friendUids[i];
         friends.push({
           userId: uid,
           username: user.username,
@@ -58,11 +62,15 @@ export class FriendsService {
 
   static async getIncomingRequests(userId: string): Promise<RequestInfo[]> {
     const requests = await firestoreService.getPendingRequestsTo(userId);
+    if (requests.length === 0) return [];
+
+    const users = await Promise.all(requests.map(req => firestoreService.getUser(req.fromUid)));
     const results: RequestInfo[] = [];
 
-    for (const req of requests) {
-      const user = await firestoreService.getUser(req.fromUid);
+    for (let i = 0; i < requests.length; i++) {
+      const user = users[i];
       if (user) {
+        const req = requests[i];
         results.push({
           requestId: req.id,
           userId: req.fromUid,
@@ -78,11 +86,15 @@ export class FriendsService {
 
   static async getOutgoingRequests(userId: string): Promise<RequestInfo[]> {
     const requests = await firestoreService.getPendingRequestsFrom(userId);
+    if (requests.length === 0) return [];
+
+    const users = await Promise.all(requests.map(req => firestoreService.getUser(req.toUid)));
     const results: RequestInfo[] = [];
 
-    for (const req of requests) {
-      const user = await firestoreService.getUser(req.toUid);
+    for (let i = 0; i < requests.length; i++) {
+      const user = users[i];
       if (user) {
+        const req = requests[i];
         results.push({
           requestId: req.id,
           userId: req.toUid,
@@ -207,13 +219,16 @@ export class FriendsService {
 
   static async getBlockedUsers(userId: string): Promise<BlockedInfo[]> {
     const blockedUids = await firestoreService.getBlockedUsers(userId);
+    if (blockedUids.length === 0) return [];
+
+    const users = await Promise.all(blockedUids.map(uid => firestoreService.getUser(uid)));
     const results: BlockedInfo[] = [];
 
-    for (const uid of blockedUids) {
-      const user = await firestoreService.getUser(uid);
+    for (let i = 0; i < blockedUids.length; i++) {
+      const user = users[i];
       if (user) {
         results.push({
-          userId: uid,
+          userId: blockedUids[i],
           username: user.username,
           displayName: user.displayName,
         });

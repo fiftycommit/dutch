@@ -10,7 +10,9 @@ import 'package:sign_in_button/sign_in_button.dart';
 
 import '../../models/game_settings.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/multiplayer_game_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/social/friends_api_service.dart';
 import '../../widgets/card_rain_background.dart';
 
 // ─── Palette thématique ─────────────────────────────────────────────────────
@@ -192,8 +194,24 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _completeAuthSuccess() async {
+    // Lancer la connexion Socket.IO dès maintenant (pas attendre le lobby)
+    _warmUpMultiplayer();
     final didPop = await Navigator.of(context).maybePop(true);
     if (!didPop && mounted) context.go('/multiplayer');
+  }
+
+  void _warmUpMultiplayer() {
+    try {
+      final auth = context.read<AuthProvider>();
+      final multiProvider = context.read<MultiplayerGameProvider>();
+      final token = auth.token;
+      if (token != null) {
+        multiProvider.setAuthToken(token);
+        unawaited(multiProvider.connectEarly());
+      }
+    } catch (_) {
+      // Best-effort, ne pas bloquer la navigation
+    }
   }
 
   Future<void> _handleBack() async {
@@ -235,6 +253,10 @@ class _LoginScreenState extends State<LoginScreen>
         username: chosenUsername,
         displayName: result.user?.displayName ?? '',
       );
+      // Inscription → pas de prefetch (0 amis/demandes)
+    } else {
+      // Connexion existante → prefetch social data
+      FriendsApiService.prefetchSummary(auth.authService);
     }
 
     await _completeAuthSuccess();
@@ -372,9 +394,12 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final result = await auth.login(id, pw);
     if (!mounted) return;
-    result.success
-        ? await _completeAuthSuccess()
-        : _setError(result.error ?? 'Erreur de connexion');
+    if (result.success) {
+      FriendsApiService.prefetchSummary(auth.authService);
+      await _completeAuthSuccess();
+    } else {
+      _setError(result.error ?? 'Erreur de connexion');
+    }
   }
 
   void _onUsernameChanged(String value) {

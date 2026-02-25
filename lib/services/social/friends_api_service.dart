@@ -108,6 +108,32 @@ class FriendsApiService {
   static bool _lastProbeResult = true;
   static const _probeCacheDuration = Duration(seconds: 5);
 
+  // Prefetch : lancé dès le login, consommé par le lobby
+  static Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>?
+      _prefetchedSummary;
+
+  /// Lance le prefetch des données sociales en arrière-plan.
+  /// Appeler dès que le login réussit.
+  static void prefetchSummary(AuthService authService) {
+    _prefetchedSummary = FriendsApiService(authService).getSummary();
+  }
+
+  /// Consomme le prefetch s'il existe, sinon fait un appel normal.
+  Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
+      getSummaryOrPrefetched() async {
+    final prefetched = _prefetchedSummary;
+    if (prefetched != null) {
+      _prefetchedSummary = null;
+      return prefetched;
+    }
+    return getSummary();
+  }
+
+  /// Invalide le prefetch (ex: après inscription, pas besoin de fetch).
+  static void clearPrefetch() {
+    _prefetchedSummary = null;
+  }
+
   FriendsApiService(this._authService);
 
   Future<Map<String, String>> _headers() async {
@@ -181,6 +207,38 @@ class FriendsApiService {
     } catch (e) {
       _debugResponseIssue('$endpoint: JSON invalide ($e)');
       return null;
+    }
+  }
+
+  /// Appel unique : amis + demandes entrantes/sortantes en un seul round-trip.
+  Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
+      getSummary() async {
+    const empty = (friends: <FriendInfo>[], incoming: <FriendRequestInfo>[], outgoing: <FriendRequestInfo>[]);
+    if (!await _canReachBackend()) return empty;
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/api/friends/summary'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = _decodeJsonResponse(response, endpoint: 'getSummary');
+      if (data == null || data['success'] != true) return empty;
+
+      final friends = (data['friends'] as List)
+          .map((f) => FriendInfo.fromJson(f))
+          .toList();
+      final incoming = (data['incoming'] as List)
+          .map((r) => FriendRequestInfo.fromJson(r))
+          .toList();
+      final outgoing = (data['outgoing'] as List)
+          .map((r) => FriendRequestInfo.fromJson(r))
+          .toList();
+      return (friends: friends, incoming: incoming, outgoing: outgoing);
+    } catch (e) {
+      if (kDebugMode) debugPrint('getSummary error: $e');
+      return empty;
     }
   }
 

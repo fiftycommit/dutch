@@ -30,12 +30,40 @@ router.get('/', async (req, res) => {
   res.json({ success: true, friends });
 });
 
+// GET /api/friends/summary — amis + demandes en un seul appel
+router.get('/summary', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const uid = authReq.user!.uid;
+    const [friends, incoming, outgoing] = await Promise.all([
+      FriendsService.getFriends(uid),
+      FriendsService.getIncomingRequests(uid),
+      FriendsService.getOutgoingRequests(uid),
+    ]);
+    res.json({ success: true, friends, incoming, outgoing });
+  } catch (error) {
+    console.error('friends summary error:', error);
+    if (isFirestoreUnavailable(error)) {
+      res.status(503).json({
+        success: false,
+        errorCode: FIREBASE_UNAVAILABLE_ERROR_CODE,
+        error:
+          'Service social temporairement indisponible (Firebase). Vérifie https://downdetector.com/status/firebase/',
+      });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
 // GET /api/friends/requests
 router.get('/requests', async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const incoming = await FriendsService.getIncomingRequests(authReq.user!.uid);
-    const outgoing = await FriendsService.getOutgoingRequests(authReq.user!.uid);
+    const [incoming, outgoing] = await Promise.all([
+      FriendsService.getIncomingRequests(authReq.user!.uid),
+      FriendsService.getOutgoingRequests(authReq.user!.uid),
+    ]);
     res.json({ success: true, incoming, outgoing });
   } catch (error) {
     console.error('friends requests error:', error);

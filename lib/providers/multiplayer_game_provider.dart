@@ -298,6 +298,9 @@ class MultiplayerGameProvider
     // Les salons sont chargés via la source active serveur (Firestore).
   }
 
+  /// Lancer la connexion Socket.IO en avance (appelé dès le login).
+  Future<void> connectEarly() => _multiplayerService.connect();
+
   Map<String, dynamic>? get _localPresence {
     final cid = _multiplayerService.clientId;
     if (cid != null) {
