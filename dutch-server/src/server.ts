@@ -17,7 +17,7 @@ import authRoutes from './routes/authRoutes';
 import friendsRoutes from './routes/friendsRoutes';
 import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
-import chatKeyRoutes from './routes/chatKeyRoutes';
+import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
@@ -257,6 +257,7 @@ export function startServer() {
   app.use('/api/admin', adminRoutes);
 
   // Routes Chat keys (chiffrement E2E)
+  setChatIo(io);
   app.use('/api/chats', chatKeyRoutes);
 
   // Dashboard admin

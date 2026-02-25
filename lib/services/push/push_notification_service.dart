@@ -131,7 +131,7 @@ class PushNotificationService {
           type: InAppNotificationType.friendRequest,
           title: 'Demande d\'ami',
           body: '$fromUsername veut être ton ami',
-          onTap: () => router?.go('/friends?tab=1'),
+          onTap: () => router?.push('/friends?tab=1'),
         ));
         break;
       case 'friend_accepted':
@@ -140,7 +140,7 @@ class PushNotificationService {
           type: InAppNotificationType.friendAccepted,
           title: 'Ami accepté !',
           body: '$fromUsername est maintenant ton ami',
-          onTap: () => router?.go('/friends'),
+          onTap: () => router?.push('/friends'),
         ));
         break;
       case 'chat_message':
@@ -156,7 +156,7 @@ class PushNotificationService {
           title: title,
           body: body,
           onTap: () {
-            if (senderId != null) router?.go('/friends/chat/$senderId');
+            if (senderId != null) router?.push('/friends/chat/$senderId');
           },
         ));
         break;

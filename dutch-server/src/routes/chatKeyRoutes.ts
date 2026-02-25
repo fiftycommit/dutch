@@ -3,6 +3,14 @@ import { createHmac, randomBytes } from 'crypto';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { firestore } from '../services/FirebaseAdmin';
 import { PushNotificationService } from '../services/PushNotificationService';
+import { onlineUsers } from '../middleware/socketAuthMiddleware';
+import type { Server } from 'socket.io';
+
+let _io: Server | null = null;
+
+export function setChatIo(io: Server) {
+  _io = io;
+}
 
 const router = Router();
 
@@ -94,6 +102,22 @@ router.post('/:chatId/notify', requireAuth, async (req, res) => {
       body: preview || '📩 Nouveau message',
       data: { type: 'chat_message', chatId, senderId },
     });
+
+    // Emit socket event for in-app notification (iOS fallback without APNs)
+    if (_io) {
+      const recipientSockets = onlineUsers.get(recipientId);
+      if (recipientSockets) {
+        for (const socketId of recipientSockets) {
+          _io.to(socketId).emit('chat:private_message', {
+            chatId,
+            senderId,
+            senderName,
+            preview: preview || '📩 Nouveau message',
+          });
+        }
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[chatNotify] Erreur:', err);

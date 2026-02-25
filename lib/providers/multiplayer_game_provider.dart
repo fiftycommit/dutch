@@ -426,6 +426,38 @@ class MultiplayerGameProvider
     _multiplayerService.onRoomInviteReceived = (roomCode, fromDisplayName) {
       _handleAutoJoinFromInvite(roomCode);
     };
+    _multiplayerService.onFriendRequestReceived = (data) {
+      final fromName = data['fromDisplayName'] as String? ??
+          data['fromUsername'] as String? ??
+          'Quelqu\'un';
+      InAppNotificationService.instance.show(InAppNotificationPayload(
+        type: InAppNotificationType.friendRequest,
+        title: 'Demande d\'ami',
+        body: '$fromName veut être ton ami',
+      ));
+    };
+    _multiplayerService.onFriendAccepted = (data) {
+      final name = data['displayName'] as String? ??
+          data['username'] as String? ??
+          'Un ami';
+      InAppNotificationService.instance.show(InAppNotificationPayload(
+        type: InAppNotificationType.friendAccepted,
+        title: 'Ami accepté !',
+        body: '$name est maintenant ton ami',
+      ));
+    };
+    _multiplayerService.onPrivateMessage = (data) {
+      final senderId = data['senderId'] as String?;
+      final currentLoc = AppRouter.currentLocation ?? '';
+      if (senderId != null && currentLoc == '/friends/chat/$senderId') return;
+      final senderName = data['senderName'] as String? ?? 'Message';
+      final preview = data['preview'] as String? ?? '';
+      InAppNotificationService.instance.show(InAppNotificationPayload(
+        type: InAppNotificationType.privateMessage,
+        title: senderName,
+        body: preview,
+      ));
+    };
   }
 
   Future<void> _handleAutoJoinFromInvite(String roomCode) async {

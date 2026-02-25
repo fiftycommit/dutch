@@ -74,6 +74,9 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onTournamentEnded;
   Function(Map<String, dynamic>)? onDuplicateLoginAttempt;
   Function(String roomCode, String fromDisplayName)? onRoomInviteReceived;
+  Function(Map<String, dynamic>)? onFriendRequestReceived;
+  Function(Map<String, dynamic>)? onFriendAccepted;
+  Function(Map<String, dynamic>)? onPrivateMessage;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONNEXION
@@ -532,6 +535,22 @@ class MultiplayerService {
       }
     }
   });
+
+    socket.on('friend:request_received', (data) {
+      if (data is Map) {
+        onFriendRequestReceived?.call(data.cast<String, dynamic>());
+      }
+    });
+    socket.on('friend:accepted', (data) {
+      if (data is Map) {
+        onFriendAccepted?.call(data.cast<String, dynamic>());
+      }
+    });
+    socket.on('chat:private_message', (data) {
+      if (data is Map) {
+        onPrivateMessage?.call(data.cast<String, dynamic>());
+      }
+    });
 
   socket.on('game:spied_card', (data) {
       if (data is Map) {

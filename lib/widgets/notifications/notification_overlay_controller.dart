@@ -64,11 +64,13 @@ class _NotificationOverlayControllerState
               top: 0,
               left: 0,
               right: 0,
-              child: InAppNotificationBanner(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InAppNotificationBanner(
                 key: ValueKey(_current.hashCode),
                 payload: _current!,
                 onDismiss: _onDismiss,
-              ),
+              )),
             ),
         ],
       ),
