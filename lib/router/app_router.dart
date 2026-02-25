@@ -424,7 +424,11 @@ class AppRouter {
                 state: state,
                 child: _DeferredScreen(
                   loader: friends_page.loadLibrary,
-                  builder: () => friends_page.FriendsPage(),
+                  builder: () => friends_page.FriendsPage(
+                    initialTabIndex: int.tryParse(
+                            state.uri.queryParameters['tab'] ?? '') ??
+                        0,
+                  ),
                 ),
               ),
             ),

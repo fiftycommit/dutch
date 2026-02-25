@@ -199,7 +199,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         final sectionSpacing = 8.0 * heightScale;
         final contentSpacing = 12.0 * heightScale;
         final bottomSpacing = 16.0 * heightScale;
-        final maxPlayers = provider.roomSettings?.maxPlayers ?? 4;
+        final maxPlayers = provider.roomSettings?.maxPlayers ?? 6;
         final minPlayers = provider.roomSettings?.minPlayers ?? 2;
         final connectedHumans = _connectedHumans(provider);
         final canStart = provider.isHost &&
@@ -294,15 +294,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
       child: Row(
         children: [
-          // Bouton Quitter/Fermer
+          // Bouton retour (revenir au menu sans quitter la room)
           IconButton(
-            icon: Icon(
-              provider.isHost ? Icons.close : Icons.arrow_back,
-              color: Colors.white,
-            ),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
             iconSize: f(22),
-            tooltip: provider.isHost ? 'Fermer la room' : 'Quitter',
-            onPressed: () => _handleLeaveOrClose(context, provider),
+            tooltip: 'Retour',
+            onPressed: () => context.go('/multiplayer'),
           ),
           SizedBox(width: f(8)),
           Expanded(
@@ -331,6 +328,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               tooltip: 'Paramètres',
               onPressed: () => _showSettingsDialog(context, provider),
             ),
+          // Bouton quitter la room
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            iconSize: f(22),
+            tooltip: 'Quitter la room',
+            onPressed: () => _handleLeaveOrClose(context, provider),
+          ),
           _buildConnectionIndicator(context, provider, colors),
         ],
       ),
@@ -509,10 +513,35 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         }
       }
     } else {
-      // Simplement quitter
-      provider.leaveRoom();
-      if (mounted) {
-        context.go('/multiplayer');
+      // Demander confirmation pour quitter la room
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Quitter la room ?'),
+          content: const Text(
+            'Tu seras retiré de la room. Tu pourras la rejoindre à nouveau avec le code.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: const Text('Quitter'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true && mounted) {
+        provider.leaveRoom();
+        if (mounted) {
+          context.go('/multiplayer');
+        }
       }
     }
   }

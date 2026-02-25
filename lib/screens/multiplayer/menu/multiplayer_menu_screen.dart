@@ -886,7 +886,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     icon: Icons.mark_email_unread_outlined,
                     label: '$pendingCount demandes',
                     onTap: () async {
-                      await context.push('/friends');
+                      await context.push('/friends?tab=1');
                       if (mounted) {
                         await Future.wait<void>(
                             [_loadSocialData(), _loadMyRooms()]);
@@ -918,9 +918,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           _pillButton(
             icon: Icons.mark_email_unread_outlined,
             label: '$pendingCount demandes',
-            onTap: () {
-              unawaited(
-                  _openProfileSpaceWithTab(MultiplayerProfileTab.friends));
+            onTap: () async {
+              await context.push('/friends?tab=1');
+              if (mounted) {
+                await Future.wait<void>(
+                    [_loadSocialData(), _loadMyRooms()]);
+              }
             },
           ),
         ],

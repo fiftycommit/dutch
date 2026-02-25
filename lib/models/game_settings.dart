@@ -65,7 +65,7 @@ class GameSettings {
     this.isPublic = false,
     this.numberOfPlayers = 4,
     this.roomName,
-    this.appTheme = AppTheme.dark,
+    this.appTheme = AppTheme.green,
   });
 
   GameSettings copyWith({
@@ -132,7 +132,7 @@ class GameSettings {
       isPublic: json['isPublic'] ?? false,
       numberOfPlayers: json['numberOfPlayers'] ?? 4,
       roomName: json['roomName'],
-      appTheme: AppTheme.values[json['appTheme'] ?? 2], // default: dark
+      appTheme: AppTheme.values[json['appTheme'] ?? 3], // default: green
     );
   }
 

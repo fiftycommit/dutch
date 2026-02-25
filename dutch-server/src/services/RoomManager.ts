@@ -284,7 +284,7 @@ export class RoomManager {
     const maxPlayers =
       typeof room.settings?.maxPlayers === 'number'
         ? room.settings.maxPlayers
-        : 4;
+        : 6;
 
     // Si on n'est pas spectateur et que c'est plein -> Erreur
     if (!isSpectator && this.activePlayerCount(room) >= maxPlayers) {
@@ -401,7 +401,7 @@ export class RoomManager {
     const maxPlayers =
       typeof room.settings?.maxPlayers === 'number'
         ? room.settings.maxPlayers
-        : 4;
+        : 6;
     const fillBots = options.fillBots ?? (room.settings?.fillBots !== false);
 
     const host = room.players.find((p) => p.id === room.hostPlayerId);
@@ -2107,7 +2107,7 @@ export class RoomManager {
     const minPlayersRaw =
       typeof settings?.minPlayers === 'number' ? settings.minPlayers : 2;
     const maxPlayersRaw =
-      typeof settings?.maxPlayers === 'number' ? settings.maxPlayers : 4;
+      typeof settings?.maxPlayers === 'number' ? settings.maxPlayers : 6;
     let minPlayers = Math.max(2, Math.min(6, minPlayersRaw));
     let maxPlayers = Math.max(2, Math.min(6, maxPlayersRaw));
     if (maxPlayers < minPlayers) {

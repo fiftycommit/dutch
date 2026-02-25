@@ -514,8 +514,8 @@ class _MultiplayerProfileSpaceScreenState
               if (error != null) ...[
                 const SizedBox(height: 10),
                 Text(error!,
-                    style: const TextStyle(
-                        color: Color(0xFFDC2626), fontSize: 12)),
+                    style: TextStyle(
+                        color: MultiplayerColors.of(context).danger, fontSize: 12)),
               ],
             ]),
           ),
@@ -638,8 +638,8 @@ class _MultiplayerProfileSpaceScreenState
               if (error != null) ...[
                 const SizedBox(height: 8),
                 Text(error!,
-                    style: const TextStyle(
-                        color: Color(0xFFDC2626), fontSize: 12)),
+                    style: TextStyle(
+                        color: MultiplayerColors.of(context).danger, fontSize: 12)),
               ],
             ]),
           ),
@@ -711,7 +711,7 @@ class _MultiplayerProfileSpaceScreenState
               child: const Text('Annuler')),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB91C1C)),
+                backgroundColor: MultiplayerColors.of(context).danger),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Délier'),
           ),
@@ -794,8 +794,8 @@ class _MultiplayerProfileSpaceScreenState
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFFFBBF24).withValues(alpha: 0.98),
-            const Color(0xFFF97316).withValues(alpha: 0.98),
+            MultiplayerColors.of(context).primary,
+            MultiplayerColors.of(context).primary.withValues(alpha: 0.8),
           ],
         ),
       ),
@@ -912,8 +912,8 @@ class _InfosTab extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFFFBBF24).withValues(alpha: 0.98),
-                      const Color(0xFFF97316).withValues(alpha: 0.98),
+                      cs.primary,
+                      cs.primary.withValues(alpha: 0.8),
                     ],
                   ),
                 ),
@@ -964,7 +964,7 @@ class _InfosTab extends StatelessWidget {
           const _RowDivider(),
           _InfoRow(
             icon: Icons.alternate_email_rounded,
-            iconColor: const Color(0xFF0EA5E9),
+            iconColor: cs.info,
             label: 'Nom d\'utilisateur',
             value: username.isNotEmpty ? '@$username' : '—',
             onTap: onEditUsername,
@@ -972,7 +972,7 @@ class _InfosTab extends StatelessWidget {
           const _RowDivider(),
           _InfoRow(
             icon: Icons.email_outlined,
-            iconColor: const Color(0xFF10B981),
+            iconColor: cs.success,
             label: 'Mail',
             value: email.isNotEmpty ? email : '—',
             onTap: onEditEmail,
@@ -986,7 +986,7 @@ class _InfosTab extends StatelessWidget {
           // Google provider
           _ProviderRow(
             icon: Icons.g_mobiledata_rounded,
-            iconColor: const Color(0xFFDB4437),
+            iconColor: cs.danger,
             label: 'Google',
             isLinked: linkedProviders.contains('google.com'),
             canUnlink: linkedProviders.length > 1,
@@ -997,7 +997,7 @@ class _InfosTab extends StatelessWidget {
           // Email/password provider
           _ProviderRow(
             icon: Icons.email_outlined,
-            iconColor: const Color(0xFF0EA5E9),
+            iconColor: cs.info,
             label: 'Email / Mot de passe',
             isLinked: linkedProviders.contains('password'),
             canUnlink: linkedProviders.length > 1,
@@ -1204,13 +1204,13 @@ class _ProviderRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                color: MultiplayerColors.of(context).success.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text(
+              child: Text(
                 'Lié',
                 style: TextStyle(
-                    color: Color(0xFF10B981),
+                    color: MultiplayerColors.of(context).success,
                     fontSize: 11,
                     fontWeight: FontWeight.w700),
               ),
@@ -1232,9 +1232,9 @@ class _ProviderRow extends StatelessWidget {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('Ajouter',
+              child: Text('Ajouter',
                   style: TextStyle(
-                      color: Color(0xFF0EA5E9),
+                      color: MultiplayerColors.of(context).info,
                       fontWeight: FontWeight.w700,
                       fontSize: 13)),
             ),
@@ -1298,7 +1298,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
               child: const Text('Annuler')),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB91C1C)),
+                backgroundColor: MultiplayerColors.of(context).danger),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Oui, supprimer'),
           ),
@@ -1334,19 +1334,21 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       children: [
-        Container(
+        Builder(builder: (context) {
+          final cs = MultiplayerColors.of(context);
+          return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFFEF2F2),
+            color: cs.danger.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFCA5A5)),
+            border: Border.all(color: cs.danger.withValues(alpha: 0.4)),
           ),
-          child: const Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.warning_amber_rounded,
-                  color: Color(0xFFDC2626), size: 26),
-              SizedBox(width: 12),
+                  color: cs.danger, size: 26),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,22 +1356,23 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                     Text(
                       'Zone dangereuse',
                       style: TextStyle(
-                        color: Color(0xFFB91C1C),
+                        color: cs.danger,
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       'La suppression est irréversible. Toutes tes données disparaîtront définitivement.',
-                      style: TextStyle(color: Color(0xFFDC2626), fontSize: 13),
+                      style: TextStyle(color: cs.danger, fontSize: 13),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-        ),
+        );
+        }),
         const SizedBox(height: 20),
         _InfoCard(children: [
           Padding(
@@ -1381,8 +1384,8 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                   _needsPwd
                       ? 'Confirme avec ton mot de passe'
                       : 'Confirme la suppression',
-                  style: const TextStyle(
-                    color: Color(0xFF1E293B),
+                  style: TextStyle(
+                    color: MultiplayerColors.of(context).textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -1402,7 +1405,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                         onPressed: () => setState(() => _obscure = !_obscure),
                         icon: Icon(
                           _obscure ? Icons.visibility_off : Icons.visibility,
-                          color: const Color(0xFF94A3B8),
+                          color: MultiplayerColors.of(context).textSecondary,
                           size: 20,
                         ),
                       ),
@@ -1410,16 +1413,16 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                   ),
                 ] else ...[
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Tu seras redirigé vers Google pour confirmer ton identité.',
-                    style: TextStyle(color: Color(0xFF666666), fontSize: 13),
+                    style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 13),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 8),
                     Text(
                       _error!,
-                      style: const TextStyle(
-                          color: Color(0xFFDC2626), fontSize: 12),
+                      style: TextStyle(
+                          color: MultiplayerColors.of(context).danger, fontSize: 12),
                     ),
                   ],
                 ],
@@ -1440,7 +1443,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFB91C1C),
+                      backgroundColor: MultiplayerColors.of(context).danger,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -1496,8 +1499,8 @@ class _FriendsListTab extends StatelessWidget {
             padding: const EdgeInsets.only(left: 4, bottom: 8),
             child: Text(
               '${friends.length} AMI${friends.length > 1 ? 'S' : ''}',
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
+              style: TextStyle(
+                color: cs.textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -1602,7 +1605,7 @@ class _ThemePicker extends StatelessWidget {
           final selected = current == theme;
           // Pour "Vert", la couleur de sélection est verte
           final selectionColor =
-              theme == AppTheme.green ? const Color(0xFF4CAF50) : cs.primary;
+              theme == AppTheme.green ? MultiplayerColors.green.primary : cs.primary;
           return Expanded(
             child: GestureDetector(
               onTap: () => onChanged(theme),
@@ -1688,40 +1691,45 @@ InputDecoration _dlgInput(
 }
 
 Widget _warnBanner(String text) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFFBEB),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFFCD34D)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('⚠️', style: TextStyle(fontSize: 14)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Color(0xFF92400E),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+  return Builder(builder: (context) {
+    final cs = MultiplayerColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.warning.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: cs.textBody,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  });
 }
 
-IconButton _eyeIcon(bool obscure, VoidCallback onTap) {
-  return IconButton(
-    onPressed: onTap,
-    icon: Icon(
-      obscure ? Icons.visibility_off : Icons.visibility,
-      color: const Color(0xFF94A3B8),
-      size: 20,
-    ),
-  );
+Widget _eyeIcon(bool obscure, VoidCallback onTap) {
+  return Builder(builder: (context) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        obscure ? Icons.visibility_off : Icons.visibility,
+        color: MultiplayerColors.of(context).textSecondary,
+        size: 20,
+      ),
+    );
+  });
 }

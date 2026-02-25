@@ -60,10 +60,10 @@ class _CreatePrivateRoomScreenState extends State<CreatePrivateRoomScreen> {
       final playerName = await _resolvePlayerName();
       await provider.createRoom(
         settings: GameSettings(
-          numberOfPlayers: 4,
+          numberOfPlayers: 6,
           isPublic: false,
           minPlayers: 2,
-          maxPlayers: 4,
+          maxPlayers: 6,
         ),
         playerName: playerName,
       );

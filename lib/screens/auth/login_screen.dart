@@ -2,20 +2,92 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sign_in_button/sign_in_button.dart';
 
+import '../../models/game_settings.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../widgets/card_rain_background.dart';
 
-// ─── Palette CSS ──────────────────────────────────────────────────────────────
-const _kRed = Color(0xFFFF4B2B);
-const _kRed2 = Color(0xFFFF416C);
-const _kBg = Color(0xFFF6F5F7);
-const _kInput = Color(0xFFEEEEEE);
-const _kText = Color(0xFF333333);
-const _kSpan = Color(0xFF888888);
+// ─── Palette thématique ─────────────────────────────────────────────────────
+class _AuthColors {
+  final Color accent1;
+  final Color accent2;
+  final Color bg;
+  final Color formBg;
+  final Color input;
+  final Color text;
+  final Color textSecondary;
+  final Color dialogBg;
+  final bool isGreen;
+
+  const _AuthColors({
+    required this.accent1,
+    required this.accent2,
+    required this.bg,
+    required this.formBg,
+    required this.input,
+    required this.text,
+    required this.textSecondary,
+    required this.dialogBg,
+    this.isGreen = false,
+  });
+
+  static const _light = _AuthColors(
+    accent1: Color(0xFFFF4B2B),
+    accent2: Color(0xFFFF416C),
+    bg: Color(0xFFF6F5F7),
+    formBg: Colors.white,
+    input: Color(0xFFEEEEEE),
+    text: Color(0xFF333333),
+    textSecondary: Color(0xFF888888),
+    dialogBg: Colors.white,
+  );
+
+  static const _dark = _AuthColors(
+    accent1: Color(0xFFFF4B2B),
+    accent2: Color(0xFFFF416C),
+    bg: Color(0xFF1C1C1E),
+    formBg: Color(0xFF1C1C1E),
+    input: Color(0xFF2C2C2E),
+    text: Colors.white,
+    textSecondary: Color(0xFFAEAEB2),
+    dialogBg: Color(0xFF2C2C2E),
+  );
+
+  static const _green = _AuthColors(
+    accent1: Color(0xFF4CAF50),
+    accent2: Color(0xFF66BB6A),
+    bg: Color(0xFF0D1F15),
+    formBg: Color(0xFF0D1F15),
+    input: Color(0xFF1A3A28),
+    text: Colors.white,
+    textSecondary: Color(0xFFA8C5A8),
+    dialogBg: Color(0xFF1A3A28),
+    isGreen: true,
+  );
+
+  static _AuthColors of(BuildContext context) {
+    final theme = context.watch<SettingsProvider>().appTheme;
+    switch (theme) {
+      case AppTheme.dark:
+        return _dark;
+      case AppTheme.green:
+        return _green;
+      case AppTheme.light:
+      case AppTheme.system:
+        final brightness = MediaQuery.platformBrightnessOf(context);
+        if (theme == AppTheme.system && brightness == Brightness.dark) {
+          return _dark;
+        }
+        return _light;
+    }
+  }
+}
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
 
@@ -35,6 +107,15 @@ class _LoginScreenState extends State<LoginScreen>
   final _identifierCtrl = TextEditingController();
   final _loginPwCtrl = TextEditingController();
   bool _obscureLoginPw = true;
+
+  // FocusNodes pour la navigation Tab
+  final _loginIdentifierFocus = FocusNode();
+  final _loginPasswordFocus = FocusNode();
+  final _regUsernameFocus = FocusNode();
+  final _regPseudoFocus = FocusNode();
+  final _regEmailFocus = FocusNode();
+  final _regPasswordFocus = FocusNode();
+  final _regConfirmFocus = FocusNode();
 
   final _usernameCtrl = TextEditingController();
   final _pseudoCtrl = TextEditingController();
@@ -73,6 +154,13 @@ class _LoginScreenState extends State<LoginScreen>
     _emailCtrl.dispose();
     _regPwCtrl.dispose();
     _confirmPwCtrl.dispose();
+    _loginIdentifierFocus.dispose();
+    _loginPasswordFocus.dispose();
+    _regUsernameFocus.dispose();
+    _regPseudoFocus.dispose();
+    _regEmailFocus.dispose();
+    _regPasswordFocus.dispose();
+    _regConfirmFocus.dispose();
     _shakeResetTimer?.cancel();
     _usernameCheckTimer?.cancel();
     super.dispose();
@@ -132,6 +220,7 @@ class _LoginScreenState extends State<LoginScreen>
       final chosenUsername = await _showUsernamePickerDialog(
         suggested: result.suggestedUsername ?? '',
         displayName: result.user?.displayName ?? '',
+        colors: _AuthColors.of(context),
       );
       if (!mounted) return;
       if (chosenUsername == null) {
@@ -155,6 +244,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<String?> _showUsernamePickerDialog({
     required String suggested,
     required String displayName,
+    required _AuthColors colors,
   }) async {
     final ctrl = TextEditingController(text: suggested);
     String? error;
@@ -194,39 +284,44 @@ class _LoginScreenState extends State<LoginScreen>
           }
 
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: colors.dialogBg,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Choisir un nom d\'utilisateur',
+            title: Text('Choisir un nom d\'utilisateur',
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: Color(0xFF333333))),
+                    color: colors.text)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Bienvenue, $displayName !',
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF666666))),
+                    style: TextStyle(
+                        fontSize: 13, color: colors.textSecondary)),
                 const SizedBox(height: 4),
-                const Text('Vous pouvez garder ce nom ou en choisir un autre.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
+                Text('Vous pouvez garder ce nom ou en choisir un autre.',
+                    style: TextStyle(fontSize: 12, color: colors.textSecondary)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: ctrl,
                   autofocus: true,
                   onSubmitted: (_) => validate(),
+                  style: TextStyle(color: colors.text),
                   decoration: InputDecoration(
                     hintText: 'nom_utilisateur',
+                    hintStyle: TextStyle(color: colors.textSecondary),
                     prefixText: '@',
+                    prefixStyle: TextStyle(color: colors.text),
                     errorText: error,
+                    filled: true,
+                    fillColor: colors.input,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide:
-                          const BorderSide(color: Color(0xFFFF4B2B), width: 2),
+                          BorderSide(color: colors.accent1, width: 2),
                     ),
                   ),
                   onChanged: (_) => setState(() => error = null),
@@ -236,13 +331,13 @@ class _LoginScreenState extends State<LoginScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(null),
-                child: const Text('Annuler',
-                    style: TextStyle(color: Color(0xFF999999))),
+                child: Text('Annuler',
+                    style: TextStyle(color: colors.textSecondary)),
               ),
               ElevatedButton(
                 onPressed: checking ? null : validate,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF4B2B),
+                  backgroundColor: colors.accent1,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
@@ -345,9 +440,12 @@ class _LoginScreenState extends State<LoginScreen>
         .read<AuthProvider>()
         .register(username, pseudo, email, pw);
     if (!mounted) return;
-    result.success
-        ? await _completeAuthSuccess()
-        : _setError(result.error ?? "Erreur d'inscription");
+    if (result.success) {
+      TextInput.finishAutofillContext();
+      await _completeAuthSuccess();
+    } else {
+      _setError(result.error ?? "Erreur d'inscription");
+    }
   }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
@@ -357,18 +455,26 @@ class _LoginScreenState extends State<LoginScreen>
     final media = MediaQuery.of(context);
     final isWide = media.size.width >= 700;
 
+    final colors = _AuthColors.of(context);
+
     return Theme(
       data: Theme.of(context).copyWith(
         textTheme: GoogleFonts.montserratTextTheme(Theme.of(context).textTheme),
       ),
       child: Scaffold(
-        backgroundColor: _kBg,
+        backgroundColor: colors.bg,
         resizeToAvoidBottomInset: true,
         body: GestureDetector(
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           behavior: HitTestBehavior.translucent,
-          child: SafeArea(
-              child: isWide ? _buildDesktop(media) : _buildMobile(media)),
+          child: Stack(
+            children: [
+              if (colors.isGreen) const Positioned.fill(child: CardRainBackground()),
+              SafeArea(
+                child: isWide ? _buildDesktop(media, colors) : _buildMobile(media, colors),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -376,7 +482,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ─── Desktop ───────────────────────────────────────────────────────────────
 
-  Widget _buildDesktop(MediaQueryData media) {
+  Widget _buildDesktop(MediaQueryData media, _AuthColors colors) {
     final auth = context.watch<AuthProvider>();
     // .container { width: 768px; max-width: 100%; min-height: 480px }
     final w = math.min(media.size.width - 32.0, 768.0);
@@ -384,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Stack(
       children: [
-        Positioned(top: 8, left: 12, child: _BackBtn(onTap: _handleBack)),
+        Positioned(top: 8, left: 12, child: _BackBtn(onTap: _handleBack, colors: colors)),
         Center(
           child: AnimatedBuilder(
             animation: _anim,
@@ -396,7 +502,7 @@ class _LoginScreenState extends State<LoginScreen>
                 width: w,
                 height: h,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colors.formBg,
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: const [
                     BoxShadow(
@@ -423,6 +529,7 @@ class _LoginScreenState extends State<LoginScreen>
                         child: IgnorePointer(
                           ignoring: t > 0.5,
                           child: _FormSignIn(
+                            colors: colors,
                             identifierCtrl: _identifierCtrl,
                             passwordCtrl: _loginPwCtrl,
                             obscurePassword: _obscureLoginPw,
@@ -435,6 +542,8 @@ class _LoginScreenState extends State<LoginScreen>
                             onForgotPassword: () =>
                                 context.push('/forgot-password'),
                             onGoogleTap: _loginWithGoogle,
+                            identifierFocus: _loginIdentifierFocus,
+                            passwordFocus: _loginPasswordFocus,
                           ),
                         ),
                       ),
@@ -452,6 +561,7 @@ class _LoginScreenState extends State<LoginScreen>
                           child: Opacity(
                             opacity: (t * 2 - 1).clamp(0.0, 1.0),
                             child: _FormSignUp(
+                              colors: colors,
                               usernameCtrl: _usernameCtrl,
                               pseudoCtrl: _pseudoCtrl,
                               emailCtrl: _emailCtrl,
@@ -471,6 +581,11 @@ class _LoginScreenState extends State<LoginScreen>
                               isLoading: auth.isLoading,
                               onRegister: _register,
                               onGoogleTap: _loginWithGoogle,
+                              usernameFocus: _regUsernameFocus,
+                              pseudoFocus: _regPseudoFocus,
+                              emailFocus: _regEmailFocus,
+                              passwordFocus: _regPasswordFocus,
+                              confirmFocus: _regConfirmFocus,
                             ),
                           ),
                         ),
@@ -485,11 +600,11 @@ class _LoginScreenState extends State<LoginScreen>
                         left: half * (1 - t),
                         width: half,
                         child: Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
-                              colors: [_kRed, _kRed2],
+                              colors: [colors.accent1, colors.accent2],
                             ),
                           ),
                           // Les deux panneaux overlay superposés
@@ -550,7 +665,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ─── Mobile ────────────────────────────────────────────────────────────────
 
-  Widget _buildMobile(MediaQueryData media) {
+  Widget _buildMobile(MediaQueryData media, _AuthColors colors) {
     final auth = context.watch<AuthProvider>();
 
     return AnimatedBuilder(
@@ -561,18 +676,18 @@ class _LoginScreenState extends State<LoginScreen>
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
-                  colors: [_kRed, _kRed2],
+                  colors: [colors.accent1, colors.accent2],
                 ),
               ),
               child: Column(
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: _BackBtn(onTap: _handleBack, light: true),
+                    child: _BackBtn(onTap: _handleBack, light: true, colors: colors),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -603,11 +718,13 @@ class _LoginScreenState extends State<LoginScreen>
                       _GhostBtn(
                           label: 'SE CONNECTER',
                           active: !showSignUp,
+                          colors: colors,
                           onTap: _switchToSignIn),
                       const SizedBox(width: 10),
                       _GhostBtn(
                           label: "S'INSCRIRE",
                           active: showSignUp,
+                          colors: colors,
                           onTap: _switchToSignUp),
                     ],
                   ),
@@ -616,7 +733,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             Expanded(
               child: Container(
-                color: Colors.white,
+                color: colors.formBg,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 280),
                   transitionBuilder: (child, anim) =>
@@ -624,6 +741,7 @@ class _LoginScreenState extends State<LoginScreen>
                   child: showSignUp
                       ? _FormSignUp(
                           key: const ValueKey('signup'),
+                          colors: colors,
                           usernameCtrl: _usernameCtrl,
                           pseudoCtrl: _pseudoCtrl,
                           emailCtrl: _emailCtrl,
@@ -645,9 +763,15 @@ class _LoginScreenState extends State<LoginScreen>
                           mobileMode: true,
                           onSwitchToLogin: _switchToSignIn,
                           onGoogleTap: _loginWithGoogle,
+                          usernameFocus: _regUsernameFocus,
+                          pseudoFocus: _regPseudoFocus,
+                          emailFocus: _regEmailFocus,
+                          passwordFocus: _regPasswordFocus,
+                          confirmFocus: _regConfirmFocus,
                         )
                       : _FormSignIn(
                           key: const ValueKey('signin'),
+                          colors: colors,
                           identifierCtrl: _identifierCtrl,
                           passwordCtrl: _loginPwCtrl,
                           obscurePassword: _obscureLoginPw,
@@ -662,6 +786,8 @@ class _LoginScreenState extends State<LoginScreen>
                           mobileMode: true,
                           onSwitchToSignUp: _switchToSignUp,
                           onGoogleTap: _loginWithGoogle,
+                          identifierFocus: _loginIdentifierFocus,
+                          passwordFocus: _loginPasswordFocus,
                         ),
                 ),
               ),
@@ -729,6 +855,7 @@ class _OverlayPanel extends StatelessWidget {
 //        padding:0 50px; height:100%; text-align:center }
 
 class _FormSignIn extends StatelessWidget {
+  final _AuthColors colors;
   final TextEditingController identifierCtrl;
   final TextEditingController passwordCtrl;
   final bool obscurePassword;
@@ -741,9 +868,12 @@ class _FormSignIn extends StatelessWidget {
   final bool mobileMode;
   final VoidCallback? onSwitchToSignUp;
   final VoidCallback? onGoogleTap;
+  final FocusNode? identifierFocus;
+  final FocusNode? passwordFocus;
 
   const _FormSignIn({
     super.key,
+    required this.colors,
     required this.identifierCtrl,
     required this.passwordCtrl,
     required this.obscurePassword,
@@ -756,6 +886,8 @@ class _FormSignIn extends StatelessWidget {
     this.mobileMode = false,
     this.onSwitchToSignUp,
     this.onGoogleTap,
+    this.identifierFocus,
+    this.passwordFocus,
   });
 
   @override
@@ -763,8 +895,7 @@ class _FormSignIn extends StatelessWidget {
     return _ShakeWrapper(
       shake: shakeForm,
       child: Container(
-        color: Colors.white,
-        // form { padding: 0 50px; height: 100% } + centré verticalement
+        color: colors.formBg,
         padding: const EdgeInsets.symmetric(horizontal: 50),
         child: Center(
           child: SingleChildScrollView(
@@ -772,33 +903,42 @@ class _FormSignIn extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // h1
-                const Text('Connexion',
+                Text('Connexion',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: _kText,
+                        color: colors.text,
                         fontWeight: FontWeight.bold,
                         fontSize: 24)),
-                // .social-container { margin: 20px 0 }
                 _SocialRow(onGoogleTap: onGoogleTap),
-                // span { font-size: 12px }
-                const Text('ou utilisez votre compte',
+                Text('ou utilisez votre compte',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: _kText)),
-                AutofillGroup(
+                    style: TextStyle(fontSize: 12, color: colors.text)),
+                FocusTraversalGroup(
+                  policy: OrderedTraversalPolicy(),
+                  child: AutofillGroup(
                   child: Column(
                     children: [
-                      _CssInput(
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(0),
+                        child: _CssInput(
+                          colors: colors,
                           controller: identifierCtrl,
-                          hint: 'E-mail',
-                          keyboardType: TextInputType.emailAddress,
+                          focusNode: identifierFocus,
+                          hint: 'E-mail ou nom d\'utilisateur',
+                          keyboardType: TextInputType.text,
                           action: TextInputAction.next,
+                          onSubmitted: (_) => passwordFocus?.requestFocus(),
                           autofillHints: const [
                             AutofillHints.username,
                             AutofillHints.email
                           ]),
-                      _CssInput(
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(1),
+                        child: _CssInput(
+                          colors: colors,
                           controller: passwordCtrl,
+                          focusNode: passwordFocus,
                           hint: 'Mot de passe',
                           obscure: obscurePassword,
                           action: TextInputAction.done,
@@ -812,20 +952,21 @@ class _FormSignIn extends StatelessWidget {
                                       ? Icons.visibility_off
                                       : Icons.visibility,
                                   size: 18,
-                                  color: _kSpan))),
+                                  color: colors.textSecondary))),
+                      ),
                     ],
                   ),
                 ),
-                if (errorMessage != null) _ErrorBox(message: errorMessage!),
-                // a { color:#333; font-size:14px; margin:15px 0 }
+                ),
+                if (errorMessage != null) _ErrorBox(message: errorMessage!, colors: colors),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   child: GestureDetector(
                     onTap: onForgotPassword,
-                    child: const Text('Mot de passe oublié ?',
+                    child: Text('Mot de passe oublié ?',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: _kText,
+                            color: colors.text,
                             fontSize: 14,
                             decoration: TextDecoration.none)),
                   ),
@@ -833,6 +974,7 @@ class _FormSignIn extends StatelessWidget {
                 _CssButton(
                     label: 'SE CONNECTER',
                     ghost: false,
+                    colors: colors,
                     isLoading: isLoading,
                     onTap: onLogin),
                 if (mobileMode && onSwitchToSignUp != null)
@@ -840,9 +982,9 @@ class _FormSignIn extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 16),
                     child: GestureDetector(
                       onTap: onSwitchToSignUp,
-                      child: const Text("Pas de compte ? S'inscrire",
+                      child: Text("Pas de compte ? S'inscrire",
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _kRed, fontSize: 13)),
+                          style: TextStyle(color: colors.accent1, fontSize: 13)),
                     ),
                   ),
               ],
@@ -857,6 +999,7 @@ class _FormSignIn extends StatelessWidget {
 // ─── Formulaire Inscription ────────────────────────────────────────────────────
 
 class _FormSignUp extends StatelessWidget {
+  final _AuthColors colors;
   final TextEditingController usernameCtrl;
   final TextEditingController pseudoCtrl;
   final TextEditingController emailCtrl;
@@ -876,9 +1019,15 @@ class _FormSignUp extends StatelessWidget {
   final bool mobileMode;
   final VoidCallback? onSwitchToLogin;
   final VoidCallback? onGoogleTap;
+  final FocusNode? usernameFocus;
+  final FocusNode? pseudoFocus;
+  final FocusNode? emailFocus;
+  final FocusNode? passwordFocus;
+  final FocusNode? confirmFocus;
 
   const _FormSignUp({
     super.key,
+    required this.colors,
     required this.usernameCtrl,
     required this.pseudoCtrl,
     required this.emailCtrl,
@@ -898,6 +1047,11 @@ class _FormSignUp extends StatelessWidget {
     this.mobileMode = false,
     this.onSwitchToLogin,
     this.onGoogleTap,
+    this.usernameFocus,
+    this.pseudoFocus,
+    this.emailFocus,
+    this.passwordFocus,
+    this.confirmFocus,
   });
 
   @override
@@ -905,7 +1059,7 @@ class _FormSignUp extends StatelessWidget {
     return _ShakeWrapper(
       shake: shakeForm,
       child: Container(
-        color: Colors.white,
+        color: colors.formBg,
         padding: const EdgeInsets.symmetric(horizontal: 50),
         child: Center(
           child: SingleChildScrollView(
@@ -913,57 +1067,82 @@ class _FormSignUp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text('Créer un compte',
+                Text('Créer un compte',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: _kText,
+                        color: colors.text,
                         fontWeight: FontWeight.bold,
                         fontSize: 22)),
                 _SocialRow(onGoogleTap: onGoogleTap),
-                const Text("ou utilisez votre e-mail pour vous inscrire",
+                Text("ou utilisez votre e-mail pour vous inscrire",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: _kText)),
-                AutofillGroup(
+                    style: TextStyle(fontSize: 12, color: colors.text)),
+                FocusTraversalGroup(
+                  policy: OrderedTraversalPolicy(),
+                  child: AutofillGroup(
                   child: Column(
                     children: [
-                      _CssInput(
-                        controller: usernameCtrl,
-                        hint: "Nom d'utilisateur",
-                        action: TextInputAction.next,
-                        autofillHints: const [AutofillHints.newUsername],
-                        onChanged: onUsernameChanged,
-                        trailing: checkingUsername
-                            ? const Padding(
-                                padding: EdgeInsets.all(10),
-                                child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: _kRed)))
-                            : usernameAvailable == true
-                                ? const Icon(Icons.check_circle,
-                                    color: Color(0xFF22C55E), size: 18)
-                                : usernameAvailable == false
-                                    ? const Icon(Icons.cancel,
-                                        color: Color(0xFFF43F5E), size: 18)
-                                    : null,
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(0),
+                        child: _CssInput(
+                          colors: colors,
+                          controller: usernameCtrl,
+                          focusNode: usernameFocus,
+                          hint: "Nom d'utilisateur",
+                          action: TextInputAction.next,
+                          autofillHints: const [AutofillHints.newUsername],
+                          onChanged: onUsernameChanged,
+                          onSubmitted: (_) => pseudoFocus?.requestFocus(),
+                          trailing: checkingUsername
+                              ? Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: colors.accent1)))
+                              : usernameAvailable == true
+                                  ? const Icon(Icons.check_circle,
+                                      color: Color(0xFF22C55E), size: 18)
+                                  : usernameAvailable == false
+                                      ? const Icon(Icons.cancel,
+                                          color: Color(0xFFF43F5E), size: 18)
+                                      : null,
+                        ),
                       ),
-                      _CssInput(
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(1),
+                        child: _CssInput(
+                          colors: colors,
                           controller: pseudoCtrl,
+                          focusNode: pseudoFocus,
                           hint: 'Pseudo',
-                          action: TextInputAction.next),
-                      _CssInput(
+                          action: TextInputAction.next,
+                          onSubmitted: (_) => emailFocus?.requestFocus()),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(2),
+                        child: _CssInput(
+                          colors: colors,
                           controller: emailCtrl,
+                          focusNode: emailFocus,
                           hint: 'E-mail',
                           keyboardType: TextInputType.emailAddress,
                           action: TextInputAction.next,
+                          onSubmitted: (_) => passwordFocus?.requestFocus(),
                           autofillHints: const [AutofillHints.email]),
-                      _CssInput(
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(3),
+                        child: _CssInput(
+                          colors: colors,
                           controller: passwordCtrl,
+                          focusNode: passwordFocus,
                           hint: 'Mot de passe',
                           obscure: obscurePassword,
                           action: TextInputAction.next,
                           autofillHints: const [AutofillHints.newPassword],
+                          onSubmitted: (_) => confirmFocus?.requestFocus(),
                           trailing: IconButton(
                               splashRadius: 16,
                               onPressed: onTogglePassword,
@@ -972,9 +1151,14 @@ class _FormSignUp extends StatelessWidget {
                                       ? Icons.visibility_off
                                       : Icons.visibility,
                                   size: 18,
-                                  color: _kSpan))),
-                      _CssInput(
+                                  color: colors.textSecondary))),
+                      ),
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(4),
+                        child: _CssInput(
+                          colors: colors,
                           controller: confirmCtrl,
+                          focusNode: confirmFocus,
                           hint: 'Répéter le mot de passe',
                           obscure: obscureConfirm,
                           action: TextInputAction.done,
@@ -987,15 +1171,18 @@ class _FormSignUp extends StatelessWidget {
                                       ? Icons.visibility_off
                                       : Icons.visibility,
                                   size: 18,
-                                  color: _kSpan))),
+                                  color: colors.textSecondary))),
+                      ),
                     ],
                   ),
                 ),
-                if (errorMessage != null) _ErrorBox(message: errorMessage!),
+                ),
+                if (errorMessage != null) _ErrorBox(message: errorMessage!, colors: colors),
                 const SizedBox(height: 16),
                 _CssButton(
                     label: "S'INSCRIRE",
                     ghost: false,
+                    colors: colors,
                     isLoading: isLoading,
                     onTap: onRegister),
                 if (mobileMode && onSwitchToLogin != null)
@@ -1003,9 +1190,9 @@ class _FormSignUp extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 16),
                     child: GestureDetector(
                       onTap: onSwitchToLogin,
-                      child: const Text('Déjà un compte ? Se connecter',
+                      child: Text('Déjà un compte ? Se connecter',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _kRed, fontSize: 13)),
+                          style: TextStyle(color: colors.accent1, fontSize: 13)),
                     ),
                   ),
               ],
@@ -1021,6 +1208,7 @@ class _FormSignUp extends StatelessWidget {
 
 /// input { background:#eee; border:none; padding:12px 15px; margin:8px 0; width:100% }
 class _CssInput extends StatelessWidget {
+  final _AuthColors colors;
   final TextEditingController controller;
   final String hint;
   final TextInputType? keyboardType;
@@ -1030,8 +1218,10 @@ class _CssInput extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
   final Widget? trailing;
+  final FocusNode? focusNode;
 
   const _CssInput({
+    required this.colors,
     required this.controller,
     required this.hint,
     this.keyboardType,
@@ -1041,14 +1231,16 @@ class _CssInput extends StatelessWidget {
     this.onSubmitted,
     this.onChanged,
     this.trailing,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8), // margin: 8px 0
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         keyboardType: keyboardType,
         textInputAction: action,
         obscureText: obscure,
@@ -1056,23 +1248,22 @@ class _CssInput extends StatelessWidget {
         onSubmitted: onSubmitted,
         onChanged: onChanged,
         textAlign: TextAlign.left,
-        style: const TextStyle(color: _kText, fontSize: 14),
+        style: TextStyle(color: colors.text, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: _kSpan, fontSize: 14),
+          hintStyle: TextStyle(color: colors.textSecondary, fontSize: 14),
           suffixIcon: trailing,
           filled: true,
-          fillColor: _kInput, // #eee
-          // input { border: none } — pas de border-radius dans le CSS original
+          fillColor: colors.input,
           contentPadding:
               const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
           border: const OutlineInputBorder(
               borderRadius: BorderRadius.zero, borderSide: BorderSide.none),
           enabledBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.zero, borderSide: BorderSide.none),
-          focusedBorder: const OutlineInputBorder(
+          focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.zero,
-              borderSide: BorderSide(color: _kRed, width: 1.5)),
+              borderSide: BorderSide(color: colors.accent1, width: 1.5)),
         ),
       ),
     );
@@ -1089,11 +1280,13 @@ class _CssButton extends StatefulWidget {
   final bool ghost;
   final bool isLoading;
   final VoidCallback? onTap;
+  final _AuthColors? colors;
   const _CssButton(
       {required this.label,
       required this.ghost,
       this.isLoading = false,
-      this.onTap});
+      this.onTap,
+      this.colors});
 
   @override
   State<_CssButton> createState() => _CssButtonState();
@@ -1115,13 +1308,15 @@ class _CssButtonState extends State<_CssButton> {
         scale: _pressed ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 80),
         curve: Curves.easeIn,
-        child: Container(
+        child: Builder(builder: (context) {
+          final accent = widget.colors?.accent1 ?? const Color(0xFFFF4B2B);
+          return Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 45),
           decoration: BoxDecoration(
-            color: widget.ghost ? Colors.transparent : _kRed,
+            color: widget.ghost ? Colors.transparent : accent,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: widget.ghost ? Colors.white : _kRed, width: 1),
+                color: widget.ghost ? Colors.white : accent, width: 1),
           ),
           child: widget.isLoading
               ? const SizedBox(
@@ -1138,7 +1333,8 @@ class _CssButtonState extends State<_CssButton> {
                     letterSpacing: 1,
                   ),
                 ),
-        ),
+        );
+        }),
       ),
     );
   }
@@ -1170,9 +1366,10 @@ class _SocialRow extends StatelessWidget {
 class _GhostBtn extends StatelessWidget {
   final String label;
   final bool active;
+  final _AuthColors colors;
   final VoidCallback onTap;
   const _GhostBtn(
-      {required this.label, required this.active, required this.onTap});
+      {required this.label, required this.active, required this.colors, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1190,7 +1387,7 @@ class _GhostBtn extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: active ? _kRed : Colors.white,
+            color: active ? colors.accent1 : Colors.white,
             fontSize: 12,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
@@ -1204,7 +1401,8 @@ class _GhostBtn extends StatelessWidget {
 /// Message d'erreur
 class _ErrorBox extends StatelessWidget {
   final String message;
-  const _ErrorBox({required this.message});
+  final _AuthColors colors;
+  const _ErrorBox({required this.message, required this.colors});
 
   @override
   Widget build(BuildContext context) {
@@ -1213,13 +1411,13 @@ class _ErrorBox extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0x1AFF4B2B),
-          border: Border.all(color: _kRed, width: 1),
+          color: colors.accent1.withValues(alpha: 0.1),
+          border: Border.all(color: colors.accent1, width: 1),
         ),
         child: Text(message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: _kRed, fontSize: 12, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: colors.accent1, fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -1250,11 +1448,12 @@ class _ShakeWrapper extends StatelessWidget {
 class _BackBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool light;
-  const _BackBtn({required this.onTap, this.light = false});
+  final _AuthColors? colors;
+  const _BackBtn({required this.onTap, this.light = false, this.colors});
 
   @override
   Widget build(BuildContext context) {
-    final color = light ? Colors.white : _kText;
+    final color = light ? Colors.white : (colors?.text ?? const Color(0xFF333333));
     return GestureDetector(
       onTap: onTap,
       child: Container(

@@ -10,7 +10,9 @@ import '../../utils/ui_constants.dart';
 import '../../services/social/friends_api_service.dart';
 
 class FriendsPage extends StatefulWidget {
-  const FriendsPage({super.key});
+  const FriendsPage({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   State<FriendsPage> createState() => _FriendsPageState();
@@ -30,7 +32,7 @@ class _FriendsPageState extends State<FriendsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     final authProvider = context.read<AuthProvider>();
     _friendsApi = FriendsApiService(authProvider.authService);
     unawaited(_loadData());
