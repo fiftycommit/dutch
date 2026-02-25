@@ -18,8 +18,7 @@ class _NotificationOverlayControllerState
     extends State<NotificationOverlayController> {
   StreamSubscription<InAppNotificationPayload>? _sub;
   final _queue = Queue<InAppNotificationPayload>();
-  OverlayEntry? _currentEntry;
-  bool _showing = false;
+  InAppNotificationPayload? _current;
 
   @override
   void initState() {
@@ -30,51 +29,49 @@ class _NotificationOverlayControllerState
   void _onNotification(InAppNotificationPayload payload) {
     if (_queue.length >= 3) _queue.removeFirst();
     _queue.add(payload);
-    _showNext();
+    if (_current == null) _showNext();
   }
 
   void _showNext() {
-    if (_showing || _queue.isEmpty) return;
-    _showing = true;
-
-    final payload = _queue.removeFirst();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final overlay = Overlay.of(context, rootOverlay: true);
-      _currentEntry = OverlayEntry(
-        builder: (_) => Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: Material(
-            color: Colors.transparent,
-            child: InAppNotificationBanner(
-              payload: payload,
-              onDismiss: _onDismiss,
-            ),
-          ),
-        ),
-      );
-      overlay.insert(_currentEntry!);
-    });
+    if (_queue.isEmpty) return;
+    setState(() => _current = _queue.removeFirst());
   }
 
   void _onDismiss() {
-    _currentEntry?.remove();
-    _currentEntry = null;
-    _showing = false;
+    setState(() => _current = null);
     if (_queue.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds: 200), _showNext);
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) _showNext();
+      });
     }
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    _currentEntry?.remove();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        children: [
+          widget.child,
+          if (_current != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: InAppNotificationBanner(
+                key: ValueKey(_current.hashCode),
+                payload: _current!,
+                onDismiss: _onDismiss,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

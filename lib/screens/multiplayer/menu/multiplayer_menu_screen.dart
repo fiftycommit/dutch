@@ -857,7 +857,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
   }
 
   Widget _buildHeader({required bool compact}) {
-    final pendingCount = _incomingRequests.length + _outgoingRequests.length;
+    final pendingCount = _incomingRequests.length;
     final incomingCount = _incomingRequests.length;
     if (compact) {
       return Column(
@@ -882,7 +882,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   const SizedBox(width: 8),
                   _pillButton(
                     icon: Icons.mark_email_unread_outlined,
-                    label: '$pendingCount demandes',
+                    label: '$pendingCount demande${pendingCount > 1 ? 's' : ''}',
                     onTap: () async {
                       await context.push('/friends?tab=1');
                       if (mounted) {
@@ -915,7 +915,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           const SizedBox(width: 8),
           _pillButton(
             icon: Icons.mark_email_unread_outlined,
-            label: '$pendingCount demandes',
+            label: '$pendingCount demande${pendingCount > 1 ? 's' : ''}',
             onTap: () async {
               await context.push('/friends?tab=1');
               if (mounted) {
