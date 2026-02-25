@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:go_router/go_router.dart';
 import '../auth/auth_service.dart';
+import '../notifications/in_app_notification_service.dart';
 
 class PushNotificationService {
   static final PushNotificationService _instance = PushNotificationService._();
@@ -18,6 +20,9 @@ class PushNotificationService {
   /// Callbacks pour la navigation depuis les notifications
   Function(String roomCode)? onRoomInviteTapped;
   Function()? onFriendRequestTapped;
+
+  /// Router for in-app navigation from notification taps
+  GoRouter? router;
 
   String? get fcmToken => _fcmToken;
   bool get isInitialized => _initialized;
@@ -111,6 +116,50 @@ class PushNotificationService {
     if (kDebugMode) {
       debugPrint(
           'Push foreground: ${message.notification?.title} - ${message.data}');
+    }
+
+    final data = message.data;
+    final type = data['type'] as String?;
+    final notification = message.notification;
+    final currentLocation =
+        router?.routerDelegate.currentConfiguration.uri.path ?? '';
+
+    switch (type) {
+      case 'friend_request':
+        final fromUsername = data['fromUsername'] as String? ?? 'Quelqu\'un';
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.friendRequest,
+          title: 'Demande d\'ami',
+          body: '$fromUsername veut être ton ami',
+          onTap: () => router?.go('/friends?tab=1'),
+        ));
+        break;
+      case 'friend_accepted':
+        final fromUsername = data['fromUsername'] as String? ?? 'Un ami';
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.friendAccepted,
+          title: 'Ami accepté !',
+          body: '$fromUsername est maintenant ton ami',
+          onTap: () => router?.go('/friends'),
+        ));
+        break;
+      case 'chat_message':
+        final senderId = data['senderId'] as String?;
+        if (senderId != null &&
+            currentLocation == '/friends/chat/$senderId') {
+          return;
+        }
+        final title = notification?.title ?? 'Message';
+        final body = notification?.body ?? '';
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.privateMessage,
+          title: title,
+          body: body,
+          onTap: () {
+            if (senderId != null) router?.go('/friends/chat/$senderId');
+          },
+        ));
+        break;
     }
   }
 

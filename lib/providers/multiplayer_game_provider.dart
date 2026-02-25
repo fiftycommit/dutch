@@ -12,6 +12,8 @@ import 'managers/multiplayer/multiplayer_notification_manager.dart';
 import 'managers/multiplayer/multiplayer_timer_manager.dart';
 import 'managers/multiplayer/multiplayer_chat_manager.dart';
 import 'managers/multiplayer/multiplayer_connection_manager.dart';
+import '../services/notifications/in_app_notification_service.dart';
+import '../router/app_router.dart';
 
 enum GameEventType {
   playerJoined,
@@ -535,6 +537,18 @@ class MultiplayerGameProvider
     notifyListeners();
     _eventController.add(GameEvent(
         GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
+
+    final currentLoc = AppRouter.currentLocation;
+    if (currentLoc == null ||
+        (!currentLoc.startsWith('/lobby') &&
+            !currentLoc.startsWith('/multiplayer/game'))) {
+      final playerName = player['name'] as String? ?? 'Un joueur';
+      InAppNotificationService.instance.show(InAppNotificationPayload(
+        type: InAppNotificationType.playerJoined,
+        title: 'Joueur rejoint',
+        body: '$playerName a rejoint le salon',
+      ));
+    }
   }
 
   void _handlePresenceUpdate(Map<String, dynamic> data) {

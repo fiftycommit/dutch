@@ -18,6 +18,7 @@ import 'providers/auth_provider.dart';
 import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
 import 'services/push/push_notification_service.dart';
+import 'widgets/notifications/notification_overlay_controller.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -232,6 +233,8 @@ class _DutchGameAppState extends State<DutchGameApp> {
           // Créer le router une seule fois pour éviter de reset la navigation
           _router ??= AppRouter.createRouter(context);
 
+          PushNotificationService().router = _router;
+
           return MaterialApp.router(
             routerConfig: _router!,
             title: 'Dutch Card Game',
@@ -241,6 +244,8 @@ class _DutchGameAppState extends State<DutchGameApp> {
             darkTheme: appTheme == AppTheme.green
                 ? _buildGreenTheme()
                 : _buildDarkTheme(),
+            builder: (context, child) =>
+                NotificationOverlayController(child: child ?? const SizedBox()),
           );
         },
       ),

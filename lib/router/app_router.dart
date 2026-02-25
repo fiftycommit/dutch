@@ -106,6 +106,7 @@ class _DeferredScreen extends StatelessWidget {
 /// Configuration du routeur pour l'application
 /// Permet d'avoir des URLs propres sur le web (ex: /room/ABC123)
 class AppRouter {
+  static String? currentLocation;
   static final GlobalKey<NavigatorState> _rootNavigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -539,12 +540,13 @@ class AppRouter {
       ),
     );
 
-    if (kIsWeb) {
-      router.routerDelegate.addListener(() {
-        final location = router.routerDelegate.currentConfiguration.uri.path;
+    router.routerDelegate.addListener(() {
+      final location = router.routerDelegate.currentConfiguration.uri.path;
+      currentLocation = location;
+      if (kIsWeb) {
         WebSplashHelper.setSafeAreaBackground(_safeBgForLocation(location));
-      });
-    }
+      }
+    });
 
     return router;
   }
