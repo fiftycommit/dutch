@@ -27,6 +27,9 @@ class InAppNotificationService {
   final _controller = StreamController<InAppNotificationPayload>.broadcast();
   GoRouter? router;
 
+  /// ID de l'ami dont le chat est actuellement ouvert (set par ChatPage).
+  String? activeChatFriendId;
+
   Stream<InAppNotificationPayload> get stream => _controller.stream;
 
   void show(InAppNotificationPayload payload) {

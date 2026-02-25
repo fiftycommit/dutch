@@ -9,6 +9,8 @@ import '../providers/multiplayer_game_provider.dart';
 import '../utils/ui_constants.dart';
 import '../screens/web_splash_helper.dart'
     if (dart.library.io) '../screens/web_splash_helper_stub.dart';
+import '../services/web/web_session_storage.dart'
+    if (dart.library.io) '../services/web/web_session_storage_stub.dart';
 
 // ── Eager imports (critical path: splash → menu → solo game) ──
 import '../screens/splash_screen.dart';
@@ -110,6 +112,55 @@ class AppRouter {
   static final GlobalKey<NavigatorState> _rootNavigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
+  /// Sur le web, indique si le splash a déjà été exécuté.
+  static bool _webSplashDone = false;
+
+  /// URL que l'utilisateur a demandée avant le splash (deep link).
+  static String? _pendingDeepLink;
+
+  /// Appelé par le SplashScreen une fois l'init terminée.
+  static void markSplashDone() => _webSplashDone = true;
+
+  /// Route à restaurer après un rejoin réussi (reload web).
+  static String? _pendingRestoreRoute;
+
+  /// Retourne le deep link en attente (et le consomme).
+  static String? consumePendingDeepLink() {
+    final link = _pendingDeepLink;
+    _pendingDeepLink = null;
+    return link;
+  }
+
+  /// Consomme la route à restaurer après rejoin.
+  static String? consumePendingRestoreRoute() {
+    final route = _pendingRestoreRoute;
+    _pendingRestoreRoute = null;
+    return route;
+  }
+
+  /// Routes qui nécessitent un état en mémoire (provider/socket) et ne
+  /// peuvent pas survivre à un reload web sans session restore.
+  static const _statefulPrefixes = [
+    '/lobby',
+    '/solo/game',
+    '/solo/memorization',
+    '/solo/results',
+    '/solo/dutch-reveal',
+    '/multiplayer/game',
+    '/multiplayer/memorization',
+    '/multiplayer/results',
+    '/multiplayer/dutch-reveal',
+  ];
+
+  /// Prefixes multiplayer que l'on peut restaurer via sessionStorage.
+  static const _restorablePrefixes = [
+    '/lobby',
+    '/multiplayer/game',
+    '/multiplayer/memorization',
+    '/multiplayer/results',
+    '/multiplayer/dutch-reveal',
+  ];
+
   /// Mapping route → CSS background pour les safe areas iOS
   static const _defaultSafeBg = 'linear-gradient(to bottom, #0d2818, #1a472a)';
   static const _routeSafeBg = <String, String>{
@@ -138,6 +189,44 @@ class AppRouter {
       navigatorKey: _rootNavigatorKey,
       initialLocation: '/splash',
       debugLogDiagnostics: true,
+      redirect: !kIsWeb
+          ? null
+          : (context, state) {
+              final path = state.matchedLocation;
+
+              // Déjà passé par le splash → sauvegarder la route courante.
+              if (_webSplashDone) {
+                final isRestorable = _restorablePrefixes
+                    .any((prefix) => path.startsWith(prefix));
+                WebSessionStorage.saveRoute(isRestorable ? path : null);
+                return null;
+              }
+
+              // On est sur le splash → le laisser tourner.
+              if (path == '/splash') return null;
+
+              final needsState = _statefulPrefixes
+                  .any((prefix) => path.startsWith(prefix));
+
+              if (needsState) {
+                // Tenter la restauration via sessionStorage.
+                final isRestorable = _restorablePrefixes
+                    .any((prefix) => path.startsWith(prefix));
+                final savedRoom = isRestorable
+                    ? WebSessionStorage.getRoomCode()
+                    : null;
+                if (savedRoom != null) {
+                  _pendingDeepLink = '/room/$savedRoom';
+                  _pendingRestoreRoute = WebSessionStorage.getRoute() ?? path;
+                } else {
+                  _pendingDeepLink = null;
+                }
+              } else {
+                _pendingDeepLink = state.uri.toString();
+              }
+
+              return '/splash';
+            },
       routes: [
         // ShellRoute pour envelopper toutes les pages avec SelectionArea
         // (nécessite d'être à l'intérieur du Navigator pour avoir accès à l'Overlay)
@@ -583,9 +672,12 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
         listen: false,
       );
 
-      // Si déjà dans cette room, aller directement au lobby
+      // Si déjà dans cette room, aller directement à la route restaurée
       if (provider.roomCode == widget.roomCode) {
-        if (mounted) context.go('/lobby');
+        if (mounted) {
+          final restore = AppRouter.consumePendingRestoreRoute();
+          context.go(restore ?? '/lobby');
+        }
         return;
       }
 
@@ -594,7 +686,10 @@ class _RoomJoinHandlerState extends State<_RoomJoinHandler> {
         playerName: widget.playerName,
       );
 
-      if (mounted) context.go('/lobby');
+      if (mounted) {
+        final restore = AppRouter.consumePendingRestoreRoute();
+        context.go(restore ?? '/lobby');
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

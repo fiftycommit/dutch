@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/ui_constants.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import '../router/app_router.dart';
 import '../utils/screen_utils.dart';
 import '../services/ui/svg_precache_service.dart';
 import 'web_splash_helper.dart'
@@ -109,8 +110,14 @@ class _SplashScreenState extends State<SplashScreen>
   void _navigateHomeOnce() {
     if (_didNavigate || !mounted) return;
     _didNavigate = true;
+    AppRouter.markSplashDone();
+    if (kIsWeb) {
+      WebSplashHelper.hideSplash();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.go('/');
+      if (!mounted) return;
+      final deepLink = AppRouter.consumePendingDeepLink();
+      context.go(deepLink ?? '/');
     });
   }
 

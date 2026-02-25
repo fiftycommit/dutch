@@ -14,6 +14,8 @@ import 'managers/multiplayer/multiplayer_chat_manager.dart';
 import 'managers/multiplayer/multiplayer_connection_manager.dart';
 import '../services/notifications/in_app_notification_service.dart';
 import '../router/app_router.dart';
+import '../services/web/web_session_storage.dart'
+    if (dart.library.io) '../services/web/web_session_storage_stub.dart';
 
 enum GameEventType {
   playerJoined,
@@ -454,8 +456,10 @@ class MultiplayerGameProvider
     };
     _multiplayerService.onPrivateMessage = (data) {
       final senderId = data['senderId'] as String?;
-      final currentLoc = AppRouter.currentLocation ?? '';
-      if (senderId != null && currentLoc == '/friends/chat/$senderId') return;
+      if (senderId != null &&
+          senderId == InAppNotificationService.instance.activeChatFriendId) {
+        return;
+      }
       final senderName = data['senderName'] as String? ?? 'Message';
       final preview = data['preview'] as String? ?? '';
       InAppNotificationService.instance.show(InAppNotificationPayload(
@@ -682,6 +686,7 @@ class MultiplayerGameProvider
           }
         ];
         _multiplayerService.setFocused(true);
+        WebSessionStorage.saveSession(_roomCode!);
       }
       _connectionManager.setConnecting(false);
     } catch (e) {
@@ -768,6 +773,7 @@ class MultiplayerGameProvider
         ];
       }
       _multiplayerService.setFocused(true);
+      WebSessionStorage.saveSession(roomCode);
       _connectionManager.setConnecting(false);
     } catch (e) {
       _notificationManager.setError(e.toString());
@@ -1100,6 +1106,7 @@ class MultiplayerGameProvider
   }
 
   void _resetRoomState() {
+    WebSessionStorage.clearSession();
     _roomCode = null;
     _hostPlayerId = null;
     _gameState = null;

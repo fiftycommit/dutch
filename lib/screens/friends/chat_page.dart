@@ -15,6 +15,7 @@ import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../services/notifications/in_app_notification_service.dart';
 import '../../services/social/private_chat_service.dart';
 import '../../utils/ui_constants.dart';
 
@@ -74,6 +75,7 @@ class _ChatPageState extends State<ChatPage> {
     _chatService.markAsRead(_chatId, _myUserId);
     _scrollController.addListener(_onScroll);
     _controller.addListener(_onTextChanged);
+    InAppNotificationService.instance.activeChatFriendId = widget.friendUserId;
   }
 
   void _listenMeta() {
@@ -304,6 +306,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    InAppNotificationService.instance.activeChatFriendId = null;
     _metaSub?.cancel();
     _typingDebounce?.cancel();
     _scrollController.removeListener(_onScroll);
