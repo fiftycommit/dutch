@@ -19,6 +19,7 @@ import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
 import 'services/push/push_notification_service.dart';
 import 'widgets/notifications/notification_overlay_controller.dart';
+import 'services/notifications/in_app_notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -234,6 +235,7 @@ class _DutchGameAppState extends State<DutchGameApp> {
           _router ??= AppRouter.createRouter(context);
 
           PushNotificationService().router = _router;
+          InAppNotificationService.instance.router = _router;
 
           return MaterialApp.router(
             routerConfig: _router!,

@@ -434,6 +434,7 @@ class MultiplayerGameProvider
         type: InAppNotificationType.friendRequest,
         title: 'Demande d\'ami',
         body: '$fromName veut être ton ami',
+        route: '/friends?tab=1',
       ));
     };
     _multiplayerService.onFriendAccepted = (data) {
@@ -444,6 +445,7 @@ class MultiplayerGameProvider
         type: InAppNotificationType.friendAccepted,
         title: 'Ami accepté !',
         body: '$name est maintenant ton ami',
+        route: '/friends',
       ));
     };
     _multiplayerService.onPrivateMessage = (data) {
@@ -456,6 +458,7 @@ class MultiplayerGameProvider
         type: InAppNotificationType.privateMessage,
         title: senderName,
         body: preview,
+        route: senderId != null ? '/friends/chat/$senderId' : null,
       ));
     };
   }
