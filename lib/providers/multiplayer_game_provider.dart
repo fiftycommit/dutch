@@ -427,6 +427,8 @@ class MultiplayerGameProvider
       _handleAutoJoinFromInvite(roomCode);
     };
     _multiplayerService.onFriendRequestReceived = (data) {
+      final currentLoc = AppRouter.currentLocation ?? '';
+      if (currentLoc.startsWith('/friends')) return;
       final fromName = data['fromDisplayName'] as String? ??
           data['fromUsername'] as String? ??
           'Quelqu\'un';
@@ -438,6 +440,8 @@ class MultiplayerGameProvider
       ));
     };
     _multiplayerService.onFriendAccepted = (data) {
+      final currentLoc = AppRouter.currentLocation ?? '';
+      if (currentLoc.startsWith('/friends')) return;
       final name = data['displayName'] as String? ??
           data['username'] as String? ??
           'Un ami';
@@ -570,19 +574,43 @@ class MultiplayerGameProvider
       _playersInLobby.add(player);
     }
     notifyListeners();
-    _eventController.add(GameEvent(
-        GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
 
-    final currentLoc = AppRouter.currentLocation;
-    if (currentLoc == null ||
-        (!currentLoc.startsWith('/lobby') &&
-            !currentLoc.startsWith('/multiplayer/game'))) {
-      final playerName = player['name'] as String? ?? 'Un joueur';
-      InAppNotificationService.instance.show(InAppNotificationPayload(
-        type: InAppNotificationType.playerJoined,
-        title: 'Joueur rejoint',
-        body: '$playerName a rejoint le salon',
-      ));
+    final isMe =
+        player['id'] == playerId || player['clientId'] == this.clientId;
+
+    if (isMe) {
+      final hostInfo = _playersInLobby
+          .where((p) => p['id'] == _hostPlayerId)
+          .firstOrNull;
+      final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';
+      _eventController.add(GameEvent(
+          GameEventType.playerJoined, '$hostName vous a ajouté à la partie'));
+
+      final currentLoc = AppRouter.currentLocation;
+      if (currentLoc == null ||
+          (!currentLoc.startsWith('/lobby') &&
+              !currentLoc.startsWith('/multiplayer/game'))) {
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.playerJoined,
+          title: 'Invitation',
+          body: '$hostName vous a ajouté au salon',
+        ));
+      }
+    } else {
+      _eventController.add(GameEvent(
+          GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
+
+      final currentLoc = AppRouter.currentLocation;
+      if (currentLoc == null ||
+          (!currentLoc.startsWith('/lobby') &&
+              !currentLoc.startsWith('/multiplayer/game'))) {
+        final playerName = player['name'] as String? ?? 'Un joueur';
+        InAppNotificationService.instance.show(InAppNotificationPayload(
+          type: InAppNotificationType.playerJoined,
+          title: 'Joueur rejoint',
+          body: '$playerName a rejoint le salon',
+        ));
+      }
     }
   }
 
