@@ -582,32 +582,31 @@ class MultiplayerGameProvider
     final isMe =
         player['id'] == playerId || player['clientId'] == this.clientId;
 
-    if (isMe) {
-      final hostInfo = _playersInLobby
-          .where((p) => p['id'] == _hostPlayerId)
-          .firstOrNull;
-      final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';
-      _eventController.add(GameEvent(
-          GameEventType.playerJoined, '$hostName vous a ajouté à la partie'));
+    final inGameContext = _isInRoomScreen();
 
-      final currentLoc = AppRouter.currentLocation;
-      if (currentLoc == null ||
-          (!currentLoc.startsWith('/lobby') &&
-              !currentLoc.startsWith('/multiplayer/game'))) {
-        InAppNotificationService.instance.show(InAppNotificationPayload(
-          type: InAppNotificationType.playerJoined,
-          title: 'Invitation',
-          body: '$hostName vous a ajouté au salon',
-        ));
+    if (isMe) {
+      // Si c'est moi l'hôte, pas de notif (je me suis ajouté moi-même)
+      if (!_isHost) {
+        final hostInfo = _playersInLobby
+            .where((p) => p['id'] == _hostPlayerId)
+            .firstOrNull;
+        final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';
+        _eventController.add(GameEvent(
+            GameEventType.playerJoined, '$hostName vous a ajouté à la partie'));
+
+        if (!inGameContext) {
+          InAppNotificationService.instance.show(InAppNotificationPayload(
+            type: InAppNotificationType.playerJoined,
+            title: 'Invitation',
+            body: '$hostName vous a ajouté au salon',
+          ));
+        }
       }
     } else {
       _eventController.add(GameEvent(
           GameEventType.playerJoined, "${player['name']} a rejoint la partie"));
 
-      final currentLoc = AppRouter.currentLocation;
-      if (currentLoc == null ||
-          (!currentLoc.startsWith('/lobby') &&
-              !currentLoc.startsWith('/multiplayer/game'))) {
+      if (!inGameContext) {
         final playerName = player['name'] as String? ?? 'Un joueur';
         InAppNotificationService.instance.show(InAppNotificationPayload(
           type: InAppNotificationType.playerJoined,
@@ -686,8 +685,7 @@ class MultiplayerGameProvider
           }
         ];
         _multiplayerService.setFocused(true);
-        debugPrint('[WebRestore] saveSession(createRoom) roomCode=$_roomCode');
-        WebSessionStorage.saveSession(_roomCode!);
+WebSessionStorage.saveSession(_roomCode!);
       }
       _connectionManager.setConnecting(false);
     } catch (e) {
@@ -774,8 +772,7 @@ class MultiplayerGameProvider
         ];
       }
       _multiplayerService.setFocused(true);
-      debugPrint('[WebRestore] saveSession(joinRoom) roomCode=$roomCode');
-      WebSessionStorage.saveSession(roomCode);
+WebSessionStorage.saveSession(roomCode);
       _connectionManager.setConnecting(false);
     } catch (e) {
       _notificationManager.setError(e.toString());
@@ -1105,6 +1102,19 @@ class MultiplayerGameProvider
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!isConnected || _roomCode == null) return;
     _multiplayerService.setFocused(state == AppLifecycleState.resumed);
+  }
+
+  /// Vérifie si l'utilisateur est déjà dans un écran lié au salon
+  /// (lobby, partie, rejoin...) — dans ce cas, pas besoin de notif in-app.
+  static bool _isInRoomScreen() {
+    final loc = AppRouter.currentLocation;
+    if (loc == null) return false;
+    return loc.startsWith('/lobby') ||
+        loc.startsWith('/multiplayer/game') ||
+        loc.startsWith('/multiplayer/memorization') ||
+        loc.startsWith('/multiplayer/results') ||
+        loc.startsWith('/multiplayer/dutch-reveal') ||
+        loc.startsWith('/room/');
   }
 
   void _resetRoomState() {

@@ -207,7 +207,7 @@ class AppRouter {
                     ? WebSessionStorage.getRoomCode()
                     : null;
                 final savedRoute = WebSessionStorage.getRoute();
-                debugPrint('[WebRestore] path=$path needsState=$needsState isRestorable=$isRestorable savedRoom=$savedRoom savedRoute=$savedRoute');
+
                 if (savedRoom != null) {
                   // Skip le splash, rejoindre directement.
                   final targetRoute = savedRoute ?? path;

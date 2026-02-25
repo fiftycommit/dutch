@@ -147,6 +147,14 @@
 
 <body>
   <!-- Native HTML splash (visible before Flutter loads) -->
+  <!-- Cacher immédiatement si on a une session à restaurer (reload en jeu) -->
+  <script>
+    try {
+      if (sessionStorage.getItem('dutch_room_code')) {
+        document.write('<style>#splash{display:none!important}</style>');
+      }
+    } catch(_) {}
+  </script>
   <div id="splash">
     <div id="splash-title">DUTCH</div>
     <div id="splash-subtitle">Jeu de Mémoire et Stratégie</div>
