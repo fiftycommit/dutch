@@ -118,6 +118,7 @@ class _GameScreenState extends State<GameScreen>
                   gameState: gameState,
                   isProcessing: gameProvider.isProcessing,
                   shakingCardIndices: gameProvider.shakingCardIndices.toList(),
+                  isPaused: gameProvider.isPaused,
                   callbacks: GameTableCallbacks.fromController(
                     context: context,
                     controller: gameProvider,

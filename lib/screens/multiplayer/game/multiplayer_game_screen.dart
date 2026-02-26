@@ -154,6 +154,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
             swapPartnerName: data['swapPartnerName'],
             receivedCardPosition: data['receivedCardPosition'],
             autoCloseSeconds: 15,
+            onTimeout: () => provider.triggerPowerTimeoutKick(),
           );
         }
       });
@@ -169,6 +170,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
             context,
             data['byPlayerName'] ?? 'Un joueur',
             autoCloseSeconds: 15,
+            onTimeout: () => provider.triggerPowerTimeoutKick(),
           );
         }
       });
@@ -185,6 +187,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
             data['byPlayerName'] ?? 'Un joueur',
             data['cardIndex'] ?? 0,
             autoCloseSeconds: 15,
+            onTimeout: () => provider.triggerPowerTimeoutKick(),
           );
         }
       });
@@ -437,6 +440,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       turnDuration: gameState.turnTimeoutMs,
                       reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
                     ),
+                    isPaused: gameProvider
+                        .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency
                   ),
 
                   // Room Code and Tournament Info Overlay

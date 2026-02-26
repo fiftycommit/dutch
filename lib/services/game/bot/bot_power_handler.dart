@@ -1574,7 +1574,7 @@ class BotPowerHandler {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir. ($reason)");
+    // gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir. ($reason)");
 
     // Log
     GameLoggerService.instance.logPowerSkip(

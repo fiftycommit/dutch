@@ -66,7 +66,8 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onSwapNotification;
   Function(Map<String, dynamic>)? onJokerNotification;
   Function(Map<String, dynamic>)? onSpyNotification;
-  Function(String pausedByName, String pausedByPlayerId, int pauseDeadline)? onGamePaused;
+  Function(String pausedByName, String pausedByPlayerId, int pauseDeadline)?
+      onGamePaused;
   Function(String)? onGameResumed;
   Function(String pausedByName, int secondsRemaining)? onPauseWarning;
   Function(Map<String, dynamic>)? onGameAllReady;
@@ -111,6 +112,15 @@ class MultiplayerService {
   void disconnect() {
     leaveRoom();
     _connectionHandler.disconnect();
+  }
+
+  void sendPresenceTimeoutKick(bool isForeground) {
+    if (_currentRoomCode == null || playerId == null) return;
+    socket?.emit('presence:timeout_kick', {
+      'roomCode': _currentRoomCode,
+      'playerId': playerId,
+      'isForeground': isForeground,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -437,6 +447,7 @@ class MultiplayerService {
       onTimeout: () => false,
     );
   }
+
   void confirmPresence() => _actionsEmitter.confirmPresence();
   void markReady() => _actionsEmitter.markReady();
   void cancelGame() => _actionsEmitter.cancelGame();
@@ -549,14 +560,14 @@ class MultiplayerService {
     });
 
     socket.on('room:invite', (data) {
-    if (data is Map) {
-      final roomCode = data['roomCode'] as String?;
-      final fromDisplayName = data['fromDisplayName'] as String? ?? 'Un ami';
-      if (roomCode != null) {
-        onRoomInviteReceived?.call(roomCode.toUpperCase(), fromDisplayName);
+      if (data is Map) {
+        final roomCode = data['roomCode'] as String?;
+        final fromDisplayName = data['fromDisplayName'] as String? ?? 'Un ami';
+        if (roomCode != null) {
+          onRoomInviteReceived?.call(roomCode.toUpperCase(), fromDisplayName);
+        }
       }
-    }
-  });
+    });
 
     socket.on('friend:request_received', (data) {
       if (data is Map) {
@@ -580,7 +591,7 @@ class MultiplayerService {
       }
     });
 
-  socket.on('game:pause_warning', (data) {
+    socket.on('game:pause_warning', (data) {
       if (data is Map) {
         final pausedBy = data['pausedBy'] as String? ?? 'Inconnu';
         final secondsRemaining = data['secondsRemaining'] as int? ?? 0;
@@ -588,7 +599,7 @@ class MultiplayerService {
       }
     });
 
-  socket.on('game:spied_card', (data) {
+    socket.on('game:spied_card', (data) {
       if (data is Map) {
         try {
           final cardJson = data['card'] as Map<String, dynamic>?;

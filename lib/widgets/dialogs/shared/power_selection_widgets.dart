@@ -115,6 +115,8 @@ class PowerSelectionWidgets {
     required String Function(Player) getPlayerLabel,
     required String Function(Player) getCardLabel,
     required DialogMetrics metrics,
+    int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     final spacing = metrics.space(8);
     final sectionSpacing = metrics.space(16);
@@ -190,12 +192,12 @@ class PowerSelectionWidgets {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                TextButton(
+                PowerDialogWidgets.tickingSkipButton(
+                  labelPrefix: "ANNULER",
                   onPressed: onCancel,
-                  child: Text("ANNULER",
-                      style: TextStyle(
-                          color: AppColors.textDisabled,
-                          fontSize: metrics.font(14))),
+                  metrics: metrics,
+                  autoCloseSeconds: autoCloseSeconds,
+                  onTimeout: onTimeout,
                 ),
                 ElevatedButton(
                   onPressed: onConfirm,
@@ -227,13 +229,17 @@ class PowerSelectionWidgets {
     required VoidCallback onCancel,
     required DialogMetrics metrics,
     bool fullWidthButton = false,
+    int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     final gapS = metrics.space(8);
     final gapM = metrics.space(16);
     final iconSize = metrics.size(40);
     final titleSize = metrics.font(20);
     final bodySize = metrics.font(14);
-    final buttonSize = metrics.font(16);
+    final buttonSize = (fullWidthButton || buttonText.contains('\n'))
+        ? metrics.font(14)
+        : metrics.font(16);
 
     return SingleChildScrollView(
       child: SizedBox(
@@ -262,7 +268,7 @@ class PowerSelectionWidgets {
             SizedBox(height: gapM),
             SizedBox(
               width: fullWidthButton ? metrics.contentWidth : null,
-              height: fullWidthButton ? metrics.space(56) : null,
+              height: fullWidthButton ? metrics.space(64) : null,
               child: ElevatedButton(
                 onPressed: onConfirm,
                 style: ElevatedButton.styleFrom(
@@ -288,13 +294,12 @@ class PowerSelectionWidgets {
               ),
             ),
             SizedBox(height: gapM),
-            TextButton(
+            PowerDialogWidgets.tickingSkipButton(
+              labelPrefix: "ANNULER",
               onPressed: onCancel,
-              child: Text(
-                "ANNULER",
-                style: TextStyle(
-                    color: AppColors.textDisabled, fontSize: metrics.font(14)),
-              ),
+              metrics: metrics,
+              autoCloseSeconds: autoCloseSeconds,
+              onTimeout: onTimeout,
             ),
           ],
         ),
@@ -314,6 +319,8 @@ class PowerSelectionWidgets {
     required String Function(Player) getLabel,
     required bool Function(Player) isMe,
     required DialogMetrics metrics,
+    int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     final gapS = metrics.space(8);
     final gapM = metrics.space(16);
@@ -350,13 +357,12 @@ class PowerSelectionWidgets {
           metrics: metrics,
         ),
         SizedBox(height: gapM),
-        TextButton(
+        PowerDialogWidgets.tickingSkipButton(
+          labelPrefix: "ANNULER",
           onPressed: onCancel,
-          child: Text(
-            "ANNULER",
-            style: TextStyle(
-                color: AppColors.textDisabled, fontSize: metrics.font(14)),
-          ),
+          metrics: metrics,
+          autoCloseSeconds: autoCloseSeconds,
+          onTimeout: onTimeout,
         ),
       ],
     );

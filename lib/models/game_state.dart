@@ -41,6 +41,8 @@ class GameState {
   bool get isWaitingForSpecialPower => turnState.isWaitingForSpecialPower;
   set isWaitingForSpecialPower(bool v) =>
       turnState.isWaitingForSpecialPower = v;
+  int? get specialPowerStartTime => turnState.specialPowerStartTime;
+  set specialPowerStartTime(int? v) => turnState.specialPowerStartTime = v;
   PlayingCard? get specialCardToActivate => turnState.specialCardToActivate;
   set specialCardToActivate(PlayingCard? v) =>
       turnState.specialCardToActivate = v;

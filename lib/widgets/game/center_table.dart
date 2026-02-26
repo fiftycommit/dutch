@@ -24,6 +24,7 @@ class CenterTable extends StatefulWidget {
   final PlayingCard? discardCardOverride;
   final GlobalKey? drawnCardKey;
   final bool showDeckAndDiscard;
+  final bool isPaused;
 
   const CenterTable({
     super.key,
@@ -42,6 +43,7 @@ class CenterTable extends StatefulWidget {
     this.discardCardOverride,
     this.drawnCardKey,
     this.showDeckAndDiscard = true,
+    this.isPaused = false,
   });
 
   @override
@@ -107,6 +109,14 @@ class _CenterTableState extends State<CenterTable>
 
     final total = widget.reactionTimeTotalMs;
     final serverRemaining = widget.gameState.reactionTimeRemaining;
+
+    // Si le jeu est en pause, on gèle l'animation et on met à jour le temps de référence
+    // pour que lors de la reprise, on ne soustraie pas le temps passé en pause.
+    if (widget.isPaused) {
+      _lastServerUpdate = DateTime.now();
+      _lastServerRemaining = serverRemaining;
+      return;
+    }
 
     // Détecter un changement significatif (pas juste le décompte normal)
     // Un saut de plus de 500ms indique un reset ou une nouvelle phase

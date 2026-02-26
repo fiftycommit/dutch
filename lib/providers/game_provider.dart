@@ -602,6 +602,11 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void startReactionPhase() {
     if (_gameState == null || _isPaused) return;
+
+    if (_gameState!.specialPowerStartTime != null) {
+      _gameState!.specialPowerStartTime = null; // consume it
+    }
+
     _timerManager.startReactionPhase(
         _gameState!, _currentReactionTimeMs, _isPaused);
     _simulateBotReaction();

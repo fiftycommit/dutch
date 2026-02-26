@@ -704,6 +704,7 @@ class GameLogic {
     if (powerCards.contains(card.value)) {
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
+      gameState.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
     }
   }
 

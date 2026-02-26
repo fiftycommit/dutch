@@ -1,6 +1,7 @@
 import { PlayingCard, createFullDeck, cardMatches } from '../models/Card';
 import { Player } from '../models/Player';
 import { GameState, GamePhase, addToHistory, getCurrentPlayer, nextPlayer as nextPlayerUtil } from '../models/GameState';
+import { HistoryFormatter } from '../utils/HistoryFormatter';
 
 export class GameLogic {
   private static random(): number {
@@ -42,9 +43,9 @@ export class GameLogic {
       const randomIndex = Math.floor(this.random() * gameState.players.length);
       gameState.currentPlayerIndex = randomIndex;
       const starterName = gameState.players[randomIndex].isHuman
-        ? 'Vous commencez'
-        : `${gameState.players[randomIndex].name} commence`;
-      addToHistory(gameState, `Tirage au sort : ${starterName} !`);
+        ? 'Vous'
+        : gameState.players[randomIndex].name;
+      addToHistory(gameState, HistoryFormatter.formatStartingPlayer(starterName));
     }
   }
 
@@ -66,7 +67,7 @@ export class GameLogic {
         human.knownCards[index] = true;
       }
     }
-    addToHistory(gameState, 'Vous avez mémorisé vos cartes.');
+    addToHistory(gameState, HistoryFormatter.formatInitialMemorization());
   }
 
   static drawCard(gameState: GameState): void {
@@ -76,7 +77,7 @@ export class GameLogic {
 
     if (gameState.deck.length > 0) {
       gameState.drawnCard = gameState.deck.pop()!;
-      addToHistory(gameState, `${getCurrentPlayer(gameState).name} pioche.`);
+      addToHistory(gameState, HistoryFormatter.formatDrawCard(getCurrentPlayer(gameState).name));
     } else {
       this.endGame(gameState);
     }
@@ -88,7 +89,7 @@ export class GameLogic {
     const card = gameState.drawnCard;
     gameState.drawnCard = null;
     gameState.discardPile.push(card);
-    addToHistory(gameState, `${getCurrentPlayer(gameState).name} défausse sa pioche.`);
+    addToHistory(gameState, HistoryFormatter.formatDiscardDrawn(getCurrentPlayer(gameState).name, card));
 
     this.checkSpecialPower(gameState, card);
 
@@ -97,9 +98,10 @@ export class GameLogic {
     }
   }
 
-  private static startReactionPhase(gameState: GameState): void {
+  private static startReactionPhase(gameState: GameState, delayMs: number = 0): void {
     gameState.phase = GamePhase.reaction;
-    gameState.reactionStartTime = new Date();
+    // Si on a un délai (ex: suite à un pouvoir spécial), on démarre le timestamp de réaction dans le futur
+    gameState.reactionStartTime = new Date(Date.now() + delayMs);
   }
 
   static replaceCard(gameState: GameState, cardIndex: number): void {
@@ -119,7 +121,7 @@ export class GameLogic {
     gameState.drawnCard = null;
 
     gameState.discardPile.push(oldCard);
-    addToHistory(gameState, `${player.name} échange une carte.`);
+    addToHistory(gameState, HistoryFormatter.formatReplaceDrawn(player.name, oldCard));
 
     this.checkSpecialPower(gameState, oldCard);
 
@@ -147,7 +149,7 @@ export class GameLogic {
 
       addToHistory(
         gameState,
-        `MATCH ! ${player.name} pose ${this.getCardDisplayName(playerCard)} !`
+        HistoryFormatter.formatMatchSuccess(player.name, playerCard)
       );
 
       if (gameState.phase !== GamePhase.reaction) {
@@ -161,7 +163,7 @@ export class GameLogic {
     } else {
       addToHistory(
         gameState,
-        `${player.name} rate son match (${this.getCardDisplayName(playerCard)} ≠ ${this.getCardDisplayName(topDiscard)}) ! Pénalité !`
+        HistoryFormatter.formatMatchFail(player.name, playerCard, topDiscard)
       );
       this.applyPenalty(gameState, player);
       return false;
@@ -178,7 +180,7 @@ export class GameLogic {
     player.hand.push(penaltyCard);
     player.knownCards.push(false);
 
-    addToHistory(gameState, `${player.name} prend une carte de pénalité.`);
+    addToHistory(gameState, HistoryFormatter.formatPenalty(player.name));
   }
 
   static lookAtCard(gameState: GameState, target: Player, cardIndex: number): void {
@@ -186,7 +188,7 @@ export class GameLogic {
       // Note: Logic to show card to requester is handled by client/provider
       addToHistory(
         gameState,
-        `${getCurrentPlayer(gameState).name} regarde une carte de ${target.name}.`
+        HistoryFormatter.formatPowerSpy(getCurrentPlayer(gameState).name, target.name)
       );
     }
   }
@@ -218,7 +220,7 @@ export class GameLogic {
 
     addToHistory(
       gameState,
-      `Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.`
+      HistoryFormatter.formatPowerSwap(p1.name, idx1, p2.name, idx2)
     );
   }
 
@@ -236,7 +238,7 @@ export class GameLogic {
 
     addToHistory(
       gameState,
-      `JOKER ! ${getCurrentPlayer(gameState).name} mélange ${targetPlayer.name} !`
+      HistoryFormatter.formatPowerJoker(getCurrentPlayer(gameState).name, targetPlayer.name)
     );
   }
 
@@ -246,6 +248,7 @@ export class GameLogic {
     if (powerCards.includes(card.value)) {
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
+      gameState.specialPowerStartTime = Date.now();
     }
   }
 
@@ -254,7 +257,7 @@ export class GameLogic {
     gameState.dutchCallerId = playerId || getCurrentPlayer(gameState).id;
     gameState.phase = GamePhase.dutchCalled;
     const player = gameState.players.find(p => p.id === gameState.dutchCallerId);
-    addToHistory(gameState, `${player?.name || 'Joueur'} crie DUTCH !`);
+    addToHistory(gameState, HistoryFormatter.formatDutchCall(player?.name || 'Joueur'));
 
     // Stop game immediately (as per user request to match Solo mode)
     this.endGame(gameState);
@@ -267,7 +270,7 @@ export class GameLogic {
 
     const card = gameState.discardPile.pop()!;
     gameState.drawnCard = card;
-    addToHistory(gameState, `${getCurrentPlayer(gameState).name} prend de la défausse.`);
+    addToHistory(gameState, HistoryFormatter.formatTakeFromDiscard(getCurrentPlayer(gameState).name));
   }
 
   static attemptMatch(gameState: GameState, playerId: string, cardIndex: number): boolean {
@@ -401,7 +404,7 @@ export class GameLogic {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    this.startReactionPhase(gameState);
+    this.startReactionPhase(gameState, 3500);
 
     return result;
   }
@@ -409,8 +412,8 @@ export class GameLogic {
   static skipSpecialPower(gameState: GameState): void {
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    addToHistory(gameState, `${getCurrentPlayer(gameState).name} ignore le pouvoir spécial.`);
-    this.startReactionPhase(gameState);
+    // addToHistory(gameState, `${getCurrentPlayer(gameState).name} ignore le pouvoir spécial.`);
+    this.startReactionPhase(gameState, 3500);
   }
 
   static endGame(gameState: GameState): void {
@@ -437,12 +440,12 @@ export class GameLogic {
 
       addToHistory(
         gameState,
-        `🔄 Pioche vide ! Défausse mélangée (${gameState.deck.length} cartes)`
+        HistoryFormatter.formatDeckRefill(gameState.deck.length)
       );
     } else {
       if (gameState.dutchCallerId) {
         gameState.phase = GamePhase.dutchCalled;
-        addToHistory(gameState, 'Plus de cartes disponibles - Fin de partie');
+        addToHistory(gameState, HistoryFormatter.formatEmptyDeckEnd());
       } else {
         this.endGame(gameState);
       }

@@ -739,8 +739,25 @@ class MultiplayerGameProvider
           .whereType<Map>()
           .map((e) => e.cast<String, dynamic>())
           .toList();
+
+      // Trier les joueurs dans le lobby en fonction du score
+      _playersInLobby.sort((a, b) {
+        final scoreA = _getScoreForPlayer(a['clientId']);
+        final scoreB = _getScoreForPlayer(b['clientId']);
+        return scoreB.compareTo(scoreA); // Descendant
+      });
     }
     notifyListeners();
+  }
+
+  int _getScoreForPlayer(String? clientId) {
+    if (clientId == null || _cumulativeScores.isEmpty) return 0;
+    for (final entry in _cumulativeScores) {
+      if (entry['clientId'] == clientId) {
+        return entry['score'] as int? ?? 0;
+      }
+    }
+    return 0;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -909,6 +926,12 @@ class MultiplayerGameProvider
     _resetRoomState();
   }
 
+  void triggerPowerTimeoutKick() {
+    final isForeground =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _multiplayerService.sendPresenceTimeoutKick(isForeground);
+  }
+
   Future<bool> closeRoom() async {
     if (!_isHost) return false;
     final success = await _multiplayerService.closeRoom();
@@ -1033,8 +1056,7 @@ class MultiplayerGameProvider
     final topDiscard = _gameState!.discardPile.isNotEmpty
         ? _gameState!.discardPile.last
         : null;
-    final willSucceed =
-        topDiscard != null && playerCard.matches(topDiscard);
+    final willSucceed = topDiscard != null && playerCard.matches(topDiscard);
 
     // Envoyer au serveur (source de vérité)
     _multiplayerService.attemptMatch(cardIndex);

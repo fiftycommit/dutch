@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
@@ -156,6 +157,30 @@ class PowerDialogWidgets {
     );
   }
 
+  /// Bouton "PASSER" ou "ANNULER" avec auto-close
+  static Widget tickingSkipButton({
+    required String labelPrefix,
+    required VoidCallback onPressed,
+    required DialogMetrics metrics,
+    required int autoCloseSeconds,
+    VoidCallback? onTimeout,
+  }) {
+    if (autoCloseSeconds <= 0) {
+      return skipButton(
+        label: labelPrefix,
+        onPressed: onPressed,
+        metrics: metrics,
+      );
+    }
+    return _TickingSkipButton(
+      autoCloseSeconds: autoCloseSeconds,
+      labelPrefix: labelPrefix,
+      onPressed: onPressed,
+      onTimeout: onTimeout,
+      metrics: metrics,
+    );
+  }
+
   /// Bouton de confirmation stylisé
   static Widget confirmButton({
     required String label,
@@ -181,6 +206,176 @@ class PowerDialogWidgets {
           fontWeight: FontWeight.bold,
         ),
       ),
+    );
+  }
+
+  /// Bouton de confirmation stylisé avec auto-close
+  static Widget tickingConfirmButton({
+    required String labelPrefix,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required VoidCallback? onPressed,
+    required DialogMetrics metrics,
+    required int autoCloseSeconds,
+    VoidCallback? onTimeout,
+  }) {
+    if (autoCloseSeconds <= 0) {
+      return confirmButton(
+        label: labelPrefix,
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+        onPressed: onPressed,
+        metrics: metrics,
+      );
+    }
+    return _TickingConfirmButton(
+      autoCloseSeconds: autoCloseSeconds,
+      labelPrefix: labelPrefix,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
+      onPressed: onPressed ?? () {},
+      onTimeout: onTimeout,
+      metrics: metrics,
+    );
+  }
+}
+
+class _TickingConfirmButton extends StatefulWidget {
+  final int autoCloseSeconds;
+  final String labelPrefix;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onPressed;
+  final VoidCallback? onTimeout;
+  final DialogMetrics metrics;
+
+  const _TickingConfirmButton({
+    required this.autoCloseSeconds,
+    required this.labelPrefix,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onPressed,
+    this.onTimeout,
+    required this.metrics,
+  });
+
+  @override
+  State<_TickingConfirmButton> createState() => _TickingConfirmButtonState();
+}
+
+class _TickingConfirmButtonState extends State<_TickingConfirmButton> {
+  late int _remaining;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.autoCloseSeconds;
+    if (_remaining > 0) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _remaining--;
+        });
+        if (_remaining <= 0) {
+          timer.cancel();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _remaining > 0
+        ? "${widget.labelPrefix} ($_remaining s)"
+        : widget.labelPrefix;
+    return PowerDialogWidgets.confirmButton(
+      label: label,
+      backgroundColor: widget.backgroundColor,
+      foregroundColor: widget.foregroundColor,
+      onPressed: widget.onPressed,
+      metrics: widget.metrics,
+    );
+  }
+}
+
+class _TickingSkipButton extends StatefulWidget {
+  final int autoCloseSeconds;
+  final String labelPrefix;
+  final VoidCallback onPressed;
+  final VoidCallback? onTimeout;
+  final DialogMetrics metrics;
+
+  const _TickingSkipButton({
+    required this.autoCloseSeconds,
+    required this.labelPrefix,
+    required this.onPressed,
+    this.onTimeout,
+    required this.metrics,
+  });
+
+  @override
+  State<_TickingSkipButton> createState() => _TickingSkipButtonState();
+}
+
+class _TickingSkipButtonState extends State<_TickingSkipButton> {
+  late int _remaining;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.autoCloseSeconds;
+    if (_remaining > 0) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _remaining--;
+        });
+        if (_remaining <= 0) {
+          timer.cancel();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _remaining > 0
+        ? "${widget.labelPrefix} ($_remaining s)"
+        : widget.labelPrefix;
+    return PowerDialogWidgets.skipButton(
+      label: label,
+      onPressed: widget.onPressed,
+      metrics: widget.metrics,
     );
   }
 }

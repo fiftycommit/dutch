@@ -37,6 +37,7 @@ function createGameState(players, gameMode, difficulty) {
         eliminatedPlayerIds: [],
         drawnCard: null,
         isWaitingForSpecialPower: false,
+        specialPowerStartTime: null,
         specialCardToActivate: null,
         dutchCallerId: null,
         reactionStartTime: null,

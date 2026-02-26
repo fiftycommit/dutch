@@ -24,6 +24,7 @@ import {
   createRoom as createRoomModel,
 } from '../models/Room';
 import { TimerManager } from './TimerManager';
+import { PushNotificationService } from './PushNotificationService';
 
 export interface RoomManagerOptions {
   turnTimeoutMs: number;
@@ -768,23 +769,46 @@ export class RoomManager {
       ranks.set(pId, currentRank);
     }
 
-    // Calculer les points RP selon le classement (Utilisation des valeurs Bronze pour l'instant)
+    // Calculer les points RP de BASE selon la position (en se calquant sur le rang Bronze du client par défaut).
+    // Sur le client, des bonus supplémentaires (série de victoires, rang exact du joueur) seront appliqués
+    // mais pour le classement du salon (points bruts gagnés pendant la session), on utilise la base.
     const getRPForRank = (rank: number, totalPlayers: number): number => {
-      if (totalPlayers >= 4) {
-        if (rank === 1) return 30;
-        if (rank === 2) return 15;
-        if (rank === 3) return -25;
-        if (rank >= 4) return -50;
+      const points = {
+        win: 30,
+        second: 15,
+        third: -25,
+        last: -50,
+      };
+
+      let baseRP = 0;
+      const playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
+
+      if (rank === 1) {
+        baseRP = points.win;
+      } else if (rank === totalPlayers) {
+        baseRP = points.last;
+      } else if (totalPlayers === 4) {
+        if (rank === 2) baseRP = points.second;
+        else baseRP = points.third;
       } else if (totalPlayers === 3) {
-        if (rank === 1) return 30;
-        if (rank === 2) return -10;
-        if (rank >= 3) return -30;
+        baseRP = Math.round((points.second + points.third) / 2);
+      } else if (totalPlayers === 5) {
+        if (rank === 2) baseRP = points.second;
+        else if (rank === 3) baseRP = points.third;
+        else baseRP = Math.floor((points.third + points.last) / 2);
+      } else if (totalPlayers === 6) {
+        if (rank === 2) baseRP = points.second;
+        else if (rank === 3) baseRP = points.third;
+        else if (rank === 4) baseRP = Math.floor((points.third + points.last) / 2);
+        else baseRP = Math.floor((points.third + points.last * 2) / 3);
       } else {
-        // 2 joueurs
-        if (rank === 1) return 30;
-        if (rank >= 2) return -30;
+        baseRP = points.last;
       }
-      return 0; // Fallback
+
+      baseRP = Math.round(baseRP * playerMultiplier);
+
+      // Bonus/Malus tournoi omis ici car géré globalement ou par manche sur le client
+      return baseRP;
     };
 
     // Générer les scores finaux avec RP
@@ -1035,7 +1059,7 @@ export class RoomManager {
       const scoreKey = player.clientId || player.id;
       const currentScore = room.cumulativeScores.get(scoreKey) || 0;
       const roundScore = calculateScore(player);
-      room.cumulativeScores.set(scoreKey, currentScore + roundScore);
+      room.cumulativeScores.set(scoreKey, Math.max(0, currentScore + roundScore));
     }
   }
 
@@ -1057,7 +1081,7 @@ export class RoomManager {
     for (const score of roundScores) {
       const scoreKey = score.clientId || score.playerId;
       const currentScore = room.cumulativeScores.get(scoreKey) || 0;
-      room.cumulativeScores.set(scoreKey, currentScore + score.rpChange);
+      room.cumulativeScores.set(scoreKey, Math.max(0, currentScore + score.rpChange));
     }
   }
 
@@ -1459,20 +1483,34 @@ export class RoomManager {
     }
   }
 
-  triggerPresenceCheck(roomCode: string, playerId: string, reason: string) {
+  triggerPresenceCheck(
+    roomCode: string,
+    playerId: string,
+    reason: string,
+    options?: { deadlineMs?: number; sendPush?: boolean }
+  ) {
     const room = this.rooms.get(roomCode);
     if (!room) return;
     const player = room.players.find((p) => p.id === playerId);
     if (!player || player.isSpectator) return;
     if (this.presenceChecks.get(roomCode)?.playerId === playerId) return;
 
-    const deadlineAt = this.now() + this.presenceGraceMs;
+    const deadlineMs = options?.deadlineMs ?? this.presenceGraceMs;
+    const deadlineAt = this.now() + deadlineMs;
     this.presenceChecks.set(roomCode, { playerId, deadlineAt });
 
     this.io.to(player.id).emit('presence:check', {
       reason,
-      deadlineMs: this.presenceGraceMs,
+      deadlineMs,
     });
+
+    if (options?.sendPush && player.userId) {
+      PushNotificationService.sendToUser(player.userId, {
+        title: 'Tu es toujours là ?',
+        body: 'La partie t\'attend ! Reviens vite ou tu seras expulsé(e).',
+        data: { type: 'presence_check', roomCode }
+      }).catch(console.error);
+    }
 
     const key = `${roomCode}:${playerId}`;
     const existing = this.presenceTimers.get(key);
@@ -1482,7 +1520,7 @@ export class RoomManager {
       const current = this.presenceChecks.get(roomCode);
       if (!current || current.playerId !== playerId) return;
       this.markSpectator(roomCode, playerId, 'Inactif');
-    }, this.presenceGraceMs);
+    }, deadlineMs);
 
     this.presenceTimers.set(key, timer);
   }

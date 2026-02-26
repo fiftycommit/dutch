@@ -94,6 +94,7 @@ class GameTableWidget extends StatelessWidget {
   final bool isSpectator;
   final bool? animationsEnabled;
   final ValueChanged<String>? onSpecialPowerAnimationComplete;
+  final bool isPaused;
 
   const GameTableWidget({
     super.key,
@@ -105,6 +106,7 @@ class GameTableWidget extends StatelessWidget {
     this.isSpectator = false,
     this.animationsEnabled,
     this.onSpecialPowerAnimationComplete,
+    this.isPaused = false,
   });
 
   @override
@@ -119,6 +121,7 @@ class GameTableWidget extends StatelessWidget {
       isSpectator: isSpectator,
       animationsEnabled: animationsEnabled ?? settings.animationsEnabled,
       onSpecialPowerAnimationComplete: onSpecialPowerAnimationComplete,
+      isPaused: isPaused,
     );
   }
 }
@@ -132,6 +135,7 @@ class _GameTableContent extends StatefulWidget {
   final bool isSpectator;
   final bool animationsEnabled;
   final ValueChanged<String>? onSpecialPowerAnimationComplete;
+  final bool isPaused;
 
   const _GameTableContent({
     required this.gameState,
@@ -142,6 +146,7 @@ class _GameTableContent extends StatefulWidget {
     required this.isSpectator,
     required this.animationsEnabled,
     this.onSpecialPowerAnimationComplete,
+    required this.isPaused,
   });
 
   @override
@@ -1452,6 +1457,7 @@ class _GameTableContentState extends State<_GameTableContent>
                                 ? _discardOverrideCard
                                 : null,
                             drawnCardKey: _drawnCardKey,
+                            isPaused: widget.isPaused,
                           ),
                         ),
                       ),

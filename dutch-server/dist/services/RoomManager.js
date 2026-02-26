@@ -42,6 +42,7 @@ const GameState_1 = require("../models/GameState");
 const Player_1 = require("../models/Player");
 const Room_1 = require("../models/Room");
 const TimerManager_1 = require("./TimerManager");
+const PushNotificationService_1 = require("./PushNotificationService");
 class RoomManager {
     getIO() {
         return this.io;
@@ -436,28 +437,94 @@ class RoomManager {
     clearReactionTimer(roomCode) {
         this.timerManager.clearTimer(roomCode);
     }
-    pauseGame(roomCode, pausedByName) {
+    pauseGame(roomCode, pausedByPlayerId, pausedByName) {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
             return;
         if (room.isPaused)
             return;
         room.isPaused = true;
-        // Arrêter les timers sans les effacer complètement (logic complexe)
-        // Pour simplifier : on clear les timers, et on les relancera au resume.
-        // Il faudrait stocker le temps restant pour être précis, mais pour l'instant on stop.
+        room.pausedByPlayerId = pausedByPlayerId;
+        room.pausedByName = pausedByName;
+        room.pauseStartTime = Date.now();
         this.clearTurnTimer(roomCode);
-        this.timerManager.pauseTimer(roomCode); // Supposons que TimerManager gère ça, sinon on clear
-        this.broadcastGameState(roomCode, 'GAME_PAUSED', { pausedBy: pausedByName });
+        this.timerManager.pauseTimer(roomCode);
+        // Warning à 60s : "sera expulsé dans 30 secondes"
+        const warn1 = setTimeout(() => {
+            const r = this.rooms.get(roomCode);
+            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                return;
+            this.io.to(roomCode).emit('game:pause_warning', {
+                roomCode,
+                pausedBy: pausedByName,
+                secondsRemaining: 30,
+                message: `${pausedByName} sera expulsé dans 30 secondes s'il ne lève pas la pause.`,
+            });
+        }, 60000);
+        // Warning à 75s : "sera expulsé dans 15 secondes"
+        const warn2 = setTimeout(() => {
+            const r = this.rooms.get(roomCode);
+            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                return;
+            this.io.to(roomCode).emit('game:pause_warning', {
+                roomCode,
+                pausedBy: pausedByName,
+                secondsRemaining: 15,
+                message: `${pausedByName} sera expulsé dans 15 secondes s'il ne lève pas la pause.`,
+            });
+        }, 75000);
+        // Kick + auto-resume à 90s
+        const kick = setTimeout(() => {
+            const r = this.rooms.get(roomCode);
+            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                return;
+            console.log(`⏱️ Pause timeout: kick de ${pausedByName} (${pausedByPlayerId})`);
+            // Lever la pause d'abord (sans broadcast séparé, resumeGame va broadcaster)
+            r.pauseTimeoutHandle = undefined;
+            this.markSpectator(roomCode, pausedByPlayerId, 'pause trop longue');
+            // Si le joueur n'était plus dans la room après kick, la pause est déjà levée
+            // Sinon on force la reprise
+            if (r.isPaused) {
+                this.resumeGame(roomCode, pausedByPlayerId, 'Système', true);
+            }
+        }, 90000);
+        // On stocke les 3 handles dans un seul pour nettoyer facilement
+        // On les encapsule dans un handle composite via clearTimeout multiple
+        room.pauseTimeoutHandle = kick;
+        // Store warn handles on the kick handle object (hack simple)
+        kick._warn1 = warn1;
+        kick._warn2 = warn2;
+        this.broadcastGameState(roomCode, 'GAME_PAUSED', {
+            pausedBy: pausedByName,
+            pausedByPlayerId,
+            pauseDeadline: room.pauseStartTime + 90000,
+        });
     }
-    resumeGame(roomCode, resumedByName) {
+    resumeGame(roomCode, resumedByPlayerId, resumedByName, forced = false) {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
             return;
         if (!room.isPaused)
             return;
+        // Seul le joueur qui a mis pause peut lever la pause (sauf si forced par le système)
+        if (!forced && room.pausedByPlayerId && room.pausedByPlayerId !== resumedByPlayerId) {
+            console.log(`🚫 ${resumedByName} tente de lever la pause mais ce n'est pas lui qui l'a mise`);
+            return;
+        }
+        // Annuler les timers de warning + kick
+        const handle = room.pauseTimeoutHandle;
+        if (handle !== undefined) {
+            clearTimeout(handle);
+            if (handle._warn1)
+                clearTimeout(handle._warn1);
+            if (handle._warn2)
+                clearTimeout(handle._warn2);
+        }
         room.isPaused = false;
-        // Relancer les timers
+        room.pausedByPlayerId = undefined;
+        room.pausedByName = undefined;
+        room.pauseStartTime = undefined;
+        room.pauseTimeoutHandle = undefined;
         if (room.gameState.phase === GameState_1.GamePhase.playing) {
             this.startTurnTimer(roomCode);
         }
@@ -563,34 +630,57 @@ class RoomManager {
             }
             ranks.set(pId, currentRank);
         }
-        // Calculer les points RP selon le classement (Utilisation des valeurs Bronze pour l'instant)
+        // Calculer les points RP de BASE selon la position (en se calquant sur le rang Bronze du client par défaut).
+        // Sur le client, des bonus supplémentaires (série de victoires, rang exact du joueur) seront appliqués
+        // mais pour le classement du salon (points bruts gagnés pendant la session), on utilise la base.
         const getRPForRank = (rank, totalPlayers) => {
-            if (totalPlayers >= 4) {
-                if (rank === 1)
-                    return 30;
+            const points = {
+                win: 30,
+                second: 15,
+                third: -25,
+                last: -50,
+            };
+            let baseRP = 0;
+            const playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
+            if (rank === 1) {
+                baseRP = points.win;
+            }
+            else if (rank === totalPlayers) {
+                baseRP = points.last;
+            }
+            else if (totalPlayers === 4) {
                 if (rank === 2)
-                    return 15;
-                if (rank === 3)
-                    return -25;
-                if (rank >= 4)
-                    return -50;
+                    baseRP = points.second;
+                else
+                    baseRP = points.third;
             }
             else if (totalPlayers === 3) {
-                if (rank === 1)
-                    return 30;
+                baseRP = Math.round((points.second + points.third) / 2);
+            }
+            else if (totalPlayers === 5) {
                 if (rank === 2)
-                    return -10;
-                if (rank >= 3)
-                    return -30;
+                    baseRP = points.second;
+                else if (rank === 3)
+                    baseRP = points.third;
+                else
+                    baseRP = Math.floor((points.third + points.last) / 2);
+            }
+            else if (totalPlayers === 6) {
+                if (rank === 2)
+                    baseRP = points.second;
+                else if (rank === 3)
+                    baseRP = points.third;
+                else if (rank === 4)
+                    baseRP = Math.floor((points.third + points.last) / 2);
+                else
+                    baseRP = Math.floor((points.third + points.last * 2) / 3);
             }
             else {
-                // 2 joueurs
-                if (rank === 1)
-                    return 30;
-                if (rank >= 2)
-                    return -30;
+                baseRP = points.last;
             }
-            return 0; // Fallback
+            baseRP = Math.round(baseRP * playerMultiplier);
+            // Bonus/Malus tournoi omis ici car géré globalement ou par manche sur le client
+            return baseRP;
         };
         // Générer les scores finaux avec RP
         const roundScores = playersWithScores.map(({ player, cardScore }) => {
@@ -803,7 +893,7 @@ class RoomManager {
             const scoreKey = player.clientId || player.id;
             const currentScore = room.cumulativeScores.get(scoreKey) || 0;
             const roundScore = (0, Player_1.calculateScore)(player);
-            room.cumulativeScores.set(scoreKey, currentScore + roundScore);
+            room.cumulativeScores.set(scoreKey, Math.max(0, currentScore + roundScore));
         }
     }
     /**
@@ -816,7 +906,7 @@ class RoomManager {
         for (const score of roundScores) {
             const scoreKey = score.clientId || score.playerId;
             const currentScore = room.cumulativeScores.get(scoreKey) || 0;
-            room.cumulativeScores.set(scoreKey, currentScore + score.rpChange);
+            room.cumulativeScores.set(scoreKey, Math.max(0, currentScore + score.rpChange));
         }
     }
     /**
@@ -1185,7 +1275,7 @@ class RoomManager {
             room.gameState.turnStartTime = null;
         }
     }
-    triggerPresenceCheck(roomCode, playerId, reason) {
+    triggerPresenceCheck(roomCode, playerId, reason, options) {
         const room = this.rooms.get(roomCode);
         if (!room)
             return;
@@ -1194,12 +1284,20 @@ class RoomManager {
             return;
         if (this.presenceChecks.get(roomCode)?.playerId === playerId)
             return;
-        const deadlineAt = this.now() + this.presenceGraceMs;
+        const deadlineMs = options?.deadlineMs ?? this.presenceGraceMs;
+        const deadlineAt = this.now() + deadlineMs;
         this.presenceChecks.set(roomCode, { playerId, deadlineAt });
         this.io.to(player.id).emit('presence:check', {
             reason,
-            deadlineMs: this.presenceGraceMs,
+            deadlineMs,
         });
+        if (options?.sendPush && player.userId) {
+            PushNotificationService_1.PushNotificationService.sendToUser(player.userId, {
+                title: 'Tu es toujours là ?',
+                body: 'La partie t\'attend ! Reviens vite ou tu seras expulsé(e).',
+                data: { type: 'presence_check', roomCode }
+            }).catch(console.error);
+        }
         const key = `${roomCode}:${playerId}`;
         const existing = this.presenceTimers.get(key);
         if (existing)
@@ -1209,7 +1307,7 @@ class RoomManager {
             if (!current || current.playerId !== playerId)
                 return;
             this.markSpectator(roomCode, playerId, 'Inactif');
-        }, this.presenceGraceMs);
+        }, deadlineMs);
         this.presenceTimers.set(key, timer);
     }
     clearPresenceCheck(roomCode, playerId) {

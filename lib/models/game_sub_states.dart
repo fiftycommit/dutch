@@ -42,6 +42,7 @@ class DeckState {
 class TurnState {
   int currentPlayerIndex;
   bool isWaitingForSpecialPower;
+  int? specialPowerStartTime;
   PlayingCard? specialCardToActivate;
   String? dutchCallerId;
   DateTime? reactionStartTime;
@@ -58,6 +59,7 @@ class TurnState {
   TurnState({
     this.currentPlayerIndex = 0,
     this.isWaitingForSpecialPower = false,
+    this.specialPowerStartTime,
     this.specialCardToActivate,
     this.dutchCallerId,
     this.reactionStartTime,
@@ -85,6 +87,7 @@ class TurnState {
       currentPlayerIndex: json['currentPlayerIndex'] as int? ?? 0,
       isWaitingForSpecialPower:
           json['isWaitingForSpecialPower'] as bool? ?? false,
+      specialPowerStartTime: json['specialPowerStartTime'] as int?,
       specialCardToActivate: json['specialCardToActivate'] != null
           ? PlayingCard.fromJson(
               json['specialCardToActivate'] as Map<String, dynamic>)
@@ -95,26 +98,24 @@ class TurnState {
           : null,
       reactionTimeRemaining: json['reactionTimeRemaining'] as int? ?? 0,
       lastSpiedCard: json['lastSpiedCard'] != null
-          ? PlayingCard.fromJson(
-              json['lastSpiedCard'] as Map<String, dynamic>)
+          ? PlayingCard.fromJson(json['lastSpiedCard'] as Map<String, dynamic>)
           : null,
       pendingSwap: json['pendingSwap'] != null
           ? Map<String, dynamic>.from(json['pendingSwap'] as Map)
           : null,
       turnStartTime: json['turnStartTime'] as int?,
       turnTimeoutMs: json['turnTimeoutMs'] as int? ?? 25000,
-      readyPlayerIds:
-          List<String>.from(json['readyPlayerIds'] as List? ?? []),
+      readyPlayerIds: List<String>.from(json['readyPlayerIds'] as List? ?? []),
       turnCount: json['turnCount'] as int? ?? 0,
       actionCount: json['actionCount'] as int? ?? 0,
-      actionHistory:
-          (json['actionHistory'] as List?)?.cast<String>() ?? [],
+      actionHistory: (json['actionHistory'] as List?)?.cast<String>() ?? [],
     );
   }
 
   Map<String, dynamic> toJson() => {
         'currentPlayerIndex': currentPlayerIndex,
         'isWaitingForSpecialPower': isWaitingForSpecialPower,
+        'specialPowerStartTime': specialPowerStartTime,
         'specialCardToActivate': specialCardToActivate?.toJson(),
         'dutchCallerId': dutchCallerId,
         'reactionStartTime': reactionStartTime?.toIso8601String(),
@@ -149,8 +150,7 @@ class TournamentState {
       eliminatedPlayerIds:
           (json['eliminatedPlayerIds'] as List?)?.cast<String>() ?? [],
       tournamentCumulativeScores:
-          (json['tournamentCumulativeScores'] as Map?)
-                  ?.cast<String, int>() ??
+          (json['tournamentCumulativeScores'] as Map?)?.cast<String, int>() ??
               {},
     );
   }

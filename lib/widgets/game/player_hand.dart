@@ -181,17 +181,21 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
   void _startShuffleAnimation() {
     _shuffleController?.dispose();
     _shuffleController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
     final rng = math.Random();
     final count = widget.player.hand.length;
-    _shuffleOffsets = List.generate(count, (_) {
+    _shuffleOffsets = List.generate(count, (index) {
       return _ShuffleCardData(
-        dx: (rng.nextDouble() - 0.5) * 40,
-        dy: (rng.nextDouble() - 0.5) * 24,
-        rotation: (rng.nextDouble() - 0.5) * 0.5,
+        targetIndex1: rng.nextInt(count),
+        targetIndex2: rng.nextInt(count),
+        dy1: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
+        dy2: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
+        dy3: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
+        rotation1: (rng.nextDouble() - 0.5) * 0.4,
+        rotation2: (rng.nextDouble() - 0.5) * 0.4,
       );
     });
 
@@ -208,17 +212,6 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       _shuffleController?.dispose();
       _shuffleController = null;
     });
-  }
-
-  double _shuffleIntensity() {
-    if (_shuffleController == null) return 0.0;
-    final t = _shuffleController!.value;
-    // Peaks at 0.35, then comes back to 0
-    if (t < 0.35) {
-      return Curves.easeOut.transform(t / 0.35);
-    } else {
-      return Curves.easeInOut.transform(1.0 - ((t - 0.35) / 0.65));
-    }
   }
 
   @override
@@ -260,7 +253,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
                 count,
                 (index) => Positioned(
                   left: index * overlap,
-                  child: _buildCard(context, index),
+                  child: _buildCard(context, index, overlap),
                 ),
               ),
             ),
@@ -289,7 +282,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
     );
   }
 
-  Widget _buildCard(BuildContext context, int index) {
+  Widget _buildCard(BuildContext context, int index, double overlap) {
     final isSelected = widget.selectedIndices?.contains(index) ?? false;
     final isMemorizedHighlight =
         widget.highlightedIndices?.contains(index) ?? false;
@@ -375,13 +368,38 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
     );
 
     // Joker shuffle animation overlay
-    final intensity = _shuffleIntensity();
-    if (intensity > 0 && index < _shuffleOffsets.length) {
+    if (_shuffleController != null && index < _shuffleOffsets.length) {
+      final t = _shuffleController!.value;
       final data = _shuffleOffsets[index];
+
+      double dx = 0.0;
+      double dy = 0.0;
+      double rot = 0.0;
+
+      if (t < 0.33) {
+        final p = Curves.easeInOut.transform(t / 0.33);
+        dx = (data.targetIndex1 - index) * overlap * p;
+        dy = data.dy1 * math.sin(p * math.pi);
+        rot = data.rotation1 * p;
+      } else if (t < 0.66) {
+        final p = Curves.easeInOut.transform((t - 0.33) / 0.33);
+        final startDx = (data.targetIndex1 - index) * overlap;
+        final endDx = (data.targetIndex2 - index) * overlap;
+        dx = startDx + (endDx - startDx) * p;
+        dy = data.dy2 * math.sin(p * math.pi);
+        rot = data.rotation1 + (data.rotation2 - data.rotation1) * p;
+      } else {
+        final p = Curves.easeInOut.transform((t - 0.66) / 0.34);
+        final startDx = (data.targetIndex2 - index) * overlap;
+        dx = startDx * (1 - p);
+        dy = data.dy3 * math.sin(p * math.pi);
+        rot = data.rotation2 * (1 - p);
+      }
+
       card = Transform.translate(
-        offset: Offset(data.dx * intensity, data.dy * intensity),
+        offset: Offset(dx, dy),
         child: Transform.rotate(
-          angle: data.rotation * intensity,
+          angle: rot,
           child: card,
         ),
       );
@@ -400,13 +418,21 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
 }
 
 class _ShuffleCardData {
-  final double dx;
-  final double dy;
-  final double rotation;
+  final int targetIndex1;
+  final int targetIndex2;
+  final double dy1;
+  final double dy2;
+  final double dy3;
+  final double rotation1;
+  final double rotation2;
 
   const _ShuffleCardData({
-    required this.dx,
-    required this.dy,
-    required this.rotation,
+    required this.targetIndex1,
+    required this.targetIndex2,
+    required this.dy1,
+    required this.dy2,
+    required this.dy3,
+    required this.rotation1,
+    required this.rotation2,
   });
 }

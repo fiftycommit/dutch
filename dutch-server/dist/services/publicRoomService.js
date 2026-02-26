@@ -13,7 +13,7 @@ class PublicRoomService {
     /**
      * Ajoute une room à la liste des rooms publiques
      */
-    addPublicRoom(code, host, gameMode, maxPlayers = 4, hostMMR, roomName) {
+    addPublicRoom(code, host, gameMode, maxPlayers = 6, hostMMR, roomName) {
         this.publicRooms.set(code, {
             code,
             roomName,

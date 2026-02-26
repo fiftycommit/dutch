@@ -24,6 +24,22 @@ function setupConnectionHandler(socket, roomManager) {
             return;
         roomManager.confirmPresence(roomCode, socket.id);
     });
+    socket.on('presence:timeout_kick', (data) => {
+        const roomCode = data?.roomCode?.toString().toUpperCase();
+        const playerId = data?.playerId?.toString();
+        const isForeground = data?.isForeground === true;
+        if (!roomCode || !playerId)
+            return;
+        if (isForeground) {
+            roomManager.kickPlayer(roomCode, playerId, 'Inactif sur un pouvoir (Forfait)');
+        }
+        else {
+            roomManager.triggerPresenceCheck(roomCode, playerId, 'Inactif sur un pouvoir', {
+                deadlineMs: 10000,
+                sendPush: true,
+            });
+        }
+    });
     socket.on('disconnect', () => {
         console.log(`Client disconnected: ${socket.id}`);
         roomManager.handleDisconnect(socket.id);

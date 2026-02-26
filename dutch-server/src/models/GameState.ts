@@ -32,6 +32,7 @@ export interface GameState {
   eliminatedPlayerIds: string[];
   drawnCard: PlayingCard | null;
   isWaitingForSpecialPower: boolean;
+  specialPowerStartTime: number | null; // Track when the special power decision started
   specialCardToActivate: PlayingCard | null;
   dutchCallerId: string | null;
   reactionStartTime: Date | null;
@@ -68,6 +69,7 @@ export function createGameState(
     eliminatedPlayerIds: [],
     drawnCard: null,
     isWaitingForSpecialPower: false,
+    specialPowerStartTime: null,
     specialCardToActivate: null,
     dutchCallerId: null,
     reactionStartTime: null,

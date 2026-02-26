@@ -268,9 +268,15 @@ function setupGameHandler(socket, roomManager) {
                 return;
             }
             if (room.gameState.phase === GameState_1.GamePhase.reaction) {
-                const reactionTime = typeof room.settings?.reactionTimeMs === 'number'
+                const baseReactionTime = typeof room.settings?.reactionTimeMs === 'number'
                     ? room.settings.reactionTimeMs
                     : 3000;
+                // Le temps passé par le joueur à sélectionner le pouvoir est rajouté 
+                // à son temps de réaction réel, jusqu'à une limite (ex: 15s max)
+                const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
+                const elapsedSelectingPowerMs = Date.now() - powerStartTime;
+                // On limite l'extension à 15s pour éviter l'abus, même si le client a lui-même un timeout de pouvoir spécial
+                const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
                 roomManager.startReactionTimer(data.roomCode, reactionTime);
                 return;
             }
@@ -300,9 +306,12 @@ function setupGameHandler(socket, roomManager) {
                 return;
             }
             if (room.gameState.phase === GameState_1.GamePhase.reaction) {
-                const reactionTime = typeof room.settings?.reactionTimeMs === 'number'
+                const baseReactionTime = typeof room.settings?.reactionTimeMs === 'number'
                     ? room.settings.reactionTimeMs
                     : 3000;
+                const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
+                const elapsedSelectingPowerMs = Date.now() - powerStartTime;
+                const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
                 roomManager.startReactionTimer(data.roomCode, reactionTime);
                 return;
             }
@@ -324,7 +333,7 @@ function setupGameHandler(socket, roomManager) {
             const player = room.players.find(p => p.id === socket.id);
             if (!player || player.isSpectator)
                 return;
-            roomManager.pauseGame(data.roomCode, player.name);
+            roomManager.pauseGame(data.roomCode, socket.id, player.name);
         }
         catch (error) {
             console.error('Error game:pause:', error);
@@ -340,7 +349,7 @@ function setupGameHandler(socket, roomManager) {
             const player = room.players.find(p => p.id === socket.id);
             if (!player || player.isSpectator)
                 return;
-            roomManager.resumeGame(data.roomCode, player.name);
+            roomManager.resumeGame(data.roomCode, socket.id, player.name);
         }
         catch (error) {
             console.error('Error game:resume:', error);

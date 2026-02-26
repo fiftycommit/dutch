@@ -14,7 +14,7 @@ class ReactionTimerManager {
 
   /// Callback appelé quand le timer se termine
   final VoidCallback onTimerEnd;
-  
+
   /// Callback appelé pour notifier les changements
   final VoidCallback onTimerUpdate;
 
@@ -24,7 +24,8 @@ class ReactionTimerManager {
   });
 
   /// Démarrer la phase de réaction
-  void startReactionPhase(GameState gameState, int reactionTimeMs, bool isPaused) {
+  void startReactionPhase(
+      GameState gameState, int reactionTimeMs, bool isPaused) {
     if (isPaused) return;
 
     gameState.phase = GamePhase.reaction;
@@ -46,7 +47,7 @@ class ReactionTimerManager {
         onTimerEnd();
         return;
       }
-      
+
       onTimerUpdate();
     });
 
@@ -68,15 +69,15 @@ class ReactionTimerManager {
 
   /// Reprendre le timer de réaction
   void resumeTimer(GameState gameState, bool isPaused) {
-    if (_remainingReactionTimeMs != null &&
-        _remainingReactionTimeMs! > 0) {
+    if (_remainingReactionTimeMs != null && _remainingReactionTimeMs! > 0) {
       gameState.reactionTimeRemaining = _remainingReactionTimeMs!;
       reactionTimeRemaining.value = _remainingReactionTimeMs!;
       _reactionDurationMs = _remainingReactionTimeMs!;
       _reactionStartMs = DateTime.now().millisecondsSinceEpoch;
 
       _reactionTimer?.cancel();
-      _reactionTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
+      _reactionTimer =
+          Timer.periodic(const Duration(milliseconds: 30), (timer) {
         if (isPaused) {
           timer.cancel();
           return;

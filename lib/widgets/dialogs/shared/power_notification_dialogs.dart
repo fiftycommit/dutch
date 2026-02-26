@@ -1,10 +1,84 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
+
+class _TickingButton extends StatefulWidget {
+  final int autoCloseSeconds;
+  final String labelPrefix;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onPressed;
+  final VoidCallback? onTimeout;
+  final DialogMetrics metrics;
+
+  const _TickingButton({
+    required this.autoCloseSeconds,
+    required this.labelPrefix,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onPressed,
+    this.onTimeout,
+    required this.metrics,
+  });
+
+  @override
+  State<_TickingButton> createState() => _TickingButtonState();
+}
+
+class _TickingButtonState extends State<_TickingButton> {
+  late int _remaining;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.autoCloseSeconds;
+    if (_remaining > 0) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _remaining--;
+        });
+        if (_remaining <= 0) {
+          timer.cancel();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _remaining > 0
+        ? "${widget.labelPrefix} ($_remaining s)"
+        : widget.labelPrefix;
+    return PowerDialogWidgets.confirmButton(
+      label: label,
+      backgroundColor: widget.backgroundColor,
+      foregroundColor: widget.foregroundColor,
+      onPressed: widget.onPressed,
+      metrics: widget.metrics,
+    );
+  }
+}
 
 /// Dialogs de notification partagés entre solo et multiplayer
 /// Principe GRASP: Pure Fabrication - Regroupe les notifications UI communes
@@ -16,6 +90,8 @@ class PowerNotificationDialogs {
     PlayingCard card, {
     String title = "CARTE RÉVÉLÉE",
     String? valueOverride,
+    int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     return showDialog(
       context: context,
@@ -112,7 +188,8 @@ class PowerNotificationDialogs {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              valueOverride ?? "${card.value} (${card.points} pts)",
+                              valueOverride ??
+                                  "${card.value} (${card.points} pts)",
                               style: TextStyle(
                                 color: Colors.amber,
                                 fontSize: valueSize,
@@ -125,22 +202,14 @@ class PowerNotificationDialogs {
                           SizedBox(
                             width: buttonWidth,
                             height: buttonHeight,
-                            child: ElevatedButton(
+                            child: PowerDialogWidgets.tickingConfirmButton(
+                              labelPrefix: "OK",
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
                               onPressed: () => Navigator.pop(ctx),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  "OK",
-                                  style: TextStyle(fontSize: valueSize),
-                                ),
-                              ),
+                              metrics: metrics,
+                              autoCloseSeconds: autoCloseSeconds,
+                              onTimeout: onTimeout ?? () => Navigator.pop(ctx),
                             ),
                           ),
                         ],
@@ -174,7 +243,8 @@ class PowerNotificationDialogs {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
+                Icon(Icons.swap_horiz,
+                    color: Colors.white, size: metrics.size(50)),
                 SizedBox(height: metrics.space(12)),
                 Text(
                   "ÉCHANGE EFFECTUÉ",
@@ -189,7 +259,9 @@ class PowerNotificationDialogs {
                 Text(
                   "$player1 carte #${card1 + 1} ↔ $player2 carte #${card2 + 1}",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                  style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: metrics.font(14)),
                 ),
                 SizedBox(height: metrics.space(20)),
                 PowerDialogWidgets.confirmButton(
@@ -215,16 +287,12 @@ class PowerNotificationDialogs {
     required bool isMe,
     String? byPlayerName,
     int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        if (autoCloseSeconds > 0) {
-          Future.delayed(Duration(seconds: autoCloseSeconds), () {
-            if (ctx.mounted) Navigator.of(ctx).pop();
-          });
-        }
         return ResponsiveDialog(
           backgroundColor: Colors.red.shade900,
           builder: (context, metrics) {
@@ -232,7 +300,8 @@ class PowerNotificationDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.shuffle, color: Colors.white, size: metrics.size(50)),
+                  Icon(Icons.shuffle,
+                      color: Colors.white, size: metrics.size(50)),
                   SizedBox(height: metrics.space(12)),
                   Text(
                     isMe
@@ -253,7 +322,9 @@ class PowerNotificationDialogs {
                             ? "Vous ne savez plus où sont vos cartes !"
                             : "$targetName ne sait plus où sont ses cartes !"),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                    style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: metrics.font(14)),
                   ),
                   if (byPlayerName != null) ...[
                     SizedBox(height: metrics.space(8)),
@@ -270,11 +341,20 @@ class PowerNotificationDialogs {
                     ),
                   ],
                   SizedBox(height: metrics.space(16)),
-                  PowerDialogWidgets.confirmButton(
-                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                  _TickingButton(
+                    labelPrefix: "OK",
+                    autoCloseSeconds: autoCloseSeconds,
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.red.shade900,
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    onTimeout: onTimeout != null
+                        ? () {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            onTimeout();
+                          }
+                        : null,
                     metrics: metrics,
                   ),
                 ],
@@ -298,18 +378,13 @@ class PowerNotificationDialogs {
     String? swapPartnerName,
     int? receivedCardPosition,
     int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     final isMe = targetName == "Vous" || targetName == "vous";
     return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        // Auto-close timer
-        if (autoCloseSeconds > 0) {
-          Future.delayed(Duration(seconds: autoCloseSeconds), () {
-            if (ctx.mounted) Navigator.of(ctx).pop();
-          });
-        }
         return ResponsiveDialog(
           backgroundColor: Colors.purple.shade900,
           builder: (context, metrics) {
@@ -317,7 +392,8 @@ class PowerNotificationDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.swap_horiz, color: Colors.white, size: metrics.size(50)),
+                  Icon(Icons.swap_horiz,
+                      color: Colors.white, size: metrics.size(50)),
                   SizedBox(height: metrics.space(12)),
                   Text(
                     "🤵 VALET !",
@@ -331,7 +407,9 @@ class PowerNotificationDialogs {
                   Text(
                     "$byPlayerName a utilisé le Valet",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                    style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: metrics.font(14)),
                   ),
                   if (isMe) ...[
                     SizedBox(height: metrics.space(10)),
@@ -383,11 +461,20 @@ class PowerNotificationDialogs {
                     ),
                   ],
                   SizedBox(height: metrics.space(16)),
-                  PowerDialogWidgets.confirmButton(
-                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                  _TickingButton(
+                    labelPrefix: "OK",
+                    autoCloseSeconds: autoCloseSeconds,
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.purple.shade900,
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    onTimeout: onTimeout != null
+                        ? () {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            onTimeout();
+                          }
+                        : null,
                     metrics: metrics,
                   ),
                 ],
@@ -407,16 +494,12 @@ class PowerNotificationDialogs {
     required int cardIndex,
     required bool isMe,
     int autoCloseSeconds = 0,
+    VoidCallback? onTimeout,
   }) {
     return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        if (autoCloseSeconds > 0) {
-          Future.delayed(Duration(seconds: autoCloseSeconds), () {
-            if (ctx.mounted) Navigator.of(ctx).pop();
-          });
-        }
         return ResponsiveDialog(
           backgroundColor: Colors.blue.shade900,
           builder: (context, metrics) {
@@ -424,7 +507,8 @@ class PowerNotificationDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.remove_red_eye, color: Colors.white, size: metrics.size(50)),
+                  Icon(Icons.remove_red_eye,
+                      color: Colors.white, size: metrics.size(50)),
                   SizedBox(height: metrics.space(12)),
                   Text(
                     "👁️ ESPIONNAGE !",
@@ -438,7 +522,9 @@ class PowerNotificationDialogs {
                   Text(
                     "$byPlayerName espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(14)),
+                    style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: metrics.font(14)),
                   ),
                   if (isMe) ...[
                     SizedBox(height: metrics.space(8)),
@@ -453,11 +539,20 @@ class PowerNotificationDialogs {
                     ),
                   ],
                   SizedBox(height: metrics.space(16)),
-                  PowerDialogWidgets.confirmButton(
-                    label: autoCloseSeconds > 0 ? "OK ($autoCloseSeconds s)" : "OK",
+                  _TickingButton(
+                    labelPrefix: "OK",
+                    autoCloseSeconds: autoCloseSeconds,
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.blue.shade900,
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    onTimeout: onTimeout != null
+                        ? () {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            onTimeout();
+                          }
+                        : null,
                     metrics: metrics,
                   ),
                 ],

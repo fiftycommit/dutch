@@ -185,7 +185,7 @@ function createManager(options = {}) {
     manager.setReady(room.id, 'host-1', true);
     manager.setReady(room.id, 'player-2', true);
     manager.startGame(room.id, { fillBots: false });
-    manager.pauseGame(room.id, 'Player 1');
+    manager.pauseGame(room.id, 'host-1', 'Player 1');
     strict_1.default.equal(room.isPaused, true);
 });
 (0, node_test_1.default)('resumeGame sets isPaused to false', (t) => {
@@ -200,9 +200,9 @@ function createManager(options = {}) {
     manager.setReady(room.id, 'host-1', true);
     manager.setReady(room.id, 'player-2', true);
     manager.startGame(room.id, { fillBots: false });
-    manager.pauseGame(room.id, 'Player 1');
+    manager.pauseGame(room.id, 'host-1', 'Player 1');
     strict_1.default.equal(room.isPaused, true);
-    manager.resumeGame(room.id, 'Player 1');
+    manager.resumeGame(room.id, 'host-1', 'Player 1');
     strict_1.default.equal(room.isPaused, false);
 });
 // ============ Tests forfeitGame ============
