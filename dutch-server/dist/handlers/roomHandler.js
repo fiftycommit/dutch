@@ -119,6 +119,13 @@ function setupRoomHandler(socket, roomManager, io) {
                 callback({ success: false, error: result.error ?? 'Room introuvable' });
                 return;
             }
+            // Remove previous socket from room channel to avoid duplicate events
+            if (result.previousSocketId) {
+                const prevSocket = io?.sockets.sockets.get(result.previousSocketId);
+                if (prevSocket) {
+                    prevSocket.leave(roomCode);
+                }
+            }
             socket.join(roomCode);
             const localPlayer = result.player ??
                 result.room.players.find((p) => p.id === socket.id || p.userId?.trim() === socketUser.uid);
@@ -532,23 +539,111 @@ function setupRoomHandler(socket, roomManager, io) {
                 callback?.({ success: false, error: 'Ce joueur n\'est pas ton ami' });
                 return;
             }
+            const inviterName = socketUser.displayName || socketUser.username;
+            // Récupérer les infos de l'ami pour l'ajouter au salon
+            const friendUser = await FirestoreService_1.firestoreService.getUser(friendUserId);
+            const friendDisplayName = friendUser?.displayName?.trim() || friendUser?.username?.trim() || 'Joueur';
+            const friendUsername = friendUser?.username?.trim() || '';
+            // Ajouter l'ami comme joueur déconnecté dans la room
+            const normalizedRoomCode = roomCode.toString().toUpperCase();
+            const player = roomManager.addInvitedPlayer(normalizedRoomCode, friendUserId, friendUsername, friendDisplayName);
+            if (player) {
+                const room = roomManager.getRoom(normalizedRoomCode);
+                if (room) {
+                    RoomRegistryService_1.roomRegistryService.upsertMember(room, player).catch(() => { });
+                }
+            }
+            // Enregistrer le salon dans activeRooms de l'ami
+            RoomRegistryService_1.roomRegistryService.registerInvitedMember(normalizedRoomCode, friendUserId).catch(() => { });
             // Notification temps réel via socket
             const friendSocketIds = FriendsService_1.FriendsService.getUserSocketIds(friendUserId);
-            const inviterName = socketUser.displayName || socketUser.username;
             for (const sid of friendSocketIds) {
                 io?.to(sid).emit('room:invite', {
-                    roomCode,
+                    roomCode: normalizedRoomCode,
                     fromUserId: socketUser.uid,
                     fromUsername: socketUser.username,
                     fromDisplayName: inviterName,
                 });
             }
             // Notification push
-            await PushNotificationService_1.PushNotificationService.notifyRoomInvite(friendUserId, inviterName, roomCode);
+            await PushNotificationService_1.PushNotificationService.notifyRoomInvite(friendUserId, inviterName, normalizedRoomCode);
             callback?.({ success: true });
         }
         catch (error) {
             console.error('Error inviting friend:', error);
+            callback?.({ success: false, error: error.message });
+        }
+    });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // WIZZ - Notification pour rappeler un joueur absent du lobby
+    // ═══════════════════════════════════════════════════════════════════════════
+    const wizzCooldowns = new Map(); // socketId -> last wizz timestamp
+    socket.on('room:wizz', async (data, callback) => {
+        try {
+            const roomCode = data.roomCode?.toString().toUpperCase();
+            const targetClientId = data.targetClientId?.toString();
+            if (!roomCode || !targetClientId) {
+                callback?.({ success: false, error: 'roomCode et targetClientId requis' });
+                return;
+            }
+            const room = roomManager.getRoom(roomCode);
+            if (!room) {
+                callback?.({ success: false, error: 'Room introuvable' });
+                return;
+            }
+            // Vérifier que l'expéditeur est dans la room
+            const sender = room.players.find((p) => p.id === socket.id);
+            if (!sender) {
+                callback?.({ success: false, error: 'Vous n\'êtes pas dans cette room' });
+                return;
+            }
+            // Trouver la cible
+            const target = room.players.find((p) => p.clientId === targetClientId);
+            if (!target) {
+                callback?.({ success: false, error: 'Joueur cible introuvable' });
+                return;
+            }
+            // Permission: joueur→hôte OU hôte→joueur
+            const senderIsHost = room.hostPlayerId === socket.id;
+            const targetIsHost = room.hostPlayerId === target.id;
+            if (!senderIsHost && !targetIsHost) {
+                callback?.({ success: false, error: 'Vous ne pouvez wizzer que l\'hôte (ou l\'hôte peut wizzer les autres)' });
+                return;
+            }
+            // Vérifier que la cible n'est pas connectée+focused (pas besoin de wizz)
+            if (target.connected !== false && target.focused === true) {
+                callback?.({ success: false, error: 'Ce joueur est déjà actif dans le lobby' });
+                return;
+            }
+            // Rate limit: 1 wizz / 30s par expéditeur
+            const now = Date.now();
+            const lastWizz = wizzCooldowns.get(socket.id) ?? 0;
+            if (now - lastWizz < 30000) {
+                const remaining = Math.ceil((30000 - (now - lastWizz)) / 1000);
+                callback?.({ success: false, error: `Attends encore ${remaining}s avant de re-wizzer` });
+                return;
+            }
+            wizzCooldowns.set(socket.id, now);
+            // Émettre au socket de la cible si connecté
+            if (target.id) {
+                io?.to(target.id).emit('room:wizz', {
+                    fromName: sender.name,
+                    fromId: sender.clientId,
+                });
+            }
+            // Push notification si la cible est déconnectée
+            if (target.connected === false && target.userId) {
+                await PushNotificationService_1.PushNotificationService.sendToUser(target.userId, {
+                    title: 'On t\'attend !',
+                    body: `${sender.name} te rappelle dans le salon`,
+                    data: { type: 'room_wizz', roomCode },
+                });
+            }
+            console.log(`Wizz sent from ${sender.name} to ${target.name} in room ${roomCode}`);
+            callback?.({ success: true });
+        }
+        catch (error) {
+            console.error('Error sending wizz:', error);
             callback?.({ success: false, error: error.message });
         }
     });

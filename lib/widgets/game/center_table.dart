@@ -48,7 +48,8 @@ class CenterTable extends StatefulWidget {
   State<CenterTable> createState() => _CenterTableState();
 }
 
-class _CenterTableState extends State<CenterTable> with SingleTickerProviderStateMixin {
+class _CenterTableState extends State<CenterTable>
+    with SingleTickerProviderStateMixin {
   bool _isDrawnCardExpanded = false;
   String? _lastDrawnCardId;
   int? _lastRedZoneHapticAtMs;
@@ -63,7 +64,8 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     // Controller pour animation fluide synchronisée avec l'écran (vsync)
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 10), // Durée arbitraire, on calcule manuellement
+      duration: const Duration(
+          seconds: 10), // Durée arbitraire, on calcule manuellement
     )..addListener(_onProgressTick);
     _initProgress();
   }
@@ -76,7 +78,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
     _lastServerUpdate = DateTime.now();
     _startProgressTimer();
   }
-  
+
   /// Timer fluide à 24ms (~41fps) pour un refresh constant
   void _startProgressTimer() {
     _progressTimer?.cancel();
@@ -87,7 +89,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
       });
     }
   }
-  
+
   void _stopProgressTimer() {
     _progressTimer?.cancel();
     _progressTimer = null;
@@ -102,29 +104,41 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
       _stopProgressTimer();
       return;
     }
-    
+
     final total = widget.reactionTimeTotalMs;
     final serverRemaining = widget.gameState.reactionTimeRemaining;
-    
+
     // Détecter un changement significatif (pas juste le décompte normal)
     // Un saut de plus de 500ms indique un reset ou une nouvelle phase
-    final diff = (serverRemaining - _lastServerRemaining).abs();
     final now = DateTime.now();
-    // On ne recale le baseline que sur un saut important ou un reset
-    if (diff > 500 || serverRemaining > _lastServerRemaining || _lastServerUpdate == null) {
+    final localElapsedMs = _lastServerUpdate != null
+        ? now.difference(_lastServerUpdate!).inMilliseconds
+        : 0;
+    final currentEstimate =
+        (_lastServerRemaining - localElapsedMs).clamp(0, total);
+
+    // Détecter un désaccord majeur (> 500ms) entre notre temps estimé et le temps réel du serveur
+    // ou si le serveur a plus de temps (reset du chrono)
+    final diffFromEstimate = (serverRemaining - currentEstimate).abs();
+
+    if (diffFromEstimate > 500 ||
+        serverRemaining > _lastServerRemaining ||
+        _lastServerUpdate == null) {
       _lastServerRemaining = serverRemaining;
       _lastServerUpdate = now;
     }
-    
-    // Calculer le progrès en temps réel basé sur le dernier baseline local
-    final localElapsedMs = _lastServerUpdate != null 
-        ? now.difference(_lastServerUpdate!).inMilliseconds 
+
+    // Recalcul de l'estimate avec les nouvelles ou anciennes valeurs baselines
+    final finalElapsedMs = _lastServerUpdate != null
+        ? now.difference(_lastServerUpdate!).inMilliseconds
         : 0;
-    
+
     // Estimer le temps restant réel = baseline - temps écoulé localement
-    final estimatedRemaining = (_lastServerRemaining - localElapsedMs).clamp(0, total);
-    final smoothProgress = total > 0 ? (estimatedRemaining / total).clamp(0.0, 1.0) : 0.0;
-    
+    final estimatedRemaining =
+        (_lastServerRemaining - finalElapsedMs).clamp(0, total);
+    final smoothProgress =
+        total > 0 ? (estimatedRemaining / total).clamp(0.0, 1.0) : 0.0;
+
     // Toujours mettre à jour pour une animation fluide
     setState(() {
       _currentProgress = smoothProgress;
@@ -138,8 +152,9 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
         // Seulement réinitialiser si c'est une NOUVELLE phase (pas un resume)
         final serverRemaining = widget.gameState.reactionTimeRemaining;
         final total = widget.reactionTimeTotalMs;
-        final isResume = serverRemaining < total * 0.95; // Moins de 95% = resume probable
-        
+        final isResume =
+            serverRemaining < total * 0.95; // Moins de 95% = resume probable
+
         if (!isResume || _lastServerUpdate == null) {
           _lastServerUpdate = DateTime.now();
         }
@@ -412,9 +427,7 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
       key: widget.discardKey,
       card: widget.discardCardOverride ?? gs.topDiscardCard,
       cardSize: cardSize,
-      onTap: canTakeDiscard
-          ? widget.onTakeFromDiscard
-          : widget.onShowDiscard,
+      onTap: canTakeDiscard ? widget.onTakeFromDiscard : widget.onShowDiscard,
       svgBuilder: widget.svgBuilder,
     );
 
@@ -479,7 +492,8 @@ class _CenterTableState extends State<CenterTable> with SingleTickerProviderStat
 
   Widget _buildLastBotAction(GameState gs) {
     final raw = gs.actionHistory.first;
-    final text = raw.contains('] ') ? raw.substring(raw.indexOf('] ') + 2) : raw;
+    final text =
+        raw.contains('] ') ? raw.substring(raw.indexOf('] ') + 2) : raw;
 
     return Text(
       text,

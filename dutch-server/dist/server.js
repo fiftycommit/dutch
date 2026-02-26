@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -23,7 +56,8 @@ const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const friendsRoutes_1 = __importDefault(require("./routes/friendsRoutes"));
 const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
-const chatKeyRoutes_1 = __importDefault(require("./routes/chatKeyRoutes"));
+const chatKeyRoutes_1 = __importStar(require("./routes/chatKeyRoutes"));
+const friendsRoutes_2 = require("./routes/friendsRoutes");
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const RoomRegistryService_1 = require("./services/RoomRegistryService");
@@ -199,17 +233,14 @@ function startServer() {
 </urlset>`);
     });
     app.get('/version', (req, res) => {
-        res.json({
-            sha: process.env.GIT_SHA || null,
-            buildTime: process.env.BUILD_TIME || null,
-            startedAt,
-            nodeEnv: process.env.NODE_ENV || null,
-        });
-    });
-    app.get('/rooms', (req, res) => {
-        res.json(roomManager.listRooms());
+        res.json({ status: 'ok' });
     });
     app.get('/rooms/debug', (req, res) => {
+        const secret = req.headers['x-admin-secret'];
+        if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+            res.status(403).json({ error: 'Accès refusé' });
+            return;
+        }
         res.json(roomManager.listRoomsDebug());
     });
     app.get('/rooms/public', (req, res) => {
@@ -229,12 +260,14 @@ function startServer() {
     // Routes Auth (inscription, connexion, profil)
     app.use('/api/auth', authRoutes_1.default);
     // Routes Friends (amis, demandes, blocage)
+    (0, friendsRoutes_2.setFriendsIo)(io, roomManager);
     app.use('/api/friends', friendsRoutes_1.default);
     // Routes Rooms (salons sauvegardés)
     app.use('/api/rooms', roomRoutes_1.default);
     // Routes Admin (gestion des utilisateurs)
     app.use('/api/admin', adminRoutes_1.default);
     // Routes Chat keys (chiffrement E2E)
+    (0, chatKeyRoutes_1.setChatIo)(io);
     app.use('/api/chats', chatKeyRoutes_1.default);
     // Dashboard admin
     app.get('/admin', (req, res) => {

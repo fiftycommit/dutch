@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/ui/haptic_service.dart';
 
@@ -22,14 +21,24 @@ class PresenceCheckOverlay extends StatefulWidget {
   State<PresenceCheckOverlay> createState() => _PresenceCheckOverlayState();
 }
 
-class _PresenceCheckOverlayState extends State<PresenceCheckOverlay> {
-  Timer? _timer;
-  int _remainingMs = 0;
+class _PresenceCheckOverlayState extends State<PresenceCheckOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _progressController;
+  int _lastHapticTick = 0;
   bool _wasActive = false;
 
   @override
   void initState() {
     super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: widget.deadlineMs > 0 ? widget.deadlineMs : 15000),
+    )..addListener(() {
+        if (mounted) setState(() {});
+        _checkHaptic();
+      });
+
     if (widget.active) {
       _wasActive = true;
       _startCountdown(widget.deadlineMs);
@@ -52,44 +61,42 @@ class _PresenceCheckOverlayState extends State<PresenceCheckOverlay> {
 
   @override
   void dispose() {
-    _stopCountdown();
+    _progressController.dispose();
     super.dispose();
   }
 
   void _startCountdown(int ms) {
-    _stopCountdown();
-    _remainingMs = ms;
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!mounted) return;
-      setState(() {
-        _remainingMs = (_remainingMs - 100).clamp(0, 600000).toInt();
-      });
-
-      // Vibration pulsée tout au long du check
-      final tickIndex = timer.tick;
-      if (tickIndex % 7 == 0) {
-        HapticService.cardTap();
-      }
-
-      if (_remainingMs <= 0) {
-        _stopCountdown();
-      }
-    });
+    if (ms <= 0) return;
+    _progressController.duration = Duration(milliseconds: ms);
+    _progressController.value = 1.0;
+    _progressController.reverse();
   }
 
   void _stopCountdown() {
-    _timer?.cancel();
-    _timer = null;
+    _progressController.stop();
+  }
+
+  void _checkHaptic() {
+    if (!widget.active) return;
+
+    // 80 BPM = une vibration toutes les 750ms
+    final elapsedTotal = widget.deadlineMs * (1.0 - _progressController.value);
+    final tickIndex = (elapsedTotal / 100).round();
+
+    // On vibre continuellement pendant tout le compte à rebours de présence
+    if (tickIndex != _lastHapticTick && tickIndex % 7 == 0) {
+      _lastHapticTick = tickIndex;
+      HapticService.cardTap();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!widget.active) return const SizedBox.shrink();
 
-    final seconds = (_remainingMs / 1000).ceil().clamp(0, 60).toInt();
-    final progress = widget.deadlineMs > 0
-        ? (_remainingMs / widget.deadlineMs).clamp(0.0, 1.0)
-        : 0.0;
+    final remainingMs = (widget.deadlineMs * _progressController.value).round();
+    final seconds = (remainingMs / 1000).ceil().clamp(0, 60).toInt();
+    final progress = _progressController.value;
     final reason = widget.reason ?? 'Confirme ta présence pour continuer.';
 
     // Couleur progressive de la barre

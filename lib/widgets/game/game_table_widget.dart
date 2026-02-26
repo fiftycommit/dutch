@@ -224,24 +224,42 @@ class _GameTableContentState extends State<_GameTableContent>
   }
 
   Player? get _humanPlayer {
+    // 1. Essayer avec l'ID du joueur (socket.id, le plus direct)
     if (mpConfig.playerId != null) {
       try {
         return gs.players.firstWhere((p) => p.id == mpConfig.playerId);
-      } catch (_) {
-        return null;
-      }
+      } catch (_) {}
     }
-    try {
-      return gs.players.firstWhere((p) => p.isHuman);
-    } catch (_) {
-      return null;
+
+    // 2. En mode solo contre des bots, il n'y a qu'un seul humain
+    final humans = gs.players.where((p) => p.isHuman).toList();
+    if (humans.length == 1) {
+      return humans.first;
     }
+
+    return null;
   }
 
   List<Player> get _opponents {
     final human = _humanPlayer;
     if (human == null) return gs.players;
-    return gs.players.where((p) => p.id != human.id).toList();
+
+    // Pour que l'ordre visuel respecte le sens des aiguilles d'une montre pour tout le monde :
+    // On trouve l'index du joueur local. Les adversaires sont ceux qui le suivent dans le tableau
+    // en rebouclant vers le début (modulo).
+    final players = gs.players;
+    final humanIndex = players.indexWhere((p) => p.id == human.id);
+
+    if (humanIndex == -1) return players; // Fallback
+
+    final List<Player> orderedOpponents = [];
+    for (int i = 1; i < players.length; i++) {
+      // (Index_local + i) % total_joueurs donne l'ordre chronologique exact suivant le joueur local
+      final nextIndex = (humanIndex + i) % players.length;
+      orderedOpponents.add(players[nextIndex]);
+    }
+
+    return orderedOpponents;
   }
 
   bool get _isMyTurn {
@@ -376,19 +394,13 @@ class _GameTableContentState extends State<_GameTableContent>
       return;
     }
 
-    // En multijoueur, ne montrer l'animation que si c'est le joueur local qui agit
-    // (la carte piochée était visible par lui et il la défausse/remplace)
-    final isMultiplayer = mpConfig.playerId != null;
-    if (isMultiplayer && _lastDrawnCard == null) {
-      // Si on n'avait pas de carte piochée visible, on ne doit pas animer
-      // car c'est probablement l'action d'un autre joueur
-      return;
-    }
+    // L'animation ne doit se déclencher que pour le joueur local (qui est le seul dont on a les cartes)
+    // La logique plus bas vérifie si c'est la main locale ("human.hand") qui a changé.
 
-    final currentDiscard = gs.discardPile.length;
-    if (currentDiscard <= _lastDiscardPileSize) {
-      return;
-    }
+    // On ne vérifie plus strictement `currentDiscard <= _lastDiscardPileSize`
+    // car dans certaines phases (comme "reaction"), la défausse peut jouer un rôle particulier
+    // ou la taille de la pile peut ne pas augmenter immédiatement sur le client de la même manière.
+    // L'essentiel est de voir si une carte a disparu de la main.
 
     final previousHand = _lastHandCards[human.id];
     if (previousHand == null || previousHand.isEmpty) {
