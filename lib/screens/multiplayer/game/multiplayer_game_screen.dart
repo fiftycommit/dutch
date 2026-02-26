@@ -30,7 +30,9 @@ class MultiplayerGameScreen extends StatefulWidget {
 }
 
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
-    with GameLayoutMixin<MultiplayerGameScreen>, GameScreenMixin<MultiplayerGameScreen> {
+    with
+        GameLayoutMixin<MultiplayerGameScreen>,
+        GameScreenMixin<MultiplayerGameScreen> {
   StreamSubscription? _eventSubscription;
   StreamSubscription? _emoteSubscription;
   final List<Widget> _floatingEmotes = [];
@@ -57,13 +59,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   }
 
   void _setupProviderListener() {
-    _cachedProvider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    _cachedProvider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
     _cachedProvider!.addListener(_onProviderChanged);
   }
 
   void _onProviderChanged() {
     if (!mounted) return;
-    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    final provider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gameState = provider.gameState;
     if (gameState == null) return;
 
@@ -131,7 +135,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
         if (ModalRoute.of(context)?.isCurrent == true && mounted) {
           final title = targetName == 'vous' ? 'VOTRE CARTE' : 'CARTE REVELEE';
-          UnifiedPowerDialogs.showCardRevealDialog(context, spiedCard, title: title);
+          UnifiedPowerDialogs.showCardRevealDialog(context, spiedCard,
+              title: title);
         }
       });
     }
@@ -187,7 +192,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   }
 
   void _setupEmoteListener() {
-    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
+    final provider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
     _emoteSubscription = provider.emoteStream.listen((emote) {
       if (!mounted) return;
       _showFloatingEmote(emote);
@@ -211,7 +217,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       onComplete: () {
         if (mounted) {
           setState(() {
-            _floatingEmotes.removeWhere((w) => w.key == ValueKey('emote_$emoteId'));
+            _floatingEmotes
+                .removeWhere((w) => w.key == ValueKey('emote_$emoteId'));
           });
         }
       },
@@ -356,229 +363,247 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     return PopScope(
       canPop: false,
       child: Consumer<MultiplayerGameProvider>(
-      builder: (context, gameProvider, child) {
-        final gameState = gameProvider.gameState;
+        builder: (context, gameProvider, child) {
+          final gameState = gameProvider.gameState;
 
-        if (gameState == null) {
-          return const Scaffold(
-            backgroundColor: AppColors.gradientBottom,
-            body: Center(child: CircularProgressIndicator(color: AppColors.textPrimary)),
-          );
-        }
+          if (gameState == null) {
+            return const Scaffold(
+              backgroundColor: AppColors.gradientBottom,
+              body: Center(
+                  child:
+                      CircularProgressIndicator(color: AppColors.textPrimary)),
+            );
+          }
 
-        // Early returns pour états bloquants (dialogs déclenchés par le listener)
-        if (gameProvider.roomClosedByHost && _hostClosedDialogShown) {
-          return Scaffold(backgroundColor: AppColors.gradientBottom);
-        }
-        if (gameProvider.wasKicked && _kickedDialogShown) {
-          return Scaffold(backgroundColor: AppColors.gradientBottom);
-        }
-        if (gameProvider.wasBanned && _bannedDialogShown) {
-          return Scaffold(backgroundColor: AppColors.gradientBottom);
-        }
+          // Early returns pour états bloquants (dialogs déclenchés par le listener)
+          if (gameProvider.roomClosedByHost && _hostClosedDialogShown) {
+            return Scaffold(backgroundColor: AppColors.gradientBottom);
+          }
+          if (gameProvider.wasKicked && _kickedDialogShown) {
+            return Scaffold(backgroundColor: AppColors.gradientBottom);
+          }
+          if (gameProvider.wasBanned && _bannedDialogShown) {
+            return Scaffold(backgroundColor: AppColors.gradientBottom);
+          }
 
-        final size = MediaQuery.of(context).size;
-        final isPortrait = size.height > size.width;
+          final size = MediaQuery.of(context).size;
+          final isPortrait = size.height > size.width;
 
-        if (kIsWeb && isPortrait) {
-          return GameOverlays.rotateScreen();
-        }
+          if (kIsWeb && isPortrait) {
+            return GameOverlays.rotateScreen();
+          }
 
-        return PopScope(
-          onPopInvokedWithResult: (didPop, _) async {
-            if (!didPop) {
-              _showQuitConfirmation(context, gameProvider);
-            }
-          },
-          child: Scaffold(
-            backgroundColor: AppColors.gradientBottom,
-            body: Stack(
-              children: [
-                GameTableWidget(
-                  gameState: gameState,
-                  isProcessing: gameProvider.isProcessing,
-                  shakingCardIndices: gameProvider.shakingCardIndices.toList(),
-                  isSpectator: !gameState.players.any((p) => p.id == gameProvider.playerId && !p.isSpectator),
-                  callbacks: GameTableCallbacks.fromController(
-                    context: context,
-                    controller: gameProvider,
-                    onOpponentCardTap: (opponentIndex, cardIndex) => 
-                        gameProvider.usePower10SpyOpponent(opponentIndex, cardIndex),
-                    supportsTakeFromDiscard: true, // Multiplayer allows taking from discard
+          return PopScope(
+            onPopInvokedWithResult: (didPop, _) async {
+              if (!didPop) {
+                _showQuitConfirmation(context, gameProvider);
+              }
+            },
+            child: Scaffold(
+              backgroundColor: AppColors.gradientBottom,
+              body: Stack(
+                children: [
+                  GameTableWidget(
+                    gameState: gameState,
+                    isProcessing: gameProvider.isProcessing,
+                    shakingCardIndices:
+                        gameProvider.shakingCardIndices.toList(),
+                    isSpectator: !gameState.players.any(
+                        (p) => p.id == gameProvider.playerId && !p.isSpectator),
+                    callbacks: GameTableCallbacks.fromController(
+                      context: context,
+                      controller: gameProvider,
+                      onOpponentCardTap: (opponentIndex, cardIndex) =>
+                          gameProvider.usePower10SpyOpponent(
+                              opponentIndex, cardIndex),
+                      supportsTakeFromDiscard:
+                          true, // Multiplayer allows taking from discard
+                    ),
+                    onSpecialPowerAnimationComplete: (cardId) {
+                      if (!mounted) return;
+                      setState(() {
+                        _specialPowerReadyId = cardId;
+                        _specialPowerDialogShownId = null;
+                      });
+                    },
+                    multiplayerConfig: MultiplayerConfig(
+                      playerId: gameProvider.playerId,
+                      playerConnections: _buildConnectionMap(gameProvider),
+                      playerAfkStatus: _buildAfkMap(gameProvider, gameState),
+                      turnStartTime: gameState.turnStartTime != null
+                          ? gameState.turnStartTime! -
+                              gameProvider.serverTimeOffsetMs
+                          : null,
+                      turnDuration: gameState.turnTimeoutMs,
+                      reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
+                    ),
                   ),
-                  onSpecialPowerAnimationComplete: (cardId) {
-                    if (!mounted) return;
-                    setState(() {
-                      _specialPowerReadyId = cardId;
-                      _specialPowerDialogShownId = null;
-                    });
-                  },
-                  multiplayerConfig: MultiplayerConfig(
-                    playerId: gameProvider.playerId,
-                    playerConnections: _buildConnectionMap(gameProvider),
-                    playerAfkStatus: _buildAfkMap(gameProvider, gameState),
-                    turnStartTime: gameState.turnStartTime != null 
-                        ? gameState.turnStartTime! - gameProvider.serverTimeOffsetMs 
-                        : null,
-                    turnDuration: gameState.turnTimeoutMs,
-                    reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
-                  ),
-                ),
 
-                // Room Code and Tournament Info Overlay
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              gameState.gameMode == GameMode.tournament 
-                                  ? Icons.emoji_events 
-                                  : Icons.videogame_asset,
-                              color: gameState.gameMode == GameMode.tournament 
-                                  ? Colors.amber 
-                                  : AppColors.textSecondary, 
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
+                  // Room Code and Tournament Info Overlay
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                gameState.gameMode == GameMode.tournament
+                                    ? Icons.emoji_events
+                                    : Icons.videogame_asset,
+                                color: gameState.gameMode == GameMode.tournament
+                                    ? Colors.amber
+                                    : AppColors.textSecondary,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                gameState.gameMode == GameMode.tournament
+                                    ? tournamentStageLabel(
+                                        gameState.tournamentRound,
+                                        totalRounds:
+                                            gameProvider.tournamentTotalRounds,
+                                      )
+                                    // Masquer le code pour les parties publiques
+                                    : (gameProvider.roomSettings?.isPublic ==
+                                            true
+                                        ? "Partie publique"
+                                        : "Room: ${gameProvider.roomCode ?? '?'}"),
+                                style: const TextStyle(
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (gameState.gameMode == GameMode.tournament) ...[
+                            const SizedBox(height: 2),
                             Text(
-                              gameState.gameMode == GameMode.tournament
-                                  ? tournamentStageLabel(
-                                      gameState.tournamentRound,
-                                      totalRounds: gameProvider.tournamentTotalRounds,
-                                    )
-                                  // Masquer le code pour les parties publiques
-                                  : (gameProvider.roomSettings?.isPublic == true
-                                      ? "Partie publique"
-                                      : "Room: ${gameProvider.roomCode ?? '?'}"),
+                              "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
                               style: const TextStyle(
-                                color: Colors.amber,
-                                fontWeight: FontWeight.bold,
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
                               ),
                             ),
                           ],
-                        ),
-                        if (gameState.gameMode == GameMode.tournament) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  if (gameState.phase == GamePhase.dutchCalled)
+                    GameOverlays.dutchNotification(),
+
+                  if (gameState.isWaitingForSpecialPower)
+                    _buildSpecialPowerOverlay(gameProvider, gameState),
+
+                  if (gameProvider.isProcessing)
+                    const Positioned(
+                      top: 20,
+                      right: 60,
+                      child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.textDisabled)),
+                    ),
+
+                  // Notification: joueur a quitté
+                  if (gameProvider.playerLeftNotification)
+                    GameOverlays.playerLeftBanner(
+                        gameProvider.lastPlayerLeftName),
+
+                  // Notification: pouvoir spécial utilisé sur nous
+                  if (gameProvider.specialPowerNotification)
+                    GameOverlays.specialPowerBanner(
+                        gameProvider.specialPowerByName),
+
+                  // Boutons en haut à droite
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Bouton Émotes
+                        IconButton(
+                          icon: const Icon(Icons.emoji_emotions,
+                              color: Colors.amber, size: 32),
+                          onPressed: () {
+                            setState(() {
+                              _showEmoteOverlay = true;
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.pause_circle_filled,
+                              color: AppColors.textDisabled, size: 32),
+                          onPressed: () => gameProvider.pauseGame(),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.exit_to_app,
+                              color: AppColors.textDisabled, size: 32),
+                          onPressed: () =>
+                              _showQuitConfirmation(context, gameProvider),
+                        ),
                       ],
                     ),
                   ),
-                ),
 
-                if (gameState.phase == GamePhase.dutchCalled)
-                  GameOverlays.dutchNotification(),
+                  // Indicateur de reconnexion silencieuse
+                  if (gameProvider.isSilentReconnecting)
+                    GameOverlays.reconnectingBanner(),
 
-                if (gameState.isWaitingForSpecialPower)
-                  _buildSpecialPowerOverlay(gameProvider, gameState),
+                  if (gameProvider.isPaused)
+                    GameOverlays.pauseOverlay(
+                      pausedByName: gameProvider.pausedByName,
+                      onResume: gameProvider.resumeGame,
+                    ),
 
-                if (gameProvider.isProcessing)
-                  const Positioned(
-                    top: 20,
-                    right: 60,
-                    child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.textDisabled)),
-                  ),
-
-                // Notification: joueur a quitté
-                if (gameProvider.playerLeftNotification)
-                  GameOverlays.playerLeftBanner(gameProvider.lastPlayerLeftName),
-
-                // Notification: pouvoir spécial utilisé sur nous
-                if (gameProvider.specialPowerNotification)
-                  GameOverlays.specialPowerBanner(gameProvider.specialPowerByName),
-
-                // Boutons en haut à droite
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Bouton Émotes
-                      IconButton(
-                        icon: const Icon(Icons.emoji_emotions,
-                            color: Colors.amber, size: 32),
-                        onPressed: () {
-                          setState(() {
-                            _showEmoteOverlay = true;
-                          });
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.pause_circle_filled,
-                            color: AppColors.textDisabled, size: 32),
-                        onPressed: () => gameProvider.pauseGame(),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.exit_to_app,
-                            color: AppColors.textDisabled, size: 32),
-                        onPressed: () =>
-                            _showQuitConfirmation(context, gameProvider),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Indicateur de reconnexion silencieuse
-                if (gameProvider.isSilentReconnecting)
-                  GameOverlays.reconnectingBanner(),
-
-                if (gameProvider.isPaused)
-                  GameOverlays.pauseOverlay(
-                    pausedByName: gameProvider.pausedByName,
-                    onResume: gameProvider.resumeGame,
-                  ),
-
-                PresenceCheckOverlay(
-                  active: gameProvider.presenceCheckActive,
-                  deadlineMs: gameProvider.presenceCheckDeadlineMs,
-                  reason: gameProvider.presenceCheckReason,
-                  onConfirm: gameProvider.confirmPresence,
-                ),
-
-                // Émotes flottantes
-                ..._floatingEmotes,
-
-                // Overlay d'émotes
-                if (_showEmoteOverlay)
-                  EmoteOverlay(
-                    onClose: () {
-                      setState(() {
-                        _showEmoteOverlay = false;
-                      });
-                    },
-                    onEmoteSent: (emoji) {
-                      gameProvider.sendEmote(emoji);
+                  PresenceCheckOverlay(
+                    active: gameProvider.presenceCheckActive,
+                    deadlineMs: gameProvider.presenceCheckDeadlineMs,
+                    reason: gameProvider.presenceCheckReason,
+                    onConfirm: gameProvider.confirmPresence,
+                    onAbandon: () {
+                      gameProvider.confirmPresence(); // Clear the check first
+                      gameProvider.forfeitGame();
+                      if (context.mounted) {
+                        context.go('/lobby');
+                      }
                     },
                   ),
-              ],
+
+                  // Émotes flottantes
+                  ..._floatingEmotes,
+
+                  // Overlay d'émotes
+                  if (_showEmoteOverlay)
+                    EmoteOverlay(
+                      onClose: () {
+                        setState(() {
+                          _showEmoteOverlay = false;
+                        });
+                      },
+                      onEmoteSent: (emoji) {
+                        gameProvider.sendEmote(emoji);
+                      },
+                    ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
-    ),
+          );
+        },
+      ),
     );
   }
 
@@ -659,5 +684,4 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     _specialPowerReadyId = null;
     _specialPowerDialogShownId = null;
   }
-
 }

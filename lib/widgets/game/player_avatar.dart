@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/player.dart';
+import '../../services/ui/haptic_service.dart';
 import '../../utils/screen_utils.dart';
 
 class PlayerAvatar extends StatefulWidget {
@@ -89,8 +90,31 @@ class _PlayerAvatarState extends State<PlayerAvatar>
       }
     }
 
+    // Vibration pulsée en zone rouge (<25%)
+    if (newProgress > 0 && newProgress < 0.25 && widget.isActive) {
+      // 80 BPM = une vibration toutes les 750ms
+      // Le timer tick toutes les 100ms, donc on vibre toutes les ~7 ticks
+      final tickIndex = (elapsed / 100).round();
+      if (tickIndex % 7 == 0) {
+        HapticService.cardTap();
+      }
+    }
+
     if (remaining <= 0) {
       _timer?.cancel();
+    }
+  }
+
+  /// Couleur progressive : vert vif → orange → rouge
+  Color _timerColor() {
+    if (_progress > 0.5) {
+      // Vert → Orange (100% → 50%)
+      final t = ((_progress - 0.5) / 0.5).clamp(0.0, 1.0);
+      return Color.lerp(Colors.orange, const Color(0xFF4CAF50), t)!;
+    } else {
+      // Orange → Rouge (50% → 0%)
+      final t = (_progress / 0.5).clamp(0.0, 1.0);
+      return Color.lerp(Colors.red, Colors.orange, t)!;
     }
   }
 
@@ -110,17 +134,8 @@ class _PlayerAvatarState extends State<PlayerAvatar>
     final badgeHeight = ScreenUtils.scale(context, widget.size * 0.6);
     final fontSize = ScreenUtils.scaleFont(context, widget.size * 0.35);
 
-    Color backgroundColor = widget.isActive
-        ? Colors.amber.shade700
-        : Colors.black.withValues(alpha: 0.5);
-
-    if (widget.isActive && widget.turnStartTime != null) {
-      // Background color for timer is now consistent
-      backgroundColor = Colors.grey.shade700;
-    }
-
     if (widget.isAfk) {
-      backgroundColor = Colors.grey.shade800;
+      // Afk background logic can be handled separately if needed, but the container uses _timerColor
     }
 
     return Stack(
@@ -163,7 +178,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                       alignment: Alignment.centerLeft,
                       widthFactor: _progress,
                       child: Container(
-                        color: backgroundColor.withValues(alpha: 0.6),
+                        color: _timerColor().withValues(alpha: 0.7),
                       ),
                     ),
                   ),

@@ -355,6 +355,14 @@ export class RoomManager {
         gamePlayer.isSpectator = true; // Sync with GameState
         gamePlayer.hasFolded = true; // Also mark as folded for round logic
 
+        // Traquer l'ordre d'élimination pour le classement de fin de partie
+        if (!room.gameState.eliminatedPlayerIds) {
+          room.gameState.eliminatedPlayerIds = [];
+        }
+        if (!room.gameState.eliminatedPlayerIds.includes(playerId)) {
+          room.gameState.eliminatedPlayerIds.push(playerId);
+        }
+
         this.clearPresenceCheck(roomCode, playerId);
         this.clearTurnTimer(roomCode);
 
@@ -641,17 +649,39 @@ export class RoomManager {
       cardScore: calculateScore(player),
     }));
 
-    // Trier par score de cartes (le plus bas est le meilleur)
-    playersWithScores.sort((a, b) => a.cardScore - b.cardScore);
+    // Séparer les joueurs éliminés et non-éliminés
+    const eliminatedIds = room.gameState.eliminatedPlayerIds || [];
+    const activePlayers = playersWithScores.filter(p => !eliminatedIds.includes(p.player.id));
+    const eliminatedPlayers = playersWithScores.filter(p => eliminatedIds.includes(p.player.id));
 
-    // Calculer les rangs avec égalités
+    // Trier les actifs par score de cartes (le plus bas est le meilleur)
+    activePlayers.sort((a, b) => a.cardScore - b.cardScore);
+
+    // Trier les éliminés par ordre inverse d'élimination (le premier éliminé est le pire)
+    eliminatedPlayers.sort((a, b) => {
+      const indexA = eliminatedIds.indexOf(a.player.id);
+      const indexB = eliminatedIds.indexOf(b.player.id);
+      return indexB - indexA; // Le dernier éliminé (index max) est "meilleur" que le premier éliminé
+    });
+
+    const sortedPlayers = [...activePlayers, ...eliminatedPlayers];
+
+    // Calculer les rangs avec égalités (seulement pour les actifs, les éliminés ont chacun un rang distinct)
     const ranks: Map<string, number> = new Map();
     let currentRank = 1;
-    for (let i = 0; i < playersWithScores.length; i++) {
-      if (i > 0 && playersWithScores[i].cardScore > playersWithScores[i - 1].cardScore) {
+
+    for (let i = 0; i < sortedPlayers.length; i++) {
+      const pId = sortedPlayers[i].player.id;
+
+      if (eliminatedIds.includes(pId)) {
+        // Les éliminés ne font pas d'égalité, ils prennent la place exacte restante
+        currentRank = i + 1;
+      } else if (i > 0 &&
+        !eliminatedIds.includes(sortedPlayers[i - 1].player.id) &&
+        sortedPlayers[i].cardScore > sortedPlayers[i - 1].cardScore) {
         currentRank = i + 1;
       }
-      ranks.set(playersWithScores[i].player.id, currentRank);
+      ranks.set(pId, currentRank);
     }
 
     // Calculer les points RP selon le classement (comme en mode solo)
@@ -1070,7 +1100,34 @@ export class RoomManager {
     player.connected = true;
     player.lastSeenAt = this.now();
     this.touchRoom(room);
-    this.startTurnTimer(roomCode);
+
+    // Après confirmation de présence : seulement 15s pour jouer (pas le timer complet)
+    const extensionMs = 15000;
+    this.clearTurnTimer(roomCode);
+
+    if (room.gameState && room.gameState.phase === GamePhase.playing) {
+      room.gameState.turnStartTime = this.now();
+      room.gameState.turnTimeoutMs = extensionMs;
+
+      const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
+      if (currentPlayer && currentPlayer.id === socketId) {
+        const timer = setTimeout(() => {
+          const currentRoom = this.rooms.get(roomCode);
+          if (!currentRoom || !currentRoom.gameState) return;
+          const stillCurrent = currentRoom.gameState.players[currentRoom.gameState.currentPlayerIndex]?.id === socketId;
+          if (!stillCurrent) return;
+          this.actionTimers.delete(roomCode);
+          // Éjection directe après l'extension
+          this.markSpectator(roomCode, socketId, 'Temps écoulé après avertissement');
+        }, extensionMs);
+        this.actionTimers.set(roomCode, timer);
+      }
+
+      this.broadcastGameState(roomCode, 'PRESENCE_CONFIRMED', {
+        message: '⏱️ 15 secondes pour jouer !',
+      });
+    }
+
     this.broadcastPresence(roomCode);
   }
 
@@ -1422,14 +1479,25 @@ export class RoomManager {
 
     const roomIndex = room.players.findIndex((p) => p.id === playerId);
     if (roomIndex >= 0) {
-      room.players.splice(roomIndex, 1);
+      if (room.status === RoomStatus.playing || room.isPaused) {
+        room.players[roomIndex].isSpectator = true;
+        room.players[roomIndex].ready = false;
+      } else {
+        room.players.splice(roomIndex, 1);
+      }
     }
-    if (room.players.length === 0) {
+
+    // On compte seulement les joueurs non-spectateurs (s'il y en a) pour détruire la room
+    const activeHumanPlayers = room.players.filter(p => p.isHuman && !p.isSpectator);
+    if (room.players.length === 0 || activeHumanPlayers.length === 0) {
       this.removeRoom(roomCode);
       return;
     }
 
-    this.reindexPlayers(room);
+    if (room.status !== RoomStatus.playing && !room.isPaused) {
+      this.reindexPlayers(room);
+    }
+
     this.ensureHost(room);
     this.touchRoom(room);
 
