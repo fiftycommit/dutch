@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/player.dart';
 import '../../services/ui/haptic_service.dart';
@@ -36,89 +35,97 @@ class PlayerAvatar extends StatefulWidget {
 
 class _PlayerAvatarState extends State<PlayerAvatar>
     with SingleTickerProviderStateMixin {
-  Timer? _timer;
-  double _progress = 1.0;
+  late AnimationController _progressController;
+  int _lastHapticTick = 0;
 
   @override
   void initState() {
     super.initState();
-    if (widget.isActive && widget.turnStartTime != null) {
-      _startTimer();
-    }
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1), // Sera écrasé par la vraie durée
+    )..addListener(() {
+        if (mounted) setState(() {});
+        _checkHaptic();
+      });
+
+    _updateTimer();
   }
 
   @override
   void didUpdateWidget(PlayerAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive != oldWidget.isActive ||
-        widget.turnStartTime != oldWidget.turnStartTime) {
-      _timer?.cancel();
-      if (widget.isActive && widget.turnStartTime != null) {
-        _startTimer();
-      } else {
-        setState(() {
-          _progress = 1.0;
-        });
-      }
+        widget.turnStartTime != oldWidget.turnStartTime ||
+        widget.turnDuration != oldWidget.turnDuration) {
+      _updateTimer();
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _progressController.dispose();
     super.dispose();
   }
 
-  void _startTimer() {
-    _updateProgress();
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      _updateProgress();
-    });
-  }
-
-  void _updateProgress() {
-    if (widget.turnStartTime == null || widget.turnDuration == null) return;
+  void _updateTimer() {
+    if (!widget.isActive ||
+        widget.turnStartTime == null ||
+        widget.turnDuration == null) {
+      _progressController.stop();
+      _progressController.value = 1.0;
+      return;
+    }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    final elapsed = now - widget.turnStartTime!;
+    // Si turnStartTime est dans le futur (clock skew), elapsed est négatif.
+    // En utilisant 0 au minimum, on force le timer à démarrer immédiatement.
+    final elapsed =
+        (now - widget.turnStartTime!).clamp(0, widget.turnDuration!);
     final remaining = widget.turnDuration! - elapsed;
-    final newProgress = (remaining / widget.turnDuration!).clamp(0.0, 1.0);
 
-    if ((newProgress - _progress).abs() > 0.005 || newProgress == 0.0) {
-      if (mounted) {
-        setState(() {
-          _progress = newProgress;
-        });
-      }
+    if (remaining > 0) {
+      _progressController.duration =
+          Duration(milliseconds: widget.turnDuration!);
+      // On affecte la valeur actuelle
+      _progressController.value = remaining / widget.turnDuration!;
+      // On lance l'animation vers 0 depuis cette valeur actuelle
+      _progressController.reverse();
+    } else {
+      _progressController.stop();
+      _progressController.value = 0.0;
     }
+  }
 
-    // Vibration pulsée en zone rouge (<25%)
-    if (newProgress > 0 &&
-        newProgress < 0.25 &&
-        widget.isActive &&
-        widget.isLocalPlayer) {
+  void _checkHaptic() {
+    if (!widget.isActive || !widget.isLocalPlayer) return;
+
+    final progress = _progressController.value;
+    if (progress > 0 && progress < 0.25) {
       // 80 BPM = une vibration toutes les 750ms
-      // Le timer tick toutes les 100ms, donc on vibre toutes les ~7 ticks
-      final tickIndex = (elapsed / 100).round();
-      if (tickIndex % 7 == 0) {
-        HapticService.cardTap();
+      // Le timer global correspond à turnDuration.
+      // On calcule le temps écoulé théorique en millisecondes
+      if (widget.turnDuration != null) {
+        final elapsedTotal = widget.turnDuration! * (1.0 - progress);
+        final tickIndex = (elapsedTotal / 100).round();
+        if (tickIndex != _lastHapticTick && tickIndex % 7 == 0) {
+          _lastHapticTick = tickIndex;
+          HapticService.cardTap();
+        }
       }
-    }
-
-    if (remaining <= 0) {
-      _timer?.cancel();
     }
   }
 
   /// Couleur progressive : vert vif → orange → rouge
   Color _timerColor() {
-    if (_progress > 0.5) {
+    final progress = _progressController.value;
+    if (progress > 0.5) {
       // Vert → Orange (100% → 50%)
-      final t = ((_progress - 0.5) / 0.5).clamp(0.0, 1.0);
+      final t = ((progress - 0.5) / 0.5).clamp(0.0, 1.0);
       return Color.lerp(Colors.orange, const Color(0xFF4CAF50), t)!;
     } else {
       // Orange → Rouge (50% → 0%)
-      final t = (_progress / 0.5).clamp(0.0, 1.0);
+      final t = (progress / 0.5).clamp(0.0, 1.0);
       return Color.lerp(Colors.red, Colors.orange, t)!;
     }
   }
@@ -181,7 +188,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                   Positioned.fill(
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: _progress,
+                      widthFactor: _progressController.value,
                       child: Container(
                         color: _timerColor().withValues(alpha: 0.7),
                       ),
