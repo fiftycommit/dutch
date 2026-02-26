@@ -320,6 +320,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     List<int>? hiddenIndices,
     List<String>? hiddenCardIds,
     bool isLocalPlayer = false,
+    bool isBeingShuffled = false,
   }) {
     Widget badge = PlayerAvatar(
       player: player,
@@ -386,6 +387,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       cardSize: cardSize,
       overlapCards: !isHuman,
       fitToWidth: isHuman,
+      isBeingShuffled: isBeingShuffled,
     );
 
     return Column(
@@ -430,6 +432,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     Widget? rightAccessory,
     int? turnStartTime,
     int? turnDuration,
+    bool isBeingShuffled = false,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
@@ -489,6 +492,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       turnStartTime: turnStartTime,
       turnDuration: turnDuration,
       isLocalPlayer: true, // Ceci est la zone du joueur local
+      isBeingShuffled: isBeingShuffled,
     );
     final fittedPlayerBlock = SizedBox(
       height: maxHeight,
@@ -553,6 +557,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     List<int>? hiddenIndices,
     List<String>? hiddenCardIds,
     List<int>? highlightedIndices,
+    bool isBeingShuffled = false,
   }) {
     final cardMetrics = cardVisualSize(context, cardSize);
     final overlap =
@@ -581,6 +586,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       handKey: handKey,
       hiddenIndices: hiddenIndices,
       hiddenCardIds: hiddenCardIds,
+      isBeingShuffled: isBeingShuffled,
     );
   }
 }

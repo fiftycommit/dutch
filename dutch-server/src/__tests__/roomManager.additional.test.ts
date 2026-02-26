@@ -246,7 +246,7 @@ test('pauseGame sets isPaused to true', (t) => {
   manager.setReady(room.id, 'player-2', true);
   manager.startGame(room.id, { fillBots: false });
 
-  manager.pauseGame(room.id, 'Player 1');
+  manager.pauseGame(room.id, 'host-1', 'Player 1');
 
   assert.equal(room.isPaused, true);
 });
@@ -265,10 +265,10 @@ test('resumeGame sets isPaused to false', (t) => {
   manager.setReady(room.id, 'player-2', true);
   manager.startGame(room.id, { fillBots: false });
 
-  manager.pauseGame(room.id, 'Player 1');
+  manager.pauseGame(room.id, 'host-1', 'Player 1');
   assert.equal(room.isPaused, true);
 
-  manager.resumeGame(room.id, 'Player 1');
+  manager.resumeGame(room.id, 'host-1', 'Player 1');
   assert.equal(room.isPaused, false);
 });
 

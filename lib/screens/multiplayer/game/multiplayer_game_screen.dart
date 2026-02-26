@@ -567,6 +567,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     GameOverlays.pauseOverlay(
                       pausedByName: gameProvider.pausedByName,
                       onResume: gameProvider.resumeGame,
+                      isLocalPauser: gameProvider.isLocalPauser,
+                      pauseDeadlineMs: gameProvider.pauseDeadlineMs,
                     ),
 
                   PresenceCheckOverlay(

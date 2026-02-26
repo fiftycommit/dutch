@@ -39,6 +39,10 @@ export interface Room {
 
   cumulativeScores?: Map<string, number>; // clientId -> score total (classement permanent)
   isPaused?: boolean;
+  pausedByPlayerId?: string;   // socket.id du joueur qui a mis pause
+  pausedByName?: string;       // nom affiché
+  pauseStartTime?: number;     // Date.now() au moment de la pause
+  pauseTimeoutHandle?: ReturnType<typeof setTimeout>; // timer d'expulsion auto
   emptyAt?: number; // Timestamp quand la room est devenue vide
   bannedClientIds?: Set<string>; // clientIds des joueurs BANNIS (ne peuvent plus rejoindre)
 }

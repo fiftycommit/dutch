@@ -118,7 +118,7 @@ class GameSettings {
       luckDifficulty: Difficulty.values[json['luckDifficulty'] ?? 1],
       botDifficulty: Difficulty.values[json['botDifficulty'] ?? 1],
       minPlayers: json['minPlayers'] ?? 2,
-      maxPlayers: json['maxPlayers'] ?? 4,
+      maxPlayers: json['maxPlayers'] ?? 6,
       fillBots: json['fillBots'] ?? true,
       reactionTimeMs: json['reactionTimeMs'] ?? 3000,
       actionTextDisplayMs: json['actionTextDisplayMs'] ?? 1500,

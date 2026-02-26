@@ -36,6 +36,7 @@ class PlayerHandWidget extends StatefulWidget {
   final bool overlapCards;
   final bool fitToWidth;
   final SvgBuilder? svgBuilder;
+  final bool isBeingShuffled;
 
   const PlayerHandWidget({
     super.key,
@@ -51,6 +52,7 @@ class PlayerHandWidget extends StatefulWidget {
     this.overlapCards = true,
     this.fitToWidth = false,
     this.svgBuilder,
+    this.isBeingShuffled = false,
   });
 
   @override
@@ -114,23 +116,31 @@ class PlayerHandWidget extends StatefulWidget {
   }
 }
 
-class _PlayerHandWidgetState extends State<PlayerHandWidget> {
+class _PlayerHandWidgetState extends State<PlayerHandWidget>
+    with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
   int _lastHandLength = 0;
   int? _penaltyHighlightIndex;
   Timer? _penaltyTimer;
+
+  // Joker shuffle animation
+  AnimationController? _shuffleController;
+  bool _wasShuffled = false;
+  late List<_ShuffleCardData> _shuffleOffsets;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     _lastHandLength = widget.player.hand.length;
+    _shuffleOffsets = [];
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _penaltyTimer?.cancel();
+    _shuffleController?.dispose();
     super.dispose();
   }
 
@@ -160,6 +170,55 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
     }
 
     _lastHandLength = widget.player.hand.length;
+
+    // Joker shuffle detection
+    if (widget.isBeingShuffled && !_wasShuffled) {
+      _startShuffleAnimation();
+    }
+    _wasShuffled = widget.isBeingShuffled;
+  }
+
+  void _startShuffleAnimation() {
+    _shuffleController?.dispose();
+    _shuffleController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    final rng = math.Random();
+    final count = widget.player.hand.length;
+    _shuffleOffsets = List.generate(count, (_) {
+      return _ShuffleCardData(
+        dx: (rng.nextDouble() - 0.5) * 40,
+        dy: (rng.nextDouble() - 0.5) * 24,
+        rotation: (rng.nextDouble() - 0.5) * 0.5,
+      );
+    });
+
+    _shuffleController!.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    _shuffleController!.forward().then((_) {
+      if (mounted) {
+        setState(() {
+          _shuffleOffsets = [];
+        });
+      }
+      _shuffleController?.dispose();
+      _shuffleController = null;
+    });
+  }
+
+  double _shuffleIntensity() {
+    if (_shuffleController == null) return 0.0;
+    final t = _shuffleController!.value;
+    // Peaks at 0.35, then comes back to 0
+    if (t < 0.35) {
+      return Curves.easeOut.transform(t / 0.35);
+    } else {
+      return Curves.easeInOut.transform(1.0 - ((t - 0.35) / 0.65));
+    }
   }
 
   @override
@@ -306,7 +365,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
       },
     );
 
-    final tappable = GestureDetector(
+    Widget card = GestureDetector(
       onTap: () {
         if (widget.onCardTap != null && widget.isActive && !isHidden) {
           widget.onCardTap!(index);
@@ -315,14 +374,39 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget> {
       child: cardBody,
     );
 
-    if (!isHidden) return tappable;
+    // Joker shuffle animation overlay
+    final intensity = _shuffleIntensity();
+    if (intensity > 0 && index < _shuffleOffsets.length) {
+      final data = _shuffleOffsets[index];
+      card = Transform.translate(
+        offset: Offset(data.dx * intensity, data.dy * intensity),
+        child: Transform.rotate(
+          angle: data.rotation * intensity,
+          child: card,
+        ),
+      );
+    }
+
+    if (!isHidden) return card;
 
     return Visibility(
       visible: false,
       maintainSize: true,
       maintainAnimation: true,
       maintainState: true,
-      child: IgnorePointer(child: tappable),
+      child: IgnorePointer(child: card),
     );
   }
+}
+
+class _ShuffleCardData {
+  final double dx;
+  final double dy;
+  final double rotation;
+
+  const _ShuffleCardData({
+    required this.dx,
+    required this.dy,
+    required this.rotation,
+  });
 }

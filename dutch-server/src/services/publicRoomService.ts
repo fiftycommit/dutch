@@ -29,7 +29,7 @@ class PublicRoomService {
     code: string,
     host: string,
     gameMode: string,
-    maxPlayers: number = 4,
+    maxPlayers: number = 6,
     hostMMR?: number,
     roomName?: string
   ): void {

@@ -351,7 +351,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       const player = room.players.find(p => p.id === socket.id);
       if (!player || player.isSpectator) return;
 
-      roomManager.pauseGame(data.roomCode, player.name);
+      roomManager.pauseGame(data.roomCode, socket.id, player.name);
     } catch (error) {
       console.error('Error game:pause:', error);
     }
@@ -366,7 +366,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       const player = room.players.find(p => p.id === socket.id);
       if (!player || player.isSpectator) return;
 
-      roomManager.resumeGame(data.roomCode, player.name);
+      roomManager.resumeGame(data.roomCode, socket.id, player.name);
     } catch (error) {
       console.error('Error game:resume:', error);
     }

@@ -555,30 +555,97 @@ export class RoomManager {
     this.timerManager.clearTimer(roomCode);
   }
 
-  pauseGame(roomCode: string, pausedByName: string) {
+  pauseGame(roomCode: string, pausedByPlayerId: string, pausedByName: string) {
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameState) return;
     if (room.isPaused) return;
 
     room.isPaused = true;
+    room.pausedByPlayerId = pausedByPlayerId;
+    room.pausedByName = pausedByName;
+    room.pauseStartTime = Date.now();
 
-    // Arrêter les timers sans les effacer complètement (logic complexe)
-    // Pour simplifier : on clear les timers, et on les relancera au resume.
-    // Il faudrait stocker le temps restant pour être précis, mais pour l'instant on stop.
     this.clearTurnTimer(roomCode);
-    this.timerManager.pauseTimer(roomCode); // Supposons que TimerManager gère ça, sinon on clear
+    this.timerManager.pauseTimer(roomCode);
 
-    this.broadcastGameState(roomCode, 'GAME_PAUSED', { pausedBy: pausedByName });
+    // Warning à 60s : "sera expulsé dans 30 secondes"
+    const warn1 = setTimeout(() => {
+      const r = this.rooms.get(roomCode);
+      if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId) return;
+      this.io.to(roomCode).emit('game:pause_warning', {
+        roomCode,
+        pausedBy: pausedByName,
+        secondsRemaining: 30,
+        message: `${pausedByName} sera expulsé dans 30 secondes s'il ne lève pas la pause.`,
+      });
+    }, 60_000);
+
+    // Warning à 75s : "sera expulsé dans 15 secondes"
+    const warn2 = setTimeout(() => {
+      const r = this.rooms.get(roomCode);
+      if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId) return;
+      this.io.to(roomCode).emit('game:pause_warning', {
+        roomCode,
+        pausedBy: pausedByName,
+        secondsRemaining: 15,
+        message: `${pausedByName} sera expulsé dans 15 secondes s'il ne lève pas la pause.`,
+      });
+    }, 75_000);
+
+    // Kick + auto-resume à 90s
+    const kick = setTimeout(() => {
+      const r = this.rooms.get(roomCode);
+      if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId) return;
+      console.log(`⏱️ Pause timeout: kick de ${pausedByName} (${pausedByPlayerId})`);
+      // Lever la pause d'abord (sans broadcast séparé, resumeGame va broadcaster)
+      r.pauseTimeoutHandle = undefined;
+      this.markSpectator(roomCode, pausedByPlayerId, 'pause trop longue');
+      // Si le joueur n'était plus dans la room après kick, la pause est déjà levée
+      // Sinon on force la reprise
+      if (r.isPaused) {
+        this.resumeGame(roomCode, pausedByPlayerId, 'Système', true);
+      }
+    }, 90_000);
+
+    // On stocke les 3 handles dans un seul pour nettoyer facilement
+    // On les encapsule dans un handle composite via clearTimeout multiple
+    room.pauseTimeoutHandle = kick as ReturnType<typeof setTimeout>;
+    // Store warn handles on the kick handle object (hack simple)
+    (kick as any)._warn1 = warn1;
+    (kick as any)._warn2 = warn2;
+
+    this.broadcastGameState(roomCode, 'GAME_PAUSED', {
+      pausedBy: pausedByName,
+      pausedByPlayerId,
+      pauseDeadline: room.pauseStartTime + 90_000,
+    });
   }
 
-  resumeGame(roomCode: string, resumedByName: string) {
+  resumeGame(roomCode: string, resumedByPlayerId: string, resumedByName: string, forced = false) {
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameState) return;
     if (!room.isPaused) return;
 
-    room.isPaused = false;
+    // Seul le joueur qui a mis pause peut lever la pause (sauf si forced par le système)
+    if (!forced && room.pausedByPlayerId && room.pausedByPlayerId !== resumedByPlayerId) {
+      console.log(`🚫 ${resumedByName} tente de lever la pause mais ce n'est pas lui qui l'a mise`);
+      return;
+    }
 
-    // Relancer les timers
+    // Annuler les timers de warning + kick
+    const handle = room.pauseTimeoutHandle;
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      if ((handle as any)._warn1) clearTimeout((handle as any)._warn1);
+      if ((handle as any)._warn2) clearTimeout((handle as any)._warn2);
+    }
+
+    room.isPaused = false;
+    room.pausedByPlayerId = undefined;
+    room.pausedByName = undefined;
+    room.pauseStartTime = undefined;
+    room.pauseTimeoutHandle = undefined;
+
     if (room.gameState.phase === GamePhase.playing) {
       this.startTurnTimer(roomCode);
     } else if (room.gameState.phase === GamePhase.reaction) {

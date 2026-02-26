@@ -66,8 +66,9 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onSwapNotification;
   Function(Map<String, dynamic>)? onJokerNotification;
   Function(Map<String, dynamic>)? onSpyNotification;
-  Function(String)? onGamePaused;
+  Function(String pausedByName, String pausedByPlayerId, int pauseDeadline)? onGamePaused;
   Function(String)? onGameResumed;
+  Function(String pausedByName, int secondsRemaining)? onPauseWarning;
   Function(Map<String, dynamic>)? onGameAllReady;
   Function(Map<String, dynamic>)? onEmoteReceived;
   Function(Map<String, dynamic>)? onTournamentEliminated;
@@ -579,6 +580,14 @@ class MultiplayerService {
       }
     });
 
+  socket.on('game:pause_warning', (data) {
+      if (data is Map) {
+        final pausedBy = data['pausedBy'] as String? ?? 'Inconnu';
+        final secondsRemaining = data['secondsRemaining'] as int? ?? 0;
+        onPauseWarning?.call(pausedBy, secondsRemaining);
+      }
+    });
+
   socket.on('game:spied_card', (data) {
       if (data is Map) {
         try {
@@ -615,7 +624,10 @@ class MultiplayerService {
     if (updateType == 'GAME_STARTED') {
       onGameStarted?.call(data['message'] as String? ?? '');
     } else if (updateType == 'GAME_PAUSED') {
-      onGamePaused?.call(data['pausedBy'] as String? ?? 'Inconnu');
+      final pausedBy = data['pausedBy'] as String? ?? 'Inconnu';
+      final pausedByPlayerId = data['pausedByPlayerId'] as String? ?? '';
+      final pauseDeadline = data['pauseDeadline'] as int? ?? 0;
+      onGamePaused?.call(pausedBy, pausedByPlayerId, pauseDeadline);
     } else if (updateType == 'GAME_RESUMED') {
       onGameResumed?.call(data['resumedBy'] as String? ?? 'Inconnu');
     }

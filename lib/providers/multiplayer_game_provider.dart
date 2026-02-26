@@ -129,6 +129,12 @@ class MultiplayerGameProvider
 
   String? _pausedByName;
   String? get pausedByName => _pausedByName;
+  String? _pausedByPlayerId;
+  String? get pausedByPlayerId => _pausedByPlayerId;
+  int _pauseDeadlineMs = 0;
+  int get pauseDeadlineMs => _pauseDeadlineMs;
+  bool get isLocalPauser =>
+      _pausedByPlayerId != null && _pausedByPlayerId == playerId;
 
   PlayingCard? _lastSpiedCard;
   PlayingCard? get lastSpiedCard => _lastSpiedCard;
@@ -438,14 +444,25 @@ class MultiplayerGameProvider
         _notificationManager.handleJokerNotification;
     _multiplayerService.onSpyNotification =
         _notificationManager.handleSpyNotification;
-    _multiplayerService.onGamePaused = (pausedBy) {
+    _multiplayerService.onGamePaused = (pausedBy, pausedByPid, deadline) {
       _isPaused = true;
       _pausedByName = pausedBy;
+      _pausedByPlayerId = pausedByPid;
+      _pauseDeadlineMs = deadline;
       notifyListeners();
     };
     _multiplayerService.onGameResumed = (resumedBy) {
       _isPaused = false;
       _pausedByName = null;
+      _pausedByPlayerId = null;
+      _pauseDeadlineMs = 0;
+      notifyListeners();
+    };
+    _multiplayerService.onPauseWarning = (pausedBy, secondsRemaining) {
+      _eventController.add(GameEvent(
+        GameEventType.info,
+        '⚠️ $pausedBy sera expulsé dans $secondsRemaining secondes s\'il ne lève pas la pause.',
+      ));
       notifyListeners();
     };
     _multiplayerService.onEmoteReceived = _handleEmoteReceived;
@@ -773,7 +790,7 @@ class MultiplayerGameProvider
           numberOfPlayers: 4,
           isPublic: true,
           minPlayers: 2,
-          maxPlayers: 4,
+          maxPlayers: 6,
           roomName: roomName),
       playerName: playerName,
     );
@@ -997,8 +1014,39 @@ class MultiplayerGameProvider
   }
 
   @override
-  void attemptMatch(int cardIndex) {
-    if (_gameState != null) _multiplayerService.attemptMatch(cardIndex);
+  void attemptMatch(int cardIndex) async {
+    if (_gameState == null || _gameState!.phase != GamePhase.reaction) return;
+
+    final pid = playerId;
+    if (pid == null) return;
+
+    Player? me;
+    try {
+      me = _gameState!.players.firstWhere((p) => p.id == pid);
+    } catch (_) {
+      return;
+    }
+    if (cardIndex < 0 || cardIndex >= me.hand.length) return;
+
+    // Vérification locale pour le feedback visuel (shake si match raté)
+    final playerCard = me.hand[cardIndex];
+    final topDiscard = _gameState!.discardPile.isNotEmpty
+        ? _gameState!.discardPile.last
+        : null;
+    final willSucceed =
+        topDiscard != null && playerCard.matches(topDiscard);
+
+    // Envoyer au serveur (source de vérité)
+    _multiplayerService.attemptMatch(cardIndex);
+
+    // Feedback visuel local immédiat
+    if (!willSucceed) {
+      shakingCardIndices.add(cardIndex);
+      notifyListeners();
+      await Future.delayed(const Duration(milliseconds: 500));
+      shakingCardIndices.remove(cardIndex);
+      notifyListeners();
+    }
   }
 
   @override

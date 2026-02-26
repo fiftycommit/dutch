@@ -176,6 +176,9 @@ class _GameTableContentState extends State<_GameTableContent>
   bool _valetHistoryInitialized = false;
   final Map<String, int> _processedValetHistoryCounts = {};
   String? _pendingSpecialPowerCardId;
+  final Set<String> _jokerShufflePlayerIds = {};
+  bool _jokerHistoryInitialized = false;
+  int _processedJokerHistoryCount = 0;
   final Map<String, Set<int>> _memorizationGlowByPlayer = {};
   Timer? _memorizationGlowTimer;
   bool _memorizationGlowShown = false;
@@ -207,6 +210,7 @@ class _GameTableContentState extends State<_GameTableContent>
     _checkDiscardAnimations();
     _checkDrawnCardAnimations();
     _checkValetSwapAnimations();
+    _checkJokerShuffleAnimations();
     _syncCardTracking();
     if (gs.phase == GamePhase.setup) {
       _memorizationGlowShown = false;
@@ -657,6 +661,67 @@ class _GameTableContentState extends State<_GameTableContent>
     return _ParsedValetSwapEvent(player1Name: p1, player2Name: p2);
   }
 
+  void _checkJokerShuffleAnimations() {
+    if (!_animationsEnabled) return;
+
+    if (!_jokerHistoryInitialized) {
+      _processedJokerHistoryCount = _countJokerEvents();
+      _jokerHistoryInitialized = true;
+      return;
+    }
+
+    final currentCount = _countJokerEvents();
+    if (currentCount > _processedJokerHistoryCount) {
+      // Find the latest joker event target
+      final target = _parseLatestJokerTarget();
+      if (target != null) {
+        final player = _findPlayerByName(target);
+        if (player != null) {
+          setState(() {
+            _jokerShufflePlayerIds.add(player.id);
+          });
+          Future.delayed(const Duration(milliseconds: 900), () {
+            if (mounted) {
+              setState(() {
+                _jokerShufflePlayerIds.remove(player.id);
+              });
+            }
+          });
+        }
+      }
+    }
+    _processedJokerHistoryCount = currentCount;
+  }
+
+  int _countJokerEvents() {
+    int count = 0;
+    for (final raw in gs.actionHistory) {
+      if (_isJokerEvent(raw)) count++;
+    }
+    return count;
+  }
+
+  bool _isJokerEvent(String raw) {
+    final timestampIdx = raw.indexOf('] ');
+    final text =
+        (timestampIdx >= 0 ? raw.substring(timestampIdx + 2) : raw).trim();
+    return text.startsWith('JOKER') || text.contains('mélange');
+  }
+
+  String? _parseLatestJokerTarget() {
+    for (int i = 0; i < gs.actionHistory.length; i++) {
+      final raw = gs.actionHistory[i];
+      if (!_isJokerEvent(raw)) continue;
+      final timestampIdx = raw.indexOf('] ');
+      final text =
+          (timestampIdx >= 0 ? raw.substring(timestampIdx + 2) : raw).trim();
+      // Format: "JOKER ! X mélange Y !"
+      final match = RegExp(r'mélange\s+(.+?)[\s!]*$').firstMatch(text);
+      if (match != null) return match.group(1)?.trim();
+    }
+    return null;
+  }
+
   Player? _findPlayerByName(String name) {
     final trimmed = name.trim();
     for (final player in gs.players) {
@@ -788,6 +853,7 @@ class _GameTableContentState extends State<_GameTableContent>
     _discardAnimations.clear();
     _drawnToHandAnimations.clear();
     _valetSwapAnimations.clear();
+    _jokerShufflePlayerIds.clear();
     _discardOverrideCard = null;
     _discardOverrideCount = 0;
     _pendingSpecialPowerCardId = null;
@@ -1926,6 +1992,7 @@ class _GameTableContentState extends State<_GameTableContent>
       onCardTap: canInteract && callbacks.onOpponentCardTap != null
           ? (index) => callbacks.onOpponentCardTap!(opponent.position, index)
           : null,
+      isBeingShuffled: _jokerShufflePlayerIds.contains(opponent.id),
     );
   }
 
@@ -1967,6 +2034,7 @@ class _GameTableContentState extends State<_GameTableContent>
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
       turnStartTime: _isMyTurn ? mpConfig.turnStartTime : null,
       turnDuration: _isMyTurn ? mpConfig.turnDuration : null,
+      isBeingShuffled: _jokerShufflePlayerIds.contains(human.id),
     );
   }
 }

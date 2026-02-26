@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../utils/ui_constants.dart';
 
@@ -53,47 +54,18 @@ class GameOverlays {
     );
   }
 
-  /// Overlay de pause
+  /// Overlay de pause (avec countdown + barre de progression)
   static Widget pauseOverlay({
     String? pausedByName,
     required VoidCallback onResume,
+    required bool isLocalPauser,
+    int pauseDeadlineMs = 0,
   }) {
-    return Container(
-      color: Colors.black.withValues(alpha: 0.85),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.pause_circle_outline,
-                color: Colors.amber, size: 80),
-            const SizedBox(height: 20),
-            const Text(
-              "PAUSE",
-              style: TextStyle(
-                color: Colors.amber,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (pausedByName != null)
-              Text("Mis en pause par $pausedByName",
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: onResume,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                foregroundColor: Colors.black,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-              ),
-              child: const Text("REPRENDRE",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
+    return _PauseOverlay(
+      pausedByName: pausedByName,
+      onResume: onResume,
+      isLocalPauser: isLocalPauser,
+      pauseDeadlineMs: pauseDeadlineMs,
     );
   }
 
@@ -221,6 +193,178 @@ class GameOverlays {
           fontWeight: FontWeight.bold,
           fontSize: isCompact ? 10 : 14,
           color: Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget interne : overlay de pause avec countdown animé
+// ─────────────────────────────────────────────────────────────────────────────
+class _PauseOverlay extends StatefulWidget {
+  final String? pausedByName;
+  final VoidCallback onResume;
+  final bool isLocalPauser;
+  final int pauseDeadlineMs;
+
+  const _PauseOverlay({
+    required this.pausedByName,
+    required this.onResume,
+    required this.isLocalPauser,
+    required this.pauseDeadlineMs,
+  });
+
+  @override
+  State<_PauseOverlay> createState() => _PauseOverlayState();
+}
+
+class _PauseOverlayState extends State<_PauseOverlay> {
+  static const int _totalSeconds = 90;
+  Timer? _ticker;
+  int _secondsRemaining = _totalSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PauseOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pauseDeadlineMs != widget.pauseDeadlineMs) {
+      _startCountdown();
+    }
+  }
+
+  void _startCountdown() {
+    _ticker?.cancel();
+    if (widget.pauseDeadlineMs <= 0) {
+      setState(() => _secondsRemaining = _totalSeconds);
+      return;
+    }
+    _tick();
+    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _tick());
+  }
+
+  void _tick() {
+    if (!mounted) return;
+    final remaining =
+        ((widget.pauseDeadlineMs - DateTime.now().millisecondsSinceEpoch) /
+                1000)
+            .ceil()
+            .clamp(0, _totalSeconds);
+    setState(() => _secondsRemaining = remaining);
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  Color get _progressColor {
+    final ratio = _secondsRemaining / _totalSeconds;
+    if (ratio > 0.5) return Colors.green;
+    if (ratio > 0.25) return Colors.orange;
+    return Colors.red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress =
+        widget.pauseDeadlineMs > 0 ? _secondsRemaining / _totalSeconds : 1.0;
+    final showCountdown = widget.pauseDeadlineMs > 0;
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.85),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.pause_circle_outline,
+                    color: Colors.amber, size: 72),
+                const SizedBox(height: 16),
+                const Text(
+                  "PAUSE",
+                  style: TextStyle(
+                    color: Colors.amber,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (widget.pausedByName != null)
+                  Text(
+                    "Mis en pause par ${widget.pausedByName}",
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
+
+                // ── Countdown + barre de progression ──
+                if (showCountdown) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    "Temps restant à ${widget.pausedByName ?? '?'} pour lever la pause",
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0),
+                      minHeight: 10,
+                      backgroundColor: Colors.white12,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(_progressColor),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "$_secondsRemaining s",
+                    style: TextStyle(
+                        color: _progressColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                // Bouton REPRENDRE — visible seulement pour le pauseur
+                if (widget.isLocalPauser)
+                  ElevatedButton(
+                    onPressed: widget.onResume,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 40, vertical: 14),
+                    ),
+                    child: const Text("REPRENDRE",
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.bold)),
+                  )
+                else
+                  const Text(
+                    "En attente que le joueur lève la pause…",
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic),
+                    textAlign: TextAlign.center,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
