@@ -14,6 +14,7 @@ class PlayerAvatar extends StatefulWidget {
   final int? turnStartTime; // Timestamp du début du tour (ms)
   final int? turnDuration; // Durée totale du tour (ms)
   final bool isAfk; // Si le joueur est AFK
+  final bool isLocalPlayer; // Si c'est le joueur de l'appareil local
 
   const PlayerAvatar({
     super.key,
@@ -26,6 +27,7 @@ class PlayerAvatar extends StatefulWidget {
     this.turnStartTime,
     this.turnDuration,
     this.isAfk = false,
+    this.isLocalPlayer = false,
   });
 
   @override
@@ -91,7 +93,10 @@ class _PlayerAvatarState extends State<PlayerAvatar>
     }
 
     // Vibration pulsée en zone rouge (<25%)
-    if (newProgress > 0 && newProgress < 0.25 && widget.isActive) {
+    if (newProgress > 0 &&
+        newProgress < 0.25 &&
+        widget.isActive &&
+        widget.isLocalPlayer) {
       // 80 BPM = une vibration toutes les 750ms
       // Le timer tick toutes les 100ms, donc on vibre toutes les ~7 ticks
       final tickIndex = (elapsed / 100).round();

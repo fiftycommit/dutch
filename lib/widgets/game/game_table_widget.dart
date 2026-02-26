@@ -1953,6 +1953,8 @@ class _GameTableContentState extends State<_GameTableContent>
       handKey: _handKeys[human.id],
       hiddenIndices: _hiddenCardIndexByPlayer[human.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
+      turnStartTime: _isMyTurn ? mpConfig.turnStartTime : null,
+      turnDuration: _isMyTurn ? mpConfig.turnDuration : null,
     );
   }
 }

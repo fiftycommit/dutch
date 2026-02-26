@@ -319,6 +319,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     Key? handKey,
     List<int>? hiddenIndices,
     List<String>? hiddenCardIds,
+    bool isLocalPlayer = false,
   }) {
     Widget badge = PlayerAvatar(
       player: player,
@@ -330,6 +331,7 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       turnStartTime: turnStartTime,
       turnDuration: turnDuration,
       isAfk: isAfk,
+      isLocalPlayer: isLocalPlayer,
     );
 
     // Add connection indicator for multiplayer
@@ -426,6 +428,8 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
     List<String>? hiddenCardIds,
     Widget? leftAccessory,
     Widget? rightAccessory,
+    int? turnStartTime,
+    int? turnDuration,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final safePadding = MediaQuery.of(context).padding;
@@ -482,6 +486,9 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
       handKey: handKey,
       hiddenIndices: hiddenIndices,
       hiddenCardIds: hiddenCardIds,
+      turnStartTime: turnStartTime,
+      turnDuration: turnDuration,
+      isLocalPlayer: true, // Ceci est la zone du joueur local
     );
     final fittedPlayerBlock = SizedBox(
       height: maxHeight,
