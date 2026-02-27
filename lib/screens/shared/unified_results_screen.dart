@@ -185,8 +185,7 @@ class ResultsScreen extends StatelessWidget {
   }
 
   void _downloadGameLog(BuildContext context) async {
-    final isTournament =
-        config.gameState.gameMode == GameMode.tournament;
+    final isTournament = config.gameState.gameMode == GameMode.tournament;
 
     if (isTournament && GameLoggerService.instance.hasTournamentArchive) {
       final choice = await showDialog<String>(
@@ -218,8 +217,7 @@ class ResultsScreen extends StatelessWidget {
         _exportLogContent(
             context, GameLoggerService.instance.getLogForCurrentRound());
       } else {
-        _exportLogContent(
-            context, GameLoggerService.instance.getFullLog());
+        _exportLogContent(context, GameLoggerService.instance.getFullLog());
       }
       return;
     }
@@ -316,7 +314,9 @@ class ResultsScreen extends StatelessWidget {
     final isDutchEliminated = isDutchCaller && !isWinner;
     final isTournamentEliminated =
         config.eliminatedPlayerIds?.contains(player.id) ?? false;
-    final isEliminated = isDutchEliminated || isTournamentEliminated;
+    final isExpelled = player.isSpectator;
+    final isEliminated =
+        isDutchEliminated || isTournamentEliminated || isExpelled;
     final score = gs.getFinalScore(player);
     final isLocalPlayer = player.id == config.localPlayerId ||
         (config.localPlayerId == null && player.isHuman);
@@ -373,7 +373,7 @@ class ResultsScreen extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        player.name,
+                        isLocalPlayer ? 'Vous' : player.name,
                         style: TextStyle(
                           color: isLocalPlayer ? Colors.amber : Colors.white,
                           fontWeight: FontWeight.bold,
@@ -426,7 +426,9 @@ class ResultsScreen extends StatelessWidget {
                   Text(
                     isDutchEliminated
                         ? "❌ ÉLIMINÉ (Dutch raté !)"
-                        : "❌ ÉLIMINÉ",
+                        : isExpelled
+                            ? "❌ EXPULSÉ"
+                            : "❌ ÉLIMINÉ",
                     style: const TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.bold,

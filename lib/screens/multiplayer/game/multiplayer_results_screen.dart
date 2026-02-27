@@ -227,7 +227,26 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    // Non-host: message d'attente uniquement (pas de navigation pour éviter les bugs)
+    // Joueur kické / expulsé : bouton retour au salon
+    final localIsSpectator = provider.gameState?.players
+            .where((p) => p.id == provider.playerId)
+            .firstOrNull
+            ?.isSpectator ??
+        false;
+    if (provider.wasKicked || localIsSpectator) {
+      return [
+        shared.ResultsActionButton(
+          label: "Retour au Salon",
+          backgroundColor: Colors.orange.shade700,
+          onPressed: () {
+            provider.acknowledgeKicked();
+            context.go('/lobby');
+          },
+        ),
+      ];
+    }
+
+    // Non-host: message d'attente
     return [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

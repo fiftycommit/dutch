@@ -28,8 +28,8 @@ class MultiplayerDialogs {
             Text(
               "L'hôte a fermé la partie.",
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
@@ -57,7 +57,7 @@ class MultiplayerDialogs {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Exclu de la room",
+              "Exclu de la partie",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: metrics.font(24),
@@ -66,19 +66,19 @@ class MultiplayerDialogs {
             ),
             SizedBox(height: metrics.space(20)),
             Text(
-              message ?? "Vous avez été exclu de la room.",
+              message ?? "Vous avez été exclu de la partie.",
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
               onPressed: () {
                 Navigator.of(ctx).pop(); // Fermer le dialog
-                context.go('/multiplayer'); // Retour à l'accueil multiplayer
+                context.go('/lobby'); // Retour au salon
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text("OK"),
+              child: const Text("Retour au salon"),
             ),
           ],
         ),
@@ -108,15 +108,15 @@ class MultiplayerDialogs {
             Text(
               message ?? "Vous avez été banni de cette room.",
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: metrics.font(16)),
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: metrics.font(16)),
             ),
             SizedBox(height: metrics.space(10)),
             Text(
               "Vous ne pouvez plus rejoindre cette room.",
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: Colors.redAccent, fontSize: metrics.font(14)),
+              style: TextStyle(
+                  color: Colors.redAccent, fontSize: metrics.font(14)),
             ),
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
@@ -124,7 +124,8 @@ class MultiplayerDialogs {
                 Navigator.of(ctx).pop(); // Fermer le dialog
                 context.go('/multiplayer'); // Retour à l'accueil multiplayer
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
               child: const Text("OK"),
             ),
           ],

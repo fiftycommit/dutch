@@ -12,10 +12,10 @@ class RPCalculator {
   /// Points de base par victoire/défaite selon le rang
   static const Map<String, Map<String, int>> basePoints = {
     'Bronze': {
-      'win': 30,      // Victoire facile = peu de points
+      'win': 30, // Victoire facile = peu de points
       'second': 15,
       'third': -25,
-      'last': -50,    // Défaite = grosse perte
+      'last': -50, // Défaite = grosse perte
     },
     'Argent': {
       'win': 45,
@@ -30,20 +30,24 @@ class RPCalculator {
       'last': -30,
     },
     'Platine': {
-      'win': 70,      // Victoire difficile = beaucoup de points
+      'win': 70, // Victoire difficile = beaucoup de points
       'second': 30,
       'third': -15,
-      'last': -20,    // Défaite = petite perte (bots très forts)
+      'last': -20, // Défaite = petite perte (bots très forts)
     },
   };
 
   /// Bonus fixes (indépendants du rang)
-  static const int dutchWinBonus = 20;           // +20 si Dutch + 1er
-  static const int dutchPerfectBonus = 30;       // +30 supplémentaire si 0 points (total +50)
-  static const int dutchFailPenalty = -30;       // -30 si Dutch sans être 1er
-  static const double winStreakStartMultiplier = 1.2; // À partir de 2 victoires d'affilée
-  static const double winStreakStepMultiplier = 0.1;  // +0.1 par victoire supplémentaire
-  static const double winStreakMaxMultiplier = 2.0;   // Cap du multiplicateur
+  static const int dutchWinBonus = 20; // +20 si Dutch + 1er
+  static const int dutchPerfectBonus =
+      30; // +30 supplémentaire si 0 points (total +50)
+  static const int dutchFailPenalty = -30; // -30 si Dutch sans être 1er
+  static const int expelledPenalty = -100; // -100 si expulsé (timeout/kick)
+  static const double winStreakStartMultiplier =
+      1.2; // À partir de 2 victoires d'affilée
+  static const double winStreakStepMultiplier =
+      0.1; // +0.1 par victoire supplémentaire
+  static const double winStreakMaxMultiplier = 2.0; // Cap du multiplicateur
 
   /// Obtenir le nom du rang à partir du MMR
   static String getRankName(int mmr) {
@@ -77,12 +81,14 @@ class RPCalculator {
   /// [isTournament] : si c'est une manche de tournoi (bonus/malus ajustés)
   /// [tournamentRound] : numéro de la manche (1..N)
   /// [winStreak] : série actuelle de victoires (après la partie)
+  /// [isExpelled] : si le joueur a été expulsé (timeout/kick) → -100 RP fixe
   static RPResult calculateRP({
     required int playerRank,
     required int currentMMR,
     required bool calledDutch,
     required bool hasEmptyHand,
     bool isEliminated = false,
+    bool isExpelled = false,
     int totalPlayers = 4,
     bool isTournament = false,
     int tournamentRound = 1,
@@ -90,14 +96,28 @@ class RPCalculator {
   }) {
     String rank = getRankName(currentMMR);
     Map<String, int> points = basePoints[rank]!;
-    
+
+    // Joueur expulsé : pénalité fixe, pas de calcul
+    if (isExpelled) {
+      return RPResult(
+        totalChange: expelledPenalty,
+        baseChange: expelledPenalty,
+        bonusChange: 0,
+        streakBonus: 0,
+        streakMultiplier: 1.0,
+        winStreak: 0,
+        rank: rank,
+        bonusDescriptions: ['$expelledPenalty (Expulsé)'],
+      );
+    }
+
     int baseRP = 0;
-    
+
     // Multiplicateur selon le nombre de joueurs (2-6 joueurs)
     // Plus il y a de joueurs, plus c'est difficile et plus les gains/pertes sont importants
     // 2 joueurs: x1.0, 3: x1.2, 4: x1.4, 5: x1.6, 6: x1.8
     final double playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
-    
+
     // Points de base selon la position RELATIVE au nombre de joueurs
     // En tournoi avec moins de 4 joueurs, adapter les positions
     if (playerRank == 1) {
@@ -140,10 +160,10 @@ class RPCalculator {
       // 2 joueurs : soit 1er soit dernier (déjà traité)
       baseRP = points['last']!;
     }
-    
+
     // Appliquer le multiplicateur selon le nombre de joueurs
     baseRP = (baseRP * playerMultiplier).round();
-    
+
     // Bonus tournoi selon la manche (plus on avance, plus c'est important)
     if (isTournament) {
       final int totalRounds =
@@ -171,7 +191,7 @@ class RPCalculator {
         // Dutch gagnant : +20
         bonusRP += dutchWinBonus;
         bonusDescriptions.add('+$dutchWinBonus (Dutch)');
-        
+
         // Dutch parfait (main vide) : +30 supplémentaire
         if (hasEmptyHand) {
           bonusRP += dutchPerfectBonus;
@@ -220,10 +240,10 @@ class RPCalculator {
   /// Obtenir le prochain rang et les points nécessaires
   static NextRankInfo? getNextRankInfo(int currentMMR) {
     String currentRank = getRankName(currentMMR);
-    
+
     int nextThreshold;
     String nextRank;
-    
+
     if (currentRank == 'Bronze') {
       nextThreshold = rankThresholds['Argent']!;
       nextRank = 'Argent';

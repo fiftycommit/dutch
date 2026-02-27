@@ -309,10 +309,12 @@ class GameState {
   }
 
   List<Player> getFinalRanking() {
-    List<Player> ranking = List.from(players);
+    // Séparer les joueurs actifs des spectateurs (expulsés/kickés)
+    List<Player> active = players.where((p) => !p.isSpectator).toList();
+    List<Player> spectators = players.where((p) => p.isSpectator).toList();
 
-    // Trier par score, mais en cas d'égalité, celui qui a Dutch est devant
-    ranking.sort((a, b) {
+    // Trier les actifs par score, mais en cas d'égalité, celui qui a Dutch est devant
+    active.sort((a, b) {
       int scoreA = getFinalScore(a);
       int scoreB = getFinalScore(b);
 
@@ -329,11 +331,18 @@ class GameState {
 
     // Si le Dutch caller n'a pas gagné (quelqu'un a un score STRICTEMENT inférieur), il est mis en dernier
     if (dutchCallerId != null && !didDutchCallerWin()) {
-      Player failedCaller = ranking.firstWhere((p) => p.id == dutchCallerId);
-      ranking.remove(failedCaller);
-      ranking.add(failedCaller);
+      final failedCaller = active.cast<Player?>().firstWhere(
+            (p) => p?.id == dutchCallerId,
+            orElse: () => null,
+          );
+      if (failedCaller != null) {
+        active.remove(failedCaller);
+        active.add(failedCaller);
+      }
     }
-    return ranking;
+
+    // Les spectateurs (expulsés) sont toujours après les joueurs actifs
+    return [...active, ...spectators];
   }
 
   /// Retourne les rangs réels avec gestion des ex-aequo.
@@ -358,11 +367,18 @@ class GameState {
       Player player = ranking[i];
       int score = getFinalScore(player);
 
-      // Cas spécial : Dutch caller raté est toujours dernier
+      // Cas spécial : spectateurs (expulsés) et Dutch caller raté sont derniers
+      if (player.isSpectator) {
+        ranks[player.id] = ranking.length; // Dernier
+        continue;
+      }
       if (dutchCallerId != null &&
           !didDutchCallerWin() &&
           player.id == dutchCallerId) {
-        ranks[player.id] = ranking.length; // Dernier
+        // Dutch caller raté : juste avant les spectateurs ou dernier
+        final spectatorCount = ranking.where((p) => p.isSpectator).length;
+        ranks[player.id] =
+            ranking.length - spectatorCount; // Dernier des actifs
         continue;
       }
 
