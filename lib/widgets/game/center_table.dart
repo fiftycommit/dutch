@@ -17,6 +17,7 @@ class CenterTable extends StatefulWidget {
   final VoidCallback? onDrawCard;
   final VoidCallback? onTakeFromDiscard;
   final int reactionTimeTotalMs;
+  final int specialPowerTimeTotalMs;
   final bool enableHaptics;
   final SvgBuilder? svgBuilder;
   final GlobalKey? deckKey;
@@ -36,6 +37,7 @@ class CenterTable extends StatefulWidget {
     this.onDrawCard,
     this.onTakeFromDiscard,
     this.reactionTimeTotalMs = 3000,
+    this.specialPowerTimeTotalMs = 15000,
     this.enableHaptics = false,
     this.svgBuilder,
     this.deckKey,
@@ -58,17 +60,21 @@ class _CenterTableState extends State<CenterTable>
   late AnimationController _progressController;
   double _currentProgress = 1.0;
   Timer? _progressTimer; // Timer fluide pour le refresh à 24ms
+  bool _wasPowerPending =
+      false; // Pour détecter la fin du pouvoir et forcer resync
+  double _powerProgress =
+      1.0; // Progression du timer pouvoir (1.0 = début, 0.0 = expiré)
+  Timer? _powerTimer; // Timer fluide pour la barre du pouvoir
 
   @override
   void initState() {
     super.initState();
     _lastDrawnCardId = widget.gameState.drawnCard?.id;
-    // Controller pour animation fluide synchronisée avec l'écran (vsync)
+    // Controller uniquement pour vsync (ne pas addListener pour éviter le double-tick)
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(
-          seconds: 10), // Durée arbitraire, on calcule manuellement
-    )..addListener(_onProgressTick);
+      duration: const Duration(seconds: 10),
+    );
     _initProgress();
   }
 
@@ -84,7 +90,8 @@ class _CenterTableState extends State<CenterTable>
   /// Timer fluide à 24ms (~41fps) pour un refresh constant
   void _startProgressTimer() {
     _progressTimer?.cancel();
-    if (widget.gameState.phase == GamePhase.reaction) {
+    if (widget.gameState.phase == GamePhase.reaction &&
+        !widget.gameState.isWaitingForSpecialPower) {
       _progressTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
         if (!mounted) return;
         _onProgressTick();
@@ -110,9 +117,10 @@ class _CenterTableState extends State<CenterTable>
     final total = widget.reactionTimeTotalMs;
     final serverRemaining = widget.gameState.reactionTimeRemaining;
 
-    // Si le jeu est en pause, on gèle l'animation et on met à jour le temps de référence
-    // pour que lors de la reprise, on ne soustraie pas le temps passé en pause.
-    if (widget.isPaused) {
+    // Si le jeu est en pause ou qu'un pouvoir est en cours, on gèle l'animation
+    // et on met à jour le temps de référence pour que lors de la reprise,
+    // on ne soustraie pas le temps passé en pause/pouvoir.
+    if (widget.isPaused || widget.gameState.isWaitingForSpecialPower) {
       _lastServerUpdate = DateTime.now();
       _lastServerRemaining = serverRemaining;
       return;
@@ -156,11 +164,34 @@ class _CenterTableState extends State<CenterTable>
   }
 
   void _updateProgressTarget() {
+    final gs = widget.gameState;
+    final isPowerPending = gs.isWaitingForSpecialPower;
+
+    // Détecter la fin du pouvoir : pouvoir était en cours et ne l'est plus
+    if (_wasPowerPending && !isPowerPending) {
+      // Sync avec la valeur serveur pour démarrer le temps de réaction
+      _lastServerRemaining = gs.reactionTimeRemaining;
+      _lastServerUpdate = DateTime.now();
+    }
+    _wasPowerPending = isPowerPending;
+
+    // Gérer le timer du pouvoir
+    if (isPowerPending) {
+      if (_powerTimer == null || !_powerTimer!.isActive) {
+        _startPowerTimer();
+      }
+    } else {
+      _stopPowerTimer();
+    }
+
     // Démarrer/arrêter le timer selon la phase
-    if (widget.gameState.phase == GamePhase.reaction) {
-      if (_progressTimer == null || !_progressTimer!.isActive) {
+    if (gs.phase == GamePhase.reaction) {
+      if (isPowerPending) {
+        // Pouvoir en cours : stopper le timer (la barre est gelée visuellement)
+        _stopProgressTimer();
+      } else if (_progressTimer == null || !_progressTimer!.isActive) {
         // Seulement réinitialiser si c'est une NOUVELLE phase (pas un resume)
-        final serverRemaining = widget.gameState.reactionTimeRemaining;
+        final serverRemaining = gs.reactionTimeRemaining;
         final total = widget.reactionTimeTotalMs;
         final isResume =
             serverRemaining < total * 0.95; // Moins de 95% = resume probable
@@ -177,9 +208,40 @@ class _CenterTableState extends State<CenterTable>
     }
   }
 
+  void _startPowerTimer() {
+    _powerTimer?.cancel();
+    _powerTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
+      if (!mounted) return;
+      _onPowerTick();
+    });
+  }
+
+  void _stopPowerTimer() {
+    _powerTimer?.cancel();
+    _powerTimer = null;
+  }
+
+  void _onPowerTick() {
+    if (!mounted) return;
+    final startTime = widget.gameState.specialPowerStartTime;
+    if (startTime == null || !widget.gameState.isWaitingForSpecialPower) {
+      _stopPowerTimer();
+      return;
+    }
+    final elapsed = DateTime.now().millisecondsSinceEpoch - startTime;
+    final remaining = (widget.specialPowerTimeTotalMs - elapsed)
+        .clamp(0, widget.specialPowerTimeTotalMs);
+    final progress =
+        (remaining / widget.specialPowerTimeTotalMs).clamp(0.0, 1.0);
+    setState(() {
+      _powerProgress = progress;
+    });
+  }
+
   @override
   void dispose() {
     _stopProgressTimer();
+    _stopPowerTimer();
     _progressController.dispose();
     super.dispose();
   }
@@ -205,6 +267,17 @@ class _CenterTableState extends State<CenterTable>
     final t = (0.3 - progress) / 0.3;
     final interval = 600 - (480 * t);
     return interval.round();
+  }
+
+  Widget _buildPowerProgress() {
+    final progress = _powerProgress;
+    final color = Color.lerp(Colors.red, Colors.amber, progress)!;
+    return LinearProgressIndicator(
+      value: progress,
+      backgroundColor: Colors.black26,
+      color: color,
+      borderRadius: BorderRadius.circular(4),
+    );
   }
 
   Widget _buildReactionProgress() {
@@ -269,10 +342,38 @@ class _CenterTableState extends State<CenterTable>
     final padding = widget.isCompactMode ? 8.0 : 15.0;
     final deckCount = gs.deck.length;
 
+    // Détecter si on attend qu'un joueur choisisse son pouvoir
+    final isWaitingForPower = gs.isWaitingForSpecialPower;
+    final powerPlayerName = isWaitingForPower
+        ? (gs.currentPlayer.name == "Vous"
+            ? "Quelqu'un"
+            : gs.currentPlayer.name)
+        : "";
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isReaction) ...[
+        if (isReaction && isWaitingForPower) ...[
+          const SizedBox(height: 10),
+          Text(
+            "$powerPlayerName utilise son pouvoir...",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: widget.isCompactMode ? 14 : 18,
+              fontWeight: FontWeight.bold,
+              fontStyle: FontStyle.italic,
+              shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: widget.isCompactMode ? 100 : 150,
+            height: widget.isCompactMode ? 5 : 8,
+            child: _buildPowerProgress(),
+          ),
+          const SizedBox(height: 10),
+        ] else if (isReaction) ...[
           Text(
             "Vite ! Avez-vous un${topCardValue == 'Dame' ? 'e' : ''} $topCardValue ?",
             style: TextStyle(

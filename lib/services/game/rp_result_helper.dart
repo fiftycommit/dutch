@@ -14,11 +14,13 @@ class RPResultHelper {
   }) {
     if (currentMMR == null || player.isSpectator) return null;
 
-    final totalPlayers =
-        gameState.players.where((p) => !p.isSpectator).length;
+    final totalPlayers = gameState.players.where((p) => !p.isSpectator).length;
     final calledDutch = gameState.dutchCallerId == player.id;
     final isWinner = rank == 1;
     final isEliminated = calledDutch && !isWinner;
+    // En multi, les cartes adversaires sont hidden (isHidden=true).
+    // Une main toute-hidden ne veut PAS dire qu'elle est vide : on ne sait juste pas.
+    // On ne considère la main vide que si elle est réellement vide (pas de cartes du tout).
     final hasEmptyHand = player.hand.isEmpty;
     final isTournament = gameState.gameMode == GameMode.tournament;
     final tournamentRound = isTournament ? gameState.tournamentRound : 1;

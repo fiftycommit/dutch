@@ -416,9 +416,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     callbacks: GameTableCallbacks.fromController(
                       context: context,
                       controller: gameProvider,
-                      onOpponentCardTap: (opponentIndex, cardIndex) =>
-                          gameProvider.usePower10SpyOpponent(
-                              opponentIndex, cardIndex),
+                      onOpponentCardTap: (opponentIndex, cardIndex) {
+                        gameProvider.sendSpecialPowerTargetSelection(
+                            opponentIndex, null, null, null);
+                        gameProvider.usePower10SpyOpponent(
+                            opponentIndex, cardIndex);
+                      },
                       supportsTakeFromDiscard:
                           true, // Multiplayer allows taking from discard
                     ),
@@ -439,6 +442,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                           : null,
                       turnDuration: gameState.turnTimeoutMs,
                       reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
+                      powerTargetPlayerIds: gameProvider.powerTargetPlayerIds,
                     ),
                     isPaused: gameProvider
                         .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency

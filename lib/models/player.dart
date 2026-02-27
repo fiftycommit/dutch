@@ -83,6 +83,10 @@ class Player {
   /// Public: on connaît les emplacements observés, pas les valeurs.
   List<int> memorizedCardIndices;
 
+  /// Score envoyé par le serveur (multi). Utilisé comme fallback quand les
+  /// cartes sont hidden (points=0) et que le score calculé localement est faux.
+  int? serverScore;
+
   Player({
     required this.id,
     required this.name,
@@ -115,6 +119,7 @@ class Player {
     this.lastBronzeValetTargetTurn = -999,
     this.lastTargetedByPowerTurn = -999,
     List<int>? memorizedCardIndices,
+    this.serverScore,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
@@ -166,6 +171,10 @@ class Player {
         memorizedCardIndices = List<int>.from(other.memorizedCardIndices);
 
   int calculateScore() {
+    // En multi, le serveur envoie le score calculé côté serveur.
+    // Toujours l'utiliser quand disponible car les cartes adversaires
+    // sont hidden (points=0) et le calcul local serait faux.
+    if (serverScore != null) return serverScore!;
     int score = 0;
     for (var card in hand) {
       score += card.points;
@@ -841,6 +850,7 @@ class Player {
       memorizedCardIndices: ((json['memorizedCardIndices'] as List?) ?? [])
           .map((e) => (e as num).toInt())
           .toList(),
+      serverScore: json['score'] as int?,
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas sérialisés
       // car ils sont gérés côté serveur pour les bots
     );

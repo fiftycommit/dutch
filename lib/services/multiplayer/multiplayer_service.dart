@@ -62,6 +62,7 @@ class MultiplayerService {
   Function(Map<String, dynamic>)? onPlayerLeft;
   Function(Map<String, dynamic>)? onPlayerAfk;
   Function(Map<String, dynamic>)? onSpecialPowerTargeted;
+  Function(Map<String, dynamic>)? onSpecialPowerTargetSelection;
   Function(PlayingCard, String)? onSpiedCard;
   Function(Map<String, dynamic>)? onSwapNotification;
   Function(Map<String, dynamic>)? onJokerNotification;
@@ -423,6 +424,8 @@ class MultiplayerService {
       _actionsEmitter.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex);
   void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
       _actionsEmitter.usePowerValetSwap(p1, c1, p2, c2);
+  void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>
+      _actionsEmitter.sendSpecialPowerTargetSelection(p1, c1, p2, c2);
   void usePowerJokerShuffle(int targetPlayerIndex) =>
       _actionsEmitter.usePowerJokerShuffle(targetPlayerIndex);
   void skipSpecialPower() => _actionsEmitter.skipSpecialPower();
@@ -519,6 +522,11 @@ class MultiplayerService {
     socket.on('special_power:targeted', (data) {
       if (data is Map) {
         onSpecialPowerTargeted?.call(data.cast<String, dynamic>());
+      }
+    });
+    socket.on('special_power:target_selection', (data) {
+      if (data is Map) {
+        onSpecialPowerTargetSelection?.call(data.cast<String, dynamic>());
       }
     });
     socket.on('special_power:swap_notification', (data) {

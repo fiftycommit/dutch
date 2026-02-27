@@ -1,6 +1,7 @@
 import '../../../models/playing_card.dart';
 import '../../../models/player.dart';
 import '../../../models/game_state.dart';
+import '../../../utils/action_history_messages.dart';
 import '../../../services/game/game_logic.dart';
 import '../../../services/logging/game_logger_service.dart';
 import '../../game_tracking_provider.dart';
@@ -19,7 +20,7 @@ class SpecialPowerHandler {
   void skipPower(GameState gameState) {
     final human = gameState.currentPlayer;
     final specialCard = gameState.specialCardToActivate;
-    
+
     if (human.isHuman && specialCard != null) {
       final powerType = _getPowerType(specialCard);
       _trackingProvider.recordPlayerAction(
@@ -35,7 +36,7 @@ class SpecialPowerHandler {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    gameState.addToHistory("⏭️ Pouvoir spécial ignoré.");
+    gameState.addToHistory(ActionHistoryMessages.powerSkipped());
   }
 
   /// Utiliser un pouvoir spécial
@@ -50,8 +51,9 @@ class SpecialPowerHandler {
     Player currentPlayer = gameState.currentPlayer;
     Player targetPlayer = gameState.players[targetPlayerIndex];
 
-    final beforeScore = currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
-    
+    final beforeScore =
+        currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
+
     if (currentPlayer.isHuman) {
       final powerType = _getPowerType(specialCard);
       final targetStrategy = _getTargetStrategy(gameState, targetPlayer);
@@ -73,14 +75,14 @@ class SpecialPowerHandler {
     if (specialCard.value == '7' || specialCard.value == '8') {
       if (targetCardIndex < currentPlayer.hand.length) {
         currentPlayer.knownCards[targetCardIndex] = true;
-        gameState.addToHistory(
-            "👁️ ${currentPlayer.name} regarde sa carte #${targetCardIndex + 1}");
+        gameState.addToHistory(ActionHistoryMessages.powerLookOwn(
+            currentPlayer.name, targetCardIndex));
       }
     } else if (specialCard.value == '9' || specialCard.value == '10') {
       if (targetCardIndex < targetPlayer.hand.length) {
         gameState.lastSpiedCard = targetPlayer.hand[targetCardIndex];
-        gameState.addToHistory(
-            "👁 ${currentPlayer.name} espionne ${targetPlayer.name} (carte #${targetCardIndex + 1})");
+        gameState.addToHistory(ActionHistoryMessages.powerSpy(
+            currentPlayer.name, targetPlayer.name, targetCardIndex));
       }
     } else if (specialCard.value == 'V') {
       gameState.pendingSwap = {
@@ -117,8 +119,9 @@ class SpecialPowerHandler {
     Player currentPlayer = gameState.currentPlayer;
     Player targetPlayer = gameState.players[targetPlayerIndex];
 
-    final beforeScore = currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
-    
+    final beforeScore =
+        currentPlayer.isHuman ? currentPlayer.getEstimatedScore() : null;
+
     if (currentPlayer.isHuman) {
       _trackingProvider.recordPlayerAction(
         actionType: 'power',
@@ -142,10 +145,12 @@ class SpecialPowerHandler {
     targetPlayer.knownCards[targetCardIndex] = false;
 
     // FIX: Invalider la mentalMap des bots après un swap
-    if (!currentPlayer.isHuman && ownCardIndex < currentPlayer.mentalMap.length) {
+    if (!currentPlayer.isHuman &&
+        ownCardIndex < currentPlayer.mentalMap.length) {
       currentPlayer.mentalMap[ownCardIndex] = null;
     }
-    if (!targetPlayer.isHuman && targetCardIndex < targetPlayer.mentalMap.length) {
+    if (!targetPlayer.isHuman &&
+        targetCardIndex < targetPlayer.mentalMap.length) {
       targetPlayer.mentalMap[targetCardIndex] = null;
     }
 
@@ -161,7 +166,7 @@ class SpecialPowerHandler {
     );
 
     gameState.addToHistory(
-        "🔄 ${currentPlayer.name} échange avec ${targetPlayer.name}");
+        ActionHistoryMessages.powerSwap(currentPlayer.name, targetPlayer.name));
 
     gameState.pendingSwap = null;
     gameState.isWaitingForSpecialPower = false;
@@ -186,7 +191,7 @@ class SpecialPowerHandler {
     final human = gameState.currentPlayer;
     final specialCard = gameState.specialCardToActivate;
     final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
-    
+
     if (human.isHuman && specialCard != null) {
       _trackingProvider.recordPlayerAction(
         actionType: 'power',
@@ -228,7 +233,7 @@ class SpecialPowerHandler {
     final human = gameState.currentPlayer;
     final specialCard = gameState.specialCardToActivate;
     final beforeScore = human.isHuman ? human.getEstimatedScore() : null;
-    
+
     if (human.isHuman && specialCard != null) {
       _trackingProvider.recordPlayerAction(
         actionType: 'power',
@@ -273,7 +278,8 @@ class SpecialPowerHandler {
   /// Obtenir la stratégie de ciblage
   String _getTargetStrategy(GameState gameState, Player target) {
     final players = List<Player>.from(gameState.players);
-    players.sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
+    players
+        .sort((a, b) => a.getEstimatedScore().compareTo(b.getEstimatedScore()));
     final targetRank = players.indexOf(target) + 1;
     if (targetRank == 1) return 'leader';
     if (targetRank == players.length) return 'weak';

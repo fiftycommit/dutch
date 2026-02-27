@@ -71,6 +71,7 @@ class MultiplayerConfig {
   final int? turnStartTime;
   final int? turnDuration;
   final int reactionTimeTotalMs;
+  final Set<String> powerTargetPlayerIds;
 
   const MultiplayerConfig({
     this.playerId,
@@ -79,6 +80,7 @@ class MultiplayerConfig {
     this.turnStartTime,
     this.turnDuration,
     this.reactionTimeTotalMs = 0,
+    this.powerTargetPlayerIds = const {},
   });
 
   static const solo = MultiplayerConfig();
@@ -323,10 +325,31 @@ class _GameTableContentState extends State<_GameTableContent>
   }
 
   List<int>? _highlightedIndicesForPlayer(String playerId) {
-    final indices = _memorizationGlowByPlayer[playerId];
-    if (indices == null || indices.isEmpty) return null;
-    final sorted = indices.toList()..sort();
-    return sorted;
+    final memIndices = _memorizationGlowByPlayer[playerId];
+    final isPowerTarget = mpConfig.powerTargetPlayerIds.contains(playerId);
+
+    if (!isPowerTarget && (memIndices == null || memIndices.isEmpty)) {
+      return null;
+    }
+
+    final result = <int>{};
+    if (memIndices != null) result.addAll(memIndices);
+
+    // Si le joueur est ciblé par un pouvoir, illuminer toute sa main
+    if (isPowerTarget) {
+      final player = gs.players.cast<Player?>().firstWhere(
+            (p) => p?.id == playerId,
+            orElse: () => null,
+          );
+      if (player != null) {
+        for (int i = 0; i < player.hand.length; i++) {
+          result.add(i);
+        }
+      }
+    }
+
+    if (result.isEmpty) return null;
+    return result.toList()..sort();
   }
 
   void _syncHandTracking() {
@@ -1991,10 +2014,15 @@ class _GameTableContentState extends State<_GameTableContent>
       hiddenIndices: _hiddenCardIndexByPlayer[opponent.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[opponent.id]?.toList(),
       highlightedIndices: _highlightedIndicesForPlayer(opponent.id),
+      isPowerHighlighted: mpConfig.powerTargetPlayerIds.contains(opponent.id),
       isConnected: isConnected,
       isAfk: isAfk,
-      turnStartTime: isActive ? mpConfig.turnStartTime : null,
-      turnDuration: isActive ? mpConfig.turnDuration : null,
+      turnStartTime: isActive && gs.phase == GamePhase.playing
+          ? mpConfig.turnStartTime
+          : null,
+      turnDuration: isActive && gs.phase == GamePhase.playing
+          ? mpConfig.turnDuration
+          : null,
       onCardTap: canInteract && callbacks.onOpponentCardTap != null
           ? (index) => callbacks.onOpponentCardTap!(opponent.position, index)
           : null,
@@ -2025,6 +2053,7 @@ class _GameTableContentState extends State<_GameTableContent>
       maxHeight: maxHeight,
       selectedIndices: widget.shakingCardIndices,
       highlightedIndices: _highlightedIndicesForPlayer(human.id),
+      isPowerHighlighted: mpConfig.powerTargetPlayerIds.contains(human.id),
       onCardTap: callbacks.onCardTap,
       onDraw: callbacks.onDrawCard,
       onDiscard: callbacks.onDiscardDrawnCard,
@@ -2038,8 +2067,12 @@ class _GameTableContentState extends State<_GameTableContent>
       handKey: _handKeys[human.id],
       hiddenIndices: _hiddenCardIndexByPlayer[human.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
-      turnStartTime: _isMyTurn ? mpConfig.turnStartTime : null,
-      turnDuration: _isMyTurn ? mpConfig.turnDuration : null,
+      turnStartTime: _isMyTurn && gs.phase == GamePhase.playing
+          ? mpConfig.turnStartTime
+          : null,
+      turnDuration: _isMyTurn && gs.phase == GamePhase.playing
+          ? mpConfig.turnDuration
+          : null,
       isBeingShuffled: _jokerShufflePlayerIds.contains(human.id),
     );
   }

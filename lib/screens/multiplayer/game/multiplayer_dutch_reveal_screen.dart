@@ -13,8 +13,9 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<MultiplayerGameProvider>(context, listen: false);
-    
+    final provider =
+        Provider.of<MultiplayerGameProvider>(context, listen: false);
+
     if (!provider.isPlaying || provider.gameState == null) {
       return Scaffold(
         backgroundColor: AppColors.gradientBottom,
@@ -27,13 +28,16 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
       child: shared.DutchRevealScreen(
         config: shared.DutchRevealConfig(
           gameState: provider.gameState!,
+          localPlayerId: provider.playerId,
           buildResultsScreen: (context) => MultiplayerResultsScreen(
             gameState: provider.gameState!,
             localPlayerId: provider.playerId,
           ),
           navigateToResults: (context) => context.go('/multiplayer/results'),
-          shouldRedirectToLobby: () => 
-            provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
+          shouldRedirectToLobby: () =>
+              provider.isInLobby &&
+              !provider.isPlaying &&
+              provider.roomCode != null,
           navigateToLobbyRedirect: (context) => context.go('/lobby'),
         ),
       ),

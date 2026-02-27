@@ -3,6 +3,7 @@ import '../../../models/game_state.dart';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import '../../../models/playing_card.dart';
+import '../../../utils/action_history_messages.dart';
 import '../../learning/ai_telemetry_service.dart';
 import '../../logging/game_logger_service.dart';
 import 'bot_difficulty.dart';
@@ -172,7 +173,7 @@ class BotPowerHandler {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    gameState.addToHistory("${bot.name} a utilisé son pouvoir.");
+    gameState.addToHistory(ActionHistoryMessages.powerUsed(bot.name));
   }
 
   static _PowerUseConclusions _buildPowerUseConclusions({

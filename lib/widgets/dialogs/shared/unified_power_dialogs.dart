@@ -32,6 +32,9 @@ class PowerDialogConfig {
   /// Le serveur envoie la vraie carte via game:spied_card
   final bool isMultiplayer;
 
+  /// Callback appelé quand un joueur est ciblé (pour illuminer sa main en temps réel)
+  final void Function(Set<int> targetPlayerIndices)? onPlayerTargeted;
+
   const PowerDialogConfig({
     required this.gameState,
     required this.localPlayer,
@@ -42,6 +45,7 @@ class PowerDialogConfig {
     required this.onSwapCards,
     required this.isLocalPlayer,
     this.isMultiplayer = false,
+    this.onPlayerTargeted,
   });
 
   List<Player> get opponents =>
@@ -100,6 +104,13 @@ class PowerDialogConfig {
         final p1Index = gs.players.indexOf(p1);
         final p2Index = gs.players.indexOf(p2);
         gp.usePowerValetSwap(p1Index, c1, p2Index, c2);
+      },
+      onPlayerTargeted: (targetIndices) {
+        // Émet les indices des joueurs ciblés pour illuminer leur main
+        // chez les autres joueurs en temps réel
+        final p1 = targetIndices.isNotEmpty ? targetIndices.first : null;
+        final p2 = targetIndices.length > 1 ? targetIndices.last : null;
+        gp.sendSpecialPowerTargetSelection(p1, null, p2, null);
       },
     );
   }
@@ -471,11 +482,23 @@ class UnifiedPowerDialogs {
                 onSelectPlayer1: (p) => setState(() {
                   player1 = p;
                   card1 = null;
+                  final gs = config.gameState;
+                  final indices = <int>{
+                    gs.players.indexOf(p),
+                    if (player2 != null) gs.players.indexOf(player2!),
+                  };
+                  config.onPlayerTargeted?.call(indices);
                 }),
                 onSelectCard1: (i) => setState(() => card1 = i),
                 onSelectPlayer2: (p) => setState(() {
                   player2 = p;
                   card2 = null;
+                  final gs = config.gameState;
+                  final indices = <int>{
+                    if (player1 != null) gs.players.indexOf(player1!),
+                    gs.players.indexOf(p),
+                  };
+                  config.onPlayerTargeted?.call(indices);
                 }),
                 onSelectCard2: (i) => setState(() => card2 = i),
                 onCancel: () {
@@ -524,6 +547,8 @@ class UnifiedPowerDialogs {
           subtitle: "Choisissez un joueur pour mélanger sa main",
           players: config.allPlayers,
           onSelectPlayer: (player, index) {
+            config.onPlayerTargeted
+                ?.call({config.gameState.players.indexOf(player)});
             Navigator.pop(ctx);
             // On lance directement l'effet du joker, sans boite de dialogue supplémentaire
             // pour le joueur actif, ce qui préserve son temps de réaction
@@ -533,7 +558,7 @@ class UnifiedPowerDialogs {
             Navigator.pop(ctx);
             config.onSkipPower();
           },
-          getLabel: (p) => p.name,
+          getLabel: (p) => config.isLocalPlayer(p) ? "Vous" : p.name,
           isMe: config.isLocalPlayer,
           metrics: metrics,
           autoCloseSeconds: config.isMultiplayer ? 15 : 0,

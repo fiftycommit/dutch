@@ -207,7 +207,9 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                       Flexible(
                         fit: FlexFit.loose,
                         child: Text(
-                          widget.player.displayName,
+                          widget.isLocalPlayer
+                              ? "Vous"
+                              : widget.player.displayName,
                           style: TextStyle(
                             color:
                                 widget.isActive ? Colors.white : Colors.white,
@@ -322,7 +324,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                   : null,
             ),
             child: Text(
-              widget.player.displayName,
+              widget.isLocalPlayer ? "Vous" : widget.player.displayName,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: ScreenUtils.scaleFont(context, 10),

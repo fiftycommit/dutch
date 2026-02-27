@@ -197,6 +197,22 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
    * - Carte V : { roomCode, player1Index, card1Index, player2Index, card2Index } - Échange universel
    * - JOKER : { roomCode, targetPlayerIndex } - Mélanger n'importe qui
    */
+  socket.on('special_power:target_selection', async (data) => {
+    try {
+      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room || !room.gameState) return;
+
+      const currentPlayer = getCurrentPlayer(room.gameState);
+      if (currentPlayer.id !== socket.id) return;
+
+      // Broadcast the partial selection to all OTHER players in the room
+      socket.to(data.roomCode).emit('special_power:target_selection', data);
+    } catch (error) {
+      console.error('Error special_power:target_selection:', error);
+    }
+  });
+
   socket.on('game:use_special_power', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
@@ -295,12 +311,9 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
             ? room.settings.reactionTimeMs
             : 3000;
 
-        // Le temps passé par le joueur à sélectionner le pouvoir est rajouté 
-        // à son temps de réaction réel, jusqu'à une limite (ex: 15s max)
-        const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
-        const elapsedSelectingPowerMs = Date.now() - powerStartTime;
-        // On limite l'extension à 15s pour éviter l'abus, même si le client a lui-même un timeout de pouvoir spécial
-        const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
+        // Le temps passé à sélectionner ne doit plus être rajouté ici
+        // car cela crée un délai perceptible (le client attend l'animation)
+        const reactionTime = baseReactionTime;
 
         roomManager.startReactionTimer(data.roomCode, reactionTime);
         return;
@@ -338,9 +351,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
             ? room.settings.reactionTimeMs
             : 3000;
 
-        const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
-        const elapsedSelectingPowerMs = Date.now() - powerStartTime;
-        const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
+        const reactionTime = baseReactionTime;
 
         roomManager.startReactionTimer(data.roomCode, reactionTime);
         return;

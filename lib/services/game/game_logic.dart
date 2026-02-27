@@ -3,6 +3,7 @@ import '../../models/playing_card.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
+import '../../utils/action_history_messages.dart';
 import '../logging/game_logger_service.dart';
 import 'bot/bot_dutch_strategy.dart';
 import 'bot/discard_tracker.dart';
@@ -106,7 +107,8 @@ class GameLogic {
 
     if (gameState.deck.isNotEmpty) {
       gameState.drawnCard = gameState.deck.removeLast();
-      gameState.addToHistory("${gameState.currentPlayer.name} pioche.");
+      gameState.addToHistory(
+          ActionHistoryMessages.draw(gameState.currentPlayer.name));
 
       // Log
       GameLoggerService.instance.logDraw(
@@ -128,11 +130,9 @@ class GameLogic {
     // Message explicite : le joueur n'a PAS gardé la carte piochée
     final currentName = gameState.currentPlayer.name;
     final isHuman = currentName == "Vous";
-    final cardName = card.displayName == 'e Dame' ? ' Dame' : card.displayName;
-    final verb = isHuman ? "ne gardez pas" : "ne garde pas";
 
-    gameState
-        .addToHistory("$currentName $verb la carte$cardName (pas intéressé)");
+    gameState.addToHistory(ActionHistoryMessages.discardDrawn(currentName, card,
+        isLocal: isHuman));
 
     // Tracker la défausse (wasExchange = false : pas d'échange)
     BotDutchStrategy.discardTracker.trackDiscard(
@@ -193,16 +193,9 @@ class GameLogic {
 
     gameState.discardPile.add(oldCard);
     // Message explicite : le joueur a GARDÉ la carte piochée
-    final isDame = oldCard.displayName == 'e Dame';
-    final cardName = isDame ? 'Dame' : oldCard.displayName.trimLeft();
-    if (player.isHuman) {
-      gameState
-          .addToHistory("Vous remplacez votre $cardName par la carte piochée");
-    } else {
-      final possessif = isDame ? 'sa' : 'son';
-      gameState.addToHistory(
-          "${player.name} remplace $possessif $cardName par la carte piochée");
-    }
+    gameState.addToHistory(ActionHistoryMessages.replaceCard(
+        player.name, oldCard,
+        isLocal: player.isHuman));
 
     // Tracker la défausse (wasExchange = true : il a gardé la pioche)
     BotDutchStrategy.discardTracker.trackDiscard(
@@ -284,14 +277,9 @@ class GameLogic {
         }
       }
 
-      String textMatch =
-          "MATCH ! - ${player.name} pose un${playerCard.displayName} !";
-
-      if (player.name == "Vous") {
-        textMatch = "MATCH ! - Vous avez posé un${playerCard.displayName} !";
-      }
-
-      gameState.addToHistory(textMatch);
+      gameState.addToHistory(ActionHistoryMessages.matchSuccess(
+          player.name, playerCard,
+          isLocal: player.name == "Vous"));
 
       // Log
       GameLoggerService.instance.logMatch(
@@ -306,8 +294,8 @@ class GameLogic {
       }
       return true;
     } else {
-      gameState.addToHistory(
-          "${player.name} rate son match (${playerCard.displayName} ≠ ${topDiscard.displayName}) ! Pénalité !");
+      gameState.addToHistory(ActionHistoryMessages.matchFailed(
+          player.name, playerCard, topDiscard));
 
       // Log
       GameLoggerService.instance.logCustomAction(
@@ -343,7 +331,7 @@ class GameLogic {
     }
     player.clearUnknownCardHint(newHand.length - 1);
 
-    gameState.addToHistory("${player.name} prend une carte de pénalité.");
+    gameState.addToHistory(ActionHistoryMessages.penalty(player.name));
   }
 
   static void lookAtCard(GameState gameState, Player target, int cardIndex) {
@@ -484,7 +472,7 @@ class GameLogic {
     }
 
     gameState.addToHistory(
-        "Échange : ${p1.name} carte #${idx1 + 1} ↔ ${p2.name} carte #${idx2 + 1}.");
+        ActionHistoryMessages.powerSwapDetailed(p1.name, idx1, p2.name, idx2));
 
     // Log
     GameLoggerService.instance.logValetExchange(
@@ -687,8 +675,8 @@ class GameLogic {
       }
     }
 
-    gameState.addToHistory(
-        "JOKER ! ${gameState.currentPlayer.name} mélange ${targetPlayer.name} !");
+    gameState.addToHistory(ActionHistoryMessages.powerJoker(
+        gameState.currentPlayer.name, targetPlayer.name));
 
     // Log
     GameLoggerService.instance.logPowerUse(
@@ -712,7 +700,8 @@ class GameLogic {
     if (gameState.dutchCallerId != null) return;
     gameState.dutchCallerId = gameState.currentPlayer.id;
     gameState.phase = GamePhase.dutchCalled;
-    gameState.addToHistory('${gameState.currentPlayer.name} crie DUTCH !');
+    gameState.addToHistory(
+        ActionHistoryMessages.dutch(gameState.currentPlayer.name));
 
     // Log
     GameLoggerService.instance.logDutch(
@@ -745,11 +734,11 @@ class GameLogic {
       // Utiliser smartShuffle avec le mode de mélange des paramètres
       gameState.smartShuffle();
       gameState.addToHistory(
-          "🔄 Pioche vide ! Défausse mélangée (${gameState.deck.length} cartes)");
+          ActionHistoryMessages.deckRefilled(gameState.deck.length));
     } else {
       if (gameState.dutchCallerId != null) {
         gameState.phase = GamePhase.dutchCalled;
-        gameState.addToHistory("Plus de cartes disponibles - Fin de partie");
+        gameState.addToHistory(ActionHistoryMessages.noCardsLeft());
       } else {
         endGame(gameState);
       }

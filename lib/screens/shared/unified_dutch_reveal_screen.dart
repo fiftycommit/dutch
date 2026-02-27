@@ -9,6 +9,7 @@ import '../../utils/ui_constants.dart';
 /// Configuration pour l'écran de révélation Dutch
 class DutchRevealConfig {
   final GameState gameState;
+  final String? localPlayerId;
   final Widget Function(BuildContext context) buildResultsScreen;
   final void Function(BuildContext context)? navigateToResults;
   final Widget? Function(BuildContext context)? buildLobbyRedirect;
@@ -18,6 +19,7 @@ class DutchRevealConfig {
 
   const DutchRevealConfig({
     required this.gameState,
+    this.localPlayerId,
     required this.buildResultsScreen,
     this.navigateToResults,
     this.buildLobbyRedirect,
@@ -98,14 +100,24 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       setState(() {
         for (var player in players) {
           if (waveIndex < player.hand.length) {
-            _currentScores[player.id] =
-                (_currentScores[player.id] ?? 0) + player.hand[waveIndex].points;
+            _currentScores[player.id] = (_currentScores[player.id] ?? 0) +
+                player.hand[waveIndex].points;
           }
         }
       });
       await _scorePopController.forward(from: 0.0);
       await Future.delayed(const Duration(milliseconds: 600));
     }
+
+    // En multi, les cartes adversaires sont hidden (points=0).
+    // Utiliser le score serveur comme score final si disponible.
+    setState(() {
+      for (var player in players) {
+        if (player.serverScore != null) {
+          _currentScores[player.id] = player.serverScore!;
+        }
+      }
+    });
 
     _highlightWinner();
   }
@@ -125,7 +137,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     if (maxCards <= 0) return;
 
     // Hauteur totale du contenu scrollable
-    final totalContentHeight = _gridScrollController.position.maxScrollExtent + viewportHeight;
+    final totalContentHeight =
+        _gridScrollController.position.maxScrollExtent + viewportHeight;
     final rowHeight = totalContentHeight / maxCards;
     final rowBottom = (rowIndex + 1) * rowHeight;
     final currentBottom = _gridScrollController.offset + viewportHeight;
@@ -245,7 +258,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                       children: List.generate(players.length, (i) {
                         final player = players[i];
                         final isWinner = _winnerId == player.id;
-                        final isEliminated = _revealComplete && _eliminatedId == player.id;
+                        final isEliminated =
+                            _revealComplete && _eliminatedId == player.id;
                         Color bgColor;
                         if (isWinner) {
                           bgColor = Colors.amber.withValues(alpha: 0.2);
@@ -258,14 +272,21 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         }
                         return Expanded(
                           child: Container(
-                            margin: EdgeInsets.symmetric(horizontal: isCompact ? 2 : 3),
+                            margin: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 2 : 3),
                             decoration: BoxDecoration(
                               color: bgColor,
                               borderRadius: BorderRadius.circular(12),
                               border: isWinner
-                                  ? Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 1.5)
+                                  ? Border.all(
+                                      color:
+                                          Colors.amber.withValues(alpha: 0.5),
+                                      width: 1.5)
                                   : (isEliminated
-                                      ? Border.all(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.5)
+                                      ? Border.all(
+                                          color: Colors.redAccent
+                                              .withValues(alpha: 0.5),
+                                          width: 1.5)
                                       : null),
                             ),
                           ),
@@ -281,7 +302,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                           physics: const NeverScrollableScrollPhysics(),
                           child: Column(
                             children: List.generate(maxCards, (rowIndex) {
-                              return _buildCardRow(players, rowIndex, isCompact);
+                              return _buildCardRow(
+                                  players, rowIndex, isCompact);
                             }),
                           ),
                         );
@@ -310,6 +332,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
           final isDutchCaller = gameState.dutchCallerId == player.id;
           final isWinner = _winnerId == player.id;
           final isEliminated = _revealComplete && _eliminatedId == player.id;
+          final isLocalPlayer = player.id == widget.config.localPlayerId ||
+              (widget.config.localPlayerId == null && player.isHuman);
+          final displayName = isLocalPlayer ? "Vous" : player.name;
           return Expanded(
             child: Container(
               padding: EdgeInsets.symmetric(vertical: isCompact ? 2 : 4),
@@ -328,7 +353,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                     style: TextStyle(fontSize: isCompact ? 18 : 28),
                   ),
                   Text(
-                    player.name,
+                    displayName,
                     style: TextStyle(
                       color: isWinner
                           ? Colors.amber
@@ -342,7 +367,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                   if (isDutchCaller)
                     Container(
                       margin: const EdgeInsets.only(top: 2),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
                         color: Colors.amber,
                         borderRadius: BorderRadius.circular(4),
@@ -370,9 +396,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   Widget _buildCardRow(List<Player> players, int rowIndex, bool isCompact) {
     final bool shouldReveal = rowIndex <= _currentRevealIndex;
     final bool isCurrentRow = rowIndex == _currentRevealIndex;
-    final double animValue = isCurrentRow
-        ? _flipController.value
-        : (shouldReveal ? 1.0 : 0.0);
+    final double animValue =
+        isCurrentRow ? _flipController.value : (shouldReveal ? 1.0 : 0.0);
     final cardSize = isCompact ? CardSize.tiny : CardSize.small;
 
     return Padding(
@@ -437,7 +462,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                                 : (isEliminated
                                     ? Colors.red.withValues(alpha: 0.7)
                                     : Colors.black45),
-                            borderRadius: BorderRadius.circular(isCompact ? 6 : 10),
+                            borderRadius:
+                                BorderRadius.circular(isCompact ? 6 : 10),
                             border: isEliminated
                                 ? Border.all(color: Colors.redAccent, width: 2)
                                 : null,
@@ -453,7 +479,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         ),
                         if (isWinner && _revealComplete)
                           Padding(
-                            padding: EdgeInsets.only(top: isCompact ? 2.0 : 4.0),
+                            padding:
+                                EdgeInsets.only(top: isCompact ? 2.0 : 4.0),
                             child: Icon(
                               Icons.emoji_events,
                               color: Colors.amber,
@@ -472,7 +499,6 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 }
-
 
 /// Helper pour ordonner les joueurs en mode solo (humain au centre)
 List<Player> orderPlayersForSolo(List<Player> allPlayers) {

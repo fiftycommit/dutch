@@ -21,7 +21,9 @@ class GameActionsEmitter {
   bool _safeEmit(String event, Map<String, dynamic> data) {
     final socket = _socket;
     if (socket == null || !socket.connected) {
-      if (kDebugMode) debugPrint('⚠️ Socket non connecté, action $event ignorée');
+      if (kDebugMode) {
+        debugPrint('⚠️ Socket non connecté, action $event ignorée');
+      }
       return false;
     }
     if (_roomCode == null) {
@@ -70,7 +72,9 @@ class GameActionsEmitter {
 
   /// Carte 7 : Regarder sa propre carte
   void usePower7LookOwnCard(int cardIndex) {
-    if (kDebugMode) debugPrint('👁️ Pouvoir 7 : Regarde sa carte #${cardIndex + 1}');
+    if (kDebugMode) {
+      debugPrint('👁️ Pouvoir 7 : Regarde sa carte #${cardIndex + 1}');
+    }
     _safeEmit('game:use_special_power', {
       'roomCode': _roomCode,
       'cardIndex': cardIndex,
@@ -108,10 +112,29 @@ class GameActionsEmitter {
 
   /// JOKER : Mélanger la main d'un joueur (y compris soi-même)
   void usePowerJokerShuffle(int targetPlayerIndex) {
-    if (kDebugMode) debugPrint('🃏 Pouvoir Joker : Mélange joueur $targetPlayerIndex');
+    if (kDebugMode) {
+      debugPrint('🃏 Pouvoir Joker : Mélange joueur $targetPlayerIndex');
+    }
     _safeEmit('game:use_special_power', {
       'roomCode': _roomCode,
       'targetPlayerIndex': targetPlayerIndex,
+    });
+  }
+
+  /// Emission de la sélection partielle (pour retour visuel en temps réel)
+  void sendSpecialPowerTargetSelection(
+      int? player1Index, int? card1Index, int? player2Index, int? card2Index) {
+    if (kDebugMode) {
+      debugPrint('🎯 Sélection partielle Valet : '
+          'p1=$player1Index c1=$card1Index '
+          'p2=$player2Index c2=$card2Index');
+    }
+    _safeEmit('special_power:target_selection', {
+      'roomCode': _roomCode,
+      'player1Index': player1Index,
+      'card1Index': card1Index,
+      'player2Index': player2Index,
+      'card2Index': card2Index,
     });
   }
 

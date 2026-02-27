@@ -30,6 +30,7 @@ class PlayerHandWidget extends StatefulWidget {
   final Function(int)? onCardTap;
   final List<int>? selectedIndices;
   final List<int>? highlightedIndices;
+  final bool isPowerHighlighted;
   final List<int>? hiddenIndices;
   final List<String>? hiddenCardIds;
   final CardSize cardSize;
@@ -46,6 +47,7 @@ class PlayerHandWidget extends StatefulWidget {
     this.onCardTap,
     this.selectedIndices,
     this.highlightedIndices,
+    this.isPowerHighlighted = false,
     this.hiddenIndices,
     this.hiddenCardIds,
     this.cardSize = CardSize.medium,
@@ -181,7 +183,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
   void _startShuffleAnimation() {
     _shuffleController?.dispose();
     _shuffleController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
 
@@ -191,11 +193,6 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       return _ShuffleCardData(
         targetIndex1: rng.nextInt(count),
         targetIndex2: rng.nextInt(count),
-        dy1: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
-        dy2: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
-        dy3: (rng.nextBool() ? 1 : -1) * (rng.nextDouble() * 30 + 15),
-        rotation1: (rng.nextDouble() - 0.5) * 0.4,
-        rotation2: (rng.nextDouble() - 0.5) * 0.4,
       );
     });
 
@@ -284,8 +281,12 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
 
   Widget _buildCard(BuildContext context, int index, double overlap) {
     final isSelected = widget.selectedIndices?.contains(index) ?? false;
-    final isMemorizedHighlight =
-        widget.highlightedIndices?.contains(index) ?? false;
+    final isHighlighted = widget.highlightedIndices?.contains(index) ?? false;
+    final highlightColor = widget.isPowerHighlighted
+        ? const Color(0xFFFFD700)
+        : const Color(0xFFB8FF32);
+    final highlightGlowColor =
+        widget.isPowerHighlighted ? Colors.amber : Colors.cyanAccent;
     final isPenaltyHighlight = _penaltyHighlightIndex == index;
     final cardId = widget.player.hand[index].id;
     final isHidden = (widget.hiddenIndices?.contains(index) ?? false) ||
@@ -311,8 +312,8 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
                   ? Border.all(color: Colors.red, width: 3)
                   : (isPenaltyHighlight
                       ? Border.all(color: Colors.redAccent, width: 2)
-                      : (isMemorizedHighlight
-                          ? Border.all(color: const Color(0xFFB8FF32), width: 2)
+                      : (isHighlighted
+                          ? Border.all(color: highlightColor, width: 2)
                           : null)),
               boxShadow: isSelected
                   ? [
@@ -330,17 +331,16 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
                             spreadRadius: 1,
                           )
                         ]
-                      : (isMemorizedHighlight
+                      : (isHighlighted
                           ? [
                               BoxShadow(
-                                color: const Color(0xFFB8FF32)
-                                    .withValues(alpha: 0.65),
+                                color: highlightColor.withValues(alpha: 0.65),
                                 blurRadius: 12,
                                 spreadRadius: 1.5,
                               ),
                               BoxShadow(
                                 color:
-                                    Colors.cyanAccent.withValues(alpha: 0.35),
+                                    highlightGlowColor.withValues(alpha: 0.35),
                                 blurRadius: 20,
                                 spreadRadius: 1,
                               ),
@@ -367,41 +367,25 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       child: cardBody,
     );
 
-    // Joker shuffle animation overlay
+    // Joker shuffle animation overlay (uniquement horizontale)
     if (_shuffleController != null && index < _shuffleOffsets.length) {
       final t = _shuffleController!.value;
       final data = _shuffleOffsets[index];
 
       double dx = 0.0;
-      double dy = 0.0;
-      double rot = 0.0;
 
-      if (t < 0.33) {
-        final p = Curves.easeInOut.transform(t / 0.33);
+      if (t < 0.5) {
+        final p = Curves.easeInOut.transform(t / 0.5);
         dx = (data.targetIndex1 - index) * overlap * p;
-        dy = data.dy1 * math.sin(p * math.pi);
-        rot = data.rotation1 * p;
-      } else if (t < 0.66) {
-        final p = Curves.easeInOut.transform((t - 0.33) / 0.33);
-        final startDx = (data.targetIndex1 - index) * overlap;
-        final endDx = (data.targetIndex2 - index) * overlap;
-        dx = startDx + (endDx - startDx) * p;
-        dy = data.dy2 * math.sin(p * math.pi);
-        rot = data.rotation1 + (data.rotation2 - data.rotation1) * p;
       } else {
-        final p = Curves.easeInOut.transform((t - 0.66) / 0.34);
-        final startDx = (data.targetIndex2 - index) * overlap;
+        final p = Curves.easeInOut.transform((t - 0.5) / 0.5);
+        final startDx = (data.targetIndex1 - index) * overlap;
         dx = startDx * (1 - p);
-        dy = data.dy3 * math.sin(p * math.pi);
-        rot = data.rotation2 * (1 - p);
       }
 
       card = Transform.translate(
-        offset: Offset(dx, dy),
-        child: Transform.rotate(
-          angle: rot,
-          child: card,
-        ),
+        offset: Offset(dx, 0),
+        child: card,
       );
     }
 
@@ -420,19 +404,9 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
 class _ShuffleCardData {
   final int targetIndex1;
   final int targetIndex2;
-  final double dy1;
-  final double dy2;
-  final double dy3;
-  final double rotation1;
-  final double rotation2;
 
   const _ShuffleCardData({
     required this.targetIndex1,
     required this.targetIndex2,
-    required this.dy1,
-    required this.dy2,
-    required this.dy3,
-    required this.rotation1,
-    required this.rotation2,
   });
 }

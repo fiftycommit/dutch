@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
+import '../utils/action_history_messages.dart';
 import '../services/multiplayer/multiplayer_service.dart';
 import '../services/ui/haptic_service.dart';
 import '../services/ui/emote_service.dart';
@@ -142,6 +143,30 @@ class MultiplayerGameProvider
   String? get spiedTargetName => _spiedTargetName;
   bool _showSpiedCardDialog = false;
   bool get showSpiedCardDialog => _showSpiedCardDialog;
+
+  // Cible de pouvoir en temps réel (Valet)
+  int? _pendingValetPlayer1;
+  int? _pendingValetCard1;
+  int? _pendingValetPlayer2;
+  int? _pendingValetCard2;
+
+  int? get pendingValetPlayer1 => _pendingValetPlayer1;
+  int? get pendingValetCard1 => _pendingValetCard1;
+  int? get pendingValetPlayer2 => _pendingValetPlayer2;
+  int? get pendingValetCard2 => _pendingValetCard2;
+
+  // Indices des joueurs ciblés par un pouvoir (pour illuminer leur main)
+  Set<int> _powerTargetPlayerIndices = {};
+
+  /// IDs des joueurs dont la main doit être illuminée (pouvoir en cours)
+  Set<String> get powerTargetPlayerIds {
+    final gs = _gameState;
+    if (gs == null) return {};
+    return _powerTargetPlayerIndices
+        .where((i) => i >= 0 && i < gs.players.length)
+        .map((i) => gs.players[i].id)
+        .toSet();
+  }
 
   /// Carte préchargée du deck pour éliminer la latence lors de la pioche
   PlayingCard? _preloadedDeckCard;
@@ -432,6 +457,18 @@ class MultiplayerGameProvider
     };
     _multiplayerService.onSpecialPowerTargeted =
         _notificationManager.handleSpecialPowerTargeted;
+    _multiplayerService.onSpecialPowerTargetSelection = (data) {
+      _pendingValetPlayer1 = data['player1Index'] as int?;
+      _pendingValetCard1 = data['card1Index'] as int?;
+      _pendingValetPlayer2 = data['player2Index'] as int?;
+      _pendingValetCard2 = data['card2Index'] as int?;
+      // Mettre à jour les indices pour le highlight des mains ciblées
+      _powerTargetPlayerIndices = {
+        if (_pendingValetPlayer1 != null) _pendingValetPlayer1!,
+        if (_pendingValetPlayer2 != null) _pendingValetPlayer2!,
+      };
+      notifyListeners();
+    };
     _multiplayerService.onSpiedCard = (card, targetName) {
       _lastSpiedCard = card;
       _spiedTargetName = targetName;
@@ -624,7 +661,25 @@ class MultiplayerGameProvider
       }
     }
 
+    // Générer les messages d'action côté client (comme en solo)
+    _inferActionHistory(_gameState, gameState);
+
+    // Fallback : si le serveur ne fournit pas turnStartTime en phase playing,
+    // l'initialiser côté client pour que la progress bar du turn timer s'affiche
+    if (gameState.phase == GamePhase.playing &&
+        gameState.turnStartTime == null) {
+      gameState.turnStartTime =
+          DateTime.now().millisecondsSinceEpoch + serverTimeOffsetMs;
+    }
+
     _gameState = gameState;
+
+    // Clear pending valet selection when state updates natively
+    _pendingValetPlayer1 = null;
+    _pendingValetCard1 = null;
+    _pendingValetPlayer2 = null;
+    _pendingValetCard2 = null;
+    _powerTargetPlayerIndices = {};
 
     // Reset le flag de processing quand on reçoit une mise à jour du serveur
     // Cela évite les blocages si une action n'a pas été confirmée
@@ -648,6 +703,106 @@ class MultiplayerGameProvider
 
     _timerManager.syncReactionPhase(_gameState);
     notifyListeners();
+  }
+
+  /// Compare l'ancien et le nouveau gameState pour générer les messages
+  /// d'action côté client (comme en solo). Le serveur n'envoie pas toujours
+  /// un actionHistory complet, donc on l'enrichit localement.
+  void _inferActionHistory(GameState? oldGs, GameState newGs) {
+    if (oldGs == null) return;
+
+    // Résoudre le nom affiché pour un joueur
+    String nameOf(Player p) => p.id == playerId ? 'Vous' : p.name;
+    bool isMe(Player p) => p.id == playerId;
+
+    // Trouver le joueur qui agissait dans l'ancien état
+    final actor = oldGs.currentPlayer;
+    final actorName = nameOf(actor);
+
+    // ── Dutch ────────────────────────────────────────────────────────
+    if (oldGs.dutchCallerId == null && newGs.dutchCallerId != null) {
+      final callerId = newGs.dutchCallerId!;
+      final caller = newGs.players.cast<Player?>().firstWhere(
+            (p) => p?.id == callerId,
+            orElse: () => null,
+          );
+      if (caller != null) {
+        newGs.addToHistory(ActionHistoryMessages.dutch(nameOf(caller)));
+      }
+      return;
+    }
+
+    // ── Phase de réaction (match réussi / raté) ──────────────────────
+    if (newGs.phase == GamePhase.reaction ||
+        oldGs.phase == GamePhase.reaction) {
+      // Détecter un match réussi : la pile de défausse a grandi ET
+      // un joueur a perdu une carte
+      for (final newP in newGs.players) {
+        final oldP = oldGs.players.cast<Player?>().firstWhere(
+              (p) => p?.id == newP.id,
+              orElse: () => null,
+            );
+        if (oldP == null) continue;
+
+        if (newP.hand.length < oldP.hand.length &&
+            newGs.discardPile.length > oldGs.discardPile.length) {
+          final matchedCard = newGs.discardPile.last;
+          newGs.addToHistory(ActionHistoryMessages.matchSuccess(
+              nameOf(newP), matchedCard,
+              isLocal: isMe(newP)));
+          return;
+        }
+        // Match raté : le joueur a PLUS de cartes (pénalité)
+        if (newP.hand.length > oldP.hand.length &&
+            oldGs.phase == GamePhase.reaction) {
+          newGs.addToHistory(ActionHistoryMessages.penalty(nameOf(newP)));
+          return;
+        }
+      }
+    }
+
+    // Ne rien faire si le joueur actif n'a pas changé et pas de transition visible
+    if (oldGs.phase != GamePhase.playing) return;
+
+    // ── Pioche / Prise depuis la défausse ────────────────────────────
+    if (oldGs.drawnCard == null && newGs.drawnCard != null) {
+      if (newGs.discardPile.length < oldGs.discardPile.length) {
+        // La défausse a diminué → prise depuis la défausse
+        newGs.addToHistory(
+            ActionHistoryMessages.takeFromDiscard(actorName, newGs.drawnCard!));
+      } else {
+        // La pioche a diminué → pioche normale
+        newGs.addToHistory(ActionHistoryMessages.draw(actorName));
+      }
+      return;
+    }
+
+    // ── Défausse ou remplacement ─────────────────────────────────────
+    // La carte piochée disparaît, la défausse grandit
+    if (oldGs.drawnCard != null && newGs.drawnCard == null) {
+      final newTopDiscard =
+          newGs.discardPile.isNotEmpty ? newGs.discardPile.last : null;
+
+      final newActor = newGs.players.cast<Player?>().firstWhere(
+            (p) => p?.id == actor.id,
+            orElse: () => null,
+          );
+
+      if (newActor != null && newTopDiscard != null) {
+        if (newActor.hand.length == actor.hand.length) {
+          // Même nombre de cartes → remplacement (l'ancienne carte est défaussée)
+          newGs.addToHistory(ActionHistoryMessages.replaceCard(
+              actorName, newTopDiscard,
+              isLocal: isMe(actor)));
+        } else {
+          // Main inchangée côté nombre → défausse simple (pas intéressé)
+          newGs.addToHistory(ActionHistoryMessages.discardDrawn(
+              actorName, newTopDiscard,
+              isLocal: isMe(actor)));
+        }
+      }
+      return;
+    }
   }
 
   void _handlePlayerJoined(Map<String, dynamic> data) {
@@ -1109,6 +1264,9 @@ class MultiplayerGameProvider
   void usePowerJokerShuffle(int targetPlayerIndex) =>
       _executeWithProcessingLock(
           () => _multiplayerService.usePowerJokerShuffle(targetPlayerIndex));
+
+  void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>
+      _multiplayerService.sendSpecialPowerTargetSelection(p1, c1, p2, c2);
 
   void _executeWithProcessingLock(void Function() action) {
     if (_gameState == null || _isProcessingAction) return;

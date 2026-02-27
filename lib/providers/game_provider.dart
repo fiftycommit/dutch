@@ -5,6 +5,7 @@ import '../models/playing_card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
+import '../utils/action_history_messages.dart';
 import '../models/player_learning_data.dart';
 import '../services/game/game_logic.dart';
 import '../core/interfaces/i_haptic_service.dart';
@@ -498,8 +499,8 @@ class GameProvider with ChangeNotifier implements IGameController {
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
-    _gameState!.addToHistory(
-        "${human.name} prend ${_gameState!.drawnCard!.displayName} de la défausse.");
+    _gameState!.addToHistory(ActionHistoryMessages.takeFromDiscard(
+        human.name, _gameState!.drawnCard!));
 
     _trackingProvider.recordPlayerActionWithResult(
       actionType: 'draw',
@@ -526,7 +527,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     _gameState!.phase = GamePhase.dutchCalled;
     _gameState!.dutchCallerId = human.id;
-    _gameState!.addToHistory("📢 ${human.name} crie DUTCH !");
+    _gameState!.addToHistory(ActionHistoryMessages.dutch(human.name));
     endGame();
   }
 
@@ -1109,7 +1110,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.discardPile.add(topCard);
     _gameState!.smartShuffle();
     _gameState!.addToHistory(
-        "🔄 Pioche vide ! Défausse mélangée (${_gameState!.deck.length} cartes)");
+        ActionHistoryMessages.deckRefilled(_gameState!.deck.length));
     notifyListeners();
   }
 

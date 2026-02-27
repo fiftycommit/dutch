@@ -55,11 +55,14 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     final isTournament = gameState.gameMode == GameMode.tournament;
     final totalRounds = isTournament ? provider.tournamentTotalRounds : 1;
     final isFinalRound = provider.isTournamentFinalRound;
-    final isLocalEliminated = isTournament && provider.isLocalPlayerEliminated();
-    final isTournamentOver = isTournament && (isFinalRound || isLocalEliminated);
-    
+    final isLocalEliminated =
+        isTournament && provider.isLocalPlayerEliminated();
+    final isTournamentOver =
+        isTournament && (isFinalRound || isLocalEliminated);
+
     final stageLabel = isTournament
-        ? tournamentStageLabel(gameState.tournamentRound, totalRounds: totalRounds)
+        ? tournamentStageLabel(gameState.tournamentRound,
+            totalRounds: totalRounds)
         : null;
 
     final eliminatedIds = <String>{};
@@ -68,40 +71,49 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     }
 
     // Vérifier si le joueur local a gagné le tournoi
-    final localPlayer = gameState.players.where((p) => p.id == widget.localPlayerId).firstOrNull;
+    final localPlayer = gameState.players
+        .where((p) => p.id == widget.localPlayerId)
+        .firstOrNull;
     final localRank = localPlayer != null
-        ? (gameState.getFinalRanksWithTies()[localPlayer.id] ?? 
-           (gameState.getFinalRanking().indexWhere((p) => p.id == localPlayer.id) + 1))
+        ? (gameState.getFinalRanksWithTies()[localPlayer.id] ??
+            (gameState
+                    .getFinalRanking()
+                    .indexWhere((p) => p.id == localPlayer.id) +
+                1))
         : 0;
     final isTournamentWinner = isTournament && isFinalRound && localRank == 1;
 
     return PopScope(
       canPop: false,
       child: shared.ResultsScreen(
-      config: shared.ResultsConfig(
-        gameState: gameState,
-        localPlayerId: widget.localPlayerId,
-        title: isTournament
-            ? (isTournamentOver
-                ? "FIN DU TOURNOI"
-                : "${stageLabel!.toUpperCase()} TERMINÉE")
-            : "RÉSULTATS",
-        subtitle: isTournamentOver ? stageLabel : null,
-        alertBanner: isTournamentWinner
-            ? _buildTournamentWinnerBanner()
-            : (isTournament && isLocalEliminated)
-                ? _buildEliminatedBanner(stageLabel)
-                : null,
-        isTournamentFinal: isFinalRound,
-        eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
-        shouldRedirect: () => provider.isInLobby && !provider.isPlaying && provider.roomCode != null,
-        onRedirect: () {
-          context.go('/lobby');
-        },
-        buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider, isTournament: isTournament, isTournamentOver: isTournamentOver),
-        rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
+        config: shared.ResultsConfig(
+          gameState: gameState,
+          localPlayerId: widget.localPlayerId,
+          title: isTournament
+              ? (isTournamentOver
+                  ? "FIN DU TOURNOI"
+                  : "${stageLabel!.toUpperCase()} TERMINÉE")
+              : "RÉSULTATS",
+          subtitle: isTournamentOver ? stageLabel : null,
+          alertBanner: isTournamentWinner
+              ? _buildTournamentWinnerBanner()
+              : (isTournament && isLocalEliminated)
+                  ? _buildEliminatedBanner(stageLabel)
+                  : null,
+          isTournamentFinal: isFinalRound,
+          eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
+          shouldRedirect: () =>
+              provider.isInLobby &&
+              !provider.isPlaying &&
+              provider.roomCode != null,
+          onRedirect: () {
+            context.go('/lobby');
+          },
+          buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider,
+              isTournament: isTournament, isTournamentOver: isTournamentOver),
+          rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
+        ),
       ),
-    ),
     );
   }
 
@@ -154,7 +166,8 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           if (stageLabel != null)
             Text(
               "Éliminé en $stageLabel",
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style:
+                  const TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
         ],
       ),
@@ -162,7 +175,10 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
   }
 
   shared.PlayerRPResult? _calculateRP(Player player, int rank, GameState gs) {
-    final currentMMR = _localMMR ?? 0;
+    // Si les stats ne sont pas encore chargées, ne pas calculer pour éviter
+    // d'afficher un rang Bronze par défaut (MMR=0) à la place du vrai rang.
+    if (_localMMR == null) return null;
+    final currentMMR = _localMMR!;
     final isLocalPlayer = player.id == widget.localPlayerId;
     final winStreak = isLocalPlayer && rank == 1 ? _localWinStreak + 1 : 0;
 

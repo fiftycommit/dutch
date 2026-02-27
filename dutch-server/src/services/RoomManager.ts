@@ -1430,6 +1430,8 @@ export class RoomManager {
     room.gameState.turnStartTime = this.now();
     room.gameState.turnTimeoutMs = timeoutMs;
 
+    this.broadcastGameState(roomCode, 'TIMER_UPDATE');
+
     const playerId = currentPlayer.id;
 
     const timer = setTimeout(() => {

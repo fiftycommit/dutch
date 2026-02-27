@@ -340,6 +340,18 @@ class PowerNotificationDialogs {
                       ),
                     ),
                   ],
+                  if (autoCloseSeconds > 0) ...[
+                    SizedBox(height: metrics.space(8)),
+                    Text(
+                      "Attention : L'inactivité entraînera votre exclusion de la partie.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.redAccent.shade100,
+                        fontSize: metrics.font(11),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   SizedBox(height: metrics.space(16)),
                   _TickingButton(
                     labelPrefix: "OK",
@@ -460,6 +472,18 @@ class PowerNotificationDialogs {
                       ),
                     ),
                   ],
+                  if (autoCloseSeconds > 0) ...[
+                    SizedBox(height: metrics.space(8)),
+                    Text(
+                      "Attention : L'inactivité entraînera votre exclusion de la partie.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.redAccent.shade100,
+                        fontSize: metrics.font(11),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   SizedBox(height: metrics.space(16)),
                   _TickingButton(
                     labelPrefix: "OK",
@@ -535,6 +559,18 @@ class PowerNotificationDialogs {
                         color: Colors.amber,
                         fontSize: metrics.font(12),
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  if (autoCloseSeconds > 0) ...[
+                    SizedBox(height: metrics.space(8)),
+                    Text(
+                      "Attention : L'inactivité entraînera votre exclusion de la partie.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.redAccent.shade100,
+                        fontSize: metrics.font(11),
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                   ],
