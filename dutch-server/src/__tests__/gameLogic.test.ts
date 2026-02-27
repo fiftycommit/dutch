@@ -531,7 +531,7 @@ describe('GameLogic', () => {
   describe('useSpecialPower', () => {
     it('handles card 7 - look at own card', () => {
       const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
+      state.phase = GamePhase.specialPower;
       state.currentPlayerIndex = 0;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('hearts', '7');
@@ -546,7 +546,7 @@ describe('GameLogic', () => {
 
     it('handles card 10 - spy on opponent', () => {
       const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
+      state.phase = GamePhase.specialPower;
       state.currentPlayerIndex = 0;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('spades', '10');
@@ -562,7 +562,7 @@ describe('GameLogic', () => {
 
     it('handles card V (Jack) - swap between any two players', () => {
       const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
+      state.phase = GamePhase.specialPower;
       state.currentPlayerIndex = 0;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('clubs', 'V');
@@ -584,7 +584,7 @@ describe('GameLogic', () => {
 
     it('handles JOKER - shuffle target player hand', () => {
       const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
+      state.phase = GamePhase.specialPower;
       state.currentPlayerIndex = 0;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('joker', 'JOKER');
@@ -608,7 +608,7 @@ describe('GameLogic', () => {
 
     it('starts reaction phase after power use', () => {
       const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
+      state.phase = GamePhase.specialPower;
       state.currentPlayerIndex = 0;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('hearts', '7');

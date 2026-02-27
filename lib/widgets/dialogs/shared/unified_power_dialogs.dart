@@ -51,6 +51,22 @@ class PowerDialogConfig {
   List<Player> get opponents =>
       allPlayers.where((p) => !isLocalPlayer(p) && p.hand.isNotEmpty).toList();
 
+  /// Timestamp de début du pouvoir (ms epoch)
+  int get powerStartTimeMs =>
+      gameState.specialPowerStartTime ?? DateTime.now().millisecondsSinceEpoch;
+
+  /// Durée totale accordée pour le pouvoir (ms)
+  int get powerTotalMs =>
+      gameState.turnTimeoutMs > 0 ? gameState.turnTimeoutMs : 60000;
+
+  /// Secondes restantes pour le pouvoir (pour autoCloseSeconds)
+  int get powerRemainingSeconds {
+    if (!isMultiplayer) return 0;
+    final elapsed = DateTime.now().millisecondsSinceEpoch - powerStartTimeMs;
+    final remaining = (powerTotalMs - elapsed).clamp(0, powerTotalMs);
+    return (remaining / 1000).ceil();
+  }
+
   /// Factory pour le mode SOLO
   static PowerDialogConfig solo(BuildContext context) {
     final gp = Provider.of<GameProvider>(context, listen: false);
@@ -157,6 +173,11 @@ class UnifiedPowerDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (config.isMultiplayer)
+                    PowerTimerBar(
+                      startTimeMs: config.powerStartTimeMs,
+                      totalMs: config.powerTotalMs,
+                    ),
                   Icon(Icons.visibility, color: Colors.amber, size: iconSize),
                   SizedBox(height: smallSpacing),
                   Text(
@@ -210,7 +231,7 @@ class UnifiedPowerDialogs {
                       config.onSkipPower();
                     },
                     metrics: metrics,
-                    autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+                    autoCloseSeconds: config.powerRemainingSeconds,
                   ),
                 ],
               ),
@@ -244,6 +265,11 @@ class UnifiedPowerDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (config.isMultiplayer)
+                    PowerTimerBar(
+                      startTimeMs: config.powerStartTimeMs,
+                      totalMs: config.powerTotalMs,
+                    ),
                   Icon(Icons.visibility, color: Colors.blue, size: iconSize),
                   SizedBox(height: smallSpacing),
                   Text(
@@ -291,7 +317,7 @@ class UnifiedPowerDialogs {
               config.onSkipPower();
             },
             metrics: metrics,
-            autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+            autoCloseSeconds: config.powerRemainingSeconds,
           ),
         ],
       );
@@ -334,7 +360,7 @@ class UnifiedPowerDialogs {
             config.onSkipPower();
           },
           metrics: metrics,
-          autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+          autoCloseSeconds: config.powerRemainingSeconds,
         ),
       ],
     );
@@ -361,6 +387,11 @@ class UnifiedPowerDialogs {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (config.isMultiplayer)
+                    PowerTimerBar(
+                      startTimeMs: config.powerStartTimeMs,
+                      totalMs: config.powerTotalMs,
+                    ),
                   Text(
                     "Cartes de ${opponent.name} (${opponent.hand.length} carte${opponent.hand.length > 1 ? 's' : ''})",
                     style: TextStyle(
@@ -404,7 +435,7 @@ class UnifiedPowerDialogs {
                       config.onSkipPower();
                     },
                     metrics: metrics,
-                    autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+                    autoCloseSeconds: config.powerRemainingSeconds,
                   ),
                 ],
               ),
@@ -448,11 +479,17 @@ class UnifiedPowerDialogs {
             config.onSkipPower();
           },
           metrics: metrics,
-          autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+          autoCloseSeconds: config.powerRemainingSeconds,
           onTimeout: () {
             Navigator.pop(ctx);
             config.onSkipPower();
           },
+          powerTimerBar: config.isMultiplayer
+              ? PowerTimerBar(
+                  startTimeMs: config.powerStartTimeMs,
+                  totalMs: config.powerTotalMs,
+                )
+              : null,
         ),
       ),
     );
@@ -521,6 +558,17 @@ class UnifiedPowerDialogs {
                 getCardLabel: (p) =>
                     config.isLocalPlayer(p) ? "votre main" : p.name,
                 metrics: metrics,
+                autoCloseSeconds: config.powerRemainingSeconds,
+                onTimeout: () {
+                  Navigator.pop(ctx);
+                  config.onSkipPower();
+                },
+                powerTimerBar: config.isMultiplayer
+                    ? PowerTimerBar(
+                        startTimeMs: config.powerStartTimeMs,
+                        totalMs: config.powerTotalMs,
+                      )
+                    : null,
               );
             },
           );
@@ -561,11 +609,17 @@ class UnifiedPowerDialogs {
           getLabel: (p) => config.isLocalPlayer(p) ? "Vous" : p.name,
           isMe: config.isLocalPlayer,
           metrics: metrics,
-          autoCloseSeconds: config.isMultiplayer ? 15 : 0,
+          autoCloseSeconds: config.powerRemainingSeconds,
           onTimeout: () {
             Navigator.pop(ctx);
             config.onSkipPower();
           },
+          powerTimerBar: config.isMultiplayer
+              ? PowerTimerBar(
+                  startTimeMs: config.powerStartTimeMs,
+                  totalMs: config.powerTotalMs,
+                )
+              : null,
         ),
       ),
     );

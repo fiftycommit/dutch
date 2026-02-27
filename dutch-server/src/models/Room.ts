@@ -45,13 +45,15 @@ export interface Room {
   pauseTimeoutHandle?: ReturnType<typeof setTimeout>; // timer d'expulsion auto
   emptyAt?: number; // Timestamp quand la room est devenue vide
   bannedClientIds?: Set<string>; // clientIds des joueurs BANNIS (ne peuvent plus rejoindre)
+  creatorUserId?: string; // userId persistant du créateur (pour restaurer l'hôte à la reconnexion)
 }
 
 export function createRoom(
   id: string,
   hostPlayerId: string,
   settings: GameSettings,
-  expiresAt: number
+  expiresAt: number,
+  creatorUserId?: string
 ): Room {
   return {
     id,
@@ -66,5 +68,6 @@ export function createRoom(
     expiresAt,
     tournamentRound: 1,
     isPaused: false,
+    creatorUserId,
   };
 }

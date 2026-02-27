@@ -46,7 +46,7 @@ describe('GameState', () => {
       assert.strictEqual(state.pendingSwap, null);
       assert.deepStrictEqual(state.tournamentCumulativeScores, {});
       assert.strictEqual(state.turnStartTime, null);
-      assert.strictEqual(state.turnTimeoutMs, 70000);
+      assert.strictEqual(state.turnTimeoutMs, 90000);
       assert.deepStrictEqual(state.readyPlayerIds, []);
     });
 
@@ -183,9 +183,10 @@ describe('GameState', () => {
     it('has all expected phases', () => {
       assert.strictEqual(GamePhase.setup, 0);
       assert.strictEqual(GamePhase.playing, 1);
-      assert.strictEqual(GamePhase.reaction, 2);
-      assert.strictEqual(GamePhase.dutchCalled, 3);
-      assert.strictEqual(GamePhase.ended, 4);
+      assert.strictEqual(GamePhase.specialPower, 2);
+      assert.strictEqual(GamePhase.reaction, 3);
+      assert.strictEqual(GamePhase.dutchCalled, 4);
+      assert.strictEqual(GamePhase.ended, 5);
     });
   });
 

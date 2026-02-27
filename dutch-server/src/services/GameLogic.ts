@@ -89,16 +89,20 @@ export class GameLogic {
     const card = gameState.drawnCard;
     gameState.drawnCard = null;
     gameState.discardPile.push(card);
-    addToHistory(gameState, HistoryFormatter.formatDiscardDrawn(getCurrentPlayer(gameState).name, card));
+
+    // Check if card has a special power BEFORE generating the message
+    const powerCards = ['7', '10', 'V', 'JOKER'];
+    const hasPower = powerCards.includes(card.value);
+    addToHistory(gameState, HistoryFormatter.formatDiscardDrawn(getCurrentPlayer(gameState).name, card, hasPower));
 
     this.checkSpecialPower(gameState, card);
 
-    if (!gameState.isWaitingForSpecialPower) {
+    if (gameState.phase !== GamePhase.specialPower) {
       this.startReactionPhase(gameState);
     }
   }
 
-  private static startReactionPhase(gameState: GameState, delayMs: number = 0): void {
+  static startReactionPhase(gameState: GameState, delayMs: number = 0): void {
     gameState.phase = GamePhase.reaction;
     // Si on a un délai (ex: suite à un pouvoir spécial), on démarre le timestamp de réaction dans le futur
     gameState.reactionStartTime = new Date(Date.now() + delayMs);
@@ -125,7 +129,7 @@ export class GameLogic {
 
     this.checkSpecialPower(gameState, oldCard);
 
-    if (!gameState.isWaitingForSpecialPower) {
+    if (gameState.phase !== GamePhase.specialPower) {
       this.startReactionPhase(gameState);
     }
   }
@@ -246,6 +250,7 @@ export class GameLogic {
     // Only cards with actual implemented powers: 7 (spy), 10 (swap), V (exchange), JOKER (shuffle)
     const powerCards = ['7', '10', 'V', 'JOKER'];
     if (powerCards.includes(card.value)) {
+      gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
       gameState.specialPowerStartTime = Date.now();
@@ -310,7 +315,7 @@ export class GameLogic {
     affectedPlayers?: Array<{ playerId: string; playerName: string; cardIndex: number; swapPartnerName: string; receivedCardPosition: number }>;
     shuffledPlayer?: { playerId: string; playerName: string };
   } {
-    if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) {
+    if (gameState.phase !== GamePhase.specialPower || !gameState.specialCardToActivate) {
       return {};
     }
 
@@ -404,7 +409,7 @@ export class GameLogic {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    this.startReactionPhase(gameState, 3500);
+    this.startReactionPhase(gameState);
 
     return result;
   }
@@ -412,8 +417,8 @@ export class GameLogic {
   static skipSpecialPower(gameState: GameState): void {
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    // addToHistory(gameState, `${getCurrentPlayer(gameState).name} ignore le pouvoir spécial.`);
-    this.startReactionPhase(gameState, 3500);
+    addToHistory(gameState, HistoryFormatter.formatPowerSkip(getCurrentPlayer(gameState).name));
+    this.startReactionPhase(gameState);
   }
 
   static endGame(gameState: GameState): void {

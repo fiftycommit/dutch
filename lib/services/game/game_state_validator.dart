@@ -12,9 +12,10 @@ class GameStateValidator implements IValidationService {
     final errors = <String>[];
 
     // Vérifier que le joueur courant existe
-    if (gameState.currentPlayerIndex < 0 || 
+    if (gameState.currentPlayerIndex < 0 ||
         gameState.currentPlayerIndex >= gameState.players.length) {
-      errors.add('Index du joueur courant invalide: ${gameState.currentPlayerIndex}');
+      errors.add(
+          'Index du joueur courant invalide: ${gameState.currentPlayerIndex}');
     }
 
     // Vérifier que tous les joueurs ont des mains valides
@@ -22,26 +23,30 @@ class GameStateValidator implements IValidationService {
       if (player.hand.isEmpty && gameState.phase != GamePhase.ended) {
         errors.add('${player.name} a une main vide en cours de partie');
       }
-      
+
       if (player.hand.length != player.knownCards.length) {
-        errors.add('${player.name}: taille main (${player.hand.length}) != knownCards (${player.knownCards.length})');
+        errors.add(
+            '${player.name}: taille main (${player.hand.length}) != knownCards (${player.knownCards.length})');
       }
     }
 
     // Vérifier que la pioche + défausse + mains = deck complet
-    final totalCards = gameState.deck.length + 
-                      gameState.discardPile.length + 
-                      gameState.players.fold<int>(0, (sum, p) => sum + p.hand.length);
-    
+    final totalCards = gameState.deck.length +
+        gameState.discardPile.length +
+        gameState.players.fold<int>(0, (sum, p) => sum + p.hand.length);
+
     // Note: Le nombre de cartes dépend du nombre de jokers configurés
     // On vérifie juste qu'il y a au moins 52 cartes
     if (totalCards < 52 && gameState.phase != GamePhase.ended) {
-      errors.add('Nombre total de cartes trop faible: $totalCards (minimum: 52)');
+      errors
+          .add('Nombre total de cartes trop faible: $totalCards (minimum: 52)');
     }
 
     // Vérifier que Dutch n'est pas appelé plusieurs fois
     if (gameState.dutchCallerId != null) {
-      final dutchCallers = gameState.players.where((p) => p.id == gameState.dutchCallerId).length;
+      final dutchCallers = gameState.players
+          .where((p) => p.id == gameState.dutchCallerId)
+          .length;
       if (dutchCallers != 1) {
         errors.add('Dutch caller invalide: $dutchCallers joueurs trouvés');
       }
@@ -57,21 +62,21 @@ class GameStateValidator implements IValidationService {
   bool canPerformAction(GameState gameState, String actionType) {
     switch (actionType) {
       case 'draw':
-        return gameState.phase == GamePhase.playing && 
-               gameState.drawnCard == null;
-      
+        return gameState.phase == GamePhase.playing &&
+            gameState.drawnCard == null;
+
       case 'replace':
       case 'discard':
-        return gameState.phase == GamePhase.playing && 
-               gameState.drawnCard != null;
-      
+        return gameState.phase == GamePhase.playing &&
+            gameState.drawnCard != null;
+
       case 'match':
-        return gameState.phase == GamePhase.reaction && 
-               gameState.discardPile.isNotEmpty;
-      
+        return gameState.phase == GamePhase.reaction &&
+            gameState.discardPile.isNotEmpty;
+
       case 'dutch':
         return gameState.dutchCallerId == null;
-      
+
       default:
         return false;
     }
@@ -79,9 +84,9 @@ class GameStateValidator implements IValidationService {
 
   @override
   bool canUsePower(GameState gameState, Player player) {
-    return gameState.isWaitingForSpecialPower && 
-           gameState.specialCardToActivate != null &&
-           gameState.currentPlayer.id == player.id;
+    return gameState.phase == GamePhase.specialPower &&
+        gameState.specialCardToActivate != null &&
+        gameState.currentPlayer.id == player.id;
   }
 }
 

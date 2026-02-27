@@ -13,9 +13,12 @@ export class HistoryFormatter {
         return `${playerName} pioche.`;
     }
 
-    static formatDiscardDrawn(playerName: string, card: PlayingCard): string {
+    static formatDiscardDrawn(playerName: string, card: PlayingCard, hasPower: boolean = false): string {
         const isDame = card.value === 'Q';
         const cardName = isDame ? 'Dame' : card.value;
+        if (hasPower) {
+            return `${playerName} défausse la carte ${cardName}`;
+        }
         return `${playerName} ne garde pas la carte ${cardName} (pas intéressé)`;
     }
 

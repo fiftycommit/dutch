@@ -770,27 +770,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         // Adapter les espacements selon la hauteur disponible
+        // Sur Android Chrome, la barre d'adresse réduit le viewport (~600-650px)
         final screenHeight = constraints.maxHeight;
-        final isLargeScreen = screenHeight > 700;
-        final spacing1 = isLargeScreen ? 20.0 : 10.0;
-        final spacing2 = isLargeScreen ? 50.0 : 25.0;
-        final spacing3 = isLargeScreen ? 40.0 : 20.0;
-        final spacing4 = isLargeScreen ? 16.0 : 12.0;
-        final iconSize = isLargeScreen ? 80.0 : 60.0;
-        final titleSize = isLargeScreen ? 60.0 : 48.0;
+        final isVerySmall = screenHeight < 580;
+        final isSmall = screenHeight < 700;
+        final spacing1 = isVerySmall ? 4.0 : (isSmall ? 8.0 : 20.0);
+        final spacing2 = isVerySmall ? 12.0 : (isSmall ? 18.0 : 50.0);
+        final spacing3 = isVerySmall ? 10.0 : (isSmall ? 14.0 : 40.0);
+        final spacing4 = isVerySmall ? 8.0 : (isSmall ? 10.0 : 16.0);
+        final iconSize = isVerySmall ? 40.0 : (isSmall ? 54.0 : 80.0);
+        final titleSize = isVerySmall ? 36.0 : (isSmall ? 44.0 : 60.0);
+        final useCompactProfile = isSmall;
 
-        return SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight,
-            ),
-            child: IntrinsicHeight(
+        // CustomScrollView + SliverFillRemaining : plus robuste que
+        // IntrinsicHeight sur le renderer HTML web (Android Chrome)
+        return CustomScrollView(
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(height: spacing1),
                   Icon(Icons.style, size: iconSize, color: Colors.amber),
-                  const SizedBox(height: 10),
+                  SizedBox(height: isVerySmall ? 4 : 10),
                   Text(
                     key: _titleKey,
                     "DUTCH'78",
@@ -806,25 +809,26 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                       ],
                     ),
                   ),
-                  Text(
-                    'réalisé par Max, Irfat et EL Roy',
-                    style: TextStyle(
-                      fontSize: isLargeScreen ? 16 : 14,
-                      letterSpacing: isLargeScreen ? 4 : 2,
-                      color: Colors.amber,
-                      fontWeight: FontWeight.bold,
+                  if (!isVerySmall)
+                    Text(
+                      'réalisé par Max, Irfat et EL Roy',
+                      style: TextStyle(
+                        fontSize: isSmall ? 13 : 16,
+                        letterSpacing: isSmall ? 1.5 : 4,
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
                   SizedBox(height: spacing2),
                   if (isLoading)
                     const CircularProgressIndicator(color: Colors.amber)
                   else
                     _buildProfileSelectionBox(
-                      compact: false,
-                      radius: 12,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
+                      compact: useCompactProfile,
+                      radius: useCompactProfile ? 10 : 12,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: useCompactProfile ? 4 : 6,
+                        vertical: useCompactProfile ? 3 : 4,
                       ),
                     ),
                   SizedBox(height: spacing3),
@@ -931,7 +935,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 ],
               ),
             ),
-          ),
+          ],
         );
       },
     );

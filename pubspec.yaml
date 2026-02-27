@@ -53,6 +53,7 @@ dependencies:
   web: ^1.1.1
   google_fonts: ^6.3.2
   cryptography: ^2.9.0
+  wakelock_plus: ^1.4.0
 
 dev_dependencies:
   flutter_test:

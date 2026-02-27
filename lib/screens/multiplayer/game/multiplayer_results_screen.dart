@@ -102,12 +102,41 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
                   : null,
           isTournamentFinal: isFinalRound,
           eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
-          shouldRedirect: () =>
-              provider.isInLobby &&
-              !provider.isPlaying &&
-              provider.roomCode != null,
+          shouldRedirect: () {
+            // Room was closed/destroyed or player was removed → exit
+            if (provider.roomCode == null) {
+              return true;
+            }
+            // Room restarted → go to lobby
+            if (provider.isInLobby &&
+                !provider.isPlaying &&
+                provider.roomCode != null) {
+              return true;
+            }
+            // Host closed room while we're on results
+            if (provider.roomClosedByHost) {
+              return true;
+            }
+            // Banned
+            if (provider.wasBanned) {
+              return true;
+            }
+            return false;
+          },
           onRedirect: () {
-            context.go('/lobby');
+            if (provider.wasBanned) {
+              provider.acknowledgeBanned(); // resets room state
+              context.go('/multiplayer');
+            } else if (provider.roomClosedByHost) {
+              provider.acknowledgeRoomClosed(); // resets room state
+              context.go('/multiplayer');
+            } else if (provider.roomCode == null) {
+              // Room destroyed or we were removed
+              context.go('/multiplayer');
+            } else {
+              // Room restarted → lobby
+              context.go('/lobby');
+            }
           },
           buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider,
               isTournament: isTournament, isTournamentOver: isTournamentOver),
@@ -227,26 +256,21 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    // Joueur kické / expulsé : bouton retour au salon
-    final localIsSpectator = provider.gameState?.players
-            .where((p) => p.id == provider.playerId)
-            .firstOrNull
-            ?.isSpectator ??
-        false;
-    if (provider.wasKicked || localIsSpectator) {
+    // Joueur kické / expulsé : bouton quitter directement
+    if (provider.wasKicked) {
       return [
         shared.ResultsActionButton(
-          label: "Retour au Salon",
+          label: "Quitter",
           backgroundColor: Colors.orange.shade700,
           onPressed: () {
-            provider.acknowledgeKicked();
-            context.go('/lobby');
+            provider.acknowledgeKicked(); // resets room state
+            context.go('/multiplayer');
           },
         ),
       ];
     }
 
-    // Non-host: message d'attente
+    // Non-host: message d'attente + bouton quitter
     return [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -277,6 +301,18 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
             ),
           ],
         ),
+      ),
+
+      const SizedBox(height: 12),
+
+      // Bouton quitter le salon pour les non-host
+      shared.ResultsActionButton(
+        label: "Quitter le salon",
+        backgroundColor: Colors.red.shade700,
+        onPressed: () {
+          provider.leaveAfterResults();
+          context.go('/multiplayer');
+        },
       ),
     ];
   }

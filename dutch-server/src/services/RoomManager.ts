@@ -67,8 +67,8 @@ export class RoomManager {
   }
 
   constructor(private io: Server, options: Partial<RoomManagerOptions> = {}) {
-    this.turnTimeoutMs = options.turnTimeoutMs ?? 45000;
-    this.specialPowerTimeoutMs = options.specialPowerTimeoutMs ?? 45000;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? 90000;
+    this.specialPowerTimeoutMs = options.specialPowerTimeoutMs ?? 60000;
     this.presenceGraceMs = options.presenceGraceMs ?? 15000;
     this.roomTtlMs = options.roomTtlMs ?? 2 * 60 * 60 * 1000;
     this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
@@ -177,7 +177,8 @@ export class RoomManager {
       roomCode,
       hostSocketId,
       normalizedSettings,
-      expiresAt
+      expiresAt,
+      userId?.trim()
     );
 
     const hostPlayer = createPlayer(
@@ -220,7 +221,8 @@ export class RoomManager {
     }
 
     this.pruneWaitingRoom(room);
-    this.ensureHost(room);
+    // NOTE: ensureHost is called AFTER identity matching below,
+    // so a reconnecting host is restored before any host transfer.
 
     const normalizedUserId = userId?.trim();
     const normalizedUsername = username?.trim().toLowerCase();
@@ -273,12 +275,25 @@ export class RoomManager {
         this.clearPresenceCheck(roomCode, previousId);
       }
 
-      if (room.hostPlayerId === previousId) {
+      // Restore host status using persistent identity.
+      // Priority: room creator always gets host back, then old socket match,
+      // then fallback if current host is stale/disconnected.
+      const isCreator = normalizedUserId && room.creatorUserId === normalizedUserId;
+      const wasHost = room.hostPlayerId === previousId;
+      const hostPlayerStale = !room.players.some(
+        (p) => p.id === room.hostPlayerId && p.connected
+      );
+      if (isCreator || wasHost || hostPlayerStale) {
         room.hostPlayerId = socketId;
       }
+
+      this.ensureHost(room);
       this.touchRoom(room);
       return { room, player: existing, previousSocketId: previousId !== socketId ? previousId : undefined };
     }
+
+    // For new players, ensure host is valid before adding them
+    this.ensureHost(room);
 
     // Si la partie est en cours, on rejoint comme SPECTATEUR
     const isSpectator = (room.status !== RoomStatus.waiting && room.status !== RoomStatus.ended);
@@ -367,27 +382,32 @@ export class RoomManager {
         this.clearPresenceCheck(roomCode, playerId);
         this.clearTurnTimer(roomCode);
 
+        // Notifier tout le monde que le joueur abandonne
+        this.io.to(roomCode).emit('player:forfeit', {
+          roomCode,
+          playerId,
+          playerName: player.name,
+          message: `${player.name} a abandonné la partie.`
+        });
+
         // Check if only one active player remains ("Last Man Standing")
         const activeCount = this.activePlayerCount(room);
         if (activeCount <= 1) {
-          this.handleGameEnd(roomCode); // Utiliser handleGameEnd directement
+          // Game ends — handleGameEnd broadcasts GAME_ENDED + presence
+          this.touchRoom(room);
+          this.broadcastGameState(roomCode, 'PLAYER_FORFEIT', { playerId });
+          this.broadcastPresence(roomCode);
+          this.handleGameEnd(roomCode);
+          return true;
         } else if (getCurrentPlayer(room.gameState).id === playerId) {
           this.forceEndTurn(roomCode, `${player.name} a abandonné.`);
         }
       }
-
-      // Notifier tout le monde que le joueur abandonne
-      this.io.to(roomCode).emit('player:forfeit', {
-        roomCode,
-        playerId,
-        playerName: player.name,
-        message: `${player.name} a abandonné la partie et rejoint le lobby.`
-      });
     }
 
     this.touchRoom(room);
     this.broadcastGameState(roomCode, 'PLAYER_FORFEIT', { playerId });
-    this.broadcastPresence(roomCode); // Mise à jour UI Lobby
+    this.broadcastPresence(roomCode);
     return true;
   }
 
@@ -647,7 +667,7 @@ export class RoomManager {
     room.pauseStartTime = undefined;
     room.pauseTimeoutHandle = undefined;
 
-    if (room.gameState.phase === GamePhase.playing) {
+    if (room.gameState.phase === GamePhase.playing || room.gameState.phase === GamePhase.specialPower) {
       this.startTurnTimer(roomCode);
     } else if (room.gameState.phase === GamePhase.reaction) {
       this.timerManager.resumeTimer(roomCode);
@@ -683,6 +703,16 @@ export class RoomManager {
 
       await this.delay(800);
       await BotAI.playBotTurn(gameState);
+
+      // Si le bot a déclenché un pouvoir spécial, l'utiliser automatiquement
+      if (this.currentPhase(gameState) === GamePhase.specialPower) {
+        this.broadcastGameState(roomCode, 'PARTIAL_UPDATE');
+        await this.delay(800);
+        await BotAI.useBotSpecialPower(gameState);
+        // Le bot a utilisé son pouvoir mais n'a pas transitionné la phase.
+        // Appliquer la même logique que skipSpecialPower/useSpecialPower :
+        GameLogic.startReactionPhase(gameState);
+      }
 
       this.broadcastGameState(roomCode, 'PARTIAL_UPDATE');
 
@@ -926,9 +956,11 @@ export class RoomManager {
       p.hasFolded = false;
       p.knownCards = [];
       p.isSpectator = false;
+      // Re-mark connected players as non-spectator (forfeited players rejoin lobby)
     });
 
     this.reindexPlayers(room);
+    this.ensureHost(room);
 
     // Incrémenter le round si mode tournoi
     if (room.gameMode === GameMode.tournament) {
@@ -1217,7 +1249,7 @@ export class RoomManager {
     const extensionMs = 15000;
     this.clearTurnTimer(roomCode);
 
-    if (room.gameState && room.gameState.phase === GamePhase.playing) {
+    if (room.gameState && (room.gameState.phase === GamePhase.playing || room.gameState.phase === GamePhase.specialPower)) {
       room.gameState.turnStartTime = this.now();
       room.gameState.turnTimeoutMs = extensionMs;
 
@@ -1259,18 +1291,20 @@ export class RoomManager {
       roomCode,
     });
 
-    if (room.status === RoomStatus.waiting) {
+    if (room.status === RoomStatus.waiting || room.status === RoomStatus.ended) {
+      // In waiting or ended state: clean removal (player leaves for real)
       room.players.splice(index, 1);
-      if (room.players.length === 0) {
+      if (room.players.length === 0 ||
+          room.players.filter(p => p.isHuman).length === 0) {
         this.removeRoom(roomCode);
         return;
       }
       this.reindexPlayers(room);
-      if (room.hostPlayerId === socketId && room.players.length > 0) {
-        room.hostPlayerId = room.players[0].id;
+      if (room.hostPlayerId === socketId) {
+        this.ensureHost(room);
       }
-      this.ensureHost(room);
     } else {
+      // In playing state: mark as spectator (game still running)
       this.removePlayerFromActiveRoom(roomCode, leaving.id, {
         removeReason: `${leaving.name} a quitté la partie.`,
       });
@@ -1279,7 +1313,9 @@ export class RoomManager {
 
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
-    this.broadcastGameState(roomCode, 'PLAYER_LEFT');
+    if (room.gameState) {
+      this.broadcastGameState(roomCode, 'PLAYER_LEFT');
+    }
 
     // Check if game should end due to lack of players
     this.checkGameEndCondition(roomCode);
@@ -1410,7 +1446,7 @@ export class RoomManager {
   startTurnTimer(roomCode: string) {
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameState) return;
-    if (room.gameState.phase !== GamePhase.playing) return;
+    if (room.gameState.phase !== GamePhase.playing && room.gameState.phase !== GamePhase.specialPower) return;
     if (this.presenceChecks.has(roomCode)) return;
 
     const currentPlayer = getCurrentPlayer(room.gameState);
@@ -1421,7 +1457,7 @@ export class RoomManager {
     // Si le jeu est en pause, on ne lance pas le timer maintenant
     if (room.isPaused) return;
 
-    const waitingSpecialPower = room.gameState.isWaitingForSpecialPower;
+    const waitingSpecialPower = room.gameState.phase === GamePhase.specialPower;
     const timeoutMs = waitingSpecialPower
       ? this.specialPowerTimeoutMs
       : this.turnTimeoutMs;
@@ -1441,19 +1477,20 @@ export class RoomManager {
       const stillCurrent = getCurrentPlayer(currentGameState).id === playerId;
       if (!stillCurrent) return;
       this.actionTimers.delete(roomCode);
-      if (currentGameState.isWaitingForSpecialPower) {
+      if (currentGameState.phase === GamePhase.specialPower) {
         GameLogic.skipSpecialPower(currentGameState);
         const timeoutSeconds = Math.round(this.specialPowerTimeoutMs / 1000);
         this.broadcastGameState(roomCode, 'ACTION_RESULT', {
           message: `⏱️ Pouvoir spécial expiré (${timeoutSeconds}s) : pouvoir ignoré.`,
         });
 
-        if (currentGameState.phase === GamePhase.ended) {
+        const phaseAfterSkip = currentGameState.phase as GamePhase;
+        if (phaseAfterSkip === GamePhase.ended) {
           this.handleGameEnd(roomCode);
           return;
         }
 
-        if (currentGameState.phase === GamePhase.reaction) {
+        if (phaseAfterSkip === GamePhase.reaction) {
           const reactionTime =
             typeof currentRoom.settings?.reactionTimeMs === 'number'
               ? currentRoom.settings.reactionTimeMs
@@ -1564,7 +1601,7 @@ export class RoomManager {
     // et empêcherait de le classer à la fin.
     gameState.readyPlayerIds = gameState.readyPlayerIds.filter((id) => id !== playerId);
 
-    if (phaseBeforeRemoval === GamePhase.playing && wasCurrentPlayer) {
+    if ((phaseBeforeRemoval === GamePhase.playing || phaseBeforeRemoval === GamePhase.specialPower) && wasCurrentPlayer) {
       this.clearTurnTimer(roomCode);
       this.forceEndTurn(roomCode, removeReason);
     }
@@ -1647,11 +1684,11 @@ export class RoomManager {
     if (!room || !room.gameState) return;
     const gameState = room.gameState;
 
-    if (gameState.isWaitingForSpecialPower) {
+    if (gameState.phase === GamePhase.specialPower) {
       GameLogic.skipSpecialPower(gameState);
     } else if (gameState.drawnCard) {
       GameLogic.discardDrawnCard(gameState);
-      if (gameState.isWaitingForSpecialPower) {
+      if ((gameState.phase as GamePhase) === GamePhase.specialPower) {
         GameLogic.skipSpecialPower(gameState);
       } else {
         GameLogic.nextPlayer(gameState);

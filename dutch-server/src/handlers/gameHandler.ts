@@ -45,6 +45,11 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
 
+      if (room.gameState.phase === GamePhase.specialPower) {
+        roomManager.startTurnTimer(data.roomCode);
+        return;
+      }
+
       if (room.gameState.phase === GamePhase.reaction) {
         const reactionTime =
           typeof room.settings?.reactionTimeMs === 'number'
@@ -94,6 +99,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
 
       if (room.gameState.phase === GamePhase.ended) {
         roomManager.handleGameEnd(data.roomCode);
+        return;
+      }
+
+      if (room.gameState.phase === GamePhase.specialPower) {
+        console.log(`[DISCARD] Special power phase, starting power timer`);
+        roomManager.startTurnTimer(data.roomCode);
         return;
       }
 

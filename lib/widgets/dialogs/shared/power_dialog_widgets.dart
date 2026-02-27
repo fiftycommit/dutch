@@ -332,6 +332,81 @@ class _TickingSkipButton extends StatefulWidget {
   State<_TickingSkipButton> createState() => _TickingSkipButtonState();
 }
 
+/// Barre de progression du temps restant pour utiliser un pouvoir spécial.
+/// Affichée en haut de chaque dialogue de pouvoir en mode multijoueur.
+class PowerTimerBar extends StatefulWidget {
+  final int startTimeMs;
+  final int totalMs;
+
+  const PowerTimerBar({
+    super.key,
+    required this.startTimeMs,
+    required this.totalMs,
+  });
+
+  @override
+  State<PowerTimerBar> createState() => _PowerTimerBarState();
+}
+
+class _PowerTimerBarState extends State<PowerTimerBar> {
+  Timer? _timer;
+  double _progress = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateProgress();
+    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      _updateProgress();
+    });
+  }
+
+  void _updateProgress() {
+    final elapsed = DateTime.now().millisecondsSinceEpoch - widget.startTimeMs;
+    final remaining = (widget.totalMs - elapsed).clamp(0, widget.totalMs);
+    final p = widget.totalMs > 0 ? remaining / widget.totalMs : 0.0;
+    if ((p - _progress).abs() > 0.001) {
+      setState(() => _progress = p);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = (widget.totalMs * _progress / 1000).ceil();
+    final color = Color.lerp(Colors.red, Colors.amber, _progress)!;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "Temps restant : ${seconds}s",
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: _progress,
+            backgroundColor: Colors.black26,
+            color: color,
+            minHeight: 4,
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+}
+
 class _TickingSkipButtonState extends State<_TickingSkipButton> {
   late int _remaining;
   Timer? _timer;

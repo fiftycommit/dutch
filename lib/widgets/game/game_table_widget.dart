@@ -1106,11 +1106,12 @@ class _GameTableContentState extends State<_GameTableContent>
         final special = gs.specialCardToActivate;
         if (_animationsEnabled &&
             special != null &&
-            gs.isWaitingForSpecialPower &&
+            gs.phase == GamePhase.specialPower &&
             special.id == card.id) {
           _pendingSpecialPowerCardId = card.id;
         }
-        if (gs.phase == GamePhase.playing) {
+        if (gs.phase == GamePhase.playing ||
+            gs.phase == GamePhase.specialPower) {
           if (_discardOverrideCount == 0) {
             _discardOverrideCard = previousTop;
           }
@@ -1252,11 +1253,12 @@ class _GameTableContentState extends State<_GameTableContent>
         final special = gs.specialCardToActivate;
         if (_animationsEnabled &&
             special != null &&
-            gs.isWaitingForSpecialPower &&
+            gs.phase == GamePhase.specialPower &&
             special.id == card.id) {
           _pendingSpecialPowerCardId = card.id;
         }
-        if (gs.phase == GamePhase.playing) {
+        if (gs.phase == GamePhase.playing ||
+            gs.phase == GamePhase.specialPower) {
           if (_discardOverrideCount == 0) {
             _discardOverrideCard = previousTop;
           }
@@ -1274,7 +1276,7 @@ class _GameTableContentState extends State<_GameTableContent>
     Future.delayed(delay, () {
       if (!mounted) return;
       final specialId = gs.specialCardToActivate?.id;
-      if (gs.isWaitingForSpecialPower && specialId == cardId) {
+      if (gs.phase == GamePhase.specialPower && specialId == cardId) {
         callback(cardId);
       }
     });
@@ -1476,9 +1478,11 @@ class _GameTableContentState extends State<_GameTableContent>
                             showDeckAndDiscard: showCenterDeck,
                             deckKey: _deckKey,
                             discardKey: _discardKey,
-                            discardCardOverride: gs.phase == GamePhase.playing
-                                ? _discardOverrideCard
-                                : null,
+                            discardCardOverride:
+                                (gs.phase == GamePhase.playing ||
+                                        gs.phase == GamePhase.specialPower)
+                                    ? _discardOverrideCard
+                                    : null,
                             drawnCardKey: _drawnCardKey,
                             isPaused: widget.isPaused,
                           ),
@@ -1522,7 +1526,8 @@ class _GameTableContentState extends State<_GameTableContent>
                         gs.discardPile.isNotEmpty,
                     onTakeFromDiscard: callbacks.onTakeFromDiscard,
                     onShowDiscardPile: callbacks.onShowDiscardPile,
-                    discardCard: (gs.phase == GamePhase.playing
+                    discardCard: ((gs.phase == GamePhase.playing ||
+                                gs.phase == GamePhase.specialPower)
                             ? _discardOverrideCard
                             : null) ??
                         gs.topDiscardCard,
@@ -1997,7 +2002,7 @@ class _GameTableContentState extends State<_GameTableContent>
     final isConnected = mpConfig.playerConnections[opponent.id];
     final isAfk = mpConfig.playerAfkStatus[opponent.id] ?? false;
 
-    final canInteract = gs.isWaitingForSpecialPower &&
+    final canInteract = gs.phase == GamePhase.specialPower &&
         _humanPlayer != null &&
         gs.currentPlayer.id == _humanPlayer!.id;
 
@@ -2017,10 +2022,14 @@ class _GameTableContentState extends State<_GameTableContent>
       isPowerHighlighted: mpConfig.powerTargetPlayerIds.contains(opponent.id),
       isConnected: isConnected,
       isAfk: isAfk,
-      turnStartTime: isActive && gs.phase == GamePhase.playing
+      turnStartTime: isActive &&
+              (gs.phase == GamePhase.playing ||
+                  gs.phase == GamePhase.specialPower)
           ? mpConfig.turnStartTime
           : null,
-      turnDuration: isActive && gs.phase == GamePhase.playing
+      turnDuration: isActive &&
+              (gs.phase == GamePhase.playing ||
+                  gs.phase == GamePhase.specialPower)
           ? mpConfig.turnDuration
           : null,
       onCardTap: canInteract && callbacks.onOpponentCardTap != null
@@ -2067,10 +2076,14 @@ class _GameTableContentState extends State<_GameTableContent>
       handKey: _handKeys[human.id],
       hiddenIndices: _hiddenCardIndexByPlayer[human.id]?.toList(),
       hiddenCardIds: _hiddenCardIdsByPlayer[human.id]?.toList(),
-      turnStartTime: _isMyTurn && gs.phase == GamePhase.playing
+      turnStartTime: _isMyTurn &&
+              (gs.phase == GamePhase.playing ||
+                  gs.phase == GamePhase.specialPower)
           ? mpConfig.turnStartTime
           : null,
-      turnDuration: _isMyTurn && gs.phase == GamePhase.playing
+      turnDuration: _isMyTurn &&
+              (gs.phase == GamePhase.playing ||
+                  gs.phase == GamePhase.specialPower)
           ? mpConfig.turnDuration
           : null,
       isBeingShuffled: _jokerShufflePlayerIds.contains(human.id),

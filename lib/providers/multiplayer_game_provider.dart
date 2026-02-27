@@ -64,8 +64,10 @@ class MultiplayerGameProvider
   String? _hostPlayerId;
   String? get hostPlayerId => _hostPlayerId;
 
-  bool _isHost = false;
-  bool get isHost => _isHost;
+  /// Computed from server-authoritative _hostPlayerId.
+  /// Never stored — always derived to avoid stale host state.
+  bool get isHost =>
+      _hostPlayerId != null && playerId != null && _hostPlayerId == playerId;
 
   bool _isProcessingAction = false;
   @override
@@ -434,8 +436,23 @@ class MultiplayerGameProvider
       _gameState = null;
       _isPlaying = false;
       _isInLobby = true;
+      _isPaused = false;
+      _pausedByName = null;
+      _pausedByPlayerId = null;
+      _pauseDeadlineMs = 0;
+      _preloadedDeckCard = null;
+      _afkPlayerIds.clear();
+      _timerManager.reset();
       for (final player in _playersInLobby) {
         player['ready'] = false;
+        player['isSpectator'] = false;
+      }
+      // Update cumulative scores from restart data
+      if (data['cumulativeScores'] is List) {
+        _cumulativeScores = (data['cumulativeScores'] as List)
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
       }
       notifyListeners();
     };
@@ -647,7 +664,8 @@ class MultiplayerGameProvider
   void _handleGameStateUpdate(GameState gameState) {
     final wasMyTurn = _gameState?.currentPlayer.id == playerId;
     final isNowMyTurn = gameState.currentPlayer.id == playerId &&
-        gameState.phase == GamePhase.playing;
+        (gameState.phase == GamePhase.playing ||
+            gameState.phase == GamePhase.specialPower);
     if (!wasMyTurn && isNowMyTurn) {
       HapticService.importantAction();
       // Notification in-app si le joueur n'est pas sur l'écran de jeu
@@ -666,7 +684,8 @@ class MultiplayerGameProvider
 
     // Fallback : si le serveur ne fournit pas turnStartTime en phase playing,
     // l'initialiser côté client pour que la progress bar du turn timer s'affiche
-    if (gameState.phase == GamePhase.playing &&
+    if ((gameState.phase == GamePhase.playing ||
+            gameState.phase == GamePhase.specialPower) &&
         gameState.turnStartTime == null) {
       gameState.turnStartTime =
           DateTime.now().millisecondsSinceEpoch + serverTimeOffsetMs;
@@ -695,6 +714,10 @@ class MultiplayerGameProvider
     }
 
     if (me != null && !me.isSpectator) {
+      _isPlaying = true;
+      _isInLobby = false;
+    } else if (gameState.phase == GamePhase.ended && me != null) {
+      // Spectator (forfeited player) should still see results when game ends
       _isPlaying = true;
       _isInLobby = false;
     } else if (!_isInLobby && !_isPlaying) {
@@ -789,16 +812,19 @@ class MultiplayerGameProvider
           );
 
       if (newActor != null && newTopDiscard != null) {
+        // Détecter si la carte défaussée a un pouvoir spécial
+        final hasPower = newGs.phase == GamePhase.specialPower;
+
         if (newActor.hand.length == actor.hand.length) {
           // Même nombre de cartes → remplacement (l'ancienne carte est défaussée)
           newGs.addToHistory(ActionHistoryMessages.replaceCard(
               actorName, newTopDiscard,
               isLocal: isMe(actor)));
         } else {
-          // Main inchangée côté nombre → défausse simple (pas intéressé)
+          // Main inchangée côté nombre → défausse simple
           newGs.addToHistory(ActionHistoryMessages.discardDrawn(
               actorName, newTopDiscard,
-              isLocal: isMe(actor)));
+              isLocal: isMe(actor), hasPower: hasPower));
         }
       }
       return;
@@ -829,7 +855,7 @@ class MultiplayerGameProvider
 
     if (isMe) {
       // Si c'est moi l'hôte, pas de notif (je me suis ajouté moi-même)
-      if (!_isHost) {
+      if (!isHost) {
         final hostInfo =
             _playersInLobby.where((p) => p['id'] == _hostPlayerId).firstOrNull;
         final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';
@@ -841,6 +867,7 @@ class MultiplayerGameProvider
             type: InAppNotificationType.playerJoined,
             title: 'Invitation',
             body: '$hostName vous a ajouté au salon',
+            route: '/lobby',
           ));
         }
       }
@@ -854,6 +881,7 @@ class MultiplayerGameProvider
           type: InAppNotificationType.playerJoined,
           title: 'Joueur rejoint',
           body: '$playerName a rejoint le salon',
+          route: '/lobby',
         ));
       }
     }
@@ -885,10 +913,36 @@ class MultiplayerGameProvider
     _presenceById = byId;
     _presenceByClientId = byClient;
 
+    // Detect if we've been removed from the room
+    final myPid = playerId;
+    final myCid = clientId;
+    final stillInRoom = _playersInLobby.any((p) =>
+        (myPid != null && p['id'] == myPid) ||
+        (myCid != null && p['clientId'] == myCid));
+    if (!stillInRoom && _roomCode != null && _playersInLobby.isNotEmpty) {
+      // We're no longer in the player list — we were removed
+      _resetRoomState();
+      return;
+    }
+
     if (data['gameMode'] is int) {
       _roomGameMode = GameMode.values[data['gameMode']];
     }
-    if (data['status'] is String) _roomStatus = data['status'];
+
+    // Detect room status transitions
+    final newStatus = data['status'] as String?;
+    if (newStatus != null) {
+      final oldStatus = _roomStatus;
+      _roomStatus = newStatus;
+
+      // ended → waiting = restartGame happened (backup for missed room:restarted)
+      if (oldStatus == 'ended' && newStatus == 'waiting') {
+        _gameState = null;
+        _isPlaying = false;
+        _isInLobby = true;
+      }
+    }
+
     if (data['cumulativeScores'] is List) {
       _cumulativeScores = (data['cumulativeScores'] as List)
           .whereType<Map>()
@@ -930,10 +984,9 @@ class MultiplayerGameProvider
           settings: settings, playerName: playerName);
 
       if (_roomCode != null) {
-        _isHost = true;
+        _hostPlayerId = _multiplayerService.playerId;
         _isInLobby = true;
         _roomSettings = settings;
-        _hostPlayerId = _multiplayerService.playerId;
         _playersInLobby = [
           {
             'id': playerId,
@@ -1008,7 +1061,6 @@ class MultiplayerGameProvider
           roomCode: roomCode, playerName: playerName);
 
       _roomCode = roomCode;
-      _isHost = false;
       _isInLobby = true;
       if (room != null && room['players'] is List) {
         _playersInLobby =
@@ -1045,7 +1097,7 @@ class MultiplayerGameProvider
       int? numberOfBots,
       bool? useSBMM,
       int? botDifficulty}) async {
-    if (!_isHost) {
+    if (!isHost) {
       _notificationManager.setError("Seul l'hôte peut démarrer");
       return;
     }
@@ -1073,7 +1125,7 @@ class MultiplayerGameProvider
   }
 
   Future<void> leaveRoom() async {
-    if (_isHost) {
+    if (isHost) {
       await closeRoom();
     } else {
       _multiplayerService.leaveRoom();
@@ -1088,7 +1140,7 @@ class MultiplayerGameProvider
   }
 
   Future<bool> closeRoom() async {
-    if (!_isHost) return false;
+    if (!isHost) return false;
     final success = await _multiplayerService.closeRoom();
     if (success) _resetRoomState();
     return success;
@@ -1100,7 +1152,7 @@ class MultiplayerGameProvider
         .becomeHost(_notificationManager.closedRoomCode!);
     if (success) {
       _roomCode = _notificationManager.closedRoomCode;
-      _isHost = true;
+      _hostPlayerId = playerId; // Set so computed isHost returns true
       _isInLobby = true;
       _notificationManager.clearRoomClosedAfterBecomeHost();
       notifyListeners();
@@ -1108,15 +1160,25 @@ class MultiplayerGameProvider
     return success;
   }
 
+  /// Host: restart game (resets room to waiting, all players go to lobby)
+  /// Non-host: just signals readiness for lobby return
   Future<bool> restartGame() async =>
-      _isHost ? await _multiplayerService.restartGame() : false;
+      isHost ? await _multiplayerService.restartGame() : false;
+
+  /// Clean return to lobby for non-host players from the results screen.
+  /// Leaves the room and resets state so the player navigates to /multiplayer.
+  void leaveAfterResults() {
+    _multiplayerService.leaveRoom();
+    _resetRoomState();
+  }
+
   Future<bool> kickPlayer(String clientId) async =>
-      _isHost ? await _multiplayerService.kickPlayer(clientId) : false;
+      isHost ? await _multiplayerService.kickPlayer(clientId) : false;
   Future<bool> banPlayer(String clientId) async =>
-      _isHost ? await _multiplayerService.banPlayer(clientId) : false;
+      isHost ? await _multiplayerService.banPlayer(clientId) : false;
 
   Future<bool> setGameMode(GameMode mode) async {
-    if (!_isHost) return false;
+    if (!isHost) return false;
     final success = await _multiplayerService.setGameMode(mode.index);
     if (success && _roomSettings != null) {
       _roomSettings = GameSettings(
@@ -1133,7 +1195,7 @@ class MultiplayerGameProvider
 
   Future<bool> updateRoomSettings(
       {Difficulty? botDifficulty, Difficulty? luckDifficulty}) async {
-    if (!_isHost) return false;
+    if (!isHost) return false;
     final success = await _multiplayerService.updateRoomSettings(
         botDifficulty: botDifficulty?.index,
         luckDifficulty: luckDifficulty?.index);
@@ -1385,8 +1447,10 @@ class MultiplayerGameProvider
 
   Future<void> forfeitGame() async {
     _multiplayerService.cancelGame();
-    _isPlaying = false;
-    _isInLobby = true;
+    // Don't set _isInLobby = true here!
+    // The player stays as spectator in the game view.
+    // When the game ends (GAME_ENDED), they'll see the results screen
+    // and can return to lobby from there.
     notifyListeners();
   }
 
@@ -1427,7 +1491,6 @@ class MultiplayerGameProvider
     _roomCode = null;
     _hostPlayerId = null;
     _gameState = null;
-    _isHost = false;
     _isInLobby = false;
     _isPlaying = false;
     _playersInLobby = [];

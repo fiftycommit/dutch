@@ -263,6 +263,8 @@ export class BotAI {
     for (let i = 0; i < bot.hand.length; i++) {
       if (i < memory.mentalMap.length && memory.mentalMap[i] !== null) {
         score += memory.mentalMap[i]!.points;
+      } else if (bot.knownCards[i]) {
+        score += bot.hand[i].points;
       }
     }
     return score;
@@ -271,7 +273,8 @@ export class BotAI {
   private static knowsAllCards(bot: Player): boolean {
     const memory = this.getBotMemory(bot);
     for (let i = 0; i < bot.hand.length; i++) {
-      if (i >= memory.mentalMap.length || memory.mentalMap[i] === null) return false;
+      const inMentalMap = i < memory.mentalMap.length && memory.mentalMap[i] !== null;
+      if (!inMentalMap && !bot.knownCards[i]) return false;
     }
     return true;
   }
@@ -281,6 +284,9 @@ export class BotAI {
     if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
       return memory.mentalMap[index]!.points;
     }
+    if (bot.knownCards[index]) {
+      return bot.hand[index].points;
+    }
     return null;
   }
 
@@ -288,6 +294,9 @@ export class BotAI {
     const memory = this.getBotMemory(bot);
     if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
       return memory.mentalMap[index]!;
+    }
+    if (bot.knownCards[index]) {
+      return bot.hand[index];
     }
     return null;
   }
@@ -1069,10 +1078,11 @@ export class BotAI {
     }
 
     // Parcourir la mentalMap : est-ce que je CONNAIS une carte qui matche ?
+    // Fallback sur knownCards + hand si la mentalMap est vide (ex: mémoire réinitialisée)
     for (let i = 0; i < bot.hand.length; i++) {
       const knownCard = (i < memory.mentalMap.length && memory.mentalMap[i] !== null)
         ? memory.mentalMap[i]!
-        : null;
+        : (bot.knownCards[i] ? bot.hand[i] : null);
 
       if (knownCard && cardMatches(knownCard, topDiscard)) {
         // Je connais cette carte et elle matche → match immédiat
@@ -1115,7 +1125,7 @@ export class BotAI {
   // ============================================================
 
   static async useBotSpecialPower(gameState: GameState, playerMMR?: number): Promise<void> {
-    if (!gameState.isWaitingForSpecialPower || !gameState.specialCardToActivate) return;
+    if (gameState.phase !== GamePhase.specialPower || !gameState.specialCardToActivate) return;
 
     const bot = getCurrentPlayer(gameState);
     const card = gameState.specialCardToActivate;
@@ -1142,7 +1152,6 @@ export class BotAI {
 
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    addToHistory(gameState, `${bot.name} a utilisé son pouvoir.`);
   }
 
   // Carte 7 : regarder sa propre carte — toujours utile

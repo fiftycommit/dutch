@@ -6,7 +6,7 @@ import 'game_sub_states.dart';
 
 enum GameMode { quick, tournament }
 
-enum GamePhase { setup, playing, reaction, dutchCalled, ended }
+enum GamePhase { setup, playing, specialPower, reaction, dutchCalled, ended }
 
 enum DealMode {
   blockSequential,

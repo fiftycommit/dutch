@@ -117,6 +117,7 @@ class PowerSelectionWidgets {
     required DialogMetrics metrics,
     int autoCloseSeconds = 0,
     VoidCallback? onTimeout,
+    Widget? powerTimerBar,
   }) {
     final spacing = metrics.space(8);
     final sectionSpacing = metrics.space(16);
@@ -129,6 +130,7 @@ class PowerSelectionWidgets {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (powerTimerBar != null) powerTimerBar,
             // Joueur A
             Text("1️⃣ Joueur A :",
                 style: TextStyle(color: Colors.white, fontSize: titleSize)),
@@ -231,6 +233,7 @@ class PowerSelectionWidgets {
     bool fullWidthButton = false,
     int autoCloseSeconds = 0,
     VoidCallback? onTimeout,
+    Widget? powerTimerBar,
   }) {
     final gapS = metrics.space(8);
     final gapM = metrics.space(16);
@@ -247,6 +250,7 @@ class PowerSelectionWidgets {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (powerTimerBar != null) powerTimerBar,
             Icon(icon, color: color, size: iconSize),
             SizedBox(height: gapS),
             Text(
@@ -321,6 +325,7 @@ class PowerSelectionWidgets {
     required DialogMetrics metrics,
     int autoCloseSeconds = 0,
     VoidCallback? onTimeout,
+    Widget? powerTimerBar,
   }) {
     final gapS = metrics.space(8);
     final gapM = metrics.space(16);
@@ -331,6 +336,7 @@ class PowerSelectionWidgets {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (powerTimerBar != null) powerTimerBar,
         Icon(icon, color: color, size: iconSize),
         SizedBox(height: gapS),
         Text(

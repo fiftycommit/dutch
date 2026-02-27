@@ -79,7 +79,7 @@ _flutter.loader.load({
   onEntrypointLoaded: async function (engineInitializer) {
     handleServiceWorkerUpdates();
     const appRunner = await engineInitializer.initializeEngine({
-      renderer: "html",
+      renderer: "canvaskit",
     });
     await appRunner.runApp();
   },

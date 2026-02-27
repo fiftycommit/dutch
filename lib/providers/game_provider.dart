@@ -1080,10 +1080,10 @@ class GameProvider with ChangeNotifier implements IGameController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _handlePostAction() {
-    if (_gameState!.isWaitingForSpecialPower) {
+    if (_gameState!.phase == GamePhase.specialPower) {
       _timerManager.pauseTimer(_gameState);
       Future.delayed(const Duration(milliseconds: 1300)).then((_) {
-        if (_gameState?.isWaitingForSpecialPower == true) notifyListeners();
+        if (_gameState?.phase == GamePhase.specialPower) notifyListeners();
       });
     } else {
       startReactionPhase();

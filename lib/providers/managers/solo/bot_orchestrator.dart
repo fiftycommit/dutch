@@ -167,7 +167,7 @@ class BotOrchestrator {
           return; // Le bot a appelé Dutch
         }
 
-        if (gameState.isWaitingForSpecialPower) {
+        if (gameState.phase == GamePhase.specialPower) {
           // Attendre avant d'utiliser le pouvoir (moins en hardcore)
           if (!isPaused) {
             final powerWait = hardcoreLevel != null ? 100 : 180;
@@ -186,6 +186,7 @@ class BotOrchestrator {
 
           if (isPaused) break;
 
+          gameState.phase = GamePhase.playing;
           gameState.isWaitingForSpecialPower = false;
           gameState.specialCardToActivate = null;
           onStateChanged?.call();

@@ -76,6 +76,11 @@ class _CenterTableState extends State<CenterTable>
       duration: const Duration(seconds: 10),
     );
     _initProgress();
+    // Init power timer if power is already pending at first build
+    if (widget.gameState.phase == GamePhase.specialPower) {
+      _wasPowerPending = true;
+      _startPowerTimer();
+    }
   }
 
   void _initProgress() {
@@ -90,8 +95,7 @@ class _CenterTableState extends State<CenterTable>
   /// Timer fluide à 24ms (~41fps) pour un refresh constant
   void _startProgressTimer() {
     _progressTimer?.cancel();
-    if (widget.gameState.phase == GamePhase.reaction &&
-        !widget.gameState.isWaitingForSpecialPower) {
+    if (widget.gameState.phase == GamePhase.reaction) {
       _progressTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
         if (!mounted) return;
         _onProgressTick();
@@ -120,7 +124,7 @@ class _CenterTableState extends State<CenterTable>
     // Si le jeu est en pause ou qu'un pouvoir est en cours, on gèle l'animation
     // et on met à jour le temps de référence pour que lors de la reprise,
     // on ne soustraie pas le temps passé en pause/pouvoir.
-    if (widget.isPaused || widget.gameState.isWaitingForSpecialPower) {
+    if (widget.isPaused || widget.gameState.phase == GamePhase.specialPower) {
       _lastServerUpdate = DateTime.now();
       _lastServerRemaining = serverRemaining;
       return;
@@ -165,17 +169,17 @@ class _CenterTableState extends State<CenterTable>
 
   void _updateProgressTarget() {
     final gs = widget.gameState;
-    final isPowerPending = gs.isWaitingForSpecialPower;
+    final isPowerPending = gs.phase == GamePhase.specialPower;
 
     // Détecter la fin du pouvoir : pouvoir était en cours et ne l'est plus
+    // → la réaction démarre immédiatement (pas de délai)
     if (_wasPowerPending && !isPowerPending) {
-      // Sync avec la valeur serveur pour démarrer le temps de réaction
       _lastServerRemaining = gs.reactionTimeRemaining;
       _lastServerUpdate = DateTime.now();
     }
     _wasPowerPending = isPowerPending;
 
-    // Gérer le timer du pouvoir
+    // Gérer le timer du pouvoir (fonctionne en phase playing ET reaction)
     if (isPowerPending) {
       if (_powerTimer == null || !_powerTimer!.isActive) {
         _startPowerTimer();
@@ -184,13 +188,12 @@ class _CenterTableState extends State<CenterTable>
       _stopPowerTimer();
     }
 
-    // Démarrer/arrêter le timer selon la phase
+    // Démarrer/arrêter le timer de réaction selon la phase
     if (gs.phase == GamePhase.reaction) {
       if (isPowerPending) {
-        // Pouvoir en cours : stopper le timer (la barre est gelée visuellement)
+        // Pouvoir en cours : stopper le timer de réaction
         _stopProgressTimer();
       } else if (_progressTimer == null || !_progressTimer!.isActive) {
-        // Seulement réinitialiser si c'est une NOUVELLE phase (pas un resume)
         final serverRemaining = gs.reactionTimeRemaining;
         final total = widget.reactionTimeTotalMs;
         final isResume =
@@ -202,7 +205,8 @@ class _CenterTableState extends State<CenterTable>
         _lastServerRemaining = serverRemaining;
         _startProgressTimer();
       }
-    } else {
+    } else if (!isPowerPending) {
+      // Phase playing sans pouvoir : pas de timer de réaction
       _stopProgressTimer();
       _currentProgress = 1.0;
     }
@@ -224,15 +228,18 @@ class _CenterTableState extends State<CenterTable>
   void _onPowerTick() {
     if (!mounted) return;
     final startTime = widget.gameState.specialPowerStartTime;
-    if (startTime == null || !widget.gameState.isWaitingForSpecialPower) {
+    if (startTime == null || widget.gameState.phase != GamePhase.specialPower) {
       _stopPowerTimer();
       return;
     }
+    // Utiliser turnTimeoutMs du gameState (le serveur le met à specialPowerTimeoutMs
+    // quand un pouvoir est en attente) au lieu du hardcoded specialPowerTimeTotalMs
+    final totalMs = widget.gameState.turnTimeoutMs > 0
+        ? widget.gameState.turnTimeoutMs
+        : widget.specialPowerTimeTotalMs;
     final elapsed = DateTime.now().millisecondsSinceEpoch - startTime;
-    final remaining = (widget.specialPowerTimeTotalMs - elapsed)
-        .clamp(0, widget.specialPowerTimeTotalMs);
-    final progress =
-        (remaining / widget.specialPowerTimeTotalMs).clamp(0.0, 1.0);
+    final remaining = (totalMs - elapsed).clamp(0, totalMs);
+    final progress = (remaining / totalMs).clamp(0.0, 1.0);
     setState(() {
       _powerProgress = progress;
     });
@@ -343,7 +350,7 @@ class _CenterTableState extends State<CenterTable>
     final deckCount = gs.deck.length;
 
     // Détecter si on attend qu'un joueur choisisse son pouvoir
-    final isWaitingForPower = gs.isWaitingForSpecialPower;
+    final isWaitingForPower = gs.phase == GamePhase.specialPower;
     final powerPlayerName = isWaitingForPower
         ? (gs.currentPlayer.name == "Vous"
             ? "Quelqu'un"
@@ -353,8 +360,13 @@ class _CenterTableState extends State<CenterTable>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isReaction && isWaitingForPower) ...[
-          const SizedBox(height: 10),
+        if (isWaitingForPower) ...[
+          // Power progress: visible pour les autres joueurs
+          // (le joueur actif a son propre dialogue de pouvoir)
+          if (gs.actionHistory.isNotEmpty) ...[
+            _buildLastBotAction(gs),
+            const SizedBox(height: 6),
+          ],
           Text(
             "$powerPlayerName utilise son pouvoir...",
             textAlign: TextAlign.center,
@@ -374,22 +386,32 @@ class _CenterTableState extends State<CenterTable>
           ),
           const SizedBox(height: 10),
         ] else if (isReaction) ...[
-          Text(
-            "Vite ! Avez-vous un${topCardValue == 'Dame' ? 'e' : ''} $topCardValue ?",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: widget.isCompactMode ? 12 : 16,
-              fontWeight: FontWeight.bold,
-              shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
+          // Show what happened (e.g., "X ne garde pas le A") above the reaction prompt
+          if (!widget.isMyTurn && gs.actionHistory.isNotEmpty) ...[
+            _buildLastBotAction(gs),
+            const SizedBox(height: 6),
+          ],
+          // Pendant le délai post-pouvoir (remaining > total), ne pas afficher
+          // la barre de réaction (elle serait bloquée au vert).
+          // On attend que le vrai countdown commence.
+          if (gs.reactionTimeRemaining <= widget.reactionTimeTotalMs + 200) ...[
+            Text(
+              "Vite ! Avez-vous un${topCardValue == 'Dame' ? 'e' : ''} $topCardValue ?",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: widget.isCompactMode ? 12 : 16,
+                fontWeight: FontWeight.bold,
+                shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
+              ),
             ),
-          ),
-          SizedBox(height: widget.isCompactMode ? 2 : 5),
-          SizedBox(
-            width: widget.isCompactMode ? 100 : 150,
-            height: widget.isCompactMode ? 5 : 8,
-            child: _buildReactionProgress(),
-          ),
-          SizedBox(height: widget.isCompactMode ? 4 : 10),
+            SizedBox(height: widget.isCompactMode ? 2 : 5),
+            SizedBox(
+              width: widget.isCompactMode ? 100 : 150,
+              height: widget.isCompactMode ? 5 : 8,
+              child: _buildReactionProgress(),
+            ),
+            SizedBox(height: widget.isCompactMode ? 4 : 10),
+          ],
         ] else if (!widget.isMyTurn && gs.actionHistory.isNotEmpty) ...[
           _buildLastBotAction(gs),
           SizedBox(height: widget.isCompactMode ? 4 : 10),

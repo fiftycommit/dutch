@@ -183,16 +183,19 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
   void _startShuffleAnimation() {
     _shuffleController?.dispose();
     _shuffleController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 700),
       vsync: this,
     );
 
     final rng = math.Random();
     final count = widget.player.hand.length;
     _shuffleOffsets = List.generate(count, (index) {
+      // Forcer un déplacement significatif pour chaque carte
+      int t1 = _randomFarIndex(rng, index, count);
+      int t2 = _randomFarIndex(rng, t1, count);
       return _ShuffleCardData(
-        targetIndex1: rng.nextInt(count),
-        targetIndex2: rng.nextInt(count),
+        targetIndex1: t1,
+        targetIndex2: t2,
       );
     });
 
@@ -209,6 +212,18 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       _shuffleController?.dispose();
       _shuffleController = null;
     });
+  }
+
+  /// Génère un index suffisamment éloigné de [fromIndex] pour un mouvement visible
+  int _randomFarIndex(math.Random rng, int fromIndex, int count) {
+    if (count <= 2) return (count - 1) - fromIndex;
+    // Essayer de trouver un index à distance >= 2
+    for (int attempt = 0; attempt < 10; attempt++) {
+      final candidate = rng.nextInt(count);
+      if ((candidate - fromIndex).abs() >= 2) return candidate;
+    }
+    // Fallback : aller à l'extrémité opposée
+    return fromIndex < count ~/ 2 ? count - 1 : 0;
   }
 
   @override
@@ -367,20 +382,27 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       child: cardBody,
     );
 
-    // Joker shuffle animation overlay (uniquement horizontale)
+    // Joker shuffle animation overlay (3 phases : pos1, pos2, retour)
     if (_shuffleController != null && index < _shuffleOffsets.length) {
       final t = _shuffleController!.value;
       final data = _shuffleOffsets[index];
 
       double dx = 0.0;
+      final dx1 = (data.targetIndex1 - index) * overlap;
+      final dx2 = (data.targetIndex2 - index) * overlap;
 
-      if (t < 0.5) {
-        final p = Curves.easeInOut.transform(t / 0.5);
-        dx = (data.targetIndex1 - index) * overlap * p;
+      if (t < 0.33) {
+        // Phase 1 : aller vers targetIndex1
+        final p = Curves.easeInOut.transform(t / 0.33);
+        dx = dx1 * p;
+      } else if (t < 0.66) {
+        // Phase 2 : aller de targetIndex1 vers targetIndex2
+        final p = Curves.easeInOut.transform((t - 0.33) / 0.33);
+        dx = dx1 + (dx2 - dx1) * p;
       } else {
-        final p = Curves.easeInOut.transform((t - 0.5) / 0.5);
-        final startDx = (data.targetIndex1 - index) * overlap;
-        dx = startDx * (1 - p);
+        // Phase 3 : retour à la position d'origine
+        final p = Curves.easeInOut.transform((t - 0.66) / 0.34);
+        dx = dx2 * (1 - p);
       }
 
       card = Transform.translate(

@@ -9,9 +9,10 @@ export enum GameMode {
 export enum GamePhase {
   setup = 0,
   playing = 1,
-  reaction = 2,
-  dutchCalled = 3,
-  ended = 4,
+  specialPower = 2,
+  reaction = 3,
+  dutchCalled = 4,
+  ended = 5,
 }
 
 export enum Difficulty {
@@ -79,7 +80,7 @@ export function createGameState(
     pendingSwap: null,
     tournamentCumulativeScores: {},
     turnStartTime: null,
-    turnTimeoutMs: 45000, // 45 secondes par défaut
+    turnTimeoutMs: 90000, // 1min30 par défaut
     readyPlayerIds: [],
   };
 }

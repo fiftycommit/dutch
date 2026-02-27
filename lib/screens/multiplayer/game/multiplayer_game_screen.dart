@@ -21,6 +21,7 @@ import 'package:dutch_game/widgets/multiplayer/game_overlays.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
+import 'package:dutch_game/services/platform/wake_lock_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({super.key});
@@ -50,6 +51,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     super.initState();
     resetEndGameNavigation(); // Reset guard on screen entry
     lockLandscapeOrientation(autoFullscreenOnWeb: false);
+    WakeLockService.instance.enable();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupEventListeners();
@@ -69,6 +71,27 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final provider =
         Provider.of<MultiplayerGameProvider>(context, listen: false);
     final gameState = provider.gameState;
+
+    // Safety: room destroyed or we were removed → exit game screen
+    if (provider.roomCode == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          context.go('/multiplayer');
+        }
+      });
+      return;
+    }
+
+    // Safety: gameState null but we're in lobby (room restarted) → go to lobby
+    if (gameState == null && provider.isInLobby) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          context.go('/lobby');
+        }
+      });
+      return;
+    }
+
     if (gameState == null) return;
 
     // Handle Host Left
@@ -295,6 +318,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   void dispose() {
     _cachedProvider?.removeListener(_onProviderChanged);
     unlockOrientation();
+    WakeLockService.instance.disable();
     _eventSubscription?.cancel();
     _emoteSubscription?.cancel();
     super.dispose();
@@ -512,7 +536,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   if (gameState.phase == GamePhase.dutchCalled)
                     GameOverlays.dutchNotification(),
 
-                  if (gameState.isWaitingForSpecialPower)
+                  if (gameState.phase == GamePhase.specialPower)
                     _buildSpecialPowerOverlay(gameProvider, gameState),
 
                   if (gameProvider.isProcessing)
@@ -588,9 +612,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     onAbandon: () {
                       gameProvider.confirmPresence(); // Clear the check first
                       gameProvider.forfeitGame();
-                      if (context.mounted) {
-                        context.go('/lobby');
-                      }
+                      // Don't navigate to /lobby - stay as spectator.
+                      // The game will end and navigate to results automatically.
                     },
                   ),
 
@@ -623,8 +646,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final leave = await GameDialogs.confirmQuit(context);
     if (leave == true && mounted) {
       gp.forfeitGame();
-      if (!context.mounted) return;
-      context.go('/lobby');
+      // Don't navigate to /lobby - stay as spectator.
+      // The game will end and navigate to results automatically.
     }
   }
 
@@ -649,7 +672,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final trigger = gs.specialCardToActivate!;
     final triggerId = trigger.id;
 
-    if (!gs.isWaitingForSpecialPower) {
+    if (gs.phase != GamePhase.specialPower) {
       _resetSpecialPowerState();
       return const SizedBox();
     }
@@ -666,7 +689,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         if (!mounted) return;
         final current = gp.gameState;
         if (current == null ||
-            !current.isWaitingForSpecialPower ||
+            current.phase != GamePhase.specialPower ||
             current.specialCardToActivate?.id != triggerId) {
           return;
         }

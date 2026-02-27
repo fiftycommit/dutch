@@ -184,7 +184,7 @@ class BotAI {
     HardcoreLevel? hardcoreLevel,
     int? playerSkillEstimate,
   }) async {
-    if (!gameState.isWaitingForSpecialPower ||
+    if (gameState.phase != GamePhase.specialPower ||
         gameState.specialCardToActivate == null) {
       return;
     }

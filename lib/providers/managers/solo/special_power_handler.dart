@@ -34,6 +34,7 @@ class SpecialPowerHandler {
       );
     }
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     gameState.addToHistory(ActionHistoryMessages.powerSkipped());
@@ -93,6 +94,7 @@ class SpecialPowerHandler {
       return; // Ne pas terminer le pouvoir, attendre la sélection de la carte à échanger
     }
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
 
@@ -169,6 +171,7 @@ class SpecialPowerHandler {
         ActionHistoryMessages.powerSwap(currentPlayer.name, targetPlayer.name));
 
     gameState.pendingSwap = null;
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
 
@@ -212,6 +215,7 @@ class SpecialPowerHandler {
       GameLogic.lookAtCard(gameState, target, cardIndex);
     }
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
 
@@ -253,6 +257,7 @@ class SpecialPowerHandler {
       }
     }
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
 

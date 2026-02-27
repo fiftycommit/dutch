@@ -130,9 +130,12 @@ class GameLogic {
     // Message explicite : le joueur n'a PAS gardé la carte piochée
     final currentName = gameState.currentPlayer.name;
     final isHuman = currentName == "Vous";
+    // Vérifier si la carte a un pouvoir spécial (7, 10, V, JOKER)
+    final powerValues = {'7', '10', 'V', 'JOKER'};
+    final hasPower = powerValues.contains(card.value);
 
     gameState.addToHistory(ActionHistoryMessages.discardDrawn(currentName, card,
-        isLocal: isHuman));
+        isLocal: isHuman, hasPower: hasPower));
 
     // Tracker la défausse (wasExchange = false : pas d'échange)
     BotDutchStrategy.discardTracker.trackDiscard(
@@ -690,9 +693,12 @@ class GameLogic {
   static void _checkSpecialPower(GameState gameState, PlayingCard card) {
     List<String> powerCards = ['7', '10', 'V', 'JOKER'];
     if (powerCards.contains(card.value)) {
+      gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
       gameState.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
+      gameState.turnStartTime = DateTime.now().millisecondsSinceEpoch;
+      gameState.turnTimeoutMs = 60000; // 1 minute pour utiliser le pouvoir
     }
   }
 

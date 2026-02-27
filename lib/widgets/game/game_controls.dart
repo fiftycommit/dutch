@@ -30,7 +30,7 @@ class GameControls extends StatelessWidget {
     final isMyTurn = gameState.currentPlayer.id == currentPlayer.id &&
         gameState.phase == GamePhase.playing;
     final hasDrawn = gameState.drawnCard != null;
-    final isSpecial = gameState.isWaitingForSpecialPower &&
+    final isSpecial = gameState.phase == GamePhase.specialPower &&
         gameState.currentPlayer.id == currentPlayer.id;
     final gap = ScreenUtils.spacing(context, compact ? 8 : 12);
 

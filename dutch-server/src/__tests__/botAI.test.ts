@@ -181,6 +181,7 @@ describe('BotAI', () => {
     it('handles card 7 (look at own card)', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
+      state.phase = GamePhase.specialPower;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('hearts', '7');
       state.players[1].knownCards = [true, true, false, false];
@@ -194,6 +195,7 @@ describe('BotAI', () => {
     it('handles card 10 (spy on opponent)', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
+      state.phase = GamePhase.specialPower;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('spades', '10');
 
@@ -205,6 +207,7 @@ describe('BotAI', () => {
     it('handles card V (Jack swap)', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
+      state.phase = GamePhase.specialPower;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('clubs', 'V');
 
@@ -216,6 +219,7 @@ describe('BotAI', () => {
     it('handles JOKER (shuffle)', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
+      state.phase = GamePhase.specialPower;
       state.isWaitingForSpecialPower = true;
       state.specialCardToActivate = createCard('joker', 'JOKER');
 

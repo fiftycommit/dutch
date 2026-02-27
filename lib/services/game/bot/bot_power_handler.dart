@@ -51,7 +51,7 @@ class BotPowerHandler {
     BotPersonality? personality,
     bool skipDelay = false,
   }) async {
-    if (!gameState.isWaitingForSpecialPower ||
+    if (gameState.phase != GamePhase.specialPower ||
         gameState.specialCardToActivate == null) {
       return;
     }
@@ -171,6 +171,7 @@ class BotPowerHandler {
                 : 'shuffle';
     AiTelemetryService().onPowerUsed(bot.id, powerName, impactDelta);
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     gameState.addToHistory(ActionHistoryMessages.powerUsed(bot.name));
@@ -1573,6 +1574,7 @@ class BotPowerHandler {
   }) {
     final powerVal = gameState.specialCardToActivate?.value ?? '?';
 
+    gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
     // gameState.addToHistory("⏭️ ${bot.name} ignore son pouvoir. ($reason)");

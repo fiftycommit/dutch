@@ -12,17 +12,20 @@ class ActionHistoryMessages {
   // ─── Défausse de la carte piochée ────────────────────────────────────
 
   static String discardDrawn(String playerName, PlayingCard card,
-      {required bool isLocal}) {
-    final cardName =
-        card.displayName == 'e Dame' ? ' Dame' : card.displayName;
+      {required bool isLocal, bool hasPower = false}) {
+    final cardName = card.displayName == 'e Dame' ? ' Dame' : card.displayName;
+    if (hasPower) {
+      final verb = isLocal ? 'défaussez' : 'défausse';
+      return "$playerName $verb la carte$cardName";
+    }
     final verb = isLocal ? "ne gardez pas" : "ne garde pas";
     return "$playerName $verb la carte$cardName (pas intéressé)";
   }
 
   // ─── Remplacement (échange avec la pioche) ──────────────────────────
 
-  static String replaceCard(
-      String playerName, PlayingCard oldCard, {required bool isLocal}) {
+  static String replaceCard(String playerName, PlayingCard oldCard,
+      {required bool isLocal}) {
     final isDame = oldCard.displayName == 'e Dame';
     final cardName = isDame ? 'Dame' : oldCard.displayName.trimLeft();
     if (isLocal) {
@@ -63,8 +66,7 @@ class ActionHistoryMessages {
   static String powerLookOwn(String playerName, int cardIndex) =>
       "👁️ $playerName regarde sa carte #${cardIndex + 1}";
 
-  static String powerSpy(
-          String playerName, String targetName, int cardIndex) =>
+  static String powerSpy(String playerName, String targetName, int cardIndex) =>
       "👁 $playerName espionne $targetName (carte #${cardIndex + 1})";
 
   static String powerSwap(String playerName, String targetName) =>
@@ -91,6 +93,5 @@ class ActionHistoryMessages {
   static String deckRefilled(int cardCount) =>
       "🔄 Pioche vide ! Défausse mélangée ($cardCount cartes)";
 
-  static String noCardsLeft() =>
-      "Plus de cartes disponibles - Fin de partie";
+  static String noCardsLeft() => "Plus de cartes disponibles - Fin de partie";
 }

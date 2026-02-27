@@ -34,11 +34,36 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
             localPlayerId: provider.playerId,
           ),
           navigateToResults: (context) => context.go('/multiplayer/results'),
-          shouldRedirectToLobby: () =>
-              provider.isInLobby &&
-              !provider.isPlaying &&
-              provider.roomCode != null,
-          navigateToLobbyRedirect: (context) => context.go('/lobby'),
+          shouldRedirectToLobby: () {
+            if (provider.roomCode == null) {
+              return true;
+            }
+            if (provider.isInLobby &&
+                !provider.isPlaying &&
+                provider.roomCode != null) {
+              return true;
+            }
+            if (provider.roomClosedByHost) {
+              return true;
+            }
+            if (provider.wasBanned) {
+              return true;
+            }
+            return false;
+          },
+          navigateToLobbyRedirect: (context) {
+            if (provider.wasBanned) {
+              provider.acknowledgeBanned();
+              context.go('/multiplayer');
+            } else if (provider.roomClosedByHost) {
+              provider.acknowledgeRoomClosed();
+              context.go('/multiplayer');
+            } else if (provider.roomCode == null) {
+              context.go('/multiplayer');
+            } else {
+              context.go('/lobby');
+            }
+          },
         ),
       ),
     );

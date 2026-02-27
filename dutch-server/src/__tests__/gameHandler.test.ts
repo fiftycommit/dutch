@@ -5,6 +5,7 @@ import { RoomManager } from '../services/RoomManager';
 import { setupGameHandler } from '../handlers/gameHandler';
 import { GamePhase, GameMode, getCurrentPlayer } from '../models/GameState';
 import { createCard } from '../models/Card';
+import { SecurityService } from '../services/SecurityService';
 
 // Mock Socket implementation
 class MockSocket {
@@ -78,6 +79,7 @@ describe('gameHandler', () => {
   let roomCode: string;
 
   beforeEach(() => {
+    SecurityService.resetForTesting();
     mockSocket = new MockSocket('player-1');
     mockServer = new MockServer();
     roomManager = new RoomManager(mockServer as unknown as Server, {
@@ -287,6 +289,7 @@ describe('gameHandler', () => {
     it('handles card 7 special power', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.specialPower;
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('hearts', '7');
 
@@ -303,6 +306,7 @@ describe('gameHandler', () => {
     it('handles card 10 special power', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.specialPower;
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('spades', '10');
 
@@ -319,6 +323,7 @@ describe('gameHandler', () => {
     it('handles Jack (V) swap power', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.specialPower;
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('clubs', 'V');
 
@@ -337,6 +342,7 @@ describe('gameHandler', () => {
     it('handles JOKER shuffle power', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.specialPower;
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('joker', 'JOKER');
 
@@ -354,6 +360,7 @@ describe('gameHandler', () => {
     it('allows skipping special power', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.specialPower;
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('hearts', '7');
 

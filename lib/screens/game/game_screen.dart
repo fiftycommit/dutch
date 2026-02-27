@@ -12,6 +12,7 @@ import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
+import 'package:dutch_game/services/platform/wake_lock_service.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -31,6 +32,7 @@ class _GameScreenState extends State<GameScreen>
     super.initState();
     resetEndGameNavigation(); // Reset guard on screen entry
     lockLandscapeOrientation(autoFullscreenOnWeb: false);
+    WakeLockService.instance.enable();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -56,6 +58,7 @@ class _GameScreenState extends State<GameScreen>
   void dispose() {
     _gameProvider?.removeListener(_onProviderChanged);
     unlockOrientation();
+    WakeLockService.instance.disable();
     super.dispose();
   }
 
@@ -171,7 +174,7 @@ class _GameScreenState extends State<GameScreen>
                   ),
                 if (gameState.phase == GamePhase.dutchCalled)
                   _buildDutchNotification(gameState),
-                if (gameState.isWaitingForSpecialPower)
+                if (gameState.phase == GamePhase.specialPower)
                   _buildSpecialPowerOverlay(gameProvider, gameState),
                 if (gameProvider.isProcessing)
                   const Positioned(
@@ -213,7 +216,7 @@ class _GameScreenState extends State<GameScreen>
 
     Player? playerWithPower;
 
-    if (gs.currentPlayer.isHuman && gs.isWaitingForSpecialPower) {
+    if (gs.currentPlayer.isHuman && gs.phase == GamePhase.specialPower) {
       playerWithPower = gs.currentPlayer;
     } else {
       final humans = gs.players.where((p) => p.isHuman);
@@ -229,7 +232,7 @@ class _GameScreenState extends State<GameScreen>
     final trigger = gs.specialCardToActivate!;
     final triggerId = trigger.id;
 
-    if (!gs.isWaitingForSpecialPower) {
+    if (gs.phase != GamePhase.specialPower) {
       _resetSpecialPowerState();
       return const SizedBox();
     }
@@ -246,7 +249,7 @@ class _GameScreenState extends State<GameScreen>
         if (!mounted) return;
         final current = gp.gameState;
         if (current == null ||
-            !current.isWaitingForSpecialPower ||
+            current.phase != GamePhase.specialPower ||
             current.specialCardToActivate?.id != triggerId) {
           return;
         }
