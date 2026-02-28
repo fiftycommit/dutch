@@ -7,6 +7,7 @@ import '../../services/ui/haptic_service.dart';
 import 'card_widget.dart';
 import 'deck_discard_widget.dart';
 import 'svg_builder_provider.dart';
+import '../../utils/history_personalizer.dart';
 
 class CenterTable extends StatefulWidget {
   final GameState gameState;
@@ -26,6 +27,7 @@ class CenterTable extends StatefulWidget {
   final GlobalKey? drawnCardKey;
   final bool showDeckAndDiscard;
   final bool isPaused;
+  final String? localPlayerName;
 
   const CenterTable({
     super.key,
@@ -46,6 +48,7 @@ class CenterTable extends StatefulWidget {
     this.drawnCardKey,
     this.showDeckAndDiscard = true,
     this.isPaused = false,
+    this.localPlayerName,
   });
 
   @override
@@ -352,9 +355,9 @@ class _CenterTableState extends State<CenterTable>
     // Détecter si on attend qu'un joueur choisisse son pouvoir
     final isWaitingForPower = gs.phase == GamePhase.specialPower;
     final powerPlayerName = isWaitingForPower
-        ? (gs.currentPlayer.name == "Vous"
-            ? "Quelqu'un"
-            : gs.currentPlayer.name)
+        ? (gs.currentPlayer.name == widget.localPlayerName
+            ? 'Vous utilisez votre'
+            : '${gs.currentPlayer.name} utilise son')
         : "";
 
     return Column(
@@ -368,7 +371,7 @@ class _CenterTableState extends State<CenterTable>
             const SizedBox(height: 6),
           ],
           Text(
-            "$powerPlayerName utilise son pouvoir...",
+            "$powerPlayerName pouvoir...",
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white,
@@ -625,8 +628,10 @@ class _CenterTableState extends State<CenterTable>
 
   Widget _buildLastBotAction(GameState gs) {
     final raw = gs.actionHistory.first;
-    final text =
+    final rawText =
         raw.contains('] ') ? raw.substring(raw.indexOf('] ') + 2) : raw;
+    final text =
+        HistoryPersonalizer.personalize(rawText, widget.localPlayerName);
 
     return Text(
       text,

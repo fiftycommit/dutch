@@ -434,6 +434,12 @@ class MultiplayerService {
       _actionsEmitter.sendChatMessage(message);
   void setFocused(bool focused) => _actionsEmitter.setFocused(focused);
 
+  /// Émet le focus utilisateur global (indépendant de la room)
+  /// Permet au serveur de marquer l'utilisateur hors-ligne quand l'app est en arrière-plan
+  void setUserFocused(bool focused) {
+    _connectionHandler.socket?.emit('user:focus', {'focused': focused});
+  }
+
   Future<bool> sendWizz(String targetClientId) async {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();

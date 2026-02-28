@@ -6,7 +6,7 @@ export class HistoryFormatter {
     }
 
     static formatInitialMemorization(): string {
-        return 'Vous avez mémorisé vos cartes.';
+        return 'Mémorisation initiale terminée.';
     }
 
     static formatDrawCard(playerName: string): string {
@@ -63,7 +63,7 @@ export class HistoryFormatter {
     }
 
     static formatPowerJoker(playerName: string, targetName: string): string {
-        return `JOKER ! ${playerName} mélange ${targetName} !`;
+        return `JOKER ! ${playerName} mélange la main de ${targetName} !`;
     }
 
     static formatPowerSkip(playerName: string): string {

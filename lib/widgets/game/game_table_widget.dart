@@ -743,8 +743,9 @@ class _GameTableContentState extends State<_GameTableContent>
       final timestampIdx = raw.indexOf('] ');
       final text =
           (timestampIdx >= 0 ? raw.substring(timestampIdx + 2) : raw).trim();
-      // Format: "JOKER ! X mélange Y !"
-      final match = RegExp(r'mélange\s+(.+?)[\s!]*$').firstMatch(text);
+      // Format: "JOKER ! X mélange la main de Y !"
+      final match =
+          RegExp(r'mélange\s+la main de\s+(.+?)[\s!]*$').firstMatch(text);
       if (match != null) return match.group(1)?.trim();
     }
     return null;
@@ -1485,6 +1486,14 @@ class _GameTableContentState extends State<_GameTableContent>
                                     : null,
                             drawnCardKey: _drawnCardKey,
                             isPaused: widget.isPaused,
+                            localPlayerName: mpConfig.playerId != null
+                                ? gs.players
+                                    .cast<Player?>()
+                                    .firstWhere(
+                                        (p) => p?.id == mpConfig.playerId,
+                                        orElse: () => null)
+                                    ?.name
+                                : null,
                           ),
                         ),
                       ),

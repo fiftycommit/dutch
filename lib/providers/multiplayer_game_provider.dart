@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
-import '../utils/action_history_messages.dart';
 import '../services/multiplayer/multiplayer_service.dart';
 import '../services/ui/haptic_service.dart';
 import '../services/ui/emote_service.dart';
@@ -679,8 +678,11 @@ class MultiplayerGameProvider
       }
     }
 
-    // Générer les messages d'action côté client (comme en solo)
-    _inferActionHistory(_gameState, gameState);
+    // Ajuster specialPowerStartTime avec l'offset serveur (même correction que turnStartTime)
+    if (gameState.specialPowerStartTime != null) {
+      gameState.specialPowerStartTime =
+          gameState.specialPowerStartTime! - serverTimeOffsetMs;
+    }
 
     // Fallback : si le serveur ne fournit pas turnStartTime en phase playing,
     // l'initialiser côté client pour que la progress bar du turn timer s'affiche
@@ -726,109 +728,6 @@ class MultiplayerGameProvider
 
     _timerManager.syncReactionPhase(_gameState);
     notifyListeners();
-  }
-
-  /// Compare l'ancien et le nouveau gameState pour générer les messages
-  /// d'action côté client (comme en solo). Le serveur n'envoie pas toujours
-  /// un actionHistory complet, donc on l'enrichit localement.
-  void _inferActionHistory(GameState? oldGs, GameState newGs) {
-    if (oldGs == null) return;
-
-    // Résoudre le nom affiché pour un joueur
-    String nameOf(Player p) => p.id == playerId ? 'Vous' : p.name;
-    bool isMe(Player p) => p.id == playerId;
-
-    // Trouver le joueur qui agissait dans l'ancien état
-    final actor = oldGs.currentPlayer;
-    final actorName = nameOf(actor);
-
-    // ── Dutch ────────────────────────────────────────────────────────
-    if (oldGs.dutchCallerId == null && newGs.dutchCallerId != null) {
-      final callerId = newGs.dutchCallerId!;
-      final caller = newGs.players.cast<Player?>().firstWhere(
-            (p) => p?.id == callerId,
-            orElse: () => null,
-          );
-      if (caller != null) {
-        newGs.addToHistory(ActionHistoryMessages.dutch(nameOf(caller)));
-      }
-      return;
-    }
-
-    // ── Phase de réaction (match réussi / raté) ──────────────────────
-    if (newGs.phase == GamePhase.reaction ||
-        oldGs.phase == GamePhase.reaction) {
-      // Détecter un match réussi : la pile de défausse a grandi ET
-      // un joueur a perdu une carte
-      for (final newP in newGs.players) {
-        final oldP = oldGs.players.cast<Player?>().firstWhere(
-              (p) => p?.id == newP.id,
-              orElse: () => null,
-            );
-        if (oldP == null) continue;
-
-        if (newP.hand.length < oldP.hand.length &&
-            newGs.discardPile.length > oldGs.discardPile.length) {
-          final matchedCard = newGs.discardPile.last;
-          newGs.addToHistory(ActionHistoryMessages.matchSuccess(
-              nameOf(newP), matchedCard,
-              isLocal: isMe(newP)));
-          return;
-        }
-        // Match raté : le joueur a PLUS de cartes (pénalité)
-        if (newP.hand.length > oldP.hand.length &&
-            oldGs.phase == GamePhase.reaction) {
-          newGs.addToHistory(ActionHistoryMessages.penalty(nameOf(newP)));
-          return;
-        }
-      }
-    }
-
-    // Ne rien faire si le joueur actif n'a pas changé et pas de transition visible
-    if (oldGs.phase != GamePhase.playing) return;
-
-    // ── Pioche / Prise depuis la défausse ────────────────────────────
-    if (oldGs.drawnCard == null && newGs.drawnCard != null) {
-      if (newGs.discardPile.length < oldGs.discardPile.length) {
-        // La défausse a diminué → prise depuis la défausse
-        newGs.addToHistory(
-            ActionHistoryMessages.takeFromDiscard(actorName, newGs.drawnCard!));
-      } else {
-        // La pioche a diminué → pioche normale
-        newGs.addToHistory(ActionHistoryMessages.draw(actorName));
-      }
-      return;
-    }
-
-    // ── Défausse ou remplacement ─────────────────────────────────────
-    // La carte piochée disparaît, la défausse grandit
-    if (oldGs.drawnCard != null && newGs.drawnCard == null) {
-      final newTopDiscard =
-          newGs.discardPile.isNotEmpty ? newGs.discardPile.last : null;
-
-      final newActor = newGs.players.cast<Player?>().firstWhere(
-            (p) => p?.id == actor.id,
-            orElse: () => null,
-          );
-
-      if (newActor != null && newTopDiscard != null) {
-        // Détecter si la carte défaussée a un pouvoir spécial
-        final hasPower = newGs.phase == GamePhase.specialPower;
-
-        if (newActor.hand.length == actor.hand.length) {
-          // Même nombre de cartes → remplacement (l'ancienne carte est défaussée)
-          newGs.addToHistory(ActionHistoryMessages.replaceCard(
-              actorName, newTopDiscard,
-              isLocal: isMe(actor)));
-        } else {
-          // Main inchangée côté nombre → défausse simple
-          newGs.addToHistory(ActionHistoryMessages.discardDrawn(
-              actorName, newTopDiscard,
-              isLocal: isMe(actor), hasPower: hasPower));
-        }
-      }
-      return;
-    }
   }
 
   void _handlePlayerJoined(Map<String, dynamic> data) {
@@ -1469,8 +1368,15 @@ class MultiplayerGameProvider
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!isConnected || _roomCode == null) return;
-    _multiplayerService.setFocused(state == AppLifecycleState.resumed);
+    final focused = state == AppLifecycleState.resumed;
+    // Focus global : met à jour la pastille en ligne pour les amis, même hors room
+    if (isConnected) {
+      _multiplayerService.setUserFocused(focused);
+    }
+    // Focus room : met à jour la présence dans la partie en cours
+    if (isConnected && _roomCode != null) {
+      _multiplayerService.setFocused(focused);
+    }
   }
 
   /// Vérifie si l'utilisateur est déjà dans un écran lié au salon

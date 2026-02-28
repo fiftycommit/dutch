@@ -100,7 +100,7 @@ describe('GameLogic', () => {
       GameLogic.initialReveal(state, [0, 1]);
 
       assert.ok(state.actionHistory.length > historyLengthBefore);
-      assert.ok(state.actionHistory.some(h => h.includes('mémorisé')));
+      assert.ok(state.actionHistory.some(h => h.includes('Mémorisation initiale')));
     });
 
     it('ignores invalid indices', () => {

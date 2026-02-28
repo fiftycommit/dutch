@@ -25,15 +25,24 @@ export interface BlockedInfo {
 
 // Référence vers la map d'utilisateurs en ligne (injectée depuis socketAuthMiddleware)
 let onlineUsersRef: Map<string, Set<string>> = new Map();
+let userFocusedRef: Map<string, boolean> = new Map();
 
 export class FriendsService {
   static setOnlineUsersRef(ref: Map<string, Set<string>>) {
     onlineUsersRef = ref;
   }
 
+  static setUserFocusedRef(ref: Map<string, boolean>) {
+    userFocusedRef = ref;
+  }
+
   static isUserOnline(userId: string): boolean {
     const sockets = onlineUsersRef.get(userId);
-    return !!sockets && sockets.size > 0;
+    if (!sockets || sockets.size === 0) return false;
+    // Si le focus est explicitement false (app en arrière-plan), l'utilisateur est "hors ligne"
+    const focused = userFocusedRef.get(userId);
+    if (focused === false) return false;
+    return true;
   }
 
   static async getFriends(userId: string): Promise<FriendInfo[]> {

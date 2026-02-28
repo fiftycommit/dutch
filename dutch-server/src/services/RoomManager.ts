@@ -474,6 +474,23 @@ export class RoomManager {
 
     const gameState = createGameState(room.players, room.gameMode, difficulty);
     GameLogic.initializeGame(gameState);
+
+    // Si le joueur tiré au sort est le même qu'à la partie précédente, on re-tire parmi les autres
+    if (room.lastStartingPlayerId && gameState.players.length > 1) {
+      const currentStarter = gameState.players[gameState.currentPlayerIndex];
+      if (currentStarter.id === room.lastStartingPlayerId) {
+        const otherIndexes = gameState.players
+          .map((_, i) => i)
+          .filter(i => gameState.players[i].id !== room.lastStartingPlayerId);
+        if (otherIndexes.length > 0) {
+          gameState.currentPlayerIndex = otherIndexes[Math.floor(Math.random() * otherIndexes.length)];
+          const newStarter = gameState.players[gameState.currentPlayerIndex];
+          console.log(`🎲 Re-tirage (${currentStarter.name} déjà commencé) → ${newStarter.name}`);
+        }
+      }
+    }
+    room.lastStartingPlayerId = gameState.players[gameState.currentPlayerIndex].id;
+
     // Stay in setup phase until all humans complete memorization
     gameState.phase = GamePhase.setup;
     gameState.readyPlayerIds = [];

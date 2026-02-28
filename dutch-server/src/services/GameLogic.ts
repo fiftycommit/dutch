@@ -42,10 +42,9 @@ export class GameLogic {
     if (gameState.players.length > 0) {
       const randomIndex = Math.floor(this.random() * gameState.players.length);
       gameState.currentPlayerIndex = randomIndex;
-      const starterName = gameState.players[randomIndex].isHuman
-        ? 'Vous'
-        : gameState.players[randomIndex].name;
-      addToHistory(gameState, HistoryFormatter.formatStartingPlayer(starterName));
+      const starter = gameState.players[randomIndex];
+      console.log(`🎲 Premier joueur : ${starter.name} (index ${randomIndex}/${gameState.players.length})`);
+      addToHistory(gameState, HistoryFormatter.formatStartingPlayer(starter.name));
     }
   }
 

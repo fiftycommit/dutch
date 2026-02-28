@@ -19,7 +19,7 @@ import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
 import { setFriendsIo } from './routes/friendsRoutes';
-import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers } from './middleware/socketAuthMiddleware';
+import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers, userFocused } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
 
@@ -145,8 +145,9 @@ export function startServer() {
     pingInterval: 25000,
   });
 
-  // Injecter la référence des users en ligne pour le service d'amis
+  // Injecter les références de présence pour le service d'amis
   FriendsService.setOnlineUsersRef(onlineUsers);
+  FriendsService.setUserFocusedRef(userFocused);
 
   // Socket Auth Middleware (Firebase token verification)
   io.use(socketAuthMiddleware);

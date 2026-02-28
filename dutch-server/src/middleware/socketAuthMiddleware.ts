@@ -5,6 +5,10 @@ import { firestoreService, FirestoreUser } from '../services/FirestoreService';
 // Map uid -> Set<socketId> pour tracker les users en ligne
 export const onlineUsers = new Map<string, Set<string>>();
 
+// Map uid -> boolean pour tracker si l'app est au premier plan (focus)
+// undefined = inconnu (jamais envoyé), true = premier plan, false = arrière-plan
+export const userFocused = new Map<string, boolean>();
+
 export interface FirebaseUserPayload {
   uid: string;
   email: string | null;
@@ -70,6 +74,7 @@ export function handleSocketDisconnect(socket: Socket) {
       sockets.delete(socket.id);
       if (sockets.size === 0) {
         onlineUsers.delete(user.uid);
+        userFocused.delete(user.uid); // Nettoyer le focus quand plus de sockets
       }
     }
   }

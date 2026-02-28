@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
 import { roomRegistryService } from '../services/RoomRegistryService';
+import { userFocused } from '../middleware/socketAuthMiddleware';
 
 export function setupConnectionHandler(socket: Socket, roomManager: RoomManager) {
   socket.on(
@@ -20,6 +21,13 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
     const roomCode = data?.roomCode?.toString().toUpperCase();
     if (!roomCode) return;
     roomManager.updateFocus(roomCode, socket.id, data?.focused === true);
+  });
+
+  // Mise à jour du focus utilisateur global (hors room) — permet de détecter app en arrière-plan
+  socket.on('user:focus', (data) => {
+    const uid = (socket as any).data?.user?.uid;
+    if (!uid) return;
+    userFocused.set(uid, data?.focused === true);
   });
 
   socket.on('presence:ack', (data) => {

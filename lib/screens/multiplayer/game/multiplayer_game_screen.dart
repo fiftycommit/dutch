@@ -73,7 +73,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final gameState = provider.gameState;
 
     // Safety: room destroyed or we were removed → exit game screen
-    if (provider.roomCode == null) {
+    // Ne pas interférer si un dialog de kick/ban/host-closed est déjà affiché
+    if (provider.roomCode == null &&
+        !_kickedDialogShown &&
+        !_bannedDialogShown &&
+        !_hostClosedDialogShown) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
           context.go('/multiplayer');
