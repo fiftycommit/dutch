@@ -893,12 +893,61 @@ export class RoomManager {
 
     room.status = RoomStatus.ended;
     room.gameState.phase = GamePhase.ended;
+
+    // Tous les humains connectés sont sur l'écran de résultats
+    room.playersInResults = new Set(
+      room.players.filter((p) => p.isHuman && p.connected).map((p) => p.id)
+    );
+
     this.clearTurnTimer(roomCode);
     this.broadcastGameState(roomCode, 'GAME_ENDED', {
       message: 'Partie terminée !',
       roundScores, // Scores de cette manche (points bruts + rpChange)
       cumulativeScores: this.getCumulativeScoresArray(room),
     });
+    this.broadcastPresence(roomCode);
+  }
+
+  /**
+   * Retour au salon : n'importe quel joueur peut appeler.
+   * Retire le joueur de playersInResults.
+   * Quand plus personne n'est sur les résultats → reset la room.
+   */
+  backToLobby(roomCode: string, playerId: string): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+    if (room.status !== RoomStatus.ended) return false;
+
+    room.playersInResults?.delete(playerId);
+    this.tryResetEndedRoom(room, roomCode);
+
+    return true;
+  }
+
+  /**
+   * Si plus personne n'est sur les résultats, remet la room en waiting.
+   */
+  private tryResetEndedRoom(room: Room, roomCode: string) {
+    if (room.status !== RoomStatus.ended) return;
+    if (room.playersInResults && room.playersInResults.size > 0) return;
+
+    // Plus personne sur les résultats → reset complet
+    room.players = room.players.filter((p) => p.isHuman);
+    room.players.forEach((p) => {
+      p.ready = false;
+      p.hand = [];
+      p.hasFolded = false;
+      p.knownCards = [];
+      p.isSpectator = false;
+    });
+
+    room.status = RoomStatus.waiting;
+    room.gameState = null;
+    room.playersInResults = undefined;
+
+    this.reindexPlayers(room);
+    this.ensureHost(room);
+    this.touchRoom(room);
     this.broadcastPresence(roomCode);
   }
 
@@ -1032,12 +1081,24 @@ export class RoomManager {
       canRejoin: true, // Le joueur PEUT revenir
     });
 
+    // Si la partie est en cours, gérer proprement le retrait du gameState
+    if (room.status === RoomStatus.playing && room.gameState) {
+      this.removePlayerFromActiveRoom(roomCode, target.id, {
+        removeReason: `${target.name} a été exclu par l'hôte.`,
+      });
+      return true;
+    }
+
     // Retirer le joueur (mais ne pas le bannir - il peut revenir)
+    room.playersInResults?.delete(target.id);
     room.players.splice(targetIndex, 1);
     this.reindexPlayers(room);
 
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
+
+    // Si plus personne sur les résultats → reset la room
+    this.tryResetEndedRoom(room, roomCode);
 
     return true;
   }
@@ -1082,12 +1143,24 @@ export class RoomManager {
       room.bannedClientIds.add(target.clientId);
     }
 
+    // Si la partie est en cours, gérer proprement le retrait du gameState
+    if (room.status === RoomStatus.playing && room.gameState) {
+      this.removePlayerFromActiveRoom(roomCode, target.id, {
+        removeReason: `${target.name} a été banni par l'hôte.`,
+      });
+      return true;
+    }
+
     // Retirer le joueur
+    room.playersInResults?.delete(target.id);
     room.players.splice(targetIndex, 1);
     this.reindexPlayers(room);
 
     this.touchRoom(room);
     this.broadcastPresence(roomCode);
+
+    // Si plus personne sur les résultats → reset la room
+    this.tryResetEndedRoom(room, roomCode);
 
     return true;
   }
@@ -1310,6 +1383,7 @@ export class RoomManager {
 
     if (room.status === RoomStatus.waiting || room.status === RoomStatus.ended) {
       // In waiting or ended state: clean removal (player leaves for real)
+      room.playersInResults?.delete(socketId);
       room.players.splice(index, 1);
       if (room.players.length === 0 ||
           room.players.filter(p => p.isHuman).length === 0) {
@@ -1320,6 +1394,8 @@ export class RoomManager {
       if (room.hostPlayerId === socketId) {
         this.ensureHost(room);
       }
+      // Si plus personne sur les résultats → reset la room
+      this.tryResetEndedRoom(room, roomCode);
     } else {
       // In playing state: mark as spectator (game still running)
       this.removePlayerFromActiveRoom(roomCode, leaving.id, {
@@ -1641,7 +1717,8 @@ export class RoomManager {
 
     const roomIndex = room.players.findIndex((p) => p.id === playerId);
     if (roomIndex >= 0) {
-      if (room.status === RoomStatus.waiting) {
+      if (room.status === RoomStatus.waiting || room.status === RoomStatus.ended) {
+        // En attente ou partie terminée : retirer complètement le joueur
         room.players.splice(roomIndex, 1);
       } else {
         room.players[roomIndex].isSpectator = true;
@@ -1650,12 +1727,18 @@ export class RoomManager {
       }
     }
 
+    // Retirer des résultats si présent
+    room.playersInResults?.delete(playerId);
+
     // On compte seulement les joueurs non-spectateurs (s'il y en a) pour détruire la room
     const activeHumanPlayers = room.players.filter(p => p.isHuman && !p.isSpectator);
     if (room.players.length === 0 || activeHumanPlayers.length === 0) {
       this.removeRoom(roomCode);
       return;
     }
+
+    // Si plus personne sur les résultats → reset la room
+    this.tryResetEndedRoom(room, roomCode);
 
     if (room.status !== RoomStatus.playing && !room.isPaused) {
       this.reindexPlayers(room);

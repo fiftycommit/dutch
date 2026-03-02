@@ -296,8 +296,8 @@ class ResultsScreen extends StatelessWidget {
       ),
       child: Text(
         callerWon
-            ? "${caller.name} a crié DUTCH et gagne ${callerWinsTournament ? "le tournoi" : "la manche"} !"
-            : "${caller.name} a crié DUTCH mais perd ${isFinal ? "la finale" : "la manche"}.",
+            ? "${caller.name} a crié DUTCH et a gagné ${callerWinsTournament ? "le tournoi" : "la manche"} !"
+            : "${caller.name} a crié DUTCH mais a perdu ${isFinal ? "la finale" : "la manche"}.",
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: Colors.white,

@@ -14,9 +14,10 @@ var GamePhase;
 (function (GamePhase) {
     GamePhase[GamePhase["setup"] = 0] = "setup";
     GamePhase[GamePhase["playing"] = 1] = "playing";
-    GamePhase[GamePhase["reaction"] = 2] = "reaction";
-    GamePhase[GamePhase["dutchCalled"] = 3] = "dutchCalled";
-    GamePhase[GamePhase["ended"] = 4] = "ended";
+    GamePhase[GamePhase["specialPower"] = 2] = "specialPower";
+    GamePhase[GamePhase["reaction"] = 3] = "reaction";
+    GamePhase[GamePhase["dutchCalled"] = 4] = "dutchCalled";
+    GamePhase[GamePhase["ended"] = 5] = "ended";
 })(GamePhase || (exports.GamePhase = GamePhase = {}));
 var Difficulty;
 (function (Difficulty) {
@@ -47,7 +48,7 @@ function createGameState(players, gameMode, difficulty) {
         pendingSwap: null,
         tournamentCumulativeScores: {},
         turnStartTime: null,
-        turnTimeoutMs: 45000, // 45 secondes par défaut
+        turnTimeoutMs: 90000, // 1min30 par défaut
         readyPlayerIds: [],
     };
 }

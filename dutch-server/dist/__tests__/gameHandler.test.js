@@ -9,6 +9,7 @@ const RoomManager_1 = require("../services/RoomManager");
 const gameHandler_1 = require("../handlers/gameHandler");
 const GameState_1 = require("../models/GameState");
 const Card_1 = require("../models/Card");
+const SecurityService_1 = require("../services/SecurityService");
 // Mock Socket implementation
 class MockSocket {
     constructor(id) {
@@ -70,6 +71,7 @@ class MockServer {
     let roomManager;
     let roomCode;
     (0, node_test_1.beforeEach)(() => {
+        SecurityService_1.SecurityService.resetForTesting();
         mockSocket = new MockSocket('player-1');
         mockServer = new MockServer();
         roomManager = new RoomManager_1.RoomManager(mockServer, {
@@ -227,6 +229,7 @@ class MockServer {
         (0, node_test_1.it)('handles card 7 special power', async () => {
             const room = roomManager.getRoom(roomCode);
             room.gameState.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+            room.gameState.phase = GameState_1.GamePhase.specialPower;
             room.gameState.isWaitingForSpecialPower = true;
             room.gameState.specialCardToActivate = (0, Card_1.createCard)('hearts', '7');
             await mockSocket.triggerEvent('game:use_special_power', {
@@ -240,6 +243,7 @@ class MockServer {
         (0, node_test_1.it)('handles card 10 special power', async () => {
             const room = roomManager.getRoom(roomCode);
             room.gameState.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+            room.gameState.phase = GameState_1.GamePhase.specialPower;
             room.gameState.isWaitingForSpecialPower = true;
             room.gameState.specialCardToActivate = (0, Card_1.createCard)('spades', '10');
             await mockSocket.triggerEvent('game:use_special_power', {
@@ -253,6 +257,7 @@ class MockServer {
         (0, node_test_1.it)('handles Jack (V) swap power', async () => {
             const room = roomManager.getRoom(roomCode);
             room.gameState.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+            room.gameState.phase = GameState_1.GamePhase.specialPower;
             room.gameState.isWaitingForSpecialPower = true;
             room.gameState.specialCardToActivate = (0, Card_1.createCard)('clubs', 'V');
             await mockSocket.triggerEvent('game:use_special_power', {
@@ -268,6 +273,7 @@ class MockServer {
         (0, node_test_1.it)('handles JOKER shuffle power', async () => {
             const room = roomManager.getRoom(roomCode);
             room.gameState.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+            room.gameState.phase = GameState_1.GamePhase.specialPower;
             room.gameState.isWaitingForSpecialPower = true;
             room.gameState.specialCardToActivate = (0, Card_1.createCard)('joker', 'JOKER');
             await mockSocket.triggerEvent('game:use_special_power', {
@@ -282,6 +288,7 @@ class MockServer {
         (0, node_test_1.it)('allows skipping special power', async () => {
             const room = roomManager.getRoom(roomCode);
             room.gameState.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+            room.gameState.phase = GameState_1.GamePhase.specialPower;
             room.gameState.isWaitingForSpecialPower = true;
             room.gameState.specialCardToActivate = (0, Card_1.createCard)('hearts', '7');
             await mockSocket.triggerEvent('game:skip_special_power', { roomCode });

@@ -226,36 +226,6 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     bool isTournament = false,
     bool isTournamentOver = false,
   }) {
-    // Texte du bouton principal selon le mode
-    final nextRoundLabel = isTournament && !isTournamentOver
-        ? "MANCHE SUIVANTE >>"
-        : "Retour au Salon";
-
-    if (provider.isHost) {
-      return [
-        // Bouton manche suivante / retour au salon (Host uniquement)
-        shared.ResultsActionButton(
-          label: nextRoundLabel,
-          backgroundColor: isTournament && !isTournamentOver
-              ? Colors.amber.shade700
-              : Colors.green.shade700,
-          onPressed: () => provider.restartGame(),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Bouton fermer la room (Host uniquement)
-        shared.ResultsActionButton(
-          label: isTournamentOver ? "Terminer le tournoi" : "Fermer la room",
-          backgroundColor: Colors.red.shade700,
-          onPressed: () {
-            provider.closeRoom();
-            context.go('/multiplayer');
-          },
-        ),
-      ];
-    }
-
     // Joueur kické / expulsé : bouton quitter directement
     if (provider.wasKicked) {
       return [
@@ -270,42 +240,23 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    // Non-host: message d'attente + bouton quitter
+    // Tous les joueurs : retour indépendant au salon
     return [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.black26,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              isTournament && !isTournamentOver
-                  ? "En attente de la manche suivante..."
-                  : "En attente de l'hôte...",
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
+      shared.ResultsActionButton(
+        label: isTournament && !isTournamentOver
+            ? "MANCHE SUIVANTE >>"
+            : "Retour au Salon",
+        backgroundColor: isTournament && !isTournamentOver
+            ? Colors.amber.shade700
+            : Colors.green.shade700,
+        onPressed: () {
+          provider.returnToLobbyFromResults();
+          context.go('/lobby');
+        },
       ),
 
       const SizedBox(height: 12),
 
-      // Bouton quitter le salon pour les non-host
       shared.ResultsActionButton(
         label: "Quitter le salon",
         backgroundColor: Colors.red.shade700,

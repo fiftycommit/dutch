@@ -568,12 +568,25 @@ class AppRouter {
                 final gameProvider = Provider.of<MultiplayerGameProvider>(
                     context,
                     listen: false);
+                final gs = gameProvider.gameState;
+                if (gs == null) {
+                  // gameState déjà nettoyé (joueur retourné au salon) → rediriger
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (context.mounted) {
+                      context.go(gameProvider.roomCode != null ? '/lobby' : '/multiplayer');
+                    }
+                  });
+                  return _adaptivePage(
+                    state: state,
+                    child: const Scaffold(body: SizedBox.shrink()),
+                  );
+                }
                 return _adaptivePage(
                   state: state,
                   child: _DeferredScreen(
                     loader: mp_results.loadLibrary,
                     builder: () => mp_results.MultiplayerResultsScreen(
-                      gameState: gameProvider.gameState!,
+                      gameState: gs,
                       localPlayerId: gameProvider.playerId,
                     ),
                   ),

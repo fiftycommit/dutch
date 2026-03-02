@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupConnectionHandler = setupConnectionHandler;
 const RoomRegistryService_1 = require("../services/RoomRegistryService");
+const socketAuthMiddleware_1 = require("../middleware/socketAuthMiddleware");
 function setupConnectionHandler(socket, roomManager) {
     socket.on('client:ping', (data, callback) => {
         roomManager.touchPlayer(socket.id);
@@ -17,6 +18,13 @@ function setupConnectionHandler(socket, roomManager) {
         if (!roomCode)
             return;
         roomManager.updateFocus(roomCode, socket.id, data?.focused === true);
+    });
+    // Mise à jour du focus utilisateur global (hors room) — permet de détecter app en arrière-plan
+    socket.on('user:focus', (data) => {
+        const uid = socket.data?.user?.uid;
+        if (!uid)
+            return;
+        socketAuthMiddleware_1.userFocused.set(uid, data?.focused === true);
     });
     socket.on('presence:ack', (data) => {
         const roomCode = data?.roomCode?.toString().toUpperCase();

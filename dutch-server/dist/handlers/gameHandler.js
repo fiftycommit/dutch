@@ -44,6 +44,10 @@ function setupGameHandler(socket, roomManager) {
                 roomManager.handleGameEnd(data.roomCode);
                 return;
             }
+            if (room.gameState.phase === GameState_1.GamePhase.specialPower) {
+                roomManager.startTurnTimer(data.roomCode);
+                return;
+            }
             if (room.gameState.phase === GameState_1.GamePhase.reaction) {
                 const reactionTime = typeof room.settings?.reactionTimeMs === 'number'
                     ? room.settings.reactionTimeMs
@@ -86,6 +90,11 @@ function setupGameHandler(socket, roomManager) {
             roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
             if (room.gameState.phase === GameState_1.GamePhase.ended) {
                 roomManager.handleGameEnd(data.roomCode);
+                return;
+            }
+            if (room.gameState.phase === GameState_1.GamePhase.specialPower) {
+                console.log(`[DISCARD] Special power phase, starting power timer`);
+                roomManager.startTurnTimer(data.roomCode);
                 return;
             }
             if (room.gameState.phase === GameState_1.GamePhase.reaction) {
@@ -181,6 +190,23 @@ function setupGameHandler(socket, roomManager) {
      * - Carte V : { roomCode, player1Index, card1Index, player2Index, card2Index } - Échange universel
      * - JOKER : { roomCode, targetPlayerIndex } - Mélanger n'importe qui
      */
+    socket.on('special_power:target_selection', async (data) => {
+        try {
+            if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
+                return;
+            const room = roomManager.getRoom(data.roomCode);
+            if (!room || !room.gameState)
+                return;
+            const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
+            if (currentPlayer.id !== socket.id)
+                return;
+            // Broadcast the partial selection to all OTHER players in the room
+            socket.to(data.roomCode).emit('special_power:target_selection', data);
+        }
+        catch (error) {
+            console.error('Error special_power:target_selection:', error);
+        }
+    });
     socket.on('game:use_special_power', async (data) => {
         try {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
@@ -271,12 +297,9 @@ function setupGameHandler(socket, roomManager) {
                 const baseReactionTime = typeof room.settings?.reactionTimeMs === 'number'
                     ? room.settings.reactionTimeMs
                     : 3000;
-                // Le temps passé par le joueur à sélectionner le pouvoir est rajouté 
-                // à son temps de réaction réel, jusqu'à une limite (ex: 15s max)
-                const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
-                const elapsedSelectingPowerMs = Date.now() - powerStartTime;
-                // On limite l'extension à 15s pour éviter l'abus, même si le client a lui-même un timeout de pouvoir spécial
-                const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
+                // Le temps passé à sélectionner ne doit plus être rajouté ici
+                // car cela crée un délai perceptible (le client attend l'animation)
+                const reactionTime = baseReactionTime;
                 roomManager.startReactionTimer(data.roomCode, reactionTime);
                 return;
             }
@@ -309,9 +332,7 @@ function setupGameHandler(socket, roomManager) {
                 const baseReactionTime = typeof room.settings?.reactionTimeMs === 'number'
                     ? room.settings.reactionTimeMs
                     : 3000;
-                const powerStartTime = room.gameState.specialPowerStartTime ?? Date.now();
-                const elapsedSelectingPowerMs = Date.now() - powerStartTime;
-                const reactionTime = baseReactionTime + Math.min(elapsedSelectingPowerMs, 15000);
+                const reactionTime = baseReactionTime;
                 roomManager.startReactionTimer(data.roomCode, reactionTime);
                 return;
             }

@@ -353,6 +353,18 @@ class MultiplayerService {
     return completer.future;
   }
 
+  Future<bool> backToLobby() async {
+    if (_currentRoomCode == null) return false;
+    final completer = Completer<bool>();
+
+    socket?.emitWithAck('room:backToLobby', {'roomCode': _currentRoomCode},
+        ack: (response) {
+      completer.complete(response?['success'] == true);
+    });
+
+    return completer.future;
+  }
+
   Future<bool> kickPlayer(String clientId) async {
     if (_currentRoomCode == null) return false;
     final completer = Completer<bool>();

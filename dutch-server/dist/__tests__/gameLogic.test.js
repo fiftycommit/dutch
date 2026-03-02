@@ -85,7 +85,7 @@ const Card_1 = require("../models/Card");
             const historyLengthBefore = state.actionHistory.length;
             GameLogic_1.GameLogic.initialReveal(state, [0, 1]);
             node_assert_1.default.ok(state.actionHistory.length > historyLengthBefore);
-            node_assert_1.default.ok(state.actionHistory.some(h => h.includes('mémorisé')));
+            node_assert_1.default.ok(state.actionHistory.some(h => h.includes('Mémorisation initiale')));
         });
         (0, node_test_1.it)('ignores invalid indices', () => {
             const state = createInitializedGameState();
@@ -416,7 +416,7 @@ const Card_1 = require("../models/Card");
     (0, node_test_1.describe)('useSpecialPower', () => {
         (0, node_test_1.it)('handles card 7 - look at own card', () => {
             const state = createInitializedGameState();
-            state.phase = GameState_1.GamePhase.playing;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.currentPlayerIndex = 0;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('hearts', '7');
@@ -428,7 +428,7 @@ const Card_1 = require("../models/Card");
         });
         (0, node_test_1.it)('handles card 10 - spy on opponent', () => {
             const state = createInitializedGameState();
-            state.phase = GameState_1.GamePhase.playing;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.currentPlayerIndex = 0;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('spades', '10');
@@ -441,7 +441,7 @@ const Card_1 = require("../models/Card");
         });
         (0, node_test_1.it)('handles card V (Jack) - swap between any two players', () => {
             const state = createInitializedGameState();
-            state.phase = GameState_1.GamePhase.playing;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.currentPlayerIndex = 0;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('clubs', 'V');
@@ -460,7 +460,7 @@ const Card_1 = require("../models/Card");
         });
         (0, node_test_1.it)('handles JOKER - shuffle target player hand', () => {
             const state = createInitializedGameState();
-            state.phase = GameState_1.GamePhase.playing;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.currentPlayerIndex = 0;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('joker', 'JOKER');
@@ -478,7 +478,7 @@ const Card_1 = require("../models/Card");
         });
         (0, node_test_1.it)('starts reaction phase after power use', () => {
             const state = createInitializedGameState();
-            state.phase = GameState_1.GamePhase.playing;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.currentPlayerIndex = 0;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('hearts', '7');

@@ -17,9 +17,14 @@ class MultiplayerDutchRevealScreen extends StatelessWidget {
         Provider.of<MultiplayerGameProvider>(context, listen: false);
 
     if (!provider.isPlaying || provider.gameState == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go(provider.roomCode != null ? '/lobby' : '/multiplayer');
+        }
+      });
       return Scaffold(
         backgroundColor: AppColors.gradientBottom,
-        body: Center(child: CircularProgressIndicator(color: Colors.amber)),
+        body: const Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
 

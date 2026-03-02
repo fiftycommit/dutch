@@ -121,7 +121,12 @@ class MultiplayerGameProvider
       _gameState?.players.where((p) => p.id == playerId).firstOrNull;
 
   @override
-  bool get isLocalPlayerTurn => _gameState?.currentPlayer.id == playerId;
+  bool get isLocalPlayerTurn {
+    final gs = _gameState;
+    if (gs == null) return false;
+    if (gs.currentPlayerIndex < 0 || gs.currentPlayerIndex >= gs.players.length) return false;
+    return gs.players[gs.currentPlayerIndex].id == playerId;
+  }
 
   @override
   bool get canLocalPlayerAct =>
@@ -661,8 +666,13 @@ class MultiplayerGameProvider
   }
 
   void _handleGameStateUpdate(GameState gameState) {
-    final wasMyTurn = _gameState?.currentPlayer.id == playerId;
-    final isNowMyTurn = gameState.currentPlayer.id == playerId &&
+    final wasMyTurn = _gameState != null &&
+        _gameState!.currentPlayerIndex >= 0 &&
+        _gameState!.currentPlayerIndex < _gameState!.players.length &&
+        _gameState!.players[_gameState!.currentPlayerIndex].id == playerId;
+    final isNowMyTurn = gameState.currentPlayerIndex >= 0 &&
+        gameState.currentPlayerIndex < gameState.players.length &&
+        gameState.players[gameState.currentPlayerIndex].id == playerId &&
         (gameState.phase == GamePhase.playing ||
             gameState.phase == GamePhase.specialPower);
     if (!wasMyTurn && isNowMyTurn) {
@@ -722,8 +732,6 @@ class MultiplayerGameProvider
       // Spectator (forfeited player) should still see results when game ends
       _isPlaying = true;
       _isInLobby = false;
-    } else if (!_isInLobby && !_isPlaying) {
-      _isPlaying = true;
     }
 
     _timerManager.syncReactionPhase(_gameState);
@@ -818,28 +826,23 @@ class MultiplayerGameProvider
     final stillInRoom = _playersInLobby.any((p) =>
         (myPid != null && p['id'] == myPid) ||
         (myCid != null && p['clientId'] == myCid));
-    if (!stillInRoom && _roomCode != null && _playersInLobby.isNotEmpty) {
-      // We're no longer in the player list — we were removed
+    if (!stillInRoom && _roomCode != null) {
+      // We're no longer in the player list — we were removed (or list is empty)
       _resetRoomState();
       return;
     }
 
     if (data['gameMode'] is int) {
-      _roomGameMode = GameMode.values[data['gameMode']];
+      final modeIndex = data['gameMode'] as int;
+      if (modeIndex >= 0 && modeIndex < GameMode.values.length) {
+        _roomGameMode = GameMode.values[modeIndex];
+      }
     }
 
     // Detect room status transitions
     final newStatus = data['status'] as String?;
     if (newStatus != null) {
-      final oldStatus = _roomStatus;
       _roomStatus = newStatus;
-
-      // ended → waiting = restartGame happened (backup for missed room:restarted)
-      if (oldStatus == 'ended' && newStatus == 'waiting') {
-        _gameState = null;
-        _isPlaying = false;
-        _isInLobby = true;
-      }
     }
 
     if (data['cumulativeScores'] is List) {
@@ -962,8 +965,10 @@ class MultiplayerGameProvider
       _roomCode = roomCode;
       _isInLobby = true;
       if (room != null && room['players'] is List) {
-        _playersInLobby =
-            (room['players'] as List).cast<Map<String, dynamic>>();
+        _playersInLobby = (room['players'] as List)
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
         if (room['hostPlayerId'] is String) {
           _hostPlayerId = room['hostPlayerId'];
         }
@@ -1059,10 +1064,38 @@ class MultiplayerGameProvider
     return success;
   }
 
-  /// Host: restart game (resets room to waiting, all players go to lobby)
-  /// Non-host: just signals readiness for lobby return
+  /// Host: relance la partie (remet la room en waiting, tous les joueurs vont au lobby)
   Future<bool> restartGame() async =>
       isHost ? await _multiplayerService.restartGame() : false;
+
+  /// Retour indépendant au salon depuis l'écran de résultats (tout joueur)
+  void returnToLobbyFromResults() {
+    _multiplayerService.backToLobby();
+    _gameState = null;
+    _isPlaying = false;
+    _isInLobby = true;
+    _isPaused = false;
+    _pausedByName = null;
+    _pausedByPlayerId = null;
+    _pauseDeadlineMs = 0;
+    _preloadedDeckCard = null;
+    _pendingValetPlayer1 = null;
+    _pendingValetCard1 = null;
+    _pendingValetPlayer2 = null;
+    _pendingValetCard2 = null;
+    _powerTargetPlayerIndices = {};
+    _isProcessingAction = false;
+    _lastSpiedCard = null;
+    _spiedTargetName = null;
+    _showSpiedCardDialog = false;
+    _afkPlayerIds.clear();
+    _timerManager.reset();
+    for (final player in _playersInLobby) {
+      player['ready'] = false;
+      player['isSpectator'] = false;
+    }
+    notifyListeners();
+  }
 
   /// Clean return to lobby for non-host players from the results screen.
   /// Leaves the room and resets state so the player navigates to /multiplayer.

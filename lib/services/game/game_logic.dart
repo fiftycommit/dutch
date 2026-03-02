@@ -70,8 +70,8 @@ class GameLogic {
       int randomIndex = _random.nextInt(players.length);
       gameState.currentPlayerIndex = randomIndex;
       String starterName = players[randomIndex].isHuman
-          ? "Vous commencez"
-          : "${players[randomIndex].name} commence";
+          ? "Vous avez commencé"
+          : "${players[randomIndex].name} a commencé";
       gameState.addToHistory("Tirage au sort : $starterName !");
     }
 
@@ -344,7 +344,7 @@ class GameLogic {
         turnCount: gameState.turnCount,
       );
       gameState.addToHistory(
-          "${gameState.currentPlayer.name} regarde une carte de ${target.name}.");
+          "${gameState.currentPlayer.name} a regardé une carte de ${target.name}.");
     }
   }
 
@@ -624,7 +624,7 @@ class GameLogic {
     player.knownCards[idx] = true;
     player.clearUnknownCardHint(idx);
     gameState.addToHistory(
-        "😵 ${player.name} oublie sa défausse de réaction et se trompe de carte.");
+        "😵 ${player.name} a oublié sa défausse de réaction et s'est trompé de carte.");
   }
 
   static void jokerEffect(GameState gameState, Player targetPlayer) {

@@ -47,6 +47,7 @@ export interface Room {
   bannedClientIds?: Set<string>; // clientIds des joueurs BANNIS (ne peuvent plus rejoindre)
   creatorUserId?: string; // userId persistant du créateur (pour restaurer l'hôte à la reconnexion)
   lastStartingPlayerId?: string; // ID du joueur qui a commencé la partie précédente (pour éviter répétition)
+  playersInResults?: Set<string>; // socketIds des joueurs encore sur l'écran de résultats
 }
 
 export function createRoom(

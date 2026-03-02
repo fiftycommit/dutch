@@ -509,7 +509,7 @@ class BotThreatAnalyzer {
     for (int i = 0; i < maxEntries; i++) {
       final lower = gs.actionHistory[i].toLowerCase();
       if (!lower.contains(name)) continue;
-      if (lower.contains('rate son match') ||
+      if (lower.contains('a raté son match') ||
           lower.contains('pénalité') ||
           lower.contains('penalite')) {
         return true;

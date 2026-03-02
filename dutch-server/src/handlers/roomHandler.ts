@@ -517,6 +517,18 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
     }
   });
 
+  // Retour au salon (n'importe quel joueur, partie terminée)
+  socket.on('room:backToLobby', (data, callback) => {
+    try {
+      const roomCode = data.roomCode?.toString().toUpperCase();
+      const success = roomManager.backToLobby(roomCode, socket.id);
+      callback({ success });
+    } catch (error: any) {
+      console.error('Error returning to lobby:', error);
+      callback({ success: false, error: error.message });
+    }
+  });
+
   // Kick un joueur (hôte uniquement) - le joueur PEUT revenir
   socket.on('room:kick', (data, callback) => {
     try {

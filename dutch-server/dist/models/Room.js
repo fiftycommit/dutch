@@ -9,7 +9,7 @@ var RoomStatus;
     RoomStatus["ended"] = "ended";
     RoomStatus["closing"] = "closing";
 })(RoomStatus || (exports.RoomStatus = RoomStatus = {}));
-function createRoom(id, hostPlayerId, settings, expiresAt) {
+function createRoom(id, hostPlayerId, settings, expiresAt, creatorUserId) {
     return {
         id,
         hostPlayerId,
@@ -23,5 +23,6 @@ function createRoom(id, hostPlayerId, settings, expiresAt) {
         expiresAt,
         tournamentRound: 1,
         isPaused: false,
+        creatorUserId,
     };
 }

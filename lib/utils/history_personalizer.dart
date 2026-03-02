@@ -27,16 +27,20 @@ class HistoryPersonalizer {
 
   static String _personalizeBody(String body, String myName) {
     // ── Patterns avec préfixe ────────────────────────────────────────
-    // "JOKER ! X mélange la main de Y !"
+    // "JOKER ! X a mélangé la main de Y !"
     if (body.startsWith('JOKER ! $myName ')) {
       final rest = body.substring('JOKER ! $myName '.length);
-      return 'JOKER ! Vous mélangez ${rest.replaceFirst('mélange ', '')}';
+      return 'JOKER ! Vous avez mélangé ${rest.replaceFirst('a mélangé ', '')}';
     }
     if (body.contains('JOKER !') && body.contains('la main de $myName')) {
       return body.replaceAll('la main de $myName', 'votre main');
     }
 
-    // "MATCH ! X pose ..."
+    // "MATCH ! - X a posé ..."
+    if (body.startsWith('MATCH ! - $myName ')) {
+      return 'MATCH ! - Vous ${_conjugate(body.substring('MATCH ! - $myName '.length))}';
+    }
+    // "MATCH ! X a posé ..." (server format)
     if (body.startsWith('MATCH ! $myName ')) {
       return 'MATCH ! Vous ${_conjugate(body.substring('MATCH ! $myName '.length))}';
     }
@@ -49,9 +53,9 @@ class HistoryPersonalizer {
       return body.replaceAll('↔ $myName ', '↔ Vous ');
     }
 
-    // "Tirage au sort : X commence !"
+    // "Tirage au sort : X a commencé !"
     if (body.startsWith('Tirage au sort : $myName')) {
-      return 'Tirage au sort : Vous commencez !';
+      return 'Tirage au sort : Vous avez commencé !';
     }
 
     // "Au tour de X."
@@ -93,24 +97,23 @@ class HistoryPersonalizer {
   static String _conjugate(String rest) {
     // Ordre important : patterns les plus longs d'abord
     const replacements = <String, String>{
-      'ne garde pas': 'ne gardez pas',
+      "n'a pas gardé": "n'avez pas gardé",
       'a utilisé': 'avez utilisé',
-      'rate son': 'ratez votre',
-      'rate sa': 'ratez votre',
-      'remplace son': 'remplacez votre',
-      'remplace sa': 'remplacez votre',
-      'crie ': 'criez ',
-      'regarde une de ses': 'regardez une de vos',
-      'regarde': 'regardez',
-      'active': 'activez',
-      'défausse': 'défaussez',
-      'espionne': 'espionnez',
-      'mélange': 'mélangez',
-      'ignore': 'ignorez',
-      'pioche': 'piochez',
-      'prend': 'prenez',
-      'commence': 'commencez',
-      'pose': 'posez',
+      'a raté son': 'avez raté votre',
+      'a raté sa': 'avez raté votre',
+      'a remplacé son': 'avez remplacé votre',
+      'a remplacé sa': 'avez remplacé votre',
+      'a crié ': 'avez crié ',
+      'a regardé une de ses': 'avez regardé une de vos',
+      'a regardé': 'avez regardé',
+      'a défaussé': 'avez défaussé',
+      'a espionné': 'avez espionné',
+      'a mélangé': 'avez mélangé',
+      'a ignoré': 'avez ignoré',
+      'a pioché': 'avez pioché',
+      'a pris': 'avez pris',
+      'a commencé': 'avez commencé',
+      'a posé': 'avez posé',
     };
 
     for (final entry in replacements.entries) {

@@ -743,9 +743,9 @@ class _GameTableContentState extends State<_GameTableContent>
       final timestampIdx = raw.indexOf('] ');
       final text =
           (timestampIdx >= 0 ? raw.substring(timestampIdx + 2) : raw).trim();
-      // Format: "JOKER ! X mélange la main de Y !"
+      // Format: "JOKER ! X a mélangé la main de Y !"
       final match =
-          RegExp(r'mélange\s+la main de\s+(.+?)[\s!]*$').firstMatch(text);
+          RegExp(r'a mélangé\s+la main de\s+(.+?)[\s!]*$').firstMatch(text);
       if (match != null) return match.group(1)?.trim();
     }
     return null;

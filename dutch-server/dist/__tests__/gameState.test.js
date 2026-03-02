@@ -39,7 +39,7 @@ const Player_1 = require("../models/Player");
             node_assert_1.default.strictEqual(state.pendingSwap, null);
             node_assert_1.default.deepStrictEqual(state.tournamentCumulativeScores, {});
             node_assert_1.default.strictEqual(state.turnStartTime, null);
-            node_assert_1.default.strictEqual(state.turnTimeoutMs, 70000);
+            node_assert_1.default.strictEqual(state.turnTimeoutMs, 90000);
             node_assert_1.default.deepStrictEqual(state.readyPlayerIds, []);
         });
         (0, node_test_1.it)('creates tournament mode game state', () => {
@@ -146,9 +146,10 @@ const Player_1 = require("../models/Player");
         (0, node_test_1.it)('has all expected phases', () => {
             node_assert_1.default.strictEqual(GameState_1.GamePhase.setup, 0);
             node_assert_1.default.strictEqual(GameState_1.GamePhase.playing, 1);
-            node_assert_1.default.strictEqual(GameState_1.GamePhase.reaction, 2);
-            node_assert_1.default.strictEqual(GameState_1.GamePhase.dutchCalled, 3);
-            node_assert_1.default.strictEqual(GameState_1.GamePhase.ended, 4);
+            node_assert_1.default.strictEqual(GameState_1.GamePhase.specialPower, 2);
+            node_assert_1.default.strictEqual(GameState_1.GamePhase.reaction, 3);
+            node_assert_1.default.strictEqual(GameState_1.GamePhase.dutchCalled, 4);
+            node_assert_1.default.strictEqual(GameState_1.GamePhase.ended, 5);
         });
     });
     (0, node_test_1.describe)('GameMode enum', () => {

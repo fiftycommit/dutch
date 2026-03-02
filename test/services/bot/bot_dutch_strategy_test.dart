@@ -173,9 +173,9 @@ void main() {
           PlayingCard.create('spades', '2'),
         ];
         gameState.actionHistory = [
-          '[15:52] MATCH ! - Human pose un5 !',
-          '[15:52] MATCH ! - Human pose un7 !',
-          '[15:51] Human remplace son 9 par la carte piochée',
+          '[15:52] MATCH ! - Human a posé un5 !',
+          '[15:52] MATCH ! - Human a posé un7 !',
+          '[15:51] Human a remplacé son 9 par la carte piochée',
         ];
 
         final result = BotDutchStrategy.shouldCallDutch(
@@ -193,8 +193,8 @@ void main() {
         bot.knownCards = [];
         bot.mentalMap = [];
         gameState.actionHistory = [
-          '[16:10] MATCH ! - Human pose un4 !',
-          '[16:09] MATCH ! - Human pose un6 !',
+          '[16:10] MATCH ! - Human a posé un4 !',
+          '[16:09] MATCH ! - Human a posé un6 !',
         ];
 
         final goldResult = BotDutchStrategy.shouldCallDutch(
@@ -251,8 +251,8 @@ void main() {
           PlayingCard.create('diamonds', 'R'),
         ];
         gameState.actionHistory = [
-          '[16:20] Human rate son match (6 ≠ 7) ! Pénalité !',
-          '[16:19] Human pioche',
+          '[16:20] Human a raté son match (6 ≠ 7) ! Pénalité !',
+          '[16:19] Human a pioché',
         ];
 
         final result = BotDutchStrategy.shouldCallDutch(
@@ -282,8 +282,8 @@ void main() {
           PlayingCard.create('diamonds', 'R'),
         ];
         gameState.actionHistory = [
-          '[16:19] Human pioche',
-          '[16:18] Human remplace son 9 par la carte piochée',
+          '[16:19] Human a pioché',
+          '[16:18] Human a remplacé son 9 par la carte piochée',
         ];
 
         final result = BotDutchStrategy.shouldCallDutch(

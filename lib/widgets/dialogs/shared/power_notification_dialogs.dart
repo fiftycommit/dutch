@@ -544,7 +544,7 @@ class PowerNotificationDialogs {
                   ),
                   SizedBox(height: metrics.space(12)),
                   Text(
-                    "$byPlayerName espionne ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
+                    "$byPlayerName a espionné ${isMe ? "votre" : "la"} carte #${cardIndex + 1} !",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: AppColors.textSecondary,

@@ -1692,7 +1692,7 @@ class BotPowerHandler {
     bot.knownCards[idx] = true;
     bot.clearUnknownCardHint(idx);
     gs.addToHistory(
-      '🤯 ${bot.name} confond l\'info espionnée avec sa propre carte.',
+      '🤯 ${bot.name} a confondu l\'info espionnée avec sa propre carte.',
     );
   }
 
@@ -1709,7 +1709,7 @@ class BotPowerHandler {
 
     final idx = knownIndices[_random.nextInt(knownIndices.length)];
     bot.forgetCard(idx);
-    gs.addToHistory('😵 ${bot.name} se distrait et oublie une de ses cartes.');
+    gs.addToHistory('😵 ${bot.name} s\'est distrait et a oublié une de ses cartes.');
   }
 
   static int _compareByValetStrength(Player a, Player b) {
@@ -2187,7 +2187,7 @@ class BotPowerHandler {
     for (int i = 0; i < limit; i++) {
       final lower = gs.actionHistory[i].toLowerCase();
       if (!lower.contains(lowerName)) continue;
-      if (lower.contains('rate son match') ||
+      if (lower.contains('a raté son match') ||
           lower.contains('pénalité') ||
           lower.contains('penalite')) {
         return false;

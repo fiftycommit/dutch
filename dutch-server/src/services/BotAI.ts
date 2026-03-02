@@ -333,7 +333,7 @@ export class BotAI {
   private static getFailedMatchCount(gs: GameState, player: Player): number {
     let count = 0;
     for (const entry of gs.actionHistory) {
-      if (entry.includes(player.name) && entry.includes('rate son match')) {
+      if (entry.includes(player.name) && entry.includes('a raté son match')) {
         count++;
       }
     }

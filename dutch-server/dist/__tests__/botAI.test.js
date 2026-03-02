@@ -148,6 +148,7 @@ const Card_1 = require("../models/Card");
         (0, node_test_1.it)('handles card 7 (look at own card)', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('hearts', '7');
             state.players[1].knownCards = [true, true, false, false];
@@ -158,6 +159,7 @@ const Card_1 = require("../models/Card");
         (0, node_test_1.it)('handles card 10 (spy on opponent)', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('spades', '10');
             await BotAI_1.BotAI.useBotSpecialPower(state);
@@ -166,6 +168,7 @@ const Card_1 = require("../models/Card");
         (0, node_test_1.it)('handles card V (Jack swap)', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('clubs', 'V');
             await BotAI_1.BotAI.useBotSpecialPower(state);
@@ -174,6 +177,7 @@ const Card_1 = require("../models/Card");
         (0, node_test_1.it)('handles JOKER (shuffle)', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
+            state.phase = GameState_1.GamePhase.specialPower;
             state.isWaitingForSpecialPower = true;
             state.specialCardToActivate = (0, Card_1.createCard)('joker', 'JOKER');
             await BotAI_1.BotAI.useBotSpecialPower(state);

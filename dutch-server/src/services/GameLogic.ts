@@ -249,10 +249,17 @@ export class GameLogic {
     // Only cards with actual implemented powers: 7 (spy), 10 (swap), V (exchange), JOKER (shuffle)
     const powerCards = ['7', '10', 'V', 'JOKER'];
     if (powerCards.includes(card.value)) {
+      const now = Date.now();
       gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
-      gameState.specialPowerStartTime = Date.now();
+      gameState.specialPowerStartTime = now;
+      // Synchroniser turnStartTime et turnTimeoutMs immédiatement pour que
+      // le premier broadcast (ACTION_RESULT) inclue les bonnes valeurs du timer.
+      // Sans ça, les joueurs en attente reçoivent l'ancien turnTimeoutMs (90s de la phase playing)
+      // au lieu du timeout du pouvoir spécial (60s), ce qui désynchronise leur barre de progression.
+      gameState.turnStartTime = now;
+      gameState.turnTimeoutMs = 60000; // 60s pour utiliser le pouvoir (synchronisé avec RoomManager.specialPowerTimeoutMs)
     }
   }
 
@@ -328,7 +335,7 @@ export class GameLogic {
       if (cardIndex >= 0 && cardIndex < currentPlayer.hand.length) {
         gameState.lastSpiedCard = currentPlayer.hand[cardIndex];
         currentPlayer.knownCards[cardIndex] = true;
-        addToHistory(gameState, `${currentPlayer.name} regarde une de ses cartes.`);
+        addToHistory(gameState, `${currentPlayer.name} a regardé une de ses cartes.`);
         result.spiedCard = currentPlayer.hand[cardIndex];
       }
     } else if (card.value === '10') {
@@ -342,7 +349,7 @@ export class GameLogic {
           gameState.lastSpiedCard = targetPlayer.hand[targetCardIndex];
           addToHistory(
             gameState,
-            `${currentPlayer.name} espionne une carte de ${targetPlayer.name}.`
+            `${currentPlayer.name} a espionné une carte de ${targetPlayer.name}.`
           );
           result.spiedCard = targetPlayer.hand[targetCardIndex];
         }

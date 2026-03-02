@@ -52,6 +52,13 @@ class SecurityService {
             return false; // Rate limit exceeded - trop de tentatives de join
         }
     }
+    /** Réinitialise tous les rate limiters (usage tests uniquement) */
+    static resetForTesting() {
+        this.eventLimiter = new rate_limiter_flexible_1.RateLimiterMemory({ points: 20, duration: 1 });
+        this.matchLimiter = new rate_limiter_flexible_1.RateLimiterMemory({ points: 1, duration: 0.5 });
+        this.connectionLimiter = new rate_limiter_flexible_1.RateLimiterMemory({ points: 30, duration: 60 });
+        this.joinAttemptLimiter = new rate_limiter_flexible_1.RateLimiterMemory({ points: 5, duration: 60 });
+    }
 }
 exports.SecurityService = SecurityService;
 _a = SecurityService;

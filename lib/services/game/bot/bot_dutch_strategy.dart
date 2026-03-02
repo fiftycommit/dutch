@@ -400,7 +400,7 @@ class BotDutchStrategy {
 
     // Déclencheur unique demandé: erreur adverse explicite.
     final opponentJustFailedMatch =
-        _recentActionContains(gs, opponent.name, ['rate son match'], limit: 8);
+        _recentActionContains(gs, opponent.name, ['a raté son match'], limit: 8);
     if (!opponentJustFailedMatch) return false;
 
     final knownScore = bot.getKnownScore();
@@ -1034,7 +1034,7 @@ class BotDutchStrategy {
     final trajectoryClean = !_recentActionContains(
       gs,
       opponent.name,
-      ['rate son match', 'pénalité', 'penalite'],
+      ['a raté son match', 'pénalité', 'penalite'],
       limit: 12,
     );
 
@@ -1326,7 +1326,7 @@ class BotDutchStrategy {
   }
 
   static bool _recentMatchFail(GameState gs, Player player) {
-    return _recentActionContains(gs, player.name, ['rate son match']);
+    return _recentActionContains(gs, player.name, ['a raté son match']);
   }
 
   static bool _recentPenalty(GameState gs, Player player) {

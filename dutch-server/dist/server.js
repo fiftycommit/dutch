@@ -177,8 +177,9 @@ function startServer() {
         pingTimeout: 60000,
         pingInterval: 25000,
     });
-    // Injecter la référence des users en ligne pour le service d'amis
+    // Injecter les références de présence pour le service d'amis
     FriendsService_1.FriendsService.setOnlineUsersRef(socketAuthMiddleware_1.onlineUsers);
+    FriendsService_1.FriendsService.setUserFocusedRef(socketAuthMiddleware_1.userFocused);
     // Socket Auth Middleware (Firebase token verification)
     io.use(socketAuthMiddleware_1.socketAuthMiddleware);
     // Socket Connection Rate Limiting
