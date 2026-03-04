@@ -44,6 +44,9 @@ class MemorizationConfig {
   /// Callback pour quitter la partie (retour à l'accueil)
   final void Function(BuildContext context)? onQuit;
 
+  /// Message affiché dans le dialogue de confirmation de quit
+  final String quitMessage;
+
   const MemorizationConfig({
     required this.localPlayer,
     required this.onMemorizationComplete,
@@ -56,6 +59,7 @@ class MemorizationConfig {
     this.noPlayerMessage = "Les bots continuent...",
     this.noPlayerTitle = "VOUS ÊTES ÉLIMINÉ",
     this.onQuit,
+    this.quitMessage = 'La partie sera comptée comme un abandon.',
   });
 }
 
@@ -619,9 +623,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         backgroundColor: AppColors.backgroundMedium,
         title: const Text('Quitter la partie ?',
             style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'La partie n\'a pas encore commencé, aucun résultat ne sera enregistré.',
-          style: TextStyle(color: AppColors.textSecondary),
+        content: Text(
+          config.quitMessage,
+          style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(

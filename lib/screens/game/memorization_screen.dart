@@ -30,6 +30,14 @@ class MemorizationScreen extends StatelessWidget {
       return _buildEliminatedScreen();
     }
 
+    // En partie rapide ou au round 1 d'un tournoi, quitter pendant la
+    // mémorisation = simple retour en arrière (pas encore joué).
+    // À partir du round 2, les rounds précédents sont enregistrés donc
+    // quitter = abandon comptabilisé.
+    final isTournament = gameState.gameMode == GameMode.tournament;
+    final isFirstRound = gameState.tournamentRound <= 1;
+    final canCancelCleanly = !isTournament || isFirstRound;
+
     return PopScope(
       canPop: false,
       child: shared.MemorizationScreen(
@@ -57,11 +65,16 @@ class MemorizationScreen extends StatelessWidget {
           },
           navigateToGame: (context) => context.go('/solo/game'),
           onQuit: (context) {
-            // La mémorisation est avant le vrai début de partie :
-            // quitter ici = simple retour en arrière, pas d'abandon.
-            gameProvider.cancelGame();
+            if (canCancelCleanly) {
+              gameProvider.cancelGame();
+            } else {
+              gameProvider.quitGame();
+            }
             context.go('/');
           },
+          quitMessage: canCancelCleanly
+              ? 'La partie n\'a pas encore commencé, aucun résultat ne sera enregistré.'
+              : 'La partie sera comptée comme un abandon.',
           noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",
           noPlayerMessage: "Les bots continuent...",
         ),
