@@ -69,7 +69,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/'),
+            onPressed: () async {
+              final didPop = await Navigator.of(context).maybePop();
+              if (!didPop && context.mounted) context.go('/');
+            },
           ),
           bottom: TabBar(
             indicatorColor: Colors.amber,
@@ -259,5 +262,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
 }

@@ -57,10 +57,9 @@ class MemorizationScreen extends StatelessWidget {
           },
           navigateToGame: (context) => context.go('/solo/game'),
           onQuit: (context) {
-            if (gameState.gameMode == GameMode.tournament &&
-                gameState.tournamentRound > 1) {
-              gameProvider.quitGame();
-            }
+            // La mémorisation est avant le vrai début de partie :
+            // quitter ici = simple retour en arrière, pas d'abandon.
+            gameProvider.cancelGame();
             context.go('/');
           },
           noPlayerTitle: "VOUS ÊTES ÉLIMINÉ",

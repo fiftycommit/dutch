@@ -78,7 +78,10 @@ class _StatsScreenState extends State<StatsScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/'),
+            onPressed: () async {
+              final didPop = await Navigator.of(context).maybePop();
+              if (!didPop && context.mounted) context.go('/');
+            },
           ),
           bottom: TabBar(
             indicatorColor: Colors.amber,
@@ -251,8 +254,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
               SizedBox(height: metrics.space(8)),
               if (matches.any((m) =>
-                  m['gameLog'] != null &&
-                  (m['gameLog'] as String).isNotEmpty))
+                  m['gameLog'] != null && (m['gameLog'] as String).isNotEmpty))
                 Padding(
                   padding: EdgeInsets.only(bottom: metrics.space(8)),
                   child: ElevatedButton.icon(

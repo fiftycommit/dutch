@@ -1030,6 +1030,21 @@ class GameProvider with ChangeNotifier implements IGameController {
     );
   }
 
+  /// Annule la partie en cours **sans** enregistrer de résultat dans les stats.
+  /// Utilisé quand le joueur quitte avant d'avoir réellement joué (ex. phase
+  /// de mémorisation avant la révélation des cartes).
+  void cancelGame() {
+    _clearActiveGameFlag();
+    _gameState = null;
+    _isPaused = false;
+    isProcessing = false;
+    shakingCardIndices.clear();
+    _timerManager.cancelTimer();
+    _playerMMR = null;
+    _tournamentManager.resetTournament();
+    notifyListeners();
+  }
+
   void quitGame() {
     _clearActiveGameFlag();
     if (_gameState != null) {

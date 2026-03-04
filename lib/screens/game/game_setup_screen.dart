@@ -69,7 +69,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/'),
+          onPressed: () async {
+            final didPop = await Navigator.of(context).maybePop();
+            if (!didPop && mounted) context.go('/');
+          },
         ),
         title: Text(
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie',

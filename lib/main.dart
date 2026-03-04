@@ -90,6 +90,14 @@ ThemeData _buildLightTheme() => ThemeData(
         error: Color(0xFFFF3B30),
         surface: Color(0xFFFFFFFF),
       ),
+      // Transitions de page explicites : predictive back Android 14+, swipe iOS/macOS
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
             color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
@@ -124,6 +132,14 @@ ThemeData _buildDarkTheme() => ThemeData(
         foregroundColor: Colors.white,
         elevation: 0,
       ),
+      // Transitions de page explicites : predictive back Android 14+, swipe iOS/macOS
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
             color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
@@ -157,6 +173,14 @@ ThemeData _buildGreenTheme() => ThemeData(
         backgroundColor: Color(0xFF1A3A28),
         foregroundColor: Colors.white,
         elevation: 0,
+      ),
+      // Transitions de page explicites : predictive back Android 14+, swipe iOS/macOS
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
       ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(

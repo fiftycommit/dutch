@@ -42,7 +42,10 @@ class _AiProfileScreenState extends State<AiProfileScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/'),
+            onPressed: () async {
+              final didPop = await Navigator.of(context).maybePop();
+              if (!didPop && context.mounted) context.go('/');
+            },
           ),
           bottom: const TabBar(
             indicatorColor: Colors.amber,
@@ -176,7 +179,8 @@ class _AiProfileTabState extends State<_AiProfileTab> {
     final profile = _profile;
     if (profile == null) {
       return const Center(
-        child: Text('Profil indisponible', style: TextStyle(color: AppColors.textSecondary)),
+        child: Text('Profil indisponible',
+            style: TextStyle(color: AppColors.textSecondary)),
       );
     }
 
@@ -196,7 +200,8 @@ class _AiProfileTabState extends State<_AiProfileTab> {
           const InfoCard(
             title: 'Profil SBMM',
             value: 'Inactif',
-            subtitle: 'Lance une partie en mode SBMM pour activer le profil IA.',
+            subtitle:
+                'Lance une partie en mode SBMM pour activer le profil IA.',
           ),
         ],
       );
@@ -310,7 +315,11 @@ class _AiProfileTabState extends State<_AiProfileTab> {
           const SizedBox(height: 12),
           InfoCard(
             title: 'Ciblage',
-            value: targetingStrategy == 'leader' ? '🎯 Leader' : targetingStrategy == 'weak' ? '🎯 Faible' : '🎯 Équilibré',
+            value: targetingStrategy == 'leader'
+                ? '🎯 Leader'
+                : targetingStrategy == 'weak'
+                    ? '🎯 Faible'
+                    : '🎯 Équilibré',
             subtitle: 'Vitesse: ${(decisionSpeed / 1000).toStringAsFixed(1)}s',
           ),
           const SizedBox(height: 12),

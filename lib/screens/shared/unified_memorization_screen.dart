@@ -158,7 +158,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         _selectedCards.add(index);
       }
     });
-
   }
 
   void _confirmAndStart() async {
@@ -486,117 +485,121 @@ class _MemorizationScreenState extends State<MemorizationScreen>
             children: [
               Center(
                 child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: verticalPadding,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.visibility,
-                        size: iconSize, color: AppColors.textDisabled),
-                    SizedBox(height: verticalSpacing),
-                    Text(
-                      "MÉMORISATION",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: titleSize,
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        shadows: const [
-                          Shadow(
-                            color: Colors.black45,
-                            blurRadius: 10,
-                            offset: Offset(2, 2),
-                          )
-                        ],
-                      ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: verticalPadding,
                     ),
-                    SizedBox(
-                        height: isIphoneLandscape ? 2 : (isCompact ? 2 : 10)),
-                    // Countdown timer (multiplayer)
-                    if (config.countdownSeconds != null) ...[
-                      Text(
-                        "Temps restant: $_remainingSeconds s",
-                        style: TextStyle(
-                          color: _remainingSeconds <= 5
-                              ? Colors.redAccent
-                              : Colors.amberAccent,
-                          fontSize: subtitleSize * 1.2,
-                          fontWeight: FontWeight.bold,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility,
+                            size: iconSize, color: AppColors.textDisabled),
+                        SizedBox(height: verticalSpacing),
+                        Text(
+                          "MÉMORISATION",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: titleSize,
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black45,
+                                blurRadius: 10,
+                                offset: Offset(2, 2),
+                              )
+                            ],
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                          height: isIphoneLandscape ? 2 : (isCompact ? 2 : 5)),
-                    ],
-                    Text(
-                      "Clique sur 2 cartes pour les mémoriser.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: subtitleSize,
-                      ),
-                    ),
-                    SizedBox(height: verticalSpacing),
-                    SizedBox(
-                      height: cardAreaHeight,
-                      child: _buildCardGrid(
-                        isCompact: isCompact,
-                        cardColumns: cardColumns,
-                        cardRows: cardRows,
-                      ),
-                    ),
-                    SizedBox(height: verticalSpacing * 1.2),
-                    Center(
-                      child: AnimatedOpacity(
-                        opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
-                        duration: const Duration(milliseconds: 300),
-                        child: ElevatedButton(
-                          onPressed: canConfirm && !_isRevealing
-                              ? _confirmAndStart
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber,
-                            foregroundColor: Colors.black,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isCompact ? 20 : 40,
-                              vertical: isCompact ? 12 : 20,
-                            ),
-                            textStyle: TextStyle(
-                              fontSize: isCompact ? 14 : 18,
+                        SizedBox(
+                            height:
+                                isIphoneLandscape ? 2 : (isCompact ? 2 : 10)),
+                        // Countdown timer (multiplayer)
+                        if (config.countdownSeconds != null) ...[
+                          Text(
+                            "Temps restant: $_remainingSeconds s",
+                            style: TextStyle(
+                              color: _remainingSeconds <= 5
+                                  ? Colors.redAccent
+                                  : Colors.amberAccent,
+                              fontSize: subtitleSize * 1.2,
                               fontWeight: FontWeight.bold,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                ScreenUtils.borderRadius(context, 12),
+                          ),
+                          SizedBox(
+                              height:
+                                  isIphoneLandscape ? 2 : (isCompact ? 2 : 5)),
+                        ],
+                        Text(
+                          "Clique sur 2 cartes pour les mémoriser.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: subtitleSize,
+                          ),
+                        ),
+                        SizedBox(height: verticalSpacing),
+                        SizedBox(
+                          height: cardAreaHeight,
+                          child: _buildCardGrid(
+                            isCompact: isCompact,
+                            cardColumns: cardColumns,
+                            cardRows: cardRows,
+                          ),
+                        ),
+                        SizedBox(height: verticalSpacing * 1.2),
+                        Center(
+                          child: AnimatedOpacity(
+                            opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
+                            duration: const Duration(milliseconds: 300),
+                            child: ElevatedButton(
+                              onPressed: canConfirm && !_isRevealing
+                                  ? _confirmAndStart
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber,
+                                foregroundColor: Colors.black,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isCompact ? 20 : 40,
+                                  vertical: isCompact ? 12 : 20,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: isCompact ? 14 : 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    ScreenUtils.borderRadius(context, 12),
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                canConfirm
+                                    ? "C'EST BON !"
+                                    : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
-                          child: Text(
-                            canConfirm
-                                ? "C'EST BON !"
-                                : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
                         ),
-                      ),
+                        SizedBox(height: isCompact ? 10 : 20),
+                      ],
                     ),
-                    SizedBox(height: isCompact ? 10 : 20),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            ),
               if (config.onQuit != null)
                 Positioned(
                   top: 8,
                   left: 8,
                   child: IconButton(
                     onPressed: () => _confirmQuit(context),
-                    icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                    icon:
+                        const Icon(Icons.close, color: Colors.white, size: 32),
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.white.withValues(alpha: 0.15),
                     ),
@@ -617,13 +620,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         title: const Text('Quitter la partie ?',
             style: TextStyle(color: Colors.white)),
         content: const Text(
-          'Vous n\'avez pas encore vu vos cartes.',
+          'La partie n\'a pas encore commencé, aucun résultat ne sera enregistré.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white70)),
+            child:
+                const Text('Annuler', style: TextStyle(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () {
@@ -632,7 +636,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               _gameStartSubscription?.cancel();
               config.onQuit!(context);
             },
-            child: const Text('Quitter', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Quitter',
+                style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),

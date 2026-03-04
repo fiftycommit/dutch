@@ -15,7 +15,10 @@ class RulesScreen extends StatelessWidget {
         backgroundColor: AppColors.backgroundMedium,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => context.go('/'),
+          onPressed: () async {
+            final didPop = await Navigator.of(context).maybePop();
+            if (!didPop && context.mounted) context.go('/');
+          },
         ),
         titleTextStyle: const TextStyle(
           color: Colors.white,

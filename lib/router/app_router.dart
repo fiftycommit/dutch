@@ -196,16 +196,15 @@ class AppRouter {
               // On est sur le splash → le laisser tourner.
               if (path == '/splash') return null;
 
-              final needsState = _statefulPrefixes
-                  .any((prefix) => path.startsWith(prefix));
+              final needsState =
+                  _statefulPrefixes.any((prefix) => path.startsWith(prefix));
 
               if (needsState) {
                 // Tenter la restauration via sessionStorage.
                 final isRestorable = _restorablePrefixes
                     .any((prefix) => path.startsWith(prefix));
-                final savedRoom = isRestorable
-                    ? WebSessionStorage.getRoomCode()
-                    : null;
+                final savedRoom =
+                    isRestorable ? WebSessionStorage.getRoomCode() : null;
                 final savedRoute = WebSessionStorage.getRoute();
 
                 if (savedRoom != null) {
@@ -266,14 +265,17 @@ class AppRouter {
             GoRoute(
               path: '/solo/setup',
               name: 'soloSetup',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final isTournament =
                     state.uri.queryParameters['tournament'] == 'true';
                 final saveSlot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '0') ?? 0;
-                return GameSetupScreen(
-                  isTournament: isTournament,
-                  saveSlot: saveSlot,
+                return _adaptivePage(
+                  state: state,
+                  child: GameSetupScreen(
+                    isTournament: isTournament,
+                    saveSlot: saveSlot,
+                  ),
                 );
               },
             ),
@@ -302,34 +304,46 @@ class AppRouter {
             GoRoute(
               path: '/rules',
               name: 'rules',
-              builder: (context, state) => const RulesScreen(),
+              pageBuilder: (context, state) => _adaptivePage(
+                state: state,
+                child: const RulesScreen(),
+              ),
             ),
             GoRoute(
               path: '/settings',
               name: 'settings',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return SettingsScreen(initialSlot: slot);
+                return _adaptivePage(
+                  state: state,
+                  child: SettingsScreen(initialSlot: slot),
+                );
               },
             ),
             GoRoute(
               path: '/stats',
               name: 'stats',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return StatsScreen(initialSlot: slot);
+                return _adaptivePage(
+                  state: state,
+                  child: StatsScreen(initialSlot: slot),
+                );
               },
             ),
 
             GoRoute(
               path: '/ai-profile',
               name: 'aiProfile',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final slot =
                     int.tryParse(state.uri.queryParameters['slot'] ?? '1') ?? 1;
-                return AiProfileScreen(slotId: slot);
+                return _adaptivePage(
+                  state: state,
+                  child: AiProfileScreen(slotId: slot),
+                );
               },
             ),
 
@@ -513,9 +527,9 @@ class AppRouter {
                 child: _DeferredScreen(
                   loader: friends_page.loadLibrary,
                   builder: () => friends_page.FriendsPage(
-                    initialTabIndex: int.tryParse(
-                            state.uri.queryParameters['tab'] ?? '') ??
-                        0,
+                    initialTabIndex:
+                        int.tryParse(state.uri.queryParameters['tab'] ?? '') ??
+                            0,
                   ),
                 ),
               ),
@@ -529,8 +543,7 @@ class AppRouter {
                   loader: friends_chat.loadLibrary,
                   builder: () => friends_chat.ChatPage(
                     friendUserId: state.pathParameters['friendUserId']!,
-                    friendDisplayName:
-                        (state.extra as String?) ??
+                    friendDisplayName: (state.extra as String?) ??
                         state.uri.queryParameters['name'] ??
                         '',
                   ),
@@ -573,7 +586,9 @@ class AppRouter {
                   // gameState déjà nettoyé (joueur retourné au salon) → rediriger
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (context.mounted) {
-                      context.go(gameProvider.roomCode != null ? '/lobby' : '/multiplayer');
+                      context.go(gameProvider.roomCode != null
+                          ? '/lobby'
+                          : '/multiplayer');
                     }
                   });
                   return _adaptivePage(

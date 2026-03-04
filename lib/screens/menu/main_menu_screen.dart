@@ -684,7 +684,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                       _handleBlockedGameButtonTap();
                       return;
                     }
-                    context.go('/solo/setup?tournament=false&slot=$slot');
+                    context.push('/solo/setup?tournament=false&slot=$slot');
                   },
                 ),
                 SizedBox(height: buttonSpacing),
@@ -700,7 +700,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                       _handleBlockedGameButtonTap();
                       return;
                     }
-                    context.go('/solo/setup?tournament=true&slot=$slot');
+                    context.push('/solo/setup?tournament=true&slot=$slot');
                   },
                 ),
                 SizedBox(height: buttonSpacing),
@@ -727,51 +727,51 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                             icon: Icons.settings,
                             label: 'Réglages',
                             onPressed: () => context
-                                .go('/settings?slot=${selectedSlot ?? 1}'),
+                                .push('/settings?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 20),
                           LabeledIconButton(
                             icon: Icons.menu_book,
                             label: 'Règles',
-                            onPressed: () => context.go('/rules'),
+                            onPressed: () => context.push('/rules'),
                           ),
                           const SizedBox(width: 20),
                           LabeledIconButton(
                             icon: Icons.bar_chart,
                             label: 'Statistiques',
-                            onPressed: () =>
-                                context.go('/stats?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .push('/stats?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 20),
                           LabeledIconButton(
                             icon: Icons.psychology,
                             label: 'Profil IA',
                             onPressed: () => context
-                                .go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                                .push('/ai-profile?slot=${selectedSlot ?? 1}'),
                           ),
                         ]
                       : [
                           SmallIconButton(
                             icon: Icons.settings,
                             onPressed: () => context
-                                .go('/settings?slot=${selectedSlot ?? 1}'),
+                                .push('/settings?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 18),
                           SmallIconButton(
                             icon: Icons.menu_book,
-                            onPressed: () => context.go('/rules'),
+                            onPressed: () => context.push('/rules'),
                           ),
                           const SizedBox(width: 18),
                           SmallIconButton(
                             icon: Icons.bar_chart,
-                            onPressed: () =>
-                                context.go('/stats?slot=${selectedSlot ?? 1}'),
+                            onPressed: () => context
+                                .push('/stats?slot=${selectedSlot ?? 1}'),
                           ),
                           const SizedBox(width: 18),
                           SmallIconButton(
                             icon: Icons.psychology,
                             onPressed: () => context
-                                .go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                                .push('/ai-profile?slot=${selectedSlot ?? 1}'),
                           ),
                         ],
                 ),
@@ -864,7 +864,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           _handleBlockedGameButtonTap();
                           return;
                         }
-                        context.go('/solo/setup?tournament=false&slot=$slot');
+                        context.push('/solo/setup?tournament=false&slot=$slot');
                       },
                     ),
                   ),
@@ -883,7 +883,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           _handleBlockedGameButtonTap();
                           return;
                         }
-                        context.go('/solo/setup?tournament=true&slot=$slot');
+                        context.push('/solo/setup?tournament=true&slot=$slot');
                       },
                     ),
                   ),
@@ -914,8 +914,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         child: LabeledIconButton(
                           icon: Icons.settings,
                           label: 'Réglages',
-                          onPressed: () =>
-                              context.go('/settings?slot=${selectedSlot ?? 1}'),
+                          onPressed: () => context
+                              .push('/settings?slot=${selectedSlot ?? 1}'),
                         ),
                       ),
                       const SizedBox(width: 20),
@@ -924,7 +924,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         child: LabeledIconButton(
                           icon: Icons.menu_book,
                           label: 'Règles',
-                          onPressed: () => context.go('/rules'),
+                          onPressed: () => context.push('/rules'),
                         ),
                       ),
                       const SizedBox(width: 20),
@@ -934,7 +934,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           icon: Icons.bar_chart,
                           label: 'Stats',
                           onPressed: () =>
-                              context.go('/stats?slot=${selectedSlot ?? 1}'),
+                              context.push('/stats?slot=${selectedSlot ?? 1}'),
                         ),
                       ),
                       const SizedBox(width: 20),
@@ -944,7 +944,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           icon: Icons.psychology,
                           label: 'Profil IA',
                           onPressed: () => context
-                              .go('/ai-profile?slot=${selectedSlot ?? 1}'),
+                              .push('/ai-profile?slot=${selectedSlot ?? 1}'),
                         ),
                       ),
                     ],
