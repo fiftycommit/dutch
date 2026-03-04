@@ -61,6 +61,21 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.7
+
+# Configuration flutter_native_splash
+# Fond vert sombre DUTCH pour éliminer le flash blanc au démarrage natif
+flutter_native_splash:
+  color: "#0d2818"
+  color_dark: "#0d2818"
+  android_12:
+    color: "#0d2818"
+    color_dark: "#0d2818"
+  # Pas d'image — le SplashScreen Flutter prend le relais immédiatement
+  # Le but est juste d'éliminer l'écran blanc natif
+  fullscreen: true
+  # Ne pas toucher au web (géré par index.html)
+  web: false
 
 flutter:
   uses-material-design: true

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
 import '../utils/ui_constants.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:vector_graphics/vector_graphics.dart';
 import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../utils/screen_utils.dart';
+import '../providers/auth_provider.dart';
 import '../services/ui/svg_precache_service.dart';
 import 'web_splash_helper.dart'
     if (dart.library.io) 'web_splash_helper_stub.dart';
@@ -96,6 +98,7 @@ class _SplashScreenState extends State<SplashScreen>
       _setStatus('Chargement...', progress: 0.10);
 
       // Précache uniquement les SVGs critiques (dos + joker = 3 fichiers)
+      // Les .vec pré-compilés sont chargés en priorité (quasi-instantané)
       await SvgPrecacheService()
           .precacheCriticalSvgs()
           .timeout(const Duration(seconds: 3));
@@ -104,7 +107,30 @@ class _SplashScreenState extends State<SplashScreen>
     } else {
       _setStatus('Mode léger (connexion lente)', progress: 0.80);
     }
+
+    // Attendre que l'AuthProvider soit initialisé (session Firebase).
+    // Timeout court pour ne pas bloquer si le réseau est lent.
+    // Cela évite un flash "non connecté" au menu quand l'user est déjà auth.
+    _setStatus('Connexion...', progress: 0.88);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isInitialized) {
+        await _waitForAuth(authProvider).timeout(const Duration(seconds: 3));
+      }
+    } catch (_) {
+      // Timeout ou erreur : on continue sans bloquer
+    }
+
     _setStatus('Préparation...', progress: 0.95);
+  }
+
+  /// Attend que l'AuthProvider termine son init (poll léger).
+  Future<void> _waitForAuth(AuthProvider auth) async {
+    // L'init a déjà été lancée par le create du Provider (..init())
+    // On attend simplement que isInitialized devienne true.
+    while (!auth.isInitialized && mounted) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
   }
 
   void _navigateHomeOnce() {
@@ -181,8 +207,10 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SvgPicture.asset(
-                          'assets/images/cards/joker-rouge.svg',
+                        VectorGraphic(
+                          loader: const AssetBytesLoader(
+                            'assets/images/cards/joker-rouge.vec',
+                          ),
                           width: logoWidth,
                           height: logoHeight,
                         ),

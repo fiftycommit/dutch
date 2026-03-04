@@ -51,6 +51,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   bool isLoading = true;
   bool _isProfileStackOpen = false;
 
+  /// Pluie de cartes différée : on attend que le menu soit interactif
+  /// avant de monter le widget animé coûteux (CRP: priorité au contenu critique)
+  bool _cardRainReady = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +81,18 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_ensureMultiplayerWarmupStarted());
+    });
+    // Différer la pluie de cartes : laisser le menu se rendre d'abord
+    // pour un Time-to-Interactive optimal (approche CRP)
+    _deferCardRain();
+  }
+
+  /// Monte la pluie de cartes après un court délai pour ne pas bloquer
+  /// le rendu initial du menu (les boutons doivent être interactifs d'abord).
+  void _deferCardRain() {
+    Future<void>.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      setState(() => _cardRainReady = true);
     });
   }
 
@@ -562,7 +578,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               decoration: AppDecorations.pageBackground,
             ),
           ),
-          if (settings.cardRainEnabled && settings.animationsEnabled)
+          if (_cardRainReady &&
+              settings.cardRainEnabled &&
+              settings.animationsEnabled)
             Positioned.fill(
               child: CardRainBackground(
                 obstacleKeys: [

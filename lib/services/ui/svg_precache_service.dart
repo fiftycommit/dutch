@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,8 +14,15 @@ class SvgPrecacheService {
   bool get isPrecached => _isPrecached;
   static const String _prefsKey = 'svg_precache_v1';
 
-  /// SVGs critiques : dos de cartes + cartes numériques (les plus fréquentes)
-  /// Les figures (V, D, R) et jokers sont chargés en arrière-plan après
+  /// SVGs critiques pré-compilés en .vec (binaire vector_graphics).
+  /// Chargés au splash : quasi-instantané car pas de parsing SVG.
+  static const List<String> _criticalVecPaths = [
+    'assets/images/cards/dos-bleu.vec',
+    'assets/images/cards/back.vec',
+    'assets/images/cards/joker-rouge.vec',
+  ];
+
+  /// SVGs critiques (version source, pour fallback et référence)
   static const List<String> _criticalCardSvgPaths = [
     'assets/images/cards/dos-bleu.svg',
     'assets/images/cards/back.svg',
@@ -88,17 +96,35 @@ class SvgPrecacheService {
   ];
 
   /// Précache uniquement les SVGs critiques (dos de carte, joker pour splash)
-  /// Rapide : 3 fichiers seulement, utilisé pendant le splash
+  /// Utilise les .vec pré-compilés pour un chargement quasi-instantané,
+  /// avec fallback sur les .svg classiques.
   Future<void> precacheCriticalSvgs() async {
     final desiredCacheSize = _allCardSvgPaths.length + 20;
     if (svg.cache.maximumSize < desiredCacheSize) {
       svg.cache.maximumSize = desiredCacheSize;
     }
 
+    // Charger les .vec pré-compilés en priorité (binaire = pas de parsing)
+    await Future.wait(
+      _criticalVecPaths.map(_loadVec),
+      eagerError: false,
+    );
+
+    // Charger aussi les SVG sources dans le cache flutter_svg
+    // (nécessaire pour SvgPicture.asset() utilisé dans le reste de l'app)
     await Future.wait(
       _criticalCardSvgPaths.map(_loadSvg),
       eagerError: false,
     );
+  }
+
+  /// Pré-charge un fichier .vec binaire dans le cache d'assets Flutter
+  Future<void> _loadVec(String path) async {
+    try {
+      await rootBundle.load(path);
+    } catch (e) {
+      if (kDebugMode) debugPrint('VEC precache: $e');
+    }
   }
 
   /// Précache tous les SVGs restants en arrière-plan
