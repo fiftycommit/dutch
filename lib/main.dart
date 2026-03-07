@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'utils/ui_constants.dart';
@@ -20,6 +20,7 @@ import 'services/multiplayer/client_id_service.dart';
 import 'services/push/push_notification_service.dart';
 import 'widgets/notifications/notification_overlay_controller.dart';
 import 'services/notifications/in_app_notification_service.dart';
+import 'services/logging/error_reporting_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -38,43 +39,59 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lancer Firebase et l'orientation en parallèle (non séquentiel)
-  await Future.wait([
-    Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ),
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]),
-  ]);
+  final errorService = ErrorReportingService();
 
-  // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
-  // setPersistence n'est supporté que sur le web
-  if (kIsWeb) {
-    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-  }
+  // Capturer les erreurs Flutter (widget build, layout, etc.)
+  FlutterError.onError = (details) {
+    errorService.reportFlutterError(details);
+    // En debug, on garde aussi le comportement par défaut (écran rouge)
+    if (kDebugMode) {
+      FlutterError.presentError(details);
+    }
+  };
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  // Capturer les erreurs async non gérées via runZonedGuarded
+  runZonedGuarded(() async {
+    // Lancer Firebase et l'orientation en parallèle (non séquentiel)
+    await Future.wait([
+      Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ),
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]),
+    ]);
 
-  // Initialiser le service locator avec tous les services
-  ServiceLocator.setupDefaultServices();
+    // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
+    // setPersistence n'est supporté que sur le web
+    if (kIsWeb) {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    }
 
-  // Plein écran edge-to-edge : contenu sous les barres système
-  // mais SafeArea toujours respectée (contrairement à immersiveSticky)
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarDividerColor: Colors.transparent,
-  ));
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // Warm-up non bloquant: ne jamais retarder le boot de l'app sur le web/PWA.
-  unawaited(_warmupClientId());
+    // Initialiser le service locator avec tous les services
+    ServiceLocator.setupDefaultServices();
 
-  runApp(const DutchGameApp());
+    // Plein écran edge-to-edge : contenu sous les barres système
+    // mais SafeArea toujours respectée (contrairement à immersiveSticky)
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ));
+
+    // Warm-up non bloquant: ne jamais retarder le boot de l'app sur le web/PWA.
+    unawaited(_warmupClientId());
+
+    runApp(const DutchGameApp());
+  }, (error, stackTrace) {
+    errorService.reportZoneError(error, stackTrace);
+  });
 }
 
 ThemeData _buildLightTheme() => ThemeData(

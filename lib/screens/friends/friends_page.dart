@@ -32,7 +32,8 @@ class _FriendsPageState extends State<FriendsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
+    _tabController = TabController(
+        length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     final authProvider = context.read<AuthProvider>();
     _friendsApi = FriendsApiService(authProvider.authService);
     unawaited(_loadData());
@@ -53,7 +54,10 @@ class _FriendsPageState extends State<FriendsPage>
     ]);
     if (!mounted) return;
     final friends = results[0] as List<FriendInfo>;
-    final requests = results[1] as ({List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing});
+    final requests = results[1] as ({
+      List<FriendRequestInfo> incoming,
+      List<FriendRequestInfo> outgoing
+    });
     final blocked = results[2] as List<BlockedUserInfo>;
     setState(() {
       _friends = friends;
@@ -68,8 +72,9 @@ class _FriendsPageState extends State<FriendsPage>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
-      backgroundColor:
-          isError ? MultiplayerColors.of(context).danger : MultiplayerColors.of(context).success,
+      backgroundColor: isError
+          ? MultiplayerColors.of(context).danger
+          : MultiplayerColors.of(context).success,
     ));
   }
 
@@ -78,15 +83,13 @@ class _FriendsPageState extends State<FriendsPage>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Supprimer cet ami ?'),
-        content: Text(
-            '${friend.displayName} sera retiré de ta liste d\'amis.'),
+        content: Text('${friend.displayName} sera retiré de ta liste d\'amis.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
               child: const Text('Annuler')),
           FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Supprimer'),
           ),
@@ -94,12 +97,14 @@ class _FriendsPageState extends State<FriendsPage>
       ),
     );
     if (confirmed != true) return;
-    final ok = await _friendsApi.removeFriend(friend.userId);
+    final result = await _friendsApi.removeFriend(friend.userId);
     _showSnackBar(
-      ok ? '${friend.displayName} supprimé.' : 'Erreur lors de la suppression.',
-      isError: !ok,
+      result.success
+          ? '${friend.displayName} supprimé.'
+          : (result.error ?? 'Erreur lors de la suppression.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(_loadData());
+    if (result.success) unawaited(_loadData());
   }
 
   Future<void> _confirmBlockFriend(FriendInfo friend) async {
@@ -114,8 +119,7 @@ class _FriendsPageState extends State<FriendsPage>
               onPressed: () => Navigator.of(ctx).pop(false),
               child: const Text('Annuler')),
           FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: Colors.red.shade800),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade800),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Bloquer'),
           ),
@@ -123,12 +127,14 @@ class _FriendsPageState extends State<FriendsPage>
       ),
     );
     if (confirmed != true) return;
-    final ok = await _friendsApi.blockUser(friend.userId);
+    final result = await _friendsApi.blockUser(friend.userId);
     _showSnackBar(
-      ok ? '${friend.displayName} bloqué.' : 'Erreur lors du blocage.',
-      isError: !ok,
+      result.success
+          ? '${friend.displayName} bloqué.'
+          : (result.error ?? 'Erreur lors du blocage.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(_loadData());
+    if (result.success) unawaited(_loadData());
   }
 
   void _openFriendActions(FriendInfo friend) {
@@ -176,7 +182,8 @@ class _FriendsPageState extends State<FriendsPage>
                 Text(
                   '@${friend.username}',
                   style: TextStyle(
-                      color: MultiplayerColors.of(context).textSecondary, fontSize: 14),
+                      color: MultiplayerColors.of(context).textSecondary,
+                      fontSize: 14),
                 ),
                 const SizedBox(height: 20),
                 _BottomSheetAction(
@@ -365,8 +372,9 @@ class _FriendsPageState extends State<FriendsPage>
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child:
-                        Icon(Icons.arrow_back, size: 24, color: MultiplayerColors.of(context).textPrimary),
+                    child: Icon(Icons.arrow_back,
+                        size: 24,
+                        color: MultiplayerColors.of(context).textPrimary),
                   ),
                 ),
               ),
@@ -529,8 +537,7 @@ class _FriendTile extends StatelessWidget {
       ),
       child: ListTile(
         onTap: onTap,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
           backgroundColor: cs.surfaceHigh,
           child: Text(
@@ -545,7 +552,8 @@ class _FriendTile extends StatelessWidget {
         ),
         title: Text(
           friend.displayName,
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.textPrimary),
+          style: TextStyle(
+              fontWeight: FontWeight.w600, fontSize: 15, color: cs.textPrimary),
         ),
         subtitle: Text(
           '@${friend.username}',
@@ -591,36 +599,37 @@ class _RequestsTab extends StatelessWidget {
   final Future<void> Function() onReload;
   final void Function(String, {bool isError}) onShowSnackBar;
 
-  Future<void> _accept(
-      BuildContext context, FriendRequestInfo req) async {
-    final ok = await friendsApi.acceptRequest(req.requestId);
+  Future<void> _accept(BuildContext context, FriendRequestInfo req) async {
+    final result = await friendsApi.acceptRequest(req.requestId);
     onShowSnackBar(
-      ok
+      result.success
           ? '${req.displayName} ajouté en ami !'
-          : 'Erreur lors de l\'acceptation.',
-      isError: !ok,
+          : (result.error ?? 'Erreur lors de l\'acceptation.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(onReload());
+    if (result.success) unawaited(onReload());
   }
 
-  Future<void> _reject(
-      BuildContext context, FriendRequestInfo req) async {
-    final ok = await friendsApi.rejectRequest(req.requestId);
+  Future<void> _reject(BuildContext context, FriendRequestInfo req) async {
+    final result = await friendsApi.rejectRequest(req.requestId);
     onShowSnackBar(
-      ok ? 'Demande refusée.' : 'Erreur lors du refus.',
-      isError: !ok,
+      result.success
+          ? 'Demande refusée.'
+          : (result.error ?? 'Erreur lors du refus.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(onReload());
+    if (result.success) unawaited(onReload());
   }
 
-  Future<void> _cancel(
-      BuildContext context, FriendRequestInfo req) async {
-    final ok = await friendsApi.cancelRequest(req.requestId);
+  Future<void> _cancel(BuildContext context, FriendRequestInfo req) async {
+    final result = await friendsApi.cancelRequest(req.requestId);
     onShowSnackBar(
-      ok ? 'Demande annulée.' : 'Erreur lors de l\'annulation.',
-      isError: !ok,
+      result.success
+          ? 'Demande annulée.'
+          : (result.error ?? 'Erreur lors de l\'annulation.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(onReload());
+    if (result.success) unawaited(onReload());
   }
 
   @override
@@ -629,7 +638,8 @@ class _RequestsTab extends StatelessWidget {
       return Center(
         child: Text(
           'Aucune demande en attente.',
-          style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
+          style: TextStyle(
+              color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
         ),
       );
     }
@@ -733,31 +743,29 @@ class _RequestTile extends StatelessWidget {
               children: [
                 Text(info.displayName,
                     style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14, color: cs.textPrimary)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: cs.textPrimary)),
                 Text('@${info.username}',
-                    style: TextStyle(
-                        color: cs.textSecondary, fontSize: 12)),
+                    style: TextStyle(color: cs.textSecondary, fontSize: 12)),
               ],
             ),
           ),
           if (isIncoming) ...[
             IconButton(
               onPressed: onAccept,
-              icon: Icon(Icons.check_circle_outline_rounded,
-                  color: cs.success),
+              icon: Icon(Icons.check_circle_outline_rounded, color: cs.success),
               tooltip: 'Accepter',
             ),
             IconButton(
               onPressed: onRejectOrCancel,
-              icon: Icon(Icons.cancel_outlined,
-                  color: cs.danger),
+              icon: Icon(Icons.cancel_outlined, color: cs.danger),
               tooltip: 'Refuser',
             ),
           ] else
             TextButton(
               onPressed: onRejectOrCancel,
-              child: Text('Annuler',
-                  style: TextStyle(color: cs.textSecondary)),
+              child: Text('Annuler', style: TextStyle(color: cs.textSecondary)),
             ),
         ],
       ),
@@ -798,12 +806,14 @@ class _BlockedTab extends StatelessWidget {
       ),
     );
     if (confirmed != true) return;
-    final ok = await friendsApi.unblockUser(user.userId);
+    final result = await friendsApi.unblockUser(user.userId);
     onShowSnackBar(
-      ok ? '${user.displayName} débloqué.' : 'Erreur lors du déblocage.',
-      isError: !ok,
+      result.success
+          ? '${user.displayName} débloqué.'
+          : (result.error ?? 'Erreur lors du déblocage.'),
+      isError: !result.success,
     );
-    if (ok) unawaited(onReload());
+    if (result.success) unawaited(onReload());
   }
 
   @override
@@ -812,7 +822,8 @@ class _BlockedTab extends StatelessWidget {
       return Center(
         child: Text(
           'Aucun utilisateur bloqué.',
-          style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
+          style: TextStyle(
+              color: MultiplayerColors.of(context).textSecondary, fontSize: 16),
         ),
       );
     }
@@ -825,8 +836,7 @@ class _BlockedTab extends StatelessWidget {
         final user = blocked[index];
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: cs.surface,
             borderRadius: BorderRadius.circular(14),
@@ -859,17 +869,18 @@ class _BlockedTab extends StatelessWidget {
                   children: [
                     Text(user.displayName,
                         style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14, color: cs.textPrimary)),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: cs.textPrimary)),
                     Text('@${user.username}',
-                        style: TextStyle(
-                            color: cs.textSecondary, fontSize: 12)),
+                        style:
+                            TextStyle(color: cs.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
               TextButton(
                 onPressed: () => _unblock(context, user),
-                child: Text('Débloquer',
-                    style: TextStyle(color: cs.primary)),
+                child: Text('Débloquer', style: TextStyle(color: cs.primary)),
               ),
             ],
           ),

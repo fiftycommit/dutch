@@ -124,7 +124,8 @@ class MultiplayerGameProvider
   bool get isLocalPlayerTurn {
     final gs = _gameState;
     if (gs == null) return false;
-    if (gs.currentPlayerIndex < 0 || gs.currentPlayerIndex >= gs.players.length) return false;
+    if (gs.currentPlayerIndex < 0 || gs.currentPlayerIndex >= gs.players.length)
+      return false;
     return gs.players[gs.currentPlayerIndex].id == playerId;
   }
 
@@ -718,12 +719,7 @@ class MultiplayerGameProvider
       _isProcessingAction = false;
     }
 
-    Player? me;
-    try {
-      me = gameState.players.firstWhere((p) => p.id == playerId);
-    } catch (_) {
-      me = null;
-    }
+    final me = gameState.players.where((p) => p.id == playerId).firstOrNull;
 
     if (me != null && !me.isSpectator) {
       _isPlaying = true;
@@ -1192,12 +1188,8 @@ class MultiplayerGameProvider
     final pid = playerId;
     if (pid == null) return;
 
-    Player? me;
-    try {
-      me = _gameState!.players.firstWhere((p) => p.id == pid);
-    } catch (_) {
-      return;
-    }
+    final me = _gameState!.players.where((p) => p.id == pid).firstOrNull;
+    if (me == null) return;
     if (cardIndex < 0 || cardIndex >= me.hand.length) return;
 
     // Vérification locale pour le feedback visuel (shake si match raté)

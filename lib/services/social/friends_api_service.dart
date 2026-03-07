@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
 import '../auth/auth_service.dart';
 import '../network/network_probe_service.dart';
+import '../logging/error_reporting_service.dart';
 
 class FriendInfo {
   final String userId;
@@ -97,6 +98,27 @@ class UserLookupInfo {
   }
 }
 
+/// Résultat typé pour les actions amis (accept, reject, remove, block, etc.)
+/// Permet aux appelants de distinguer succès / erreur réseau / erreur serveur.
+class FriendsActionResult {
+  final bool success;
+  final String? error;
+
+  const FriendsActionResult({required this.success, this.error});
+
+  const FriendsActionResult.ok()
+      : success = true,
+        error = null;
+
+  const FriendsActionResult.networkError()
+      : success = false,
+        error = 'Serveur indisponible';
+
+  const FriendsActionResult.failure([String? message])
+      : success = false,
+        error = message ?? 'Erreur inconnue';
+}
+
 class FriendsApiService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
   final AuthService _authService;
@@ -109,8 +131,12 @@ class FriendsApiService {
   static const _probeCacheDuration = Duration(seconds: 5);
 
   // Prefetch : lancé dès le login, consommé par le lobby
-  static Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>?
-      _prefetchedSummary;
+  static Future<
+      ({
+        List<FriendInfo> friends,
+        List<FriendRequestInfo> incoming,
+        List<FriendRequestInfo> outgoing
+      })>? _prefetchedSummary;
 
   /// Lance le prefetch des données sociales en arrière-plan.
   /// Appeler dès que le login réussit.
@@ -119,8 +145,12 @@ class FriendsApiService {
   }
 
   /// Consomme le prefetch s'il existe, sinon fait un appel normal.
-  Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
-      getSummaryOrPrefetched() async {
+  Future<
+      ({
+        List<FriendInfo> friends,
+        List<FriendRequestInfo> incoming,
+        List<FriendRequestInfo> outgoing
+      })> getSummaryOrPrefetched() async {
     final prefetched = _prefetchedSummary;
     if (prefetched != null) {
       _prefetchedSummary = null;
@@ -211,9 +241,17 @@ class FriendsApiService {
   }
 
   /// Appel unique : amis + demandes entrantes/sortantes en un seul round-trip.
-  Future<({List<FriendInfo> friends, List<FriendRequestInfo> incoming, List<FriendRequestInfo> outgoing})>
-      getSummary() async {
-    const empty = (friends: <FriendInfo>[], incoming: <FriendRequestInfo>[], outgoing: <FriendRequestInfo>[]);
+  Future<
+      ({
+        List<FriendInfo> friends,
+        List<FriendRequestInfo> incoming,
+        List<FriendRequestInfo> outgoing
+      })> getSummary() async {
+    const empty = (
+      friends: <FriendInfo>[],
+      incoming: <FriendRequestInfo>[],
+      outgoing: <FriendRequestInfo>[]
+    );
     if (!await _canReachBackend()) return empty;
     try {
       final response = await http
@@ -226,9 +264,8 @@ class FriendsApiService {
       final data = _decodeJsonResponse(response, endpoint: 'getSummary');
       if (data == null || data['success'] != true) return empty;
 
-      final friends = (data['friends'] as List)
-          .map((f) => FriendInfo.fromJson(f))
-          .toList();
+      final friends =
+          (data['friends'] as List).map((f) => FriendInfo.fromJson(f)).toList();
       final incoming = (data['incoming'] as List)
           .map((r) => FriendRequestInfo.fromJson(r))
           .toList();
@@ -381,127 +418,116 @@ class FriendsApiService {
     }
   }
 
-  Future<bool> acceptRequest(String requestId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> acceptRequest(String requestId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'acceptRequest',
+      request: () => http
           .post(
             Uri.parse('$_baseUrl/api/friends/accept'),
-            headers: await _headers(),
+            headers: headers,
             body: jsonEncode({'requestId': requestId}),
           )
-          .timeout(const Duration(seconds: 10));
-
-      final data = _decodeJsonResponse(response, endpoint: 'acceptRequest');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
-    }
+          .timeout(const Duration(seconds: 10)),
+    );
   }
 
-  Future<bool> rejectRequest(String requestId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> rejectRequest(String requestId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'rejectRequest',
+      request: () => http
           .post(
             Uri.parse('$_baseUrl/api/friends/reject'),
-            headers: await _headers(),
+            headers: headers,
             body: jsonEncode({'requestId': requestId}),
           )
-          .timeout(const Duration(seconds: 10));
-
-      final data = _decodeJsonResponse(response, endpoint: 'rejectRequest');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
-    }
+          .timeout(const Duration(seconds: 10)),
+    );
   }
 
-  Future<bool> cancelRequest(String requestId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> cancelRequest(String requestId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'cancelRequest',
+      request: () => http
           .post(
             Uri.parse('$_baseUrl/api/friends/cancel'),
-            headers: await _headers(),
+            headers: headers,
             body: jsonEncode({'requestId': requestId}),
           )
-          .timeout(const Duration(seconds: 10));
-
-      final data = _decodeJsonResponse(response, endpoint: 'cancelRequest');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
-    }
+          .timeout(const Duration(seconds: 10)),
+    );
   }
 
-  Future<bool> removeFriend(String userId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> removeFriend(String userId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'removeFriend',
+      request: () => http
           .delete(
             Uri.parse('$_baseUrl/api/friends/$userId'),
-            headers: await _headers(),
+            headers: headers,
           )
-          .timeout(const Duration(seconds: 10));
-
-      final data = _decodeJsonResponse(response, endpoint: 'removeFriend');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
-    }
+          .timeout(const Duration(seconds: 10)),
+    );
   }
 
-  Future<bool> blockUser(String userId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> blockUser(String userId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'blockUser',
+      request: () => http
           .post(
             Uri.parse('$_baseUrl/api/friends/block'),
-            headers: await _headers(),
+            headers: headers,
             body: jsonEncode({'userId': userId}),
           )
-          .timeout(const Duration(seconds: 10));
-
-      final data = _decodeJsonResponse(response, endpoint: 'blockUser');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
-    }
+          .timeout(const Duration(seconds: 10)),
+    );
   }
 
-  Future<bool> unblockUser(String userId) async {
-    if (!await _canReachBackend()) {
-      return false;
-    }
-    try {
-      final response = await http
+  Future<FriendsActionResult> unblockUser(String userId) async {
+    final headers = await _headers();
+    return _performAction(
+      endpoint: 'unblockUser',
+      request: () => http
           .delete(
             Uri.parse('$_baseUrl/api/friends/block/$userId'),
-            headers: await _headers(),
+            headers: headers,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 10)),
+    );
+  }
 
-      final data = _decodeJsonResponse(response, endpoint: 'unblockUser');
-      if (data == null) return false;
-      return data['success'] == true;
-    } catch (e) {
-      return false;
+  /// Helper centralisé pour les actions amis qui retournaient un simple bool.
+  /// Gère le probe réseau, le décodage et le reporting d'erreurs.
+  Future<FriendsActionResult> _performAction({
+    required String endpoint,
+    required Future<http.Response> Function() request,
+  }) async {
+    if (!await _canReachBackend()) {
+      return const FriendsActionResult.networkError();
+    }
+    try {
+      final response = await request();
+      final data = _decodeJsonResponse(response, endpoint: endpoint);
+      if (data == null) {
+        return const FriendsActionResult.failure('Réponse serveur invalide');
+      }
+      if (data['success'] == true) {
+        return const FriendsActionResult.ok();
+      }
+      return FriendsActionResult.failure(
+        data['error']?.toString() ?? 'Échec de l\'opération',
+      );
+    } catch (e, stackTrace) {
+      ErrorReportingService().reportNetwork(
+        e,
+        stackTrace: stackTrace,
+        endpoint: endpoint,
+      );
+      return const FriendsActionResult.failure('Erreur réseau');
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../../models/playing_card.dart';
+import '../logging/error_reporting_service.dart';
 import 'socket_connection_handler.dart';
 import 'saved_rooms_repository.dart';
 import 'game_actions_emitter.dart';
@@ -580,7 +581,13 @@ class MultiplayerService {
         if (gameStateJson != null) {
           try {
             onGameStateUpdate?.call(GameState.fromJson(gameStateJson));
-          } catch (_) {}
+          } catch (e, stackTrace) {
+            ErrorReportingService().reportDeserialization(
+              e,
+              stackTrace: stackTrace,
+              type: 'GameState (full_state)',
+            );
+          }
         }
       }
     });
@@ -633,7 +640,13 @@ class MultiplayerService {
           if (cardJson != null) {
             onSpiedCard?.call(PlayingCard.fromJson(cardJson), targetName);
           }
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          ErrorReportingService().reportDeserialization(
+            e,
+            stackTrace: stackTrace,
+            type: 'PlayingCard (spied_card)',
+          );
+        }
       }
     });
   }
@@ -685,7 +698,13 @@ class MultiplayerService {
         } else {
           onPreloadedDeckCardUpdate?.call(null);
         }
-      } catch (_) {}
+      } catch (e, stackTrace) {
+        ErrorReportingService().reportDeserialization(
+          e,
+          stackTrace: stackTrace,
+          type: 'GameState (state_update)',
+        );
+      }
     }
 
     if (updateType == 'TIMER_UPDATE') {

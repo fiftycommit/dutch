@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
 import '../services/ui/haptic_service.dart';
 import '../services/ui/sound_service.dart';
+import '../services/logging/error_reporting_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   GameSettings _settings = GameSettings();
@@ -65,7 +66,6 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-
   void setReactionTime(int ms) {
     _settings = _settings.copyWith(reactionTimeMs: ms);
     _saveSettings();
@@ -85,18 +85,46 @@ class SettingsProvider with ChangeNotifier {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? settingsJson = prefs.getString(_prefsKey);
-    if (settingsJson != null) {
-      _settings = GameSettings.fromJson(jsonDecode(settingsJson));
-      SoundService.setEnabled(_settings.soundEnabled);
-      HapticService.setEnabled(_settings.hapticEnabled);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? settingsJson = prefs.getString(_prefsKey);
+      if (settingsJson != null) {
+        _settings = GameSettings.fromJson(jsonDecode(settingsJson));
+        SoundService.setEnabled(_settings.soundEnabled);
+        HapticService.setEnabled(_settings.hapticEnabled);
+        notifyListeners();
+      }
+    } catch (e, stackTrace) {
+      // En cas de données corrompues, on garde les paramètres par défaut
+      // et on supprime la valeur corrompue pour éviter le même crash au prochain lancement
+      ErrorReportingService().reportStorage(
+        e,
+        stackTrace: stackTrace,
+        operation: 'lecture',
+        key: _prefsKey,
+      );
+      _settings = GameSettings();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_prefsKey);
+      } catch (_) {
+        // Impossible de nettoyer — on continue avec les valeurs par défaut
+      }
       notifyListeners();
     }
   }
 
   Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(_settings.toJson()));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, jsonEncode(_settings.toJson()));
+    } catch (e, stackTrace) {
+      ErrorReportingService().reportStorage(
+        e,
+        stackTrace: stackTrace,
+        operation: 'écriture',
+        key: _prefsKey,
+      );
+    }
   }
 }

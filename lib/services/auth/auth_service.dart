@@ -222,9 +222,14 @@ class AuthService {
         final suggested = _normalizeUsername(
             fbUser.email?.split('@').first ?? fbUser.displayName ?? '');
         return AuthResult(
-          success: true, token: token,
-          user: UserInfo(id: fbUser.uid, username: suggested, displayName: fbUser.displayName ?? ''),
-          needsUsernameSetup: true, suggestedUsername: suggested,
+          success: true,
+          token: token,
+          user: UserInfo(
+              id: fbUser.uid,
+              username: suggested,
+              displayName: fbUser.displayName ?? ''),
+          needsUsernameSetup: true,
+          suggestedUsername: suggested,
         );
       }
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
@@ -240,9 +245,14 @@ class AuthService {
         final suggested = _normalizeUsername(
             fbUser.email?.split('@').first ?? fbUser.displayName ?? '');
         return AuthResult(
-          success: true, token: token,
-          user: UserInfo(id: fbUser.uid, username: suggested, displayName: fbUser.displayName ?? ''),
-          needsUsernameSetup: true, suggestedUsername: suggested,
+          success: true,
+          token: token,
+          user: UserInfo(
+              id: fbUser.uid,
+              username: suggested,
+              displayName: fbUser.displayName ?? ''),
+          needsUsernameSetup: true,
+          suggestedUsername: suggested,
         );
       }
       if (kDebugMode) debugPrint('Google Sign-In error: $e');
@@ -316,7 +326,8 @@ class AuthService {
         return AuthResult(
           success: true,
           token: token,
-          user: UserInfo(id: fbUser.uid, username: username, displayName: displayName),
+          user: UserInfo(
+              id: fbUser.uid, username: username, displayName: displayName),
         );
       }
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
@@ -327,7 +338,8 @@ class AuthService {
         return AuthResult(
           success: true,
           token: token,
-          user: UserInfo(id: fbUser.uid, username: username, displayName: displayName),
+          user: UserInfo(
+              id: fbUser.uid, username: username, displayName: displayName),
         );
       }
       if (kDebugMode) debugPrint('Register error: $e');
@@ -777,6 +789,9 @@ class AuthService {
       if (!reauth.success) return reauth;
 
       // Supprimer côté serveur (Firestore)
+      // On tente la suppression serveur mais on ne bloque pas la suppression
+      // Firebase si elle échoue — l'erreur est loguée pour investigation.
+      bool serverDeleteFailed = false;
       final token = await user.getIdToken();
       if (token != null) {
         try {
@@ -788,13 +803,33 @@ class AuthService {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           });
-          await request.send().timeout(const Duration(seconds: 10));
-        } catch (_) {}
+          final response =
+              await request.send().timeout(const Duration(seconds: 10));
+          if (response.statusCode >= 400) {
+            serverDeleteFailed = true;
+            if (kDebugMode) {
+              debugPrint(
+                  'Suppression serveur échouée (HTTP ${response.statusCode})');
+            }
+          }
+        } catch (e) {
+          serverDeleteFailed = true;
+          if (kDebugMode) {
+            debugPrint('Suppression serveur échouée : $e');
+          }
+        }
       }
 
       // Supprimer le compte Firebase
       await user.delete();
 
+      if (serverDeleteFailed) {
+        return const AuthResult(
+          success: true,
+          error:
+              'Compte supprimé, mais certaines données serveur n\'ont pas pu être nettoyées',
+        );
+      }
       return const AuthResult(success: true);
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _mapFirebaseError(e.code));
