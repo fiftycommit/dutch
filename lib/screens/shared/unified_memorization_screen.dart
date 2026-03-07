@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../models/player.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/game/card_widget.dart';
@@ -80,7 +81,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   bool _isWaiting = false;
   late AnimationController _pulseController;
 
-  Timer? _countdownTimer;
+  Ticker? _countdownTicker;
+  DateTime? _countdownStartTime;
   int _remainingSeconds = 0;
   StreamSubscription? _gameStartSubscription;
 
@@ -113,23 +115,29 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   @override
   void dispose() {
     _pulseController.dispose();
-    _countdownTimer?.cancel();
+    _countdownTicker?.dispose();
     _gameStartSubscription?.cancel();
     super.dispose();
   }
 
   void _startCountdown() {
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      setState(() {
-        if (_remainingSeconds > 0) {
-          _remainingSeconds--;
-        } else {
-          timer.cancel();
+    _countdownStartTime = DateTime.now();
+    _countdownTicker = createTicker((_) {
+      if (!mounted || _countdownStartTime == null) return;
+      final elapsed = DateTime.now().difference(_countdownStartTime!).inSeconds;
+      final newRemaining = (config.countdownSeconds! - elapsed)
+          .clamp(0, config.countdownSeconds!);
+      if (newRemaining != _remainingSeconds) {
+        setState(() {
+          _remainingSeconds = newRemaining;
+        });
+        if (newRemaining <= 0) {
+          _countdownTicker?.stop();
           _handleTimeout();
         }
-      });
+      }
     });
+    _countdownTicker!.start();
   }
 
   void _handleTimeout() {
@@ -168,7 +176,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     if (_selectedCards.length != 2 || _isRevealing || _isWaiting) return;
 
     setState(() => _isRevealing = true);
-    _countdownTimer?.cancel();
+    _countdownTicker?.stop();
 
     if (!mounted) return;
     await _showRevealedCardsDialog();
@@ -636,7 +644,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _countdownTimer?.cancel();
+              _countdownTicker?.stop();
               _gameStartSubscription?.cancel();
               config.onQuit!(context);
             },

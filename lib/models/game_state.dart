@@ -91,6 +91,7 @@ class GameState {
     List<String>? eliminatedPlayerIds,
     PlayingCard? drawnCard,
     bool isWaitingForSpecialPower = false,
+    int? specialPowerStartTime,
     PlayingCard? specialCardToActivate,
     String? dutchCallerId,
     DateTime? reactionStartTime,
@@ -112,6 +113,7 @@ class GameState {
         turnState = TurnState(
           currentPlayerIndex: currentPlayerIndex,
           isWaitingForSpecialPower: isWaitingForSpecialPower,
+          specialPowerStartTime: specialPowerStartTime,
           specialCardToActivate: specialCardToActivate,
           dutchCallerId: dutchCallerId,
           reactionStartTime: reactionStartTime,
@@ -480,6 +482,7 @@ class GameState {
           : null,
       isWaitingForSpecialPower:
           json['isWaitingForSpecialPower'] as bool? ?? false,
+      specialPowerStartTime: json['specialPowerStartTime'] as int?,
       specialCardToActivate: json['specialCardToActivate'] != null
           ? PlayingCard.fromJson(
               json['specialCardToActivate'] as Map<String, dynamic>)
@@ -518,6 +521,7 @@ class GameState {
       'eliminatedPlayerIds': eliminatedPlayerIds,
       'drawnCard': drawnCard?.toJson(),
       'isWaitingForSpecialPower': isWaitingForSpecialPower,
+      'specialPowerStartTime': specialPowerStartTime,
       'specialCardToActivate': specialCardToActivate?.toJson(),
       'dutchCallerId': dutchCallerId,
       'reactionStartTime': reactionStartTime?.toIso8601String(),

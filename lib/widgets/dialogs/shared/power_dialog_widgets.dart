@@ -1,6 +1,6 @@
 import 'dart:math' as math;
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
@@ -263,38 +263,42 @@ class _TickingConfirmButton extends StatefulWidget {
   State<_TickingConfirmButton> createState() => _TickingConfirmButtonState();
 }
 
-class _TickingConfirmButtonState extends State<_TickingConfirmButton> {
+class _TickingConfirmButtonState extends State<_TickingConfirmButton>
+    with SingleTickerProviderStateMixin {
   late int _remaining;
-  Timer? _timer;
+  Ticker? _ticker;
+  late DateTime _startTime;
 
   @override
   void initState() {
     super.initState();
     _remaining = widget.autoCloseSeconds;
+    _startTime = DateTime.now();
     if (_remaining > 0) {
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        setState(() {
-          _remaining--;
-        });
-        if (_remaining <= 0) {
-          timer.cancel();
-          if (widget.onTimeout != null) {
-            widget.onTimeout!();
-          } else {
-            widget.onPressed();
+      _ticker = createTicker((_) {
+        if (!mounted) return;
+        final elapsed = DateTime.now().difference(_startTime).inSeconds;
+        final newRemaining = (widget.autoCloseSeconds - elapsed)
+            .clamp(0, widget.autoCloseSeconds);
+        if (newRemaining != _remaining) {
+          setState(() => _remaining = newRemaining);
+          if (_remaining <= 0) {
+            _ticker?.stop();
+            if (widget.onTimeout != null) {
+              widget.onTimeout!();
+            } else {
+              widget.onPressed();
+            }
           }
         }
       });
+      _ticker!.start();
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 
@@ -348,24 +352,46 @@ class PowerTimerBar extends StatefulWidget {
   State<PowerTimerBar> createState() => _PowerTimerBarState();
 }
 
-class _PowerTimerBarState extends State<PowerTimerBar> {
-  Timer? _timer;
+class _PowerTimerBarState extends State<PowerTimerBar>
+    with SingleTickerProviderStateMixin {
+  Ticker? _ticker;
   double _progress = 1.0;
 
   @override
   void initState() {
     super.initState();
     _updateProgress();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted) return;
+    _ticker = createTicker((_) => _updateProgress());
+    _ticker!.start();
+  }
+
+  @override
+  void didUpdateWidget(PowerTimerBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Si les paramètres changent (ex: nouveau startTimeMs après reconnexion),
+    // recalculer immédiatement
+    if (oldWidget.startTimeMs != widget.startTimeMs ||
+        oldWidget.totalMs != widget.totalMs) {
       _updateProgress();
-    });
+    }
   }
 
   void _updateProgress() {
-    final elapsed = DateTime.now().millisecondsSinceEpoch - widget.startTimeMs;
-    final remaining = (widget.totalMs - elapsed).clamp(0, widget.totalMs);
-    final p = widget.totalMs > 0 ? remaining / widget.totalMs : 0.0;
+    if (!mounted) return;
+    final totalMs = widget.totalMs;
+    if (totalMs <= 0 || widget.startTimeMs <= 0) {
+      // Données invalides — afficher la barre pleine au lieu de crasher
+      if (_progress != 1.0) {
+        setState(() => _progress = 1.0);
+      }
+      return;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final elapsed = now - widget.startTimeMs;
+    // Protéger contre les timestamps dans le futur (désync d'horloge)
+    final clampedElapsed = elapsed.clamp(0, totalMs);
+    final remaining = totalMs - clampedElapsed;
+    final p = (remaining / totalMs).clamp(0.0, 1.0);
     if ((p - _progress).abs() > 0.001) {
       setState(() => _progress = p);
     }
@@ -373,13 +399,17 @@ class _PowerTimerBarState extends State<PowerTimerBar> {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final seconds = (widget.totalMs * _progress / 1000).ceil();
+    final totalMs = widget.totalMs;
+    // Éviter l'affichage de secondes négatives ou incohérentes
+    final seconds = totalMs > 0
+        ? (totalMs * _progress / 1000).ceil().clamp(0, totalMs ~/ 1000 + 1)
+        : 0;
     final color = Color.lerp(Colors.red, Colors.amber, _progress)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -407,38 +437,42 @@ class _PowerTimerBarState extends State<PowerTimerBar> {
   }
 }
 
-class _TickingSkipButtonState extends State<_TickingSkipButton> {
+class _TickingSkipButtonState extends State<_TickingSkipButton>
+    with SingleTickerProviderStateMixin {
   late int _remaining;
-  Timer? _timer;
+  Ticker? _ticker;
+  late DateTime _startTime;
 
   @override
   void initState() {
     super.initState();
     _remaining = widget.autoCloseSeconds;
+    _startTime = DateTime.now();
     if (_remaining > 0) {
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        setState(() {
-          _remaining--;
-        });
-        if (_remaining <= 0) {
-          timer.cancel();
-          if (widget.onTimeout != null) {
-            widget.onTimeout!();
-          } else {
-            widget.onPressed();
+      _ticker = createTicker((_) {
+        if (!mounted) return;
+        final elapsed = DateTime.now().difference(_startTime).inSeconds;
+        final newRemaining = (widget.autoCloseSeconds - elapsed)
+            .clamp(0, widget.autoCloseSeconds);
+        if (newRemaining != _remaining) {
+          setState(() => _remaining = newRemaining);
+          if (_remaining <= 0) {
+            _ticker?.stop();
+            if (widget.onTimeout != null) {
+              widget.onTimeout!();
+            } else {
+              widget.onPressed();
+            }
           }
         }
       });
+      _ticker!.start();
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 

@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
 import '../../models/game_state.dart';
 import '../../models/playing_card.dart';
@@ -56,85 +56,83 @@ class CenterTable extends StatefulWidget {
 }
 
 class _CenterTableState extends State<CenterTable>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isDrawnCardExpanded = false;
   String? _lastDrawnCardId;
   int? _lastRedZoneHapticAtMs;
-  late AnimationController _progressController;
+
+  // ── Reaction timer ──
   double _currentProgress = 1.0;
-  Timer? _progressTimer; // Timer fluide pour le refresh à 24ms
-  bool _wasPowerPending =
-      false; // Pour détecter la fin du pouvoir et forcer resync
-  double _powerProgress =
-      1.0; // Progression du timer pouvoir (1.0 = début, 0.0 = expiré)
-  Timer? _powerTimer; // Timer fluide pour la barre du pouvoir
+  Ticker? _reactionTicker;
+  DateTime? _lastServerUpdate;
+  int _lastServerRemaining = 0;
+
+  // ── Power timer ──
+  double _powerProgress = 1.0;
+  Ticker? _powerTicker;
+
+  /// Fallback client-side si le serveur ne fournit pas specialPowerStartTime
+  int? _powerStartFallback;
+
+  /// Détecte la fin du pouvoir pour resync la réaction
+  bool _wasPowerPending = false;
 
   @override
   void initState() {
     super.initState();
     _lastDrawnCardId = widget.gameState.drawnCard?.id;
-    // Controller uniquement pour vsync (ne pas addListener pour éviter le double-tick)
-    _progressController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    );
-    _initProgress();
-    // Init power timer if power is already pending at first build
+    _initReactionProgress();
+    // Initialiser le power timer si un pouvoir est déjà en cours au premier build
     if (widget.gameState.phase == GamePhase.specialPower) {
       _wasPowerPending = true;
-      _startPowerTimer();
+      _startPowerTicker();
     }
   }
 
-  void _initProgress() {
+  void _initReactionProgress() {
     final total = widget.reactionTimeTotalMs;
     final remaining = widget.gameState.reactionTimeRemaining;
     _currentProgress = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 1.0;
     _lastServerRemaining = remaining;
     _lastServerUpdate = DateTime.now();
-    _startProgressTimer();
+    _startReactionTicker();
   }
 
-  /// Timer fluide à 24ms (~41fps) pour un refresh constant
-  void _startProgressTimer() {
-    _progressTimer?.cancel();
+  // ── Reaction ticker (remplace Timer.periodic pour respecter le vsync) ──
+
+  void _startReactionTicker() {
+    _reactionTicker?.dispose();
+    _reactionTicker = null;
     if (widget.gameState.phase == GamePhase.reaction) {
-      _progressTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
-        if (!mounted) return;
-        _onProgressTick();
-      });
+      _reactionTicker = createTicker((_) => _onReactionTick());
+      _reactionTicker!.start();
     }
   }
 
-  void _stopProgressTimer() {
-    _progressTimer?.cancel();
-    _progressTimer = null;
+  void _stopReactionTicker() {
+    _reactionTicker?.dispose();
+    _reactionTicker = null;
   }
 
-  DateTime? _lastServerUpdate;
-  int _lastServerRemaining = 0;
-
-  void _onProgressTick() {
+  void _onReactionTick() {
     if (!mounted) return;
     if (widget.gameState.phase != GamePhase.reaction) {
-      _stopProgressTimer();
+      _stopReactionTicker();
       return;
     }
 
     final total = widget.reactionTimeTotalMs;
+    if (total <= 0) return;
+
     final serverRemaining = widget.gameState.reactionTimeRemaining;
 
-    // Si le jeu est en pause ou qu'un pouvoir est en cours, on gèle l'animation
-    // et on met à jour le temps de référence pour que lors de la reprise,
-    // on ne soustraie pas le temps passé en pause/pouvoir.
+    // Si le jeu est en pause ou qu'un pouvoir est en cours, geler l'animation
     if (widget.isPaused || widget.gameState.phase == GamePhase.specialPower) {
       _lastServerUpdate = DateTime.now();
       _lastServerRemaining = serverRemaining;
       return;
     }
 
-    // Détecter un changement significatif (pas juste le décompte normal)
-    // Un saut de plus de 500ms indique un reset ou une nouvelle phase
     final now = DateTime.now();
     final localElapsedMs = _lastServerUpdate != null
         ? now.difference(_lastServerUpdate!).inMilliseconds
@@ -142,10 +140,8 @@ class _CenterTableState extends State<CenterTable>
     final currentEstimate =
         (_lastServerRemaining - localElapsedMs).clamp(0, total);
 
-    // Détecter un désaccord majeur (> 500ms) entre notre temps estimé et le temps réel du serveur
-    // ou si le serveur a plus de temps (reset du chrono)
+    // Détecter un désaccord majeur (> 500ms) ou un reset du chrono
     final diffFromEstimate = (serverRemaining - currentEstimate).abs();
-
     if (diffFromEstimate > 500 ||
         serverRemaining > _lastServerRemaining ||
         _lastServerUpdate == null) {
@@ -153,106 +149,118 @@ class _CenterTableState extends State<CenterTable>
       _lastServerUpdate = now;
     }
 
-    // Recalcul de l'estimate avec les nouvelles ou anciennes valeurs baselines
     final finalElapsedMs = _lastServerUpdate != null
         ? now.difference(_lastServerUpdate!).inMilliseconds
         : 0;
-
-    // Estimer le temps restant réel = baseline - temps écoulé localement
     final estimatedRemaining =
         (_lastServerRemaining - finalElapsedMs).clamp(0, total);
-    final smoothProgress =
-        total > 0 ? (estimatedRemaining / total).clamp(0.0, 1.0) : 0.0;
+    final smoothProgress = (estimatedRemaining / total).clamp(0.0, 1.0);
 
-    // Toujours mettre à jour pour une animation fluide
     setState(() {
       _currentProgress = smoothProgress;
     });
   }
 
+  // ── Power ticker ──
+
+  void _startPowerTicker() {
+    _powerTicker?.dispose();
+    _powerTicker = null;
+    _powerProgress = 1.0;
+    // Mémoriser le moment où le pouvoir a commencé côté client (fallback)
+    _powerStartFallback ??= DateTime.now().millisecondsSinceEpoch;
+    _powerTicker = createTicker((_) => _onPowerTick());
+    _powerTicker!.start();
+  }
+
+  void _stopPowerTicker() {
+    _powerTicker?.dispose();
+    _powerTicker = null;
+    _powerStartFallback = null;
+  }
+
+  void _onPowerTick() {
+    if (!mounted) return;
+    if (widget.gameState.phase != GamePhase.specialPower) {
+      _stopPowerTicker();
+      return;
+    }
+
+    // Utiliser le timestamp serveur quand disponible, sinon le fallback client
+    final startTime =
+        widget.gameState.specialPowerStartTime ?? _powerStartFallback;
+    if (startTime == null) {
+      // Ni serveur ni fallback — ne devrait pas arriver, mais on se protège
+      _powerStartFallback = DateTime.now().millisecondsSinceEpoch;
+      return;
+    }
+
+    // turnTimeoutMs est mis à la valeur specialPowerTimeoutMs par le serveur
+    // quand un pouvoir est en attente ; fallback sur le prop du widget
+    final totalMs = widget.gameState.turnTimeoutMs > 0
+        ? widget.gameState.turnTimeoutMs
+        : widget.specialPowerTimeTotalMs;
+    if (totalMs <= 0) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final elapsed = now - startTime;
+    // Protéger contre les timestamps dans le futur (désync d'horloge)
+    final clampedElapsed = elapsed.clamp(0, totalMs);
+    final remaining = totalMs - clampedElapsed;
+    final progress = (remaining / totalMs).clamp(0.0, 1.0);
+
+    setState(() {
+      _powerProgress = progress;
+    });
+  }
+
+  // ── Coordination des transitions de phase ──
+
   void _updateProgressTarget() {
     final gs = widget.gameState;
     final isPowerPending = gs.phase == GamePhase.specialPower;
 
-    // Détecter la fin du pouvoir : pouvoir était en cours et ne l'est plus
-    // → la réaction démarre immédiatement (pas de délai)
+    // Détecter la fin du pouvoir → resync immédiate du timer de réaction
     if (_wasPowerPending && !isPowerPending) {
       _lastServerRemaining = gs.reactionTimeRemaining;
       _lastServerUpdate = DateTime.now();
     }
     _wasPowerPending = isPowerPending;
 
-    // Gérer le timer du pouvoir (fonctionne en phase playing ET reaction)
+    // Gérer le ticker du pouvoir
     if (isPowerPending) {
-      if (_powerTimer == null || !_powerTimer!.isActive) {
-        _startPowerTimer();
+      if (_powerTicker == null || !_powerTicker!.isActive) {
+        _startPowerTicker();
       }
     } else {
-      _stopPowerTimer();
+      _stopPowerTicker();
     }
 
-    // Démarrer/arrêter le timer de réaction selon la phase
+    // Gérer le ticker de réaction
     if (gs.phase == GamePhase.reaction) {
       if (isPowerPending) {
-        // Pouvoir en cours : stopper le timer de réaction
-        _stopProgressTimer();
-      } else if (_progressTimer == null || !_progressTimer!.isActive) {
+        _stopReactionTicker();
+      } else if (_reactionTicker == null || !_reactionTicker!.isActive) {
         final serverRemaining = gs.reactionTimeRemaining;
         final total = widget.reactionTimeTotalMs;
-        final isResume =
-            serverRemaining < total * 0.95; // Moins de 95% = resume probable
+        final isResume = total > 0 && serverRemaining < total * 0.95;
 
         if (!isResume || _lastServerUpdate == null) {
           _lastServerUpdate = DateTime.now();
         }
         _lastServerRemaining = serverRemaining;
-        _startProgressTimer();
+        _startReactionTicker();
       }
     } else if (!isPowerPending) {
-      // Phase playing sans pouvoir : pas de timer de réaction
-      _stopProgressTimer();
+      _stopReactionTicker();
       _currentProgress = 1.0;
     }
   }
 
-  void _startPowerTimer() {
-    _powerTimer?.cancel();
-    _powerTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
-      if (!mounted) return;
-      _onPowerTick();
-    });
-  }
-
-  void _stopPowerTimer() {
-    _powerTimer?.cancel();
-    _powerTimer = null;
-  }
-
-  void _onPowerTick() {
-    if (!mounted) return;
-    final startTime = widget.gameState.specialPowerStartTime;
-    if (startTime == null || widget.gameState.phase != GamePhase.specialPower) {
-      _stopPowerTimer();
-      return;
-    }
-    // Utiliser turnTimeoutMs du gameState (le serveur le met à specialPowerTimeoutMs
-    // quand un pouvoir est en attente) au lieu du hardcoded specialPowerTimeTotalMs
-    final totalMs = widget.gameState.turnTimeoutMs > 0
-        ? widget.gameState.turnTimeoutMs
-        : widget.specialPowerTimeTotalMs;
-    final elapsed = DateTime.now().millisecondsSinceEpoch - startTime;
-    final remaining = (totalMs - elapsed).clamp(0, totalMs);
-    final progress = (remaining / totalMs).clamp(0.0, 1.0);
-    setState(() {
-      _powerProgress = progress;
-    });
-  }
-
   @override
   void dispose() {
-    _stopProgressTimer();
-    _stopPowerTimer();
-    _progressController.dispose();
+    _stopReactionTicker();
+    _stopPowerTicker();
     super.dispose();
   }
 

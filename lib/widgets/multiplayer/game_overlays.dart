@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
 
 /// Overlays réutilisables pour les écrans de jeu multiplayer
@@ -219,9 +219,10 @@ class _PauseOverlay extends StatefulWidget {
   State<_PauseOverlay> createState() => _PauseOverlayState();
 }
 
-class _PauseOverlayState extends State<_PauseOverlay> {
+class _PauseOverlayState extends State<_PauseOverlay>
+    with SingleTickerProviderStateMixin {
   static const int _totalSeconds = 90;
-  Timer? _ticker;
+  Ticker? _ticker;
   int _secondsRemaining = _totalSeconds;
 
   @override
@@ -239,13 +240,15 @@ class _PauseOverlayState extends State<_PauseOverlay> {
   }
 
   void _startCountdown() {
-    _ticker?.cancel();
+    _ticker?.dispose();
+    _ticker = null;
     if (widget.pauseDeadlineMs <= 0) {
       setState(() => _secondsRemaining = _totalSeconds);
       return;
     }
     _tick();
-    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _tick());
+    _ticker = createTicker((_) => _tick());
+    _ticker!.start();
   }
 
   void _tick() {
@@ -255,12 +258,14 @@ class _PauseOverlayState extends State<_PauseOverlay> {
                 1000)
             .ceil()
             .clamp(0, _totalSeconds);
-    setState(() => _secondsRemaining = remaining);
+    if (remaining != _secondsRemaining) {
+      setState(() => _secondsRemaining = remaining);
+    }
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 
@@ -312,8 +317,7 @@ class _PauseOverlayState extends State<_PauseOverlay> {
                   const SizedBox(height: 20),
                   Text(
                     "Temps restant à ${widget.pausedByName ?? '?'} pour lever la pause",
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 13),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
@@ -323,8 +327,7 @@ class _PauseOverlayState extends State<_PauseOverlay> {
                       value: progress.clamp(0.0, 1.0),
                       minHeight: 10,
                       backgroundColor: Colors.white12,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(_progressColor),
+                      valueColor: AlwaysStoppedAnimation<Color>(_progressColor),
                     ),
                   ),
                   const SizedBox(height: 6),

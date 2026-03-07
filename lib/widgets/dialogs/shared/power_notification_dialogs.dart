@@ -1,6 +1,6 @@
 import 'dart:math' as math;
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
@@ -30,38 +30,42 @@ class _TickingButton extends StatefulWidget {
   State<_TickingButton> createState() => _TickingButtonState();
 }
 
-class _TickingButtonState extends State<_TickingButton> {
+class _TickingButtonState extends State<_TickingButton>
+    with SingleTickerProviderStateMixin {
   late int _remaining;
-  Timer? _timer;
+  Ticker? _ticker;
+  late DateTime _startTime;
 
   @override
   void initState() {
     super.initState();
     _remaining = widget.autoCloseSeconds;
+    _startTime = DateTime.now();
     if (_remaining > 0) {
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        setState(() {
-          _remaining--;
-        });
-        if (_remaining <= 0) {
-          timer.cancel();
-          if (widget.onTimeout != null) {
-            widget.onTimeout!();
-          } else {
-            widget.onPressed();
+      _ticker = createTicker((_) {
+        if (!mounted) return;
+        final elapsed = DateTime.now().difference(_startTime).inSeconds;
+        final newRemaining = (widget.autoCloseSeconds - elapsed)
+            .clamp(0, widget.autoCloseSeconds);
+        if (newRemaining != _remaining) {
+          setState(() => _remaining = newRemaining);
+          if (_remaining <= 0) {
+            _ticker?.stop();
+            if (widget.onTimeout != null) {
+              widget.onTimeout!();
+            } else {
+              widget.onPressed();
+            }
           }
         }
       });
+      _ticker!.start();
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 
