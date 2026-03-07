@@ -124,8 +124,10 @@ class MultiplayerGameProvider
   bool get isLocalPlayerTurn {
     final gs = _gameState;
     if (gs == null) return false;
-    if (gs.currentPlayerIndex < 0 || gs.currentPlayerIndex >= gs.players.length)
+    if (gs.currentPlayerIndex < 0 ||
+        gs.currentPlayerIndex >= gs.players.length) {
       return false;
+    }
     return gs.players[gs.currentPlayerIndex].id == playerId;
   }
 
