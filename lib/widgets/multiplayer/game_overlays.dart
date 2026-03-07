@@ -2,6 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
 
+/// InheritedWidget qui propage l'état de pause dans l'arbre widget.
+/// Utilisé pour que les Ticker des dialogs de pouvoir se gèlent
+/// automatiquement pendant la pause, même à travers des showDialog.
+class GamePauseScope extends InheritedWidget {
+  final bool isPaused;
+
+  const GamePauseScope({
+    super.key,
+    required this.isPaused,
+    required super.child,
+  });
+
+  /// Retourne true si le jeu est en pause. Retourne false si pas
+  /// de GamePauseScope dans l'arbre (solo, tests, etc.)
+  static bool of(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<GamePauseScope>()
+            ?.isPaused ??
+        false;
+  }
+
+  @override
+  bool updateShouldNotify(GamePauseScope oldWidget) =>
+      isPaused != oldWidget.isPaused;
+}
+
 /// Overlays réutilisables pour les écrans de jeu multiplayer
 class GameOverlays {
   /// Overlay "Veuillez tourner votre appareil"

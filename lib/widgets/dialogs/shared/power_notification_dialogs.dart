@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
+import '../../multiplayer/game_overlays.dart';
 import '../responsive_dialog.dart';
 import 'power_dialog_widgets.dart';
 
@@ -35,6 +36,11 @@ class _TickingButtonState extends State<_TickingButton>
   late int _remaining;
   Ticker? _ticker;
   late DateTime _startTime;
+  bool _isPaused = false;
+
+  /// Durée cumulée passée en pause
+  Duration _pausedDuration = Duration.zero;
+  DateTime? _pauseStart;
 
   @override
   void initState() {
@@ -42,24 +48,50 @@ class _TickingButtonState extends State<_TickingButton>
     _remaining = widget.autoCloseSeconds;
     _startTime = DateTime.now();
     if (_remaining > 0) {
-      _ticker = createTicker((_) {
-        if (!mounted) return;
-        final elapsed = DateTime.now().difference(_startTime).inSeconds;
-        final newRemaining = (widget.autoCloseSeconds - elapsed)
-            .clamp(0, widget.autoCloseSeconds);
-        if (newRemaining != _remaining) {
-          setState(() => _remaining = newRemaining);
-          if (_remaining <= 0) {
-            _ticker?.stop();
-            if (widget.onTimeout != null) {
-              widget.onTimeout!();
-            } else {
-              widget.onPressed();
-            }
+      _startTicker();
+    }
+  }
+
+  void _startTicker() {
+    _ticker?.dispose();
+    _ticker = createTicker((_) {
+      if (!mounted || _isPaused) return;
+      final elapsed = DateTime.now().difference(_startTime) - _pausedDuration;
+      final newRemaining = (widget.autoCloseSeconds - elapsed.inSeconds)
+          .clamp(0, widget.autoCloseSeconds);
+      if (newRemaining != _remaining) {
+        setState(() => _remaining = newRemaining);
+        if (_remaining <= 0) {
+          _ticker?.stop();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
           }
         }
-      });
-      _ticker!.start();
+      }
+    });
+    _ticker!.start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final paused = GamePauseScope.of(context);
+    if (paused != _isPaused) {
+      _isPaused = paused;
+      if (_isPaused) {
+        _pauseStart = DateTime.now();
+        _ticker?.stop();
+      } else {
+        if (_pauseStart != null) {
+          _pausedDuration += DateTime.now().difference(_pauseStart!);
+          _pauseStart = null;
+        }
+        if (_remaining > 0) {
+          _startTicker();
+        }
+      }
     }
   }
 

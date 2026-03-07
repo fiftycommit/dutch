@@ -45,6 +45,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   String? _specialPowerReadyId;
   String? _specialPowerDialogShownId;
   MultiplayerGameProvider? _cachedProvider;
+  bool _wasPausedLastFrame = false;
+  bool _pauseDialogShown = false;
 
   @override
   void initState() {
@@ -219,6 +221,49 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         }
       });
     }
+
+    // ── Pause overlay au-dessus des dialogs de pouvoir ──
+    // Quand isPaused passe à true et qu'un dialog de pouvoir est ouvert,
+    // on affiche un showDialog supplémentaire par-dessus pour bloquer les
+    // interactions et signaler visuellement la pause.
+    final isPaused = provider.isPaused;
+    if (isPaused &&
+        !_wasPausedLastFrame &&
+        _specialPowerDialogShownId != null) {
+      if (!_pauseDialogShown) {
+        _pauseDialogShown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !provider.isPaused) {
+            _pauseDialogShown = false;
+            return;
+          }
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            barrierColor: Colors.transparent,
+            builder: (_) => PopScope(
+              canPop: false,
+              child: GameOverlays.pauseOverlay(
+                pausedByName: provider.pausedByName,
+                onResume: provider.resumeGame,
+                isLocalPauser: provider.isLocalPauser,
+                pauseDeadlineMs: provider.pauseDeadlineMs,
+              ),
+            ),
+          );
+        });
+      }
+    }
+    if (!isPaused && _wasPausedLastFrame && _pauseDialogShown) {
+      _pauseDialogShown = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // Retirer le dialog de pause empilé
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      });
+    }
+    _wasPausedLastFrame = isPaused;
   }
 
   void _setupEmoteListener() {
@@ -430,213 +475,217 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 _showQuitConfirmation(context, gameProvider);
               }
             },
-            child: Scaffold(
-              backgroundColor: AppColors.gradientBottom,
-              body: Stack(
-                children: [
-                  GameTableWidget(
-                    gameState: gameState,
-                    isProcessing: gameProvider.isProcessing,
-                    shakingCardIndices:
-                        gameProvider.shakingCardIndices.toList(),
-                    isSpectator: !gameState.players.any(
-                        (p) => p.id == gameProvider.playerId && !p.isSpectator),
-                    callbacks: GameTableCallbacks.fromController(
-                      context: context,
-                      controller: gameProvider,
-                      onOpponentCardTap: (opponentIndex, cardIndex) {
-                        gameProvider.sendSpecialPowerTargetSelection(
-                            opponentIndex, null, null, null);
-                        gameProvider.usePower10SpyOpponent(
-                            opponentIndex, cardIndex);
+            child: GamePauseScope(
+              isPaused: gameProvider.isPaused,
+              child: Scaffold(
+                backgroundColor: AppColors.gradientBottom,
+                body: Stack(
+                  children: [
+                    GameTableWidget(
+                      gameState: gameState,
+                      isProcessing: gameProvider.isProcessing,
+                      shakingCardIndices:
+                          gameProvider.shakingCardIndices.toList(),
+                      isSpectator: !gameState.players.any((p) =>
+                          p.id == gameProvider.playerId && !p.isSpectator),
+                      callbacks: GameTableCallbacks.fromController(
+                        context: context,
+                        controller: gameProvider,
+                        onOpponentCardTap: (opponentIndex, cardIndex) {
+                          gameProvider.sendSpecialPowerTargetSelection(
+                              opponentIndex, null, null, null);
+                          gameProvider.usePower10SpyOpponent(
+                              opponentIndex, cardIndex);
+                        },
+                        supportsTakeFromDiscard:
+                            true, // Multiplayer allows taking from discard
+                      ),
+                      onSpecialPowerAnimationComplete: (cardId) {
+                        if (!mounted) return;
+                        setState(() {
+                          _specialPowerReadyId = cardId;
+                          _specialPowerDialogShownId = null;
+                        });
                       },
-                      supportsTakeFromDiscard:
-                          true, // Multiplayer allows taking from discard
+                      multiplayerConfig: MultiplayerConfig(
+                        playerId: gameProvider.playerId,
+                        playerConnections: _buildConnectionMap(gameProvider),
+                        playerAfkStatus: _buildAfkMap(gameProvider, gameState),
+                        turnStartTime: gameState.turnStartTime != null
+                            ? gameState.turnStartTime! -
+                                gameProvider.serverTimeOffsetMs
+                            : null,
+                        turnDuration: gameState.turnTimeoutMs,
+                        reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
+                        powerTargetPlayerIds: gameProvider.powerTargetPlayerIds,
+                      ),
+                      isPaused: gameProvider
+                          .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency
                     ),
-                    onSpecialPowerAnimationComplete: (cardId) {
-                      if (!mounted) return;
-                      setState(() {
-                        _specialPowerReadyId = cardId;
-                        _specialPowerDialogShownId = null;
-                      });
-                    },
-                    multiplayerConfig: MultiplayerConfig(
-                      playerId: gameProvider.playerId,
-                      playerConnections: _buildConnectionMap(gameProvider),
-                      playerAfkStatus: _buildAfkMap(gameProvider, gameState),
-                      turnStartTime: gameState.turnStartTime != null
-                          ? gameState.turnStartTime! -
-                              gameProvider.serverTimeOffsetMs
-                          : null,
-                      turnDuration: gameState.turnTimeoutMs,
-                      reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
-                      powerTargetPlayerIds: gameProvider.powerTargetPlayerIds,
-                    ),
-                    isPaused: gameProvider
-                        .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency
-                  ),
 
-                  // Room Code and Tournament Info Overlay
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                gameState.gameMode == GameMode.tournament
-                                    ? Icons.emoji_events
-                                    : Icons.videogame_asset,
-                                color: gameState.gameMode == GameMode.tournament
-                                    ? Colors.amber
-                                    : AppColors.textSecondary,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
+                    // Room Code and Tournament Info Overlay
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  gameState.gameMode == GameMode.tournament
+                                      ? Icons.emoji_events
+                                      : Icons.videogame_asset,
+                                  color:
+                                      gameState.gameMode == GameMode.tournament
+                                          ? Colors.amber
+                                          : AppColors.textSecondary,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  gameState.gameMode == GameMode.tournament
+                                      ? tournamentStageLabel(
+                                          gameState.tournamentRound,
+                                          totalRounds: gameProvider
+                                              .tournamentTotalRounds,
+                                        )
+                                      // Masquer le code pour les parties publiques
+                                      : (gameProvider.roomSettings?.isPublic ==
+                                              true
+                                          ? "Partie publique"
+                                          : "Room: ${gameProvider.roomCode ?? '?'}"),
+                                  style: const TextStyle(
+                                    color: Colors.amber,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (gameState.gameMode == GameMode.tournament) ...[
+                              const SizedBox(height: 2),
                               Text(
-                                gameState.gameMode == GameMode.tournament
-                                    ? tournamentStageLabel(
-                                        gameState.tournamentRound,
-                                        totalRounds:
-                                            gameProvider.tournamentTotalRounds,
-                                      )
-                                    // Masquer le code pour les parties publiques
-                                    : (gameProvider.roomSettings?.isPublic ==
-                                            true
-                                        ? "Partie publique"
-                                        : "Room: ${gameProvider.roomCode ?? '?'}"),
+                                "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
                                 style: const TextStyle(
-                                  color: Colors.amber,
-                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11,
                                 ),
                               ),
                             ],
-                          ),
-                          if (gameState.gameMode == GameMode.tournament) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                              ),
-                            ),
                           ],
+                        ),
+                      ),
+                    ),
+
+                    if (gameState.phase == GamePhase.dutchCalled)
+                      GameOverlays.dutchNotification(),
+
+                    if (gameState.phase == GamePhase.specialPower)
+                      _buildSpecialPowerOverlay(gameProvider, gameState),
+
+                    if (gameProvider.isProcessing)
+                      const Positioned(
+                        top: 20,
+                        right: 60,
+                        child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.textDisabled)),
+                      ),
+
+                    // Notification: joueur a quitté
+                    if (gameProvider.playerLeftNotification)
+                      GameOverlays.playerLeftBanner(
+                          gameProvider.lastPlayerLeftName),
+
+                    // Notification: pouvoir spécial utilisé sur nous
+                    if (gameProvider.specialPowerNotification)
+                      GameOverlays.specialPowerBanner(
+                          gameProvider.specialPowerByName),
+
+                    // Boutons en haut à droite
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Bouton Émotes
+                          IconButton(
+                            icon: const Icon(Icons.emoji_emotions,
+                                color: Colors.amber, size: 32),
+                            onPressed: () {
+                              setState(() {
+                                _showEmoteOverlay = true;
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.pause_circle_filled,
+                                color: AppColors.textDisabled, size: 32),
+                            onPressed: () => gameProvider.pauseGame(),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.exit_to_app,
+                                color: AppColors.textDisabled, size: 32),
+                            onPressed: () =>
+                                _showQuitConfirmation(context, gameProvider),
+                          ),
                         ],
                       ),
                     ),
-                  ),
 
-                  if (gameState.phase == GamePhase.dutchCalled)
-                    GameOverlays.dutchNotification(),
+                    // Indicateur de reconnexion silencieuse
+                    if (gameProvider.isSilentReconnecting)
+                      GameOverlays.reconnectingBanner(),
 
-                  if (gameState.phase == GamePhase.specialPower)
-                    _buildSpecialPowerOverlay(gameProvider, gameState),
+                    if (gameProvider.isPaused)
+                      GameOverlays.pauseOverlay(
+                        pausedByName: gameProvider.pausedByName,
+                        onResume: gameProvider.resumeGame,
+                        isLocalPauser: gameProvider.isLocalPauser,
+                        pauseDeadlineMs: gameProvider.pauseDeadlineMs,
+                      ),
 
-                  if (gameProvider.isProcessing)
-                    const Positioned(
-                      top: 20,
-                      right: 60,
-                      child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.textDisabled)),
-                    ),
-
-                  // Notification: joueur a quitté
-                  if (gameProvider.playerLeftNotification)
-                    GameOverlays.playerLeftBanner(
-                        gameProvider.lastPlayerLeftName),
-
-                  // Notification: pouvoir spécial utilisé sur nous
-                  if (gameProvider.specialPowerNotification)
-                    GameOverlays.specialPowerBanner(
-                        gameProvider.specialPowerByName),
-
-                  // Boutons en haut à droite
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Bouton Émotes
-                        IconButton(
-                          icon: const Icon(Icons.emoji_emotions,
-                              color: Colors.amber, size: 32),
-                          onPressed: () {
-                            setState(() {
-                              _showEmoteOverlay = true;
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.pause_circle_filled,
-                              color: AppColors.textDisabled, size: 32),
-                          onPressed: () => gameProvider.pauseGame(),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.exit_to_app,
-                              color: AppColors.textDisabled, size: 32),
-                          onPressed: () =>
-                              _showQuitConfirmation(context, gameProvider),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Indicateur de reconnexion silencieuse
-                  if (gameProvider.isSilentReconnecting)
-                    GameOverlays.reconnectingBanner(),
-
-                  if (gameProvider.isPaused)
-                    GameOverlays.pauseOverlay(
-                      pausedByName: gameProvider.pausedByName,
-                      onResume: gameProvider.resumeGame,
-                      isLocalPauser: gameProvider.isLocalPauser,
-                      pauseDeadlineMs: gameProvider.pauseDeadlineMs,
-                    ),
-
-                  PresenceCheckOverlay(
-                    active: gameProvider.presenceCheckActive,
-                    deadlineMs: gameProvider.presenceCheckDeadlineMs,
-                    reason: gameProvider.presenceCheckReason,
-                    onConfirm: gameProvider.confirmPresence,
-                    onAbandon: () {
-                      gameProvider.confirmPresence(); // Clear the check first
-                      gameProvider.forfeitGame();
-                      // Don't navigate to /lobby - stay as spectator.
-                      // The game will end and navigate to results automatically.
-                    },
-                  ),
-
-                  // Émotes flottantes
-                  ..._floatingEmotes,
-
-                  // Overlay d'émotes
-                  if (_showEmoteOverlay)
-                    EmoteOverlay(
-                      onClose: () {
-                        setState(() {
-                          _showEmoteOverlay = false;
-                        });
-                      },
-                      onEmoteSent: (emoji) {
-                        gameProvider.sendEmote(emoji);
+                    PresenceCheckOverlay(
+                      active: gameProvider.presenceCheckActive,
+                      deadlineMs: gameProvider.presenceCheckDeadlineMs,
+                      reason: gameProvider.presenceCheckReason,
+                      onConfirm: gameProvider.confirmPresence,
+                      onAbandon: () {
+                        gameProvider.confirmPresence(); // Clear the check first
+                        gameProvider.forfeitGame();
+                        // Don't navigate to /lobby - stay as spectator.
+                        // The game will end and navigate to results automatically.
                       },
                     ),
-                ],
+
+                    // Émotes flottantes
+                    ..._floatingEmotes,
+
+                    // Overlay d'émotes
+                    if (_showEmoteOverlay)
+                      EmoteOverlay(
+                        onClose: () {
+                          setState(() {
+                            _showEmoteOverlay = false;
+                          });
+                        },
+                        onEmoteSent: (emoji) {
+                          gameProvider.sendEmote(emoji);
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -721,5 +770,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   void _resetSpecialPowerState() {
     _specialPowerReadyId = null;
     _specialPowerDialogShownId = null;
+    // Si le dialog de pause était empilé au-dessus d'un dialog de pouvoir,
+    // le retirer lorsque le pouvoir se termine.
+    if (_pauseDialogShown) {
+      _pauseDialogShown = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      });
+    }
   }
 }

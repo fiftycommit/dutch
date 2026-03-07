@@ -181,6 +181,7 @@ class _CenterTableState extends State<CenterTable>
 
   void _onPowerTick() {
     if (!mounted) return;
+    if (widget.isPaused) return;
     if (widget.gameState.phase != GamePhase.specialPower) {
       _stopPowerTicker();
       return;

@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
+import '../../multiplayer/game_overlays.dart';
 import '../responsive_dialog.dart';
 
 /// Widgets partagés pour les dialogs de pouvoirs spéciaux
@@ -240,6 +241,10 @@ class PowerDialogWidgets {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// _TickingConfirmButton : bouton de confirmation avec décompte auto-close
+// Gèle automatiquement le décompte quand GamePauseScope.isPaused est true.
+// ─────────────────────────────────────────────────────────────────────────────
 class _TickingConfirmButton extends StatefulWidget {
   final int autoCloseSeconds;
   final String labelPrefix;
@@ -268,6 +273,11 @@ class _TickingConfirmButtonState extends State<_TickingConfirmButton>
   late int _remaining;
   Ticker? _ticker;
   late DateTime _startTime;
+  bool _isPaused = false;
+
+  /// Durée cumulée passée en pause
+  Duration _pausedDuration = Duration.zero;
+  DateTime? _pauseStart;
 
   @override
   void initState() {
@@ -275,24 +285,50 @@ class _TickingConfirmButtonState extends State<_TickingConfirmButton>
     _remaining = widget.autoCloseSeconds;
     _startTime = DateTime.now();
     if (_remaining > 0) {
-      _ticker = createTicker((_) {
-        if (!mounted) return;
-        final elapsed = DateTime.now().difference(_startTime).inSeconds;
-        final newRemaining = (widget.autoCloseSeconds - elapsed)
-            .clamp(0, widget.autoCloseSeconds);
-        if (newRemaining != _remaining) {
-          setState(() => _remaining = newRemaining);
-          if (_remaining <= 0) {
-            _ticker?.stop();
-            if (widget.onTimeout != null) {
-              widget.onTimeout!();
-            } else {
-              widget.onPressed();
-            }
+      _startTicker();
+    }
+  }
+
+  void _startTicker() {
+    _ticker?.dispose();
+    _ticker = createTicker((_) {
+      if (!mounted || _isPaused) return;
+      final elapsed = DateTime.now().difference(_startTime) - _pausedDuration;
+      final newRemaining = (widget.autoCloseSeconds - elapsed.inSeconds)
+          .clamp(0, widget.autoCloseSeconds);
+      if (newRemaining != _remaining) {
+        setState(() => _remaining = newRemaining);
+        if (_remaining <= 0) {
+          _ticker?.stop();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
           }
         }
-      });
-      _ticker!.start();
+      }
+    });
+    _ticker!.start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final paused = GamePauseScope.of(context);
+    if (paused != _isPaused) {
+      _isPaused = paused;
+      if (_isPaused) {
+        _pauseStart = DateTime.now();
+        _ticker?.stop();
+      } else {
+        if (_pauseStart != null) {
+          _pausedDuration += DateTime.now().difference(_pauseStart!);
+          _pauseStart = null;
+        }
+        if (_remaining > 0) {
+          _startTicker();
+        }
+      }
     }
   }
 
@@ -317,6 +353,10 @@ class _TickingConfirmButtonState extends State<_TickingConfirmButton>
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// _TickingSkipButton : bouton "Passer" avec décompte auto-close
+// Gèle automatiquement le décompte quand GamePauseScope.isPaused est true.
+// ─────────────────────────────────────────────────────────────────────────────
 class _TickingSkipButton extends StatefulWidget {
   final int autoCloseSeconds;
   final String labelPrefix;
@@ -336,8 +376,92 @@ class _TickingSkipButton extends StatefulWidget {
   State<_TickingSkipButton> createState() => _TickingSkipButtonState();
 }
 
+class _TickingSkipButtonState extends State<_TickingSkipButton>
+    with SingleTickerProviderStateMixin {
+  late int _remaining;
+  Ticker? _ticker;
+  late DateTime _startTime;
+  bool _isPaused = false;
+
+  /// Durée cumulée passée en pause
+  Duration _pausedDuration = Duration.zero;
+  DateTime? _pauseStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.autoCloseSeconds;
+    _startTime = DateTime.now();
+    if (_remaining > 0) {
+      _startTicker();
+    }
+  }
+
+  void _startTicker() {
+    _ticker?.dispose();
+    _ticker = createTicker((_) {
+      if (!mounted || _isPaused) return;
+      final elapsed = DateTime.now().difference(_startTime) - _pausedDuration;
+      final newRemaining = (widget.autoCloseSeconds - elapsed.inSeconds)
+          .clamp(0, widget.autoCloseSeconds);
+      if (newRemaining != _remaining) {
+        setState(() => _remaining = newRemaining);
+        if (_remaining <= 0) {
+          _ticker?.stop();
+          if (widget.onTimeout != null) {
+            widget.onTimeout!();
+          } else {
+            widget.onPressed();
+          }
+        }
+      }
+    });
+    _ticker!.start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final paused = GamePauseScope.of(context);
+    if (paused != _isPaused) {
+      _isPaused = paused;
+      if (_isPaused) {
+        _pauseStart = DateTime.now();
+        _ticker?.stop();
+      } else {
+        if (_pauseStart != null) {
+          _pausedDuration += DateTime.now().difference(_pauseStart!);
+          _pauseStart = null;
+        }
+        if (_remaining > 0) {
+          _startTicker();
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _remaining > 0
+        ? "${widget.labelPrefix} ($_remaining s)"
+        : widget.labelPrefix;
+    return PowerDialogWidgets.skipButton(
+      label: label,
+      onPressed: widget.onPressed,
+      metrics: widget.metrics,
+    );
+  }
+}
+
 /// Barre de progression du temps restant pour utiliser un pouvoir spécial.
 /// Affichée en haut de chaque dialogue de pouvoir en mode multijoueur.
+/// Lit GamePauseScope pour se geler automatiquement pendant la pause.
 class PowerTimerBar extends StatefulWidget {
   final int startTimeMs;
   final int totalMs;
@@ -357,12 +481,38 @@ class _PowerTimerBarState extends State<PowerTimerBar>
   Ticker? _ticker;
   double _progress = 1.0;
 
+  /// Progrès gelé au moment de la pause, pour éviter de bouger pendant la pause
+  double? _frozenProgress;
+  bool _isPaused = false;
+
   @override
   void initState() {
     super.initState();
     _updateProgress();
+    _startTicker();
+  }
+
+  void _startTicker() {
+    _ticker?.dispose();
     _ticker = createTicker((_) => _updateProgress());
     _ticker!.start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final paused = GamePauseScope.of(context);
+    if (paused != _isPaused) {
+      _isPaused = paused;
+      if (_isPaused) {
+        _frozenProgress = _progress;
+        _ticker?.stop();
+      } else {
+        _frozenProgress = null;
+        _updateProgress();
+        _startTicker();
+      }
+    }
   }
 
   @override
@@ -372,12 +522,14 @@ class _PowerTimerBarState extends State<PowerTimerBar>
     // recalculer immédiatement
     if (oldWidget.startTimeMs != widget.startTimeMs ||
         oldWidget.totalMs != widget.totalMs) {
+      _frozenProgress = null;
       _updateProgress();
     }
   }
 
   void _updateProgress() {
     if (!mounted) return;
+    if (_isPaused) return;
     final totalMs = widget.totalMs;
     if (totalMs <= 0 || widget.startTimeMs <= 0) {
       // Données invalides — afficher la barre pleine au lieu de crasher
@@ -392,7 +544,7 @@ class _PowerTimerBarState extends State<PowerTimerBar>
     final clampedElapsed = elapsed.clamp(0, totalMs);
     final remaining = totalMs - clampedElapsed;
     final p = (remaining / totalMs).clamp(0.0, 1.0);
-    if ((p - _progress).abs() > 0.001) {
+    if (p != _progress) {
       setState(() => _progress = p);
     }
   }
@@ -405,12 +557,15 @@ class _PowerTimerBarState extends State<PowerTimerBar>
 
   @override
   Widget build(BuildContext context) {
+    final displayProgress = _frozenProgress ?? _progress;
     final totalMs = widget.totalMs;
     // Éviter l'affichage de secondes négatives ou incohérentes
     final seconds = totalMs > 0
-        ? (totalMs * _progress / 1000).ceil().clamp(0, totalMs ~/ 1000 + 1)
+        ? (totalMs * displayProgress / 1000)
+            .ceil()
+            .clamp(0, totalMs ~/ 1000 + 1)
         : 0;
-    final color = Color.lerp(Colors.red, Colors.amber, _progress)!;
+    final color = Color.lerp(Colors.red, Colors.amber, displayProgress)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -425,7 +580,7 @@ class _PowerTimerBarState extends State<PowerTimerBar>
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: _progress,
+            value: displayProgress,
             backgroundColor: Colors.black26,
             color: color,
             minHeight: 4,
@@ -433,58 +588,6 @@ class _PowerTimerBarState extends State<PowerTimerBar>
         ),
         const SizedBox(height: 10),
       ],
-    );
-  }
-}
-
-class _TickingSkipButtonState extends State<_TickingSkipButton>
-    with SingleTickerProviderStateMixin {
-  late int _remaining;
-  Ticker? _ticker;
-  late DateTime _startTime;
-
-  @override
-  void initState() {
-    super.initState();
-    _remaining = widget.autoCloseSeconds;
-    _startTime = DateTime.now();
-    if (_remaining > 0) {
-      _ticker = createTicker((_) {
-        if (!mounted) return;
-        final elapsed = DateTime.now().difference(_startTime).inSeconds;
-        final newRemaining = (widget.autoCloseSeconds - elapsed)
-            .clamp(0, widget.autoCloseSeconds);
-        if (newRemaining != _remaining) {
-          setState(() => _remaining = newRemaining);
-          if (_remaining <= 0) {
-            _ticker?.stop();
-            if (widget.onTimeout != null) {
-              widget.onTimeout!();
-            } else {
-              widget.onPressed();
-            }
-          }
-        }
-      });
-      _ticker!.start();
-    }
-  }
-
-  @override
-  void dispose() {
-    _ticker?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = _remaining > 0
-        ? "${widget.labelPrefix} ($_remaining s)"
-        : widget.labelPrefix;
-    return PowerDialogWidgets.skipButton(
-      label: label,
-      onPressed: widget.onPressed,
-      metrics: widget.metrics,
     );
   }
 }
