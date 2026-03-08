@@ -46,10 +46,12 @@ Future<bool> downloadLog(String filename, String content) async {
 
     // Mobile: share sheet natif
     if (Platform.isIOS || Platform.isAndroid) {
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Log de partie Dutch',
-        subject: 'Log de partie Dutch',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Log de partie Dutch',
+          subject: 'Log de partie Dutch',
+        ),
       );
       return true;
     }

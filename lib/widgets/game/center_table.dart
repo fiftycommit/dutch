@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
@@ -29,6 +30,11 @@ class CenterTable extends StatefulWidget {
   final bool isPaused;
   final String? localPlayerName;
 
+  /// Largeur disponible pour les textes d'historique.
+  /// Correspond à baseCenterWidth (largeur du bloc deck/discard) pour que
+  /// les textes wrappent à la bonne largeur au lieu d'être réduits par le FittedBox.
+  final double? availableWidth;
+
   const CenterTable({
     super.key,
     required this.gameState,
@@ -49,6 +55,7 @@ class CenterTable extends StatefulWidget {
     this.showDeckAndDiscard = true,
     this.isPaused = false,
     this.localPlayerName,
+    this.availableWidth,
   });
 
   @override
@@ -379,16 +386,10 @@ class _CenterTableState extends State<CenterTable>
             _buildLastBotAction(gs),
             const SizedBox(height: 6),
           ],
-          Text(
+          _buildConstrainedText(
             "$powerPlayerName pouvoir...",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: widget.isCompactMode ? 14 : 18,
-              fontWeight: FontWeight.bold,
-              fontStyle: FontStyle.italic,
-              shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
-            ),
+            fontSize: widget.isCompactMode ? 14 : 18,
+            italic: true,
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -407,14 +408,9 @@ class _CenterTableState extends State<CenterTable>
           // la barre de réaction (elle serait bloquée au vert).
           // On attend que le vrai countdown commence.
           if (gs.reactionTimeRemaining <= widget.reactionTimeTotalMs + 200) ...[
-            Text(
+            _buildConstrainedText(
               "Vite ! Avez-vous un${topCardValue == 'Dame' ? 'e' : ''} $topCardValue ?",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: widget.isCompactMode ? 12 : 16,
-                fontWeight: FontWeight.bold,
-                shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
-              ),
+              fontSize: widget.isCompactMode ? 12 : 16,
             ),
             SizedBox(height: widget.isCompactMode ? 2 : 5),
             SizedBox(
@@ -635,6 +631,34 @@ class _CenterTableState extends State<CenterTable>
     );
   }
 
+  /// Texte contraint avec maxLines pour éviter les débordements.
+  /// SizedBox(width: availableWidth) force le wrapping à la largeur du bloc
+  /// deck/discard, empêchant le FittedBox parent de réduire le texte.
+  Widget _buildConstrainedText(String text,
+      {required double fontSize, bool italic = false}) {
+    final textWidget = AutoSizeText(
+      text,
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      minFontSize: 5,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: fontSize,
+        fontWeight: FontWeight.bold,
+        fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+        shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
+      ),
+    );
+    if (widget.availableWidth != null) {
+      return SizedBox(width: widget.availableWidth, child: textWidget);
+    }
+    return textWidget;
+  }
+
+  /// Dernière action d'un bot/joueur, affichée au centre.
+  /// SizedBox(width: availableWidth) force le wrapping à la largeur du bloc
+  /// deck/discard, empêchant le FittedBox parent de réduire le texte.
   Widget _buildLastBotAction(GameState gs) {
     final raw = gs.actionHistory.first;
     final rawText =
@@ -642,15 +666,29 @@ class _CenterTableState extends State<CenterTable>
     final text =
         HistoryPersonalizer.personalize(rawText, widget.localPlayerName);
 
-    return Text(
+    final fontSize = widget.isCompactMode ? 12.0 : 16.0;
+    final textStyle = TextStyle(
+      color: Colors.white,
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+      shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
+    );
+
+    // 1 ligne pour les textes courts, 2 lignes pour les longs
+    final maxLines = text.length > 35 ? 2 : 1;
+
+    final textWidget = AutoSizeText(
       text,
       textAlign: TextAlign.center,
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: widget.isCompactMode ? 12 : 16,
-        fontWeight: FontWeight.bold,
-        shadows: const [Shadow(color: Colors.black, blurRadius: 5)],
-      ),
+      maxLines: maxLines,
+      minFontSize: 5,
+      overflow: TextOverflow.ellipsis,
+      style: textStyle,
     );
+
+    if (widget.availableWidth != null) {
+      return SizedBox(width: widget.availableWidth, child: textWidget);
+    }
+    return textWidget;
   }
 }

@@ -63,6 +63,17 @@ class AuthService {
 
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
+  /// Flag pour n'initialiser GoogleSignIn qu'une seule fois (requis par v7)
+  bool _googleSignInInitialized = false;
+
+  /// Initialise GoogleSignIn.instance (idempotent).
+  /// Doit être appelé avant tout appel à authenticate().
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await GoogleSignIn.instance.initialize();
+    _googleSignInInitialized = true;
+  }
+
   /// Retourne le Firebase ID token (se rafraîchit automatiquement)
   Future<String?> getStoredToken() async {
     return _firebaseAuth.currentUser?.getIdToken();
@@ -165,20 +176,21 @@ class AuthService {
           suggestedUsername: suggested,
         );
       } else {
-        // Sur iOS / Android : google_sign_in
-        final googleSignIn = GoogleSignIn(
-          clientId:
-              null, // géré par GoogleService-Info.plist / google-services.json
-        );
-        final googleUser = await googleSignIn.signIn();
-        if (googleUser == null) {
-          return const AuthResult(success: false, error: 'Connexion annulée');
+        // Sur iOS / Android : google_sign_in v7 (singleton + authenticate)
+        await _ensureGoogleSignInInitialized();
+        final GoogleSignInAccount googleUser;
+        try {
+          googleUser = await GoogleSignIn.instance.authenticate();
+        } on GoogleSignInException catch (e) {
+          if (e.code == GoogleSignInExceptionCode.canceled) {
+            return const AuthResult(success: false, error: 'Connexion annulée');
+          }
+          rethrow;
         }
 
-        final googleAuth = await googleUser.authentication;
+        final idToken = googleUser.authentication.idToken;
         final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
+          idToken: idToken,
         );
 
         final userCredential =
@@ -657,14 +669,20 @@ class AuthService {
             ..addScope('profile');
           await user.reauthenticateWithPopup(provider);
         } else {
-          final googleUser = await GoogleSignIn().signIn();
-          if (googleUser == null) {
-            return const AuthResult(success: false, error: 'Connexion annulée');
+          await _ensureGoogleSignInInitialized();
+          final GoogleSignInAccount googleUser;
+          try {
+            googleUser = await GoogleSignIn.instance.authenticate();
+          } on GoogleSignInException catch (e) {
+            if (e.code == GoogleSignInExceptionCode.canceled) {
+              return const AuthResult(
+                  success: false, error: 'Connexion annulée');
+            }
+            rethrow;
           }
-          final googleAuth = await googleUser.authentication;
+          final idToken = googleUser.authentication.idToken;
           final credential = GoogleAuthProvider.credential(
-            accessToken: googleAuth.accessToken,
-            idToken: googleAuth.idToken,
+            idToken: idToken,
           );
           await user.reauthenticateWithCredential(credential);
         }
@@ -697,14 +715,19 @@ class AuthService {
           ..addScope('profile');
         await user.linkWithPopup(provider);
       } else {
-        final googleUser = await GoogleSignIn().signIn();
-        if (googleUser == null) {
-          return const AuthResult(success: false, error: 'Connexion annulée');
+        await _ensureGoogleSignInInitialized();
+        final GoogleSignInAccount googleUser;
+        try {
+          googleUser = await GoogleSignIn.instance.authenticate();
+        } on GoogleSignInException catch (e) {
+          if (e.code == GoogleSignInExceptionCode.canceled) {
+            return const AuthResult(success: false, error: 'Connexion annulée');
+          }
+          rethrow;
         }
-        final googleAuth = await googleUser.authentication;
+        final idToken = googleUser.authentication.idToken;
         final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
+          idToken: idToken,
         );
         await user.linkWithCredential(credential);
       }

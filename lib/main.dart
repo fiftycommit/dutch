@@ -36,22 +36,22 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   );
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
+void main() {
   final errorService = ErrorReportingService();
 
-  // Capturer les erreurs Flutter (widget build, layout, etc.)
-  FlutterError.onError = (details) {
-    errorService.reportFlutterError(details);
-    // En debug, on garde aussi le comportement par défaut (écran rouge)
-    if (kDebugMode) {
-      FlutterError.presentError(details);
-    }
-  };
-
   // Capturer les erreurs async non gérées via runZonedGuarded
+  // IMPORTANT : ensureInitialized() et runApp() doivent être dans la même zone
   runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // Capturer les erreurs Flutter (widget build, layout, etc.)
+    FlutterError.onError = (details) {
+      errorService.reportFlutterError(details);
+      // En debug, on garde aussi le comportement par défaut (écran rouge)
+      if (kDebugMode) {
+        FlutterError.presentError(details);
+      }
+    };
     // Lancer Firebase et l'orientation en parallèle (non séquentiel)
     await Future.wait([
       Firebase.initializeApp(
@@ -100,7 +100,6 @@ ThemeData _buildLightTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
-      fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.light(
         primary: Color(0xFF007AFF),
         secondary: Color(0xFF34C759),
@@ -137,7 +136,6 @@ ThemeData _buildDarkTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
-      fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF0A84FF),
         secondary: Color(0xFF30D158),
@@ -179,7 +177,6 @@ ThemeData _buildGreenTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
-      fontFamilyFallback: const ['NotoColorEmoji'],
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF4CAF50),
         secondary: Color(0xFF66BB6A),

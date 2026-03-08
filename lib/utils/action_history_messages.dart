@@ -13,21 +13,21 @@ class ActionHistoryMessages {
 
   static String discardDrawn(String playerName, PlayingCard card,
       {required bool isLocal, bool hasPower = false}) {
-    final cardName = card.displayName == 'e Dame' ? ' Dame' : card.displayName;
+    final cardName = card.displayName;
     if (hasPower) {
       final verb = isLocal ? 'avez défaussé' : 'a défaussé';
-      return "$playerName $verb la carte$cardName";
+      return "$playerName $verb la carte $cardName";
     }
     final verb = isLocal ? "n'avez pas gardé" : "n'a pas gardé";
-    return "$playerName $verb la carte$cardName (pas intéressé)";
+    return "$playerName $verb la carte $cardName (pas intéressé)";
   }
 
   // ─── Remplacement (échange avec la pioche) ──────────────────────────
 
   static String replaceCard(String playerName, PlayingCard oldCard,
       {required bool isLocal}) {
-    final isDame = oldCard.displayName == 'e Dame';
-    final cardName = isDame ? 'Dame' : oldCard.displayName.trimLeft();
+    final isDame = oldCard.displayName == 'Dame';
+    final cardName = oldCard.displayName.trimLeft();
     if (isLocal) {
       return "Vous avez remplacé votre $cardName par la carte piochée";
     } else {
@@ -40,10 +40,11 @@ class ActionHistoryMessages {
 
   static String matchSuccess(String playerName, PlayingCard card,
       {required bool isLocal}) {
+    final article = card.displayName == 'Dame' ? 'une' : 'un';
     if (isLocal) {
-      return "MATCH ! - Vous avez posé un${card.displayName} !";
+      return "MATCH ! - Vous avez posé $article ${card.displayName} !";
     }
-    return "MATCH ! - $playerName a posé un${card.displayName} !";
+    return "MATCH ! - $playerName a posé $article ${card.displayName} !";
   }
 
   static String matchFailed(

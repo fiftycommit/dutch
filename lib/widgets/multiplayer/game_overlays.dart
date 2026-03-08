@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
@@ -151,8 +152,10 @@ class GameOverlays {
             children: [
               const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
               const SizedBox(width: 8),
-              Text(
+              AutoSizeText(
                 "${byPlayerName ?? 'Un joueur'} utilise un pouvoir sur vous !",
+                maxLines: 1,
+                minFontSize: 5,
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold),
               ),

@@ -1461,6 +1461,11 @@ class _GameTableContentState extends State<_GameTableContent>
                             ? centerShiftFraction
                             : (isCompact ? centerShiftFraction * 0.35 : 0.0),
                       ),
+                      // FittedBox scaleDown pour que le bloc deck/discard
+                      // (et carte piochée) rentre dans l'espace disponible.
+                      // Les textes d'historique utilisent availableWidth
+                      // (= baseCenterWidth) pour wrapper correctement au lieu
+                      // d'être réduits visuellement par le FittedBox.
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.center,
@@ -1471,6 +1476,7 @@ class _GameTableContentState extends State<_GameTableContent>
                             isMyTurn: _isMyTurn,
                             hasDrawn: _hasDrawn,
                             isCompactMode: centerCompact,
+                            availableWidth: baseCenterWidth,
                             onShowDiscard: callbacks.onShowDiscardPile,
                             onDrawCard: callbacks.onDrawCard,
                             onTakeFromDiscard: callbacks.onTakeFromDiscard,

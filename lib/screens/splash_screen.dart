@@ -203,80 +203,85 @@ class _SplashScreenState extends State<SplashScreen>
                   final titleSpacing = isShort ? 6.0 : 8.0;
                   final subtitleSpacing = isShort ? 1.5 : 2.0;
 
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        VectorGraphic(
-                          loader: const AssetBytesLoader(
-                            'assets/images/cards/joker-rouge.vec',
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          VectorGraphic(
+                            loader: const AssetBytesLoader(
+                              'assets/images/cards/joker-rouge.vec',
+                            ),
+                            width: logoWidth,
+                            height: logoHeight,
                           ),
-                          width: logoWidth,
-                          height: logoHeight,
-                        ),
-                        SizedBox(height: spacingLarge),
-                        Text(
-                          'DUTCH',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: titleSize,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: titleSpacing,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                offset: const Offset(0, 4),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: spacingSmall),
-                        Text(
-                          'Jeu de Mémoire et Stratégie',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: subtitleSize,
-                            letterSpacing: subtitleSpacing,
-                          ),
-                        ),
-                        SizedBox(height: spacingLarge),
-                        Padding(
-                          padding: ScreenUtils.adaptivePadding(
-                            context,
-                            horizontal: horizontalPadding,
-                          ),
-                          child: Column(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  ScreenUtils.borderRadius(context, 8),
+                          SizedBox(height: spacingLarge),
+                          Text(
+                            'DUTCH',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: titleSize,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: titleSpacing,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withValues(alpha: 0.5),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 8,
                                 ),
-                                child: LinearProgressIndicator(
-                                  value: null,
-                                  minHeight: progressHeight,
-                                  backgroundColor:
-                                      Colors.white.withValues(alpha: 0.2),
-                                  valueColor:
-                                      const AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF4CAF50),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: spacingSmall),
+                          Text(
+                            'Jeu de Mémoire et Stratégie',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: subtitleSize,
+                              letterSpacing: subtitleSpacing,
+                            ),
+                          ),
+                          SizedBox(height: spacingLarge),
+                          Padding(
+                            padding: ScreenUtils.adaptivePadding(
+                              context,
+                              horizontal: horizontalPadding,
+                            ),
+                            child: Column(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    ScreenUtils.borderRadius(context, 8),
+                                  ),
+                                  child: LinearProgressIndicator(
+                                    value: null,
+                                    minHeight: progressHeight,
+                                    backgroundColor:
+                                        Colors.white.withValues(alpha: 0.2),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF4CAF50),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(
-                                  height: ScreenUtils.spacing(
-                                      context, isShort ? 10 : 16)),
-                              Text(
-                                _statusText,
-                                style: TextStyle(
-                                  color: AppColors.textDisabled,
-                                  fontSize: statusFont,
+                                SizedBox(
+                                    height: ScreenUtils.spacing(
+                                        context, isShort ? 10 : 16)),
+                                Text(
+                                  _statusText,
+                                  style: TextStyle(
+                                    color: AppColors.textDisabled,
+                                    fontSize: statusFont,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 },
