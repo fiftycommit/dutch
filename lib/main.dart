@@ -259,7 +259,11 @@ class _DutchGameAppState extends State<DutchGameApp> {
           ),
         ),
         ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
-        ChangeNotifierProvider(create: (_) => MultiplayerGameProvider()),
+        ChangeNotifierProvider(
+          create: (_) => MultiplayerGameProvider(
+            hapticService: ServiceLocator().get<IHapticService>(),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: Builder(

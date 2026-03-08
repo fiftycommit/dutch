@@ -5,6 +5,7 @@ import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'mocks/mock_multiplayer_service.dart';
+import 'mocks/mock_services.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -106,7 +107,10 @@ void main() {
 
     setUp(() {
       mockService = MockMultiplayerService();
-      provider = MultiplayerGameProvider(multiplayerService: mockService);
+      provider = MultiplayerGameProvider(
+        multiplayerService: mockService,
+        hapticService: MockHapticService(),
+      );
     });
 
     tearDown(() {
@@ -180,7 +184,10 @@ void main() {
 
     setUp(() {
       mockService = MockMultiplayerService();
-      provider = MultiplayerGameProvider(multiplayerService: mockService);
+      provider = MultiplayerGameProvider(
+        multiplayerService: mockService,
+        hapticService: MockHapticService(),
+      );
     });
 
     tearDown(() {

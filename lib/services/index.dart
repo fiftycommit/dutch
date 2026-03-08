@@ -16,6 +16,6 @@ export 'multiplayer/competitive_service.dart';
 export 'multiplayer/multiplayer_service.dart';
 
 export 'ui/emote_service.dart';
-export 'ui/haptic_service.dart';
+export 'ui/haptic_service.dart'; // HapticIntensity enum uniquement
 export 'ui/sound_service.dart';
 export 'ui/stats_service.dart';

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/ui/haptic_service.dart';
+import 'package:dutch_game/services/ui/haptic_service_impl.dart';
 
 void main() {
   group('HapticIntensity', () {
@@ -16,78 +17,78 @@ void main() {
     });
   });
 
-  group('HapticService', () {
+  group('HapticServiceImpl', () {
+    late HapticServiceImpl service;
+
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized();
-      // Reset to enabled state
-      HapticService.setEnabled(true);
+      service = HapticServiceImpl();
     });
 
     group('enabled state', () {
       test('isEnabled returns true by default', () {
-        HapticService.setEnabled(true);
-        expect(HapticService.isEnabled, isTrue);
+        expect(service.isEnabled, isTrue);
       });
 
       test('setEnabled changes state', () {
-        HapticService.setEnabled(false);
-        expect(HapticService.isEnabled, isFalse);
+        service.setEnabled(false);
+        expect(service.isEnabled, isFalse);
 
-        HapticService.setEnabled(true);
-        expect(HapticService.isEnabled, isTrue);
+        service.setEnabled(true);
+        expect(service.isEnabled, isTrue);
       });
     });
 
     group('trigger', () {
       test('does nothing when disabled', () async {
-        HapticService.setEnabled(false);
+        service.setEnabled(false);
 
-        // Should complete without error
-        await HapticService.trigger(HapticIntensity.light);
-        await HapticService.trigger(HapticIntensity.medium);
-        await HapticService.trigger(HapticIntensity.heavy);
-        await HapticService.trigger(HapticIntensity.error);
-        await HapticService.trigger(HapticIntensity.success);
+        // Doit se terminer sans erreur
+        await service.trigger(HapticIntensity.light);
+        await service.trigger(HapticIntensity.medium);
+        await service.trigger(HapticIntensity.heavy);
+        await service.trigger(HapticIntensity.error);
+        await service.trigger(HapticIntensity.success);
       });
 
       test('handles all intensity levels', () async {
         for (final intensity in HapticIntensity.values) {
-          // Should complete without throwing
-          await HapticService.trigger(intensity);
+          // Doit se terminer sans exception
+          await service.trigger(intensity);
         }
       });
     });
 
     group('convenience methods', () {
       test('cardTap completes without error', () async {
-        await HapticService.cardTap();
+        await service.cardTap();
       });
 
       test('buttonTap completes without error', () async {
-        await HapticService.buttonTap();
+        await service.buttonTap();
       });
 
       test('importantAction completes without error', () async {
-        await HapticService.importantAction();
+        await service.importantAction();
       });
 
       test('error completes without error', () async {
-        await HapticService.error();
+        await service.error();
       });
 
       test('success completes without error', () async {
-        await HapticService.success();
+        await service.success();
       });
 
       test('convenience methods respect enabled state', () async {
-        HapticService.setEnabled(false);
+        service.setEnabled(false);
 
-        // All should complete without calling HapticFeedback
-        await HapticService.cardTap();
-        await HapticService.buttonTap();
-        await HapticService.importantAction();
-        await HapticService.error();
-        await HapticService.success();
+        // Toutes les méthodes doivent se terminer sans appeler HapticFeedback
+        await service.cardTap();
+        await service.buttonTap();
+        await service.importantAction();
+        await service.error();
+        await service.success();
       });
     });
   });

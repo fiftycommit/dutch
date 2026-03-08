@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/player.dart';
-import '../../services/ui/haptic_service.dart';
+import '../../core/interfaces/i_haptic_service.dart';
+import '../../core/service_locator.dart';
 import '../../utils/screen_utils.dart';
 
 class PlayerAvatar extends StatefulWidget {
@@ -110,7 +111,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
         final tickIndex = (elapsedTotal / 100).round();
         if (tickIndex != _lastHapticTick && tickIndex % 7 == 0) {
           _lastHapticTick = tickIndex;
-          HapticService.cardTap();
+          ServiceLocator().get<IHapticService>().cardTap();
         }
       }
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../services/ui/haptic_service.dart';
+import '../../core/interfaces/i_haptic_service.dart';
+import '../../core/service_locator.dart';
 
 class PresenceCheckOverlay extends StatefulWidget {
   const PresenceCheckOverlay({
@@ -86,7 +87,7 @@ class _PresenceCheckOverlayState extends State<PresenceCheckOverlay>
     // On vibre continuellement pendant tout le compte à rebours de présence
     if (tickIndex != _lastHapticTick && tickIndex % 7 == 0) {
       _lastHapticTick = tickIndex;
-      HapticService.cardTap();
+      ServiceLocator().get<IHapticService>().cardTap();
     }
   }
 

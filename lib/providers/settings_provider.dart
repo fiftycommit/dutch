@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
-import '../services/ui/haptic_service.dart';
+import '../core/interfaces/i_haptic_service.dart';
+import '../core/service_locator.dart';
 import '../services/ui/sound_service.dart';
 import '../services/logging/error_reporting_service.dart';
 
@@ -37,7 +38,8 @@ class SettingsProvider with ChangeNotifier {
 
   void toggleHaptic(bool value) {
     _settings = _settings.copyWith(hapticEnabled: value);
-    HapticService.setEnabled(value);
+    // Synchroniser avec l'instance DI unique (corrige le bug où solo ignorait le toggle)
+    ServiceLocator().get<IHapticService>().setEnabled(value);
     _saveSettings();
     notifyListeners();
   }
@@ -91,7 +93,10 @@ class SettingsProvider with ChangeNotifier {
       if (settingsJson != null) {
         _settings = GameSettings.fromJson(jsonDecode(settingsJson));
         SoundService.setEnabled(_settings.soundEnabled);
-        HapticService.setEnabled(_settings.hapticEnabled);
+        // Synchroniser avec l'instance DI unique
+        ServiceLocator()
+            .get<IHapticService>()
+            .setEnabled(_settings.hapticEnabled);
         notifyListeners();
       }
     } catch (e, stackTrace) {

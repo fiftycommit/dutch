@@ -145,7 +145,8 @@ void main() {
 
       provider.drawCard();
 
-      expect(mockTracking.recordedActions.any((a) => a['actionType'] == 'draw'), true);
+      expect(mockTracking.recordedActions.any((a) => a['actionType'] == 'draw'),
+          true);
     });
   });
 
@@ -177,6 +178,7 @@ void main() {
     test('replaceCard triggers haptic feedback', () {
       _setupGameWithHumanTurn(provider);
       provider.drawCard();
+      mockHaptic.reset();
 
       provider.replaceCard(0);
 
@@ -190,7 +192,9 @@ void main() {
 
       provider.replaceCard(0);
 
-      expect(mockTracking.recordedActions.any((a) => a['actionType'] == 'replace'), true);
+      expect(
+          mockTracking.recordedActions.any((a) => a['actionType'] == 'replace'),
+          true);
     });
   });
 
@@ -269,7 +273,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       // Setup matching cards
       final matchCard = createCard('hearts', '5');
       human.hand[0] = matchCard;
@@ -285,7 +289,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       // Setup non-matching cards
       human.hand[0] = createCard('hearts', 'A');
       provider.gameState!.discardPile.add(createCard('diamonds', '9'));
@@ -313,7 +317,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       human.hand[0] = createCard('hearts', '5');
       provider.gameState!.discardPile.add(createCard('diamonds', '5'));
 
@@ -327,7 +331,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       human.hand[0] = createCard('hearts', 'A');
       provider.gameState!.discardPile.add(createCard('diamonds', '9'));
 
@@ -341,7 +345,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       human.hand[0] = createCard('hearts', 'A');
       provider.gameState!.discardPile.add(createCard('diamonds', '9'));
 
@@ -395,7 +399,9 @@ void main() {
 
       provider.callDutch();
 
-      expect(mockTracking.recordedActions.any((a) => a['actionType'] == 'dutch'), true);
+      expect(
+          mockTracking.recordedActions.any((a) => a['actionType'] == 'dutch'),
+          true);
     });
   });
 
@@ -404,7 +410,7 @@ void main() {
       _setupGameWithHumanTurn(provider);
       provider.gameState!.phase = GamePhase.reaction;
       final human = provider.gameState!.humanPlayer;
-      
+
       human.hand[0] = createCard('hearts', '5');
       provider.gameState!.discardPile.add(createCard('diamonds', '5'));
       final handSizeBefore = human.hand.length;
@@ -415,7 +421,8 @@ void main() {
       expect(human.hand.length, handSizeBefore - 1);
     });
 
-    test('handleCardTap routes to replaceCard in playing phase with drawn card', () {
+    test('handleCardTap routes to replaceCard in playing phase with drawn card',
+        () {
       _setupGameWithHumanTurn(provider);
       provider.drawCard();
       final drawnCard = provider.gameState!.drawnCard!;
@@ -584,7 +591,7 @@ void _setupGameWithHumanTurn(GameProvider provider) {
     difficulty: Difficulty.medium,
     reactionTimeMs: 3000,
   );
-  
+
   // Ensure human is current player
   final humanIndex = provider.gameState!.players.indexWhere((p) => p.isHuman);
   provider.gameState!.currentPlayerIndex = humanIndex;
@@ -600,7 +607,7 @@ void _setupGameWithBotTurn(GameProvider provider) {
     difficulty: Difficulty.medium,
     reactionTimeMs: 3000,
   );
-  
+
   // Ensure bot is current player
   final botIndex = provider.gameState!.players.indexWhere((p) => !p.isHuman);
   provider.gameState!.currentPlayerIndex = botIndex;

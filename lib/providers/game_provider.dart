@@ -380,6 +380,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     GameLogic.drawCard(_gameState!);
 
+    _hapticService.cardTap();
     _trackingProvider.recordPlayerActionWithResult(
       actionType: 'draw',
       gameState: _gameState!,
@@ -499,6 +500,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
+    _hapticService.cardTap();
     _gameState!.addToHistory(ActionHistoryMessages.takeFromDiscard(
         human.name, _gameState!.drawnCard!));
 
@@ -527,6 +529,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
     _gameState!.phase = GamePhase.dutchCalled;
     _gameState!.dutchCallerId = human.id;
+    _hapticService.importantAction();
     _gameState!.addToHistory(ActionHistoryMessages.dutch(human.name));
     endGame();
   }
@@ -538,6 +541,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void skipSpecialPower() {
     if (_gameState == null) return;
+    _hapticService.buttonTap();
     _powerHandler.skipPower(_gameState!);
     notifyListeners();
     _timerManager.resumeTimer(_gameState!, _isPaused);
@@ -561,6 +565,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
     if (_gameState == null) return;
+    _hapticService.importantAction();
     _powerHandler.usePower(_gameState!, targetPlayerIndex, targetCardIndex);
     notifyListeners();
     if (_gameState!.pendingSwap != null) return; // Attendre completeSwap
@@ -570,6 +575,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void completeSwap(int ownCardIndex) {
     if (_gameState == null) return;
+    _hapticService.cardTap();
     _powerHandler.completeSwap(_gameState!, ownCardIndex);
     notifyListeners();
     _timerManager.resumeTimer(_gameState!, _isPaused);
@@ -578,6 +584,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void executeLookAtCard(Player target, int cardIndex) {
     if (_gameState == null) return;
+    _hapticService.cardTap();
     _powerHandler.executeLookAtCard(_gameState!, target, cardIndex);
     notifyListeners();
     _timerManager.resumeTimer(_gameState!, _isPaused);
@@ -586,6 +593,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void executeJokerEffect(Player target) {
     if (_gameState == null) return;
+    _hapticService.importantAction();
     _powerHandler.executeJokerEffect(_gameState!, target);
     notifyListeners();
     _timerManager.resumeTimer(_gameState!, _isPaused);
@@ -718,6 +726,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void endGame() {
     if (_gameState == null) return;
+    _hapticService.success();
     _clearActiveGameFlag();
     _gameState!.phase = GamePhase.ended;
 

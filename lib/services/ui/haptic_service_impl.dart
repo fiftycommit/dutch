@@ -1,16 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../core/interfaces/i_haptic_service.dart';
+import 'haptic_service.dart';
 
-enum HapticIntensity {
-  light,
-  medium,
-  heavy,
-  error,
-  success,
-}
-
-/// Implémentation concrète du service de feedback haptique
+/// Implémentation concrète du service de feedback haptique (plateformes natives)
 /// Principe SOLID: DIP - Implémente l'interface IHapticService
 class HapticServiceImpl implements IHapticService {
   bool _isEnabled = true;
@@ -23,6 +16,7 @@ class HapticServiceImpl implements IHapticService {
   @override
   bool get isEnabled => _isEnabled;
 
+  /// Déclenche un feedback haptique selon l'intensité demandée
   Future<void> trigger(HapticIntensity intensity) async {
     if (!_isEnabled) return;
 
@@ -55,7 +49,7 @@ class HapticServiceImpl implements IHapticService {
           break;
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ Haptic non supporté: $e');
+      if (kDebugMode) debugPrint('Haptic non supporté: $e');
     }
   }
 

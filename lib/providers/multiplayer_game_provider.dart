@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../models/game_state.dart';
 import '../models/game_settings.dart';
 import '../services/multiplayer/multiplayer_service.dart';
-import '../services/ui/haptic_service.dart';
+import '../core/interfaces/i_haptic_service.dart';
 import '../services/ui/emote_service.dart';
 import '../models/playing_card.dart';
 import '../models/player.dart';
@@ -40,6 +40,7 @@ class MultiplayerGameProvider
     with ChangeNotifier, WidgetsBindingObserver
     implements IGameController {
   final MultiplayerService _multiplayerService;
+  final IHapticService _hapticService;
 
   // Event Stream for UI feedback
   final StreamController<GameEvent> _eventController =
@@ -337,8 +338,11 @@ class MultiplayerGameProvider
   String? _lastPlayerName;
   void setPlayerName(String name) => _lastPlayerName = name;
 
-  MultiplayerGameProvider({MultiplayerService? multiplayerService})
-      : _multiplayerService = multiplayerService ?? MultiplayerService() {
+  MultiplayerGameProvider({
+    MultiplayerService? multiplayerService,
+    required IHapticService hapticService,
+  })  : _multiplayerService = multiplayerService ?? MultiplayerService(),
+        _hapticService = hapticService {
     WidgetsBinding.instance.addObserver(this);
 
     _notificationManager =
@@ -567,7 +571,7 @@ class MultiplayerGameProvider
     _multiplayerService.onWizzReceived = (data) {
       _wizzFromName = data['fromName'] as String? ?? 'Quelqu\'un';
       _showWizzAnimation = true;
-      HapticService.error();
+      _hapticService.error();
       notifyListeners();
 
       // In-app notification si on n'est pas dans le lobby
@@ -679,7 +683,7 @@ class MultiplayerGameProvider
         (gameState.phase == GamePhase.playing ||
             gameState.phase == GamePhase.specialPower);
     if (!wasMyTurn && isNowMyTurn) {
-      HapticService.importantAction();
+      _hapticService.importantAction();
       // Notification in-app si le joueur n'est pas sur l'écran de jeu
       if (!_isInRoomScreen()) {
         InAppNotificationService.instance.show(InAppNotificationPayload(
@@ -1152,6 +1156,8 @@ class MultiplayerGameProvider
   void drawCard() {
     if (_gameState == null) return;
 
+    _hapticService.cardTap();
+
     // Optimisation: Utiliser la carte préchargée pour affichage instantané
     // Le serveur confirmera la vraie carte mais l'affichage est immédiat
     if (_preloadedDeckCard != null && _gameState!.drawnCard == null) {
@@ -1165,22 +1171,34 @@ class MultiplayerGameProvider
 
   @override
   void replaceCard(int cardIndex) {
-    if (_gameState != null) _multiplayerService.replaceCard(cardIndex);
+    if (_gameState != null) {
+      _hapticService.cardTap();
+      _multiplayerService.replaceCard(cardIndex);
+    }
   }
 
   @override
   void discardDrawnCard() {
-    if (_gameState != null) _multiplayerService.discardDrawnCard();
+    if (_gameState != null) {
+      _hapticService.cardTap();
+      _multiplayerService.discardDrawnCard();
+    }
   }
 
   @override
   void takeFromDiscard() {
-    if (_gameState != null) _multiplayerService.takeFromDiscard();
+    if (_gameState != null) {
+      _hapticService.cardTap();
+      _multiplayerService.takeFromDiscard();
+    }
   }
 
   @override
   void callDutch() {
-    if (_gameState != null) _multiplayerService.callDutch();
+    if (_gameState != null) {
+      _hapticService.importantAction();
+      _multiplayerService.callDutch();
+    }
   }
 
   @override
@@ -1206,17 +1224,22 @@ class MultiplayerGameProvider
 
     // Feedback visuel local immédiat
     if (!willSucceed) {
+      _hapticService.error();
       shakingCardIndices.add(cardIndex);
       notifyListeners();
       await Future.delayed(const Duration(milliseconds: 500));
       shakingCardIndices.remove(cardIndex);
       notifyListeners();
+    } else {
+      _hapticService.cardTap();
     }
   }
 
   @override
-  void skipSpecialPower() =>
-      _executeWithProcessingLock(() => _multiplayerService.skipSpecialPower());
+  void skipSpecialPower() => _executeWithProcessingLock(() {
+        _hapticService.buttonTap();
+        _multiplayerService.skipSpecialPower();
+      });
 
   @override
   void handleCardTap(int cardIndex) {
@@ -1241,17 +1264,26 @@ class MultiplayerGameProvider
     }
   }
 
-  void usePower7LookOwnCard(int cardIndex) => _executeWithProcessingLock(
-      () => _multiplayerService.usePower7LookOwnCard(cardIndex));
+  void usePower7LookOwnCard(int cardIndex) => _executeWithProcessingLock(() {
+        _hapticService.cardTap();
+        _multiplayerService.usePower7LookOwnCard(cardIndex);
+      });
   void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
-      _executeWithProcessingLock(() => _multiplayerService
-          .usePower10SpyOpponent(targetPlayerIndex, targetCardIndex));
+      _executeWithProcessingLock(() {
+        _hapticService.cardTap();
+        _multiplayerService.usePower10SpyOpponent(
+            targetPlayerIndex, targetCardIndex);
+      });
   void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
-      _executeWithProcessingLock(
-          () => _multiplayerService.usePowerValetSwap(p1, c1, p2, c2));
+      _executeWithProcessingLock(() {
+        _hapticService.importantAction();
+        _multiplayerService.usePowerValetSwap(p1, c1, p2, c2);
+      });
   void usePowerJokerShuffle(int targetPlayerIndex) =>
-      _executeWithProcessingLock(
-          () => _multiplayerService.usePowerJokerShuffle(targetPlayerIndex));
+      _executeWithProcessingLock(() {
+        _hapticService.importantAction();
+        _multiplayerService.usePowerJokerShuffle(targetPlayerIndex);
+      });
 
   void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>
       _multiplayerService.sendSpecialPowerTargetSelection(p1, c1, p2, c2);

@@ -6,6 +6,7 @@ import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import '../mocks/mock_multiplayer_service.dart';
+import '../mocks/mock_services.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +16,10 @@ void main() {
 
   setUp(() {
     mockService = MockMultiplayerService();
-    provider = MultiplayerGameProvider(multiplayerService: mockService);
+    provider = MultiplayerGameProvider(
+      multiplayerService: mockService,
+      hapticService: MockHapticService(),
+    );
   });
 
   tearDown(() {
@@ -63,7 +67,7 @@ void main() {
 
     test('createRoom stores room code', () async {
       mockService.mockRoomCode = 'ABCD12';
-      
+
       await provider.createRoom(
         playerName: 'TestPlayer',
         settings: GameSettings(gameMode: GameMode.quick),
@@ -74,7 +78,7 @@ void main() {
 
     test('createRoom handles failure gracefully', () async {
       mockService.mockRoomCode = null;
-      
+
       await provider.createRoom(
         playerName: 'TestPlayer',
         settings: GameSettings(gameMode: GameMode.quick),
@@ -179,12 +183,14 @@ void main() {
       expect(mockService.attemptMatchCount, 1);
     });
 
-    test('handleCardTap calls replaceCard in playing phase with drawn card', () async {
+    test('handleCardTap calls replaceCard in playing phase with drawn card',
+        () async {
       final gameState = _createTestGameState(mockService.playerId!);
       gameState.phase = GamePhase.playing;
       gameState.drawnCard = PlayingCard.create('hearts', 'A');
       // Make sure local player is current
-      final localIndex = gameState.players.indexWhere((p) => p.id == mockService.playerId);
+      final localIndex =
+          gameState.players.indexWhere((p) => p.id == mockService.playerId);
       gameState.currentPlayerIndex = localIndex;
       mockService.simulateGameStateUpdate(gameState);
       await Future.delayed(const Duration(milliseconds: 50));
@@ -204,9 +210,11 @@ void main() {
       expect(provider.localPlayer!.id, mockService.playerId);
     });
 
-    test('isLocalPlayerTurn returns true when local player is current', () async {
+    test('isLocalPlayerTurn returns true when local player is current',
+        () async {
       final gameState = _createTestGameState(mockService.playerId!);
-      final localIndex = gameState.players.indexWhere((p) => p.id == mockService.playerId);
+      final localIndex =
+          gameState.players.indexWhere((p) => p.id == mockService.playerId);
       gameState.currentPlayerIndex = localIndex;
       mockService.simulateGameStateUpdate(gameState);
       await Future.delayed(const Duration(milliseconds: 50));
@@ -214,7 +222,8 @@ void main() {
       expect(provider.isLocalPlayerTurn, true);
     });
 
-    test('isLocalPlayerTurn returns false when other player is current', () async {
+    test('isLocalPlayerTurn returns false when other player is current',
+        () async {
       final gameState = _createTestGameState(mockService.playerId!);
       // Set to another player
       gameState.currentPlayerIndex = 1;
@@ -226,7 +235,8 @@ void main() {
 
     test('canLocalPlayerAct requires playing phase and local turn', () async {
       final gameState = _createTestGameState(mockService.playerId!);
-      final localIndex = gameState.players.indexWhere((p) => p.id == mockService.playerId);
+      final localIndex =
+          gameState.players.indexWhere((p) => p.id == mockService.playerId);
       gameState.currentPlayerIndex = localIndex;
       gameState.phase = GamePhase.playing;
       mockService.simulateGameStateUpdate(gameState);
@@ -237,7 +247,8 @@ void main() {
 
     test('canLocalPlayerAct false in reaction phase', () async {
       final gameState = _createTestGameState(mockService.playerId!);
-      final localIndex = gameState.players.indexWhere((p) => p.id == mockService.playerId);
+      final localIndex =
+          gameState.players.indexWhere((p) => p.id == mockService.playerId);
       gameState.currentPlayerIndex = localIndex;
       gameState.phase = GamePhase.reaction;
       mockService.simulateGameStateUpdate(gameState);
@@ -251,7 +262,7 @@ void main() {
     test('startGame requires host', () async {
       provider.setReady(true);
       await provider.startGame();
-      
+
       // Not host, should show error
       expect(provider.errorMessage, contains("hôte"));
     });
@@ -287,12 +298,14 @@ void main() {
 
   group('MultiplayerGameProvider - Connection Events', () {
     test('handles connection state changes', () {
-      mockService.simulateConnectionStateChange(SocketConnectionState.disconnected);
+      mockService
+          .simulateConnectionStateChange(SocketConnectionState.disconnected);
       expect(provider.connectionState, SocketConnectionState.disconnected);
     });
 
     test('handles reconnecting state', () {
-      mockService.simulateConnectionStateChange(SocketConnectionState.reconnecting);
+      mockService
+          .simulateConnectionStateChange(SocketConnectionState.reconnecting);
       expect(provider.connectionState, SocketConnectionState.reconnecting);
     });
   });
@@ -311,7 +324,7 @@ void main() {
       expect(provider.isInLobby, true);
 
       await provider.leaveRoom();
-      
+
       expect(provider.isInLobby, false);
       expect(provider.roomCode, isNull);
     });

@@ -4,7 +4,8 @@ import 'package:flutter/scheduler.dart';
 import '../../utils/ui_constants.dart';
 import '../../models/game_state.dart';
 import '../../models/playing_card.dart';
-import '../../services/ui/haptic_service.dart';
+import '../../core/interfaces/i_haptic_service.dart';
+import '../../core/service_locator.dart';
 import 'card_widget.dart';
 import 'deck_discard_widget.dart';
 import 'svg_builder_provider.dart';
@@ -353,7 +354,7 @@ class _CenterTableState extends State<CenterTable>
     final interval = _redZoneIntervalMs(progress);
     if (_lastRedZoneHapticAtMs == null ||
         now - _lastRedZoneHapticAtMs! >= interval) {
-      HapticService.cardTap();
+      ServiceLocator().get<IHapticService>().cardTap();
       _lastRedZoneHapticAtMs = now;
     }
   }

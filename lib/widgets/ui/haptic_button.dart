@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../utils/screen_utils.dart';
 import '../../utils/ui_constants.dart';
 
@@ -67,6 +69,8 @@ class _HapticButtonState extends State<HapticButton>
 
   void _handleTap() {
     if (widget.isEnabled && widget.onPressed != null) {
+      // Retour haptique au tap
+      ServiceLocator().get<IHapticService>().buttonTap();
       widget.onPressed!();
     }
   }
