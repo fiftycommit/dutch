@@ -133,7 +133,7 @@ class _MultiplayerProfileSpaceScreenState
         return AlertDialog(
           title: const Text('Modifier le pseudo'),
           content: SizedBox(
-            width: 400,
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 400.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _warnBanner('Ton pseudo est visible par les autres joueurs.'),
               const SizedBox(height: 14),
@@ -245,7 +245,7 @@ class _MultiplayerProfileSpaceScreenState
         return AlertDialog(
           title: const Text('Modifier le nom d\'utilisateur'),
           content: SizedBox(
-            width: 400,
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 400.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _warnBanner(
                   'Ton nom d\'utilisateur est unique. Les autres te trouvent avec.'),
@@ -363,7 +363,7 @@ class _MultiplayerProfileSpaceScreenState
         return AlertDialog(
           title: const Text('Modifier l\'email'),
           content: SizedBox(
-            width: 400,
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 400.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _warnBanner(
                   'Tu recevras un email de vérification sur la nouvelle adresse.'),
@@ -473,7 +473,7 @@ class _MultiplayerProfileSpaceScreenState
         return AlertDialog(
           title: const Text('Changer le mot de passe'),
           content: SizedBox(
-            width: 400,
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 400.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _warnBanner(
                   'Choisis un mot de passe fort (8+ caractères recommandé).'),
@@ -621,7 +621,7 @@ class _MultiplayerProfileSpaceScreenState
         return AlertDialog(
           title: const Text('Ajouter email / mot de passe'),
           content: SizedBox(
-            width: 400,
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 400.0),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _warnBanner(
                   'Ajoute un mot de passe pour te connecter sans Google.'),

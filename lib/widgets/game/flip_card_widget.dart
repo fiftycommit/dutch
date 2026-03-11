@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/playing_card.dart';
+import '../../utils/ui_constants.dart';
 import 'card_widget.dart';
 
 /// Widget réutilisable pour l'animation de retournement 3D d'une carte.
@@ -56,7 +57,7 @@ class AnimatedFlipCard extends StatefulWidget {
     required this.card,
     required this.isRevealed,
     this.cardSize = CardSize.large,
-    this.duration = const Duration(milliseconds: 500),
+    this.duration = AppDurations.cardFlip,
     this.delay = Duration.zero,
     this.curve = Curves.easeInOutCubic,
   });

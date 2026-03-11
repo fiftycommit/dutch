@@ -1178,7 +1178,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           ],
         ),
         content: SizedBox(
-          width: 300,
+          width: (MediaQuery.of(ctx).size.width - 48).clamp(0.0, 300.0),
           child: friends.isEmpty
               ? const Column(
                   mainAxisSize: MainAxisSize.min,

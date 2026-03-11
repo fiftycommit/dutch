@@ -45,12 +45,16 @@ class CompactSlotCard extends StatelessWidget {
       Colors.black.withValues(alpha: 0.42),
       rankColor,
     );
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 78,
-        height: 78,
+    return Semantics(
+      label: 'Profil $name, $rank',
+      selected: isSelected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.menuTransition,
+          width: 78,
+          height: 78,
         decoration: BoxDecoration(
           color: isSelected ? rankColor : idleColor,
           borderRadius: BorderRadius.circular(10),
@@ -118,6 +122,7 @@ class CompactSlotCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -151,12 +156,16 @@ class SaveSlotCard extends StatelessWidget {
       Colors.black.withValues(alpha: 0.42),
       rankColor,
     );
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 100,
-        padding: const EdgeInsets.all(12),
+    return Semantics(
+      label: 'Profil $name, $rank',
+      selected: isSelected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.menuTransition,
+          width: 100,
+          padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected ? rankColor : idleColor,
           borderRadius: BorderRadius.circular(12),
@@ -184,15 +193,17 @@ class SaveSlotCard extends StatelessWidget {
                     style: TextStyle(
                         color: isSelected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12)),
+                        fontSize: AppFontSizes.bodySmall)),
                 Text(rank,
                     style: TextStyle(
                         color: isSelected ? Colors.black87 : rankColor,
                         fontWeight: FontWeight.bold,
-                        fontSize: 11)),
+                        fontSize: AppFontSizes.small)),
                 Text(rp,
                     style: TextStyle(
-                        color: isSelected ? Colors.black54 : Colors.grey,
+                        color: isSelected
+                            ? Colors.black54
+                            : AppColors.textDisabled,
                         fontSize: AppFontSizes.small)),
               ],
             ),
@@ -212,6 +223,7 @@ class SaveSlotCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -233,20 +245,25 @@ class _SlotEditButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Zone tactile élargie (minimum 32×32px) pour faciliter le tap précis
+    final padding = ((32.0 - buttonSize) / 2).clamp(0.0, 12.0);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        width: buttonSize,
-        height: buttonSize,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(buttonSize / 2),
-        ),
-        child: Icon(
-          Icons.edit,
-          size: iconSize,
-          color: iconColor,
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Container(
+          width: buttonSize,
+          height: buttonSize,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(buttonSize / 2),
+          ),
+          child: Icon(
+            Icons.edit,
+            size: iconSize,
+            color: iconColor,
+          ),
         ),
       ),
     );
@@ -277,7 +294,7 @@ class CompactMenuButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? null : onDisabledTap,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 160),
+        duration: AppDurations.fast,
         opacity: enabled ? 1.0 : 0.45,
         child: SizedBox(
           width: 160,
@@ -291,7 +308,8 @@ class CompactMenuButton extends StatelessWidget {
                 : null,
             icon: Icon(icon,
                 color: isPrimary ? Colors.black : Colors.white, size: 18),
-            label: Text(label, style: const TextStyle(fontSize: 12)),
+            label: Text(label,
+                style: const TextStyle(fontSize: AppFontSizes.bodySmall)),
             style: ElevatedButton.styleFrom(
               backgroundColor:
                   isPrimary ? Colors.amber : AppColors.buttonSecondary,
@@ -338,7 +356,7 @@ class MenuButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? null : onDisabledTap,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 180),
+        duration: AppDurations.fast,
         opacity: enabled ? 1.0 : 0.45,
         child: SizedBox(
           width: 200,

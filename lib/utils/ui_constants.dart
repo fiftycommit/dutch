@@ -357,11 +357,23 @@ class AppTextStyles {
 class AppDurations {
   AppDurations._();
 
-  /// Animation rapide
+  /// Animation rapide (états hover/opacity)
   static const Duration fast = Duration(milliseconds: 150);
+
+  /// Transition de menu (sélection slot, boutons)
+  static const Duration menuTransition = Duration(milliseconds: 200);
 
   /// Animation standard
   static const Duration normal = Duration(milliseconds: 300);
+
+  /// Retournement de carte (flip 3D)
+  static const Duration cardFlip = Duration(milliseconds: 500);
+
+  /// Déplacement de carte (transition position)
+  static const Duration cardMove = Duration(milliseconds: 420);
+
+  /// Animation pulsation (Dutch, actions urgentes)
+  static const Duration pulse = Duration(milliseconds: 1200);
 
   /// Timeout réseau par défaut
   static const Duration networkTimeout = Duration(seconds: 15);

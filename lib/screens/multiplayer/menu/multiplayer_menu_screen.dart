@@ -446,7 +446,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     ),
                   ),
                   content: SizedBox(
-                    width: 440,
+                    width: (MediaQuery.of(dialogContext).size.width - 48).clamp(0.0, 440.0),
                     child: SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1230,6 +1230,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   fontWeight: FontWeight.bold,
                   height: 1.1,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: compact ? 6 : 8),
               Text(
@@ -1240,6 +1242,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   fontWeight: FontWeight.w400,
                   height: 1.25,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: compact ? 10 : 14),
               Row(

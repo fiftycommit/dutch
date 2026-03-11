@@ -32,7 +32,7 @@ class _GameActionButtonState extends State<GameActionButton>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: AppDurations.pulse,
       vsync: this,
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(

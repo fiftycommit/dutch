@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/playing_card.dart';
+import '../../utils/ui_constants.dart';
 import 'card_widget.dart';
 
 class AnimatedCardTransition extends StatefulWidget {
@@ -20,7 +21,7 @@ class AnimatedCardTransition extends StatefulWidget {
     required this.size,
     this.isRevealed = false,
     this.onComplete,
-    this.duration = const Duration(milliseconds: 420),
+    this.duration = AppDurations.cardMove,
     this.curve = Curves.easeOutCubic,
   });
 
