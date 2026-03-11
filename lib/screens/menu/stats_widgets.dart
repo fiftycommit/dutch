@@ -304,7 +304,7 @@ class MatchHistoryTile extends StatelessWidget {
                 "#$rank",
                 style: TextStyle(
                   color: outcome.color,
-                  fontSize: 10,
+                  fontSize: AppFontSizes.small,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -364,7 +364,7 @@ class MatchHistoryTile extends StatelessWidget {
                 "Combo x${streakMultiplier.toStringAsFixed(1)} (+$streakBonus RP)",
                 style: const TextStyle(
                   color: Colors.orangeAccent,
-                  fontSize: 10,
+                  fontSize: AppFontSizes.small,
                   fontWeight: FontWeight.bold,
                   height: 1.0,
                 ),
@@ -428,7 +428,7 @@ class TournamentHistoryTile extends StatelessWidget {
                 "#$finalPosition",
                 style: TextStyle(
                   color: outcome.color,
-                  fontSize: 10,
+                  fontSize: AppFontSizes.small,
                   fontWeight: FontWeight.bold,
                 ),
               ),

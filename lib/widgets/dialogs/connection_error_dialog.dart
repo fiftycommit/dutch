@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import 'responsive_dialog.dart';
 import '../../utils/ui_constants.dart';
 
@@ -74,6 +76,7 @@ class ConnectionErrorDialog {
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
                     Navigator.of(ctx).pop(true);
                     onRetry();
                   },

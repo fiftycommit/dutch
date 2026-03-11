@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../services/social/social_hub_repository.dart';
+import '../../../../../core/service_locator.dart';
+import '../../../../../core/interfaces/i_haptic_service.dart';
 
 class CreatePublicRoomScreen extends StatefulWidget {
   const CreatePublicRoomScreen({super.key});
@@ -205,8 +207,14 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_public_button'),
-                                        onPressed:
-                                            _isCreating ? null : _createRoom,
+                                        onPressed: _isCreating
+                                            ? null
+                                            : () {
+                                                ServiceLocator()
+                                                    .get<IHapticService>()
+                                                    .buttonTap();
+                                                _createRoom();
+                                              },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue,
                                           foregroundColor: Colors.white,
@@ -341,8 +349,14 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('create_public_button'),
-                                        onPressed:
-                                            _isCreating ? null : _createRoom,
+                                        onPressed: _isCreating
+                                            ? null
+                                            : () {
+                                                ServiceLocator()
+                                                    .get<IHapticService>()
+                                                    .buttonTap();
+                                                _createRoom();
+                                              },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue,
                                           foregroundColor: Colors.white,

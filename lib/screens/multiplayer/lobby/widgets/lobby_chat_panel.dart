@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../providers/multiplayer_game_provider.dart';
+import '../../../../core/service_locator.dart';
+import '../../../../core/interfaces/i_haptic_service.dart';
 
 class LobbyChatPanel extends StatelessWidget {
   final MultiplayerGameProvider provider;
@@ -190,7 +192,10 @@ class LobbyChatPanel extends StatelessWidget {
                     height: f(40),
                     width: f(40),
                     child: IconButton.filled(
-                      onPressed: _sendChat,
+                      onPressed: () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
+                        _sendChat();
+                      },
                       icon: Icon(Icons.send, size: f(18)),
                       style: IconButton.styleFrom(
                         backgroundColor: colors.primary,

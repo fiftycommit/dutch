@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/ui_constants.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 
 Color getRankColor(String rank) {
   switch (rank) {
@@ -79,7 +81,7 @@ class CompactSlotCard extends StatelessWidget {
                       style: TextStyle(
                           color: isSelected ? Colors.black : Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 10)),
+                          fontSize: AppFontSizes.small)),
                 ),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -191,7 +193,7 @@ class SaveSlotCard extends StatelessWidget {
                 Text(rp,
                     style: TextStyle(
                         color: isSelected ? Colors.black54 : Colors.grey,
-                        fontSize: 10)),
+                        fontSize: AppFontSizes.small)),
               ],
             ),
             Positioned(
@@ -281,7 +283,12 @@ class CompactMenuButton extends StatelessWidget {
           width: 160,
           height: 40,
           child: ElevatedButton.icon(
-            onPressed: enabled ? onPressed : null,
+            onPressed: enabled
+                ? () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    onPressed();
+                  }
+                : null,
             icon: Icon(icon,
                 color: isPrimary ? Colors.black : Colors.white, size: 18),
             label: Text(label, style: const TextStyle(fontSize: 12)),
@@ -336,7 +343,12 @@ class MenuButton extends StatelessWidget {
         child: SizedBox(
           width: 200,
           child: ElevatedButton.icon(
-            onPressed: enabled ? onPressed : null,
+            onPressed: enabled
+                ? () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    onPressed();
+                  }
+                : null,
             icon: Icon(icon, color: isPrimary ? Colors.black : Colors.white),
             label: Text(label),
             style: ElevatedButton.styleFrom(
@@ -375,7 +387,10 @@ class SmallIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      onPressed: onPressed,
+      onPressed: () {
+        ServiceLocator().get<IHapticService>().buttonTap();
+        onPressed();
+      },
       icon: Icon(icon, size: 22),
       color: AppColors.textSecondary,
       style: IconButton.styleFrom(
@@ -404,7 +419,10 @@ class LabeledIconButton extends StatelessWidget {
     return Column(
       children: [
         IconButton(
-          onPressed: onPressed,
+          onPressed: () {
+            ServiceLocator().get<IHapticService>().buttonTap();
+            onPressed();
+          },
           icon: Icon(icon, size: 28),
           color: AppColors.textSecondary,
           style: IconButton.styleFrom(

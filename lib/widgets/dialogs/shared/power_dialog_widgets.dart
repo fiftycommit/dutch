@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import '../../../core/service_locator.dart';
+import '../../../core/interfaces/i_haptic_service.dart';
 import '../../../models/playing_card.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
@@ -191,7 +193,12 @@ class PowerDialogWidgets {
     required DialogMetrics metrics,
   }) {
     return ElevatedButton(
-      onPressed: onPressed,
+      onPressed: onPressed == null
+          ? null
+          : () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              onPressed();
+            },
       style: ElevatedButton.styleFrom(
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,

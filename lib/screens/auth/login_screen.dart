@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sign_in_button/sign_in_button.dart';
 
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../models/game_settings.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/multiplayer_game_provider.dart';
@@ -319,11 +321,12 @@ class _LoginScreenState extends State<LoginScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Bienvenue, $displayName !',
-                    style: TextStyle(
-                        fontSize: 13, color: colors.textSecondary)),
+                    style:
+                        TextStyle(fontSize: 13, color: colors.textSecondary)),
                 const SizedBox(height: 4),
                 Text('Vous pouvez garder ce nom ou en choisir un autre.',
-                    style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+                    style:
+                        TextStyle(fontSize: 12, color: colors.textSecondary)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: ctrl,
@@ -342,8 +345,7 @@ class _LoginScreenState extends State<LoginScreen>
                         borderRadius: BorderRadius.circular(8)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: colors.accent1, width: 2),
+                      borderSide: BorderSide(color: colors.accent1, width: 2),
                     ),
                   ),
                   onChanged: (_) => setState(() => error = null),
@@ -357,7 +359,12 @@ class _LoginScreenState extends State<LoginScreen>
                     style: TextStyle(color: colors.textSecondary)),
               ),
               ElevatedButton(
-                onPressed: checking ? null : validate,
+                onPressed: checking
+                    ? null
+                    : () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
+                        validate();
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.accent1,
                   foregroundColor: Colors.white,
@@ -494,9 +501,12 @@ class _LoginScreenState extends State<LoginScreen>
           behavior: HitTestBehavior.translucent,
           child: Stack(
             children: [
-              if (colors.isGreen) const Positioned.fill(child: CardRainBackground()),
+              if (colors.isGreen)
+                const Positioned.fill(child: CardRainBackground()),
               SafeArea(
-                child: isWide ? _buildDesktop(media, colors) : _buildMobile(media, colors),
+                child: isWide
+                    ? _buildDesktop(media, colors)
+                    : _buildMobile(media, colors),
               ),
             ],
           ),
@@ -515,7 +525,10 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Stack(
       children: [
-        Positioned(top: 8, left: 12, child: _BackBtn(onTap: _handleBack, colors: colors)),
+        Positioned(
+            top: 8,
+            left: 12,
+            child: _BackBtn(onTap: _handleBack, colors: colors)),
         Center(
           child: AnimatedBuilder(
             animation: _anim,
@@ -712,7 +725,8 @@ class _LoginScreenState extends State<LoginScreen>
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: _BackBtn(onTap: _handleBack, light: true, colors: colors),
+                    child: _BackBtn(
+                        onTap: _handleBack, light: true, colors: colors),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -941,49 +955,50 @@ class _FormSignIn extends StatelessWidget {
                 FocusTraversalGroup(
                   policy: OrderedTraversalPolicy(),
                   child: AutofillGroup(
-                  child: Column(
-                    children: [
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(0),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: identifierCtrl,
-                          focusNode: identifierFocus,
-                          hint: 'E-mail ou nom d\'utilisateur',
-                          keyboardType: TextInputType.text,
-                          action: TextInputAction.next,
-                          onSubmitted: (_) => passwordFocus?.requestFocus(),
-                          autofillHints: const [
-                            AutofillHints.username,
-                            AutofillHints.email
-                          ]),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(1),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: passwordCtrl,
-                          focusNode: passwordFocus,
-                          hint: 'Mot de passe',
-                          obscure: obscurePassword,
-                          action: TextInputAction.done,
-                          autofillHints: const [AutofillHints.password],
-                          onSubmitted: (_) => onLogin(),
-                          trailing: IconButton(
-                              splashRadius: 16,
-                              onPressed: onTogglePassword,
-                              icon: Icon(
-                                  obscurePassword
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  size: 18,
-                                  color: colors.textSecondary))),
-                      ),
-                    ],
+                    child: Column(
+                      children: [
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(0),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: identifierCtrl,
+                              focusNode: identifierFocus,
+                              hint: 'E-mail ou nom d\'utilisateur',
+                              keyboardType: TextInputType.text,
+                              action: TextInputAction.next,
+                              onSubmitted: (_) => passwordFocus?.requestFocus(),
+                              autofillHints: const [
+                                AutofillHints.username,
+                                AutofillHints.email
+                              ]),
+                        ),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(1),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: passwordCtrl,
+                              focusNode: passwordFocus,
+                              hint: 'Mot de passe',
+                              obscure: obscurePassword,
+                              action: TextInputAction.done,
+                              autofillHints: const [AutofillHints.password],
+                              onSubmitted: (_) => onLogin(),
+                              trailing: IconButton(
+                                  splashRadius: 16,
+                                  onPressed: onTogglePassword,
+                                  icon: Icon(
+                                      obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      size: 18,
+                                      color: colors.textSecondary))),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                ),
-                if (errorMessage != null) _ErrorBox(message: errorMessage!, colors: colors),
+                if (errorMessage != null)
+                  _ErrorBox(message: errorMessage!, colors: colors),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   child: GestureDetector(
@@ -1009,7 +1024,8 @@ class _FormSignIn extends StatelessWidget {
                       onTap: onSwitchToSignUp,
                       child: Text("Pas de compte ? S'inscrire",
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: colors.accent1, fontSize: 13)),
+                          style:
+                              TextStyle(color: colors.accent1, fontSize: 13)),
                     ),
                   ),
               ],
@@ -1105,104 +1121,106 @@ class _FormSignUp extends StatelessWidget {
                 FocusTraversalGroup(
                   policy: OrderedTraversalPolicy(),
                   child: AutofillGroup(
-                  child: Column(
-                    children: [
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(0),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: usernameCtrl,
-                          focusNode: usernameFocus,
-                          hint: "Nom d'utilisateur",
-                          action: TextInputAction.next,
-                          autofillHints: const [AutofillHints.newUsername],
-                          onChanged: onUsernameChanged,
-                          onSubmitted: (_) => pseudoFocus?.requestFocus(),
-                          trailing: checkingUsername
-                              ? Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: colors.accent1)))
-                              : usernameAvailable == true
-                                  ? const Icon(Icons.check_circle,
-                                      color: Color(0xFF22C55E), size: 18)
-                                  : usernameAvailable == false
-                                      ? const Icon(Icons.cancel,
-                                          color: Color(0xFFF43F5E), size: 18)
-                                      : null,
+                    child: Column(
+                      children: [
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(0),
+                          child: _CssInput(
+                            colors: colors,
+                            controller: usernameCtrl,
+                            focusNode: usernameFocus,
+                            hint: "Nom d'utilisateur",
+                            action: TextInputAction.next,
+                            autofillHints: const [AutofillHints.newUsername],
+                            onChanged: onUsernameChanged,
+                            onSubmitted: (_) => pseudoFocus?.requestFocus(),
+                            trailing: checkingUsername
+                                ? Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: colors.accent1)))
+                                : usernameAvailable == true
+                                    ? const Icon(Icons.check_circle,
+                                        color: Color(0xFF22C55E), size: 18)
+                                    : usernameAvailable == false
+                                        ? const Icon(Icons.cancel,
+                                            color: Color(0xFFF43F5E), size: 18)
+                                        : null,
+                          ),
                         ),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(1),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: pseudoCtrl,
-                          focusNode: pseudoFocus,
-                          hint: 'Pseudo',
-                          action: TextInputAction.next,
-                          onSubmitted: (_) => emailFocus?.requestFocus()),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(2),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: emailCtrl,
-                          focusNode: emailFocus,
-                          hint: 'E-mail',
-                          keyboardType: TextInputType.emailAddress,
-                          action: TextInputAction.next,
-                          onSubmitted: (_) => passwordFocus?.requestFocus(),
-                          autofillHints: const [AutofillHints.email]),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(3),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: passwordCtrl,
-                          focusNode: passwordFocus,
-                          hint: 'Mot de passe',
-                          obscure: obscurePassword,
-                          action: TextInputAction.next,
-                          autofillHints: const [AutofillHints.newPassword],
-                          onSubmitted: (_) => confirmFocus?.requestFocus(),
-                          trailing: IconButton(
-                              splashRadius: 16,
-                              onPressed: onTogglePassword,
-                              icon: Icon(
-                                  obscurePassword
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  size: 18,
-                                  color: colors.textSecondary))),
-                      ),
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(4),
-                        child: _CssInput(
-                          colors: colors,
-                          controller: confirmCtrl,
-                          focusNode: confirmFocus,
-                          hint: 'Répéter le mot de passe',
-                          obscure: obscureConfirm,
-                          action: TextInputAction.done,
-                          onSubmitted: (_) => onRegister(),
-                          trailing: IconButton(
-                              splashRadius: 16,
-                              onPressed: onToggleConfirm,
-                              icon: Icon(
-                                  obscureConfirm
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  size: 18,
-                                  color: colors.textSecondary))),
-                      ),
-                    ],
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(1),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: pseudoCtrl,
+                              focusNode: pseudoFocus,
+                              hint: 'Pseudo',
+                              action: TextInputAction.next,
+                              onSubmitted: (_) => emailFocus?.requestFocus()),
+                        ),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(2),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: emailCtrl,
+                              focusNode: emailFocus,
+                              hint: 'E-mail',
+                              keyboardType: TextInputType.emailAddress,
+                              action: TextInputAction.next,
+                              onSubmitted: (_) => passwordFocus?.requestFocus(),
+                              autofillHints: const [AutofillHints.email]),
+                        ),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(3),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: passwordCtrl,
+                              focusNode: passwordFocus,
+                              hint: 'Mot de passe',
+                              obscure: obscurePassword,
+                              action: TextInputAction.next,
+                              autofillHints: const [AutofillHints.newPassword],
+                              onSubmitted: (_) => confirmFocus?.requestFocus(),
+                              trailing: IconButton(
+                                  splashRadius: 16,
+                                  onPressed: onTogglePassword,
+                                  icon: Icon(
+                                      obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      size: 18,
+                                      color: colors.textSecondary))),
+                        ),
+                        FocusTraversalOrder(
+                          order: const NumericFocusOrder(4),
+                          child: _CssInput(
+                              colors: colors,
+                              controller: confirmCtrl,
+                              focusNode: confirmFocus,
+                              hint: 'Répéter le mot de passe',
+                              obscure: obscureConfirm,
+                              action: TextInputAction.done,
+                              onSubmitted: (_) => onRegister(),
+                              trailing: IconButton(
+                                  splashRadius: 16,
+                                  onPressed: onToggleConfirm,
+                                  icon: Icon(
+                                      obscureConfirm
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      size: 18,
+                                      color: colors.textSecondary))),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                ),
-                if (errorMessage != null) _ErrorBox(message: errorMessage!, colors: colors),
+                if (errorMessage != null)
+                  _ErrorBox(message: errorMessage!, colors: colors),
                 const SizedBox(height: 16),
                 _CssButton(
                     label: "S'INSCRIRE",
@@ -1217,7 +1235,8 @@ class _FormSignUp extends StatelessWidget {
                       onTap: onSwitchToLogin,
                       child: Text('Déjà un compte ? Se connecter',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: colors.accent1, fontSize: 13)),
+                          style:
+                              TextStyle(color: colors.accent1, fontSize: 13)),
                     ),
                   ),
               ],
@@ -1326,7 +1345,10 @@ class _CssButtonState extends State<_CssButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
-        if (!widget.isLoading) widget.onTap?.call();
+        if (!widget.isLoading) {
+          ServiceLocator().get<IHapticService>().buttonTap();
+          widget.onTap?.call();
+        }
       },
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedScale(
@@ -1336,29 +1358,29 @@ class _CssButtonState extends State<_CssButton> {
         child: Builder(builder: (context) {
           final accent = widget.colors?.accent1 ?? const Color(0xFFFF4B2B);
           return Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 45),
-          decoration: BoxDecoration(
-            color: widget.ghost ? Colors.transparent : accent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: widget.ghost ? Colors.white : accent, width: 1),
-          ),
-          child: widget.isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : Text(
-                  widget.label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 45),
+            decoration: BoxDecoration(
+              color: widget.ghost ? Colors.transparent : accent,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: widget.ghost ? Colors.white : accent, width: 1),
+            ),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
                   ),
-                ),
-        );
+          );
         }),
       ),
     );
@@ -1394,7 +1416,10 @@ class _GhostBtn extends StatelessWidget {
   final _AuthColors colors;
   final VoidCallback onTap;
   const _GhostBtn(
-      {required this.label, required this.active, required this.colors, required this.onTap});
+      {required this.label,
+      required this.active,
+      required this.colors,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1442,7 +1467,9 @@ class _ErrorBox extends StatelessWidget {
         child: Text(message,
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: colors.accent1, fontSize: 12, fontWeight: FontWeight.bold)),
+                color: colors.accent1,
+                fontSize: 12,
+                fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -1478,7 +1505,8 @@ class _BackBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = light ? Colors.white : (colors?.text ?? const Color(0xFF333333));
+    final color =
+        light ? Colors.white : (colors?.text ?? const Color(0xFF333333));
     return GestureDetector(
       onTap: onTap,
       child: Container(

@@ -11,6 +11,8 @@ import '../../../../../models/game_settings.dart';
 import '../../../../../utils/ui_constants.dart';
 import '../../../widgets/dialogs/connection_error_dialog.dart';
 import '../../../widgets/dialogs/multiplayer/multiplayer_dialogs.dart';
+import '../../../../../core/service_locator.dart';
+import '../../../../../core/interfaces/i_haptic_service.dart';
 import 'widgets/lobby_chat_panel.dart';
 import 'widgets/lobby_players_panel.dart';
 import 'widgets/lobby_room_info.dart';
@@ -482,9 +484,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               child: const Text('Annuler'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, {
-                'botDifficulty': botDifficulty,
-              }),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                Navigator.pop(ctx, {
+                  'botDifficulty': botDifficulty,
+                });
+              },
               child: const Text('Appliquer'),
             ),
           ],
@@ -529,7 +534,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               child: const Text('Annuler'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                Navigator.pop(ctx, true);
+              },
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
               ),
@@ -560,7 +568,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               child: const Text('Annuler'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                Navigator.pop(ctx, true);
+              },
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
               ),
@@ -611,7 +622,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             child: const Text('Quitter'),
           ),
           FilledButton.icon(
-            onPressed: () => Navigator.pop(ctx, 'become_host'),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.pop(ctx, 'become_host');
+            },
             icon: const Icon(Icons.star),
             label: const Text('Devenir hôte'),
           ),
@@ -812,7 +826,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: () => provider.watchGame(),
+          onPressed: () {
+            ServiceLocator().get<IHapticService>().buttonTap();
+            provider.watchGame();
+          },
           icon: Icon(Icons.visibility, size: f(18)),
           label: const Text('REGARDER LA PARTIE'),
           style: ElevatedButton.styleFrom(
@@ -836,7 +853,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   key: const Key('host_ready_button'),
-                  onPressed: () => provider.setReady(!provider.isReady),
+                  onPressed: () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    provider.setReady(!provider.isReady);
+                  },
                   icon: Icon(
                     provider.isReady
                         ? Icons.check_circle
@@ -860,12 +880,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 child: ElevatedButton(
                   key: const Key('host_start_button'),
                   onPressed: canStart
-                      ? () => _handleStartPressed(
+                      ? () {
+                          ServiceLocator().get<IHapticService>().buttonTap();
+                          _handleStartPressed(
                             context,
                             provider,
                             connectedHumans,
                             maxPlayers,
-                          )
+                          );
+                        }
                       : null,
                   style: ElevatedButton.styleFrom(
                     padding:
@@ -900,7 +923,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           width: double.infinity,
           child: ElevatedButton.icon(
             key: const Key('guest_ready_button'),
-            onPressed: () => provider.setReady(!provider.isReady),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              provider.setReady(!provider.isReady);
+            },
             icon: Icon(
               provider.isReady
                   ? Icons.check_circle
@@ -1110,11 +1136,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               child: const Text('Annuler'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, {
-                'numberOfBots': numberOfBots,
-                'useSBMM': useSBMM,
-                'botDifficulty': useSBMM ? null : botDifficulty,
-              }),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                Navigator.pop(dialogContext, {
+                  'numberOfBots': numberOfBots,
+                  'useSBMM': useSBMM,
+                  'botDifficulty': useSBMM ? null : botDifficulty,
+                });
+              },
               child: const Text('Lancer'),
             ),
           ],

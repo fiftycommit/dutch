@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/service_locator.dart';
+import '../../../core/interfaces/i_haptic_service.dart';
 import '../../../utils/ui_constants.dart';
 import 'package:go_router/go_router.dart';
 import '../responsive_dialog.dart';
@@ -34,6 +36,7 @@ class MultiplayerDialogs {
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
               onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
                 Navigator.of(ctx).pop(); // Fermer le dialog
                 context.go('/multiplayer'); // Retour à l'accueil multiplayer
               },
@@ -74,6 +77,7 @@ class MultiplayerDialogs {
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
               onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
                 Navigator.of(ctx).pop(); // Fermer le dialog
                 context.go('/lobby'); // Retour au salon
               },
@@ -121,6 +125,7 @@ class MultiplayerDialogs {
             SizedBox(height: metrics.space(30)),
             ElevatedButton(
               onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
                 Navigator.of(ctx).pop(); // Fermer le dialog
                 context.go('/multiplayer'); // Retour à l'accueil multiplayer
               },

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../../services/logging/game_logger_service.dart';
@@ -396,7 +398,7 @@ class ResultsScreen extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 10,
+                            fontSize: AppFontSizes.small,
                           ),
                         ),
                       ),
@@ -415,7 +417,7 @@ class ResultsScreen extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
-                            fontSize: 10,
+                            fontSize: AppFontSizes.small,
                           ),
                         ),
                       ),
@@ -480,7 +482,7 @@ class ResultsScreen extends StatelessWidget {
                           rpResult.streakText!,
                           style: const TextStyle(
                             color: Colors.orangeAccent,
-                            fontSize: 10,
+                            fontSize: AppFontSizes.small,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -529,7 +531,10 @@ class ResultsActionButton extends StatelessWidget {
     return SizedBox(
       width: width,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: () {
+          ServiceLocator().get<IHapticService>().buttonTap();
+          onPressed();
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -537,12 +542,15 @@ class ResultsActionButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: AppFontSizes.subtitle,
+            ),
           ),
         ),
       ),

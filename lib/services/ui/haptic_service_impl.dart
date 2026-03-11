@@ -23,14 +23,16 @@ class HapticServiceImpl implements IHapticService {
     try {
       switch (intensity) {
         case HapticIntensity.light:
-          await HapticFeedback.selectionClick();
-          break;
-
-        case HapticIntensity.medium:
           await HapticFeedback.mediumImpact();
           break;
 
+        case HapticIntensity.medium:
+          await HapticFeedback.heavyImpact();
+          break;
+
         case HapticIntensity.heavy:
+          await HapticFeedback.heavyImpact();
+          await Future.delayed(const Duration(milliseconds: 80));
           await HapticFeedback.heavyImpact();
           break;
 
@@ -38,14 +40,16 @@ class HapticServiceImpl implements IHapticService {
           await HapticFeedback.heavyImpact();
           await Future.delayed(const Duration(milliseconds: 100));
           await HapticFeedback.heavyImpact();
+          await Future.delayed(const Duration(milliseconds: 100));
+          await HapticFeedback.heavyImpact();
           break;
 
         case HapticIntensity.success:
-          await HapticFeedback.lightImpact();
-          await Future.delayed(const Duration(milliseconds: 50));
-          await HapticFeedback.lightImpact();
-          await Future.delayed(const Duration(milliseconds: 50));
-          await HapticFeedback.lightImpact();
+          await HapticFeedback.mediumImpact();
+          await Future.delayed(const Duration(milliseconds: 60));
+          await HapticFeedback.mediumImpact();
+          await Future.delayed(const Duration(milliseconds: 60));
+          await HapticFeedback.mediumImpact();
           break;
       }
     } catch (e) {

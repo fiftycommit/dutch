@@ -9,6 +9,8 @@ import '../../widgets/game/card_widget.dart';
 import '../../widgets/game/flip_card_widget.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/screen_utils.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 
 /// Configuration pour l'écran de mémorisation
 class MemorizationConfig {
@@ -569,7 +571,12 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             duration: const Duration(milliseconds: 300),
                             child: ElevatedButton(
                               onPressed: canConfirm && !_isRevealing
-                                  ? _confirmAndStart
+                                  ? () {
+                                      ServiceLocator()
+                                          .get<IHapticService>()
+                                          .buttonTap();
+                                      _confirmAndStart();
+                                    }
                                   : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.amber,
@@ -643,6 +650,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           ),
           TextButton(
             onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
               Navigator.pop(ctx);
               _countdownTicker?.stop();
               _gameStartSubscription?.cancel();

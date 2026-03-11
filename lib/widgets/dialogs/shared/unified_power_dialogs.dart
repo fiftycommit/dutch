@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/service_locator.dart';
+import '../../../core/interfaces/i_haptic_service.dart';
 import '../../../models/playing_card.dart';
 import '../../../models/player.dart';
 import '../../../models/game_state.dart';
@@ -337,6 +339,7 @@ class UnifiedPowerDialogs {
             final count = opponent.hand.length;
             return ElevatedButton(
               onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
                 Navigator.pop(context);
                 _showOpponentCardSelection(context, config, opponent);
               },

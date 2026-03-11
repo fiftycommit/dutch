@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../utils/ui_constants.dart';
 import '../../services/social/friends_api_service.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 
 class FriendsPage extends StatefulWidget {
   const FriendsPage({super.key, this.initialTabIndex = 0});
@@ -90,7 +91,10 @@ class _FriendsPageState extends State<FriendsPage>
               child: const Text('Annuler')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.of(ctx).pop(true);
+            },
             child: const Text('Supprimer'),
           ),
         ],
@@ -120,7 +124,10 @@ class _FriendsPageState extends State<FriendsPage>
               child: const Text('Annuler')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade800),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.of(ctx).pop(true);
+            },
             child: const Text('Bloquer'),
           ),
         ],
@@ -168,7 +175,7 @@ class _FriendsPageState extends State<FriendsPage>
                         : '?',
                     style: const TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                       color: Color(0xFF4F46E5),
                     ),
                   ),
@@ -177,7 +184,7 @@ class _FriendsPageState extends State<FriendsPage>
                 Text(
                   friend.displayName,
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700),
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   '@${friend.username}',
@@ -286,7 +293,12 @@ class _FriendsPageState extends State<FriendsPage>
                 child: const Text('Annuler'),
               ),
               FilledButton(
-                onPressed: searching ? null : onSearch,
+                onPressed: searching
+                    ? null
+                    : () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
+                        onSearch();
+                      },
                 child: searching
                     ? const SizedBox(
                         width: 16,
@@ -303,13 +315,7 @@ class _FriendsPageState extends State<FriendsPage>
 
   @override
   Widget build(BuildContext context) {
-    final themed = Theme.of(context).copyWith(
-      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
-    );
-
-    return Theme(
-      data: themed,
-      child: Scaffold(
+    return Scaffold(
         body: Container(
           color: MultiplayerColors.of(context).background,
           child: SafeArea(
@@ -350,7 +356,6 @@ class _FriendsPageState extends State<FriendsPage>
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -384,7 +389,7 @@ class _FriendsPageState extends State<FriendsPage>
                 style: TextStyle(
                   color: MultiplayerColors.of(context).textPrimary,
                   fontSize: 28,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const Spacer(),
@@ -429,7 +434,7 @@ class _FriendsPageState extends State<FriendsPage>
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
-                              fontWeight: FontWeight.w700),
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -545,7 +550,7 @@ class _FriendTile extends StatelessWidget {
                 ? friend.displayName[0].toUpperCase()
                 : '?',
             style: TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.bold,
               color: cs.primary,
             ),
           ),
@@ -683,7 +688,7 @@ class _SectionHeader extends StatelessWidget {
         label,
         style: TextStyle(
           color: MultiplayerColors.of(context).textSecondary,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.bold,
           fontSize: 13,
           letterSpacing: 0.8,
         ),
@@ -731,7 +736,7 @@ class _RequestTile extends StatelessWidget {
                   ? info.displayName[0].toUpperCase()
                   : '?',
               style: TextStyle(
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.bold,
                 color: cs.primary,
               ),
             ),
@@ -800,7 +805,10 @@ class _BlockedTab extends StatelessWidget {
               onPressed: () => Navigator.of(ctx).pop(false),
               child: const Text('Annuler')),
           FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                Navigator.of(ctx).pop(true);
+              },
               child: const Text('Débloquer')),
         ],
       ),
@@ -857,7 +865,7 @@ class _BlockedTab extends StatelessWidget {
                       ? user.displayName[0].toUpperCase()
                       : '?',
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                     color: cs.danger,
                   ),
                 ),

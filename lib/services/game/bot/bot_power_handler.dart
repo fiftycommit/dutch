@@ -822,11 +822,20 @@ class BotPowerHandler {
     final canUseIndexIntel =
         _isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty);
     if (canUseIndexIntel) {
+      // Priorité 1 : index initialement révélé et jamais échangé depuis le départ.
+      final untouchedRevealedIdx = BotDutchStrategy.discardTracker
+          .pickUntouchedInitiallyRevealedIndex(target.id, target.hand.length);
+      if (untouchedRevealedIdx != null) return untouchedRevealedIdx;
+
+      // Priorité 2 : index que le joueur a amélioré puis arrêté de toucher.
+      final stoppedTouchingIdx = BotDutchStrategy.discardTracker
+          .pickStoppedTouchingIndex(target.id, target.hand.length);
+      if (stoppedTouchingIdx != null) return stoppedTouchingIdx;
+
+      // Priorité 3 : heuristique sur fréquence d'échange et plafond estimé.
       final likelyStrongIdx = BotDutchStrategy.discardTracker
           .pickLikelyStrongIndex(target.id, target.hand.length);
-      if (likelyStrongIdx != null) {
-        return likelyStrongIdx;
-      }
+      if (likelyStrongIdx != null) return likelyStrongIdx;
     }
 
     // Sans info fiable, le bot ne voit pas les cartes cachées de la cible.
@@ -1144,11 +1153,20 @@ class BotPowerHandler {
       }
     }
 
+    // Priorité 1 : index initialement révélé et jamais échangé depuis le départ.
+    final untouchedRevealedIdx = BotDutchStrategy.discardTracker
+        .pickUntouchedInitiallyRevealedIndex(opponent.id, opponent.hand.length);
+    if (untouchedRevealedIdx != null) return untouchedRevealedIdx;
+
+    // Priorité 2 : index que le joueur a amélioré puis arrêté de toucher.
+    final stoppedTouchingIdx = BotDutchStrategy.discardTracker
+        .pickStoppedTouchingIndex(opponent.id, opponent.hand.length);
+    if (stoppedTouchingIdx != null) return stoppedTouchingIdx;
+
+    // Priorité 3 : heuristique sur fréquence d'échange et plafond estimé.
     final likelyStrongIdx = BotDutchStrategy.discardTracker
         .pickLikelyStrongIndex(opponent.id, opponent.hand.length);
-    if (likelyStrongIdx != null) {
-      return likelyStrongIdx;
-    }
+    if (likelyStrongIdx != null) return likelyStrongIdx;
 
     return _random.nextInt(opponent.hand.length);
   }

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/service_locator.dart';
+import '../../../core/interfaces/i_haptic_service.dart';
 import '../../../models/player.dart';
 import '../../../utils/ui_constants.dart';
 import '../responsive_dialog.dart';
@@ -202,7 +204,12 @@ class PowerSelectionWidgets {
                   onTimeout: onTimeout,
                 ),
                 ElevatedButton(
-                  onPressed: onConfirm,
+                  onPressed: onConfirm == null
+                      ? null
+                      : () {
+                          ServiceLocator().get<IHapticService>().buttonTap();
+                          onConfirm();
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     padding: EdgeInsets.symmetric(
@@ -274,7 +281,10 @@ class PowerSelectionWidgets {
               width: fullWidthButton ? metrics.contentWidth : null,
               height: fullWidthButton ? metrics.space(64) : null,
               child: ElevatedButton(
-                onPressed: onConfirm,
+                onPressed: () {
+                  ServiceLocator().get<IHapticService>().buttonTap();
+                  onConfirm();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: color.withValues(alpha: 0.8),
                   foregroundColor: Colors.white,
@@ -391,7 +401,10 @@ class PowerSelectionWidgets {
         final player = entry.value;
         final playerIsMe = isMe(player);
         return ElevatedButton.icon(
-          onPressed: () => onSelect(player, index),
+          onPressed: () {
+            ServiceLocator().get<IHapticService>().buttonTap();
+            onSelect(player, index);
+          },
           icon: Icon(
             playerIsMe ? Icons.person : Icons.smart_toy,
             size: metrics.size(20),

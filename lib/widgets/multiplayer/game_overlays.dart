@@ -1,6 +1,8 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../utils/ui_constants.dart';
 
 /// InheritedWidget qui propage l'état de pause dans l'arbre widget.
@@ -374,7 +376,10 @@ class _PauseOverlayState extends State<_PauseOverlay>
                 // Bouton REPRENDRE — visible seulement pour le pauseur
                 if (widget.isLocalPauser)
                   ElevatedButton(
-                    onPressed: widget.onResume,
+                    onPressed: () {
+                      ServiceLocator().get<IHapticService>().buttonTap();
+                      widget.onResume?.call();
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                       foregroundColor: Colors.black,

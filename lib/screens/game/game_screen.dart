@@ -13,6 +13,8 @@ import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/services/platform/wake_lock_service.dart';
+import 'package:dutch_game/core/service_locator.dart';
+import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -322,7 +324,10 @@ class _GameScreenState extends State<GameScreen>
             ),
             const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: () => gp.resumeGame(),
+              onPressed: () {
+                ServiceLocator().get<IHapticService>().buttonTap();
+                gp.resumeGame();
+              },
               icon: const Icon(Icons.play_arrow, size: 28),
               label: const Text("REPRENDRE", style: TextStyle(fontSize: 18)),
               style: ElevatedButton.styleFrom(

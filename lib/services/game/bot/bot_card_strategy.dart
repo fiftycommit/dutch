@@ -568,29 +568,21 @@ class BotCardStrategy {
         duel ? gs.players.where((p) => p.id != bot.id).firstOrNull : null;
     final duelAgainstHumanOrMoi = duelOpponent != null &&
         (duelOpponent.isHuman || duelOpponent.botBehavior == BotBehavior.moi);
-    final knowsAllCards = !hasUnknown;
     bool shouldTrigger = false;
 
-    if (duel && knowsAllCards && !hasKnownHighPayload) {
-      shouldTrigger = false;
+    if (duel) {
+      // En duel, le Valet est gratuit (on allait le défausser anyway) → toujours déclencher.
+      shouldTrigger = true;
     } else if (isMoiStyle) {
       if (hasKnownHighPayload && (racePressure || cardGap >= 1)) {
         shouldTrigger = true;
-      } else if (duel && hasUnknown && cardGap >= 0) {
+      } else if (hasUnknown && cardGap >= 0) {
         shouldTrigger = true;
       }
     } else if (profile.tier == _CardTier.platinum) {
-      if (duel && hasUnknown) {
+      if (racePressure && (hasKnownHighPayload || hasUnknown)) {
         shouldTrigger = true;
-      } else if (duelAgainstHumanOrMoi &&
-          duel &&
-          (hasUnknown || cardGap >= 0)) {
-        shouldTrigger = true;
-      } else if (racePressure && (hasKnownHighPayload || hasUnknown)) {
-        shouldTrigger = true;
-      } else if (duel &&
-          tableConclusions.minOpponentCards <= 3 &&
-          hasKnownHighPayload) {
+      } else if (duelAgainstHumanOrMoi && (hasUnknown || cardGap >= 0)) {
         shouldTrigger = true;
       }
     } else {

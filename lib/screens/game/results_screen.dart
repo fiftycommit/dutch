@@ -8,6 +8,8 @@ import '../../providers/game_provider.dart';
 import '../../services/game/rp_result_helper.dart';
 import '../shared/unified_results_screen.dart' as shared;
 import '../../utils/tournament_labels.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 
 /// Écran de résultats pour le mode solo
 /// Utilise la version unifiée avec configuration spécifique
@@ -37,10 +39,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
     final isTournament = gameState.gameMode == GameMode.tournament;
     if (!isTournament) return;
     final totalRounds = gameProvider.tournamentTotalRounds;
-    final remainingRounds = (totalRounds - gameState.tournamentRound).clamp(0, totalRounds).toInt();
+    final remainingRounds =
+        (totalRounds - gameState.tournamentRound).clamp(0, totalRounds).toInt();
     final isFinalRound = remainingRounds == 0 || gameState.players.length <= 2;
     final isHumanEliminated = gameProvider.isHumanEliminatedInTournament();
-    if (isHumanEliminated && !isFinalRound && gameProvider.tournamentFinalRanking == null) {
+    if (isHumanEliminated &&
+        !isFinalRound &&
+        gameProvider.tournamentFinalRanking == null) {
       _tournamentFinishTriggered = true;
       gameProvider.finishTournamentForHuman();
     }
@@ -53,13 +58,16 @@ class _ResultsScreenState extends State<ResultsScreen> {
         if (!gameProvider.hasActiveGame) {
           return Scaffold(
             backgroundColor: AppColors.gradientBottom,
-            body: Center(child: Text('Pas de résultats', style: TextStyle(color: Colors.white))),
+            body: Center(
+                child: Text('Pas de résultats',
+                    style: TextStyle(color: Colors.white))),
           );
         }
 
         final gameState = gameProvider.gameState!;
         final isTournament = gameState.gameMode == GameMode.tournament;
-        final totalRounds = isTournament ? gameProvider.tournamentTotalRounds : 1;
+        final totalRounds =
+            isTournament ? gameProvider.tournamentTotalRounds : 1;
         final remainingRounds = isTournament
             ? (totalRounds - gameState.tournamentRound)
                 .clamp(0, totalRounds)
@@ -67,8 +75,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
             : 0;
         final isFinalRound = isTournament &&
             (remainingRounds == 0 || gameState.players.length <= 2);
-        final isHumanEliminated = isTournament && gameProvider.isHumanEliminatedInTournament();
-        final isTournamentOver = isTournament && (isFinalRound || isHumanEliminated);
+        final isHumanEliminated =
+            isTournament && gameProvider.isHumanEliminatedInTournament();
+        final isTournamentOver =
+            isTournament && (isFinalRound || isHumanEliminated);
         final stageLabel = isTournament
             ? tournamentStageLabel(
                 gameState.tournamentRound,
@@ -90,82 +100,87 @@ class _ResultsScreenState extends State<ResultsScreen> {
         final humanRank = () {
           final ranksWithTies = gameState.getFinalRanksWithTies();
           return ranksWithTies[humanPlayer.id] ??
-              (gameState.getFinalRanking().indexWhere((p) => p.id == humanPlayer.id) + 1);
+              (gameState
+                      .getFinalRanking()
+                      .indexWhere((p) => p.id == humanPlayer.id) +
+                  1);
         }();
-        final isTournamentWinner = isTournament && isFinalRound && humanRank == 1;
+        final isTournamentWinner =
+            isTournament && isFinalRound && humanRank == 1;
 
         final showRP = gameProvider.playerMMR != null;
 
         return PopScope(
           canPop: false,
           child: shared.ResultsScreen(
-          config: shared.ResultsConfig(
-            gameState: gameState,
-            localPlayerId: humanPlayer.id,
-            title: isTournament
-                ? (isTournamentOver
-                    ? "FIN DU TOURNOI"
-                    : "${stageLabel!.toUpperCase()} TERMINÉE")
-                : "RÉSULTATS",
-            subtitle: isTournamentOver ? stageLabel : null,
-            alertBanner: isTournamentWinner
-                ? _buildTournamentWinnerBanner()
-                : (isTournament && isHumanEliminated)
-                    ? _buildEliminatedBanner(
-                        gameProvider,
-                        totalRounds,
-                        gameState.tournamentRound,
-                      )
-                    : null,
-            isTournamentFinal: isFinalRound,
-            eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
-            buildActionButtons: (ctx) => [
-              if (isTournament && !isTournamentOver)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 180,
-                        child: shared.ResultsActionButton(
-                          label: 'ABANDONNER',
-                          backgroundColor: Colors.red.shade700,
-                          onPressed: () => _confirmAbandonTournament(
-                            ctx,
-                            gameProvider,
-                            remainingRounds,
-                            gameState,
+            config: shared.ResultsConfig(
+              gameState: gameState,
+              localPlayerId: humanPlayer.id,
+              title: isTournament
+                  ? (isTournamentOver
+                      ? "FIN DU TOURNOI"
+                      : "${stageLabel!.toUpperCase()} TERMINÉE")
+                  : "RÉSULTATS",
+              subtitle: isTournamentOver ? stageLabel : null,
+              alertBanner: isTournamentWinner
+                  ? _buildTournamentWinnerBanner()
+                  : (isTournament && isHumanEliminated)
+                      ? _buildEliminatedBanner(
+                          gameProvider,
+                          totalRounds,
+                          gameState.tournamentRound,
+                        )
+                      : null,
+              isTournamentFinal: isFinalRound,
+              eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
+              buildActionButtons: (ctx) => [
+                if (isTournament && !isTournamentOver)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 180,
+                          child: shared.ResultsActionButton(
+                            label: 'ABANDONNER',
+                            backgroundColor: Colors.red.shade700,
+                            onPressed: () => _confirmAbandonTournament(
+                              ctx,
+                              gameProvider,
+                              remainingRounds,
+                              gameState,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 180,
-                        child: shared.ResultsActionButton(
-                          label: 'MANCHE SUIVANTE >>',
-                          backgroundColor: Colors.amber.shade700,
-                          onPressed: () async {
-                            await gameProvider.startNextTournamentRound();
-                            if (ctx.mounted) ctx.go('/solo/memorization');
-                          },
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 180,
+                          child: shared.ResultsActionButton(
+                            label: 'MANCHE SUIVANTE >>',
+                            backgroundColor: Colors.amber.shade700,
+                            onPressed: () async {
+                              await gameProvider.startNextTournamentRound();
+                              if (ctx.mounted) ctx.go('/solo/memorization');
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  )
+                else
+                  shared.ResultsActionButton(
+                    label: 'TERMINER',
+                    backgroundColor: Colors.amber.shade700,
+                    onPressed: () => ctx.go('/'),
                   ),
-                )
-              else
-                shared.ResultsActionButton(
-                  label: 'TERMINER',
-                  backgroundColor: Colors.amber.shade700,
-                  onPressed: () => ctx.go('/'),
-                ),
-            ],
-            rpCalculator: showRP
-                ? (player, rank) => _calculateRP(gameProvider, player, rank, gameState)
-                : null,
+              ],
+              rpCalculator: showRP
+                  ? (player, rank) =>
+                      _calculateRP(gameProvider, player, rank, gameState)
+                  : null,
+            ),
           ),
-        ),
         );
       },
     );
@@ -193,7 +208,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 28),
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.red.shade400, size: 28),
             const SizedBox(width: 8),
             const Text('Abandonner le tournoi ?',
                 style: TextStyle(color: Colors.white, fontSize: 18)),
@@ -244,10 +260,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+            child:
+                const Text('Annuler', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
               Navigator.pop(dialogCtx);
               gameProvider.quitGame();
               if (ctx.mounted) ctx.go('/');
@@ -302,7 +320,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
     if (isFinalRound) {
       stageLabel = tournamentStageLabel(currentRound, totalRounds: totalRounds);
     } else if (eliminatedRound != null) {
-      stageLabel = tournamentStageLabel(eliminatedRound, totalRounds: totalRounds);
+      stageLabel =
+          tournamentStageLabel(eliminatedRound, totalRounds: totalRounds);
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

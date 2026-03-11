@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/multiplayer_game_provider.dart';
@@ -232,9 +234,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 child: const Text('Annuler'),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () {
+                  ServiceLocator().get<IHapticService>().buttonTap();
+                  Navigator.of(dialogContext).pop(
+                    controller.text,
+                  );
+                },
                 child: const Text('Enregistrer'),
               ),
             ],
@@ -391,7 +396,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     color: Colors.white.withValues(alpha: 0.92),
                     fontSize: compact ? 12 : 16,
                     letterSpacing: compact ? 0.8 : 1.2,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               )

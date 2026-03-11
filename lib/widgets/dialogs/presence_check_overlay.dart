@@ -221,7 +221,10 @@ class _PresenceCheckOverlayState extends State<PresenceCheckOverlay>
                     // Bouton Continuer
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: widget.onConfirm,
+                        onPressed: () {
+                          ServiceLocator().get<IHapticService>().buttonTap();
+                          widget.onConfirm();
+                        },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: const Color(0xFF4CAF50),

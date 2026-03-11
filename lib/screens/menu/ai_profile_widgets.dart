@@ -656,7 +656,7 @@ class BotMatchupCard extends StatelessWidget {
             ),
             child: Text(
               '$boostedCount boosté${boostedCount > 1 ? 's' : ''}',
-              style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.orange, fontSize: AppFontSizes.small, fontWeight: FontWeight.bold),
             ),
           ),
       ],
@@ -715,7 +715,7 @@ class BotMatchupCard extends StatelessWidget {
           SizedBox(
             width: 40,
             child: Text(dateStr,
-                style: const TextStyle(color: AppColors.textDisabled, fontSize: 10)),
+                style: const TextStyle(color: AppColors.textDisabled, fontSize: AppFontSizes.small)),
           ),
           const SizedBox(width: 6),
           Container(
@@ -725,7 +725,7 @@ class BotMatchupCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(diffLabel,
-                style: TextStyle(color: diffColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                style: TextStyle(color: diffColor, fontSize: AppFontSizes.small, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 8),
           Icon(
@@ -745,7 +745,7 @@ class BotMatchupCard extends StatelessWidget {
           const Spacer(),
           Text(
             '${m.playerScore} vs $bestBotScore',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: AppFontSizes.small),
           ),
           if (m.wasBoostedSBMM) ...[
             const SizedBox(width: 6),

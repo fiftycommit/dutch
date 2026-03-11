@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../providers/multiplayer_game_provider.dart';
 import '../../../../utils/ui_constants.dart';
+import '../../../../core/service_locator.dart';
+import '../../../../core/interfaces/i_haptic_service.dart';
 
 class LobbyPlayersPanel extends StatelessWidget {
   final MultiplayerGameProvider provider;
@@ -436,7 +438,10 @@ class LobbyPlayersPanel extends StatelessWidget {
             child: const Text('Annuler'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.pop(ctx, true);
+            },
             style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('Exclure'),
           ),
@@ -466,7 +471,10 @@ class LobbyPlayersPanel extends StatelessWidget {
             child: const Text('Annuler'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.pop(ctx, true);
+            },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Bannir'),
           ),

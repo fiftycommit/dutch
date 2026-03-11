@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/service_locator.dart';
+import '../../../core/interfaces/i_haptic_service.dart';
 import '../../../models/game_state.dart';
 import '../../../utils/ui_constants.dart';
 import '../../game/card_widget.dart';
@@ -27,7 +29,8 @@ class GameDialogs {
                   style: TextStyle(color: Colors.white, fontSize: titleSize)),
               SizedBox(height: gap),
               Text('Êtes-vous sûr ?',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize)),
+                  style: TextStyle(
+                      color: AppColors.textSecondary, fontSize: bodySize)),
               SizedBox(height: gap),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -36,13 +39,17 @@ class GameDialogs {
                       onPressed: () => Navigator.pop(ctx, false),
                       child: Text('Non',
                           style: TextStyle(
-                              color: AppColors.textDisabled, fontSize: buttonSize))),
+                              color: AppColors.textDisabled,
+                              fontSize: buttonSize))),
                   TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style:
-                          TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                      child:
-                          Text('DUTCH !', style: TextStyle(fontSize: buttonSize)))
+                      onPressed: () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
+                        Navigator.pop(ctx, true);
+                      },
+                      style: TextButton.styleFrom(
+                          foregroundColor: Colors.redAccent),
+                      child: Text('DUTCH !',
+                          style: TextStyle(fontSize: buttonSize)))
                 ],
               )
             ],
@@ -124,7 +131,8 @@ class GameDialogs {
               SizedBox(height: gap),
               Text(
                   "Quitter la partie ? Elle sera sauvegardée et comptée comme un abandon.",
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: bodySize),
+                  style: TextStyle(
+                      color: AppColors.textSecondary, fontSize: bodySize),
                   textAlign: TextAlign.center),
               SizedBox(height: gap),
               Row(
@@ -136,7 +144,10 @@ class GameDialogs {
                           style: TextStyle(
                               color: Colors.white, fontSize: buttonSize))),
                   TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
+                      onPressed: () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
+                        Navigator.pop(ctx, true);
+                      },
                       child: Text("Oui",
                           style: TextStyle(
                               color: Colors.redAccent, fontSize: buttonSize))),

@@ -544,11 +544,21 @@ class BotDutchStrategy {
       return false; // derrière avec certitude
     }
 
+    // Guard platine: sur marge nulle avec lecture incertaine, ne pas
+    // court-circuiter l'analyse contextuelle. Un retour anticipé n'est sûr
+    // que si l'un des cas suivants est vrai :
+    //   • score ≤ 1 : quasi-impossible de perdre
+    //   • marge positive : clairement devant l'adversaire le mieux estimé
+    //   • lecture fiable : confiance minimale ≥ 45 % (égalité assumée maîtrisée)
+    final earlyCallAllowed = myScore <= 1 ||
+        myScore < context.bestOpponentEstimate ||
+        context.minEstimateConfidence >= 0.45;
+
     // Platine: verrouille vite les très bas scores en endgame
     if (profile.tier == _DutchTier.platinum &&
         phase == BotGamePhase.endgame &&
         myScore <= 2) {
-      return true;
+      if (earlyCallAllowed) return true;
     }
     // Score très bas + table "large": seuls les niveaux experts convertissent
     // agressivement cette fenêtre, les tiers bas restent plus prudents.
@@ -557,7 +567,7 @@ class BotDutchStrategy {
           .where((p) => p.id != bot.id)
           .every((p) => p.hand.length >= 3);
       if (allOpponentsHaveMany) {
-        if (profile.tier == _DutchTier.platinum) return true;
+        if (profile.tier == _DutchTier.platinum && earlyCallAllowed) return true;
       }
     }
 
@@ -567,16 +577,16 @@ class BotDutchStrategy {
         if (expertConclusions?.tableExplosive == true && myKnownScore > 2) {
           // continuer vers la décision contextuelle plus bas
         } else {
-          return true;
+          if (earlyCallAllowed) return true;
         }
       }
       if (expertConclusions?.forceImmediateClose == true && myKnownScore <= 2) {
-        return true;
+        if (earlyCallAllowed) return true;
       }
       if (phase == BotGamePhase.endgame &&
           myKnownScore <= 4 &&
           context.minOpponentCards <= 3) {
-        return true;
+        if (earlyCallAllowed) return true;
       }
     }
 
@@ -584,7 +594,7 @@ class BotDutchStrategy {
         myKnownScore <= 2 &&
         unknownCount == 0 &&
         context.tablePressure >= 0.6) {
-      return true;
+      if (earlyCallAllowed) return true;
     }
 
     final adjustedOpponentEstimate =
@@ -709,11 +719,16 @@ class BotDutchStrategy {
     if (profile.tier == _DutchTier.platinum) {
       final hasRealEdge = margin >= 1;
       final strongEdge = margin >= 2;
-      final emergencyLowScore = myScore <= 2 && margin >= 0;
+      // emergencyLowScore: marge >= 1 requise (on n'appelle plus à l'égalité pure,
+      // trop risqué avec peu de joueurs si la lecture adverse est imprécise).
+      final emergencyLowScore = myScore <= 2 && margin >= 1;
+      // pressureCloseLead: on exige d'être au moins à l'égalité (margin >= 0)
+      // et une lecture adverse fiable, pour éviter les Dutch "panic" en duel.
       final pressureCloseLead = phase == BotGamePhase.endgame &&
           myScore <= 4 &&
-          margin >= -1 &&
-          context.minOpponentCards <= 2;
+          margin >= 0 &&
+          context.minOpponentCards <= 2 &&
+          context.minEstimateConfidence >= 0.40;
       final fastTable = phase == BotGamePhase.endgame ||
           context.minOpponentCards <= 3 ||
           context.tablePressure >= 0.8;
@@ -770,15 +785,24 @@ class BotDutchStrategy {
     if (cardGap < 0) {
       risk += (-cardGap) * profile.cardDisadvantageRiskWeight;
     }
+    // Les réductions de risque sont atténuées selon le nombre de joueurs :
+    // avec peu de joueurs chaque Dutch raté coûte beaucoup plus cher,
+    // et les "fausses urgences" y sont plus fréquentes.
+    // clamp(0.4, 1.0) : réduction au plus divisée par 2.5 en duel.
+    final playerScale = (gs.players.length / 6.0).clamp(0.4, 1.0);
     if (phase == BotGamePhase.endgame) {
-      risk -= profile.endgameRiskReduction;
+      risk -= profile.endgameRiskReduction * playerScale;
     }
     if (context.minOpponentCards <= 2) {
-      risk -= profile.urgencyRiskReduction;
+      risk -= profile.urgencyRiskReduction * playerScale;
     }
     if (goodTiming) {
-      risk -= profile.timingRiskReduction;
+      risk -= profile.timingRiskReduction * playerScale;
     }
+    // Floor : le risque brut ne peut pas être négatif.
+    // Sans ce plancher, les deux réductions combinées (endgame + urgence)
+    // inversent la formule et rendent n'importe quel Dutch rentable.
+    risk = max(0.0, risk);
 
     if (personality != null) {
       final styleBias = personality.aggressiveness - personality.caution;
@@ -808,7 +832,11 @@ class BotDutchStrategy {
       }
     }
 
-    final decisionScore = opportunity - risk + profile.decisionBias;
+    // Le decisionBias platine (3.20) est calibré pour une grande table.
+    // Avec peu de joueurs, on le réduit proportionnellement pour éviter
+    // qu'il écrase le signal risque/opportunité.
+    final scaledBias = profile.decisionBias * playerScale;
+    final decisionScore = opportunity - risk + scaledBias;
     return decisionScore >= 0;
   }
 

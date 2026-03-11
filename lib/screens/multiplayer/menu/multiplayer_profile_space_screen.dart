@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
+import 'package:dutch_game/core/service_locator.dart';
+import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
 import 'package:provider/provider.dart';
 
 enum MultiplayerProfileTab { profile, friends, blocked }
@@ -166,6 +168,7 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
+                      ServiceLocator().get<IHapticService>().buttonTap();
                       final val = ctrl.text.trim();
                       if (val.isEmpty || val.length > 24) {
                         setLocal(
@@ -282,6 +285,7 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
+                      ServiceLocator().get<IHapticService>().buttonTap();
                       final norm =
                           SocialHubRepository.normalizeUsername(ctrl.text);
                       if (!SocialHubRepository.isValidUsernameFormat(norm)) {
@@ -394,6 +398,7 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
+                      ServiceLocator().get<IHapticService>().buttonTap();
                       final newEmail = ctrl.text.trim();
                       if (newEmail.isEmpty || !newEmail.contains('@')) {
                         setLocal(() => fieldError = 'Email invalide.');
@@ -515,7 +520,8 @@ class _MultiplayerProfileSpaceScreenState
                 const SizedBox(height: 10),
                 Text(error!,
                     style: TextStyle(
-                        color: MultiplayerColors.of(context).danger, fontSize: 12)),
+                        color: MultiplayerColors.of(context).danger,
+                        fontSize: 12)),
               ],
             ]),
           ),
@@ -527,6 +533,7 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
+                      ServiceLocator().get<IHapticService>().buttonTap();
                       final cur = currentCtrl.text;
                       final nw = newCtrl.text;
                       final conf = confirmCtrl.text;
@@ -639,7 +646,8 @@ class _MultiplayerProfileSpaceScreenState
                 const SizedBox(height: 8),
                 Text(error!,
                     style: TextStyle(
-                        color: MultiplayerColors.of(context).danger, fontSize: 12)),
+                        color: MultiplayerColors.of(context).danger,
+                        fontSize: 12)),
               ],
             ]),
           ),
@@ -651,6 +659,7 @@ class _MultiplayerProfileSpaceScreenState
               onPressed: saving
                   ? null
                   : () async {
+                      ServiceLocator().get<IHapticService>().buttonTap();
                       final em = emailCtrl.text.trim();
                       final pw = pwdCtrl.text;
                       if (em.isEmpty || !em.contains('@')) {
@@ -712,7 +721,10 @@ class _MultiplayerProfileSpaceScreenState
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: MultiplayerColors.of(context).danger),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.of(ctx).pop(true);
+            },
             child: const Text('Délier'),
           ),
         ],
@@ -838,7 +850,7 @@ class _MultiplayerProfileSpaceScreenState
             indicatorWeight: 2.5,
             dividerColor: Colors.transparent,
             labelStyle:
-                const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             unselectedLabelStyle:
                 const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             tabs: const [
@@ -1036,7 +1048,7 @@ class _InfosTab extends StatelessWidget {
         style: TextStyle(
           color: cs.textSecondary,
           fontSize: 11,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
         ),
       ),
@@ -1114,7 +1126,7 @@ class _InfoRow extends StatelessWidget {
                   label,
                   style: TextStyle(
                     color: cs.textPrimary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                     fontSize: 15,
                   ),
                 ),
@@ -1195,7 +1207,7 @@ class _ProviderRow extends StatelessWidget {
               label,
               style: TextStyle(
                 color: cs.textPrimary,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.bold,
                 fontSize: 15,
               ),
             ),
@@ -1204,7 +1216,9 @@ class _ProviderRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: MultiplayerColors.of(context).success.withValues(alpha: 0.15),
+                color: MultiplayerColors.of(context)
+                    .success
+                    .withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -1212,7 +1226,7 @@ class _ProviderRow extends StatelessWidget {
                 style: TextStyle(
                     color: MultiplayerColors.of(context).success,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700),
+                    fontWeight: FontWeight.bold),
               ),
             ),
             if (canUnlink) ...[
@@ -1235,7 +1249,7 @@ class _ProviderRow extends StatelessWidget {
               child: Text('Ajouter',
                   style: TextStyle(
                       color: MultiplayerColors.of(context).info,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                       fontSize: 13)),
             ),
         ],
@@ -1299,7 +1313,10 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: MultiplayerColors.of(context).danger),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              Navigator.of(ctx).pop(true);
+            },
             child: const Text('Oui, supprimer'),
           ),
         ],
@@ -1337,41 +1354,40 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
         Builder(builder: (context) {
           final cs = MultiplayerColors.of(context);
           return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cs.danger.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.danger.withValues(alpha: 0.4)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.warning_amber_rounded,
-                  color: cs.danger, size: 26),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Zone dangereuse',
-                      style: TextStyle(
-                        color: cs.danger,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.danger.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.danger.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, color: cs.danger, size: 26),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Zone dangereuse',
+                        style: TextStyle(
+                          color: cs.danger,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'La suppression est irréversible. Toutes tes données disparaîtront définitivement.',
-                      style: TextStyle(color: cs.danger, fontSize: 13),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'La suppression est irréversible. Toutes tes données disparaîtront définitivement.',
+                        style: TextStyle(color: cs.danger, fontSize: 13),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
+              ],
+            ),
+          );
         }),
         const SizedBox(height: 20),
         _InfoCard(children: [
@@ -1386,7 +1402,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                       : 'Confirme la suppression',
                   style: TextStyle(
                     color: MultiplayerColors.of(context).textPrimary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                     fontSize: 15,
                   ),
                 ),
@@ -1415,14 +1431,17 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                   const SizedBox(height: 10),
                   Text(
                     'Tu seras redirigé vers Google pour confirmer ton identité.',
-                    style: TextStyle(color: MultiplayerColors.of(context).textSecondary, fontSize: 13),
+                    style: TextStyle(
+                        color: MultiplayerColors.of(context).textSecondary,
+                        fontSize: 13),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 8),
                     Text(
                       _error!,
                       style: TextStyle(
-                          color: MultiplayerColors.of(context).danger, fontSize: 12),
+                          color: MultiplayerColors.of(context).danger,
+                          fontSize: 12),
                     ),
                   ],
                 ],
@@ -1430,7 +1449,12 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: _deleting ? null : _confirmAndDelete,
+                    onPressed: _deleting
+                        ? null
+                        : () {
+                            ServiceLocator().get<IHapticService>().buttonTap();
+                            _confirmAndDelete();
+                          },
                     icon: _deleting
                         ? const SizedBox(
                             width: 18,
@@ -1440,7 +1464,7 @@ class _DeleteAccountTabState extends State<_DeleteAccountTab> {
                         : const Icon(Icons.delete_forever_rounded),
                     label: Text(
                       _deleting ? 'Suppression...' : 'Supprimer mon compte',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: MultiplayerColors.of(context).danger,
@@ -1502,7 +1526,7 @@ class _FriendsListTab extends StatelessWidget {
               style: TextStyle(
                 color: cs.textSecondary,
                 fontSize: 11,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
               ),
             ),
@@ -1534,7 +1558,7 @@ class _FriendsListTab extends StatelessWidget {
               child: Text(
                 initial,
                 style: TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.bold,
                   color: cs.primary,
                 ),
               ),
@@ -1542,7 +1566,7 @@ class _FriendsListTab extends StatelessWidget {
             title: Text(
               friend.displayName,
               style: TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.bold,
                   fontSize: 15,
                   color: cs.textPrimary),
             ),
@@ -1604,8 +1628,9 @@ class _ThemePicker extends StatelessWidget {
           final (theme, icon, label) = opt;
           final selected = current == theme;
           // Pour "Vert", la couleur de sélection est verte
-          final selectionColor =
-              theme == AppTheme.green ? MultiplayerColors.green.primary : cs.primary;
+          final selectionColor = theme == AppTheme.green
+              ? MultiplayerColors.green.primary
+              : cs.primary;
           return Expanded(
             child: GestureDetector(
               onTap: () => onChanged(theme),
@@ -1665,7 +1690,7 @@ InputDecoration _dlgInput(
     labelText: label,
     labelStyle: labelStyle,
     floatingLabelStyle:
-        TextStyle(color: cs.textPrimary, fontWeight: FontWeight.w700),
+        TextStyle(color: cs.textPrimary, fontWeight: FontWeight.bold),
     errorText: error,
     prefixText: prefixText,
     suffixIcon: suffixIcon,

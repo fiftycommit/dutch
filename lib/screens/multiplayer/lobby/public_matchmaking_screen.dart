@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../providers/auth_provider.dart';
 import '../../../../../utils/ui_constants.dart';
+import '../../../../../core/service_locator.dart';
+import '../../../../../core/interfaces/i_haptic_service.dart';
 import 'dart:async';
 
 class PublicMatchmakingScreen extends StatefulWidget {
@@ -420,6 +422,7 @@ class _PublicMatchmakingScreenState extends State<PublicMatchmakingScreen> {
           ),
           ElevatedButton(
             onPressed: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
               Navigator.pop(context);
               _joinRoom(roomCode, playerName);
             },

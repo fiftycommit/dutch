@@ -10,6 +10,8 @@ import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/game/bot_factory.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isTournament;
@@ -429,7 +431,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                 ),
                 SizedBox(height: spacingLarge),
                 ElevatedButton(
-                  onPressed: () => _startGame(context, useSBMM),
+                  onPressed: () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    _startGame(context, useSBMM);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,

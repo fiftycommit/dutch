@@ -313,6 +313,57 @@ class DiscardTracker {
     return bestScore >= 1.0 ? bestIdx : null;
   }
 
+  /// Retourne un index initialement révélé (début de partie) et jamais échangé
+  /// par le joueur → la carte est celle d'origine, gardée volontairement (bonne).
+  /// Exclut les index déjà reciblés par un Valet adverse sans échange adverse depuis.
+  int? pickUntouchedInitiallyRevealedIndex(String playerId, int handSize) {
+    if (handSize <= 0) return null;
+    final startKnown = _playerPublicStartKnownIndices[playerId];
+    if (startKnown == null || startKnown.isEmpty) return null;
+
+    final counts = _playerReplacedIndexCounts[playerId] ?? const <int, int>{};
+    final swaps = _playerVisibleSwapByIndexCount[playerId] ?? const <int, int>{};
+
+    for (final idx in startKnown) {
+      if (idx < 0 || idx >= handSize) continue;
+      final playerExchanges = counts[idx] ?? 0;
+      if (playerExchanges > 0) continue; // le joueur a échangé → plus la carte de départ
+      final botSwaps = swaps[idx] ?? 0;
+      if (botSwaps > 0) continue; // déjà reciblé par Valet, joueur n'a pas récupéré
+      return idx;
+    }
+    return null;
+  }
+
+  /// Retourne un index que le joueur a déjà échangé (amélioré) mais qu'il
+  /// n'a plus touché récemment → il a trouvé une bonne carte et la garde.
+  /// Exclut les index déjà reciblés par un Valet adverse sans échange adverse depuis.
+  int? pickStoppedTouchingIndex(String playerId, int handSize) {
+    if (handSize <= 0) return null;
+    final counts = _playerReplacedIndexCounts[playerId] ?? const <int, int>{};
+    if (counts.isEmpty) return null;
+
+    final swaps = _playerVisibleSwapByIndexCount[playerId] ?? const <int, int>{};
+    final history = _playerReplacedIndexHistory[playerId] ?? const <int>[];
+    final recentIndices = _tail(history, 3).toSet();
+
+    int? bestIdx;
+    int bestCount = 0;
+    for (int idx = 0; idx < handSize; idx++) {
+      final playerExchanges = counts[idx] ?? 0;
+      if (playerExchanges == 0) continue; // jamais touché
+      if (recentIndices.contains(idx)) continue; // encore actif sur cet index
+      final botSwaps = swaps[idx] ?? 0;
+      // Bot a déjà ciblé cet index et le joueur ne l'a pas clairement récupéré
+      if (botSwaps > 0 && playerExchanges <= botSwaps) continue;
+      if (playerExchanges > bestCount) {
+        bestCount = playerExchanges;
+        bestIdx = idx;
+      }
+    }
+    return bestIdx;
+  }
+
   /// Retourne true si la dernière action du joueur était un échange
   bool lastActionWasExchange(String playerId) =>
       _lastActionWasExchange[playerId] ?? false;

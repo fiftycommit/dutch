@@ -9,6 +9,8 @@ import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:dutch_game/services/social/friends_api_service.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
+import 'package:dutch_game/core/service_locator.dart';
+import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
@@ -439,7 +441,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   title: Text(
                     forceCompletion ? 'Complete ton profil' : 'Mon profil',
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                       color: dlgCs.textPrimary,
                     ),
                   ),
@@ -454,7 +456,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                             'Pseudo',
                             style: TextStyle(
                               color: dlgCs.textPrimary,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -497,7 +499,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                             'Nom d utilisateur',
                             style: TextStyle(
                               color: dlgCs.textPrimary,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -589,7 +591,14 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                         child: const Text('Fermer'),
                       ),
                     FilledButton(
-                      onPressed: saving ? null : onSave,
+                      onPressed: saving
+                          ? null
+                          : () {
+                              ServiceLocator()
+                                  .get<IHapticService>()
+                                  .buttonTap();
+                              onSave();
+                            },
                       child: saving
                           ? const SizedBox(
                               width: 16,
@@ -634,7 +643,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                       'Inviter des amis',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -677,6 +686,9 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                             onPressed: selected.isEmpty
                                 ? null
                                 : () {
+                                    ServiceLocator()
+                                        .get<IHapticService>()
+                                        .buttonTap();
                                     Navigator.of(sheetContext).pop();
                                   },
                             child: const Text('Inviter'),
@@ -879,7 +891,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   const SizedBox(width: 8),
                   _pillButton(
                     icon: Icons.mark_email_unread_outlined,
-                    label: '$pendingCount demande${pendingCount > 1 ? 's' : ''}',
+                    label:
+                        '$pendingCount demande${pendingCount > 1 ? 's' : ''}',
                     onTap: () async {
                       await context.push('/friends?tab=1');
                       if (mounted) {
@@ -916,8 +929,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
             onTap: () async {
               await context.push('/friends?tab=1');
               if (mounted) {
-                await Future.wait<void>(
-                    [_loadSocialData(), _loadMyRooms()]);
+                await Future.wait<void>([_loadSocialData(), _loadMyRooms()]);
               }
             },
           ),
@@ -980,7 +992,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
       style: TextStyle(
         color: _cs.textPrimary,
         fontSize: titleSize,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.bold,
         letterSpacing: -0.5,
       ),
     );
@@ -1052,7 +1064,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                   _displayName,
                   style: TextStyle(
                     color: _cs.textPrimary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                     fontSize: 16,
                     height: 1.1,
                   ),
@@ -1215,7 +1227,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                 style: TextStyle(
                   color: _cs.textPrimary,
                   fontSize: titleSize,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.bold,
                   height: 1.1,
                 ),
               ),
@@ -1328,7 +1340,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     style: TextStyle(
                       color: _cs.textPrimary,
                       fontSize: headerSize,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
@@ -1470,7 +1482,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                         style: TextStyle(
                           color: statusColor,
                           fontSize: compact ? 10 : 11,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -1491,7 +1503,12 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
           ),
           SizedBox(width: compact ? 6 : 8),
           FilledButton(
-            onPressed: isActive ? () => _rejoinRoom(room.roomCode) : null,
+            onPressed: isActive
+                ? () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    _rejoinRoom(room.roomCode);
+                  }
+                : null,
             style: FilledButton.styleFrom(
               visualDensity:
                   compact ? VisualDensity.compact : VisualDensity.standard,

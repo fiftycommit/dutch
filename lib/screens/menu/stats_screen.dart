@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/service_locator.dart';
+import '../../core/interfaces/i_haptic_service.dart';
 import '../../services/logging/game_logger_service.dart';
 import '../../services/ui/stats_service.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
@@ -470,6 +472,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
+                        ServiceLocator().get<IHapticService>().buttonTap();
                         Navigator.pop(ctx);
                         // Deuxième confirmation
                         _showFinalConfirmation(context, slotId);
@@ -544,6 +547,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
+                        ServiceLocator().get<IHapticService>().buttonTap();
                         Navigator.pop(ctx);
                         await StatsService.resetStats(slotId: slotId);
                         if (mounted) {

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../../providers/multiplayer_game_provider.dart';
 import '../../../../../services/social/social_hub_repository.dart';
+import '../../../../../core/service_locator.dart';
+import '../../../../../core/interfaces/i_haptic_service.dart';
 
 class JoinPrivateRoomScreen extends StatefulWidget {
   const JoinPrivateRoomScreen({super.key});
@@ -281,8 +283,14 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('join_private_button'),
-                                        onPressed:
-                                            _isJoining ? null : _joinRoom,
+                                        onPressed: _isJoining
+                                            ? null
+                                            : () {
+                                                ServiceLocator()
+                                                    .get<IHapticService>()
+                                                    .buttonTap();
+                                                _joinRoom();
+                                              },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Colors.orange.shade700,
@@ -461,8 +469,14 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         key: const Key('join_private_button'),
-                                        onPressed:
-                                            _isJoining ? null : _joinRoom,
+                                        onPressed: _isJoining
+                                            ? null
+                                            : () {
+                                                ServiceLocator()
+                                                    .get<IHapticService>()
+                                                    .buttonTap();
+                                                _joinRoom();
+                                              },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Colors.orange.shade700,
