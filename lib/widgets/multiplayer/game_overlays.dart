@@ -378,7 +378,7 @@ class _PauseOverlayState extends State<_PauseOverlay>
                   ElevatedButton(
                     onPressed: () {
                       ServiceLocator().get<IHapticService>().buttonTap();
-                      widget.onResume?.call();
+                      widget.onResume();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
