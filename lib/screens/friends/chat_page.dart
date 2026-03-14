@@ -1418,6 +1418,7 @@ class _InputBarState extends State<_InputBar> {
   final AudioPlayer _previewPlayer = AudioPlayer();
   DateTime? _recordStart;
   String? _recordPath;
+  int _recordDurationMs = 0;
   int _elapsedSeconds = 0;
   Timer? _timer;
   bool _previewPlaying = false;
@@ -1484,6 +1485,8 @@ class _InputBarState extends State<_InputBar> {
 
   Future<void> _stopRecord() async {
     _timer?.cancel();
+    _recordDurationMs =
+        DateTime.now().difference(_recordStart!).inMilliseconds;
     final path = await _recorder.stop();
     if (path != null) _recordPath = path;
     setState(() => _recordState = _RecordState.preview);
@@ -1502,7 +1505,7 @@ class _InputBarState extends State<_InputBar> {
   Future<void> _sendAudio() async {
     final path = _recordPath;
     if (path == null) return;
-    final durationMs = DateTime.now().difference(_recordStart!).inMilliseconds;
+    final durationMs = _recordDurationMs;
     await _previewPlayer.stop();
     setState(() {
       _recordState = _RecordState.idle;
