@@ -6,6 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1341,23 +1342,31 @@ class _AudioBubbleState extends State<_AudioBubble> {
   bool _playing = false;
   double _progress = 0;
   StreamSubscription? _positionSub;
+  int? _realDurationMs;
 
   @override
   void initState() {
     super.initState();
+    _player.onDurationChanged.listen((d) {
+      _realDurationMs = d.inMilliseconds;
+    });
     _positionSub = _player.onPositionChanged.listen((pos) {
-      if (widget.durationMs > 0 && mounted) {
+      final dur = _realDurationMs ?? widget.durationMs;
+      if (dur > 0 && mounted) {
         setState(() {
-          _progress =
-              (pos.inMilliseconds / widget.durationMs).clamp(0.0, 1.0);
+          _progress = (pos.inMilliseconds / dur).clamp(0.0, 1.0);
         });
       }
     });
     _player.onPlayerComplete.listen((_) {
       if (mounted) {
+        // Afficher la barre pleine brièvement avant de reset
         setState(() {
           _playing = false;
-          _progress = 0;
+          _progress = 1.0;
+        });
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted) setState(() => _progress = 0);
         });
       }
     });
@@ -1384,6 +1393,11 @@ class _AudioBubbleState extends State<_AudioBubble> {
       await _player.play(source);
       if (mounted) setState(() => _playing = true);
     }
+  }
+
+  int get _remainingMs {
+    final dur = _realDurationMs ?? widget.durationMs;
+    return ((1.0 - _progress) * dur).round().clamp(0, dur);
   }
 
   String _fmt(int ms) {
@@ -1419,7 +1433,10 @@ class _AudioBubbleState extends State<_AudioBubble> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(_fmt(widget.durationMs),
+          Text(
+              _playing
+                  ? '-${_fmt(_remainingMs)}'
+                  : _fmt(widget.durationMs),
               style: TextStyle(color: color, fontSize: 11)),
         ],
       ),
@@ -1454,14 +1471,14 @@ class _WaveformPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (samples.isEmpty) return;
     final barCount = samples.length;
-    final barWidth = (size.width / barCount) * 0.6;
-    final gap = (size.width / barCount) * 0.4;
-    final step = barWidth + gap;
+    final step = size.width / barCount;
+    final barWidth = step * 0.6;
     final centerY = size.height / 2;
 
     for (int i = 0; i < barCount; i++) {
       final x = i * step;
-      final barProgress = x / size.width;
+      // Progression basée sur l'index, pas la position pixel
+      final barProgress = (i + 1) / barCount;
       final amplitude = samples[i].clamp(0.1, 1.0);
       final barHeight = amplitude * size.height * 0.85;
       final paint = Paint()
@@ -1469,8 +1486,8 @@ class _WaveformPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..strokeWidth = barWidth;
       canvas.drawLine(
-        Offset(x + barWidth / 2, centerY - barHeight / 2),
-        Offset(x + barWidth / 2, centerY + barHeight / 2),
+        Offset(x + step / 2, centerY - barHeight / 2),
+        Offset(x + step / 2, centerY + barHeight / 2),
         paint,
       );
     }
@@ -1779,25 +1796,44 @@ class _InputBarState extends State<_InputBar> {
   @override
   Widget build(BuildContext context) {
     final cs = widget.cs;
-    return Container(
-      color: cs.inputBar,
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
+    return Listener(
+      // Capturer le relâchement du doigt même si le widget a changé
+      onPointerUp: (_) {
+        if (_recordState == _RecordState.recording) {
+          if (_dragOffset < _cancelThreshold) {
+            _cancelRecord();
+          } else {
+            _stopAndSend();
+          }
+        }
+      },
+      child: Container(
+        color: cs.inputBar,
+        padding: EdgeInsets.only(
+          left: 8,
+          right: 14,
+          top: 8,
+          bottom: MediaQuery.of(context).padding.bottom + 8,
+        ),
+        child: _buildContent(cs),
       ),
-      child: _buildContent(cs),
     );
   }
 
   Widget _buildContent(MultiplayerColorScheme cs) {
-    switch (_recordState) {
-      case _RecordState.recording:
-        return _buildRecordingBar(cs);
-      case _RecordState.idle:
-        return _buildIdleBar(cs);
-    }
+    return Stack(
+      children: [
+        // Toujours présent pour garder le clavier ouvert
+        Opacity(
+          opacity: _recordState == _RecordState.recording ? 0 : 1,
+          child: IgnorePointer(
+            ignoring: _recordState == _RecordState.recording,
+            child: _buildIdleBar(cs),
+          ),
+        ),
+        if (_recordState == _RecordState.recording) _buildRecordingBar(cs),
+      ],
+    );
   }
 
   Widget _buildRecordingBar(MultiplayerColorScheme cs) {
@@ -1936,10 +1972,17 @@ class _InputBarState extends State<_InputBar> {
             ),
           )
         else
-          GestureDetector(
-            onLongPressStart: (_) => _startRecord(),
-            onLongPressEnd: (_) {
-              if (_recordState == _RecordState.recording) _stopAndSend();
+          RawGestureDetector(
+            gestures: <Type, GestureRecognizerFactory>{
+              LongPressGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                      LongPressGestureRecognizer>(
+                () => LongPressGestureRecognizer(
+                    duration: const Duration(milliseconds: 100)),
+                (instance) {
+                  instance.onLongPressStart = (_) => _startRecord();
+                },
+              ),
             },
             child: Container(
               width: 36,

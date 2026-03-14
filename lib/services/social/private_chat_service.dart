@@ -136,6 +136,25 @@ class PrivateChatService {
     });
   }
 
+  /// Stream du nombre de messages non lus pour un chat donné.
+  Stream<int> unreadCountStream(String cId, String myUserId) {
+    return _chatDoc(cId).snapshots().asyncMap((doc) async {
+      final data = doc.data();
+      final receipts = data?['readReceipts'] as Map<String, dynamic>?;
+      final myReadTs = receipts?[myUserId] as Timestamp?;
+
+      Query<Map<String, dynamic>> query = _messages(cId);
+      if (myReadTs != null) {
+        query = query.where('timestamp', isGreaterThan: myReadTs);
+      }
+      // Ne compter que les messages de l'autre personne
+      final snap = await query.get();
+      return snap.docs
+          .where((d) => (d.data()['senderId'] as String?) != myUserId)
+          .length;
+    });
+  }
+
   /// Marque le chat comme lu par myUserId (appelé à l'ouverture de la conv).
   Future<void> markAsRead(String cId, String myUserId) async {
     await _chatDoc(cId).set({

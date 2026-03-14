@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/ui_constants.dart';
 import '../../services/social/friends_api_service.dart';
+import '../../services/social/private_chat_service.dart';
 import '../../core/service_locator.dart';
 import '../../core/interfaces/i_haptic_service.dart';
 
@@ -23,6 +24,8 @@ class _FriendsPageState extends State<FriendsPage>
     with SingleTickerProviderStateMixin {
   late final FriendsApiService _friendsApi;
   late final TabController _tabController;
+  late final String _myUserId;
+  final PrivateChatService _chatService = PrivateChatService();
 
   List<FriendInfo> _friends = [];
   List<FriendRequestInfo> _incomingRequests = [];
@@ -30,12 +33,17 @@ class _FriendsPageState extends State<FriendsPage>
   List<BlockedUserInfo> _blocked = [];
   bool _loading = true;
 
+  // Compteurs de messages non lus par ami
+  final Map<String, int> _unreadCounts = {};
+  final Map<String, StreamSubscription<int>> _unreadSubs = {};
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
         length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     final authProvider = context.read<AuthProvider>();
+    _myUserId = authProvider.user!.id;
     _friendsApi = FriendsApiService(authProvider.authService);
     unawaited(_loadData());
   }
@@ -43,7 +51,28 @@ class _FriendsPageState extends State<FriendsPage>
   @override
   void dispose() {
     _tabController.dispose();
+    for (final sub in _unreadSubs.values) {
+      sub.cancel();
+    }
     super.dispose();
+  }
+
+  void _listenUnreadCounts() {
+    // Annuler les anciens subscriptions
+    for (final sub in _unreadSubs.values) {
+      sub.cancel();
+    }
+    _unreadSubs.clear();
+
+    for (final friend in _friends) {
+      final chatId = PrivateChatService.chatId(_myUserId, friend.userId);
+      _unreadSubs[friend.userId] =
+          _chatService.unreadCountStream(chatId, _myUserId).listen((count) {
+        if (mounted && _unreadCounts[friend.userId] != count) {
+          setState(() => _unreadCounts[friend.userId] = count);
+        }
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -67,6 +96,7 @@ class _FriendsPageState extends State<FriendsPage>
       _blocked = blocked;
       _loading = false;
     });
+    _listenUnreadCounts();
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -333,7 +363,12 @@ class _FriendsPageState extends State<FriendsPage>
                           children: [
                             _FriendsTab(
                               friends: _friends,
-                              onTap: _openFriendActions,
+                              onTap: (f) => context.push(
+                                '/friends/chat/${f.userId}',
+                                extra: f.displayName,
+                              ),
+                              onLongPress: _openFriendActions,
+                              unreadCounts: _unreadCounts,
                               onAddFriend: _openAddFriendDialog,
                             ),
                             _RequestsTab(
@@ -461,11 +496,15 @@ class _FriendsTab extends StatelessWidget {
   const _FriendsTab({
     required this.friends,
     required this.onTap,
+    required this.onLongPress,
+    required this.unreadCounts,
     required this.onAddFriend,
   });
 
   final List<FriendInfo> friends;
   final void Function(FriendInfo) onTap;
+  final void Function(FriendInfo) onLongPress;
+  final Map<String, int> unreadCounts;
   final VoidCallback onAddFriend;
 
   @override
@@ -512,17 +551,29 @@ class _FriendsTab extends StatelessWidget {
           );
         }
         final friend = friends[index];
-        return _FriendTile(friend: friend, onTap: () => onTap(friend));
+        return _FriendTile(
+          friend: friend,
+          onTap: () => onTap(friend),
+          onLongPress: () => onLongPress(friend),
+          unreadCount: unreadCounts[friend.userId] ?? 0,
+        );
       },
     );
   }
 }
 
 class _FriendTile extends StatelessWidget {
-  const _FriendTile({required this.friend, required this.onTap});
+  const _FriendTile({
+    required this.friend,
+    required this.onTap,
+    required this.onLongPress,
+    this.unreadCount = 0,
+  });
 
   final FriendInfo friend;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -542,18 +593,47 @@ class _FriendTile extends StatelessWidget {
       ),
       child: ListTile(
         onTap: onTap,
+        onLongPress: onLongPress,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: cs.surfaceHigh,
-          child: Text(
-            friend.displayName.isNotEmpty
-                ? friend.displayName[0].toUpperCase()
-                : '?',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: cs.primary,
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CircleAvatar(
+              backgroundColor: cs.surfaceHigh,
+              child: Text(
+                friend.displayName.isNotEmpty
+                    ? friend.displayName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: cs.primary,
+                ),
+              ),
             ),
-          ),
+            if (unreadCount > 0)
+              Positioned(
+                right: -4,
+                bottom: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  constraints: const BoxConstraints(minWidth: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: cs.surface, width: 1.5),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
         title: Text(
           friend.displayName,
