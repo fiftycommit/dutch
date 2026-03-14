@@ -19,6 +19,7 @@ class ChatMessage {
   final ChatMessageType type;
   final String? mediaUrl;
   final int? audioDurationMs;
+  final List<double>? waveform; // amplitudes normalisées 0-1
   final DateTime timestamp;
   final DocumentSnapshot? snapshot; // pour la pagination
   final List<String> deletedFor;   // UIDs pour qui le message est caché
@@ -32,6 +33,7 @@ class ChatMessage {
     required this.timestamp,
     this.mediaUrl,
     this.audioDurationMs,
+    this.waveform,
     this.snapshot,
     this.deletedFor = const [],
     this.deletedForAll = false,
@@ -49,6 +51,8 @@ class ChatMessage {
             ?.map((e) => e as String)
             .toList() ??
         const [];
+    final waveformRaw = data['waveform'] as List<dynamic>?;
+    final waveform = waveformRaw?.map((e) => (e as num).toDouble()).toList();
     return ChatMessage(
       id: doc.id,
       senderId: data['senderId'] as String? ?? '',
@@ -56,6 +60,7 @@ class ChatMessage {
       type: type,
       mediaUrl: data['mediaUrl'] as String?,
       audioDurationMs: data['audioDurationMs'] as int?,
+      waveform: waveform,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       snapshot: doc,
       deletedFor: deletedFor,
@@ -256,7 +261,8 @@ class PrivateChatService {
   }
 
   Future<void> sendAudio(
-      String cId, String senderId, File audioFile, int durationMs) async {
+      String cId, String senderId, File audioFile, int durationMs,
+      {List<double>? waveform}) async {
     final ref = _storage
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
@@ -268,13 +274,15 @@ class PrivateChatService {
       'text': '',
       'mediaUrl': url,
       'audioDurationMs': durationMs,
+      if (waveform != null) 'waveform': waveform,
       'timestamp': FieldValue.serverTimestamp(),
     });
   }
 
   /// Web uniquement : fetch le blob URL et upload les bytes vers Firebase Storage.
   Future<void> sendAudioFromUrl(
-      String cId, String senderId, String blobUrl, int durationMs) async {
+      String cId, String senderId, String blobUrl, int durationMs,
+      {List<double>? waveform}) async {
     final bytes = await _fetchBytes(blobUrl);
     final ref = _storage
         .ref()
@@ -287,6 +295,7 @@ class PrivateChatService {
       'text': '',
       'mediaUrl': url,
       'audioDurationMs': durationMs,
+      if (waveform != null) 'waveform': waveform,
       'timestamp': FieldValue.serverTimestamp(),
     });
   }

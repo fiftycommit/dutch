@@ -99,6 +99,19 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  /// Redimensionne et compresse une image (pour le web où imageQuality est ignoré)
+  Future<List<int>> _compressImageBytes(Uint8List bytes,
+      {int maxDim = 1200}) async {
+    final codec = await ui.instantiateImageCodec(bytes,
+        targetWidth: maxDim, targetHeight: maxDim);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    final byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return bytes;
+    return byteData.buffer.asUint8List();
+  }
+
   Future<void> _analyzeLocalWallpaperBrightness(String path) async {
     try {
       final bytes = await File(path).readAsBytes();
@@ -175,14 +188,16 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  void _addPendingAudio(String localPath, int durationMs) {
+  void _addPendingAudio(
+      String localPath, int durationMs, List<double> waveform) {
     final pending = ChatMessage(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       senderId: _myUserId,
       text: '',
       type: ChatMessageType.audio,
-      mediaUrl: kIsWeb ? localPath : localPath,
+      mediaUrl: localPath,
       audioDurationMs: durationMs,
+      waveform: waveform,
       timestamp: DateTime.now(),
     );
     setState(() => _pendingMessages.add(pending));
@@ -304,6 +319,8 @@ class _ChatPageState extends State<ChatPage> {
       xfile = await picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: kIsWeb ? null : 60,
+        maxWidth: 1920,
+        maxHeight: 1920,
       );
     } catch (e) {
       if (mounted) {
@@ -326,7 +343,10 @@ class _ChatPageState extends State<ChatPage> {
           FirebaseStorage.instance.ref().child('chat_wallpapers/$_chatId.jpg');
       if (kIsWeb) {
         final bytes = await xfile.readAsBytes();
-        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        final compressed = await _compressImageBytes(bytes, maxDim: 1920);
+        await ref.putData(
+            Uint8List.fromList(compressed),
+            SettableMetadata(contentType: 'image/jpeg'));
       } else {
         await ref.putFile(
             File(xfile.path), SettableMetadata(contentType: 'image/jpeg'));
@@ -423,7 +443,8 @@ class _ChatPageState extends State<ChatPage> {
     try {
       if (kIsWeb) {
         final bytes = await xfile.readAsBytes();
-        await _chatService.sendImageBytes(_chatId, _myUserId, bytes);
+        final compressed = await _compressImageBytes(bytes, maxDim: 1200);
+        await _chatService.sendImageBytes(_chatId, _myUserId, compressed);
       } else {
         final file = File(xfile.path);
         await _chatService.sendImage(_chatId, _myUserId, file);
@@ -1164,6 +1185,7 @@ class _MessageBubble extends StatelessWidget {
           durationMs: message.audioDurationMs ?? 0,
           isMe: isMe,
           cs: cs,
+          waveform: message.waveform,
         );
 
       case ChatMessageType.text:
@@ -1301,12 +1323,14 @@ class _AudioBubble extends StatefulWidget {
     required this.durationMs,
     required this.isMe,
     required this.cs,
+    this.waveform,
   });
 
   final String mediaUrl;
   final int durationMs;
   final bool isMe;
   final MultiplayerColorScheme cs;
+  final List<double>? waveform;
 
   @override
   State<_AudioBubble> createState() => _AudioBubbleState();
@@ -1315,9 +1339,33 @@ class _AudioBubble extends StatefulWidget {
 class _AudioBubbleState extends State<_AudioBubble> {
   final _player = AudioPlayer();
   bool _playing = false;
+  double _progress = 0;
+  StreamSubscription? _positionSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _positionSub = _player.onPositionChanged.listen((pos) {
+      if (widget.durationMs > 0 && mounted) {
+        setState(() {
+          _progress =
+              (pos.inMilliseconds / widget.durationMs).clamp(0.0, 1.0);
+        });
+      }
+    });
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _progress = 0;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -1328,17 +1376,13 @@ class _AudioBubbleState extends State<_AudioBubble> {
       setState(() => _playing = false);
     } else {
       final url = widget.mediaUrl;
-      // Fichier local (pending) vs URL réseau
       final source = url.startsWith('http')
           ? UrlSource(url)
           : kIsWeb
               ? UrlSource(url)
               : DeviceFileSource(url);
       await _player.play(source);
-      setState(() => _playing = true);
-      _player.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _playing = false);
-      });
+      if (mounted) setState(() => _playing = true);
     }
   }
 
@@ -1350,6 +1394,7 @@ class _AudioBubbleState extends State<_AudioBubble> {
   @override
   Widget build(BuildContext context) {
     final color = widget.isMe ? Colors.white : widget.cs.primary;
+    final dimColor = color.withValues(alpha: 0.35);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
@@ -1360,27 +1405,126 @@ class _AudioBubbleState extends State<_AudioBubble> {
             child: Icon(
               _playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
               color: color,
-              size: 36,
+              size: 32,
             ),
           ),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.graphic_eq, color: color, size: 20),
-              Text(_fmt(widget.durationMs),
-                  style: TextStyle(color: color, fontSize: 11)),
-            ],
+          CustomPaint(
+            size: const Size(120, 28),
+            painter: _WaveformPainter(
+              samples: widget.waveform ?? _generateFallbackWaveform(),
+              activeColor: color,
+              inactiveColor: dimColor,
+              progress: _progress,
+            ),
           ),
+          const SizedBox(width: 8),
+          Text(_fmt(widget.durationMs),
+              style: TextStyle(color: color, fontSize: 11)),
         ],
       ),
     );
   }
+
+  /// Génère un waveform stable pour les anciens messages sans données
+  List<double> _generateFallbackWaveform() {
+    final seed = widget.mediaUrl.hashCode.abs();
+    return List.generate(
+        30, (i) => (((seed * (i + 1) * 7) % 100) / 100.0).clamp(0.15, 1.0));
+  }
+}
+
+// ─── Waveform painters ────────────────────────────────────────────────────────
+
+/// Waveform dans la bulle de message (barres avec progression)
+class _WaveformPainter extends CustomPainter {
+  final List<double> samples;
+  final Color activeColor;
+  final Color inactiveColor;
+  final double progress;
+
+  _WaveformPainter({
+    required this.samples,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+    final barCount = samples.length;
+    final barWidth = (size.width / barCount) * 0.6;
+    final gap = (size.width / barCount) * 0.4;
+    final step = barWidth + gap;
+    final centerY = size.height / 2;
+
+    for (int i = 0; i < barCount; i++) {
+      final x = i * step;
+      final barProgress = x / size.width;
+      final amplitude = samples[i].clamp(0.1, 1.0);
+      final barHeight = amplitude * size.height * 0.85;
+      final paint = Paint()
+        ..color = barProgress <= progress ? activeColor : inactiveColor
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = barWidth;
+      canvas.drawLine(
+        Offset(x + barWidth / 2, centerY - barHeight / 2),
+        Offset(x + barWidth / 2, centerY + barHeight / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) =>
+      old.progress != progress || old.samples != samples;
+}
+
+/// Waveform en temps réel pendant l'enregistrement
+class _LiveWaveformPainter extends CustomPainter {
+  final List<double> samples;
+  final Color color;
+
+  _LiveWaveformPainter({required this.samples, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+    // Afficher les N dernières barres qui tiennent dans la largeur
+    const barWidth = 2.5;
+    const gap = 1.5;
+    const step = barWidth + gap;
+    final maxBars = (size.width / step).floor();
+    final start =
+        samples.length > maxBars ? samples.length - maxBars : 0;
+    final visible = samples.sublist(start);
+    final centerY = size.height / 2;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = barWidth;
+
+    for (int i = 0; i < visible.length; i++) {
+      final x = i * step;
+      final amplitude = visible[i].clamp(0.08, 1.0);
+      final barHeight = amplitude * size.height * 0.9;
+      canvas.drawLine(
+        Offset(x + barWidth / 2, centerY - barHeight / 2),
+        Offset(x + barWidth / 2, centerY + barHeight / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LiveWaveformPainter old) => true;
 }
 
 // ─── Input bar ────────────────────────────────────────────────────────────────
 
-enum _RecordState { idle, recording, preview }
+enum _RecordState { idle, recording }
 
 class _InputBar extends StatefulWidget {
   const _InputBar({
@@ -1396,6 +1540,7 @@ class _InputBar extends StatefulWidget {
     required this.cs,
   });
 
+
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSend;
@@ -1404,7 +1549,8 @@ class _InputBar extends StatefulWidget {
   final String myUserId;
   final PrivateChatService chatService;
   final VoidCallback onMediaSent;
-  final void Function(String localPath, int durationMs) onPendingAudio;
+  final void Function(String localPath, int durationMs, List<double> waveform)
+      onPendingAudio;
   final MultiplayerColorScheme cs;
 
   @override
@@ -1415,13 +1561,23 @@ class _InputBarState extends State<_InputBar> {
   bool _hasText = false;
   _RecordState _recordState = _RecordState.idle;
   final AudioRecorder _recorder = AudioRecorder();
-  final AudioPlayer _previewPlayer = AudioPlayer();
   DateTime? _recordStart;
   String? _recordPath;
   int _recordDurationMs = 0;
   int _elapsedSeconds = 0;
   Timer? _timer;
-  bool _previewPlaying = false;
+  Timer? _amplitudeTimer;
+  final List<double> _waveformSamples = [];
+  // Slide-to-cancel
+  double _dragOffset = 0;
+  static const _cancelThreshold = -80.0;
+  // Permission micro pré-chargée
+  bool _micPermissionGranted = false;
+  bool _micPermissionChecked = false;
+  // Protège contre le relâchement avant la fin du start
+  bool _recorderReady = false;
+  // Indique que l'utilisateur a relâché pendant le démarrage
+  bool _pendingRelease = false;
 
   @override
   void initState() {
@@ -1430,30 +1586,63 @@ class _InputBarState extends State<_InputBar> {
       final has = widget.controller.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
     });
-    _previewPlayer.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _previewPlaying = false);
-    });
+    // Pré-charger la permission micro au premier affichage
+    _preloadPermission();
+  }
+
+  Future<void> _preloadPermission() async {
+    _micPermissionGranted = await _recorder.hasPermission();
+    _micPermissionChecked = true;
   }
 
   @override
   void dispose() {
     _recorder.dispose();
-    _previewPlayer.dispose();
     _timer?.cancel();
+    _amplitudeTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _startRecord() async {
+    _recorderReady = false;
+    _pendingRelease = false;
+
     try {
-      final hasPermission = await _recorder.hasPermission();
-      if (!hasPermission) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Permission micro refusée')),
-          );
-        }
-        return;
+      // Permission déjà vérifiée au init, sinon on la demande
+      if (!_micPermissionChecked) {
+        _micPermissionGranted = await _recorder.hasPermission();
+        _micPermissionChecked = true;
       }
+      if (!_micPermissionGranted) {
+        // Re-demander au cas où l'utilisateur l'a activée entre-temps
+        _micPermissionGranted = await _recorder.hasPermission();
+        if (!_micPermissionGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Permission micro refusée')),
+            );
+          }
+          return;
+        }
+      }
+
+      // Afficher la barre d'enregistrement immédiatement (avant await)
+      _waveformSamples.clear();
+      _dragOffset = 0;
+      _elapsedSeconds = 0;
+      setState(() {
+        _recordState = _RecordState.recording;
+        _recordStart = DateTime.now();
+      });
+
+      // Timer UI tout de suite — auto-stop à 60s
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _elapsedSeconds++);
+        if (_elapsedSeconds >= 60 && _recorderReady) {
+          _stopAndSend();
+        }
+      });
 
       String path;
       if (kIsWeb) {
@@ -1466,16 +1655,54 @@ class _InputBarState extends State<_InputBar> {
 
       await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc),
           path: path);
-      _elapsedSeconds = 0;
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsedSeconds++);
-      });
-      setState(() {
-        _recordState = _RecordState.recording;
-        _recordStart = DateTime.now();
+
+      _recorderReady = true;
+
+      // Si l'utilisateur a relâché pendant le démarrage, envoyer maintenant
+      if (_pendingRelease) {
+        _pendingRelease = false;
+        await _stopAndSend();
+        return;
+      }
+
+      // Échantillonner l'amplitude réelle toutes les 80ms
+      int deadSamples = 0; // compteur de samples à 0 (détection Safari broken)
+      _amplitudeTimer =
+          Timer.periodic(const Duration(milliseconds: 80), (_) async {
+        try {
+          final amp = await _recorder.getAmplitude();
+          final db = amp.current;
+          // Safari retourne souvent -Infinity ou -160 en permanence
+          if (db == double.negativeInfinity || db < -100) {
+            deadSamples++;
+            // Après 10 samples morts, générer un waveform simulé mais naturel
+            if (deadSamples > 10) {
+              final t = _waveformSamples.length;
+              // Oscillation pseudo-aléatoire pour simuler la parole
+              final v = (0.3 +
+                      0.25 * (t % 7 < 3 ? 1.0 : 0.5) +
+                      0.15 * ((t * 13 + 7) % 11) / 11.0)
+                  .clamp(0.15, 0.85);
+              if (mounted) setState(() => _waveformSamples.add(v));
+              return;
+            }
+            if (mounted) setState(() => _waveformSamples.add(0.05));
+            return;
+          }
+          deadSamples = 0;
+          final normalized = ((db + 50) / 50).clamp(0.0, 1.0);
+          if (mounted) {
+            setState(() => _waveformSamples.add(normalized));
+          }
+        } catch (_) {
+          // Fallback silencieux
+          if (mounted) setState(() => _waveformSamples.add(0.15));
+        }
       });
     } catch (e) {
+      _recorderReady = false;
       if (mounted) {
+        setState(() => _recordState = _RecordState.idle);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erreur micro: $e')),
         );
@@ -1483,56 +1710,67 @@ class _InputBarState extends State<_InputBar> {
     }
   }
 
-  Future<void> _stopRecord() async {
+  Future<void> _stopAndSend() async {
+    // Si le recorder n'est pas encore prêt, noter qu'on veut envoyer
+    if (!_recorderReady) {
+      _pendingRelease = true;
+      return;
+    }
+
     _timer?.cancel();
+    _amplitudeTimer?.cancel();
+    if (_recordStart == null) return;
     _recordDurationMs =
         DateTime.now().difference(_recordStart!).inMilliseconds;
+    _recorderReady = false;
+    // Ignorer les enregistrements trop courts (< 300ms)
+    if (_recordDurationMs < 300) {
+      await _recorder.stop();
+      setState(() => _recordState = _RecordState.idle);
+      return;
+    }
     final path = await _recorder.stop();
     if (path != null) _recordPath = path;
-    setState(() => _recordState = _RecordState.preview);
-  }
-
-  Future<void> _cancelRecord() async {
-    _timer?.cancel();
-    await _recorder.stop();
-    await _previewPlayer.stop();
-    setState(() {
-      _recordState = _RecordState.idle;
-      _previewPlaying = false;
-    });
-  }
-
-  Future<void> _sendAudio() async {
-    final path = _recordPath;
-    if (path == null) return;
-    final durationMs = _recordDurationMs;
-    await _previewPlayer.stop();
-    setState(() {
-      _recordState = _RecordState.idle;
-      _previewPlaying = false;
-    });
-    // Optimistic: afficher le message audio immédiatement
-    widget.onPendingAudio(path, durationMs);
+    final waveform = _downsampleWaveform(_waveformSamples, 40);
+    setState(() => _recordState = _RecordState.idle);
+    widget.onPendingAudio(_recordPath!, _recordDurationMs, waveform);
     if (kIsWeb) {
-      await widget.chatService
-          .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
+      await widget.chatService.sendAudioFromUrl(
+          widget.chatId, widget.myUserId, _recordPath!, _recordDurationMs,
+          waveform: waveform);
     } else {
-      await widget.chatService
-          .sendAudio(widget.chatId, widget.myUserId, File(path), durationMs);
+      await widget.chatService.sendAudio(
+          widget.chatId, widget.myUserId, File(_recordPath!), _recordDurationMs,
+          waveform: waveform);
     }
     widget.onMediaSent();
   }
 
-  Future<void> _togglePreview() async {
-    if (_previewPlaying) {
-      await _previewPlayer.pause();
-      setState(() => _previewPlaying = false);
-    } else {
-      final source =
-          kIsWeb ? UrlSource(_recordPath!) : DeviceFileSource(_recordPath!);
-      await _previewPlayer.play(source);
-      setState(() => _previewPlaying = true);
+  Future<void> _cancelRecord() async {
+    _timer?.cancel();
+    _amplitudeTimer?.cancel();
+    _recorderReady = false;
+    _pendingRelease = false;
+    try {
+      await _recorder.stop();
+    } catch (_) {}
+    setState(() => _recordState = _RecordState.idle);
+  }
+
+  List<double> _downsampleWaveform(List<double> samples, int targetCount) {
+    if (samples.length <= targetCount) return List.from(samples);
+    final result = <double>[];
+    final ratio = samples.length / targetCount;
+    for (int i = 0; i < targetCount; i++) {
+      final start = (i * ratio).floor();
+      final end = ((i + 1) * ratio).floor().clamp(start + 1, samples.length);
+      double sum = 0;
+      for (int j = start; j < end; j++) {
+        sum += samples[j];
+      }
+      result.add(sum / (end - start));
     }
+    return result;
   }
 
   String _fmtSeconds(int s) =>
@@ -1557,103 +1795,73 @@ class _InputBarState extends State<_InputBar> {
     switch (_recordState) {
       case _RecordState.recording:
         return _buildRecordingBar(cs);
-      case _RecordState.preview:
-        return _buildPreviewBar(cs);
       case _RecordState.idle:
         return _buildIdleBar(cs);
     }
   }
 
   Widget _buildRecordingBar(MultiplayerColorScheme cs) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceHigh,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.8, end: 1.0),
-            duration: const Duration(milliseconds: 600),
-            builder: (_, v, child) => Transform.scale(scale: v, child: child),
-            child: Icon(Icons.mic, color: cs.danger, size: 24),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            _fmtSeconds(_elapsedSeconds),
-            style: TextStyle(
-                color: cs.danger, fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('Appuie pour arrêter',
-                style: TextStyle(color: cs.textSecondary, fontSize: 12)),
-          ),
-          GestureDetector(
-            onTap: _cancelRecord,
-            child:
-                Icon(Icons.delete_outline, color: cs.textSecondary, size: 22),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _stopRecord,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration:
-                  BoxDecoration(color: cs.danger, shape: BoxShape.circle),
-              child: const Icon(Icons.stop, color: Colors.white, size: 20),
+    final isCancelling = _dragOffset < _cancelThreshold;
+    return GestureDetector(
+      onHorizontalDragUpdate: (d) {
+        setState(() => _dragOffset += d.delta.dx);
+      },
+      onHorizontalDragEnd: (_) {
+        if (_dragOffset < _cancelThreshold) {
+          _cancelRecord();
+        }
+        setState(() => _dragOffset = 0);
+      },
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isCancelling
+              ? cs.danger.withValues(alpha: 0.15)
+              : cs.surfaceHigh,
+          borderRadius: BorderRadius.circular(26),
+        ),
+        child: Row(
+          children: [
+            // Indicateur micro pulsant
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.85, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeInOut,
+              builder: (_, v, child) =>
+                  Transform.scale(scale: v, child: child),
+              onEnd: () {},
+              child: Icon(Icons.mic, color: cs.danger, size: 22),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreviewBar(MultiplayerColorScheme cs) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceHigh,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: _togglePreview,
-            child: Icon(
-              _previewPlaying
-                  ? Icons.pause_circle_filled
-                  : Icons.play_circle_filled,
-              color: cs.primary,
-              size: 34,
+            const SizedBox(width: 8),
+            Text(
+              _fmtSeconds(_elapsedSeconds),
+              style: TextStyle(
+                  color: cs.danger,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
             ),
-          ),
-          const SizedBox(width: 8),
-          Icon(Icons.graphic_eq, color: cs.textSecondary, size: 20),
-          const SizedBox(width: 4),
-          Text(_fmtSeconds(_elapsedSeconds),
-              style: TextStyle(color: cs.textSecondary, fontSize: 12)),
-          const Spacer(),
-          GestureDetector(
-            onTap: _cancelRecord,
-            child: Icon(Icons.delete_outline, color: cs.danger, size: 22),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: _sendAudio,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration:
-                  BoxDecoration(color: cs.success, shape: BoxShape.circle),
-              child: const Icon(Icons.send, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            // Waveform en temps réel
+            Expanded(
+              child: ClipRect(
+                child: CustomPaint(
+                  size: const Size(double.infinity, 28),
+                  painter: _LiveWaveformPainter(
+                    samples: _waveformSamples,
+                    color: isCancelling ? cs.danger : cs.primary,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            if (isCancelling)
+              Icon(Icons.delete_outline, color: cs.danger, size: 20)
+            else
+              Text('< Glisser pour annuler',
+                  style: TextStyle(color: cs.textSecondary, fontSize: 11)),
+          ],
+        ),
       ),
     );
   }
@@ -1729,7 +1937,10 @@ class _InputBarState extends State<_InputBar> {
           )
         else
           GestureDetector(
-            onTap: _startRecord,
+            onLongPressStart: (_) => _startRecord(),
+            onLongPressEnd: (_) {
+              if (_recordState == _RecordState.recording) _stopAndSend();
+            },
             child: Container(
               width: 36,
               height: 36,
