@@ -43,6 +43,8 @@ class _ChatPageState extends State<ChatPage> {
 
   // Meta (wallpaper, read receipts, typing)
   String? _wallpaperUrl;
+  // Fichier local affiché immédiatement pendant l'upload
+  String? _localWallpaperPath;
   bool _wallpaperIsDark = true;
   DateTime? _friendReadAt;
   bool _friendIsTyping = false;
@@ -56,6 +58,9 @@ class _ChatPageState extends State<ChatPage> {
 
   // Anti-scintillement : suivi du nombre de messages pour scroll conditionnel
   int _lastMessageCount = 0;
+
+  // Messages optimistes (audio/image en cours d'upload)
+  final List<ChatMessage> _pendingMessages = [];
 
   // Mode sélection
   bool _selectionMode = false;
@@ -92,6 +97,33 @@ class _ChatPageState extends State<ChatPage> {
         _analyzeWallpaperBrightness(meta.wallpaperUrl);
       }
     });
+  }
+
+  Future<void> _analyzeLocalWallpaperBrightness(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) return;
+      final pixels = byteData.buffer.asUint8List();
+      double totalLuminance = 0;
+      int sampleCount = 0;
+      final step = (pixels.length ~/ 4) > 500 ? (pixels.length ~/ 4) ~/ 500 : 1;
+      for (int i = 0; i < pixels.length; i += step * 4) {
+        final r = pixels[i] / 255.0;
+        final g = pixels[i + 1] / 255.0;
+        final b = pixels[i + 2] / 255.0;
+        totalLuminance += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        sampleCount++;
+      }
+      final avgLuminance = sampleCount > 0 ? totalLuminance / sampleCount : 0.5;
+      if (mounted) setState(() => _wallpaperIsDark = avgLuminance < 0.5);
+    } catch (_) {
+      if (mounted) setState(() => _wallpaperIsDark = true);
+    }
   }
 
   Future<void> _analyzeWallpaperBrightness(String? url) async {
@@ -141,6 +173,22 @@ class _ChatPageState extends State<ChatPage> {
       // On error, default to dark
       if (mounted) setState(() => _wallpaperIsDark = true);
     }
+  }
+
+  void _addPendingAudio(String localPath, int durationMs) {
+    final pending = ChatMessage(
+      id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: _myUserId,
+      text: '',
+      type: ChatMessageType.audio,
+      mediaUrl: kIsWeb ? localPath : localPath,
+      audioDurationMs: durationMs,
+      timestamp: DateTime.now(),
+    );
+    setState(() => _pendingMessages.add(pending));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToBottom();
+    });
   }
 
   void _onScroll() {
@@ -267,6 +315,12 @@ class _ChatPageState extends State<ChatPage> {
     }
     if (xfile == null) return;
 
+    // Optimistic: afficher immédiatement le fichier local
+    if (!kIsWeb) {
+      setState(() => _localWallpaperPath = xfile!.path);
+      _analyzeLocalWallpaperBrightness(xfile.path);
+    }
+
     try {
       final ref =
           FirebaseStorage.instance.ref().child('chat_wallpapers/$_chatId.jpg');
@@ -282,8 +336,11 @@ class _ChatPageState extends State<ChatPage> {
           .collection('private_chats')
           .doc(_chatId)
           .set({'wallpaperUrl': url}, SetOptions(merge: true));
+      // Le stream Firestore mettra à jour _wallpaperUrl, on retire le local
+      if (mounted) setState(() => _localWallpaperPath = null);
     } catch (e) {
       if (mounted) {
+        setState(() => _localWallpaperPath = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erreur upload: $e')),
         );
@@ -486,7 +543,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final cs = MultiplayerColors.of(context);
-    final hasWallpaper = _wallpaperUrl != null;
+    final hasWallpaper = _wallpaperUrl != null || _localWallpaperPath != null;
     final wallpaperTextColor =
         hasWallpaper ? (_wallpaperIsDark ? Colors.white : Colors.black) : null;
 
@@ -511,6 +568,18 @@ class _ChatPageState extends State<ChatPage> {
               if (m.deletedFor.contains(_myUserId)) continue;
               if (seenIds.add(m.id)) allMessages.add(m);
             }
+            // Retirer les pending quand un vrai message audio arrive du stream
+            if (_pendingMessages.isNotEmpty && streamMessages.isNotEmpty) {
+              _pendingMessages.removeWhere((p) {
+                return streamMessages.any((s) =>
+                    s.type == p.type &&
+                    s.senderId == _myUserId &&
+                    s.audioDurationMs == p.audioDurationMs &&
+                    s.timestamp.difference(p.timestamp).inSeconds.abs() < 30);
+              });
+            }
+            // Ajouter les messages en attente à la fin
+            allMessages.addAll(_pendingMessages);
 
             if (streamMessages.isNotEmpty &&
                 _olderMessages.isEmpty &&
@@ -534,9 +603,12 @@ class _ChatPageState extends State<ChatPage> {
               decoration: hasWallpaper
                   ? BoxDecoration(
                       image: DecorationImage(
-                        image: NetworkImage(
-                          '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
-                        ),
+                        image: _localWallpaperPath != null
+                            ? FileImage(File(_localWallpaperPath!))
+                                as ImageProvider
+                            : NetworkImage(
+                                '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
+                              ),
                         fit: BoxFit.cover,
                       ),
                     )
@@ -591,6 +663,7 @@ class _ChatPageState extends State<ChatPage> {
                       myUserId: _myUserId,
                       chatService: _chatService,
                       onMediaSent: _scrollToBottom,
+                      onPendingAudio: _addPendingAudio,
                       cs: cs,
                     ),
                 ],
@@ -767,10 +840,12 @@ class _ChatPageState extends State<ChatPage> {
         }
         final msg = allMessages[msgIndex];
         final isMe = msg.senderId == _myUserId;
-        final showReceipt = isMe &&
-            msgIndex == lastMyIndex &&
+        final isPending = msg.id.startsWith('pending_');
+        final isLastMine = isMe && msgIndex == lastMyIndex;
+        final isRead = isLastMine &&
             _friendReadAt != null &&
             _friendReadAt!.isAfter(msg.timestamp);
+        final showDelivered = isLastMine && !isRead && !isPending;
         final isSelected = _selectedIds.contains(msg.id);
 
         return _MessageBubble(
@@ -780,8 +855,9 @@ class _ChatPageState extends State<ChatPage> {
           cs: cs,
           hasWallpaper: hasWallpaper,
           wallpaperIsDark: wallpaperIsDark,
-          showReceipt: showReceipt,
-          friendReadAt: showReceipt ? _friendReadAt : null,
+          showReceipt: isRead,
+          showDelivered: showDelivered,
+          friendReadAt: isRead ? _friendReadAt : null,
           selectionMode: _selectionMode,
           isSelected: isSelected,
           onLongPress: () => _enterSelectionMode(msg.id),
@@ -889,6 +965,7 @@ class _MessageBubble extends StatelessWidget {
     required this.hasWallpaper,
     this.wallpaperIsDark = true,
     this.showReceipt = false,
+    this.showDelivered = false,
     this.friendReadAt,
     this.selectionMode = false,
     this.isSelected = false,
@@ -902,6 +979,7 @@ class _MessageBubble extends StatelessWidget {
   final bool hasWallpaper;
   final bool wallpaperIsDark;
   final bool showReceipt;
+  final bool showDelivered;
   final DateTime? friendReadAt;
   final bool selectionMode;
   final bool isSelected;
@@ -998,6 +1076,20 @@ class _MessageBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 6, right: 2),
                       child: Text(
                         _formatReadAt(friendReadAt!),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: hasWallpaper
+                                ? (wallpaperIsDark
+                                    ? Colors.white70
+                                    : Colors.black54)
+                                : cs.textSecondary),
+                      ),
+                    )
+                  else if (showDelivered)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6, right: 2),
+                      child: Text(
+                        'Distribué',
                         style: TextStyle(
                             fontSize: 11,
                             color: hasWallpaper
@@ -1235,7 +1327,14 @@ class _AudioBubbleState extends State<_AudioBubble> {
       await _player.pause();
       setState(() => _playing = false);
     } else {
-      await _player.play(UrlSource(widget.mediaUrl));
+      final url = widget.mediaUrl;
+      // Fichier local (pending) vs URL réseau
+      final source = url.startsWith('http')
+          ? UrlSource(url)
+          : kIsWeb
+              ? UrlSource(url)
+              : DeviceFileSource(url);
+      await _player.play(source);
       setState(() => _playing = true);
       _player.onPlayerComplete.listen((_) {
         if (mounted) setState(() => _playing = false);
@@ -1293,6 +1392,7 @@ class _InputBar extends StatefulWidget {
     required this.myUserId,
     required this.chatService,
     required this.onMediaSent,
+    required this.onPendingAudio,
     required this.cs,
   });
 
@@ -1304,6 +1404,7 @@ class _InputBar extends StatefulWidget {
   final String myUserId;
   final PrivateChatService chatService;
   final VoidCallback onMediaSent;
+  final void Function(String localPath, int durationMs) onPendingAudio;
   final MultiplayerColorScheme cs;
 
   @override
@@ -1407,6 +1508,8 @@ class _InputBarState extends State<_InputBar> {
       _recordState = _RecordState.idle;
       _previewPlaying = false;
     });
+    // Optimistic: afficher le message audio immédiatement
+    widget.onPendingAudio(path, durationMs);
     if (kIsWeb) {
       await widget.chatService
           .sendAudioFromUrl(widget.chatId, widget.myUserId, path, durationMs);
