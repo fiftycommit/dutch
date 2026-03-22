@@ -12,6 +12,7 @@ import 'package:dutch_game/services/multiplayer/multiplayer_service.dart';
 import 'package:dutch_game/services/ui/emote_service.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
+import 'package:dutch_game/widgets/dialogs/shared/power_lottery_dialog.dart';
 import 'package:dutch_game/widgets/dialogs/presence_check_overlay.dart';
 import 'package:dutch_game/widgets/dialogs/connection_error_dialog.dart';
 import 'package:dutch_game/widgets/dialogs/emote_overlay.dart';
@@ -47,6 +48,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   MultiplayerGameProvider? _cachedProvider;
   bool _wasPausedLastFrame = false;
   bool _pauseDialogShown = false;
+  String? _lotteryDialogShownId;
 
   @override
   void initState() {
@@ -99,6 +101,19 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     }
 
     if (gameState == null) return;
+
+    // Fermer le dialog de loterie si les pendingMatchPowers ont été consommés
+    if (_lotteryDialogShownId != null &&
+        (gameState.pendingMatchPowers.isEmpty ||
+            gameState.phase == GamePhase.specialPower)) {
+      _lotteryDialogShownId = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ModalRoute.of(context)?.isCurrent != true) {
+          // Un dialog (la loterie) est ouvert par-dessus, le fermer
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      });
+    }
 
     // Handle Host Left
     if (provider.roomClosedByHost && !_hostClosedDialogShown) {
@@ -588,6 +603,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     if (gameState.phase == GamePhase.dutchCalled)
                       GameOverlays.dutchNotification(),
 
+                    if (gameState.pendingMatchPowers.length >= 2 &&
+                        gameState.pendingMatchPowers.first.drawNumber != null)
+                      _buildPowerLotteryOverlay(gameProvider, gameState),
+
                     if (gameState.phase == GamePhase.specialPower)
                       _buildSpecialPowerOverlay(gameProvider, gameState),
 
@@ -711,10 +730,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       _specialPowerDialogShownId = null;
       return const SizedBox();
     }
-    if (!gs.currentPlayer.isHuman) return const SizedBox();
 
-    bool isMyTurn = gs.currentPlayer.id == gp.playerId;
-    if (!isMyTurn) return const SizedBox();
+    // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
+    final isMyPower = gs.specialPowerPlayerId != null
+        ? gs.specialPowerPlayerId == gp.playerId
+        : gs.currentPlayer.id == gp.playerId;
+    if (!isMyPower) return const SizedBox();
 
     // Prevent re-showing if already processing
     if (gp.isProcessing) return const SizedBox();
@@ -730,7 +751,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       return const SizedBox();
     }
 
-    final ready = !animationsEnabled || _specialPowerReadyId == triggerId;
+    // Pour un match power, pas d'animation de carte à attendre
+    final isMatchPower = gs.specialPowerPlayerId != null;
+    final ready =
+        isMatchPower || !animationsEnabled || _specialPowerReadyId == triggerId;
     if (!ready) {
       return const AbsorbPointer(
         child: SizedBox.expand(),
@@ -764,6 +788,31 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       });
     }
 
+    return Container(color: Colors.black54);
+  }
+
+  Widget _buildPowerLotteryOverlay(
+      MultiplayerGameProvider gp, GameState gs) {
+    final lotteryId =
+        gs.pendingMatchPowers.map((p) => p.playerId).join('_');
+    if (_lotteryDialogShownId != lotteryId) {
+      _lotteryDialogShownId = lotteryId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // Vérifier que les pendingMatchPowers sont toujours présents
+        final current = gp.gameState;
+        if (current == null || current.pendingMatchPowers.isEmpty) return;
+        PowerLotteryDialog.show(
+          context,
+          pendingPowers: current.pendingMatchPowers,
+          localPlayerId: gp.playerId,
+          onComplete: () {
+            _lotteryDialogShownId = null;
+            // En multijoueur le serveur gère la suite, rien à faire côté client
+          },
+        );
+      });
+    }
     return Container(color: Colors.black54);
   }
 

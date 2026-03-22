@@ -1,5 +1,36 @@
 import 'playing_card.dart';
 
+/// Pouvoir en attente suite à un match pendant la phase de réaction
+class PendingMatchPower {
+  final String playerId;
+  final String playerName;
+  final PlayingCard card;
+  int? drawNumber; // numéro tiré lors de la loterie
+
+  PendingMatchPower({
+    required this.playerId,
+    required this.playerName,
+    required this.card,
+    this.drawNumber,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'playerId': playerId,
+        'playerName': playerName,
+        'card': card.toJson(),
+        'drawNumber': drawNumber,
+      };
+
+  factory PendingMatchPower.fromJson(Map<String, dynamic> json) {
+    return PendingMatchPower(
+      playerId: json['playerId'] as String,
+      playerName: json['playerName'] as String,
+      card: PlayingCard.fromJson(json['card'] as Map<String, dynamic>),
+      drawNumber: json['drawNumber'] as int?,
+    );
+  }
+}
+
 /// État du deck et de la défausse
 class DeckState {
   List<PlayingCard> deck;
@@ -44,6 +75,7 @@ class TurnState {
   bool isWaitingForSpecialPower;
   int? specialPowerStartTime;
   PlayingCard? specialCardToActivate;
+  String? specialPowerPlayerId; // joueur qui utilise le pouvoir (peut différer du currentPlayer lors d'un match)
   String? dutchCallerId;
   DateTime? reactionStartTime;
   int reactionTimeRemaining;
@@ -55,12 +87,14 @@ class TurnState {
   int turnCount;
   int actionCount;
   List<String> actionHistory;
+  List<PendingMatchPower> pendingMatchPowers; // pouvoirs en attente après matchs pendant réaction
 
   TurnState({
     this.currentPlayerIndex = 0,
     this.isWaitingForSpecialPower = false,
     this.specialPowerStartTime,
     this.specialCardToActivate,
+    this.specialPowerPlayerId,
     this.dutchCallerId,
     this.reactionStartTime,
     this.reactionTimeRemaining = 0,
@@ -72,8 +106,10 @@ class TurnState {
     this.turnCount = 0,
     this.actionCount = 0,
     List<String>? actionHistory,
+    List<PendingMatchPower>? pendingMatchPowers,
   })  : readyPlayerIds = readyPlayerIds ?? [],
-        actionHistory = actionHistory ?? [];
+        actionHistory = actionHistory ?? [],
+        pendingMatchPowers = pendingMatchPowers ?? [];
 
   void addToHistory(String action) {
     String time =
@@ -92,6 +128,7 @@ class TurnState {
           ? PlayingCard.fromJson(
               json['specialCardToActivate'] as Map<String, dynamic>)
           : null,
+      specialPowerPlayerId: json['specialPowerPlayerId'] as String?,
       dutchCallerId: json['dutchCallerId'] as String?,
       reactionStartTime: json['reactionStartTime'] != null
           ? DateTime.parse(json['reactionStartTime'] as String)
@@ -109,6 +146,11 @@ class TurnState {
       turnCount: json['turnCount'] as int? ?? 0,
       actionCount: json['actionCount'] as int? ?? 0,
       actionHistory: (json['actionHistory'] as List?)?.cast<String>() ?? [],
+      pendingMatchPowers: (json['pendingMatchPowers'] as List?)
+              ?.map((e) =>
+                  PendingMatchPower.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -117,6 +159,7 @@ class TurnState {
         'isWaitingForSpecialPower': isWaitingForSpecialPower,
         'specialPowerStartTime': specialPowerStartTime,
         'specialCardToActivate': specialCardToActivate?.toJson(),
+        'specialPowerPlayerId': specialPowerPlayerId,
         'dutchCallerId': dutchCallerId,
         'reactionStartTime': reactionStartTime?.toIso8601String(),
         'reactionTimeRemaining': reactionTimeRemaining,
@@ -128,6 +171,8 @@ class TurnState {
         'turnCount': turnCount,
         'actionCount': actionCount,
         'actionHistory': actionHistory,
+        'pendingMatchPowers':
+            pendingMatchPowers.map((e) => e.toJson()).toList(),
       };
 }
 

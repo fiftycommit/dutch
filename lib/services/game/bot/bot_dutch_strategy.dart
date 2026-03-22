@@ -273,6 +273,9 @@ class BotDutchStrategy {
   }) {
     final tier = _tierFromDifficulty(difficulty);
 
+    // Tous niveaux: main vide => Dutch immédiat (score 0 garanti).
+    if (bot.hand.isEmpty) return true;
+
     // Or/Platine: si une incertitude vient d'un Valet subi et n'est pas
     // revalidée, Dutch est interdit.
     if ((tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
@@ -280,12 +283,12 @@ class BotDutchStrategy {
       return false;
     }
 
-    // Règle premium (Or/Platine): main vide OU score 0 certain => Dutch immédiat.
+    // Règle premium (Or/Platine): score 0 certain => Dutch immédiat.
     if (tier == _DutchTier.gold || tier == _DutchTier.platinum) {
       final knownUnknownCount = BotMemoryManager.getUnknownIndices(bot).length;
       final hasGuaranteedZeroScore =
           knownUnknownCount == 0 ? bot.getKnownScore() == 0 : false;
-      if (bot.hand.isEmpty || hasGuaranteedZeroScore) return true;
+      if (hasGuaranteedZeroScore) return true;
     }
 
     if (phase == BotGamePhase.exploration) return false;

@@ -2,6 +2,7 @@ import 'dart:math';
 import '../../models/playing_card.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
+import '../../models/game_sub_states.dart';
 import '../../models/game_settings.dart';
 import '../../utils/action_history_messages.dart';
 import '../logging/game_logger_service.dart';
@@ -292,7 +293,10 @@ class GameLogic {
         discardCard: topDiscard,
       );
 
-      if (gameState.phase != GamePhase.reaction) {
+      if (gameState.phase == GamePhase.reaction) {
+        // Pendant la réaction, stocker le pouvoir pour résolution après
+        _addPendingMatchPower(gameState, player, playerCard);
+      } else {
         _checkSpecialPower(gameState, playerCard);
       }
       return true;
@@ -696,9 +700,23 @@ class GameLogic {
       gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
+      gameState.specialPowerPlayerId = null; // currentPlayer par défaut
       gameState.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
       gameState.turnStartTime = DateTime.now().millisecondsSinceEpoch;
       gameState.turnTimeoutMs = 60000; // 1 minute pour utiliser le pouvoir
+    }
+  }
+
+  /// Ajoute un pouvoir en attente suite à un match pendant la phase de réaction
+  static void _addPendingMatchPower(
+      GameState gameState, Player player, PlayingCard card) {
+    const powerCards = ['7', '10', 'V', 'JOKER'];
+    if (powerCards.contains(card.value)) {
+      gameState.pendingMatchPowers.add(PendingMatchPower(
+        playerId: player.id,
+        playerName: player.name,
+        card: card,
+      ));
     }
   }
 

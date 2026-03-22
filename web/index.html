@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html
-  style="background: linear-gradient(to bottom, #0d2818, #1a472a); overscroll-behavior-x: none; touch-action: pan-y;">
+  style="background: linear-gradient(to bottom, #0d2818, #1a472a); overscroll-behavior-x: none;">
 
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- SEO -->
   <!-- Google Sign-In (Web Client ID — Firebase Console → Auth → Google → Config SDK Web) -->
@@ -228,12 +228,28 @@
       }
     };
 
-    // Watch for Flutter view creation and fix background
+    // Watch for Flutter view creation and fix background + re-enable zoom
     new MutationObserver(function (mutations) {
       if (document.querySelector('flutter-view')) {
         window._fixFlutterBg();
+        // Re-enable browser zoom (Flutter overrides viewport meta)
+        var vp = document.querySelector('meta[name="viewport"]');
+        if (vp && vp.content.indexOf('user-scalable=no') !== -1) {
+          vp.setAttribute('content', 'width=device-width, initial-scale=1.0');
+        }
+        // Allow pinch-zoom on Flutter's glass pane
+        var fv = document.querySelector('flutter-view');
+        if (fv && fv.shadowRoot) {
+          var glass = fv.shadowRoot.querySelector('flt-glass-pane');
+          if (glass) glass.style.touchAction = 'manipulation';
+        }
       }
     }).observe(document.documentElement, { childList: true, subtree: true });
+
+    // Allow Safari trackpad pinch-to-zoom (passive = don't block)
+    document.addEventListener('gesturestart', function() {}, { passive: true });
+    document.addEventListener('gesturechange', function() {}, { passive: true });
+    document.addEventListener('gestureend', function() {}, { passive: true });
 
     window.splashProgress = 0;
     window.splashStatus = '';

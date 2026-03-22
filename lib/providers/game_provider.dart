@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/playing_card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../models/game_sub_states.dart';
 import '../models/game_settings.dart';
 import '../utils/action_history_messages.dart';
 import '../models/player_learning_data.dart';
@@ -541,11 +542,19 @@ class GameProvider with ChangeNotifier implements IGameController {
   @override
   void skipSpecialPower() {
     if (_gameState == null) return;
+    final wasMatchPower = _gameState!.specialPowerPlayerId != null;
     _hapticService.buttonTap();
     _powerHandler.skipPower(_gameState!);
+    _gameState!.specialPowerPlayerId = null;
     notifyListeners();
-    _timerManager.resumeTimer(_gameState!, _isPaused);
-    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+
+    if (wasMatchPower) {
+      // Pouvoir issu d'un match : vérifier s'il reste des pouvoirs en attente
+      _activateNextPendingPower();
+    } else {
+      _timerManager.resumeTimer(_gameState!, _isPaused);
+      if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    }
   }
 
   @override
@@ -566,38 +575,54 @@ class GameProvider with ChangeNotifier implements IGameController {
   void useSpecialPower(int targetPlayerIndex, int targetCardIndex) {
     if (_gameState == null) return;
     _hapticService.importantAction();
+    final wasMatchPower = _gameState!.specialPowerPlayerId != null;
     _powerHandler.usePower(_gameState!, targetPlayerIndex, targetCardIndex);
+    _gameState!.specialPowerPlayerId = null;
     notifyListeners();
     if (_gameState!.pendingSwap != null) return; // Attendre completeSwap
-    _timerManager.resumeTimer(_gameState!, _isPaused);
-    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    _afterPowerResolved(wasMatchPower);
   }
 
   void completeSwap(int ownCardIndex) {
     if (_gameState == null) return;
     _hapticService.cardTap();
+    final wasMatchPower = _gameState!.specialPowerPlayerId != null;
     _powerHandler.completeSwap(_gameState!, ownCardIndex);
+    _gameState!.specialPowerPlayerId = null;
     notifyListeners();
-    _timerManager.resumeTimer(_gameState!, _isPaused);
-    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    _afterPowerResolved(wasMatchPower);
   }
 
   void executeLookAtCard(Player target, int cardIndex) {
     if (_gameState == null) return;
     _hapticService.cardTap();
+    final wasMatchPower = _gameState!.specialPowerPlayerId != null;
     _powerHandler.executeLookAtCard(_gameState!, target, cardIndex);
+    _gameState!.specialPowerPlayerId = null;
     notifyListeners();
-    _timerManager.resumeTimer(_gameState!, _isPaused);
-    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    _afterPowerResolved(wasMatchPower);
   }
 
   void executeJokerEffect(Player target) {
     if (_gameState == null) return;
     _hapticService.importantAction();
+    final wasMatchPower = _gameState!.specialPowerPlayerId != null;
     _powerHandler.executeJokerEffect(_gameState!, target);
+    _gameState!.specialPowerPlayerId = null;
     notifyListeners();
-    _timerManager.resumeTimer(_gameState!, _isPaused);
-    if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    _afterPowerResolved(wasMatchPower);
+  }
+
+  /// Après la résolution d'un pouvoir, soit passer au prochain pouvoir en attente,
+  /// soit lancer la phase de réaction normalement.
+  void _afterPowerResolved(bool wasMatchPower) {
+    if (_gameState == null) return;
+    if (wasMatchPower) {
+      _activateNextPendingPower();
+    } else {
+      _timerManager.resumeTimer(_gameState!, _isPaused);
+      if (_gameState!.phase == GamePhase.playing) startReactionPhase();
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -624,8 +649,22 @@ class GameProvider with ChangeNotifier implements IGameController {
   void _endReactionPhase() {
     if (_gameState == null || _isPaused) return;
     _timerManager.cancelTimer();
-    _gameState!.phase = GamePhase.playing;
     _gameState!.lastSpiedCard = null;
+
+    // S'il y a des pouvoirs en attente (matchs de cartes pouvoir pendant la réaction),
+    // les résoudre avant de passer au tour suivant
+    if (_gameState!.pendingMatchPowers.isNotEmpty) {
+      _processPendingMatchPowers();
+      return;
+    }
+
+    _advanceToNextTurn();
+  }
+
+  /// Avance au tour suivant (appelé après réaction ou après résolution des pouvoirs match)
+  void _advanceToNextTurn() {
+    if (_gameState == null) return;
+    _gameState!.phase = GamePhase.playing;
     GameLogic.nextPlayer(_gameState!);
     _trackingProvider.incrementBotTurns(_gameState!);
 
@@ -636,6 +675,92 @@ class GameProvider with ChangeNotifier implements IGameController {
     if (!_gameState!.currentPlayer.isHuman && !_isPaused) {
       _checkAndPlayBotTurn();
     }
+  }
+
+  /// Résout les pouvoirs en attente suite à des matchs pendant la réaction.
+  /// Attribution aléatoire d'un numéro d'ordre, puis résolution séquentielle.
+  bool _showPowerLottery = false;
+  bool get showPowerLottery => _showPowerLottery;
+
+  void _processPendingMatchPowers() {
+    if (_gameState == null) return;
+    final pending = _gameState!.pendingMatchPowers;
+    if (pending.isEmpty) {
+      _advanceToNextTurn();
+      return;
+    }
+
+    // Un seul pouvoir en attente → pas besoin de loterie, activer directement
+    if (pending.length == 1) {
+      pending[0].drawNumber = 1;
+      _activateNextPendingPower();
+      return;
+    }
+
+    // Attribuer des numéros aléatoires pour l'ordre de résolution
+    final numbers = List.generate(pending.length, (i) => i + 1)..shuffle();
+    for (int i = 0; i < pending.length; i++) {
+      pending[i].drawNumber = numbers[i];
+    }
+
+    // Signaler à l'UI d'afficher le dialog de loterie
+    _showPowerLottery = true;
+    notifyListeners();
+  }
+
+  /// Appelé par le dialog de loterie quand il se ferme
+  void onPowerLotteryComplete() {
+    _showPowerLottery = false;
+    if (_gameState == null) return;
+    // Trier par numéro (plus petit en premier)
+    final pending = _gameState!.pendingMatchPowers;
+    pending.sort((a, b) => (a.drawNumber ?? 0).compareTo(b.drawNumber ?? 0));
+    _activateNextPendingPower();
+  }
+
+  /// Active le prochain pouvoir en attente dans la queue
+  void _activateNextPendingPower() {
+    if (_gameState == null) return;
+    final pending = _gameState!.pendingMatchPowers;
+
+    if (pending.isEmpty) {
+      // Plus de pouvoirs en attente → tour suivant
+      _advanceToNextTurn();
+      return;
+    }
+
+    // Prendre le premier pouvoir et l'activer
+    final power = pending.removeAt(0);
+    _gameState!.phase = GamePhase.specialPower;
+    _gameState!.isWaitingForSpecialPower = true;
+    _gameState!.specialCardToActivate = power.card;
+    _gameState!.specialPowerPlayerId = power.playerId;
+    _gameState!.specialPowerStartTime =
+        DateTime.now().millisecondsSinceEpoch;
+    _gameState!.turnStartTime = DateTime.now().millisecondsSinceEpoch;
+    _gameState!.turnTimeoutMs = 60000;
+
+    notifyListeners();
+
+    // Si c'est un bot, auto-résoudre le pouvoir
+    final player = _gameState!.players
+        .where((p) => p.id == power.playerId)
+        .firstOrNull;
+    if (player != null && !player.isHuman) {
+      _autoBotMatchPower(player, power);
+    }
+  }
+
+  /// Auto-résout le pouvoir d'un bot (match power)
+  Future<void> _autoBotMatchPower(Player bot, PendingMatchPower power) async {
+    if (_gameState == null) return;
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (_gameState == null || _gameState!.phase != GamePhase.specialPower) {
+      return;
+    }
+    // Le bot skip le pouvoir pour simplifier (les bots utilisent rarement
+    // les pouvoirs de match de manière stratégique)
+    skipSpecialPower();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -46,6 +46,12 @@ class GameState {
   PlayingCard? get specialCardToActivate => turnState.specialCardToActivate;
   set specialCardToActivate(PlayingCard? v) =>
       turnState.specialCardToActivate = v;
+  String? get specialPowerPlayerId => turnState.specialPowerPlayerId;
+  set specialPowerPlayerId(String? v) => turnState.specialPowerPlayerId = v;
+  List<PendingMatchPower> get pendingMatchPowers =>
+      turnState.pendingMatchPowers;
+  set pendingMatchPowers(List<PendingMatchPower> v) =>
+      turnState.pendingMatchPowers = v;
   String? get dutchCallerId => turnState.dutchCallerId;
   set dutchCallerId(String? v) => turnState.dutchCallerId = v;
   DateTime? get reactionStartTime => turnState.reactionStartTime;
@@ -460,7 +466,7 @@ class GameState {
 
   // Sérialisation JSON pour multijoueur
   factory GameState.fromJson(Map<String, dynamic> json) {
-    return GameState(
+    final gs = GameState(
       players: (json['players'] as List)
           .map((e) => Player.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -506,6 +512,14 @@ class GameState {
       turnTimeoutMs: json['turnTimeoutMs'] as int? ?? 25000,
       readyPlayerIds: List<String>.from(json['readyPlayerIds'] as List? ?? []),
     );
+    // Champs additionnels non passés au constructeur
+    gs.specialPowerPlayerId = json['specialPowerPlayerId'] as String?;
+    if (json['pendingMatchPowers'] is List) {
+      gs.pendingMatchPowers = (json['pendingMatchPowers'] as List)
+          .map((e) => PendingMatchPower.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return gs;
   }
 
   Map<String, dynamic> toJson() {

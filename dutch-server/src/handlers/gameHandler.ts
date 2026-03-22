@@ -230,9 +230,15 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       const room = roomManager.getRoom(data.roomCode);
       if (!room || !room.gameState) return;
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
+      // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
+      const isMatchPower = room.gameState.specialPowerPlayerId != null;
+      const authorizedPlayerId = isMatchPower
+        ? room.gameState.specialPowerPlayerId
+        : getCurrentPlayer(room.gameState).id;
+      if (authorizedPlayerId !== socket.id) return;
+
+      const currentPlayer = room.gameState.players.find(p => p.id === socket.id);
+      if (!currentPlayer || currentPlayer.isSpectator) return;
 
       const specialCard = room.gameState.specialCardToActivate;
       if (!specialCard) return;
@@ -316,6 +322,13 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
 
+      // Si c'était un pouvoir de match, passer au prochain pouvoir en attente
+      if (isMatchPower) {
+        room.gameState.specialPowerPlayerId = null;
+        roomManager.activateNextPendingPower(data.roomCode);
+        return;
+      }
+
       if (room.gameState.phase === GamePhase.reaction) {
         const baseReactionTime =
           typeof room.settings?.reactionTimeMs === 'number'
@@ -342,9 +355,15 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       const room = roomManager.getRoom(data.roomCode);
       if (!room || !room.gameState) return;
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
+      // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
+      const isMatchPower = room.gameState.specialPowerPlayerId != null;
+      const authorizedPlayerId = isMatchPower
+        ? room.gameState.specialPowerPlayerId
+        : getCurrentPlayer(room.gameState).id;
+      if (authorizedPlayerId !== socket.id) return;
+
+      const player = room.gameState.players.find(p => p.id === socket.id);
+      if (!player || player.isSpectator) return;
 
       roomManager.recordPlayerAction(data.roomCode, socket.id);
 
@@ -353,6 +372,13 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
 
       if (room.gameState.phase === GamePhase.ended) {
         roomManager.handleGameEnd(data.roomCode);
+        return;
+      }
+
+      // Si c'était un pouvoir de match, passer au prochain
+      if (isMatchPower) {
+        room.gameState.specialPowerPlayerId = null;
+        roomManager.activateNextPendingPower(data.roomCode);
         return;
       }
 

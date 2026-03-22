@@ -371,10 +371,17 @@ class _CenterTableState extends State<CenterTable>
 
     // Détecter si on attend qu'un joueur choisisse son pouvoir
     final isWaitingForPower = gs.phase == GamePhase.specialPower;
-    final powerPlayerName = isWaitingForPower
-        ? (gs.currentPlayer.name == widget.localPlayerName
+    final powerPlayer = isWaitingForPower
+        ? (gs.specialPowerPlayerId != null
+            ? gs.players
+                .where((p) => p.id == gs.specialPowerPlayerId)
+                .firstOrNull
+            : gs.currentPlayer)
+        : null;
+    final powerPlayerName = isWaitingForPower && powerPlayer != null
+        ? (powerPlayer.name == widget.localPlayerName
             ? 'Vous utilisez votre'
-            : '${gs.currentPlayer.name} utilise son')
+            : '${powerPlayer.name} utilise son')
         : "";
 
     return Column(

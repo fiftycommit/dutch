@@ -699,14 +699,139 @@ export class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameState) return;
 
-    room.gameState.phase = GamePhase.playing;
     room.gameState.lastSpiedCard = null;
     room.gameState.reactionStartTime = null;
 
+    // S'il y a des pouvoirs en attente (matchs pendant la réaction), les résoudre
+    if (room.gameState.pendingMatchPowers.length > 0) {
+      await this.processPendingMatchPowers(roomCode);
+      return;
+    }
+
+    room.gameState.phase = GamePhase.playing;
     GameLogic.nextPlayer(room.gameState);
     this.broadcastGameState(roomCode, 'PHASE_CHANGE');
 
     await this.checkAndPlayBotTurn(roomCode);
+  }
+
+  /**
+   * Résout les pouvoirs en attente suite à des matchs pendant la réaction.
+   * Attribution aléatoire d'un numéro d'ordre, puis résolution séquentielle.
+   */
+  async processPendingMatchPowers(roomCode: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+
+    const pending = room.gameState.pendingMatchPowers;
+    if (pending.length === 0) {
+      // Plus de pouvoirs → avancer au tour suivant
+      room.gameState.phase = GamePhase.playing;
+      GameLogic.nextPlayer(room.gameState);
+      this.broadcastGameState(roomCode, 'PHASE_CHANGE');
+      await this.checkAndPlayBotTurn(roomCode);
+      return;
+    }
+
+    // Un seul pouvoir en attente → pas besoin de loterie, activer directement
+    if (pending.length === 1) {
+      pending[0].drawNumber = 1;
+      this.activateNextPendingPower(roomCode);
+      return;
+    }
+
+    // Attribuer des numéros aléatoires pour l'ordre
+    const numbers = Array.from({ length: pending.length }, (_, i) => i + 1);
+    for (let i = numbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+    }
+    for (let i = 0; i < pending.length; i++) {
+      pending[i].drawNumber = numbers[i];
+    }
+    // Trier par numéro (plus petit en premier)
+    pending.sort((a, b) => (a.drawNumber ?? 0) - (b.drawNumber ?? 0));
+
+    // Broadcast les numéros pour affichage de la loterie
+    this.broadcastGameState(roomCode, 'MATCH_POWER_LOTTERY');
+
+    // Petit délai pour que les joueurs voient les numéros
+    await this.delay(2000);
+
+    // Activer le premier pouvoir
+    this.activateNextPendingPower(roomCode);
+  }
+
+  /**
+   * Active le prochain pouvoir en attente dans la queue
+   */
+  activateNextPendingPower(roomCode: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+
+    const pending = room.gameState.pendingMatchPowers;
+    if (pending.length === 0) {
+      // Plus de pouvoirs → avancer au tour suivant
+      room.gameState.specialPowerPlayerId = null;
+      room.gameState.phase = GamePhase.playing;
+      GameLogic.nextPlayer(room.gameState);
+      this.broadcastGameState(roomCode, 'PHASE_CHANGE');
+      void this.checkAndPlayBotTurn(roomCode);
+      return;
+    }
+
+    // Prendre le premier pouvoir
+    const power = pending.shift()!;
+    const now = Date.now();
+    room.gameState.phase = GamePhase.specialPower;
+    room.gameState.isWaitingForSpecialPower = true;
+    room.gameState.specialCardToActivate = power.card;
+    room.gameState.specialPowerPlayerId = power.playerId;
+    room.gameState.specialPowerStartTime = now;
+    room.gameState.turnStartTime = now;
+    room.gameState.turnTimeoutMs = 60000;
+
+    this.broadcastGameState(roomCode, 'ACTION_RESULT');
+
+    // Si c'est un bot, auto-résoudre
+    const player = room.gameState.players.find(p => p.id === power.playerId);
+    if (player && !player.isHuman) {
+      setTimeout(() => {
+        const currentRoom = this.rooms.get(roomCode);
+        if (!currentRoom?.gameState) return;
+        if (currentRoom.gameState.phase !== GamePhase.specialPower) return;
+        if (currentRoom.gameState.specialPowerPlayerId !== power.playerId) return;
+        GameLogic.skipSpecialPower(currentRoom.gameState);
+        this.broadcastGameState(roomCode, 'ACTION_RESULT');
+        this.activateNextPendingPower(roomCode);
+      }, 800);
+    } else {
+      // Joueur humain : démarrer le timer de pouvoir
+      this.startMatchPowerTimer(roomCode, power.playerId);
+    }
+  }
+
+  /**
+   * Timer pour un pouvoir de match (similaire à startTurnTimer mais pour specialPowerPlayerId)
+   */
+  startMatchPowerTimer(roomCode: string, playerId: string) {
+    this.clearTurnTimer(roomCode);
+
+    const timer = setTimeout(() => {
+      const room = this.rooms.get(roomCode);
+      if (!room?.gameState) return;
+      if (room.gameState.phase !== GamePhase.specialPower) return;
+      if (room.gameState.specialPowerPlayerId !== playerId) return;
+      this.actionTimers.delete(roomCode);
+
+      GameLogic.skipSpecialPower(room.gameState);
+      this.broadcastGameState(roomCode, 'ACTION_RESULT', {
+        message: '⏱️ Pouvoir spécial expiré (60s) : pouvoir ignoré.',
+      });
+      this.activateNextPendingPower(roomCode);
+    }, this.specialPowerTimeoutMs);
+
+    this.actionTimers.set(roomCode, timer);
   }
 
   async checkAndPlayBotTurn(roomCode: string) {

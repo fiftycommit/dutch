@@ -119,7 +119,7 @@ class PlayerHandWidget extends StatefulWidget {
 }
 
 class _PlayerHandWidgetState extends State<PlayerHandWidget>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final ScrollController _scrollController;
   int _lastHandLength = 0;
   int? _penaltyHighlightIndex;

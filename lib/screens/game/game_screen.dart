@@ -7,6 +7,7 @@ import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/providers/game_provider.dart';
 import 'package:dutch_game/providers/settings_provider.dart';
 import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
+import 'package:dutch_game/widgets/dialogs/shared/power_lottery_dialog.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
@@ -176,7 +177,10 @@ class _GameScreenState extends State<GameScreen>
                   ),
                 if (gameState.phase == GamePhase.dutchCalled)
                   _buildDutchNotification(gameState),
-                if (gameState.phase == GamePhase.specialPower)
+                if (gameProvider.showPowerLottery)
+                  _buildPowerLotteryOverlay(gameProvider, gameState),
+                if (gameState.phase == GamePhase.specialPower &&
+                    !gameProvider.showPowerLottery)
                   _buildSpecialPowerOverlay(gameProvider, gameState),
                 if (gameProvider.isProcessing)
                   const Positioned(
@@ -208,17 +212,45 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
+  String? _lotteryDialogShownId;
+
+  Widget _buildPowerLotteryOverlay(GameProvider gp, GameState gs) {
+    // Générer un ID unique pour cette loterie (éviter de ré-afficher)
+    final lotteryId = gs.pendingMatchPowers
+        .map((p) => p.playerId)
+        .join('_');
+    if (_lotteryDialogShownId != lotteryId) {
+      _lotteryDialogShownId = lotteryId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !gp.showPowerLottery) return;
+        final human = gs.players.where((p) => p.isHuman).firstOrNull;
+        PowerLotteryDialog.show(
+          context,
+          pendingPowers: gs.pendingMatchPowers,
+          localPlayerId: human?.id,
+          onComplete: () {
+            _lotteryDialogShownId = null;
+            gp.onPowerLotteryComplete();
+          },
+        );
+      });
+    }
+    return Container(color: Colors.black54);
+  }
+
   Widget _buildSpecialPowerOverlay(GameProvider gp, GameState gs) {
     if (gs.specialCardToActivate == null) {
       _specialPowerReadyId = null;
       _specialPowerDialogShownId = null;
       return const SizedBox();
     }
-    if (!gs.currentPlayer.isHuman) return const SizedBox();
 
+    // Déterminer qui a le pouvoir : specialPowerPlayerId (match) ou currentPlayer (normal)
     Player? playerWithPower;
-
-    if (gs.currentPlayer.isHuman && gs.phase == GamePhase.specialPower) {
+    if (gs.specialPowerPlayerId != null) {
+      playerWithPower =
+          gs.players.where((p) => p.id == gs.specialPowerPlayerId).firstOrNull;
+    } else if (gs.currentPlayer.isHuman && gs.phase == GamePhase.specialPower) {
       playerWithPower = gs.currentPlayer;
     } else {
       final humans = gs.players.where((p) => p.isHuman);
@@ -226,7 +258,9 @@ class _GameScreenState extends State<GameScreen>
       playerWithPower = humans.first;
     }
 
-    if (!playerWithPower.isHuman) return const SizedBox();
+    if (playerWithPower == null || !playerWithPower.isHuman) {
+      return const SizedBox();
+    }
 
     final animationsEnabled =
         context.watch<SettingsProvider>().animationsEnabled;
@@ -239,7 +273,10 @@ class _GameScreenState extends State<GameScreen>
       return const SizedBox();
     }
 
-    final ready = !animationsEnabled || _specialPowerReadyId == triggerId;
+    // Pour un match power, pas d'animation de carte à attendre
+    final isMatchPower = gs.specialPowerPlayerId != null;
+    final ready =
+        isMatchPower || !animationsEnabled || _specialPowerReadyId == triggerId;
     if (!ready) {
       return const AbsorbPointer(
         child: SizedBox.expand(),

@@ -21,6 +21,13 @@ export enum Difficulty {
   hard = 2,
 }
 
+export interface PendingMatchPower {
+  playerId: string;
+  playerName: string;
+  card: PlayingCard;
+  drawNumber?: number; // numéro tiré lors de la loterie
+}
+
 export interface GameState {
   players: Player[];
   deck: PlayingCard[];
@@ -35,6 +42,7 @@ export interface GameState {
   isWaitingForSpecialPower: boolean;
   specialPowerStartTime: number | null; // Track when the special power decision started
   specialCardToActivate: PlayingCard | null;
+  specialPowerPlayerId: string | null; // joueur qui utilise le pouvoir (peut différer du currentPlayer lors d'un match)
   dutchCallerId: string | null;
   reactionStartTime: Date | null;
   actionHistory: string[];
@@ -51,6 +59,8 @@ export interface GameState {
   turnTimeoutMs: number; // Durée max du tour en ms (multijoueur)
   // Joueurs prêts (ont terminé la mémorisation)
   readyPlayerIds: string[];
+  // Pouvoirs en attente suite à des matchs pendant la phase de réaction
+  pendingMatchPowers: PendingMatchPower[];
 }
 
 export function createGameState(
@@ -72,6 +82,7 @@ export function createGameState(
     isWaitingForSpecialPower: false,
     specialPowerStartTime: null,
     specialCardToActivate: null,
+    specialPowerPlayerId: null,
     dutchCallerId: null,
     reactionStartTime: null,
     actionHistory: [],
@@ -82,6 +93,7 @@ export function createGameState(
     turnStartTime: null,
     turnTimeoutMs: 90000, // 1min30 par défaut
     readyPlayerIds: [],
+    pendingMatchPowers: [],
   };
 }
 

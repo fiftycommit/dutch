@@ -1,6 +1,6 @@
 import { PlayingCard, createFullDeck, cardMatches } from '../models/Card';
 import { Player } from '../models/Player';
-import { GameState, GamePhase, addToHistory, getCurrentPlayer, nextPlayer as nextPlayerUtil } from '../models/GameState';
+import { GameState, GamePhase, PendingMatchPower, addToHistory, getCurrentPlayer, nextPlayer as nextPlayerUtil } from '../models/GameState';
 import { HistoryFormatter } from '../utils/HistoryFormatter';
 
 export class GameLogic {
@@ -155,11 +155,11 @@ export class GameLogic {
         HistoryFormatter.formatMatchSuccess(player.name, playerCard)
       );
 
-      if (gameState.phase !== GamePhase.reaction) {
+      if (gameState.phase === GamePhase.reaction) {
+        // Pendant la réaction, stocker le pouvoir pour résolution après
+        this.addPendingMatchPower(gameState, player, playerCard);
+      } else {
         this.checkSpecialPower(gameState, playerCard);
-        // Matching during turn doesn't end turn immediately unless power
-        // But if it was the player's turn, do they still need to discard/swap?
-        // Usually matching is an extra action. The turn phase dictates main action.
       }
 
       return true;
@@ -253,6 +253,7 @@ export class GameLogic {
       gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
+      gameState.specialPowerPlayerId = null; // currentPlayer par défaut
       gameState.specialPowerStartTime = now;
       // Synchroniser turnStartTime et turnTimeoutMs immédiatement pour que
       // le premier broadcast (ACTION_RESULT) inclue les bonnes valeurs du timer.
@@ -260,6 +261,18 @@ export class GameLogic {
       // au lieu du timeout du pouvoir spécial (60s), ce qui désynchronise leur barre de progression.
       gameState.turnStartTime = now;
       gameState.turnTimeoutMs = 60000; // 60s pour utiliser le pouvoir (synchronisé avec RoomManager.specialPowerTimeoutMs)
+    }
+  }
+
+  /** Ajoute un pouvoir en attente suite à un match pendant la phase de réaction */
+  private static addPendingMatchPower(gameState: GameState, player: Player, card: PlayingCard): void {
+    const powerCards = ['7', '10', 'V', 'JOKER'];
+    if (powerCards.includes(card.value)) {
+      gameState.pendingMatchPowers.push({
+        playerId: player.id,
+        playerName: player.name,
+        card: { ...card },
+      });
     }
   }
 
@@ -325,7 +338,10 @@ export class GameLogic {
       return {};
     }
 
-    const currentPlayer = getCurrentPlayer(gameState);
+    // Utiliser le joueur pouvoiré (match power) ou le joueur actif (normal)
+    const currentPlayer = gameState.specialPowerPlayerId
+      ? gameState.players.find(p => p.id === gameState.specialPowerPlayerId) ?? getCurrentPlayer(gameState)
+      : getCurrentPlayer(gameState);
     const card = gameState.specialCardToActivate;
     let result: ReturnType<typeof GameLogic.useSpecialPower> = {};
 
@@ -421,9 +437,14 @@ export class GameLogic {
   }
 
   static skipSpecialPower(gameState: GameState): void {
+    // Déterminer le joueur qui avait le pouvoir
+    const powerPlayer = gameState.specialPowerPlayerId
+      ? gameState.players.find(p => p.id === gameState.specialPowerPlayerId)
+      : getCurrentPlayer(gameState);
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
-    addToHistory(gameState, HistoryFormatter.formatPowerSkip(getCurrentPlayer(gameState).name));
+    gameState.specialPowerPlayerId = null;
+    addToHistory(gameState, HistoryFormatter.formatPowerSkip(powerPlayer?.name ?? 'Joueur'));
     this.startReactionPhase(gameState);
   }
 
