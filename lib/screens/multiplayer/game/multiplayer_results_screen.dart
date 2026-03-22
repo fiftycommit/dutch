@@ -250,7 +250,12 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
             ? Colors.amber.shade700
             : Colors.green.shade700,
         onPressed: () {
-          provider.returnToLobbyFromResults();
+          if (isTournament && !isTournamentOver && provider.isHost) {
+            // Le host déclenche le restart serveur (élimination + round suivant)
+            provider.restartGame();
+          } else {
+            provider.returnToLobbyFromResults();
+          }
           context.go('/lobby');
         },
       ),

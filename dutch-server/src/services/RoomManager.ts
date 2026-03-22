@@ -931,7 +931,17 @@ export class RoomManager {
     if (room.status !== RoomStatus.ended) return;
     if (room.playersInResults && room.playersInResults.size > 0) return;
 
-    // Plus personne sur les résultats → reset complet
+    // En mode tournoi, déléguer à restartGame pour appliquer la logique
+    // d'élimination et d'incrémentation du round
+    if (room.gameMode === GameMode.tournament) {
+      this.ensureHost(room);
+      if (room.hostPlayerId) {
+        this.restartGame(roomCode, room.hostPlayerId);
+      }
+      return;
+    }
+
+    // Plus personne sur les résultats → reset complet (mode rapide)
     room.players = room.players.filter((p) => p.isHuman);
     room.players.forEach((p) => {
       p.ready = false;

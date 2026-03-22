@@ -78,7 +78,7 @@ class ActionHistoryMessages {
       "Échange : $p1Name carte #${idx1 + 1} ↔ $p2Name carte #${idx2 + 1}.";
 
   static String powerJoker(String playerName, String targetName) =>
-      "JOKER ! $playerName a mélangé $targetName !";
+      "JOKER ! $playerName a mélangé la main de $targetName !";
 
   static String powerSkipped() => "⏭️ Pouvoir spécial a été ignoré.";
 
