@@ -143,7 +143,7 @@ class RulesScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Activés uniquement quand la carte est défaussée en premier :', style: _body(context)),
+                  Text('Activé quand la carte est défaussée :', style: _body(context)),
                   SizedBox(height: ScreenUtils.spacing(context, 12)),
                   _powerCard(context, _carte10,    'Tous les 10',    'Espionner : voir une carte d\'un adversaire'),
                   _powerCard(context, _carteValet, 'Valet (♥ ♦)',    'Échanger : échanger 2 cartes entre adversaires'),
