@@ -211,8 +211,9 @@ class BotCardStrategy {
       final (exchangeIdx, _, doublonValue) = doublonInfo;
       // Vérifier que l'échange est rentable : on perd (drawnVal - doublonValue)
       // mais on gagne doublonValue via le match → net = 2×doublonValue - drawnVal
-      // C'est rentable si 2×doublonValue > drawnVal
-      if (2 * doublonValue > drawnVal) {
+      // C'est rentable si 2×doublonValue >= drawnVal (même à score égal,
+      // on gagne une carte en moins → avantage stratégique pour Dutch)
+      if (2 * doublonValue >= drawnVal) {
         bool confused = _random.nextDouble() < difficulty.confusionOnSwap;
         if (!confused) {
           bot.updateMentalMap(exchangeIdx, drawn);

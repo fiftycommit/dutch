@@ -193,7 +193,8 @@ class BotMemoryManager {
         // Si P > V, on perd en score immédiat MAIS on gagne car on peut matcher
         // Donc on accepte si P > V (on échange le doublon contre une carte plus haute)
         // Exemple: 2×4 = 8, pioche 6 → 4+6 = 10 MAIS match 4 → score final = 6
-        if (drawnCardValue > doublonValue && doublonValue > bestDoublonValue) {
+        // >= car même à score égal (pioche == doublon), on gagne une carte en moins
+        if (drawnCardValue >= doublonValue && doublonValue > bestDoublonValue) {
           bestDoublonValue = doublonValue;
           bestIndices = indices;
         }

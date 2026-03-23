@@ -219,8 +219,16 @@ class BotPowerHandler {
     final shouldSkipSilverPower7ByDizziness =
         isSilverPower7 && _shouldSilverSkipPower7(gameState, bot);
 
+    final isDuel = gameState.players.length == 2;
     final passiveSkipChance = isBronze
-        ? 0.92
+        // Bronze skip souvent les pouvoirs, SAUF :
+        // - Le 10 (spy) qui est intuitif même pour un débutant
+        // - En 1v1 où les pouvoirs ont plus de valeur
+        ? (powerValue == '10'
+            ? 0.15
+            : isDuel
+                ? 0.55
+                : 0.92)
         : isSilver
             // Argent reste distrait sur les pouvoirs "confort",
             // mais n'ignore pas arbitrairement un espionnage 10.
@@ -370,8 +378,25 @@ class BotPowerHandler {
         difficulty.name == "Impossible";
 
     int idx;
-    if (isHardcore && _random.nextDouble() < 0.7) {
-      idx = _random.nextBool() ? 0 : target.hand.length - 1;
+    if (isHardcore) {
+      // Priorité: cibler les positions que l'adversaire n'a PAS échangées.
+      // Ce sont celles qu'il n'a pas encore optimisées → souvent les pires.
+      final weakIdx = BotDutchStrategy.discardTracker
+          .pickLikelyWeakUntouchedIndex(target.id, target.hand.length);
+
+      // Éviter d'espionner une position qu'on connaît déjà
+      final alreadySpied = bot.getSpiedCards(target.id);
+      final isAlreadyKnown = weakIdx != null &&
+          alreadySpied != null &&
+          alreadySpied.containsKey(weakIdx);
+
+      if (weakIdx != null && !isAlreadyKnown) {
+        idx = weakIdx;
+      } else if (_random.nextDouble() < 0.7) {
+        idx = _random.nextBool() ? 0 : target.hand.length - 1;
+      } else {
+        idx = _random.nextInt(target.hand.length);
+      }
     } else {
       idx = _random.nextInt(target.hand.length);
     }
@@ -865,8 +890,9 @@ class BotPowerHandler {
     final badCardThreshold = thresholdTrace.finalThreshold;
 
     // Si le bot connaît toute sa main et qu'elle est déjà "bonne" pour
-    // le contexte courant, il skip le Valet.
-    if (!hasUnknownOwn) {
+    // le contexte courant, il skip le Valet — SAUF en duel Platine où
+    // le swap a toujours une valeur de déstabilisation.
+    if (!hasUnknownOwn && !(_isPlatinumDifficulty(difficulty) && duel)) {
       final worstKnown = _worstKnownCardPoints(bot);
       if (worstKnown >= 0 && worstKnown < badCardThreshold) {
         if (!antiHumanLikeOpponent) {
@@ -893,6 +919,10 @@ class BotPowerHandler {
     // - il donne une inconnue en priorité (sinon sa pire connue),
     // - il récupère si possible une carte adverse supposée basse (espionnée),
     //   sinon une carte aléatoire adverse.
+    //
+    // EXCEPTION: En début de partie (peu de cartes connues), le bot devrait
+    // d'abord explorer ses inconnues avant de les donner. Donner une inconnue
+    // au tour 0 risque d'envoyer un Joker ou As à l'adversaire.
     if (hasUnknownOwn) {
       final ownIdx = _chooseOwnCardForDuelDisruption(bot);
       final oppIdx = _chooseOpponentCardForDuelDisruption(bot, opponent);
@@ -916,6 +946,7 @@ class BotPowerHandler {
         opponentCardIndex: oppIdx,
       );
     }
+
 
     final report = BotThreatAnalyzer.analyzeOpponents(
       gs,
@@ -964,6 +995,12 @@ class BotPowerHandler {
     bool bestOwnKnown = false;
     bool bestOppKnown = false;
 
+    // Récupérer les positions adverses déjà ciblées par un swap précédent.
+    // Re-cibler la même position est risqué : l'adversaire a probablement
+    // déjà remplacé cette carte, on risque de récupérer pire.
+    final botSwapCounts = BotDutchStrategy.discardTracker
+        .getVisibleSwapByIndexCount(opponent.id, opponent.hand.length);
+
     for (int ownIdx = 0; ownIdx < bot.hand.length; ownIdx++) {
       final ownKnown = _isKnownCardForBot(bot, ownIdx);
       final ownOut = _estimateOwnCardValueForDuelValet(bot, ownIdx);
@@ -985,6 +1022,14 @@ class BotPowerHandler {
 
         // Gain relatif: on veut maximiser (carte donnée - carte reçue).
         double gain = ownOut - oppOut;
+
+        // Pénalité pour recibler un index déjà swappé par le bot.
+        // L'adversaire a probablement remplacé cette carte, on ne sait plus
+        // ce qui s'y trouve → l'estimation à 6.5 est trop optimiste.
+        final previousSwaps = botSwapCounts[oppIdx] ?? 0;
+        if (previousSwaps > 0 && !oppKnown) {
+          gain -= 2.0 * previousSwaps;
+        }
         if (behind) {
           gain += ownOut * 0.35;
           gain -= oppOut * 0.10;
@@ -1039,12 +1084,24 @@ class BotPowerHandler {
     final unknownGainFloor = antiHumanLikeOpponent
         ? DuelTuning.duelHumanLikeUnknownGainFloor
         : (isMoiStyle ? 0.7 : 1.2);
+
+    // CORRECTION 1v1: Échange offensif proactif en duel.
+    // En 1v1, le Valet est une arme de déstabilisation même sans race risk.
+    // Un joueur humain échange même une carte inconnue pour déstabiliser
+    // l'adversaire — le bot devrait faire pareil. On autorise le swap dès que
+    // le gain n'est pas catastrophique (>= -2.0). La déstabilisation elle-même
+    // a de la valeur: l'adversaire perd sa carte connue, reçoit une inconnue.
+    final shouldSwapForDuelDisruption = duel &&
+        _isPlatinumDifficulty(difficulty) &&
+        bestGain >= -2.0;
+
     final shouldSwap = hasInformationEdge &&
             (shouldSwapForRace ||
                 (shouldSwapForSabotage && bestGain >= sabotageGainFloor) ||
                 (hasUnknownOwn && bestGain >= unknownGainFloor)) ||
         shouldSwapForEntropy ||
-        shouldSwapForOpeningDisruption;
+        shouldSwapForOpeningDisruption ||
+        shouldSwapForDuelDisruption;
 
     if (!shouldSwap) {
       if (logDecision) {
@@ -1065,6 +1122,7 @@ class BotPowerHandler {
             'swapForSabotage': shouldSwapForSabotage,
             'swapForEntropy': shouldSwapForEntropy,
             'swapForOpening': shouldSwapForOpeningDisruption,
+            'swapForDuelDisruption': shouldSwapForDuelDisruption,
             ...thresholdTrace.toLogContext(),
           },
         );
@@ -1092,6 +1150,7 @@ class BotPowerHandler {
           'swapForSabotage': shouldSwapForSabotage,
           'swapForEntropy': shouldSwapForEntropy,
           'swapForOpening': shouldSwapForOpeningDisruption,
+          'swapForDuelDisruption': shouldSwapForDuelDisruption,
           ...thresholdTrace.toLogContext(),
         },
       );

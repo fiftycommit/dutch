@@ -364,6 +364,52 @@ class DiscardTracker {
     return bestIdx;
   }
 
+  /// Retourne l'index le plus susceptible de contenir une carte mauvaise:
+  /// les positions que l'adversaire n'a JAMAIS échangées sont celles qu'il
+  /// n'a pas encore optimisées → souvent les pires cartes.
+  /// Priorité: positions non-touchées > positions peu touchées.
+  int? pickLikelyWeakUntouchedIndex(String playerId, int handSize) {
+    if (handSize <= 0) return null;
+    final counts = _playerReplacedIndexCounts[playerId] ?? const <int, int>{};
+    final startKnown = _playerPublicStartKnownIndices[playerId] ?? const <int>{};
+
+    // Collecter les positions jamais échangées
+    final untouched = <int>[];
+    for (int idx = 0; idx < handSize; idx++) {
+      final exchanges = counts[idx] ?? 0;
+      if (exchanges == 0) untouched.add(idx);
+    }
+    if (untouched.isEmpty) return null;
+
+    // Parmi les non-touchées, privilégier celles qui N'ONT PAS été vues
+    // au départ (le joueur ne les connaît peut-être même pas).
+    final unknownUntouched =
+        untouched.where((idx) => !startKnown.contains(idx)).toList();
+    if (unknownUntouched.isNotEmpty) {
+      // Préférer les dernières positions (souvent optimisées en dernier)
+      return unknownUntouched.last;
+    }
+
+    // Sinon, les positions connues mais jamais échangées (gardées volontairement
+    // = probablement bonnes, moins intéressant mais quand même utile).
+    return untouched.last;
+  }
+
+  /// Nombre de swaps (Valet) observés par index pour un joueur donné.
+  /// Utile pour éviter de recibler la même position lors d'un Valet offensif.
+  Map<int, int> getVisibleSwapByIndexCount(String playerId, int handSize) {
+    if (handSize <= 0) return const <int, int>{};
+    final source = _playerVisibleSwapByIndexCount[playerId];
+    if (source == null || source.isEmpty) return const <int, int>{};
+    final filtered = <int, int>{};
+    for (final entry in source.entries) {
+      if (entry.key >= 0 && entry.key < handSize) {
+        filtered[entry.key] = entry.value;
+      }
+    }
+    return filtered;
+  }
+
   /// Retourne true si la dernière action du joueur était un échange
   bool lastActionWasExchange(String playerId) =>
       _lastActionWasExchange[playerId] ?? false;
@@ -687,6 +733,49 @@ class DiscardTracker {
     if (cardCount <= 2) {
       estimatedAvgCard -= 0.4;
     }
+
+    // CORRECTION 1v1: Exploiter la distinction échange vs défausse directe.
+    // Si l'adversaire jette directement une carte de valeur X, ça signifie
+    // que toute sa main est meilleure que X → plafond sur sa pire carte.
+    final drawnDiscardPts =
+        _playerDrawnDiscardPoints[playerId] ?? const <int>[];
+    if (drawnDiscardPts.isNotEmpty) {
+      // La plus petite carte jetée directement = plafond sur la pire carte adverse.
+      // (s'il jette un 4 directement, il n'a rien de pire qu'un 4)
+      final minDirectDiscard =
+          drawnDiscardPts.reduce((a, b) => a < b ? a : b);
+      // Si notre estimation par carte dépasse ce plafond, on l'ajuste.
+      if (estimatedAvgCard > minDirectDiscard && minDirectDiscard <= 8) {
+        final cap = minDirectDiscard.toDouble();
+        // Blend progressif: plus on a d'observations, plus on fait confiance
+        final directDiscardWeight =
+            (drawnDiscardPts.length / 4.0).clamp(0.2, 0.75);
+        estimatedAvgCard = estimatedAvgCard * (1 - directDiscardWeight) +
+            cap * directDiscardWeight;
+      }
+    }
+
+    // CORRECTION 1v1: Raisonnement sur l'absence de doublon.
+    // Si l'adversaire jette directement une carte de valeur X (drawnDiscard),
+    // il n'a probablement PAS de doublon de X en main — sinon il aurait fait
+    // la technique du doublon (échanger puis matcher). Cela signifie que
+    // sa pire carte est probablement < X (il n'a même pas un doublon de X).
+    if (drawnDiscardPts.length >= 2) {
+      // On regarde les 2 dernières défausses directes : si les valeurs sont
+      // modérées (3-7), l'adversaire n'a même pas ces doublons → sa main
+      // est probablement meilleure qu'on ne le pense.
+      final recentDirect = drawnDiscardPts.length <= 3
+          ? drawnDiscardPts
+          : drawnDiscardPts.sublist(drawnDiscardPts.length - 3);
+      final moderateDirectDiscards =
+          recentDirect.where((v) => v >= 3 && v <= 7).length;
+      if (moderateDirectDiscards >= 2) {
+        // Bonus: l'adversaire semble jeter des cartes moyennes directement
+        // sans faire de doublons → sa main est probablement basse.
+        estimatedAvgCard -= 0.5 * (moderateDirectDiscards / 3.0);
+      }
+    }
+
     estimatedAvgCard = estimatedAvgCard.clamp(1.0, 10.0);
 
     // Confiance: couverture + stabilité des signaux (et jamais 100% ici).

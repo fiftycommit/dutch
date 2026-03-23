@@ -520,6 +520,44 @@ class BotDutchStrategy {
       return true;
     }
 
+    // CORRECTION 1v1: Dutch basé sur l'info concrète du spy.
+    // En 1v1, si le bot a espionné des cartes adverses et que le plancher
+    // factuel (somme des cartes espionnées) dépasse déjà notre score,
+    // on peut Dutch en confiance même si l'adversaire a 3-4 cartes.
+    if (profile.tier == _DutchTier.platinum &&
+        context.opponentCount == 1 &&
+        unknownCount == 0 &&
+        duelOpponent != null) {
+      final spiedCards = bot.getSpiedCards(duelOpponent.id);
+      if (spiedCards != null && spiedCards.isNotEmpty) {
+        int spiedScoreFloor = 0;
+        int validSpied = 0;
+        for (final entry in spiedCards.entries) {
+          if (entry.key >= 0 && entry.key < duelOpponent.hand.length) {
+            spiedScoreFloor += entry.value.points;
+            validSpied++;
+          }
+        }
+        // Si on a espionné au moins 1 carte et que le plancher factuel
+        // est déjà >= notre score, Dutch est safe.
+        if (validSpied >= 1 && myScore <= spiedScoreFloor) {
+          return true;
+        }
+        // Si on a espionné au moins 1 carte, le plancher + estimation
+        // des cartes restantes donne une estimation hybride plus fiable.
+        if (validSpied >= 1 && myScore <= 6) {
+          final unknownOpponentCards = duelOpponent.hand.length - validSpied;
+          final expectedUnknown =
+              BotMemoryManager.getExpectedDeckCardValue(gs);
+          final hybridEstimate =
+              spiedScoreFloor + (expectedUnknown * unknownOpponentCards).round();
+          if (myScore <= hybridEstimate) {
+            return true;
+          }
+        }
+      }
+    }
+
     // Platine "race logic": en course de fin, on autorise un Dutch agressif
     // même avant la zone "safe" classique.
     if (profile.tier == _DutchTier.platinum &&
