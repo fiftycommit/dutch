@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
+import 'package:dutch_game/core/service_locator.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
 import 'package:dutch_game/widgets/dialogs/connection_error_dialog.dart';
+import '../mocks/mock_services.dart';
 
 void main() {
+  setUp(() {
+    ServiceLocator().reset();
+    ServiceLocator().register<IHapticService>(MockHapticService());
+  });
+
+  tearDown(() {
+    ServiceLocator().reset();
+  });
+
   group('GameDialogs', () {
     group('confirmDutch', () {
       testWidgets('shows dialog with title', (tester) async {

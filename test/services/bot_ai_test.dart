@@ -124,6 +124,10 @@ void main() {
     });
 
     group('useBotSpecialPower', () {
+      setUp(() {
+        gameState.phase = GamePhase.specialPower;
+      });
+
       test('does nothing when not waiting for power', () async {
         gameState.isWaitingForSpecialPower = false;
         gameState.specialCardToActivate = null;

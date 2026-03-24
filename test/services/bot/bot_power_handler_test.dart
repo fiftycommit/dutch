@@ -41,7 +41,7 @@ void main() {
         deck: GameState.createFullDeck().sublist(0, 40),
         discardPile: [PlayingCard.create('hearts', '6')],
         currentPlayerIndex: 1,
-        phase: GamePhase.playing,
+        phase: GamePhase.specialPower,
       );
     });
 
@@ -725,9 +725,17 @@ void main() {
         );
 
         expect(
+          gameState.isWaitingForSpecialPower,
+          isFalse,
+        );
+        expect(
+          gameState.specialCardToActivate,
+          isNull,
+        );
+        expect(
           gameState.actionHistory
-              .any((entry) => entry.contains('ignore son pouvoir')),
-          isTrue,
+              .any((entry) => entry.contains('a utilisé son pouvoir')),
+          isFalse,
         );
       });
 
@@ -849,11 +857,7 @@ void main() {
 
         expect(human.knownCards.every((k) => k == false), isTrue);
         expect(bot2.knownCards.every((k) => k == true), isTrue);
-        expect(
-          gameState.actionHistory
-              .any((entry) => entry.contains('mélange Human')),
-          isTrue,
-        );
+        expect(human.lastTargetedByPowerTurn, equals(gameState.turnCount));
       });
 
       test('bronze joker does not prioritize human on equal danger', () async {
@@ -1023,7 +1027,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -1083,7 +1087,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -1136,7 +1140,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -1188,7 +1192,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -1248,7 +1252,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');
@@ -1305,7 +1309,7 @@ void main() {
           deck: GameState.createFullDeck().sublist(0, 30),
           discardPile: [PlayingCard.create('hearts', '6')],
           currentPlayerIndex: 0,
-          phase: GamePhase.playing,
+          phase: GamePhase.specialPower,
         )
           ..isWaitingForSpecialPower = true
           ..specialCardToActivate = PlayingCard.create('hearts', 'V');

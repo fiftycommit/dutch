@@ -193,6 +193,7 @@ void main() {
 
     group('canUsePower', () {
       test('returns true when waiting for power and current player', () {
+        gameState.phase = GamePhase.specialPower;
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = PlayingCard.create('hearts', '7');
         gameState.currentPlayerIndex = 0;
@@ -200,14 +201,16 @@ void main() {
         expect(validator.canUsePower(gameState, gameState.players[0]), isTrue);
       });
 
-      test('returns false when not waiting for power', () {
+      test('returns true when phase specialPower and current player match even if waiting flag is false', () {
+        gameState.phase = GamePhase.specialPower;
         gameState.isWaitingForSpecialPower = false;
         gameState.specialCardToActivate = PlayingCard.create('hearts', '7');
         
-        expect(validator.canUsePower(gameState, gameState.players[0]), isFalse);
+        expect(validator.canUsePower(gameState, gameState.players[0]), isTrue);
       });
 
       test('returns false when no special card', () {
+        gameState.phase = GamePhase.specialPower;
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = null;
         
@@ -215,6 +218,7 @@ void main() {
       });
 
       test('returns false for non-current player', () {
+        gameState.phase = GamePhase.specialPower;
         gameState.isWaitingForSpecialPower = true;
         gameState.specialCardToActivate = PlayingCard.create('hearts', '7');
         gameState.currentPlayerIndex = 0;

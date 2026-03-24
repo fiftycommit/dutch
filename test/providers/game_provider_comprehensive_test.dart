@@ -222,10 +222,11 @@ void main() {
     test('discardDrawnCard triggers haptic feedback', () {
       _setupGameWithHumanTurn(provider);
       provider.drawCard();
+      final beforeDiscard = mockHaptic.cardTapCount;
 
       provider.discardDrawnCard();
 
-      expect(mockHaptic.cardTapCount, 1);
+      expect(mockHaptic.cardTapCount, beforeDiscard + 1);
     });
   });
 

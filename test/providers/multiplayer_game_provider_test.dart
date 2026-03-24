@@ -155,6 +155,7 @@ void main() {
     });
 
     test('attemptMatch calls service', () {
+      provider.gameState!.phase = GamePhase.reaction;
       provider.attemptMatch(0);
       expect(mockService.attemptMatchCount, 1);
     });
