@@ -292,3 +292,4 @@ function startServer() {
     });
     return { app, io, httpServer, roomManager };
 }
+//# sourceMappingURL=server.js.map

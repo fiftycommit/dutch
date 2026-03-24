@@ -44,7 +44,7 @@ function createManager() {
     strict_1.default.equal(room.players.length, 4, 'Room should have 4 players');
     // Tenter de rejoindre avec un 5ème joueur
     const result = manager.joinRoom(room.id, 'p5', 'P5', 'c5');
-    strict_1.default.equal(result.error, 'Room is full', 'Should return error message');
+    strict_1.default.equal(result.error, 'Room pleine', 'Should return error message');
     strict_1.default.equal(result.room, undefined, 'Should not return room');
     strict_1.default.equal(room.players.length, 4, 'Room should still have 4 players');
     // Vérifier que le 5ème joueur n'est pas dans la room
@@ -83,7 +83,7 @@ function createManager() {
     strict_1.default.equal(room.players.length, 2);
     // Tenter de rejoindre avec un 3ème joueur
     const result2 = manager.joinRoom(room.id, 'p3', 'P3', 'c3');
-    strict_1.default.equal(result2.error, 'Room is full');
+    strict_1.default.equal(result2.error, 'Room pleine');
     strict_1.default.equal(room.players.length, 2, 'Room should still have 2 players');
 });
 (0, node_test_1.default)('disconnected player can rejoin without counting toward capacity', (t) => {
@@ -123,7 +123,7 @@ function createManager() {
     strict_1.default.equal(room.players.length, 6, 'Room should have 6 players');
     // Le 7ème joueur ne peut pas rejoindre
     const result = manager.joinRoom(room.id, 'p7', 'P7', 'c7');
-    strict_1.default.equal(result.error, 'Room is full');
+    strict_1.default.equal(result.error, 'Room pleine');
     strict_1.default.equal(room.players.length, 6);
 });
 (0, node_test_1.default)('public room becomes unavailable when full', (t) => {
@@ -143,5 +143,6 @@ function createManager() {
     strict_1.default.equal(room.players.length, 3);
     // Vérifier qu'un 4ème joueur ne peut pas rejoindre
     const result = manager.joinRoom(room.id, 'p4', 'P4', 'c4');
-    strict_1.default.equal(result.error, 'Room is full');
+    strict_1.default.equal(result.error, 'Room pleine');
 });
+//# sourceMappingURL=roomManager.capacity.test.js.map

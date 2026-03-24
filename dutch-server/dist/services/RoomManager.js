@@ -568,12 +568,147 @@ class RoomManager {
         const room = this.rooms.get(roomCode);
         if (!room || !room.gameState)
             return;
-        room.gameState.phase = GameState_1.GamePhase.playing;
         room.gameState.lastSpiedCard = null;
         room.gameState.reactionStartTime = null;
+        // S'il y a des pouvoirs en attente (matchs pendant la réaction), les résoudre
+        if (room.gameState.pendingMatchPowers.length > 0) {
+            await this.processPendingMatchPowers(roomCode);
+            return;
+        }
+        room.gameState.phase = GameState_1.GamePhase.playing;
         GameLogic_1.GameLogic.nextPlayer(room.gameState);
         this.broadcastGameState(roomCode, 'PHASE_CHANGE');
         await this.checkAndPlayBotTurn(roomCode);
+    }
+    /**
+     * Résout les pouvoirs en attente suite à des matchs pendant la réaction.
+     * Attribution aléatoire d'un numéro d'ordre, puis résolution séquentielle.
+     */
+    async processPendingMatchPowers(roomCode) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        const pending = room.gameState.pendingMatchPowers;
+        if (pending.length === 0) {
+            // Plus de pouvoirs → avancer au tour suivant
+            room.gameState.phase = GameState_1.GamePhase.playing;
+            GameLogic_1.GameLogic.nextPlayer(room.gameState);
+            this.broadcastGameState(roomCode, 'PHASE_CHANGE');
+            await this.checkAndPlayBotTurn(roomCode);
+            return;
+        }
+        // Séparer les pouvoirs passifs (7, 10) des pouvoirs actifs (Valet, Joker).
+        // Les passifs ne modifient pas l'état du jeu → pas besoin de tirage d'ordre.
+        const passivePowers = pending.filter(p => p.card.value === '7' || p.card.value === '10');
+        const activePowers = pending.filter(p => p.card.value !== '7' && p.card.value !== '10');
+        // Réorganiser : passifs d'abord (numéro auto), puis actifs
+        pending.length = 0;
+        let order = 1;
+        for (const p of passivePowers) {
+            p.drawNumber = order++;
+        }
+        pending.push(...passivePowers);
+        if (activePowers.length === 0) {
+            // Que des pouvoirs passifs → résoudre directement, pas de loterie
+            this.activateNextPendingPower(roomCode);
+            return;
+        }
+        if (activePowers.length === 1) {
+            // Un seul pouvoir actif → pas besoin de loterie
+            activePowers[0].drawNumber = order;
+            pending.push(...activePowers);
+            this.activateNextPendingPower(roomCode);
+            return;
+        }
+        // Plusieurs pouvoirs actifs → loterie pour l'ordre entre eux uniquement
+        const numbers = Array.from({ length: activePowers.length }, (_, i) => i + 1);
+        for (let i = numbers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+        }
+        for (let i = 0; i < activePowers.length; i++) {
+            activePowers[i].drawNumber = order + numbers[i] - 1;
+        }
+        pending.push(...activePowers);
+        // Trier par numéro (plus petit en premier)
+        pending.sort((a, b) => (a.drawNumber ?? 0) - (b.drawNumber ?? 0));
+        // Broadcast les numéros pour affichage de la loterie
+        this.broadcastGameState(roomCode, 'MATCH_POWER_LOTTERY');
+        // Petit délai pour que les joueurs voient les numéros
+        await this.delay(2000);
+        // Activer le premier pouvoir
+        this.activateNextPendingPower(roomCode);
+    }
+    /**
+     * Active le prochain pouvoir en attente dans la queue
+     */
+    activateNextPendingPower(roomCode) {
+        const room = this.rooms.get(roomCode);
+        if (!room || !room.gameState)
+            return;
+        const pending = room.gameState.pendingMatchPowers;
+        if (pending.length === 0) {
+            // Plus de pouvoirs → avancer au tour suivant
+            room.gameState.specialPowerPlayerId = null;
+            room.gameState.phase = GameState_1.GamePhase.playing;
+            GameLogic_1.GameLogic.nextPlayer(room.gameState);
+            this.broadcastGameState(roomCode, 'PHASE_CHANGE');
+            void this.checkAndPlayBotTurn(roomCode);
+            return;
+        }
+        // Prendre le premier pouvoir
+        const power = pending.shift();
+        const now = Date.now();
+        room.gameState.phase = GameState_1.GamePhase.specialPower;
+        room.gameState.isWaitingForSpecialPower = true;
+        room.gameState.specialCardToActivate = power.card;
+        room.gameState.specialPowerPlayerId = power.playerId;
+        room.gameState.specialPowerStartTime = now;
+        room.gameState.turnStartTime = now;
+        room.gameState.turnTimeoutMs = 60000;
+        this.broadcastGameState(roomCode, 'ACTION_RESULT');
+        // Si c'est un bot, auto-résoudre
+        const player = room.gameState.players.find(p => p.id === power.playerId);
+        if (player && !player.isHuman) {
+            setTimeout(() => {
+                const currentRoom = this.rooms.get(roomCode);
+                if (!currentRoom?.gameState)
+                    return;
+                if (currentRoom.gameState.phase !== GameState_1.GamePhase.specialPower)
+                    return;
+                if (currentRoom.gameState.specialPowerPlayerId !== power.playerId)
+                    return;
+                GameLogic_1.GameLogic.skipSpecialPower(currentRoom.gameState);
+                this.broadcastGameState(roomCode, 'ACTION_RESULT');
+                this.activateNextPendingPower(roomCode);
+            }, 800);
+        }
+        else {
+            // Joueur humain : démarrer le timer de pouvoir
+            this.startMatchPowerTimer(roomCode, power.playerId);
+        }
+    }
+    /**
+     * Timer pour un pouvoir de match (similaire à startTurnTimer mais pour specialPowerPlayerId)
+     */
+    startMatchPowerTimer(roomCode, playerId) {
+        this.clearTurnTimer(roomCode);
+        const timer = setTimeout(() => {
+            const room = this.rooms.get(roomCode);
+            if (!room?.gameState)
+                return;
+            if (room.gameState.phase !== GameState_1.GamePhase.specialPower)
+                return;
+            if (room.gameState.specialPowerPlayerId !== playerId)
+                return;
+            this.actionTimers.delete(roomCode);
+            GameLogic_1.GameLogic.skipSpecialPower(room.gameState);
+            this.broadcastGameState(roomCode, 'ACTION_RESULT', {
+                message: '⏱️ Pouvoir spécial expiré (60s) : pouvoir ignoré.',
+            });
+            this.activateNextPendingPower(roomCode);
+        }, this.specialPowerTimeoutMs);
+        this.actionTimers.set(roomCode, timer);
     }
     async checkAndPlayBotTurn(roomCode) {
         const room = this.rooms.get(roomCode);
@@ -753,6 +888,8 @@ class RoomManager {
         this.updateCumulativeScoresWithRP(room, roundScores);
         room.status = Room_1.RoomStatus.ended;
         room.gameState.phase = GameState_1.GamePhase.ended;
+        // Tous les humains connectés sont sur l'écran de résultats
+        room.playersInResults = new Set(room.players.filter((p) => p.isHuman && p.connected).map((p) => p.id));
         this.clearTurnTimer(roomCode);
         this.broadcastGameState(roomCode, 'GAME_ENDED', {
             message: 'Partie terminée !',
@@ -762,12 +899,64 @@ class RoomManager {
         this.broadcastPresence(roomCode);
     }
     /**
+     * Retour au salon : n'importe quel joueur peut appeler.
+     * Retire le joueur de playersInResults.
+     * Quand plus personne n'est sur les résultats → reset la room.
+     */
+    backToLobby(roomCode, playerId) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return false;
+        if (room.status !== Room_1.RoomStatus.ended)
+            return false;
+        room.playersInResults?.delete(playerId);
+        this.tryResetEndedRoom(room, roomCode);
+        return true;
+    }
+    /**
+     * Si plus personne n'est sur les résultats, remet la room en waiting.
+     */
+    tryResetEndedRoom(room, roomCode) {
+        if (room.status !== Room_1.RoomStatus.ended)
+            return;
+        if (room.playersInResults && room.playersInResults.size > 0)
+            return;
+        // En mode tournoi, déléguer à restartGame pour appliquer la logique
+        // d'élimination et d'incrémentation du round
+        if (room.gameMode === GameState_1.GameMode.tournament) {
+            this.ensureHost(room);
+            if (room.hostPlayerId) {
+                this.restartGame(roomCode, room.hostPlayerId);
+            }
+            return;
+        }
+        // Plus personne sur les résultats → reset complet (mode rapide)
+        room.players = room.players.filter((p) => p.isHuman);
+        room.players.forEach((p) => {
+            p.ready = false;
+            p.hand = [];
+            p.hasFolded = false;
+            p.knownCards = [];
+            p.isSpectator = false;
+        });
+        room.status = Room_1.RoomStatus.waiting;
+        room.gameState = null;
+        room.playersInResults = undefined;
+        this.reindexPlayers(room);
+        this.ensureHost(room);
+        this.touchRoom(room);
+        this.broadcastPresence(roomCode);
+    }
+    /**
      * Redémarre une partie (rematch) - garde les joueurs et scores cumulés
      * En mode tournoi: élimine le dernier du classement
      */
     restartGame(roomCode, requesterId) {
         const room = this.rooms.get(roomCode);
         if (!room)
+            return false;
+        // Seul l'hôte peut relancer
+        if (room.hostPlayerId !== requesterId)
             return false;
         // La partie doit être terminée
         if (room.status !== Room_1.RoomStatus.ended)
@@ -871,11 +1060,21 @@ class RoomManager {
             message: "Vous avez été exclu de la room par l'hôte",
             canRejoin: true, // Le joueur PEUT revenir
         });
+        // Si la partie est en cours, gérer proprement le retrait du gameState
+        if (room.status === Room_1.RoomStatus.playing && room.gameState) {
+            this.removePlayerFromActiveRoom(roomCode, target.id, {
+                removeReason: `${target.name} a été exclu par l'hôte.`,
+            });
+            return true;
+        }
         // Retirer le joueur (mais ne pas le bannir - il peut revenir)
+        room.playersInResults?.delete(target.id);
         room.players.splice(targetIndex, 1);
         this.reindexPlayers(room);
         this.touchRoom(room);
         this.broadcastPresence(roomCode);
+        // Si plus personne sur les résultats → reset la room
+        this.tryResetEndedRoom(room, roomCode);
         return true;
     }
     /**
@@ -909,11 +1108,21 @@ class RoomManager {
             }
             room.bannedClientIds.add(target.clientId);
         }
+        // Si la partie est en cours, gérer proprement le retrait du gameState
+        if (room.status === Room_1.RoomStatus.playing && room.gameState) {
+            this.removePlayerFromActiveRoom(roomCode, target.id, {
+                removeReason: `${target.name} a été banni par l'hôte.`,
+            });
+            return true;
+        }
         // Retirer le joueur
+        room.playersInResults?.delete(target.id);
         room.players.splice(targetIndex, 1);
         this.reindexPlayers(room);
         this.touchRoom(room);
         this.broadcastPresence(roomCode);
+        // Si plus personne sur les résultats → reset la room
+        this.tryResetEndedRoom(room, roomCode);
         return true;
     }
     /**
@@ -1112,6 +1321,7 @@ class RoomManager {
         });
         if (room.status === Room_1.RoomStatus.waiting || room.status === Room_1.RoomStatus.ended) {
             // In waiting or ended state: clean removal (player leaves for real)
+            room.playersInResults?.delete(socketId);
             room.players.splice(index, 1);
             if (room.players.length === 0 ||
                 room.players.filter(p => p.isHuman).length === 0) {
@@ -1122,6 +1332,8 @@ class RoomManager {
             if (room.hostPlayerId === socketId) {
                 this.ensureHost(room);
             }
+            // Si plus personne sur les résultats → reset la room
+            this.tryResetEndedRoom(room, roomCode);
         }
         else {
             // In playing state: mark as spectator (game still running)
@@ -1412,12 +1624,16 @@ class RoomManager {
                 room.players[roomIndex].connected = false;
             }
         }
+        // Retirer des résultats si présent
+        room.playersInResults?.delete(playerId);
         // On compte seulement les joueurs non-spectateurs (s'il y en a) pour détruire la room
         const activeHumanPlayers = room.players.filter(p => p.isHuman && !p.isSpectator);
         if (room.players.length === 0 || activeHumanPlayers.length === 0) {
             this.removeRoom(roomCode);
             return;
         }
+        // Si plus personne sur les résultats → reset la room
+        this.tryResetEndedRoom(room, roomCode);
         if (room.status !== Room_1.RoomStatus.playing && !room.isPaused) {
             this.reindexPlayers(room);
         }
@@ -2070,3 +2286,4 @@ class RoomManager {
     }
 }
 exports.RoomManager = RoomManager;
+//# sourceMappingURL=RoomManager.js.map

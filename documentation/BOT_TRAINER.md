@@ -9,16 +9,14 @@ Il utilise des **fantômes de vrais joueurs** (clones) et envoie des rapports au
 - `https://dutch-game.me/api/bot-learning/training-series`
 - `https://dutch-game.me/bot-stats` (dashboard)
 
-## Déploiement (auto-install + auto-start)
-Le trainer s’installe et se lance automatiquement pendant :
-```
-./scripts/deploy-server.sh 164.92.234.245
-```
+## Déploiement
+Le trainer n'est pas installé par le workflow GitHub Actions actuel.
 
-Pour **désactiver** l’installation du trainer pendant le déploiement :
-```
-SKIP_TRAINER=1 ./scripts/deploy-server.sh 164.92.234.245
-```
+Sur l'infrastructure actuelle, il est déjà provisionné sur le serveur.
+Pour un nouveau serveur, il faut reprovisionner manuellement :
+- le SDK Flutter côté serveur
+- le dossier `/var/www/dutch-trainer`
+- le service systemd `dutch-bot-trainer`
 
 ## Démarrer / Arrêter à distance
 ```

@@ -274,7 +274,7 @@ class BotAI {
     static getFailedMatchCount(gs, player) {
         let count = 0;
         for (const entry of gs.actionHistory) {
-            if (entry.includes(player.name) && entry.includes('rate son match')) {
+            if (entry.includes(player.name) && entry.includes('a raté son match')) {
                 count++;
             }
         }
@@ -1456,3 +1456,4 @@ class BotAI {
     }
 }
 exports.BotAI = BotAI;
+//# sourceMappingURL=BotAI.js.map

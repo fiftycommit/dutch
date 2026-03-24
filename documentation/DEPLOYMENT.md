@@ -32,24 +32,20 @@ Si tu dois configurer un **nouveau serveur** de zéro :
 ### 2. Configurer le DNS
 Pointer `dutch-game.me` vers l'IP du Droplet (enregistrement A)
 
-### 3. Lancer le script de setup
-```bash
-cd scripts
-chmod +x deploy-server.sh
-./deploy-server.sh <IP_DROPLET> <votre@email.com>
-```
-
-Ce script installe :
-- Node.js 20.x
-- PM2 (process manager)
-- Nginx (reverse proxy)
-- Certbot (SSL/HTTPS)
-- Firewall UFW
-- Configuration Nginx complète
-
-### 4. Ajouter le secret SSH dans GitHub
+### 3. Ajouter le secret SSH dans GitHub
 1. Va sur GitHub → Settings → Secrets → Actions
 2. Ajoute `SSH_PRIVATE_KEY` avec ta clé privée SSH
+
+### 4. Provisionner le serveur
+Le provisionnement initial n'est plus automatisé par un script du repo.
+
+À installer/configurer manuellement :
+- Node.js 20.x
+- PM2
+- Nginx
+- Certbot
+- Répertoires de déploiement attendus par GitHub Actions
+- Utilisateur et service du bot trainer si tu veux conserver l'entraînement distant
 
 ## 📊 URLs en production
 
@@ -97,6 +93,6 @@ Protections en place :
 
 ## 📝 Notes
 
-- Le script `scripts/deploy-server.sh` est pour le **setup initial uniquement**
 - Les déploiements quotidiens se font via **GitHub Actions**
 - La config Nginx est automatiquement mise à jour si nécessaire
+- L'ancien script `scripts/deploy-server.sh` a été supprimé car il ne reflétait plus l'infra réelle

@@ -45,21 +45,30 @@ test('startGame enforces minPlayers and respects fillBots=false', (t) => {
   const { manager } = createManager();
   t.after(() => manager.dispose());
 
-  const room = manager.createRoom('host-1', {
+  const notEnoughPlayersRoom = manager.createRoom('host-1', {
+    minPlayers: 3,
+    maxPlayers: 4,
+    fillBots: false,
+  });
+
+  manager.joinRoom(notEnoughPlayersRoom.id, 'p2', 'P2', 'c2');
+  manager.setReady(notEnoughPlayersRoom.id, 'host-1', true);
+  manager.setReady(notEnoughPlayersRoom.id, 'p2', true);
+
+  const startedTooEarly = manager.startGame(notEnoughPlayersRoom.id);
+  assert.equal(startedTooEarly, false);
+  assert.equal(notEnoughPlayersRoom.status, 'waiting');
+  assert.equal(notEnoughPlayersRoom.gameState, null);
+
+  const room = manager.createRoom('host-1b', {
     minPlayers: 3,
     maxPlayers: 4,
     fillBots: false,
   });
 
   manager.joinRoom(room.id, 'p2', 'P2', 'c2');
-
-  const startedTooEarly = manager.startGame(room.id);
-  assert.equal(startedTooEarly, false);
-  assert.equal(room.status, 'waiting');
-  assert.equal(room.gameState, null);
-
   manager.joinRoom(room.id, 'p3', 'P3', 'c3');
-  manager.setReady(room.id, 'host-1', true);
+  manager.setReady(room.id, 'host-1b', true);
   manager.setReady(room.id, 'p2', true);
   manager.setReady(room.id, 'p3', true);
 
@@ -138,12 +147,14 @@ test('turn timeout triggers presence check then removes AFK player', async (t) =
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   const timedOutPlayer = room.players.find((p) => p.id === currentPlayerId);
-  assert.equal(timedOutPlayer, undefined, 'Player should be removed from room');
-  assert.equal(
-    room.gameState!.players.some((p) => p.id === currentPlayerId),
-    false,
-    'Player should be removed from game state'
-  );
+  assert.ok(timedOutPlayer, 'Player should still exist in room state');
+  assert.equal(timedOutPlayer?.connected, false, 'Player should be disconnected');
+  assert.equal(timedOutPlayer?.isSpectator, true, 'Player should be converted to spectator');
+
+  const timedOutGamePlayer = room.gameState!.players.find((p) => p.id === currentPlayerId);
+  assert.ok(timedOutGamePlayer, 'Player should still exist in game state for ranking');
+  assert.equal(timedOutGamePlayer?.isSpectator, true, 'Game state should mark player spectator');
+  assert.equal(timedOutGamePlayer?.hasFolded, true, 'Game state should mark player folded');
 
   const kickedEvents = io.findEventsFor(currentPlayerId, 'room:kicked');
   assert.ok(kickedEvents.length >= 1, 'Should notify AFK player as kicked');
@@ -483,7 +494,9 @@ test('scores are calculated correctly at game end', async (t) => {
   assert.equal(endedData.roundScores.length, 2, 'Should have scores for 2 players');
 
   for (const score of endedData.roundScores) {
-    assert.ok(typeof score.score === 'number', 'Score should be a number');
+    assert.ok(typeof score.cardScore === 'number', 'Card score should be a number');
+    assert.ok(typeof score.rank === 'number', 'Rank should be a number');
+    assert.ok(typeof score.rpChange === 'number', 'RP change should be a number');
     assert.ok(score.name, 'Name should exist');
     assert.ok(score.playerId, 'PlayerId should exist');
   }

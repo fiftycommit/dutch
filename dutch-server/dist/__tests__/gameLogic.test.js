@@ -110,7 +110,7 @@ const Card_1 = require("../models/Card");
             const historyLengthBefore = state.actionHistory.length;
             GameLogic_1.GameLogic.drawCard(state);
             node_assert_1.default.ok(state.actionHistory.length > historyLengthBefore);
-            node_assert_1.default.ok(state.actionHistory.some(h => h.includes('pioche')));
+            node_assert_1.default.ok(state.actionHistory.some(h => h.includes('pioch')));
         });
         (0, node_test_1.it)('refills deck from discard when empty', () => {
             const state = createInitializedGameState();
@@ -529,3 +529,4 @@ const Card_1 = require("../models/Card");
         });
     });
 });
+//# sourceMappingURL=gameLogic.test.js.map

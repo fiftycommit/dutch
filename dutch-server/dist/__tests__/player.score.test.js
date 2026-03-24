@@ -31,3 +31,4 @@ const Card_1 = require("../models/Card");
         node_assert_1.default.strictEqual((0, Player_1.calculateScore)(player), 100);
     });
 });
+//# sourceMappingURL=player.score.test.js.map

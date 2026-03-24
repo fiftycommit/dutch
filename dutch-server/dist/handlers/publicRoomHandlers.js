@@ -110,3 +110,4 @@ function onPublicRoomClosed(roomCode) {
 function isPublicRoom(roomCode) {
     return publicRoomService_1.publicRoomService.isPublicRoom(roomCode);
 }
+//# sourceMappingURL=publicRoomHandlers.js.map

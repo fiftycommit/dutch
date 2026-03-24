@@ -100,3 +100,4 @@ async function simulateGame() {
 if (require.main === module) {
     simulateGame().catch(console.error);
 }
+//# sourceMappingURL=example.js.map

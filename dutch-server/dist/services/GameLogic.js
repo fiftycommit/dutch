@@ -125,11 +125,12 @@ class GameLogic {
             player.hand.splice(cardIndex, 1);
             player.knownCards.splice(cardIndex, 1);
             (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatMatchSuccess(player.name, playerCard));
-            if (gameState.phase !== GameState_1.GamePhase.reaction) {
+            if (gameState.phase === GameState_1.GamePhase.reaction) {
+                // Pendant la réaction, stocker le pouvoir pour résolution après
+                this.addPendingMatchPower(gameState, player, playerCard);
+            }
+            else {
                 this.checkSpecialPower(gameState, playerCard);
-                // Matching during turn doesn't end turn immediately unless power
-                // But if it was the player's turn, do they still need to discard/swap?
-                // Usually matching is an extra action. The turn phase dictates main action.
             }
             return true;
         }
@@ -189,10 +190,29 @@ class GameLogic {
         // Only cards with actual implemented powers: 7 (spy), 10 (swap), V (exchange), JOKER (shuffle)
         const powerCards = ['7', '10', 'V', 'JOKER'];
         if (powerCards.includes(card.value)) {
+            const now = Date.now();
             gameState.phase = GameState_1.GamePhase.specialPower;
             gameState.isWaitingForSpecialPower = true;
             gameState.specialCardToActivate = card;
-            gameState.specialPowerStartTime = Date.now();
+            gameState.specialPowerPlayerId = null; // currentPlayer par défaut
+            gameState.specialPowerStartTime = now;
+            // Synchroniser turnStartTime et turnTimeoutMs immédiatement pour que
+            // le premier broadcast (ACTION_RESULT) inclue les bonnes valeurs du timer.
+            // Sans ça, les joueurs en attente reçoivent l'ancien turnTimeoutMs (90s de la phase playing)
+            // au lieu du timeout du pouvoir spécial (60s), ce qui désynchronise leur barre de progression.
+            gameState.turnStartTime = now;
+            gameState.turnTimeoutMs = 60000; // 60s pour utiliser le pouvoir (synchronisé avec RoomManager.specialPowerTimeoutMs)
+        }
+    }
+    /** Ajoute un pouvoir en attente suite à un match pendant la phase de réaction */
+    static addPendingMatchPower(gameState, player, card) {
+        const powerCards = ['7', '10', 'V', 'JOKER'];
+        if (powerCards.includes(card.value)) {
+            gameState.pendingMatchPowers.push({
+                playerId: player.id,
+                playerName: player.name,
+                card: { ...card },
+            });
         }
     }
     static callDutch(gameState, playerId) {
@@ -234,7 +254,10 @@ class GameLogic {
         if (gameState.phase !== GameState_1.GamePhase.specialPower || !gameState.specialCardToActivate) {
             return {};
         }
-        const currentPlayer = (0, GameState_1.getCurrentPlayer)(gameState);
+        // Utiliser le joueur pouvoiré (match power) ou le joueur actif (normal)
+        const currentPlayer = gameState.specialPowerPlayerId
+            ? gameState.players.find(p => p.id === gameState.specialPowerPlayerId) ?? (0, GameState_1.getCurrentPlayer)(gameState)
+            : (0, GameState_1.getCurrentPlayer)(gameState);
         const card = gameState.specialCardToActivate;
         let result = {};
         if (card.value === '7') {
@@ -243,7 +266,7 @@ class GameLogic {
             if (cardIndex >= 0 && cardIndex < currentPlayer.hand.length) {
                 gameState.lastSpiedCard = currentPlayer.hand[cardIndex];
                 currentPlayer.knownCards[cardIndex] = true;
-                (0, GameState_1.addToHistory)(gameState, `${currentPlayer.name} regarde une de ses cartes.`);
+                (0, GameState_1.addToHistory)(gameState, `${currentPlayer.name} a regardé une de ses cartes.`);
                 result.spiedCard = currentPlayer.hand[cardIndex];
             }
         }
@@ -255,7 +278,7 @@ class GameLogic {
                 const targetPlayer = gameState.players[targetPlayerIndex];
                 if (targetCardIndex >= 0 && targetCardIndex < targetPlayer.hand.length) {
                     gameState.lastSpiedCard = targetPlayer.hand[targetCardIndex];
-                    (0, GameState_1.addToHistory)(gameState, `${currentPlayer.name} espionne une carte de ${targetPlayer.name}.`);
+                    (0, GameState_1.addToHistory)(gameState, `${currentPlayer.name} a espionné une carte de ${targetPlayer.name}.`);
                     result.spiedCard = targetPlayer.hand[targetCardIndex];
                 }
             }
@@ -316,9 +339,14 @@ class GameLogic {
         return result;
     }
     static skipSpecialPower(gameState) {
+        // Déterminer le joueur qui avait le pouvoir
+        const powerPlayer = gameState.specialPowerPlayerId
+            ? gameState.players.find(p => p.id === gameState.specialPowerPlayerId)
+            : (0, GameState_1.getCurrentPlayer)(gameState);
         gameState.isWaitingForSpecialPower = false;
         gameState.specialCardToActivate = null;
-        (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatPowerSkip((0, GameState_1.getCurrentPlayer)(gameState).name));
+        gameState.specialPowerPlayerId = null;
+        (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatPowerSkip(powerPlayer?.name ?? 'Joueur'));
         this.startReactionPhase(gameState);
     }
     static endGame(gameState) {
@@ -393,3 +421,4 @@ class GameLogic {
     }
 }
 exports.GameLogic = GameLogic;
+//# sourceMappingURL=GameLogic.js.map

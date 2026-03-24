@@ -43,3 +43,4 @@ function calculateScore(player) {
     }
     return player.hand.reduce((sum, card) => sum + card.points, 0);
 }
+//# sourceMappingURL=Player.js.map

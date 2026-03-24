@@ -58,3 +58,4 @@ function setupConnectionHandler(socket, roomManager) {
         // par le publicRoomService toutes les minutes
     });
 }
+//# sourceMappingURL=connectionHandler.js.map

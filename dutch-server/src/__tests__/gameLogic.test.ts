@@ -134,7 +134,7 @@ describe('GameLogic', () => {
       GameLogic.drawCard(state);
 
       assert.ok(state.actionHistory.length > historyLengthBefore);
-      assert.ok(state.actionHistory.some(h => h.includes('pioche')));
+      assert.ok(state.actionHistory.some(h => h.includes('pioch')));
     });
 
     it('refills deck from discard when empty', () => {

@@ -36,18 +36,26 @@ function createManager(options = {}) {
 (0, node_test_1.default)('startGame enforces minPlayers and respects fillBots=false', (t) => {
     const { manager } = createManager();
     t.after(() => manager.dispose());
-    const room = manager.createRoom('host-1', {
+    const notEnoughPlayersRoom = manager.createRoom('host-1', {
+        minPlayers: 3,
+        maxPlayers: 4,
+        fillBots: false,
+    });
+    manager.joinRoom(notEnoughPlayersRoom.id, 'p2', 'P2', 'c2');
+    manager.setReady(notEnoughPlayersRoom.id, 'host-1', true);
+    manager.setReady(notEnoughPlayersRoom.id, 'p2', true);
+    const startedTooEarly = manager.startGame(notEnoughPlayersRoom.id);
+    strict_1.default.equal(startedTooEarly, false);
+    strict_1.default.equal(notEnoughPlayersRoom.status, 'waiting');
+    strict_1.default.equal(notEnoughPlayersRoom.gameState, null);
+    const room = manager.createRoom('host-1b', {
         minPlayers: 3,
         maxPlayers: 4,
         fillBots: false,
     });
     manager.joinRoom(room.id, 'p2', 'P2', 'c2');
-    const startedTooEarly = manager.startGame(room.id);
-    strict_1.default.equal(startedTooEarly, false);
-    strict_1.default.equal(room.status, 'waiting');
-    strict_1.default.equal(room.gameState, null);
     manager.joinRoom(room.id, 'p3', 'P3', 'c3');
-    manager.setReady(room.id, 'host-1', true);
+    manager.setReady(room.id, 'host-1b', true);
     manager.setReady(room.id, 'p2', true);
     manager.setReady(room.id, 'p3', true);
     const started = manager.startGame(room.id, { fillBots: false });
@@ -108,8 +116,13 @@ function createManager(options = {}) {
     strict_1.default.ok(checkEvents.length >= 1, 'Should have sent presence:check');
     await new Promise((resolve) => setTimeout(resolve, 100));
     const timedOutPlayer = room.players.find((p) => p.id === currentPlayerId);
-    strict_1.default.equal(timedOutPlayer, undefined, 'Player should be removed from room');
-    strict_1.default.equal(room.gameState.players.some((p) => p.id === currentPlayerId), false, 'Player should be removed from game state');
+    strict_1.default.ok(timedOutPlayer, 'Player should still exist in room state');
+    strict_1.default.equal(timedOutPlayer?.connected, false, 'Player should be disconnected');
+    strict_1.default.equal(timedOutPlayer?.isSpectator, true, 'Player should be converted to spectator');
+    const timedOutGamePlayer = room.gameState.players.find((p) => p.id === currentPlayerId);
+    strict_1.default.ok(timedOutGamePlayer, 'Player should still exist in game state for ranking');
+    strict_1.default.equal(timedOutGamePlayer?.isSpectator, true, 'Game state should mark player spectator');
+    strict_1.default.equal(timedOutGamePlayer?.hasFolded, true, 'Game state should mark player folded');
     const kickedEvents = io.findEventsFor(currentPlayerId, 'room:kicked');
     strict_1.default.ok(kickedEvents.length >= 1, 'Should notify AFK player as kicked');
     const newCurrentPlayerId = (0, GameState_1.getCurrentPlayer)(room.gameState).id;
@@ -374,7 +387,9 @@ function createManager(options = {}) {
     strict_1.default.ok(endedData.roundScores, 'roundScores should exist');
     strict_1.default.equal(endedData.roundScores.length, 2, 'Should have scores for 2 players');
     for (const score of endedData.roundScores) {
-        strict_1.default.ok(typeof score.score === 'number', 'Score should be a number');
+        strict_1.default.ok(typeof score.cardScore === 'number', 'Card score should be a number');
+        strict_1.default.ok(typeof score.rank === 'number', 'Rank should be a number');
+        strict_1.default.ok(typeof score.rpChange === 'number', 'RP change should be a number');
         strict_1.default.ok(score.name, 'Name should exist');
         strict_1.default.ok(score.playerId, 'PlayerId should exist');
     }
@@ -469,3 +484,4 @@ function createManager(options = {}) {
     // Les scores doivent avoir augmenté
     strict_1.default.ok(Array.isArray(secondRoundCumul));
 });
+//# sourceMappingURL=roomManager.multiplayer.test.js.map

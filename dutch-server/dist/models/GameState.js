@@ -40,6 +40,7 @@ function createGameState(players, gameMode, difficulty) {
         isWaitingForSpecialPower: false,
         specialPowerStartTime: null,
         specialCardToActivate: null,
+        specialPowerPlayerId: null,
         dutchCallerId: null,
         reactionStartTime: null,
         actionHistory: [],
@@ -50,6 +51,7 @@ function createGameState(players, gameMode, difficulty) {
         turnStartTime: null,
         turnTimeoutMs: 90000, // 1min30 par défaut
         readyPlayerIds: [],
+        pendingMatchPowers: [],
     };
 }
 function getCurrentPlayer(gameState) {
@@ -75,3 +77,4 @@ function nextPlayer(gameState) {
         }
     }
 }
+//# sourceMappingURL=GameState.js.map

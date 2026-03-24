@@ -68,3 +68,4 @@ BotDifficulty.platinum = {
     matchAccuracy: 1.0,
     reactionMatchChance: 1.0,
 };
+//# sourceMappingURL=BotDifficulty.js.map

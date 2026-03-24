@@ -404,3 +404,4 @@ function createManager(options = {}) {
     // Check cumulative scores exist
     strict_1.default.ok(room.cumulativeScores);
 });
+//# sourceMappingURL=roomManager.additional.test.js.map

@@ -131,3 +131,4 @@ class PublicRoomService {
 }
 // Export singleton
 exports.publicRoomService = new PublicRoomService();
+//# sourceMappingURL=publicRoomService.js.map

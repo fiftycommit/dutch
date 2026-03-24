@@ -82,3 +82,4 @@ class TimerManager {
     }
 }
 exports.TimerManager = TimerManager;
+//# sourceMappingURL=TimerManager.js.map

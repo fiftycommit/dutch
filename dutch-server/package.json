@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "test": "npm run build && node --test dist/__tests__/*.test.js"
+    "test": "npm run build && node --test-force-exit --test dist/__tests__/*.test.js",
+    "test:coverage": "npm run build && c8 --all --src src --exclude-after-remap --exclude 'src/__tests__/**' --reports-dir coverage --reporter=lcov --reporter=text node --enable-source-maps --test-force-exit --test dist/__tests__/*.test.js"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +26,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.10",
+    "c8": "^10.1.3",
     "nodemon": "^3.1.11",
     "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",

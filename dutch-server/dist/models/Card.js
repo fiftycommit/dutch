@@ -65,3 +65,4 @@ function cardMatches(card1, card2) {
     };
     return getMatchValue(card1) === getMatchValue(card2);
 }
+//# sourceMappingURL=Card.js.map

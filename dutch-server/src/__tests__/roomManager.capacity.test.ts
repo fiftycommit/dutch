@@ -49,7 +49,7 @@ test('5th player cannot join a room with maxPlayers=4', (t) => {
   // Tenter de rejoindre avec un 5ème joueur
   const result = manager.joinRoom(room.id, 'p5', 'P5', 'c5');
 
-  assert.equal(result.error, 'Room is full', 'Should return error message');
+  assert.equal(result.error, 'Room pleine', 'Should return error message');
   assert.equal(result.room, undefined, 'Should not return room');
   assert.equal(room.players.length, 4, 'Room should still have 4 players');
   
@@ -100,7 +100,7 @@ test('room with maxPlayers=2 rejects 3rd player', (t) => {
   // Tenter de rejoindre avec un 3ème joueur
   const result2 = manager.joinRoom(room.id, 'p3', 'P3', 'c3');
 
-  assert.equal(result2.error, 'Room is full');
+  assert.equal(result2.error, 'Room pleine');
   assert.equal(room.players.length, 2, 'Room should still have 2 players');
 });
 
@@ -153,7 +153,7 @@ test('room with maxPlayers=6 accepts 6 players', (t) => {
 
   // Le 7ème joueur ne peut pas rejoindre
   const result = manager.joinRoom(room.id, 'p7', 'P7', 'c7');
-  assert.equal(result.error, 'Room is full');
+  assert.equal(result.error, 'Room pleine');
   assert.equal(room.players.length, 6);
 });
 
@@ -179,5 +179,5 @@ test('public room becomes unavailable when full', (t) => {
 
   // Vérifier qu'un 4ème joueur ne peut pas rejoindre
   const result = manager.joinRoom(room.id, 'p4', 'P4', 'c4');
-  assert.equal(result.error, 'Room is full');
+  assert.equal(result.error, 'Room pleine');
 });

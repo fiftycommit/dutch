@@ -26,3 +26,4 @@ function createRoom(id, hostPlayerId, settings, expiresAt, creatorUserId) {
         creatorUserId,
     };
 }
+//# sourceMappingURL=Room.js.map

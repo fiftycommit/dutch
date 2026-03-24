@@ -7,3 +7,4 @@ var BotDifficulty_1 = require("./BotDifficulty");
 Object.defineProperty(exports, "BotDifficulty", { enumerable: true, get: function () { return BotDifficulty_1.BotDifficulty; } });
 var BotAI_1 = require("./BotAI");
 Object.defineProperty(exports, "BotAI", { enumerable: true, get: function () { return BotAI_1.BotAI; } });
+//# sourceMappingURL=index.js.map
