@@ -42,7 +42,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        selectedNumberOfPlayers = prefs.getInt('lastNumberOfPlayers') ?? 4;
+        final savedPlayers = prefs.getInt('lastNumberOfPlayers') ?? (widget.isTournament ? 6 : 4);
+        // Clamp to valid range for tournament (3-6) vs quick (2-6)
+        selectedNumberOfPlayers = widget.isTournament
+            ? savedPlayers.clamp(3, 6)
+            : savedPlayers.clamp(2, 6);
         final diffIndex = prefs.getInt('lastBotDifficulty');
         if (diffIndex != null && diffIndex < Difficulty.values.length) {
           selectedBotDifficulty = Difficulty.values[diffIndex];
@@ -409,7 +413,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   child: SegmentedButton<int>(
                     segments: widget.isTournament
                         ? const [
+                            ButtonSegment(value: 3, label: Text("3")),
                             ButtonSegment(value: 4, label: Text("4")),
+                            ButtonSegment(value: 5, label: Text("5")),
                             ButtonSegment(value: 6, label: Text("6")),
                           ]
                         : const [

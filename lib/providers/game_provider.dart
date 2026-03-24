@@ -78,6 +78,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   int _currentActionTextDisplayMs = 1500;
   int _currentSlotId = 1;
   bool _useSBMM = false;
+  bool get useSBMM => _useSBMM;
 
   int? _playerMMR;
   int? get playerMMR => _playerMMR;
@@ -904,7 +905,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     bool calledDutch = _gameState!.dutchCallerId == human.id;
     bool wonDutch = calledDutch && playerRank == 1;
     _lastMatchRpResult = null;
-    if (_playerMMR != null) {
+    if (_useSBMM && _playerMMR != null) {
       final winStreak = playerRank == 1 ? _playerWinStreak + 1 : 0;
       _lastMatchRpResult = RPCalculator.calculateRP(
         playerRank: playerRank,

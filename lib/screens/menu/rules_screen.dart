@@ -516,6 +516,7 @@ class RulesScreen extends StatelessWidget {
                           'Seule la valeur compte (ex : 7♥ défaussé → n\'importe quel 7 peut suivre)',
                           'L\'enseigne (♠ ♥ ♦ ♣) n\'a aucune importance',
                           'La couleur (rouge/noir) n\'a aucune importance',
+                          'Si la carte défaussée a un pouvoir, il s\'active à la fin du temps de réaction',
                           'Basez-vous sur votre mémoire !',
                         ].map((t) => Padding(
                               padding: EdgeInsets.only(bottom: ScreenUtils.spacing(context, 4)),

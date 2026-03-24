@@ -108,7 +108,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         final isTournamentWinner =
             isTournament && isFinalRound && humanRank == 1;
 
-        final showRP = gameProvider.playerMMR != null;
+        final showRP = gameProvider.useSBMM && gameProvider.playerMMR != null;
 
         return PopScope(
           canPop: false,
