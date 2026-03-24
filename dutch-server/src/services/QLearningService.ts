@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { BotAction, BotGameRecord } from '../models/BotLearning';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { BotGameRecord } from '../models/BotLearning';
 
 interface QState {
   myScore: number;
@@ -23,10 +23,10 @@ interface QTableEntry {
 
 export class QLearningService {
   private qTable: Map<string, QTableEntry>;
-  private alpha: number = 0.1; // Taux d'apprentissage
-  private gamma: number = 0.95; // Facteur de discount
+  private readonly alpha: number = 0.1; // Taux d'apprentissage
+  private readonly gamma: number = 0.95; // Facteur de discount
   private epsilon: number = 0.2; // Taux d'exploration
-  private dataDir: string;
+  private readonly dataDir: string;
 
   constructor() {
     this.qTable = new Map();
@@ -37,7 +37,7 @@ export class QLearningService {
 
   private async ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -66,7 +66,7 @@ export class QLearningService {
       }
       
       console.log(`✅ Q-Table chargée: ${this.qTable.size} états`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Nouvelle Q-Table créée');
     }
   }

@@ -6,7 +6,7 @@
  */
 
 import { GameLogic, BotAI } from './index';
-import { GameState, createGameState, GameMode, GamePhase, Difficulty } from '../models/GameState';
+import { createGameState, GameMode, GamePhase, Difficulty } from '../models/GameState';
 import { Player, createPlayer, BotBehavior, BotSkillLevel } from '../models/Player';
 
 async function simulateGame() {
@@ -113,7 +113,9 @@ async function simulateGame() {
 
 // Exécuter la simulation si ce fichier est lancé directement
 if (require.main === module) {
-  simulateGame().catch(console.error);
+  void (async () => {
+    await simulateGame();
+  })();
 }
 
 export { simulateGame };

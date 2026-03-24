@@ -1,6 +1,6 @@
 import { PlayingCard, createFullDeck, cardMatches } from '../models/Card';
 import { Player } from '../models/Player';
-import { GameState, GamePhase, PendingMatchPower, addToHistory, getCurrentPlayer, nextPlayer as nextPlayerUtil } from '../models/GameState';
+import { GameState, GamePhase, addToHistory, getCurrentPlayer, nextPlayer as nextPlayerUtil } from '../models/GameState';
 import { HistoryFormatter } from '../utils/HistoryFormatter';
 
 export class GameLogic {
@@ -474,13 +474,11 @@ export class GameLogic {
         gameState,
         HistoryFormatter.formatDeckRefill(gameState.deck.length)
       );
+    } else if (gameState.dutchCallerId) {
+      gameState.phase = GamePhase.dutchCalled;
+      addToHistory(gameState, HistoryFormatter.formatEmptyDeckEnd());
     } else {
-      if (gameState.dutchCallerId) {
-        gameState.phase = GamePhase.dutchCalled;
-        addToHistory(gameState, HistoryFormatter.formatEmptyDeckEnd());
-      } else {
-        this.endGame(gameState);
-      }
+      this.endGame(gameState);
     }
   }
 

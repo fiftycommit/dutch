@@ -202,9 +202,9 @@ class RoomRegistryService {
             isHost,
             isSpectator: player.isSpectator === true,
             lastSeenAt:
-              player.lastSeenAt != null
-                ? admin.firestore.Timestamp.fromMillis(player.lastSeenAt)
-                : null,
+              player.lastSeenAt == null
+                ? null
+                : admin.firestore.Timestamp.fromMillis(player.lastSeenAt),
             disconnectedAt:
               player.connected === false
                 ? admin.firestore.FieldValue.serverTimestamp()
@@ -397,7 +397,7 @@ class RoomRegistryService {
     try {
       const roomDoc = await firestore.collection('multiplayer_rooms').doc(roomCode).get();
       if (roomDoc.exists) status = (roomDoc.data()?.status as string) || 'waiting';
-    } catch (_) {}
+    } catch {}
 
     await firestore
       .collection('users')

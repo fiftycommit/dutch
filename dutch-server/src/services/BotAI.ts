@@ -1,5 +1,5 @@
-import { GameState, GamePhase, GameMode, addToHistory, getCurrentPlayer } from '../models/GameState';
-import { Player, BotBehavior, BotSkillLevel } from '../models/Player';
+import { GameState, GamePhase, GameMode, getCurrentPlayer } from '../models/GameState';
+import { Player, BotSkillLevel } from '../models/Player';
 import { PlayingCard, cardMatches } from '../models/Card';
 import { GameLogic } from './GameLogic';
 import { BotDifficulty, BotDifficultyConfig } from './BotDifficulty';
@@ -95,12 +95,13 @@ export class BotAI {
 
     // Bronze : 30% ne retient qu'1 carte, 15% inverse les 2 positions
     // Argent : 15% ne retient qu'1 carte, 8% inverse les 2 positions
-    const forgetSecond =
-      difficulty.name === 'Bronze' ? 0.30 :
-      difficulty.name === 'Argent' ? 0.15 : 0;
-    const swapPositions =
-      difficulty.name === 'Bronze' ? 0.15 :
-      difficulty.name === 'Argent' ? 0.08 : 0;
+    let forgetSecond = 0;
+    if (difficulty.name === 'Bronze') forgetSecond = 0.3;
+    else if (difficulty.name === 'Argent') forgetSecond = 0.15;
+
+    let swapPositions = 0;
+    if (difficulty.name === 'Bronze') swapPositions = 0.15;
+    else if (difficulty.name === 'Argent') swapPositions = 0.08;
 
     if (forgetSecond > 0 && this.random() < forgetSecond) {
       // N'enregistre qu'1 carte
@@ -189,8 +190,8 @@ export class BotAI {
       }
     }
 
-    const confuseChance = difficulty.name === 'Bronze' ? 0.30 : 0.15;
-    const forgetChance = difficulty.name === 'Bronze' ? 0.20 : 0.10;
+    const confuseChance = difficulty.name === 'Bronze' ? 0.3 : 0.15;
+    const forgetChance = difficulty.name === 'Bronze' ? 0.2 : 0.1;
 
     // >= 3 défausses récentes : chance de confondre 2 positions
     if (recentDiscards >= 3 && this.random() < confuseChance) {
@@ -223,18 +224,16 @@ export class BotAI {
       return;
     }
 
-    let forgetChance: number;
+    let forgetChance = 0;
     if (context === 'valet') {
-      forgetChance =
-        difficulty.name === 'Bronze' ? 0.40 :
-        difficulty.name === 'Argent' ? 0.20 :
-        difficulty.name === 'Or' ? 0.05 : 0.0;
+      if (difficulty.name === 'Bronze') forgetChance = 0.4;
+      else if (difficulty.name === 'Argent') forgetChance = 0.2;
+      else if (difficulty.name === 'Or') forgetChance = 0.05;
     } else {
       // spy
-      forgetChance =
-        difficulty.name === 'Bronze' ? 0.25 :
-        difficulty.name === 'Argent' ? 0.10 :
-        difficulty.name === 'Or' ? 0.02 : 0.0;
+      if (difficulty.name === 'Bronze') forgetChance = 0.25;
+      else if (difficulty.name === 'Argent') forgetChance = 0.1;
+      else if (difficulty.name === 'Or') forgetChance = 0.02;
     }
 
     if (forgetChance > 0 && this.random() < forgetChance) {
@@ -281,8 +280,9 @@ export class BotAI {
 
   private static getKnownCardValue(bot: Player, index: number): number | null {
     const memory = this.getBotMemory(bot);
-    if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
-      return memory.mentalMap[index]!.points;
+    const mapped = memory.mentalMap[index];
+    if (index < memory.mentalMap.length && mapped !== null && mapped !== undefined) {
+      return mapped.points;
     }
     if (bot.knownCards[index]) {
       return bot.hand[index].points;
@@ -292,8 +292,9 @@ export class BotAI {
 
   private static getKnownCard(bot: Player, index: number): PlayingCard | null {
     const memory = this.getBotMemory(bot);
-    if (index < memory.mentalMap.length && memory.mentalMap[index] !== null) {
-      return memory.mentalMap[index]!;
+    const mapped = memory.mentalMap[index];
+    if (index < memory.mentalMap.length && mapped !== null && mapped !== undefined) {
+      return mapped;
     }
     if (bot.knownCards[index]) {
       return bot.hand[index];
@@ -477,9 +478,9 @@ export class BotAI {
     const bot = getCurrentPlayer(gameState);
     if (bot.isHuman) return;
 
-    const difficulty = playerMMR !== undefined
-      ? BotDifficulty.fromMMR(playerMMR)
-      : this.getSkillDifficulty(bot.botSkillLevel);
+    const difficulty = playerMMR === undefined
+      ? this.getSkillDifficulty(bot.botSkillLevel)
+      : BotDifficulty.fromMMR(playerMMR);
 
     const memory = this.getBotMemory(bot);
     memory.turnCounter++;
@@ -501,10 +502,10 @@ export class BotAI {
     const phase = this.getBotPhase(bot, gameState);
 
     // Délai de réflexion (max 600ms)
-    const thinkDelay =
-      difficulty.name === 'Bronze' ? 500 :
-      difficulty.name === 'Argent' ? 400 :
-      difficulty.name === 'Or' ? 300 : 200;
+    let thinkDelay = 200;
+    if (difficulty.name === 'Bronze') thinkDelay = 500;
+    else if (difficulty.name === 'Argent') thinkDelay = 400;
+    else if (difficulty.name === 'Or') thinkDelay = 300;
     await this.delay(thinkDelay);
 
     if (this.shouldCallDutch(gameState, bot, difficulty, phase)) {
@@ -709,10 +710,10 @@ export class BotAI {
     }
 
     // Seuil de base par difficulté
-    const baseThreshold =
-      difficulty.name === 'Bronze' ? 7 :
-      difficulty.name === 'Argent' ? 5 :
-      difficulty.name === 'Or' ? 4 : 3;
+    let baseThreshold = 3;
+    if (difficulty.name === 'Bronze') baseThreshold = 7;
+    else if (difficulty.name === 'Argent') baseThreshold = 5;
+    else if (difficulty.name === 'Or') baseThreshold = 4;
 
     if (knownScore > baseThreshold) {
       return false;
@@ -800,7 +801,7 @@ export class BotAI {
       if (spy.cardPoints > knownScore) {
         // Vérifier que l'adversaire n'a pas échangé depuis (il a défaussé sa pioche = main intacte)
         const lastAction = gs.actionHistory.find((e) => e.includes(target.name));
-        if (lastAction && lastAction.includes('défausse sa pioche')) {
+        if (lastAction?.includes('défausse sa pioche')) {
           return true;
         }
       }
@@ -851,9 +852,9 @@ export class BotAI {
 
     // === EXPLORATION : doublon-aware (Or/Platine toujours, Argent 50%, Bronze jamais) ===
     if (phase === BotGamePhase.exploration) {
-      const checksDoublons =
-        difficulty.name === 'Bronze' ? false :
-        difficulty.name === 'Argent' ? this.random() < 0.5 : true;
+      let checksDoublons = true;
+      if (difficulty.name === 'Bronze') checksDoublons = false;
+      else if (difficulty.name === 'Argent') checksDoublons = this.random() < 0.5;
 
       if (checksDoublons) {
         const duplicateIdx = this.findDuplicateInHand(bot, drawn);
@@ -1047,9 +1048,9 @@ export class BotAI {
     if (bot.isHuman) return false;
     if (gameState.discardPile.length === 0) return false;
 
-    const difficulty = playerMMR !== undefined
-      ? BotDifficulty.fromMMR(playerMMR)
-      : this.getSkillDifficulty(bot.botSkillLevel);
+    const difficulty = playerMMR === undefined
+      ? this.getSkillDifficulty(bot.botSkillLevel)
+      : BotDifficulty.fromMMR(playerMMR);
 
     const topDiscard = gameState.discardPile[gameState.discardPile.length - 1];
     const memory = this.getBotMemory(bot);
@@ -1086,18 +1087,18 @@ export class BotAI {
 
       if (knownCard && cardMatches(knownCard, topDiscard)) {
         // Je connais cette carte et elle matche → match immédiat
-        const reactionDelay =
-          difficulty.name === 'Platine' ? 150 :
-          difficulty.name === 'Or' ? 250 :
-          difficulty.name === 'Argent' ? 350 : 400;
+        let reactionDelay = 400;
+        if (difficulty.name === 'Platine') reactionDelay = 150;
+        else if (difficulty.name === 'Or') reactionDelay = 250;
+        else if (difficulty.name === 'Argent') reactionDelay = 350;
         await this.delay(reactionDelay);
 
         // Erreur de position : "c'est celle d'à côté"
         let matchIdx = i;
-        const positionError =
-          difficulty.name === 'Bronze' ? 0.25 :
-          difficulty.name === 'Argent' ? 0.10 :
-          difficulty.name === 'Or' ? 0.02 : 0;
+        let positionError = 0;
+        if (difficulty.name === 'Bronze') positionError = 0.25;
+        else if (difficulty.name === 'Argent') positionError = 0.1;
+        else if (difficulty.name === 'Or') positionError = 0.02;
         if (positionError > 0 && this.random() < positionError) {
           // Décaler de ±1
           const offset = this.random() < 0.5 ? -1 : 1;
@@ -1130,9 +1131,9 @@ export class BotAI {
     const bot = getCurrentPlayer(gameState);
     const card = gameState.specialCardToActivate;
 
-    const difficulty = playerMMR !== undefined
-      ? BotDifficulty.fromMMR(playerMMR)
-      : this.getSkillDifficulty(bot.botSkillLevel);
+    const difficulty = playerMMR === undefined
+      ? this.getSkillDifficulty(bot.botSkillLevel)
+      : BotDifficulty.fromMMR(playerMMR);
 
     const phase = this.getBotPhase(bot, gameState);
 
@@ -1611,12 +1612,12 @@ export class BotAI {
     const memory = this.getBotMemory(bot);
 
     // Format: "Échange : Player1 carte #X ↔ Player2 carte #Y."
-    const match = historyEntry.match(/Échange : (.+) carte #(\d+) ↔ (.+) carte #(\d+)/);
+    const match = /Échange : (.+) carte #(\d+) ↔ (.+) carte #(\d+)/.exec(historyEntry);
     if (!match) return;
 
     const [, name1, cardIdx1Str, name2, cardIdx2Str] = match;
-    const cardIdx1 = parseInt(cardIdx1Str, 10) - 1; // 1-indexed → 0-indexed
-    const cardIdx2 = parseInt(cardIdx2Str, 10) - 1;
+    const cardIdx1 = Number.parseInt(cardIdx1Str, 10) - 1; // 1-indexed → 0-indexed
+    const cardIdx2 = Number.parseInt(cardIdx2Str, 10) - 1;
 
     const player1 = gs.players.find((p) => p.name === name1);
     const player2 = gs.players.find((p) => p.name === name2);

@@ -12,7 +12,7 @@ const authLimiter = rateLimit({
   max: 30,
   message: { success: false, error: 'Trop de tentatives, réessayez dans 15 minutes' },
 });
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailRegex = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
 
 // ── Les routes register/login/forgot-password/reset-password sont supprimées ──
 // L'authentification est désormais gérée côté client par Firebase Auth SDK.
@@ -132,13 +132,13 @@ router.put('/profile', requireAuth, async (req, res) => {
 
   // Créer le document s'il n'existe pas encore (première inscription)
   const existingUser = await firestoreService.getUser(authReq.user!.uid);
-  if (!existingUser) {
+  if (existingUser) {
+    await firestoreService.updateUser(authReq.user!.uid, updates);
+  } else {
     await firestoreService.createUser(authReq.user!.uid, {
       username: updates.username || '',
       displayName: updates.displayName || '',
     });
-  } else {
-    await firestoreService.updateUser(authReq.user!.uid, updates);
   }
 
   const user = await firestoreService.getUser(authReq.user!.uid);

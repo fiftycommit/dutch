@@ -57,7 +57,7 @@ export function createPlayer(
     focused: isHuman ? true : undefined,
     isSpectator: false,
     lastSeenAt: isHuman ? Date.now() : undefined,
-    ready: isHuman ? false : true,
+    ready: !isHuman,
     botBehavior,
     botSkillLevel,
     position,

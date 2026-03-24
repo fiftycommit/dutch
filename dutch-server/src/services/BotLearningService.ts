@@ -1,5 +1,5 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
 import { QLearningService } from './QLearningService';
 import { NeuralNetworkService } from './NeuralNetworkService';
@@ -12,10 +12,10 @@ export class BotLearningService {
   private dataDir: string;
   private qLearning: QLearningService;
   private neuralNet: NeuralNetworkService;
-  private tournament: TournamentService;
-  private genetic: GeneticAlgorithmService;
-  private adaptive: AdaptiveDifficultyService;
-  private leaderboard: LeaderboardService;
+  private readonly tournament: TournamentService;
+  private readonly genetic: GeneticAlgorithmService;
+  private readonly adaptive: AdaptiveDifficultyService;
+  private readonly leaderboard: LeaderboardService;
   private paused: boolean = false;
   private statsCache: { value: BotStats; expiresAt: number } | null = null;
   private readonly statsCacheTtlMs = 15_000;
@@ -33,7 +33,7 @@ export class BotLearningService {
   }
 
   private extractGameFilenameTimestamp(file: string): number {
-    const match = file.match(/_(\d+)\.json$/);
+    const match = /_(\d+)\.json$/.exec(file);
     if (!match) return 0;
     const ts = Number(match[1]);
     return Number.isFinite(ts) ? ts : 0;
@@ -57,10 +57,10 @@ export class BotLearningService {
         try {
           const raw = await fs.readFile(path.join(gamesDir, file), 'utf-8');
           if (raw.includes('"_pending":true') || raw.includes('"_pending": true')) count++;
-        } catch (_) {}
+        } catch {}
       }
       return count;
-    } catch (_) {
+    } catch {
       return 0;
     }
   }
@@ -102,14 +102,14 @@ export class BotLearningService {
           // Réécrire sans le flag _pending
           await fs.writeFile(filepath, JSON.stringify(record, null, 2));
           processed++;
-        } catch (_) { /* skip malformed files */ }
+        } catch { /* skip malformed files */ }
       }
 
       if (processed > 0) {
         console.log(`✅ ${processed} parties en attente traitées`);
         this.invalidateStatsCache();
       }
-    } catch (_) { /* dir may not exist */ }
+    } catch { /* dir may not exist */ }
 
     return processed;
   }
@@ -126,7 +126,7 @@ export class BotLearningService {
         await fs.unlink(path.join(profilesDir, file));
         deletedProfiles++;
       }
-    } catch (_) { /* dir may not exist */ }
+    } catch { /* dir may not exist */ }
 
     // Supprimer les parties enregistrées
     try {
@@ -136,22 +136,22 @@ export class BotLearningService {
         await fs.unlink(path.join(gamesDir, file));
         deletedGames++;
       }
-    } catch (_) { /* dir may not exist */ }
+    } catch { /* dir may not exist */ }
 
     // Supprimer la training series
     try {
       await fs.unlink(path.join(this.dataDir, 'training-series.jsonl'));
-    } catch (_) { /* file may not exist */ }
+    } catch { /* file may not exist */ }
 
     // Supprimer la Q-Table
     try {
       await fs.unlink(path.join(this.dataDir, 'qlearning', 'qtable.json'));
-    } catch (_) { /* file may not exist */ }
+    } catch { /* file may not exist */ }
 
     // Supprimer le réseau de neurones
     try {
       await fs.unlink(path.join(this.dataDir, 'neural', 'network.json'));
-    } catch (_) { /* file may not exist */ }
+    } catch { /* file may not exist */ }
 
     // Réinitialiser les services en mémoire
     this.qLearning = new QLearningService();
@@ -433,7 +433,7 @@ export class BotLearningService {
         .filter(opp => opp.rank === 1) // Le gagnant
         .find(opp => opp.mmr && opp.mmr > profile.mmr + 100); // Significativement meilleur
       
-      if (bestOpponent && bestOpponent.learnedParams) {
+      if (bestOpponent?.learnedParams) {
         // Imiter partiellement les paramètres du meilleur bot
         const imitationRate = 0.15; // 15% d'imitation
         for (const [param, value] of Object.entries(bestOpponent.learnedParams)) {
@@ -449,17 +449,14 @@ export class BotLearningService {
     // Appliquer le gradient descent avec momentum
     for (const [param, gradient] of Object.entries(gradients)) {
       if (typeof params[param] === 'number') {
-        const momentum = 0.9;
-        const previousValue = params[param];
-        
         // Mise à jour avec gradient descent
         params[param] = params[param] - adaptiveLR * gradient;
         
         // Appliquer les contraintes (0-1 pour la plupart des paramètres)
-        if (param !== 'dutchThreshold') {
-          params[param] = Math.max(0, Math.min(1, params[param]));
-        } else {
+        if (param === 'dutchThreshold') {
           params[param] = Math.max(5, Math.min(30, params[param]));
+        } else {
+          params[param] = Math.max(0, Math.min(1, params[param]));
         }
       }
     }
@@ -502,9 +499,9 @@ export class BotLearningService {
     
     // Gradient pour l'agressivité - PLUS AGRESSIF (x2)
     if (record.finalScore > 20) {
-      gradients.aggressiveness = error * 1.0; // Trop agressif si score élevé
+      gradients.aggressiveness = error * 1; // Trop agressif si score élevé
     } else {
-      gradients.aggressiveness = -error * 1.0; // Pas assez agressif si bon score
+      gradients.aggressiveness = -error * 1; // Pas assez agressif si bon score
     }
     
     // Gradient pour la prudence (inverse de l'agressivité)
@@ -604,7 +601,7 @@ export class BotLearningService {
       const profile: BotProfile = JSON.parse(data);
       
       return profile.learnedParameters;
-    } catch (error) {
+    } catch {
       // Si le bot n'existe pas, retourner les paramètres par défaut
       return this.getDefaultParameters(behavior, skillLevel);
     }
@@ -638,7 +635,7 @@ export class BotLearningService {
         ? profiles.reduce((sum, p) => sum + p.winRate, 0) / profiles.length
         : 0;
       
-      const topPerformers = profiles
+      const topPerformers = [...profiles]
         .sort((a, b) => b.mmr - a.mmr)
         .slice(0, 10);
       
@@ -686,7 +683,7 @@ export class BotLearningService {
           }
 
           parsedGames.push(game as BotGameRecord);
-        } catch (_) {
+        } catch {
           // ignorer les fichiers corrompus
         }
       }
@@ -698,7 +695,7 @@ export class BotLearningService {
         return Number.isFinite(start) ? start : 0;
       };
 
-      const recentGames = parsedGames
+      const recentGames = [...parsedGames]
         .sort((a, b) => ts(b) - ts(a))
         .slice(0, 10);
 
@@ -799,7 +796,7 @@ export class BotLearningService {
           if (game.initialDeck && game.turnsBeforeDutch !== undefined) {
             gamesWithShuffle.push(game);
           }
-        } catch (error) {
+        } catch {
           // Ignorer les fichiers corrompus
         }
       }
@@ -866,7 +863,7 @@ export class BotLearningService {
       }
       
       // Parties récentes (10 dernières)
-      const recentGames = gamesWithShuffle
+      const recentGames = [...gamesWithShuffle]
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
         .slice(0, 10)
         .map(g => ({

@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 interface LeaderboardEntry {
   rank: number;
@@ -39,12 +39,12 @@ export class LeaderboardService {
     this.leaderboard = [];
     this.maxEntries = 100; // Top 100
     this.ensureDataDirectory();
-    this.loadLeaderboard();
+    this.loadLeaderboardSync();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -218,13 +218,14 @@ export class LeaderboardService {
   /**
    * Charge le classement
    */
-  private async loadLeaderboard() {
+  private loadLeaderboardSync() {
     try {
+      const fsSync = require('node:fs');
       const filePath = path.join(this.dataDir, 'leaderboard.json');
-      const data = await fs.readFile(filePath, 'utf-8');
+      const data = fsSync.readFileSync(filePath, 'utf-8');
       this.leaderboard = JSON.parse(data);
       console.log(`✅ Leaderboard chargé: ${this.leaderboard.length} bots`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Aucun leaderboard existant');
       this.leaderboard = [];
     }

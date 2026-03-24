@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 interface TournamentParticipant {
   botId: string;
@@ -47,9 +47,9 @@ export class TournamentService {
     this.ensureDataDirectory();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -106,8 +106,7 @@ export class TournamentService {
     // Premier tour : meilleur vs moins bon pour équilibrer
     const firstRound: string[] = [];
     for (let i = 0; i < participants.length / 2; i++) {
-      firstRound.push(participants[i].botId);
-      firstRound.push(participants[participants.length - 1 - i].botId);
+      firstRound.push(participants[i].botId, participants[participants.length - 1 - i].botId);
     }
     bracket.push(firstRound);
 
@@ -297,7 +296,7 @@ export class TournamentService {
       }
 
       console.log(`✅ ${this.activeTournaments.size} tournois chargés`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Aucun tournoi existant');
     }
   }

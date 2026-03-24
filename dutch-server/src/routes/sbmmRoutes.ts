@@ -9,12 +9,12 @@ const sbmmService = new SBMMService();
 router.get('/bot-mix', (req: Request, res: Response) => {
   try {
     const playerId = req.query.playerId as string;
-    const botCount = parseInt(req.query.botCount as string, 10);
+    const botCount = Number.parseInt(req.query.botCount as string, 10);
 
     if (!playerId) {
       return res.status(400).json({ error: 'playerId requis' });
     }
-    if (isNaN(botCount) || botCount < 1 || botCount > 5) {
+    if (Number.isNaN(botCount) || botCount < 1 || botCount > 5) {
       return res.status(400).json({ error: 'botCount doit être entre 1 et 5' });
     }
 

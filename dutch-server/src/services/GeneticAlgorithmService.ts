@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 interface BotGenome {
   botId: string;
@@ -51,12 +51,12 @@ export class GeneticAlgorithmService {
     this.mutationRate = 0.15; // 15% de chance de mutation
     this.eliteSize = 4; // Garder les 4 meilleurs
     this.ensureDataDirectory();
-    this.loadGeneration();
+    this.loadGenerationSync();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -191,7 +191,7 @@ export class GeneticAlgorithmService {
         if (gene === 'dutchThreshold') {
           newValue = Math.max(5, Math.min(25, newValue));
         } else if (gene === 'memoryAccuracy') {
-          newValue = Math.max(0.5, Math.min(1.0, newValue));
+          newValue = Math.max(0.5, Math.min(1, newValue));
         } else {
           newValue = Math.max(0, Math.min(1, newValue));
         }
@@ -282,9 +282,9 @@ export class GeneticAlgorithmService {
   getBestBot(): BotGenome | undefined {
     if (this.population.length === 0) return undefined;
     
-    return this.population.reduce((best, current) => 
+    return this.population.reduce((best, current) =>
       current.fitness > best.fitness ? current : best
-    );
+    , this.population[0]);
   }
 
   /**
@@ -346,33 +346,34 @@ export class GeneticAlgorithmService {
   /**
    * Charge la dernière génération
    */
-  private async loadGeneration() {
+  private loadGenerationSync() {
     try {
-      const files = await fs.readdir(this.dataDir);
-      const genFiles = files.filter(f => f.startsWith('generation_') && f.endsWith('.json'));
-      
+      const fsSync = require('node:fs');
+      const files: string[] = fsSync.readdirSync(this.dataDir);
+      const genFiles = files.filter((f: string) => f.startsWith('generation_') && f.endsWith('.json'));
+
       if (genFiles.length === 0) {
         console.log('ℹ️ Aucune génération existante');
         return;
       }
 
       // Trier pour avoir la dernière génération
-      genFiles.sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+      genFiles.sort((a: string, b: string) => {
+        const numA = Number.parseInt(/\d+/.exec(a)?.[0] || '0');
+        const numB = Number.parseInt(/\d+/.exec(b)?.[0] || '0');
         return numB - numA;
       });
 
       const latestFile = genFiles[0];
       const filePath = path.join(this.dataDir, latestFile);
-      const data = await fs.readFile(filePath, 'utf-8');
+      const data = fsSync.readFileSync(filePath, 'utf-8');
       const generation: Generation = JSON.parse(data);
 
       this.currentGeneration = generation.generationNumber;
       this.population = generation.population;
 
       console.log(`✅ Génération ${this.currentGeneration} chargée (${this.population.length} bots)`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Erreur chargement génération');
     }
   }

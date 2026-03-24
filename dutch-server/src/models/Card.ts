@@ -40,8 +40,8 @@ function calculatePoints(suit: string, value: string): number {
   if (value === 'A') return 1;
 
   // Cartes numériques
-  const numValue = parseInt(value, 10);
-  return isNaN(numValue) ? 0 : numValue;
+  const numValue = Number.parseInt(value, 10);
+  return Number.isNaN(numValue) ? 0 : numValue;
 }
 
 function isSpecialCard(value: string): boolean {
@@ -60,8 +60,7 @@ export function createFullDeck(): PlayingCard[] {
   }
 
   // Ajouter 2 jokers
-  deck.push(createCard('joker', 'JOKER'));
-  deck.push(createCard('joker', 'JOKER'));
+  deck.push(createCard('joker', 'JOKER'), createCard('joker', 'JOKER'));
 
   return deck;
 }

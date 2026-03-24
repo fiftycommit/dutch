@@ -12,7 +12,7 @@ export class BotDifficulty {
   static readonly bronze: BotDifficultyConfig = {
     name: 'Bronze',
     forgetChancePerTurn: 0.18,
-    confusionOnSwap: 0.30,
+    confusionOnSwap: 0.3,
     dutchThreshold: 10,
     reactionSpeed: 0.55,
     matchAccuracy: 0.75,
@@ -41,12 +41,12 @@ export class BotDifficulty {
 
   static readonly platinum: BotDifficultyConfig = {
     name: 'Platine',
-    forgetChancePerTurn: 0.0,
-    confusionOnSwap: 0.0,
+    forgetChancePerTurn: 0,
+    confusionOnSwap: 0,
     dutchThreshold: 1,
-    reactionSpeed: 1.0,
-    matchAccuracy: 1.0,
-    reactionMatchChance: 1.0,
+    reactionSpeed: 1,
+    matchAccuracy: 1,
+    reactionMatchChance: 1,
   };
 
   static fromMMR(mmr: number): BotDifficultyConfig {

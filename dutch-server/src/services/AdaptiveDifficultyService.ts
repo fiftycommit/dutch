@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 interface PlayerStats {
   playerId: string;
@@ -36,12 +36,12 @@ export class AdaptiveDifficultyService {
     this.dataDir = path.join(__dirname, '../../data/bot-learning/adaptive');
     this.playerStats = new Map();
     this.ensureDataDirectory();
-    this.loadPlayerStats();
+    this.loadPlayerStatsSync();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -155,13 +155,13 @@ export class AdaptiveDifficultyService {
         targetPlayerId: playerId,
         baseMMR: botBaseMMR,
         adjustedMMR: botBaseMMR,
-        adjustmentFactor: 1.0,
+        adjustmentFactor: 1,
         reason: 'Aucune statistique disponible',
         timestamp: new Date().toISOString(),
       };
     }
 
-    let adjustmentFactor = 1.0;
+    let adjustmentFactor = 1;
     let reason = '';
 
     // Ajustement selon le niveau cible
@@ -189,7 +189,7 @@ export class AdaptiveDifficultyService {
           adjustmentFactor = 0.95; // -5% MMR
           reason = 'Intermédiaire : bots équilibrés';
         } else {
-          adjustmentFactor = 1.0; // MMR normal
+          adjustmentFactor = 1; // MMR normal
           reason = 'Avancé : bots au niveau';
         }
         break;
@@ -297,20 +297,21 @@ export class AdaptiveDifficultyService {
   /**
    * Charge tous les stats des joueurs
    */
-  private async loadPlayerStats() {
+  private loadPlayerStatsSync() {
     try {
-      const files = await fs.readdir(this.dataDir);
-      const statFiles = files.filter(f => f.endsWith('.json'));
+      const fsSync = require('node:fs');
+      const files: string[] = fsSync.readdirSync(this.dataDir);
+      const statFiles = files.filter((f: string) => f.endsWith('.json'));
 
       for (const file of statFiles) {
         const filePath = path.join(this.dataDir, file);
-        const data = await fs.readFile(filePath, 'utf-8');
+        const data = fsSync.readFileSync(filePath, 'utf-8');
         const stats: PlayerStats = JSON.parse(data);
         this.playerStats.set(stats.playerId, stats);
       }
 
       console.log(`✅ ${this.playerStats.size} joueurs chargés pour adaptation`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Aucune statistique de joueur existante');
     }
   }

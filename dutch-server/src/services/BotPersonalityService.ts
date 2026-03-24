@@ -1,5 +1,5 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 interface Personality {
   id: string;
@@ -40,9 +40,9 @@ export class BotPersonalityService {
     this.initializeDefaultPersonalities();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -493,7 +493,7 @@ export class BotPersonalityService {
       }
       
       console.log(`✅ ${this.personalities.size} personnalités chargées`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Initialisation des personnalités par défaut');
     }
   }

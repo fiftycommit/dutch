@@ -7,19 +7,19 @@ export interface TimerRoomAccess {
 }
 
 export class TimerManager {
-  private timers: Map<string, NodeJS.Timeout> = new Map();
-  private endTimes: Map<string, number> = new Map();
-  private lastBroadcastAt: Map<string, number> = new Map();
-  private pausedRemainingTimes: Map<string, number> = new Map();
+  private readonly timers: Map<string, NodeJS.Timeout> = new Map();
+  private readonly endTimes: Map<string, number> = new Map();
+  private readonly lastBroadcastAt: Map<string, number> = new Map();
+  private readonly pausedRemainingTimes: Map<string, number> = new Map();
   private readonly graceMs = 200;
 
-  constructor(private roomAccess: TimerRoomAccess) { }
+  constructor(private readonly roomAccess: TimerRoomAccess) { }
 
   startReactionTimer(roomCode: string, durationMs: number) {
     this.clearTimer(roomCode);
 
     const room = this.roomAccess.getRoom(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     const startTime = Date.now();
     const endTime = startTime + durationMs;

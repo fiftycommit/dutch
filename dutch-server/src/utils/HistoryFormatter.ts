@@ -1,4 +1,4 @@
-import { PlayingCard, cardMatches } from '../models/Card';
+import { PlayingCard } from '../models/Card';
 
 export class HistoryFormatter {
     static formatStartingPlayer(playerName: string): string {

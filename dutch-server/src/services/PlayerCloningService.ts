@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { BotGameRecord, BotAction } from '../models/BotLearning';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 
 interface PlayerPattern {
   avgDecisionTime: number;
@@ -24,7 +24,7 @@ interface ClonedPlayer {
 }
 
 export class PlayerCloningService {
-  private dataDir: string;
+  private readonly dataDir: string;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning/clones');
@@ -33,7 +33,7 @@ export class PlayerCloningService {
 
   private async ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -180,7 +180,7 @@ export class PlayerCloningService {
       const filepath = path.join(this.dataDir, `${clonedBotId}.json`);
       const data = await fs.readFile(filepath, 'utf-8');
       return JSON.parse(data);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -200,7 +200,7 @@ export class PlayerCloningService {
       }
 
       return clones.sort((a, b) => b.accuracy - a.accuracy);
-    } catch (error) {
+    } catch {
       return [];
     }
   }

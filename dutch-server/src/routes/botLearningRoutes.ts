@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { BotLearningService } from '../services/BotLearningService';
 import { PlayerCloningService } from '../services/PlayerCloningService';
 import { BotPersonalityService } from '../services/BotPersonalityService';
@@ -40,7 +40,7 @@ router.post('/record', async (req: Request, res: Response) => {
  */
 router.get('/top-bots', async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = Number.parseInt(req.query.limit as string) || 10;
     const behavior = req.query.behavior as string | undefined;
     const skillLevel = req.query.skillLevel as string | undefined;
     
@@ -244,12 +244,12 @@ router.post('/training-series', async (req: Request, res: Response) => {
  */
 router.get('/training-series', async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 200, 1000);
+    const limit = Math.min(Number.parseInt(req.query.limit as string) || 200, 1000);
 
     let content = '';
     try {
       content = await fs.readFile(trainingSeriesPath, 'utf-8');
-    } catch (_) {
+    } catch {
       return res.json([]);
     }
 
@@ -260,7 +260,7 @@ router.get('/training-series', async (req: Request, res: Response) => {
       .map(line => {
         try {
           return JSON.parse(line);
-        } catch (_) {
+        } catch {
           return null;
         }
       })
@@ -335,9 +335,9 @@ router.get('/personality/difficulty/:level', async (req: Request, res: Response)
 router.get('/team/:count', async (req: Request, res: Response) => {
   try {
     const countParam = Array.isArray(req.params.count) ? req.params.count[0] : req.params.count;
-    const count = parseInt(countParam);
+    const count = Number.parseInt(countParam);
     
-    if (isNaN(count) || count < 1 || count > 10) {
+    if (Number.isNaN(count) || count < 1 || count > 10) {
       return res.status(400).json({ error: 'Nombre invalide (1-10)' });
     }
     
@@ -377,7 +377,7 @@ router.post('/personality', async (req: Request, res: Response) => {
  */
 router.get('/leaderboard', async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 100;
+    const limit = Number.parseInt(req.query.limit as string) || 100;
     const leaderboard = botLearningService.getLeaderboardService().getTopBots(limit);
     res.json(leaderboard);
   } catch (error) {

@@ -113,7 +113,7 @@ export function addToHistory(gameState: GameState, action: string): void {
 }
 
 export function nextPlayer(gameState: GameState): void {
-  for (let i = 0; i < gameState.players.length; i++) {
+  for (const _ of gameState.players) {
     gameState.currentPlayerIndex =
       (gameState.currentPlayerIndex + 1) % gameState.players.length;
 

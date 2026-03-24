@@ -26,7 +26,7 @@ describe('NeuralNetworkService', () => {
       const predictions = neuralNet.predict(input);
       
       expect(predictions).toHaveLength(8);
-      expect(predictions.every(p => !isNaN(p))).toBe(true);
+      expect(predictions.every(p => !Number.isNaN(p))).toBe(true);
     });
   });
 

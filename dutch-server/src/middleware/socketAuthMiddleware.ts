@@ -1,6 +1,6 @@
 import { Socket } from 'socket.io';
 import { auth } from '../services/FirebaseAdmin';
-import { firestoreService, FirestoreUser } from '../services/FirestoreService';
+import { firestoreService } from '../services/FirestoreService';
 
 // Map uid -> Set<socketId> pour tracker les users en ligne
 export const onlineUsers = new Map<string, Set<string>>();
@@ -59,6 +59,7 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
       onlineUsers.set(decoded.uid, new Set());
     }
     onlineUsers.get(decoded.uid)!.add(socket.id);
+    userFocused.set(decoded.uid, true);
 
     next();
   } catch {

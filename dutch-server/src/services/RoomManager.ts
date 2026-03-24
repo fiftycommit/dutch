@@ -1,6 +1,6 @@
 import { Server } from 'socket.io';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { GameLogic } from './GameLogic';
 import { BotAI } from './BotAI';
 import {
@@ -37,19 +37,19 @@ export interface RoomManagerOptions {
 }
 
 export class RoomManager {
-  private rooms = new Map<string, Room>();
-  private timerManager: TimerManager;
+  private readonly rooms = new Map<string, Room>();
+  private readonly timerManager: TimerManager;
   private actionTimers = new Map<string, NodeJS.Timeout>();
   private presenceTimers = new Map<string, NodeJS.Timeout>();
-  private presenceChecks = new Map<string, { playerId: string; deadlineAt: number }>();
+  private readonly presenceChecks = new Map<string, { playerId: string; deadlineAt: number }>();
   private cleanupTimer: NodeJS.Timeout | null = null;
-  private turnTimeoutMs: number;
-  private specialPowerTimeoutMs: number;
-  private presenceGraceMs: number;
-  private roomTtlMs: number;
-  private cleanupIntervalMs: number;
-  private stalePlayerMs: number;
-  private now: () => number;
+  private readonly turnTimeoutMs: number;
+  private readonly specialPowerTimeoutMs: number;
+  private readonly presenceGraceMs: number;
+  private readonly roomTtlMs: number;
+  private readonly cleanupIntervalMs: number;
+  private readonly stalePlayerMs: number;
+  private readonly now: () => number;
 
   private botCastingCache:
     | Array<{
@@ -271,7 +271,7 @@ export class RoomManager {
 
       // Clear any pending presence check for this player
       const pendingCheck = this.presenceChecks.get(roomCode);
-      if (pendingCheck && pendingCheck.playerId === previousId) {
+      if (pendingCheck?.playerId === previousId) {
         this.clearPresenceCheck(roomCode, previousId);
       }
 
@@ -289,7 +289,7 @@ export class RoomManager {
 
       this.ensureHost(room);
       this.touchRoom(room);
-      return { room, player: existing, previousSocketId: previousId !== socketId ? previousId : undefined };
+      return { room, player: existing, previousSocketId: previousId === socketId ? undefined : previousId };
     }
 
     // For new players, ensure host is valid before adding them
@@ -508,7 +508,7 @@ export class RoomManager {
    */
   markPlayerReady(roomCode: string, playerId: string): boolean {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return false;
+    if (!room?.gameState) return false;
 
     const gameState = room.gameState;
 
@@ -537,11 +537,11 @@ export class RoomManager {
       // Si c'est le tour d'un bot, lancer son tour
       // Sinon, démarrer le timer pour le joueur humain
       const currentPlayer = getCurrentPlayer(gameState);
-      if (!currentPlayer.isHuman) {
+      if (currentPlayer.isHuman) {
+        this.startTurnTimer(roomCode);
+      } else {
         // Lancer le tour du bot après un court délai
         setTimeout(() => this.checkAndPlayBotTurn(roomCode), 500);
-      } else {
-        this.startTurnTimer(roomCode);
       }
     }
 
@@ -565,7 +565,7 @@ export class RoomManager {
     additionalData: any = {}
   ) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     this.touchRoom(room);
 
     room.players.forEach((player) => {
@@ -595,7 +595,7 @@ export class RoomManager {
 
   pauseGame(roomCode: string, pausedByPlayerId: string, pausedByName: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     if (room.isPaused) return;
 
     room.isPaused = true;
@@ -647,7 +647,7 @@ export class RoomManager {
 
     // On stocke les 3 handles dans un seul pour nettoyer facilement
     // On les encapsule dans un handle composite via clearTimeout multiple
-    room.pauseTimeoutHandle = kick as ReturnType<typeof setTimeout>;
+    room.pauseTimeoutHandle = kick;
     // Store warn handles on the kick handle object (hack simple)
     (kick as any)._warn1 = warn1;
     (kick as any)._warn2 = warn2;
@@ -661,7 +661,7 @@ export class RoomManager {
 
   resumeGame(roomCode: string, resumedByPlayerId: string, resumedByName: string, forced = false) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     if (!room.isPaused) return;
 
     // Seul le joueur qui a mis pause peut lever la pause (sauf si forced par le système)
@@ -697,7 +697,7 @@ export class RoomManager {
 
     this.clearReactionTimer(roomCode);
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     room.gameState.lastSpiedCard = null;
     room.gameState.reactionStartTime = null;
@@ -721,7 +721,7 @@ export class RoomManager {
    */
   async processPendingMatchPowers(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     const pending = room.gameState.pendingMatchPowers;
     if (pending.length === 0) {
@@ -789,7 +789,7 @@ export class RoomManager {
    */
   activateNextPendingPower(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     const pending = room.gameState.pendingMatchPowers;
     if (pending.length === 0) {
@@ -858,7 +858,7 @@ export class RoomManager {
 
   async checkAndPlayBotTurn(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     const gameState = room.gameState;
 
     while (true) {
@@ -903,7 +903,7 @@ export class RoomManager {
 
   handleGameEnd(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     // Calculer les scores de carte de cette manche pour chaque joueur
     const playersWithScores = room.gameState.players.map((player) => ({
@@ -975,7 +975,7 @@ export class RoomManager {
       };
 
       let baseRP = 0;
-      const playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
+      const playerMultiplier = 1 + (totalPlayers - 2) * 0.2;
 
       if (rank === 1) {
         baseRP = points.win;
@@ -1294,9 +1294,7 @@ export class RoomManager {
 
     // Ajouter le clientId à la liste des bannis
     if (target.clientId) {
-      if (!room.bannedClientIds) {
-        room.bannedClientIds = new Set();
-      }
+      room.bannedClientIds ??= new Set();
       room.bannedClientIds.add(target.clientId);
     }
 
@@ -1329,9 +1327,7 @@ export class RoomManager {
     if (!room.gameState) return;
 
     // Initialiser si nécessaire
-    if (!room.cumulativeScores) {
-      room.cumulativeScores = new Map<string, number>();
-    }
+    room.cumulativeScores ??= new Map<string, number>();
 
     // Ajouter les scores de cette manche
     for (const player of room.gameState.players) {
@@ -1353,9 +1349,7 @@ export class RoomManager {
       rpChange: number;
     }>
   ): void {
-    if (!room.cumulativeScores) {
-      room.cumulativeScores = new Map<string, number>();
-    }
+    room.cumulativeScores ??= new Map<string, number>();
 
     for (const score of roundScores) {
       const scoreKey = score.clientId || score.playerId;
@@ -1406,7 +1400,7 @@ export class RoomManager {
 
   setReady(roomCode: string, socketId: string, ready: boolean): boolean {
     const room = this.rooms.get(roomCode);
-    if (!room || room.status !== RoomStatus.waiting) return false;
+    if (room?.status !== RoomStatus.waiting) return false;
     const player = room.players.find((p) => p.id === socketId);
     if (!player || !player.isHuman) return false;
 
@@ -1463,7 +1457,7 @@ export class RoomManager {
     this.touchRoom(room);
 
     const pending = this.presenceChecks.get(roomCode);
-    if (pending && pending.playerId === playerId) {
+    if (pending?.playerId === playerId) {
       this.clearPresenceCheck(roomCode, playerId);
     }
     // Note: Le timer n'est plus réinitialisé après chaque action.
@@ -1501,10 +1495,10 @@ export class RoomManager {
       room.gameState.turnTimeoutMs = extensionMs;
 
       const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
-      if (currentPlayer && currentPlayer.id === socketId) {
+      if (currentPlayer?.id === socketId) {
         const timer = setTimeout(() => {
           const currentRoom = this.rooms.get(roomCode);
-          if (!currentRoom || !currentRoom.gameState) return;
+          if (!currentRoom?.gameState) return;
           const stillCurrent = currentRoom.gameState.players[currentRoom.gameState.currentPlayerIndex]?.id === socketId;
           if (!stillCurrent) return;
           this.actionTimers.delete(roomCode);
@@ -1628,7 +1622,7 @@ export class RoomManager {
 
   checkGameEndCondition(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     if (room.gameState.phase === GamePhase.ended) return;
     if (room.gameState.phase === GamePhase.setup) return; // Don't end during setup
 
@@ -1695,7 +1689,7 @@ export class RoomManager {
 
   startTurnTimer(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     if (room.gameState.phase !== GamePhase.playing && room.gameState.phase !== GamePhase.specialPower) return;
     if (this.presenceChecks.has(roomCode)) return;
 
@@ -1722,7 +1716,7 @@ export class RoomManager {
 
     const timer = setTimeout(() => {
       const currentRoom = this.rooms.get(roomCode);
-      if (!currentRoom || !currentRoom.gameState) return;
+      if (!currentRoom?.gameState) return;
       const currentGameState = currentRoom.gameState;
       const stillCurrent = getCurrentPlayer(currentGameState).id === playerId;
       if (!stillCurrent) return;
@@ -1807,7 +1801,7 @@ export class RoomManager {
 
     const timer = setTimeout(() => {
       const current = this.presenceChecks.get(roomCode);
-      if (!current || current.playerId !== playerId) return;
+      if (current?.playerId !== playerId) return;
       this.markSpectator(roomCode, playerId, 'Inactif');
     }, deadlineMs);
 
@@ -1816,7 +1810,7 @@ export class RoomManager {
 
   private clearPresenceCheck(roomCode: string, playerId: string) {
     const current = this.presenceChecks.get(roomCode);
-    if (current && current.playerId === playerId) {
+    if (current?.playerId === playerId) {
       this.presenceChecks.delete(roomCode);
     }
 
@@ -1938,7 +1932,7 @@ export class RoomManager {
 
   private forceEndTurn(roomCode: string, reason: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
     const gameState = room.gameState;
 
     if (gameState.phase === GamePhase.specialPower) {
@@ -2123,19 +2117,19 @@ export class RoomManager {
         return now - lastSeen <= this.stalePlayerMs;
       });
 
-      if (!anyConnected) {
-        // No short inactivity auto-delete: keep room available until TTL/admin action.
-        if (!room.emptyAt) {
-          room.emptyAt = now;
-        }
+      if (anyConnected) {
+        // Activity detected, clear grace period
+        room.emptyAt = undefined;
 
         if (now >= room.expiresAt) {
           this.removeRoom(room.id);
           continue;
         }
       } else {
-        // Activity detected, clear grace period
-        room.emptyAt = undefined;
+        // No short inactivity auto-delete: keep room available until TTL/admin action.
+        if (!room.emptyAt) {
+          room.emptyAt = now;
+        }
 
         if (now >= room.expiresAt) {
           this.removeRoom(room.id);
@@ -2199,7 +2193,7 @@ export class RoomManager {
     // Vérifier que la room est en cours de fermeture ou que l'hôte actuel n'est plus connecté
     const currentHost = room.players.find((p) => p.id === room.hostPlayerId);
     const isClosing = room.status === RoomStatus.closing;
-    const hostDisconnected = !currentHost || !currentHost.connected;
+    const hostDisconnected = !currentHost?.connected;
 
     if (!isClosing && !hostDisconnected) return false;
 
@@ -2307,7 +2301,7 @@ export class RoomManager {
    */
   setGameMode(roomCode: string, socketId: string, mode: number): boolean {
     const room = this.rooms.get(roomCode);
-    if (!room || room.status !== RoomStatus.waiting) return false;
+    if (room?.status !== RoomStatus.waiting) return false;
     if (room.hostPlayerId !== socketId) return false;
 
     room.gameMode = mode as GameMode;
@@ -2324,7 +2318,7 @@ export class RoomManager {
     settings: { botDifficulty?: number; luckDifficulty?: number }
   ): boolean {
     const room = this.rooms.get(roomCode);
-    if (!room || room.status !== RoomStatus.waiting) return false;
+    if (room?.status !== RoomStatus.waiting) return false;
     if (room.hostPlayerId !== socketId) return false;
 
     // Mettre à jour les paramètres
@@ -2350,7 +2344,7 @@ export class RoomManager {
    */
   sendFullStateToPlayer(roomCode: string, playerId: string): void {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameState) return;
+    if (!room?.gameState) return;
 
     const personalizedState = this.getPersonalizedState(
       room.gameState,
@@ -2586,21 +2580,14 @@ export class RoomManager {
     if (!picked) return null;
 
     // Convert behavior/skillLevel strings en enums serveur
-    const behavior =
-      picked.behavior === 'fast'
-        ? BotBehavior.fast
-        : picked.behavior === 'aggressive'
-          ? BotBehavior.aggressive
-          : BotBehavior.balanced;
+    let behavior = BotBehavior.balanced;
+    if (picked.behavior === 'fast') behavior = BotBehavior.fast;
+    else if (picked.behavior === 'aggressive') behavior = BotBehavior.aggressive;
 
-    const skillLevel =
-      picked.skillLevel === 'platinum'
-        ? BotSkillLevel.platinum
-        : picked.skillLevel === 'gold'
-          ? BotSkillLevel.gold
-          : picked.skillLevel === 'silver'
-            ? BotSkillLevel.silver
-            : BotSkillLevel.bronze;
+    let skillLevel = BotSkillLevel.bronze;
+    if (picked.skillLevel === 'platinum') skillLevel = BotSkillLevel.platinum;
+    else if (picked.skillLevel === 'gold') skillLevel = BotSkillLevel.gold;
+    else if (picked.skillLevel === 'silver') skillLevel = BotSkillLevel.silver;
 
     // Si le profil n'a pas de skillLevel, on retombe sur celui attendu par la difficulté
     const resolvedSkillLevel = picked.skillLevel ? skillLevel : desiredSkill;

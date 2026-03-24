@@ -10,7 +10,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const currentPlayer = getCurrentPlayer(room.gameState);
       if (currentPlayer.id !== socket.id) return;
@@ -29,7 +29,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const currentPlayer = getCurrentPlayer(room.gameState);
       if (currentPlayer.id !== socket.id) return;
@@ -73,7 +73,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) {
+      if (!room?.gameState) {
         console.log(`[DISCARD] BLOCKED: Room not found or no gameState`);
         return;
       }
@@ -129,7 +129,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const currentPlayer = getCurrentPlayer(room.gameState);
       if (currentPlayer.id !== socket.id) return;
@@ -150,7 +150,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const player = room.gameState.players.find(
         (p: Player) => p.id === socket.id
@@ -181,7 +181,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         return;
       }
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       if (room.gameState.phase !== GamePhase.reaction) return;
 
@@ -212,7 +212,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const currentPlayer = getCurrentPlayer(room.gameState);
       if (currentPlayer.id !== socket.id) return;
@@ -228,7 +228,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
       const isMatchPower = room.gameState.specialPowerPlayerId != null;
@@ -262,8 +262,8 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           roomCode: data.roomCode,
           card: result.spiedCard,
           targetPlayerName: specialCard.value === '7' ? 'vous' :
-            (data.targetPlayerIndex !== undefined ?
-              room.gameState.players[data.targetPlayerIndex]?.name : 'Anonyme')
+            (data.targetPlayerIndex === undefined ?
+              'Anonyme' : room.gameState.players[data.targetPlayerIndex]?.name)
         });
 
         // Notification au joueur espionné (pouvoir 10 uniquement)
@@ -285,7 +285,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         const io = roomManager.getIO();
         for (const affected of result.affectedPlayers) {
           const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
-          if (affectedPlayer && affectedPlayer.isHuman) {
+          if (affectedPlayer?.isHuman) {
             io.to(affected.playerId).emit('special_power:swap_notification', {
               byPlayerName: currentPlayer.name,
               cardIndex: affected.cardIndex,
@@ -301,7 +301,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       if (result.shuffledPlayer) {
         const io = roomManager.getIO();
         const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer!.playerId);
-        if (shuffledPlayer && shuffledPlayer.isHuman) {
+        if (shuffledPlayer?.isHuman) {
           io.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
             byPlayerName: currentPlayer.name,
             roomCode: data.roomCode,
@@ -353,7 +353,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
       const isMatchPower = room.gameState.specialPowerPlayerId != null;
@@ -448,7 +448,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const room = roomManager.getRoom(data.roomCode);
-      if (!room || !room.gameState) return;
+      if (!room?.gameState) return;
 
       const player = room.players.find(p => p.id === socket.id);
       if (!player) return;

@@ -1,4 +1,4 @@
-import { firestoreService, FirestoreUser } from './FirestoreService';
+import { firestoreService } from './FirestoreService';
 import { PublicUser } from '../models/User';
 
 export interface FriendInfo {

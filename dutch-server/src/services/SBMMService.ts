@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // ============================================================
 // INTERFACES
@@ -61,9 +61,9 @@ interface AllBotStats {
 // ============================================================
 
 export class SBMMService {
-  private dataDir: string;
-  private profilesDir: string;
-  private botStatsPath: string;
+  private readonly dataDir: string;
+  private readonly profilesDir: string;
+  private readonly botStatsPath: string;
 
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/sbmm');
@@ -135,17 +135,17 @@ export class SBMMService {
     if (cursor < 0.25) return 'bronze';
     if (cursor < 0.35) {
       // Transition Bronze → Argent
-      return Math.random() < (cursor - 0.25) / 0.10 ? 'silver' : 'bronze';
+      return Math.random() < (cursor - 0.25) / 0.1 ? 'silver' : 'bronze';
     }
     if (cursor < 0.55) return 'silver';
     if (cursor < 0.65) {
       // Transition Argent → Or
-      return Math.random() < (cursor - 0.55) / 0.10 ? 'gold' : 'silver';
+      return Math.random() < (cursor - 0.55) / 0.1 ? 'gold' : 'silver';
     }
-    if (cursor < 0.80) return 'gold';
+    if (cursor < 0.8) return 'gold';
     if (cursor < 0.88) {
       // Transition Or → Platine
-      return Math.random() < (cursor - 0.80) / 0.08 ? 'platinum' : 'gold';
+      return Math.random() < (cursor - 0.8) / 0.08 ? 'platinum' : 'gold';
     }
     return 'platinum';
   }
@@ -284,18 +284,18 @@ export class SBMMService {
 
     if (recentWinRate > 0.55) {
       // Trop facile → monter
-      return Math.min(1.0, baseCursor + 0.05);
+      return Math.min(1, baseCursor + 0.05);
     }
     if (recentWinRate < 0.15) {
       // Trop dur → descendre
-      return Math.max(0.0, baseCursor - 0.08);
+      return Math.max(0, baseCursor - 0.08);
     }
 
     // Rang moyen : si presque toujours dernier, descendre
     const avgRank = recent.reduce((s, r) => s + r.rank, 0) / recent.length;
     const avgTotal = recent.reduce((s, r) => s + r.totalPlayers, 0) / recent.length;
     if (avgTotal > 0 && avgRank > avgTotal * 0.8) {
-      return Math.max(0.0, baseCursor - 0.05);
+      return Math.max(0, baseCursor - 0.05);
     }
 
     return baseCursor;

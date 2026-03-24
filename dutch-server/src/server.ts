@@ -1,8 +1,8 @@
 import express from 'express';
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import path from 'path';
+import path from 'node:path';
 import { RoomManager } from './services/RoomManager';
 import { setupConnectionHandler } from './handlers/connectionHandler';
 import { setupRoomHandler } from './handlers/roomHandler';
@@ -14,11 +14,10 @@ import botLearningRoutes from './routes/botLearningRoutes';
 import playerLearningRoutes from './routes/playerLearningRoutes';
 import sbmmRoutes from './routes/sbmmRoutes';
 import authRoutes from './routes/authRoutes';
-import friendsRoutes from './routes/friendsRoutes';
+import friendsRoutes, { setFriendsIo } from './routes/friendsRoutes';
 import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
-import { setFriendsIo } from './routes/friendsRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers, userFocused } from './middleware/socketAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
@@ -158,7 +157,7 @@ export function startServer() {
       const ip = socket.handshake.address;
       await SecurityService.checkConnectionLimit(ip);
       next();
-    } catch (e) {
+    } catch {
       next(new Error('Rate limit exceeded'));
     }
   });

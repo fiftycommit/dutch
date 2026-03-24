@@ -42,7 +42,7 @@ router.get('/stats', async (_req, res) => {
                 recentUsers: 0, // TODO: filtre par date si nécessaire
             },
         });
-    } catch (e) {
+    } catch {
         res.status(500).json({ success: false, error: 'Erreur serveur' });
     }
 });
@@ -54,7 +54,7 @@ router.get('/users', async (req, res) => {
     try {
         const { users } = await firestoreService.getAllUsers({
             search: req.query.search as string,
-            limit: parseInt(req.query.limit as string) || 50,
+            limit: Number.parseInt(req.query.limit as string) || 50,
         });
 
         res.json({
@@ -70,7 +70,7 @@ router.get('/users', async (req, res) => {
                 isBanned: u.isBanned,
             })),
         });
-    } catch (e) {
+    } catch {
         res.status(500).json({ success: false, error: 'Erreur serveur' });
     }
 });

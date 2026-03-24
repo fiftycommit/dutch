@@ -1,5 +1,5 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { BotGameRecord, BotAction } from '../models/BotLearning';
 
 interface NetworkLayer {
@@ -27,15 +27,15 @@ export class NeuralNetworkService {
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning/neural');
     this.ensureDataDirectory();
-    
+
     // Architecture du réseau: 15 inputs -> 32 -> 16 -> 8 outputs
     this.network = this.createNetwork(15, [32, 16], 8);
-    this.loadNetwork();
+    this.loadNetworkSync();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      const fsSync = require('fs');
+      const fsSync = require('node:fs');
       if (!fsSync.existsSync(this.dataDir)) {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -147,7 +147,6 @@ export class NeuralNetworkService {
     const deltas: number[][] = [];
     
     // Calculer le delta de la couche de sortie
-    const outputLayer = this.network.layers.length - 1;
     const outputDelta: number[] = [];
     for (let i = 0; i < activations[activations.length - 1].length; i++) {
       outputDelta.push(activations[activations.length - 1][i] - target[i]);
@@ -331,13 +330,14 @@ export class NeuralNetworkService {
   /**
    * Charge le réseau depuis le disque
    */
-  private async loadNetwork() {
+  private loadNetworkSync() {
     try {
+      const fsSync = require('node:fs');
       const filepath = path.join(this.dataDir, 'network.json');
-      const data = await fs.readFile(filepath, 'utf-8');
+      const data = fsSync.readFileSync(filepath, 'utf-8');
       this.network = JSON.parse(data);
       console.log(`✅ Réseau de neurones chargé`);
-    } catch (error) {
+    } catch {
       console.log('ℹ️ Nouveau réseau de neurones créé');
     }
   }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { firestore } from '../services/FirebaseAdmin';
 import { PushNotificationService } from '../services/PushNotificationService';
@@ -61,7 +61,7 @@ router.get('/:friendId/key', requireAuth, async (req, res) => {
     ]);
 
     // chatId déterministe (même convention que le client)
-    const sorted = [myId, friendId].sort();
+    const sorted = [myId, friendId].sort((a, b) => a.localeCompare(b));
     const chatId = `${sorted[0]}_${sorted[1]}`;
 
     const key = deriveKey(mySecret, friendSecret, chatId);

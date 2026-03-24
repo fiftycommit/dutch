@@ -1,6 +1,5 @@
 import { rateLimit } from 'express-rate-limit';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { Socket } from 'socket.io';
 import type { Request } from 'express';
 
 export class SecurityService {
@@ -20,7 +19,7 @@ export class SecurityService {
     // 1. Rate Limiting pour les requêtes HTTP (Express)
     // Limite: 500 requêtes par 15 minutes par IP (environ 33 req/min)
     // Protection basique contre le brute-force HTTP
-    static apiLimiter = rateLimit({
+    public static readonly apiLimiter = rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 500,
         standardHeaders: true,
@@ -31,7 +30,7 @@ export class SecurityService {
 
     // Rate limiting plus permissif pour les records de learning
     // (les fins de parties + trainer peuvent générer des bursts légitimes).
-    static botLearningLimiter = rateLimit({
+    public static readonly botLearningLimiter = rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 6000,
         standardHeaders: true,

@@ -15,7 +15,7 @@ interface PublicRoom {
 }
 
 class PublicRoomService {
-  private publicRooms: Map<string, PublicRoom> = new Map();
+  private readonly publicRooms: Map<string, PublicRoom> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {

@@ -1,4 +1,4 @@
-import tls from 'tls';
+import tls from 'node:tls';
 
 interface SmtpConfig {
   host: string;
@@ -10,7 +10,7 @@ interface SmtpConfig {
 }
 
 function sanitizeHeaderValue(value: string): string {
-  return value.replace(/[\r\n]/g, ' ').trim();
+  return value.replaceAll(/[\r\n]/g, ' ').trim();
 }
 
 function encodeBase64(value: string): string {

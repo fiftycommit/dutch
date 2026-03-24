@@ -25,9 +25,9 @@ router.post('/upload', async (req: Request, res: Response) => {
 router.get('/profile', async (req: Request, res: Response) => {
   try {
     const clientId = req.query.clientId as string;
-    const slotId = parseInt(req.query.slotId as string);
+    const slotId = Number.parseInt(req.query.slotId as string);
 
-    if (!clientId || isNaN(slotId)) {
+    if (!clientId || Number.isNaN(slotId)) {
       return res.status(400).json({ error: 'clientId et slotId requis' });
     }
 

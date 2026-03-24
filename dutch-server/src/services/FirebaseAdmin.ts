@@ -28,8 +28,8 @@ function initFirebase(): void {
     }
 
     // 2. Fichier local (Dev)
-    const path = require('path');
-    const fs = require('fs');
+    const path = require('node:path');
+    const fs = require('node:fs');
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
         || path.join(process.cwd(), 'data/firebase-service-account.json');
 

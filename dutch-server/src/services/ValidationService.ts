@@ -1,16 +1,16 @@
 export class ValidationService {
   private static readonly USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,20}$/;
   private static readonly ROOM_CODE_REGEX = /^[A-Z0-9]{4,8}$/;
-  private static readonly EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  private static readonly EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
 
   static sanitizePlayerName(name: unknown): string {
     if (typeof name !== 'string') return 'Joueur';
-    return name.replace(/<[^>]*>/g, '').trim().slice(0, 24) || 'Joueur';
+    return name.replaceAll(/<[^>]{0,500}>/g, '').trim().slice(0, 24) || 'Joueur';
   }
 
   static sanitizeChatMessage(msg: unknown): string {
     if (typeof msg !== 'string') return '';
-    return msg.replace(/<[^>]*>/g, '').trim().slice(0, 200);
+    return msg.replaceAll(/<[^>]{0,500}>/g, '').trim().slice(0, 200);
   }
 
   static isValidRoomCode(code: unknown): code is string {
@@ -33,7 +33,7 @@ export class ValidationService {
 
   static sanitizeDisplayName(name: unknown): string {
     if (typeof name !== 'string') return 'Joueur';
-    return name.replace(/<[^>]*>/g, '').trim().slice(0, 24) || 'Joueur';
+    return name.replaceAll(/<[^>]{0,500}>/g, '').trim().slice(0, 24) || 'Joueur';
   }
 
   static isValidEmail(email: unknown): email is string {

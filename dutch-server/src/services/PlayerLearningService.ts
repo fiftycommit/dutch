@@ -1,5 +1,6 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
+import * as path from 'node:path';
 import {
   PlayerLearningUploadPayload,
   PlayerProfileSnapshot,
@@ -14,11 +15,11 @@ export class PlayerLearningService {
     this.ensureDataDirectory();
   }
 
-  private async ensureDataDirectory() {
+  private ensureDataDirectory() {
     try {
-      await fs.mkdir(this.dataDir, { recursive: true });
-      await fs.mkdir(path.join(this.dataDir, 'profiles'), { recursive: true });
-      await fs.mkdir(path.join(this.dataDir, 'history'), { recursive: true });
+      fsSync.mkdirSync(this.dataDir, { recursive: true });
+      fsSync.mkdirSync(path.join(this.dataDir, 'profiles'), { recursive: true });
+      fsSync.mkdirSync(path.join(this.dataDir, 'history'), { recursive: true });
     } catch (error) {
       console.error('❌ Erreur création répertoire player-learning:', error);
     }
