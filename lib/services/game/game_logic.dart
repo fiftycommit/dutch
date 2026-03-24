@@ -700,17 +700,21 @@ class GameLogic {
       gameState.phase = GamePhase.specialPower;
       gameState.isWaitingForSpecialPower = true;
       gameState.specialCardToActivate = card;
-      gameState.specialPowerPlayerId = null; // currentPlayer par défaut
+      gameState.specialPowerPlayerId = null;
       gameState.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
       gameState.turnStartTime = DateTime.now().millisecondsSinceEpoch;
       gameState.turnTimeoutMs = 60000; // 1 minute pour utiliser le pouvoir
     }
   }
 
-  /// Ajoute un pouvoir en attente suite à un match pendant la phase de réaction
+  /// Ajoute un pouvoir en attente suite à un match pendant la phase de réaction.
+  /// Tous les pouvoirs (7, 10, V, JOKER) sont mis en queue.
+  /// La résolution dans game_provider sépare passifs (7, 10) et actifs (V, JOKER) :
+  /// les passifs passent en premier sans loterie, les actifs passent ensuite
+  /// avec loterie si ≥2.
   static void _addPendingMatchPower(
       GameState gameState, Player player, PlayingCard card) {
-    const powerCards = ['7', '10', 'V', 'JOKER'];
+    final powerCards = ['7', '10', 'V', 'JOKER'];
     if (powerCards.contains(card.value)) {
       gameState.pendingMatchPowers.add(PendingMatchPower(
         playerId: player.id,

@@ -733,22 +733,44 @@ export class RoomManager {
       return;
     }
 
-    // Un seul pouvoir en attente → pas besoin de loterie, activer directement
-    if (pending.length === 1) {
-      pending[0].drawNumber = 1;
+    // Séparer les pouvoirs passifs (7, 10) des pouvoirs actifs (Valet, Joker).
+    // Les passifs ne modifient pas l'état du jeu → pas besoin de tirage d'ordre.
+    const passivePowers = pending.filter(p => p.card.value === '7' || p.card.value === '10');
+    const activePowers = pending.filter(p => p.card.value !== '7' && p.card.value !== '10');
+
+    // Réorganiser : passifs d'abord (numéro auto), puis actifs
+    pending.length = 0;
+    let order = 1;
+    for (const p of passivePowers) {
+      p.drawNumber = order++;
+    }
+    pending.push(...passivePowers);
+
+    if (activePowers.length === 0) {
+      // Que des pouvoirs passifs → résoudre directement, pas de loterie
       this.activateNextPendingPower(roomCode);
       return;
     }
 
-    // Attribuer des numéros aléatoires pour l'ordre
-    const numbers = Array.from({ length: pending.length }, (_, i) => i + 1);
+    if (activePowers.length === 1) {
+      // Un seul pouvoir actif → pas besoin de loterie
+      activePowers[0].drawNumber = order;
+      pending.push(...activePowers);
+      this.activateNextPendingPower(roomCode);
+      return;
+    }
+
+    // Plusieurs pouvoirs actifs → loterie pour l'ordre entre eux uniquement
+    const numbers = Array.from({ length: activePowers.length }, (_, i) => i + 1);
     for (let i = numbers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
     }
-    for (let i = 0; i < pending.length; i++) {
-      pending[i].drawNumber = numbers[i];
+    for (let i = 0; i < activePowers.length; i++) {
+      activePowers[i].drawNumber = order + numbers[i] - 1;
     }
+    pending.push(...activePowers);
+
     // Trier par numéro (plus petit en premier)
     pending.sort((a, b) => (a.drawNumber ?? 0) - (b.drawNumber ?? 0));
 

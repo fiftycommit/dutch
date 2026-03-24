@@ -690,20 +690,55 @@ class GameProvider with ChangeNotifier implements IGameController {
       return;
     }
 
-    // Un seul pouvoir en attente → pas besoin de loterie, activer directement
-    if (pending.length == 1) {
-      pending[0].drawNumber = 1;
+    // Séparer les pouvoirs passifs (7, 10) des pouvoirs actifs (Valet, Joker).
+    // Les passifs ne modifient pas l'état du jeu → pas besoin de tirage d'ordre,
+    // ils peuvent être résolus simultanément / en premier sans loterie.
+    final passivePowers = pending
+        .where((p) => p.card.value == '7' || p.card.value == '10')
+        .toList();
+    final activePowers = pending
+        .where((p) => p.card.value != '7' && p.card.value != '10')
+        .toList();
+
+    // Réorganiser : passifs d'abord (numéro auto), puis actifs
+    pending.clear();
+    int order = 1;
+    for (final p in passivePowers) {
+      p.drawNumber = order++;
+    }
+    pending.addAll(passivePowers);
+
+    if (activePowers.isEmpty) {
+      // Que des pouvoirs passifs → résoudre directement, pas de loterie
       _activateNextPendingPower();
       return;
     }
 
-    // Attribuer des numéros aléatoires pour l'ordre de résolution
-    final numbers = List.generate(pending.length, (i) => i + 1)..shuffle();
-    for (int i = 0; i < pending.length; i++) {
-      pending[i].drawNumber = numbers[i];
+    if (activePowers.length == 1) {
+      // Un seul pouvoir actif → pas besoin de loterie
+      activePowers[0].drawNumber = order;
+      pending.addAll(activePowers);
+      if (passivePowers.isEmpty) {
+        _activateNextPendingPower();
+      }
+      // Si on a déjà lancé les passifs, ils s'enchaîneront via _activateNextPendingPower
+      if (passivePowers.isNotEmpty) {
+        _activateNextPendingPower();
+      }
+      return;
     }
 
-    // Signaler à l'UI d'afficher le dialog de loterie
+    // Plusieurs pouvoirs actifs → loterie pour l'ordre entre eux uniquement
+    final numbers = List.generate(activePowers.length, (i) => i + 1)..shuffle();
+    for (int i = 0; i < activePowers.length; i++) {
+      activePowers[i].drawNumber = order + numbers[i] - 1;
+    }
+    pending.addAll(activePowers);
+
+    // Trier par drawNumber
+    pending.sort((a, b) => (a.drawNumber ?? 0).compareTo(b.drawNumber ?? 0));
+
+    // Signaler à l'UI d'afficher le dialog de loterie (seulement pour les actifs)
     _showPowerLottery = true;
     notifyListeners();
   }
