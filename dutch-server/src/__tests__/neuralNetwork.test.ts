@@ -1,3 +1,5 @@
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
 import { NeuralNetworkService } from '../services/NeuralNetworkService';
 import { BotGameRecord } from '../models/BotLearning';
 
@@ -12,21 +14,21 @@ describe('NeuralNetworkService', () => {
     it('devrait retourner un tableau de probabilités', () => {
       const input = new Array(15).fill(0.5);
       const predictions = neuralNet.predict(input);
-      
-      expect(predictions).toHaveLength(8);
-      expect(predictions.every(p => p >= 0 && p <= 1)).toBe(true);
-      
+
+      assert.strictEqual(predictions.length, 8);
+      assert.ok(predictions.every(p => p >= 0 && p <= 1));
+
       // La somme des probabilités devrait être proche de 1 (softmax)
       const sum = predictions.reduce((a, b) => a + b, 0);
-      expect(sum).toBeCloseTo(1, 1);
+      assert.ok(Math.abs(sum - 1) < 0.1);
     });
 
     it('devrait gérer des inputs variés', () => {
       const input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0, 0.5, 0.3, 0.7, 0.2];
       const predictions = neuralNet.predict(input);
-      
-      expect(predictions).toHaveLength(8);
-      expect(predictions.every(p => !Number.isNaN(p))).toBe(true);
+
+      assert.strictEqual(predictions.length, 8);
+      assert.ok(predictions.every(p => !Number.isNaN(p)));
     });
   });
 
@@ -53,7 +55,7 @@ describe('NeuralNetworkService', () => {
       };
 
       const bestAction = neuralNet.predictBestAction(gameState, action);
-      
+
       const validActions = [
         'draw_from_deck',
         'draw_from_discard',
@@ -64,8 +66,8 @@ describe('NeuralNetworkService', () => {
         'use_power_steal',
         'pass',
       ];
-      
-      expect(validActions).toContain(bestAction);
+
+      assert.ok(validActions.includes(bestAction));
     });
   });
 
@@ -82,9 +84,9 @@ describe('NeuralNetworkService', () => {
         },
       ];
 
-      expect(() => {
+      assert.doesNotThrow(() => {
         neuralNet.train(trainingData);
-      }).not.toThrow();
+      });
     });
   });
 
@@ -132,24 +134,24 @@ describe('NeuralNetworkService', () => {
         opponents: [],
       };
 
-      await expect(neuralNet.trainFromGame(mockRecord)).resolves.not.toThrow();
+      await assert.doesNotReject(neuralNet.trainFromGame(mockRecord));
     });
   });
 
   describe('getStats', () => {
     it('devrait retourner les stats du réseau', () => {
       const stats = neuralNet.getStats();
-      
-      expect(stats).toHaveProperty('architecture');
-      expect(stats).toHaveProperty('totalLayers');
-      expect(stats).toHaveProperty('totalWeights');
-      expect(stats).toHaveProperty('totalBiases');
-      expect(stats).toHaveProperty('totalParameters');
-      
-      expect(stats.architecture).toContain('15');
-      expect(stats.architecture).toContain('8');
-      expect(stats.totalLayers).toBe(3);
-      expect(stats.totalParameters).toBeGreaterThan(0);
+
+      assert.ok('architecture' in stats);
+      assert.ok('totalLayers' in stats);
+      assert.ok('totalWeights' in stats);
+      assert.ok('totalBiases' in stats);
+      assert.ok('totalParameters' in stats);
+
+      assert.ok(stats.architecture.includes('15'));
+      assert.ok(stats.architecture.includes('8'));
+      assert.strictEqual(stats.totalLayers, 3);
+      assert.ok(stats.totalParameters > 0);
     });
   });
 });

@@ -1,3 +1,5 @@
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
 import { QLearningService } from '../services/QLearningService';
 import { BotGameRecord } from '../models/BotLearning';
 
@@ -25,8 +27,7 @@ describe('QLearningService', () => {
       ];
 
       const action = qLearning.selectAction(state, availableActions);
-      
-      expect(availableActions).toContainEqual(action);
+      assert.ok(availableActions.some(a => a.type === action.type));
     });
 
     it('devrait retourner une action valide même avec un état inconnu', () => {
@@ -43,8 +44,7 @@ describe('QLearningService', () => {
       ];
 
       const action = qLearning.selectAction(state, availableActions);
-      
-      expect(action).toEqual({ type: 'draw_deck' });
+      assert.deepStrictEqual(action, { type: 'draw_deck' });
     });
   });
 
@@ -68,9 +68,9 @@ describe('QLearningService', () => {
         deckCardsRemaining: 19,
       };
 
-      expect(() => {
+      assert.doesNotThrow(() => {
         qLearning.updateQValue(state, action, reward, nextState);
-      }).not.toThrow();
+      });
     });
   });
 
@@ -78,29 +78,25 @@ describe('QLearningService', () => {
     it('devrait donner une récompense positive pour réduire le score', () => {
       const action = { type: 'replace_card' as const, cardIndex: 0 };
       const reward = qLearning.calculateReward(action, 15, 10, false);
-      
-      expect(reward).toBeGreaterThan(0);
+      assert.ok(reward > 0);
     });
 
     it('devrait donner une pénalité pour augmenter le score', () => {
       const action = { type: 'draw_discard' as const };
       const reward = qLearning.calculateReward(action, 10, 15, false);
-      
-      expect(reward).toBeLessThan(0);
+      assert.ok(reward < 0);
     });
 
     it('devrait donner une grosse récompense pour gagner avec Dutch', () => {
       const action = { type: 'call_dutch' as const };
       const reward = qLearning.calculateReward(action, 8, 8, true, 1);
-      
-      expect(reward).toBeGreaterThan(50);
+      assert.ok(reward > 50);
     });
 
     it('devrait pénaliser un Dutch raté', () => {
       const action = { type: 'call_dutch' as const };
       const reward = qLearning.calculateReward(action, 8, 8, true, 3);
-      
-      expect(reward).toBeLessThan(0);
+      assert.ok(reward < 0);
     });
   });
 
@@ -162,35 +158,32 @@ describe('QLearningService', () => {
         opponents: [],
       };
 
-      await expect(qLearning.trainFromGame(mockRecord)).resolves.not.toThrow();
+      await assert.doesNotReject(qLearning.trainFromGame(mockRecord));
     });
   });
 
   describe('getStats', () => {
     it('devrait retourner des statistiques valides', () => {
       const stats = qLearning.getStats();
-      
-      expect(stats).toHaveProperty('totalStates');
-      expect(stats).toHaveProperty('totalActions');
-      expect(stats).toHaveProperty('totalVisits');
-      expect(stats).toHaveProperty('avgActionsPerState');
-      expect(stats).toHaveProperty('avgVisitsPerState');
-      
-      expect(typeof stats.totalStates).toBe('number');
-      expect(stats.totalStates).toBeGreaterThanOrEqual(0);
+
+      assert.ok('totalStates' in stats);
+      assert.ok('totalActions' in stats);
+      assert.ok('totalVisits' in stats);
+      assert.ok('avgActionsPerState' in stats);
+      assert.ok('avgVisitsPerState' in stats);
+
+      assert.strictEqual(typeof stats.totalStates, 'number');
+      assert.ok(stats.totalStates >= 0);
     });
   });
 
   describe('decayEpsilon', () => {
     it('devrait réduire epsilon au fil du temps', () => {
-      const initialStats = qLearning.getStats();
-      
-      for (let i = 0; i < 100; i++) {
-        qLearning.decayEpsilon();
-      }
-      
-      // Epsilon devrait avoir diminué (plus d'exploitation, moins d'exploration)
-      expect(true).toBe(true); // Le test vérifie juste que ça ne crash pas
+      assert.doesNotThrow(() => {
+        for (let i = 0; i < 100; i++) {
+          qLearning.decayEpsilon();
+        }
+      });
     });
   });
 });

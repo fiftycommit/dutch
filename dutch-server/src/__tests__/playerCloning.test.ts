@@ -1,3 +1,5 @@
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
 import { PlayerCloningService } from '../services/PlayerCloningService';
 
 describe('PlayerCloningService', () => {
@@ -38,23 +40,24 @@ describe('PlayerCloningService', () => {
 
       const pattern = await cloningService.analyzePlayerGames('player1', games);
 
-      expect(pattern).toHaveProperty('avgDecisionTime');
-      expect(pattern).toHaveProperty('dutchThresholdPattern');
-      expect(pattern).toHaveProperty('aggressivenessScore');
-      expect(pattern).toHaveProperty('riskTakingScore');
-      expect(pattern).toHaveProperty('powerUsageFrequency');
-      expect(pattern).toHaveProperty('cardReplacementPattern');
-      expect(pattern).toHaveProperty('preferredActions');
-      expect(pattern).toHaveProperty('playStyle');
+      assert.ok('avgDecisionTime' in pattern);
+      assert.ok('dutchThresholdPattern' in pattern);
+      assert.ok('aggressivenessScore' in pattern);
+      assert.ok('riskTakingScore' in pattern);
+      assert.ok('powerUsageFrequency' in pattern);
+      assert.ok('cardReplacementPattern' in pattern);
+      assert.ok('preferredActions' in pattern);
+      assert.ok('playStyle' in pattern);
 
-      expect(pattern.avgDecisionTime).toBeGreaterThan(0);
-      expect(pattern.dutchThresholdPattern).toBe(10);
+      assert.ok(pattern.avgDecisionTime > 0);
+      assert.strictEqual(pattern.dutchThresholdPattern, 10);
     });
 
     it('devrait lancer une erreur si aucune partie', async () => {
-      await expect(
-        cloningService.analyzePlayerGames('player1', [])
-      ).rejects.toThrow('Aucune partie à analyser');
+      await assert.rejects(
+        cloningService.analyzePlayerGames('player1', []),
+        { message: 'Aucune partie à analyser' }
+      );
     });
 
     it('devrait déterminer le style de jeu correctement', async () => {
@@ -71,7 +74,7 @@ describe('PlayerCloningService', () => {
       ];
 
       const pattern = await cloningService.analyzePlayerGames('player1', aggressiveGames);
-      expect(['aggressive', 'opportunistic']).toContain(pattern.playStyle);
+      assert.ok(['aggressive', 'opportunistic'].includes(pattern.playStyle));
     });
   });
 
@@ -93,14 +96,14 @@ describe('PlayerCloningService', () => {
 
       const clone = await cloningService.createClone('player1', 'Alice', games);
 
-      expect(clone).toHaveProperty('playerId', 'player1');
-      expect(clone).toHaveProperty('playerName', 'Alice');
-      expect(clone).toHaveProperty('clonedBotId');
-      expect(clone).toHaveProperty('gamesAnalyzed', 1);
-      expect(clone).toHaveProperty('accuracy');
-      expect(clone).toHaveProperty('pattern');
+      assert.strictEqual(clone.playerId, 'player1');
+      assert.strictEqual(clone.playerName, 'Alice');
+      assert.ok('clonedBotId' in clone);
+      assert.strictEqual(clone.gamesAnalyzed, 1);
+      assert.ok('accuracy' in clone);
+      assert.ok('pattern' in clone);
 
-      expect(clone.clonedBotId).toContain('clone_player1_');
+      assert.ok(clone.clonedBotId.includes('clone_player1_'));
     });
 
     it('devrait calculer la précision selon le nombre de parties', async () => {
@@ -110,7 +113,7 @@ describe('PlayerCloningService', () => {
       });
 
       const clone = await cloningService.createClone('player1', 'Alice', games);
-      expect(clone.accuracy).toBe(0.5); // < 5 parties = 50%
+      assert.strictEqual(clone.accuracy, 0.5); // < 5 parties = 50%
     });
   });
 
@@ -129,27 +132,27 @@ describe('PlayerCloningService', () => {
 
       const params = cloningService.patternToBotParameters(pattern);
 
-      expect(params).toHaveProperty('aggressiveness', 0.7);
-      expect(params).toHaveProperty('caution', 0.4); // 1 - riskTakingScore
-      expect(params).toHaveProperty('dutchThreshold', 12);
-      expect(params).toHaveProperty('powerUsageRate', 0.5);
-      expect(params).toHaveProperty('riskTolerance', 0.6);
-      expect(params).toHaveProperty('decisionDelay', 1500);
-      expect(params).toHaveProperty('playStyle', 'aggressive');
+      assert.strictEqual(params.aggressiveness, 0.7);
+      assert.strictEqual(params.caution, 0.4); // 1 - riskTakingScore
+      assert.strictEqual(params.dutchThreshold, 12);
+      assert.strictEqual(params.powerUsageRate, 0.5);
+      assert.strictEqual(params.riskTolerance, 0.6);
+      assert.strictEqual(params.decisionDelay, 1500);
+      assert.strictEqual(params.playStyle, 'aggressive');
     });
   });
 
   describe('listClones', () => {
     it('devrait retourner une liste vide si aucun clone', async () => {
       const clones = await cloningService.listClones();
-      expect(Array.isArray(clones)).toBe(true);
+      assert.ok(Array.isArray(clones));
     });
   });
 
   describe('getClone', () => {
     it('devrait retourner null si le clone n\'existe pas', async () => {
       const clone = await cloningService.getClone('nonexistent');
-      expect(clone).toBeNull();
+      assert.strictEqual(clone, null);
     });
   });
 });
