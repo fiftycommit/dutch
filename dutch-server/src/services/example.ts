@@ -113,9 +113,7 @@ async function simulateGame() {
 
 // Exécuter la simulation si ce fichier est lancé directement
 if (require.main === module) {
-  void (async () => {
-    await simulateGame();
-  })();
+  void simulateGame();
 }
 
 export { simulateGame };

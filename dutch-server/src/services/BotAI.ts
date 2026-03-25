@@ -229,8 +229,7 @@ export class BotAI {
       if (difficulty.name === 'Bronze') forgetChance = 0.4;
       else if (difficulty.name === 'Argent') forgetChance = 0.2;
       else if (difficulty.name === 'Or') forgetChance = 0.05;
-    } else {
-      // spy
+    } else if (context === 'spy') {
       if (difficulty.name === 'Bronze') forgetChance = 0.25;
       else if (difficulty.name === 'Argent') forgetChance = 0.1;
       else if (difficulty.name === 'Or') forgetChance = 0.02;

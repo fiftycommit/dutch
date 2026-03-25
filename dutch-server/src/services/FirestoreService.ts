@@ -28,7 +28,7 @@ export interface DeviceToken {
 function isFirestoreMissingIndexError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null) return false;
     const code = (error as { code?: string | number }).code;
-    const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+    const message = (error instanceof Error ? error.message : JSON.stringify(error)).toLowerCase();
     return (
         code === 'failed-precondition' ||
         code === 9 ||
