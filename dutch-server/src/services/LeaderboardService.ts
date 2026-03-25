@@ -49,7 +49,7 @@ export class LeaderboardService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire leaderboard:', error);
+      console.error('❌ Erreur création répertoire leaderboard:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -211,7 +211,7 @@ export class LeaderboardService {
       const filePath = path.join(this.dataDir, 'leaderboard.json');
       await fs.writeFile(filePath, JSON.stringify(this.leaderboard, null, 2));
     } catch (error) {
-      console.error('❌ Erreur sauvegarde leaderboard:', error);
+      console.error('❌ Erreur sauvegarde leaderboard:', error instanceof Error ? error.message : String(error));
     }
   }
 

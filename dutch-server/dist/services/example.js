@@ -98,6 +98,6 @@ async function simulateGame() {
 }
 // Exécuter la simulation si ce fichier est lancé directement
 if (require.main === module) {
-    simulateGame().catch(console.error);
+    void simulateGame();
 }
 //# sourceMappingURL=example.js.map

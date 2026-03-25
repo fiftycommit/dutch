@@ -54,7 +54,7 @@ export class TournamentService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire tournaments:', error);
+      console.error('❌ Erreur création répertoire tournaments:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -276,7 +276,7 @@ export class TournamentService {
       const filePath = path.join(this.dataDir, `${tournament.tournamentId}.json`);
       await fs.writeFile(filePath, JSON.stringify(tournament, null, 2));
     } catch (error) {
-      console.error(`❌ Erreur sauvegarde tournoi ${tournament.tournamentId}:`, error);
+      console.error(`❌ Erreur sauvegarde tournoi ${tournament.tournamentId}:`, error instanceof Error ? error.message : String(error));
     }
   }
 

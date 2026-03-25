@@ -67,7 +67,7 @@ function addToHistory(gameState, action) {
     }
 }
 function nextPlayer(gameState) {
-    for (let i = 0; i < gameState.players.length; i++) {
+    for (const _ of gameState.players) {
         gameState.currentPlayerIndex =
             (gameState.currentPlayerIndex + 1) % gameState.players.length;
         const current = getCurrentPlayer(gameState);

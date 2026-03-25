@@ -42,7 +42,7 @@ export class QLearningService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire qlearning:', error);
+      console.error('❌ Erreur création répertoire qlearning:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -89,7 +89,7 @@ export class QLearningService {
       
       await fs.writeFile(filepath, JSON.stringify(obj, null, 2));
     } catch (error) {
-      console.error('❌ Erreur sauvegarde Q-Table:', error);
+      console.error('❌ Erreur sauvegarde Q-Table:', error instanceof Error ? error.message : String(error));
     }
   }
 

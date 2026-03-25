@@ -369,14 +369,12 @@ class GameLogic {
             this.shuffleDeck(gameState.deck);
             (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatDeckRefill(gameState.deck.length));
         }
+        else if (gameState.dutchCallerId) {
+            gameState.phase = GameState_1.GamePhase.dutchCalled;
+            (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatEmptyDeckEnd());
+        }
         else {
-            if (gameState.dutchCallerId) {
-                gameState.phase = GameState_1.GamePhase.dutchCalled;
-                (0, GameState_1.addToHistory)(gameState, HistoryFormatter_1.HistoryFormatter.formatEmptyDeckEnd());
-            }
-            else {
-                this.endGame(gameState);
-            }
+            this.endGame(gameState);
         }
     }
     static smartShuffle(gameState) {

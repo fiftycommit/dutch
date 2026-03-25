@@ -10,7 +10,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
             if (currentPlayer.id !== socket.id)
@@ -30,7 +30,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
             if (currentPlayer.id !== socket.id)
@@ -69,7 +69,7 @@ function setupGameHandler(socket, roomManager) {
                 return;
             }
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState) {
+            if (!room?.gameState) {
                 console.log(`[DISCARD] BLOCKED: Room not found or no gameState`);
                 return;
             }
@@ -117,7 +117,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
             if (currentPlayer.id !== socket.id)
@@ -138,7 +138,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const player = room.gameState.players.find((p) => p.id === socket.id);
             if (!player || player.isSpectator)
@@ -166,7 +166,7 @@ function setupGameHandler(socket, roomManager) {
                 return;
             }
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             if (room.gameState.phase !== GameState_1.GamePhase.reaction)
                 return;
@@ -195,7 +195,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
             if (currentPlayer.id !== socket.id)
@@ -212,7 +212,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
             const isMatchPower = room.gameState.specialPowerPlayerId != null;
@@ -244,8 +244,8 @@ function setupGameHandler(socket, roomManager) {
                     roomCode: data.roomCode,
                     card: result.spiedCard,
                     targetPlayerName: specialCard.value === '7' ? 'vous' :
-                        (data.targetPlayerIndex !== undefined ?
-                            room.gameState.players[data.targetPlayerIndex]?.name : 'Anonyme')
+                        (data.targetPlayerIndex === undefined ?
+                            'Anonyme' : room.gameState.players[data.targetPlayerIndex]?.name)
                 });
                 // Notification au joueur espionné (pouvoir 10 uniquement)
                 if (specialCard.value === '10' && data.targetPlayerIndex !== undefined) {
@@ -265,7 +265,7 @@ function setupGameHandler(socket, roomManager) {
                 const io = roomManager.getIO();
                 for (const affected of result.affectedPlayers) {
                     const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
-                    if (affectedPlayer && affectedPlayer.isHuman) {
+                    if (affectedPlayer?.isHuman) {
                         io.to(affected.playerId).emit('special_power:swap_notification', {
                             byPlayerName: currentPlayer.name,
                             cardIndex: affected.cardIndex,
@@ -280,7 +280,7 @@ function setupGameHandler(socket, roomManager) {
             if (result.shuffledPlayer) {
                 const io = roomManager.getIO();
                 const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer.playerId);
-                if (shuffledPlayer && shuffledPlayer.isHuman) {
+                if (shuffledPlayer?.isHuman) {
                     io.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
                         byPlayerName: currentPlayer.name,
                         roomCode: data.roomCode,
@@ -325,7 +325,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
             const isMatchPower = room.gameState.specialPowerPlayerId != null;
@@ -415,7 +415,7 @@ function setupGameHandler(socket, roomManager) {
             if (!await SecurityService_1.SecurityService.checkEventRateLimit(socket.id))
                 return;
             const room = roomManager.getRoom(data.roomCode);
-            if (!room || !room.gameState)
+            if (!room?.gameState)
                 return;
             const player = room.players.find(p => p.id === socket.id);
             if (!player)

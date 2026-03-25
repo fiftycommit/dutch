@@ -46,7 +46,7 @@ export class AdaptiveDifficultyService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire adaptive:', error);
+      console.error('❌ Erreur création répertoire adaptive:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -290,7 +290,7 @@ export class AdaptiveDifficultyService {
       const filePath = path.join(this.dataDir, `${stats.playerId}.json`);
       await fs.writeFile(filePath, JSON.stringify(stats, null, 2));
     } catch (error) {
-      console.error(`❌ Erreur sauvegarde stats joueur ${stats.playerId}:`, error);
+      console.error(`❌ Erreur sauvegarde stats joueur ${stats.playerId}:`, error instanceof Error ? error.message : String(error));
     }
   }
 

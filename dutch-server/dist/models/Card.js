@@ -35,8 +35,8 @@ function calculatePoints(suit, value) {
     if (value === 'A')
         return 1;
     // Cartes numériques
-    const numValue = parseInt(value, 10);
-    return isNaN(numValue) ? 0 : numValue;
+    const numValue = Number.parseInt(value, 10);
+    return Number.isNaN(numValue) ? 0 : numValue;
 }
 function isSpecialCard(value) {
     return ['7', '10', 'V', 'JOKER'].includes(value);
@@ -51,8 +51,7 @@ function createFullDeck() {
         }
     }
     // Ajouter 2 jokers
-    deck.push(createCard('joker', 'JOKER'));
-    deck.push(createCard('joker', 'JOKER'));
+    deck.push(createCard('joker', 'JOKER'), createCard('joker', 'JOKER'));
     return deck;
 }
 function cardMatches(card1, card2) {

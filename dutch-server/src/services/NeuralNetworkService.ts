@@ -40,7 +40,7 @@ export class NeuralNetworkService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire neural:', error);
+      console.error('❌ Erreur création répertoire neural:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -323,7 +323,7 @@ export class NeuralNetworkService {
       const filepath = path.join(this.dataDir, 'network.json');
       await fs.writeFile(filepath, JSON.stringify(this.network, null, 2));
     } catch (error) {
-      console.error('❌ Erreur sauvegarde réseau:', error);
+      console.error('❌ Erreur sauvegarde réseau:', error instanceof Error ? error.message : String(error));
     }
   }
 

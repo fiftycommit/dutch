@@ -38,10 +38,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startServer = startServer;
 const express_1 = __importDefault(require("express"));
-const http_1 = require("http");
+const node_http_1 = require("node:http");
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
-const path_1 = __importDefault(require("path"));
+const node_path_1 = __importDefault(require("node:path"));
 const RoomManager_1 = require("./services/RoomManager");
 const connectionHandler_1 = require("./handlers/connectionHandler");
 const roomHandler_1 = require("./handlers/roomHandler");
@@ -53,11 +53,10 @@ const botLearningRoutes_1 = __importDefault(require("./routes/botLearningRoutes"
 const playerLearningRoutes_1 = __importDefault(require("./routes/playerLearningRoutes"));
 const sbmmRoutes_1 = __importDefault(require("./routes/sbmmRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
-const friendsRoutes_1 = __importDefault(require("./routes/friendsRoutes"));
+const friendsRoutes_1 = __importStar(require("./routes/friendsRoutes"));
 const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const chatKeyRoutes_1 = __importStar(require("./routes/chatKeyRoutes"));
-const friendsRoutes_2 = require("./routes/friendsRoutes");
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const RoomRegistryService_1 = require("./services/RoomRegistryService");
@@ -162,7 +161,7 @@ function renderHomePage(roomCount) {
 }
 function startServer() {
     const app = (0, express_1.default)();
-    const httpServer = (0, http_1.createServer)(app);
+    const httpServer = (0, node_http_1.createServer)(app);
     const allowedOrigins = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',')
         : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
@@ -189,7 +188,7 @@ function startServer() {
             await SecurityService_1.SecurityService.checkConnectionLimit(ip);
             next();
         }
-        catch (e) {
+        catch {
             next(new Error('Rate limit exceeded'));
         }
     });
@@ -261,7 +260,7 @@ function startServer() {
     // Routes Auth (inscription, connexion, profil)
     app.use('/api/auth', authRoutes_1.default);
     // Routes Friends (amis, demandes, blocage)
-    (0, friendsRoutes_2.setFriendsIo)(io, roomManager);
+    (0, friendsRoutes_1.setFriendsIo)(io, roomManager);
     app.use('/api/friends', friendsRoutes_1.default);
     // Routes Rooms (salons sauvegardés)
     app.use('/api/rooms', roomRoutes_1.default);
@@ -272,14 +271,14 @@ function startServer() {
     app.use('/api/chats', chatKeyRoutes_1.default);
     // Dashboard admin
     app.get('/admin', (req, res) => {
-        res.sendFile(path_1.default.join(__dirname, '../public/admin.html'));
+        res.sendFile(node_path_1.default.join(__dirname, '../public/admin.html'));
     });
     // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
-        res.sendFile(path_1.default.join(__dirname, '../public/bot-stats.html'));
+        res.sendFile(node_path_1.default.join(__dirname, '../public/bot-stats.html'));
     });
     app.get('/shuffle-analysis', (req, res) => {
-        res.sendFile(path_1.default.join(__dirname, '../public/shuffle-analysis.html'));
+        res.sendFile(node_path_1.default.join(__dirname, '../public/shuffle-analysis.html'));
     });
     // Dashboard profil joueur (SBMM)
     app.get('/player-profile', (req, res) => {

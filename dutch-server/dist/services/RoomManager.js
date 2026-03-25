@@ -34,8 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoomManager = void 0;
-const fs = __importStar(require("fs"));
-const path = __importStar(require("path"));
+const fs = __importStar(require("node:fs"));
+const path = __importStar(require("node:path"));
 const GameLogic_1 = require("./GameLogic");
 const BotAI_1 = require("./BotAI");
 const GameState_1 = require("../models/GameState");
@@ -205,7 +205,7 @@ class RoomManager {
             existing.lastSeenAt = this.now();
             // Clear any pending presence check for this player
             const pendingCheck = this.presenceChecks.get(roomCode);
-            if (pendingCheck && pendingCheck.playerId === previousId) {
+            if (pendingCheck?.playerId === previousId) {
                 this.clearPresenceCheck(roomCode, previousId);
             }
             // Restore host status using persistent identity.
@@ -219,7 +219,7 @@ class RoomManager {
             }
             this.ensureHost(room);
             this.touchRoom(room);
-            return { room, player: existing, previousSocketId: previousId !== socketId ? previousId : undefined };
+            return { room, player: existing, previousSocketId: previousId === socketId ? undefined : previousId };
         }
         // For new players, ensure host is valid before adding them
         this.ensureHost(room);
@@ -402,7 +402,7 @@ class RoomManager {
      */
     markPlayerReady(roomCode, playerId) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return false;
         const gameState = room.gameState;
         // Only works during setup phase
@@ -426,12 +426,12 @@ class RoomManager {
             // Si c'est le tour d'un bot, lancer son tour
             // Sinon, démarrer le timer pour le joueur humain
             const currentPlayer = (0, GameState_1.getCurrentPlayer)(gameState);
-            if (!currentPlayer.isHuman) {
-                // Lancer le tour du bot après un court délai
-                setTimeout(() => this.checkAndPlayBotTurn(roomCode), 500);
+            if (currentPlayer.isHuman) {
+                this.startTurnTimer(roomCode);
             }
             else {
-                this.startTurnTimer(roomCode);
+                // Lancer le tour du bot après un court délai
+                setTimeout(() => this.checkAndPlayBotTurn(roomCode), 500);
             }
         }
         this.touchRoom(room);
@@ -447,7 +447,7 @@ class RoomManager {
     }
     broadcastGameState(roomCode, updateType, additionalData = {}) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         this.touchRoom(room);
         room.players.forEach((player) => {
@@ -469,7 +469,7 @@ class RoomManager {
     }
     pauseGame(roomCode, pausedByPlayerId, pausedByName) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         if (room.isPaused)
             return;
@@ -532,7 +532,7 @@ class RoomManager {
     }
     resumeGame(roomCode, resumedByPlayerId, resumedByName, forced = false) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         if (!room.isPaused)
             return;
@@ -566,7 +566,7 @@ class RoomManager {
     async endReactionPhase(roomCode) {
         this.clearReactionTimer(roomCode);
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         room.gameState.lastSpiedCard = null;
         room.gameState.reactionStartTime = null;
@@ -586,7 +586,7 @@ class RoomManager {
      */
     async processPendingMatchPowers(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const pending = room.gameState.pendingMatchPowers;
         if (pending.length === 0) {
@@ -644,7 +644,7 @@ class RoomManager {
      */
     activateNextPendingPower(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const pending = room.gameState.pendingMatchPowers;
         if (pending.length === 0) {
@@ -712,7 +712,7 @@ class RoomManager {
     }
     async checkAndPlayBotTurn(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const gameState = room.gameState;
         while (true) {
@@ -751,7 +751,7 @@ class RoomManager {
     }
     handleGameEnd(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         // Calculer les scores de carte de cette manche pour chaque joueur
         const playersWithScores = room.gameState.players.map((player) => ({
@@ -815,7 +815,7 @@ class RoomManager {
                 last: -50,
             };
             let baseRP = 0;
-            const playerMultiplier = 1.0 + (totalPlayers - 2) * 0.2;
+            const playerMultiplier = 1 + (totalPlayers - 2) * 0.2;
             if (rank === 1) {
                 baseRP = points.win;
             }
@@ -1103,9 +1103,7 @@ class RoomManager {
         });
         // Ajouter le clientId à la liste des bannis
         if (target.clientId) {
-            if (!room.bannedClientIds) {
-                room.bannedClientIds = new Set();
-            }
+            room.bannedClientIds ?? (room.bannedClientIds = new Set());
             room.bannedClientIds.add(target.clientId);
         }
         // Si la partie est en cours, gérer proprement le retrait du gameState
@@ -1132,9 +1130,7 @@ class RoomManager {
         if (!room.gameState)
             return;
         // Initialiser si nécessaire
-        if (!room.cumulativeScores) {
-            room.cumulativeScores = new Map();
-        }
+        room.cumulativeScores ?? (room.cumulativeScores = new Map());
         // Ajouter les scores de cette manche
         for (const player of room.gameState.players) {
             const scoreKey = player.clientId || player.id;
@@ -1147,9 +1143,7 @@ class RoomManager {
      * Met à jour les scores cumulés avec le système RP (points de classement)
      */
     updateCumulativeScoresWithRP(room, roundScores) {
-        if (!room.cumulativeScores) {
-            room.cumulativeScores = new Map();
-        }
+        room.cumulativeScores ?? (room.cumulativeScores = new Map());
         for (const score of roundScores) {
             const scoreKey = score.clientId || score.playerId;
             const currentScore = room.cumulativeScores.get(scoreKey) || 0;
@@ -1191,7 +1185,7 @@ class RoomManager {
     }
     setReady(roomCode, socketId, ready) {
         const room = this.rooms.get(roomCode);
-        if (!room || room.status !== Room_1.RoomStatus.waiting)
+        if (room?.status !== Room_1.RoomStatus.waiting)
             return false;
         const player = room.players.find((p) => p.id === socketId);
         if (!player || !player.isHuman)
@@ -1247,7 +1241,7 @@ class RoomManager {
         }
         this.touchRoom(room);
         const pending = this.presenceChecks.get(roomCode);
-        if (pending && pending.playerId === playerId) {
+        if (pending?.playerId === playerId) {
             this.clearPresenceCheck(roomCode, playerId);
         }
         // Note: Le timer n'est plus réinitialisé après chaque action.
@@ -1284,10 +1278,10 @@ class RoomManager {
             room.gameState.turnStartTime = this.now();
             room.gameState.turnTimeoutMs = extensionMs;
             const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
-            if (currentPlayer && currentPlayer.id === socketId) {
+            if (currentPlayer?.id === socketId) {
                 const timer = setTimeout(() => {
                     const currentRoom = this.rooms.get(roomCode);
-                    if (!currentRoom || !currentRoom.gameState)
+                    if (!currentRoom?.gameState)
                         return;
                     const stillCurrent = currentRoom.gameState.players[currentRoom.gameState.currentPlayerIndex]?.id === socketId;
                     if (!stillCurrent)
@@ -1404,7 +1398,7 @@ class RoomManager {
     }
     checkGameEndCondition(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         if (room.gameState.phase === GameState_1.GamePhase.ended)
             return;
@@ -1463,7 +1457,7 @@ class RoomManager {
     }
     startTurnTimer(roomCode) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         if (room.gameState.phase !== GameState_1.GamePhase.playing && room.gameState.phase !== GameState_1.GamePhase.specialPower)
             return;
@@ -1487,7 +1481,7 @@ class RoomManager {
         const playerId = currentPlayer.id;
         const timer = setTimeout(() => {
             const currentRoom = this.rooms.get(roomCode);
-            if (!currentRoom || !currentRoom.gameState)
+            if (!currentRoom?.gameState)
                 return;
             const currentGameState = currentRoom.gameState;
             const stillCurrent = (0, GameState_1.getCurrentPlayer)(currentGameState).id === playerId;
@@ -1560,7 +1554,7 @@ class RoomManager {
             clearTimeout(existing);
         const timer = setTimeout(() => {
             const current = this.presenceChecks.get(roomCode);
-            if (!current || current.playerId !== playerId)
+            if (current?.playerId !== playerId)
                 return;
             this.markSpectator(roomCode, playerId, 'Inactif');
         }, deadlineMs);
@@ -1568,7 +1562,7 @@ class RoomManager {
     }
     clearPresenceCheck(roomCode, playerId) {
         const current = this.presenceChecks.get(roomCode);
-        if (current && current.playerId === playerId) {
+        if (current?.playerId === playerId) {
             this.presenceChecks.delete(roomCode);
         }
         const key = `${roomCode}:${playerId}`;
@@ -1669,7 +1663,7 @@ class RoomManager {
     }
     forceEndTurn(roomCode, reason) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const gameState = room.gameState;
         if (gameState.phase === GameState_1.GamePhase.specialPower) {
@@ -1828,19 +1822,19 @@ class RoomManager {
                 const lastSeen = player.lastSeenAt ?? 0;
                 return now - lastSeen <= this.stalePlayerMs;
             });
-            if (!anyConnected) {
-                // No short inactivity auto-delete: keep room available until TTL/admin action.
-                if (!room.emptyAt) {
-                    room.emptyAt = now;
-                }
+            if (anyConnected) {
+                // Activity detected, clear grace period
+                room.emptyAt = undefined;
                 if (now >= room.expiresAt) {
                     this.removeRoom(room.id);
                     continue;
                 }
             }
             else {
-                // Activity detected, clear grace period
-                room.emptyAt = undefined;
+                // No short inactivity auto-delete: keep room available until TTL/admin action.
+                if (!room.emptyAt) {
+                    room.emptyAt = now;
+                }
                 if (now >= room.expiresAt) {
                     this.removeRoom(room.id);
                     continue;
@@ -1893,7 +1887,7 @@ class RoomManager {
         // Vérifier que la room est en cours de fermeture ou que l'hôte actuel n'est plus connecté
         const currentHost = room.players.find((p) => p.id === room.hostPlayerId);
         const isClosing = room.status === Room_1.RoomStatus.closing;
-        const hostDisconnected = !currentHost || !currentHost.connected;
+        const hostDisconnected = !currentHost?.connected;
         if (!isClosing && !hostDisconnected)
             return false;
         const requester = room.players.find((p) => p.id === requesterId);
@@ -1975,7 +1969,7 @@ class RoomManager {
      */
     setGameMode(roomCode, socketId, mode) {
         const room = this.rooms.get(roomCode);
-        if (!room || room.status !== Room_1.RoomStatus.waiting)
+        if (room?.status !== Room_1.RoomStatus.waiting)
             return false;
         if (room.hostPlayerId !== socketId)
             return false;
@@ -1988,7 +1982,7 @@ class RoomManager {
      */
     updateRoomSettings(roomCode, socketId, settings) {
         const room = this.rooms.get(roomCode);
-        if (!room || room.status !== Room_1.RoomStatus.waiting)
+        if (room?.status !== Room_1.RoomStatus.waiting)
             return false;
         if (room.hostPlayerId !== socketId)
             return false;
@@ -2012,7 +2006,7 @@ class RoomManager {
      */
     sendFullStateToPlayer(roomCode, playerId) {
         const room = this.rooms.get(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const personalizedState = this.getPersonalizedState(room.gameState, playerId);
         this.io.to(playerId).emit('game:full_state', {
@@ -2214,18 +2208,18 @@ class RoomManager {
         if (!picked)
             return null;
         // Convert behavior/skillLevel strings en enums serveur
-        const behavior = picked.behavior === 'fast'
-            ? Player_1.BotBehavior.fast
-            : picked.behavior === 'aggressive'
-                ? Player_1.BotBehavior.aggressive
-                : Player_1.BotBehavior.balanced;
-        const skillLevel = picked.skillLevel === 'platinum'
-            ? Player_1.BotSkillLevel.platinum
-            : picked.skillLevel === 'gold'
-                ? Player_1.BotSkillLevel.gold
-                : picked.skillLevel === 'silver'
-                    ? Player_1.BotSkillLevel.silver
-                    : Player_1.BotSkillLevel.bronze;
+        let behavior = Player_1.BotBehavior.balanced;
+        if (picked.behavior === 'fast')
+            behavior = Player_1.BotBehavior.fast;
+        else if (picked.behavior === 'aggressive')
+            behavior = Player_1.BotBehavior.aggressive;
+        let skillLevel = Player_1.BotSkillLevel.bronze;
+        if (picked.skillLevel === 'platinum')
+            skillLevel = Player_1.BotSkillLevel.platinum;
+        else if (picked.skillLevel === 'gold')
+            skillLevel = Player_1.BotSkillLevel.gold;
+        else if (picked.skillLevel === 'silver')
+            skillLevel = Player_1.BotSkillLevel.silver;
         // Si le profil n'a pas de skillLevel, on retombe sur celui attendu par la difficulté
         const resolvedSkillLevel = picked.skillLevel ? skillLevel : desiredSkill;
         return {

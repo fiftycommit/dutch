@@ -61,7 +61,7 @@ export class GeneticAlgorithmService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire genetic:', error);
+      console.error('❌ Erreur création répertoire genetic:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -339,7 +339,7 @@ export class GeneticAlgorithmService {
       const filePath = path.join(this.dataDir, `generation_${generation.generationNumber}.json`);
       await fs.writeFile(filePath, JSON.stringify(generation, null, 2));
     } catch (error) {
-      console.error(`❌ Erreur sauvegarde génération ${generation.generationNumber}:`, error);
+      console.error(`❌ Erreur sauvegarde génération ${generation.generationNumber}:`, error instanceof Error ? error.message : String(error));
     }
   }
 

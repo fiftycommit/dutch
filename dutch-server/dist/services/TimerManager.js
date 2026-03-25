@@ -13,7 +13,7 @@ class TimerManager {
     startReactionTimer(roomCode, durationMs) {
         this.clearTimer(roomCode);
         const room = this.roomAccess.getRoom(roomCode);
-        if (!room || !room.gameState)
+        if (!room?.gameState)
             return;
         const startTime = Date.now();
         const endTime = startTime + durationMs;

@@ -47,7 +47,7 @@ export class BotPersonalityService {
         fsSync.mkdirSync(this.dataDir, { recursive: true });
       }
     } catch (error) {
-      console.error('❌ Erreur création répertoire personalities:', error);
+      console.error('❌ Erreur création répertoire personalities:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -463,7 +463,7 @@ export class BotPersonalityService {
       const filepath = path.join(this.dataDir, `${personality.id}.json`);
       await fs.writeFile(filepath, JSON.stringify(personality, null, 2));
     } catch (error) {
-      console.error(`❌ Erreur sauvegarde personnalité ${personality.id}:`, error);
+      console.error(`❌ Erreur sauvegarde personnalité ${personality.id}:`, error instanceof Error ? error.message : String(error));
     }
   }
 

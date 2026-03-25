@@ -73,7 +73,7 @@ export class BotLearningService {
     // À la reprise, traiter les parties en attente
     if (wasPaused && !value) {
       this.processPendingGames().catch((err) =>
-        console.error('❌ Erreur traitement parties en attente:', err)
+        console.error('❌ Erreur traitement parties en attente:', err instanceof Error ? err.message : String(err))
       );
     }
   }
@@ -168,7 +168,7 @@ export class BotLearningService {
       await fs.mkdir(path.join(this.dataDir, 'games'), { recursive: true });
       await fs.mkdir(path.join(this.dataDir, 'profiles'), { recursive: true });
     } catch (error) {
-      console.error('❌ Erreur création répertoire bot-learning:', error);
+      console.error('❌ Erreur création répertoire bot-learning:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -202,7 +202,7 @@ export class BotLearningService {
 
       console.log(`✅ Partie bot enregistrée: ${filename}`);
     } catch (error) {
-      console.error('❌ Erreur sauvegarde partie bot:', error);
+      console.error('❌ Erreur sauvegarde partie bot:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -292,7 +292,7 @@ export class BotLearningService {
       
       console.log(`✅ Profil bot mis à jour: ${record.botId} (MMR: ${oldMMR} → ${profile.mmr})`);
     } catch (error) {
-      console.error('❌ Erreur mise à jour profil bot:', error);
+      console.error('❌ Erreur mise à jour profil bot:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -584,7 +584,7 @@ export class BotLearningService {
       
       return profiles.slice(0, limit);
     } catch (error) {
-      console.error('❌ Erreur récupération top bots:', error);
+      console.error('❌ Erreur récupération top bots:', error instanceof Error ? error.message : String(error));
       return [];
     }
   }
@@ -714,7 +714,7 @@ export class BotLearningService {
 
       return stats;
     } catch (error) {
-      console.error('❌ Erreur récupération stats:', error);
+      console.error('❌ Erreur récupération stats:', error instanceof Error ? error.message : String(error));
       return {
         totalGames: 0,
         totalBots: 0,
@@ -885,7 +885,7 @@ export class BotLearningService {
         recentGames,
       };
     } catch (error) {
-      console.error('❌ Erreur analyse shuffle stats:', error);
+      console.error('❌ Erreur analyse shuffle stats:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }

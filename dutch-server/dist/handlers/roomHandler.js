@@ -206,7 +206,7 @@ function setupRoomHandler(socket, roomManager, io) {
                 return;
             }
             // Utiliser fillBots des settings de la room par défaut, sauf si explicitement spécifié
-            const fillBots = data.fillBots !== undefined ? data.fillBots === true : room.settings?.fillBots !== false;
+            const fillBots = data.fillBots === undefined ? room.settings?.fillBots !== false : data.fillBots === true;
             const started = roomManager.startGame(roomCode, {
                 fillBots,
             });
