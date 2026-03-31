@@ -1,0 +1,54 @@
+{
+  "bronze": {
+    "level": "bronze",
+    "gamesPlayed": 0,
+    "winsVsHumans": 0,
+    "winRateVsHumans": 0,
+    "totalScore": 0,
+    "avgScore": 0,
+    "totalRank": 0,
+    "avgRank": 0,
+    "dutchCallCount": 0,
+    "dutchSuccessCount": 0,
+    "dutchSuccessRate": 0
+  },
+  "silver": {
+    "level": "silver",
+    "gamesPlayed": 0,
+    "winsVsHumans": 0,
+    "winRateVsHumans": 0,
+    "totalScore": 0,
+    "avgScore": 0,
+    "totalRank": 0,
+    "avgRank": 0,
+    "dutchCallCount": 0,
+    "dutchSuccessCount": 0,
+    "dutchSuccessRate": 0
+  },
+  "gold": {
+    "level": "gold",
+    "gamesPlayed": 0,
+    "winsVsHumans": 0,
+    "winRateVsHumans": 0,
+    "totalScore": 0,
+    "avgScore": 0,
+    "totalRank": 0,
+    "avgRank": 0,
+    "dutchCallCount": 0,
+    "dutchSuccessCount": 0,
+    "dutchSuccessRate": 0
+  },
+  "platinum": {
+    "level": "platinum",
+    "gamesPlayed": 0,
+    "winsVsHumans": 0,
+    "winRateVsHumans": 0,
+    "totalScore": 0,
+    "avgScore": 0,
+    "totalRank": 0,
+    "avgRank": 0,
+    "dutchCallCount": 0,
+    "dutchSuccessCount": 0,
+    "dutchSuccessRate": 0
+  }
+}

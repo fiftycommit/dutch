@@ -7,8 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "test": "npm run build && node --test-force-exit --test dist/__tests__/*.test.js",
-    "test:coverage": "npm run build && c8 --all --src src --exclude-after-remap --exclude 'src/__tests__/**' --reports-dir coverage --reporter=lcov --reporter=text node --enable-source-maps --test-force-exit --test dist/__tests__/*.test.js"
+    "test": "npm run build && node --test-force-exit --test-concurrency=1 --test dist/__tests__/*.test.js",
+    "test:coverage": "npm run build && c8 --all --src src --exclude-after-remap --exclude 'src/__tests__/**' --reports-dir coverage --reporter=lcov --reporter=text node --enable-source-maps --test-force-exit --test-concurrency=1 --test dist/__tests__/*.test.js"
   },
   "keywords": [],
   "author": "",
