@@ -61,7 +61,8 @@ class BotPowerHandler {
   // ═══════════════════════════════════════════════════════════════════════════
   // BRONZE : Mémoire du pouvoir 10 pour offrir un match à l'humain
   // ═══════════════════════════════════════════════════════════════════════════
-  /// Map<botId, index de la carte à défausser pour offrir un match>
+  /// Association entre `botId` et l'index de carte à défausser
+  /// pour offrir un match.
   static final Map<String, int> _pendingMatchFromSpy = {};
 
   /// Le bot Bronze a-t-il une carte à défausser pour offrir un match ?
