@@ -6,7 +6,7 @@ import 'bot_difficulty.dart';
 /// Philosophie :
 /// - Tous les bots suivent la MÊME logique (même cerveau)
 /// - La différence vient de : mémoire, précision, réactivité
-/// - Le skill n'est pas discret (Bronze/Or) mais CONTINU basé sur le MMR
+/// - Le skill n'est pas discret (Bronze/Argent/Difficile) mais CONTINU basé sur le MMR
 class BotMatchmaking {
   static final Random _random = Random();
 
@@ -83,8 +83,7 @@ class BotMatchmaking {
     final suffixes = ['', ' II', ' III'];
     final suffix = botIndex < suffixes.length ? suffixes[botIndex] : '';
 
-    if (mmr >= 900) return 'Platine$suffix';
-    if (mmr >= 600) return 'Or$suffix';
+    if (mmr >= 600) return 'Difficile$suffix';
     if (mmr >= 300) return 'Argent$suffix';
     return 'Bronze$suffix';
   }
@@ -99,9 +98,9 @@ class BotMatchmaking {
       case 'argent':
         return _mmrToDifficulty(450, 0); // MMR moyen Argent
       case 'or':
-        return _mmrToDifficulty(750, 0); // MMR moyen Or
       case 'platine':
-        return _mmrToDifficulty(1050, 0); // MMR moyen Platine
+      case 'difficile':
+        return _mmrToDifficulty(950, 0); // MMR moyen palier fort fusionné
       default:
         return _mmrToDifficulty(450, 0); // Défaut = Argent
     }

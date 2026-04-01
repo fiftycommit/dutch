@@ -10,6 +10,7 @@ import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
 import 'bot_dutch_strategy.dart';
 import 'bot_power_handler.dart';
+import 'discard_tracker.dart';
 import 'duel_tuning.dart';
 import 'human_threat_tracker.dart';
 import 'moi_ml_profile.dart';
@@ -93,8 +94,8 @@ class BotCardStrategy {
       return;
     }
 
-    if (decisionProfile.tier == _CardTier.gold) {
-      _handleGoldReplacementByContext(
+    if (decisionProfile.tier == _CardTier.difficult) {
+      _handleDifficultReplacementByContext(
         gs,
         bot,
         drawn,
@@ -204,7 +205,7 @@ class BotCardStrategy {
     // échanger un des doublons → puis matcher l'autre pendant défausse collective
     // ═══════════════════════════════════════════════════════════════════════
     final allowDoublonPlay = !decisionProfile.greedyImmediate &&
-        (!isTenseEndgame || decisionProfile.tier == _CardTier.platinum);
+        (!isTenseEndgame || decisionProfile.tier == _CardTier.difficult);
     final doublonInfo = allowDoublonPlay
         ? BotMemoryManager.getBestDoublonForExchange(bot, drawnVal)
         : null;
@@ -415,15 +416,10 @@ class BotCardStrategy {
           gs, bot, unknownIndices);
     }
 
-    if (profile.tier == _CardTier.platinum) {
+    if (profile.tier == _CardTier.difficult) {
       return phase == BotGamePhase.endgame
           ? unknownIndices.first
           : unknownIndices.last;
-    }
-
-    if (profile.tier == _CardTier.gold) {
-      if (phase == BotGamePhase.endgame) return unknownIndices.first;
-      return unknownIndices.last;
     }
 
     // En fin de manche, les tiers élevés jouent plus "stables"
@@ -581,15 +577,14 @@ class BotCardStrategy {
       } else if (hasUnknown && cardGap >= 0) {
         shouldTrigger = true;
       }
-    } else if (profile.tier == _CardTier.platinum) {
-      if (racePressure && (hasKnownHighPayload || hasUnknown)) {
+    } else if (profile.tier == _CardTier.difficult) {
+      if (racePressure && hasKnownHighPayload) {
         shouldTrigger = true;
-      } else if (duelAgainstHumanOrMoi && (hasUnknown || cardGap >= 0)) {
+      } else if (duelAgainstHumanOrMoi &&
+          hasKnownHighPayload &&
+          (racePressure || cardGap >= 0)) {
         shouldTrigger = true;
       }
-    } else {
-      // Or: plus sélectif, déclenche surtout quand la table accélère.
-      shouldTrigger = racePressure && hasKnownHighPayload;
     }
 
     _logDrawnValetDecision(
@@ -663,11 +658,21 @@ class BotCardStrategy {
       final avgExchange =
           tracker.getAverageExchangeDiscardPoints(opponent.id, lookback: 6);
       final exchangeRate = tracker.getExchangeRate(opponent.id);
-      final style = tracker.estimateOpponentStyle(opponent.id);
-      final estimate =
-          tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
-      final indexIntel =
-          tracker.estimateOpponentIndexIntel(opponent.id, opponent.hand.length);
+      final readTier = OpponentReadTier.strong;
+      final style = tracker.estimateOpponentStyle(
+        opponent.id,
+        readTier: readTier,
+      );
+      final estimate = tracker.estimateOpponentHand(
+        opponent.id,
+        opponent.hand.length,
+        readTier: readTier,
+      );
+      final indexIntel = tracker.estimateOpponentIndexIntel(
+        opponent.id,
+        opponent.hand.length,
+        readTier: readTier,
+      );
       final powerUses = tracker.getPowerUseCount(opponent.id);
       final recentPowerUses = tracker.getRecentPowerUseCountInTurns(
         opponent.id,
@@ -950,7 +955,7 @@ class BotCardStrategy {
     }
   }
 
-  static void _handleGoldReplacementByContext(
+  static void _handleDifficultReplacementByContext(
     GameState gs,
     Player bot,
     PlayingCard drawn,
@@ -1004,6 +1009,17 @@ class BotCardStrategy {
             table,
             onlyWhenForceTempo: true,
           )) {
+        return;
+      }
+
+      if (_shouldDiscardHighCardToProtectStrongUnknown(
+        gs,
+        bot,
+        drawnVal,
+        unknownIndices,
+      )) {
+        GameLogic.discardDrawnCard(gs);
+        bot.consecutiveBadDraws++;
         return;
       }
 
@@ -1104,6 +1120,27 @@ class BotCardStrategy {
       GameLogic.discardDrawnCard(gs);
       bot.consecutiveBadDraws++;
     }
+  }
+
+  static bool _shouldDiscardHighCardToProtectStrongUnknown(
+    GameState gs,
+    Player bot,
+    int drawnVal,
+    List<int> unknownIndices,
+  ) {
+    if (unknownIndices.length != 1) return false;
+
+    final knownScore = bot.getKnownScore();
+    final expectedUnknown = BotMemoryManager.getExpectedDeckCardValue(gs);
+    final veryBadDrawFloor = max(8, expectedUnknown.ceil() + 2);
+
+    if (knownScore <= 2 && drawnVal >= veryBadDrawFloor) {
+      return true;
+    }
+    if (knownScore <= 4 && drawnVal >= 11) {
+      return true;
+    }
+    return false;
   }
 
   static void _maybeTriggerBronzeBlackout(
@@ -1301,10 +1338,6 @@ class BotCardStrategy {
     if (lowDrawChance <= 0.28) allowedWorsening += 1;
     if (expectedPoints >= 7.0) allowedWorsening += 1;
     if (tableConclusions.wasRecentlyTargeted) allowedWorsening += 1;
-    if (profile.tier == _CardTier.platinum &&
-        tableConclusions.minOpponentCards <= 2) {
-      allowedWorsening += 1;
-    }
     if (isPowerCard && remainingSameValue <= 1) {
       allowedWorsening += 1;
     }
@@ -1539,14 +1572,14 @@ class BotCardStrategy {
         break;
     }
 
-    final isPlatinumTier =
-        _tierFromDifficulty(difficulty) == _CardTier.platinum;
+    final isDifficultTier =
+        _tierFromDifficulty(difficulty) == _CardTier.difficult;
     final duelOpponent =
         gameState.players.where((p) => p.id != bot.id).firstOrNull;
     final duelAgainstHumanOrMoi = gameState.players.length == 2 &&
         duelOpponent != null &&
         (duelOpponent.isHuman || duelOpponent.botBehavior == BotBehavior.moi);
-    if (isPlatinumTier && duelAgainstHumanOrMoi) {
+    if (isDifficultTier && duelAgainstHumanOrMoi) {
       matchChance += DuelTuning.platinumDuelMatchBonus;
       if (phase == BotGamePhase.endgame) {
         matchChance += DuelTuning.platinumDuelMatchEndgameBonus;
@@ -1628,22 +1661,9 @@ class BotCardStrategy {
           unknownReplaceSkipChance: 0.0,
           forceKnownReaction: false,
         );
-      case _CardTier.gold:
+      case _CardTier.difficult:
         return const _CardDecisionProfile(
-          tier: _CardTier.gold,
-          minImprovement: 0,
-          tenseImprovementBonus: 0,
-          maxAcceptedWorseningToDenyHuman: 1,
-          allowEqualSwapInEndgame: true,
-          greedyImmediate: false,
-          greedyMinImmediateImprovement: 1,
-          knownMatchLapseChance: 0.03,
-          unknownReplaceSkipChance: 0.0,
-          forceKnownReaction: true,
-        );
-      case _CardTier.platinum:
-        return const _CardDecisionProfile(
-          tier: _CardTier.platinum,
+          tier: _CardTier.difficult,
           minImprovement: 0,
           tenseImprovementBonus: 0,
           maxAcceptedWorseningToDenyHuman: 1,
@@ -1658,7 +1678,7 @@ class BotCardStrategy {
   }
 
   static bool _isAdvancedCardTier(_CardTier tier) {
-    return tier == _CardTier.gold || tier == _CardTier.platinum;
+    return tier == _CardTier.difficult;
   }
 
   static _CardTier _tierFromDifficulty(BotDifficulty difficulty) {
@@ -1667,22 +1687,18 @@ class BotCardStrategy {
         return _CardTier.bronze;
       case 'Argent':
         return _CardTier.silver;
+      case 'Difficile':
       case 'Or':
+      case 'Platine':
       case 'Hard':
       case 'Insane':
-        return _CardTier.gold;
-      case 'Platine':
       case 'Nightmare':
       case 'Impossible':
-        return _CardTier.platinum;
+        return _CardTier.difficult;
       default:
         if (difficulty.matchAccuracy >= 0.99 &&
             difficulty.reactionSpeed >= 0.98) {
-          return _CardTier.platinum;
-        }
-        if (difficulty.matchAccuracy >= 0.95 &&
-            difficulty.reactionSpeed >= 0.9) {
-          return _CardTier.gold;
+          return _CardTier.difficult;
         }
         if (difficulty.matchAccuracy >= 0.9) {
           return _CardTier.silver;
@@ -1692,7 +1708,7 @@ class BotCardStrategy {
   }
 }
 
-enum _CardTier { bronze, silver, gold, platinum }
+enum _CardTier { bronze, silver, difficult }
 
 class _CardDecisionProfile {
   final _CardTier tier;

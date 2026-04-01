@@ -34,6 +34,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   // Tracking pour éviter de re-trigger les side effects
   bool _hasNavigatedToGame = false;
 
+  Difficulty _normalizeDisplayedBotDifficulty(Difficulty difficulty) {
+    return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -444,7 +448,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (settings == null) return;
 
     // Valeurs par défaut
-    int botDifficulty = settings.botDifficulty.index;
+    Difficulty botDifficulty =
+        _normalizeDisplayedBotDifficulty(settings.botDifficulty);
     final result = await showDialog<Map<String, int>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -465,16 +470,62 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Facile')),
-                  ButtonSegment(value: 1, label: Text('Moyen')),
-                  ButtonSegment(value: 2, label: Text('Difficile')),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SegmentedButton<Difficulty>(
+                    emptySelectionAllowed: true,
+                    segments: const [
+                      ButtonSegment(
+                        value: Difficulty.easy,
+                        label: Text('Facile'),
+                      ),
+                      ButtonSegment(
+                        value: Difficulty.medium,
+                        label: Text('Moyen'),
+                      ),
+                      ButtonSegment(
+                        value: Difficulty.platinum,
+                        label: Text('Difficile'),
+                      ),
+                    ],
+                    selected: botDifficulty == Difficulty.mix
+                        ? <Difficulty>{}
+                        : {botDifficulty},
+                    onSelectionChanged: (selection) {
+                      if (selection.isEmpty) return;
+                      setState(() => botDifficulty = selection.first);
+                    },
+                  ),
+                  ChoiceChip(
+                    avatar: Icon(
+                      Icons.shuffle,
+                      size: 16,
+                      color: botDifficulty == Difficulty.mix
+                          ? Colors.black
+                          : Colors.white,
+                    ),
+                    label: const Text('Mix'),
+                    selected: botDifficulty == Difficulty.mix,
+                    onSelected: (_) {
+                      setState(() => botDifficulty = Difficulty.mix);
+                    },
+                    selectedColor: Colors.blueGrey.shade200,
+                    backgroundColor: Colors.blueGrey.shade700,
+                    labelStyle: TextStyle(
+                      color: botDifficulty == Difficulty.mix
+                          ? Colors.black
+                          : Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    side: BorderSide(color: Colors.blueGrey.shade400),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
                 ],
-                selected: {botDifficulty},
-                onSelectionChanged: (selection) {
-                  setState(() => botDifficulty = selection.first);
-                },
               ),
             ],
           ),
@@ -487,7 +538,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               onPressed: () {
                 ServiceLocator().get<IHapticService>().buttonTap();
                 Navigator.pop(ctx, {
-                  'botDifficulty': botDifficulty,
+                  'botDifficulty': botDifficulty.index,
                 });
               },
               child: const Text('Appliquer'),
@@ -1040,7 +1091,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   ) async {
     int numberOfBots = 0; // Par defaut 0 bots en multi
     bool useSBMM = true;
-    int botDifficulty = 1; // Moyen par défaut
+    Difficulty botDifficulty = _normalizeDisplayedBotDifficulty(
+      provider.roomSettings?.botDifficulty ?? Difficulty.medium,
+    );
 
     return await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1113,17 +1166,62 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
                   if (!useSBMM) ...[
                     const SizedBox(height: 8),
-                    SegmentedButton<int>(
-                      segments: const [
-                        ButtonSegment(value: 0, label: Text('Facile')),
-                        ButtonSegment(value: 1, label: Text('Moyen')),
-                        ButtonSegment(value: 2, label: Text('Difficile')),
-                        ButtonSegment(value: 3, label: Text('Mix')),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SegmentedButton<Difficulty>(
+                          emptySelectionAllowed: true,
+                          segments: const [
+                            ButtonSegment(
+                              value: Difficulty.easy,
+                              label: Text('Facile'),
+                            ),
+                            ButtonSegment(
+                              value: Difficulty.medium,
+                              label: Text('Moyen'),
+                            ),
+                            ButtonSegment(
+                              value: Difficulty.platinum,
+                              label: Text('Difficile'),
+                            ),
+                          ],
+                          selected: botDifficulty == Difficulty.mix
+                              ? <Difficulty>{}
+                              : {botDifficulty},
+                          onSelectionChanged: (selection) {
+                            if (selection.isEmpty) return;
+                            setState(() => botDifficulty = selection.first);
+                          },
+                        ),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.shuffle,
+                            size: 16,
+                            color: botDifficulty == Difficulty.mix
+                                ? Colors.black
+                                : Colors.white,
+                          ),
+                          label: const Text('Mix'),
+                          selected: botDifficulty == Difficulty.mix,
+                          onSelected: (_) {
+                            setState(() => botDifficulty = Difficulty.mix);
+                          },
+                          selectedColor: Colors.blueGrey.shade200,
+                          backgroundColor: Colors.blueGrey.shade700,
+                          labelStyle: TextStyle(
+                            color: botDifficulty == Difficulty.mix
+                                ? Colors.black
+                                : Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          side: BorderSide(color: Colors.blueGrey.shade400),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
                       ],
-                      selected: {botDifficulty},
-                      onSelectionChanged: (selection) {
-                        setState(() => botDifficulty = selection.first);
-                      },
                     ),
                   ],
                 ],
@@ -1141,7 +1239,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 Navigator.pop(dialogContext, {
                   'numberOfBots': numberOfBots,
                   'useSBMM': useSBMM,
-                  'botDifficulty': useSBMM ? null : botDifficulty,
+                  'botDifficulty': useSBMM ? null : botDifficulty.index,
                 });
               },
               child: const Text('Lancer'),

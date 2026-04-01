@@ -33,17 +33,11 @@ class BotDifficulty {
     reactionMatchChance: 0.34,
   );
 
-  static const BotDifficulty gold = BotDifficulty(
-    name: "Or",
-    forgetChancePerTurn: 0.10,
-    confusionOnSwap: 0.14,
-    reactionSpeed: 0.78,
-    matchAccuracy: 0.88,
-    reactionMatchChance: 0.70,
-  );
-
-  static const BotDifficulty platinum = BotDifficulty(
-    name: "Platine",
+  /// Profil fort unique fusionné depuis les anciens paliers Or/Platine.
+  /// La précision mécanique reste au niveau Platine; la stratégie métier
+  /// filtre ensuite les coups trop agressifs.
+  static const BotDifficulty difficult = BotDifficulty(
+    name: "Difficile",
     forgetChancePerTurn: 0.0,
     confusionOnSwap: 0.0,
     reactionSpeed: 1.0,
@@ -51,15 +45,16 @@ class BotDifficulty {
     reactionMatchChance: 1.0,
   );
 
+  static const BotDifficulty gold = difficult;
+  static const BotDifficulty platinum = difficult;
+
   static BotDifficulty fromMMR(int mmr) {
     if (mmr < 300) {
       return bronze;
     } else if (mmr < 600) {
       return silver;
-    } else if (mmr < 900) {
-      return gold;
     } else {
-      return platinum;
+      return difficult;
     }
   }
 
@@ -70,9 +65,9 @@ class BotDifficulty {
       case "Argent":
         return silver;
       case "Or":
-        return gold;
       case "Platine":
-        return platinum;
+      case "Difficile":
+        return difficult;
       default:
         return silver;
     }

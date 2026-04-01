@@ -22,7 +22,8 @@ class BotMemoryManager {
 
     // HARDCORE FIX: Pour les difficultés hautes, ne PAS forcer un minimum de 1%
     // Platine/Or/Nightmare/Insane/Hard/Impossible peuvent avoir une mémoire parfaite
-    final isHardcore = difficulty.name == "Platine" ||
+    final isHardcore = difficulty.name == "Difficile" ||
+        difficulty.name == "Platine" ||
         difficulty.name == "Or" ||
         difficulty.name == "Hard" ||
         difficulty.name == "Insane" ||
@@ -67,7 +68,8 @@ class BotMemoryManager {
     }
 
     // HARDCORE FIX: Niveaux hardcore regardent la pire carte connue
-    final isHardcore = difficulty.name == "Or" ||
+    final isHardcore = difficulty.name == "Difficile" ||
+        difficulty.name == "Or" ||
         difficulty.name == "Platine" ||
         difficulty.name == "Hard" ||
         difficulty.name == "Insane" ||

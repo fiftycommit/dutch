@@ -32,6 +32,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   bool _isLoading = false;
   int selectedNumberOfPlayers = 4;
 
+  Difficulty _normalizeDisplayedBotDifficulty(Difficulty difficulty) {
+    return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +53,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
             : savedPlayers.clamp(2, 6);
         final diffIndex = prefs.getInt('lastBotDifficulty');
         if (diffIndex != null && diffIndex < Difficulty.values.length) {
-          selectedBotDifficulty = Difficulty.values[diffIndex];
+          selectedBotDifficulty = _normalizeDisplayedBotDifficulty(
+            Difficulty.values[diffIndex],
+          );
         }
       });
     }
@@ -345,43 +351,81 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         style: botSegmentStyle,
                       ),
                     ),
-                    child: SegmentedButton<Difficulty>(
-                      segments: [
-                        ButtonSegment(
-                          value: Difficulty.easy,
-                          label: const Text("Facile"),
-                          icon: Icon(Icons.sentiment_satisfied, size: f(18)),
+                    child: Wrap(
+                      spacing: f(10),
+                      runSpacing: f(10),
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SegmentedButton<Difficulty>(
+                          emptySelectionAllowed: true,
+                          segments: [
+                            ButtonSegment(
+                              value: Difficulty.easy,
+                              label: const Text("Facile"),
+                              icon: Icon(Icons.sentiment_satisfied, size: f(18)),
+                            ),
+                            ButtonSegment(
+                              value: Difficulty.medium,
+                              label: const Text("Moyen"),
+                              icon: Icon(Icons.sentiment_neutral, size: f(18)),
+                            ),
+                            ButtonSegment(
+                              value: Difficulty.platinum,
+                              label: const Text("Difficile"),
+                              icon: Icon(Icons.diamond, size: f(18)),
+                            ),
+                          ],
+                          selected: selectedBotDifficulty == Difficulty.mix
+                              ? <Difficulty>{}
+                              : {selectedBotDifficulty},
+                          onSelectionChanged: (Set<Difficulty> newSelection) {
+                            if (newSelection.isEmpty) return;
+                            setState(() {
+                              selectedBotDifficulty = newSelection.first;
+                            });
+                            _saveBotDifficulty(newSelection.first);
+                          },
+                          style: botSegmentStyle,
                         ),
-                        ButtonSegment(
-                          value: Difficulty.medium,
-                          label: const Text("Moyen"),
-                          icon: Icon(Icons.sentiment_neutral, size: f(18)),
-                        ),
-                        ButtonSegment(
-                          value: Difficulty.hard,
-                          label: const Text("Difficile"),
-                          icon: Icon(Icons.sentiment_very_dissatisfied,
-                              size: f(18)),
-                        ),
-                        ButtonSegment(
-                          value: Difficulty.platinum,
-                          label: const Text("Platine"),
-                          icon: Icon(Icons.diamond, size: f(18)),
-                        ),
-                        ButtonSegment(
-                          value: Difficulty.mix,
-                          label: const Text("Mix"),
-                          icon: Icon(Icons.shuffle, size: f(18)),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.shuffle,
+                            size: f(16),
+                            color: selectedBotDifficulty == Difficulty.mix
+                                ? Colors.black
+                                : Colors.white,
+                          ),
+                          label: Text(
+                            'Mix',
+                            style: TextStyle(
+                              fontSize: f(13),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          selected: selectedBotDifficulty == Difficulty.mix,
+                          onSelected: (_) {
+                            setState(() {
+                              selectedBotDifficulty = Difficulty.mix;
+                            });
+                            _saveBotDifficulty(Difficulty.mix);
+                          },
+                          selectedColor: selectedBotBg,
+                          backgroundColor: unselectedBg,
+                          side: const BorderSide(color: segmentBorder),
+                          labelStyle: TextStyle(
+                            color: selectedBotDifficulty == Difficulty.mix
+                                ? Colors.black
+                                : Colors.white,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: f(8),
+                            vertical: f(6),
+                          ),
                         ),
                       ],
-                      selected: {selectedBotDifficulty},
-                      onSelectionChanged: (Set<Difficulty> newSelection) {
-                        setState(() {
-                          selectedBotDifficulty = newSelection.first;
-                        });
-                        _saveBotDifficulty(newSelection.first);
-                      },
-                      style: botSegmentStyle,
                     ),
                   ),
                 ],
@@ -498,9 +542,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
       // Déterminer le hardcoreLevel basé sur la difficulté sélectionnée
       HardcoreLevel? hardcoreLevel;
-      if (selectedBotDifficulty == Difficulty.hard) {
-        hardcoreLevel = HardcoreLevel.nightmare;
-      } else if (selectedBotDifficulty == Difficulty.platinum) {
+      if (selectedBotDifficulty == Difficulty.platinum) {
         hardcoreLevel = HardcoreLevel.impossible;
       }
 

@@ -57,6 +57,10 @@ class BotFactory {
 
   static void resetUsedNames() => _usedNames.clear();
 
+  static Difficulty _normalizeStrongDifficulty(Difficulty difficulty) {
+    return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // SBMM BOTS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -131,7 +135,6 @@ class BotFactory {
       case 'bronze':
         return BotSkillLevel.bronze;
       case 'gold':
-        return BotSkillLevel.gold;
       case 'platinum':
         return BotSkillLevel.platinum;
       case 'silver':
@@ -153,24 +156,24 @@ class BotFactory {
     int? saveSlot,
   }) async {
     if (numberOfBots <= 0) return [];
-
-    // Platinum : logique élite (meilleurs absolus)
-    if (difficulty == Difficulty.platinum) {
-      return _createEliteBots(numberOfBots, difficulty, saveSlot: saveSlot);
-    }
+    final normalizedDifficulty = _normalizeStrongDifficulty(difficulty);
 
     // Mix : logique spéciale (mélange de niveaux)
-    if (difficulty == Difficulty.mix) {
+    if (normalizedDifficulty == Difficulty.mix) {
       return _createMixBots(numberOfBots);
     }
 
-    // Or : sélection serveur par winrate
-    if (difficulty == Difficulty.hard) {
-      return _createWinrateBots(numberOfBots, difficulty, saveSlot: saveSlot);
+    // Niveau fort unique : logique élite (anciens Or/Platine fusionnés)
+    if (normalizedDifficulty == Difficulty.platinum) {
+      return _createEliteBots(
+        numberOfBots,
+        normalizedDifficulty,
+        saveSlot: saveSlot,
+      );
     }
 
     // Bronze / Argent : bots par défaut, pas de sélection serveur
-    final targetSkill = difficultyToSkillLevel(difficulty);
+    final targetSkill = difficultyToSkillLevel(normalizedDifficulty);
     return List.generate(
       numberOfBots,
       (i) => Player(
@@ -188,116 +191,6 @@ class BotFactory {
   // INTERNAL BOT CREATION
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Winrate minimum par difficulté (pas de max, on prend les plus proches du min)
-  static double _winrateMin(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy:
-        return 0.0; // Bronze : tous les bots, triés du plus faible
-      case Difficulty.medium:
-        return 0.50; // Argent : minimum 50%
-      case Difficulty.hard:
-        return 0.70; // Or : minimum 70%
-      default:
-        return 0.0;
-    }
-  }
-
-  /// Sélectionne les bots dont le winrate moyen tombe dans la tranche cible
-  static Future<List<Player>> _createWinrateBots(
-      int numberOfBots, Difficulty difficulty,
-      {int? saveSlot}) async {
-    final botLearningService = BotLearningService();
-    final allBots = await _fetchTopBotsOfflineFirst(
-      botLearningService: botLearningService,
-      limit: 50,
-    );
-    final targetSkill = difficultyToSkillLevel(difficulty);
-
-    double avgWinrate(BotProfile b) => (b.winRate + b.avgPBeatHuman) / 2;
-    final minWr = _winrateMin(difficulty);
-    final isBronze = difficulty == Difficulty.easy;
-    final targetSkillName = targetSkill.toString().split('.').last;
-
-    // Filtrer par winrate minimum strict
-    var candidates = allBots.where((b) => avgWinrate(b) >= minWr).toList();
-
-    // Prioriser les bots du niveau cible (bronze/silver/gold) quand disponibles.
-    // Fallback implicite: si aucun bot du niveau cible admissible, on garde les meilleurs globaux.
-    final sameSkillCandidates =
-        candidates.where((b) => b.skillLevel == targetSkillName).toList();
-    if (sameSkillCandidates.isNotEmpty) {
-      candidates = sameSkillCandidates;
-    }
-
-    // Bronze : trier du plus faible au plus fort (on veut les plus nuls)
-    // Argent/Or : trier du plus fort au plus faible (on veut les meilleurs au-dessus du min)
-    if (isBronze) {
-      candidates.sort((a, b) => avgWinrate(a).compareTo(avgWinrate(b)));
-    } else {
-      candidates.sort((a, b) => avgWinrate(b).compareTo(avgWinrate(a)));
-    }
-
-    if (kDebugMode) {
-      debugPrint(
-          '🎯 Min winrate: ${(minWr * 100).toStringAsFixed(0)}% → ${candidates.length} bots trouvés');
-    }
-    for (final bot in candidates) {
-      if (kDebugMode) {
-        debugPrint(
-            '  🤖 ${bot.botId} | WR: ${(avgWinrate(bot) * 100).toStringAsFixed(0)}%');
-      }
-    }
-
-    final isGold = difficulty == Difficulty.hard;
-    final players = <Player>[];
-
-    if (isGold) {
-      // Or : 2/3 #1 + 1/3 #2 (duplication des meilleurs)
-      final bestBot = candidates.isNotEmpty ? candidates.first : null;
-      final secondBot = candidates.length >= 2 ? candidates[1] : bestBot;
-
-      if (bestBot != null) {
-        if (kDebugMode) {
-          debugPrint(
-              '⭐ #1: ${bestBot.botId} | WR: ${(avgWinrate(bestBot) * 100).toStringAsFixed(0)}%');
-        }
-      }
-      if (secondBot != null && secondBot != bestBot) {
-        if (kDebugMode) {
-          debugPrint(
-              '⭐ #2: ${secondBot.botId} | WR: ${(avgWinrate(secondBot) * 100).toStringAsFixed(0)}%');
-        }
-      }
-
-      final secondBotCount = (numberOfBots / 3).ceil();
-      final firstBotCount = numberOfBots - secondBotCount;
-
-      for (int i = 0; i < numberOfBots; i++) {
-        final source = i < firstBotCount ? bestBot : secondBot;
-        players.add(_playerFromBotProfile(source, i, targetSkill));
-      }
-    } else {
-      // Bronze / Argent : bots tous différents
-      for (int i = 0; i < numberOfBots; i++) {
-        final source = i < candidates.length ? candidates[i] : null;
-        if (source != null) {
-          if (kDebugMode) {
-            debugPrint(
-                '⭐ Bot $i: ${source.botId} | WR: ${(avgWinrate(source) * 100).toStringAsFixed(0)}%');
-          }
-        }
-        players.add(_playerFromBotProfile(source, i, targetSkill));
-      }
-    }
-
-    return _validateAndFallback(
-      serverBots: players,
-      numberOfBots: numberOfBots,
-      difficulty: difficulty,
-      saveSlot: saveSlot,
-    );
-  }
-
   /// Mode Mix : un bot de chaque tranche de winrate
   static Future<List<Player>> _createMixBots(int numberOfBots) async {
     final botLearningService = BotLearningService();
@@ -312,7 +205,7 @@ class BotFactory {
     final mixSkills = [
       BotSkillLevel.bronze,
       BotSkillLevel.silver,
-      BotSkillLevel.gold
+      BotSkillLevel.platinum,
     ];
     final players = <Player>[];
 
@@ -410,16 +303,17 @@ class BotFactory {
     required Difficulty difficulty,
     required int? saveSlot,
   }) async {
+    final normalizedDifficulty = _normalizeStrongDifficulty(difficulty);
     // Validation uniquement pour Gold/Platinum avec saveSlot connu
     if (saveSlot == null) return serverBots;
-    if (difficulty != Difficulty.hard && difficulty != Difficulty.platinum) {
+    if (normalizedDifficulty != Difficulty.platinum) {
       return serverBots;
     }
 
     final profile = await PlayerLearningService().getProfile(slotId: saveSlot);
     final playerMMR = profile.mmr;
 
-    final isGold = difficulty == Difficulty.hard;
+    final isGold = normalizedDifficulty == Difficulty.hard;
     final minMMR = isGold ? playerMMR - 100 : playerMMR;
     final minPBeatHuman = isGold ? 0.45 : 0.55;
 
@@ -441,7 +335,7 @@ class BotFactory {
     // Retry avec filtres plus larges
     final retryBots = await _retryWithBroaderFilters(
       numberOfBots: numberOfBots,
-      difficulty: difficulty,
+      difficulty: normalizedDifficulty,
       minMMR: minMMR,
       minPBeatHuman: minPBeatHuman,
     );
@@ -456,7 +350,7 @@ class BotFactory {
     }
     return _createBoostedSBMMBots(
       numberOfBots: numberOfBots,
-      difficulty: difficulty,
+      difficulty: normalizedDifficulty,
       playerProfile: profile,
     );
   }
@@ -538,8 +432,9 @@ class BotFactory {
     required Difficulty difficulty,
     required PlayerProfile playerProfile,
   }) {
-    final isGold = difficulty == Difficulty.hard;
-    final targetSkill = difficultyToSkillLevel(difficulty);
+    final normalizedDifficulty = _normalizeStrongDifficulty(difficulty);
+    final isGold = normalizedDifficulty == Difficulty.hard;
+    final targetSkill = difficultyToSkillLevel(normalizedDifficulty);
 
     final baseParamsList = BotConfig.generateMatchmakingBotParams(
       playerProfile: playerProfile,
@@ -693,19 +588,18 @@ class BotFactory {
   /// Convertit un MMR en BotSkillLevel (pour affichage/nom uniquement)
   static BotSkillLevel _mmrToSkillLevel(int mmr) {
     if (mmr >= 900) return BotSkillLevel.platinum;
-    if (mmr >= 600) return BotSkillLevel.gold;
+    if (mmr >= 600) return BotSkillLevel.platinum;
     if (mmr >= 300) return BotSkillLevel.silver;
     return BotSkillLevel.bronze;
   }
 
   static BotSkillLevel difficultyToSkillLevel(Difficulty difficulty) {
-    switch (difficulty) {
+    switch (_normalizeStrongDifficulty(difficulty)) {
       case Difficulty.easy:
         return BotSkillLevel.bronze;
       case Difficulty.medium:
         return BotSkillLevel.silver;
       case Difficulty.hard:
-        return BotSkillLevel.gold;
       case Difficulty.platinum:
         return BotSkillLevel.platinum;
       case Difficulty.mix:

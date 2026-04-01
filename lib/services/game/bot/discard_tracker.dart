@@ -9,6 +9,11 @@ enum DiscardActionType {
   matchDiscard,
 }
 
+enum OpponentReadTier {
+  medium,
+  strong,
+}
+
 /// Système de comptage de cartes pour les bots intelligents
 ///
 /// Un joueur expert observe :
@@ -57,6 +62,19 @@ class DiscardTracker {
   final Map<String, int> _playerPowerUseCount = {};
   final Map<String, List<int>> _playerPowerUseTurns = {};
   final Map<String, int> _playerRoundStartScore = {};
+  final Map<String, int> _playerHandChangeSerial = {};
+  final Map<String, int> _playerCurrentHandMaxCardCeiling = {};
+  final Map<String, int> _playerCurrentMinCardUpperBound = {};
+  final Map<String, int> _playerMinCardUpperBoundSerial = {};
+  final Map<String, int> _playerFailedMatchCount = {};
+  final Map<String, List<int>> _playerFailedMatchTurns = {};
+  final Map<String, int> _playerLookOwnCount = {};
+  final Map<String, List<int>> _playerLookOwnTurns = {};
+  final Map<String, int> _playerSpyCount = {};
+  final Map<String, List<int>> _playerSpyTurns = {};
+  final Map<String, int> _playerVisibleDisruptionCount = {};
+  final Map<String, int> _playerPowerSkipCount = {};
+  final Map<String, Map<String, int>> _playerSkippedPowerByValue = {};
 
   /// Nombre de défausses observées pour un joueur
   int getDiscardCount(String playerId) =>
@@ -147,6 +165,7 @@ class DiscardTracker {
               : DiscardActionType.drawnDiscard);
       switch (resolvedType) {
         case DiscardActionType.exchangeDiscard:
+          _bumpHandChangeSerial(discardedBy);
           _playerExchangeDiscardCount[discardedBy] =
               (_playerExchangeDiscardCount[discardedBy] ?? 0) + 1;
           final exchanged =
@@ -156,6 +175,16 @@ class DiscardTracker {
             exchanged.removeRange(0, exchanged.length - 24);
           }
           _lastActionWasExchange[discardedBy] = true;
+          final hasStableRead =
+              _playerCurrentHandMaxCardCeiling.containsKey(discardedBy);
+          if (hasStableRead) {
+            final currentSerial = _playerHandChangeSerial[discardedBy] ?? 0;
+            final cap = max(0, points - 1);
+            final previous = _playerCurrentMinCardUpperBound[discardedBy];
+            _playerCurrentMinCardUpperBound[discardedBy] =
+                previous == null ? cap : min(previous, cap);
+            _playerMinCardUpperBoundSerial[discardedBy] = currentSerial;
+          }
           if (replacedIndex != null) {
             _recordReplacementIndexObservation(
               discardedBy,
@@ -174,8 +203,19 @@ class DiscardTracker {
             drawn.removeRange(0, drawn.length - 24);
           }
           _lastActionWasExchange[discardedBy] = false;
+          final isPowerCard = value == '7' ||
+              value == '10' ||
+              value == 'V' ||
+              value == 'JOKER';
+          if (!isPowerCard) {
+            final cap = max(0, points - 1);
+            final previous = _playerCurrentHandMaxCardCeiling[discardedBy];
+            _playerCurrentHandMaxCardCeiling[discardedBy] =
+                previous == null ? cap : min(previous, cap);
+          }
           break;
         case DiscardActionType.matchDiscard:
+          _bumpHandChangeSerial(discardedBy);
           _playerMatchDiscardCount[discardedBy] =
               (_playerMatchDiscardCount[discardedBy] ?? 0) + 1;
           _lastActionWasExchange[discardedBy] = false;
@@ -216,6 +256,80 @@ class DiscardTracker {
     return _playerRoundStartScore[playerId] ?? fallback;
   }
 
+  void recordMatchFailed(
+    String playerId, {
+    int? turnCount,
+  }) {
+    _playerFailedMatchCount[playerId] =
+        (_playerFailedMatchCount[playerId] ?? 0) + 1;
+    if (turnCount != null) {
+      final turns = _playerFailedMatchTurns.putIfAbsent(playerId, () => <int>[]);
+      turns.add(turnCount);
+      if (turns.length > 24) {
+        turns.removeRange(0, turns.length - 24);
+      }
+    }
+  }
+
+  void recordSelfLook(
+    String playerId, {
+    int? turnCount,
+  }) {
+    _playerLookOwnCount[playerId] = (_playerLookOwnCount[playerId] ?? 0) + 1;
+    if (turnCount != null) {
+      final turns = _playerLookOwnTurns.putIfAbsent(playerId, () => <int>[]);
+      turns.add(turnCount);
+      if (turns.length > 24) {
+        turns.removeRange(0, turns.length - 24);
+      }
+    }
+  }
+
+  void recordSpy(
+    String playerId, {
+    int? turnCount,
+  }) {
+    _playerSpyCount[playerId] = (_playerSpyCount[playerId] ?? 0) + 1;
+    if (turnCount != null) {
+      final turns = _playerSpyTurns.putIfAbsent(playerId, () => <int>[]);
+      turns.add(turnCount);
+      if (turns.length > 24) {
+        turns.removeRange(0, turns.length - 24);
+      }
+    }
+  }
+
+  void recordPowerSkip(
+    String playerId,
+    String powerValue, {
+    int? turnCount,
+  }) {
+    _playerPowerSkipCount[playerId] = (_playerPowerSkipCount[playerId] ?? 0) + 1;
+    final byValue =
+        _playerSkippedPowerByValue.putIfAbsent(playerId, () => <String, int>{});
+    byValue[powerValue] = (byValue[powerValue] ?? 0) + 1;
+  }
+
+  void recordPenalty(String playerId) {
+    _bumpHandChangeSerial(playerId);
+    _playerCurrentHandMaxCardCeiling.remove(playerId);
+    _playerCurrentMinCardUpperBound.remove(playerId);
+    _playerMinCardUpperBoundSerial.remove(playerId);
+  }
+
+  void recordTakeFromDiscard(String playerId) {
+    _bumpHandChangeSerial(playerId);
+    _playerCurrentHandMaxCardCeiling.remove(playerId);
+    _playerCurrentMinCardUpperBound.remove(playerId);
+    _playerMinCardUpperBoundSerial.remove(playerId);
+  }
+
+  void recordVisibleJokerShuffle(String playerId) {
+    _playerVisibleDisruptionCount[playerId] =
+        (_playerVisibleDisruptionCount[playerId] ?? 0) + 1;
+    _clearPositionIntel(playerId);
+  }
+
   int getRecentPowerUseCountInTurns(
     String playerId,
     int currentTurn, {
@@ -229,6 +343,60 @@ class DiscardTracker {
       if (turn >= floorTurn) count++;
     }
     return count;
+  }
+
+  int getRecentMatchFailCount(
+    String playerId, {
+    int lookback = 2,
+  }) {
+    final count = _playerFailedMatchCount[playerId] ?? 0;
+    return min(count, max(lookback, 0));
+  }
+
+  int getRecentSelfLookCount(
+    String playerId, {
+    int lookback = 2,
+  }) {
+    final count = _playerLookOwnCount[playerId] ?? 0;
+    return min(count, max(lookback, 0));
+  }
+
+  int getRecentSpyCount(
+    String playerId, {
+    int lookback = 2,
+  }) {
+    final count = _playerSpyCount[playerId] ?? 0;
+    return min(count, max(lookback, 0));
+  }
+
+  int getVisibleDisruptionCount(
+    String playerId, {
+    int lookback = 3,
+  }) {
+    final count = _playerVisibleDisruptionCount[playerId] ?? 0;
+    return min(count, max(lookback, 0));
+  }
+
+  int getPowerSkipCount(
+    String playerId, {
+    String? powerValue,
+  }) {
+    if (powerValue == null) {
+      return _playerPowerSkipCount[playerId] ?? 0;
+    }
+    return _playerSkippedPowerByValue[playerId]?[powerValue] ?? 0;
+  }
+
+  int? getCurrentHandMaxCardCeiling(String playerId) {
+    return _playerCurrentHandMaxCardCeiling[playerId];
+  }
+
+  int? getCurrentMinCardUpperBound(String playerId) {
+    final serial = _playerMinCardUpperBoundSerial[playerId];
+    if (serial == null) return null;
+    final currentSerial = _playerHandChangeSerial[playerId] ?? 0;
+    if (serial != currentSerial) return null;
+    return _playerCurrentMinCardUpperBound[playerId];
   }
 
   /// Mémorisation publique observée (indices vus au départ).
@@ -451,6 +619,19 @@ class DiscardTracker {
     _playerPowerUseCount.clear();
     _playerPowerUseTurns.clear();
     _playerRoundStartScore.clear();
+    _playerHandChangeSerial.clear();
+    _playerCurrentHandMaxCardCeiling.clear();
+    _playerCurrentMinCardUpperBound.clear();
+    _playerMinCardUpperBoundSerial.clear();
+    _playerFailedMatchCount.clear();
+    _playerFailedMatchTurns.clear();
+    _playerLookOwnCount.clear();
+    _playerLookOwnTurns.clear();
+    _playerSpyCount.clear();
+    _playerSpyTurns.clear();
+    _playerVisibleDisruptionCount.clear();
+    _playerPowerSkipCount.clear();
+    _playerSkippedPowerByValue.clear();
   }
 
   /// Snapshot de la table à un tour donné (rotation de table).
@@ -674,7 +855,11 @@ class DiscardTracker {
   ///
   /// Logique : Si un joueur défausse beaucoup de cartes hautes,
   /// il garde probablement des cartes basses → bonne main !
-  OpponentHandEstimate estimateOpponentHand(String playerId, int cardCount) {
+  OpponentHandEstimate estimateOpponentHand(
+    String playerId,
+    int cardCount, {
+    OpponentReadTier readTier = OpponentReadTier.medium,
+  }) {
     final history = _playerDiscardHistory[playerId] ?? [];
 
     if (history.isEmpty) {
@@ -720,6 +905,14 @@ class DiscardTracker {
     final decisions = getObservedDecisionCount(playerId);
     final exchangeRate = getExchangeRate(playerId);
     final lastExchange = lastActionWasExchange(playerId);
+    final recentMatchFails = getRecentMatchFailCount(playerId);
+    final recentLooks = getRecentSelfLookCount(playerId);
+    final recentSpies = getRecentSpyCount(playerId);
+    final visibleDisruptions = getVisibleDisruptionCount(playerId);
+    final currentHandMaxCeiling = getCurrentHandMaxCardCeiling(playerId);
+    final skipped7 = getPowerSkipCount(playerId, powerValue: '7');
+    final skipped10 = getPowerSkipCount(playerId, powerValue: '10');
+    final skippedValet = getPowerSkipCount(playerId, powerValue: 'V');
 
     // Ajustements comportementaux:
     // - garde souvent la pioche => tendance à améliorer sa main (score estimé plus bas)
@@ -734,9 +927,44 @@ class DiscardTracker {
       estimatedAvgCard -= 0.4;
     }
 
+    if (recentMatchFails > 0) {
+      estimatedAvgCard += 0.55 * min(recentMatchFails, 2);
+    }
+    if (visibleDisruptions > 0) {
+      estimatedAvgCard += 0.45 * min(visibleDisruptions, 2);
+    }
+    if (recentLooks > 0) {
+      estimatedAvgCard -= 0.30 * min(recentLooks, 2);
+    }
+    if (recentSpies > 0 && cardCount <= 2) {
+      estimatedAvgCard -= 0.28 * min(recentSpies, 2);
+    }
+    if (skipped7 > 0) {
+      estimatedAvgCard -=
+          readTier == OpponentReadTier.strong ? 0.34 : 0.18;
+    }
+    if (cardCount <= 2 && skipped10 > 0) {
+      estimatedAvgCard -= 0.18;
+    }
+    if (cardCount <= 2 && skippedValet > 0) {
+      estimatedAvgCard -= 0.20;
+    }
+
+    // Refus public explicite:
+    // s'il jette une carte N non-spéciale, sa main actuelle est censée être
+    // entièrement inférieure ou égale à N-1 tant qu'aucune perturbation
+    // publique majeure n'est venue casser cette lecture.
+    if (currentHandMaxCeiling != null) {
+      final cap = currentHandMaxCeiling.toDouble().clamp(0.0, 13.0);
+      final directDiscardWeight =
+          (0.45 + min(getDrawnDiscardCount(playerId), 4) * 0.10)
+              .clamp(0.45, 0.85);
+      estimatedAvgCard =
+          (estimatedAvgCard * (1 - directDiscardWeight)) +
+              (min(estimatedAvgCard, cap) * directDiscardWeight);
+    }
+
     // CORRECTION 1v1: Exploiter la distinction échange vs défausse directe.
-    // Si l'adversaire jette directement une carte de valeur X, ça signifie
-    // que toute sa main est meilleure que X → plafond sur sa pire carte.
     final drawnDiscardPts =
         _playerDrawnDiscardPoints[playerId] ?? const <int>[];
     if (drawnDiscardPts.isNotEmpty) {
@@ -789,11 +1017,21 @@ class DiscardTracker {
     final coverage = ((history.length * 0.55) + (decisions * 0.45)) / 14.0;
     final confidence =
         (0.08 + (coverage * 0.78) - (volatility * 0.22)).clamp(0.05, 0.90);
+    final skip7ConfidenceBonus =
+        skipped7 > 0 ? (readTier == OpponentReadTier.strong ? 0.08 : 0.04) : 0.0;
+    final adjustedConfidence = (confidence +
+            (currentHandMaxCeiling != null ? 0.08 : 0.0) +
+            (recentLooks > 0 ? 0.05 : 0.0) +
+            (recentSpies > 0 && cardCount <= 2 ? 0.03 : 0.0) +
+            skip7ConfidenceBonus -
+            (visibleDisruptions * 0.06) -
+            (recentMatchFails * 0.05))
+        .clamp(0.05, 0.92);
 
     return OpponentHandEstimate(
       playerId: playerId,
       estimatedScore: cardCount * estimatedAvgCard,
-      confidence: confidence,
+      confidence: adjustedConfidence,
       likelyLowHand: likelyLowHand,
       avgDiscardedPoints: avgDiscarded,
     );
@@ -865,12 +1103,23 @@ class DiscardTracker {
     return sample.any((v) => v <= maxPoints);
   }
 
-  OpponentStyleEstimate estimateOpponentStyle(String playerId) {
+  OpponentStyleEstimate estimateOpponentStyle(
+    String playerId, {
+    OpponentReadTier readTier = OpponentReadTier.medium,
+  }) {
     final decisions = getObservedDecisionCount(playerId);
     final exchangeRate = getExchangeRate(playerId);
     final avgDiscarded = getAverageDiscardedPoints(playerId);
     final matchCount = getMatchDiscardCount(playerId);
     final powerUses = getPowerUseCount(playerId);
+    final recentMatchFails = getRecentMatchFailCount(playerId);
+    final recentLooks = getRecentSelfLookCount(playerId);
+    final recentSpies = getRecentSpyCount(playerId);
+    final visibleDisruptions = getVisibleDisruptionCount(playerId);
+    final currentHandMaxCeiling = getCurrentHandMaxCardCeiling(playerId);
+    final skipped7 = getPowerSkipCount(playerId, powerValue: '7');
+    final skipped10 = getPowerSkipCount(playerId, powerValue: '10');
+    final skippedValet = getPowerSkipCount(playerId, powerValue: 'V');
 
     // Confiance rapide mais bornée: le Platine doit s'adapter tôt.
     final confidence =
@@ -895,18 +1144,54 @@ class DiscardTracker {
     final unpredictability =
         (1.0 - ((exchangeRate - 0.5).abs() * 2.0)).clamp(0.0, 1.0);
 
+    final adjustedOptimization = (optimization +
+            (recentLooks * 0.10) +
+            (recentSpies * 0.08) +
+            (currentHandMaxCeiling != null ? 0.10 : 0.0) +
+            (skipped7 > 0
+                ? (readTier == OpponentReadTier.strong ? 0.12 : 0.06)
+                : 0.0) +
+            (skipped10 > 0 ? 0.04 : 0.0) +
+            (skippedValet > 0 ? 0.05 : 0.0) -
+            (recentMatchFails * 0.12) -
+            (visibleDisruptions * 0.14))
+        .clamp(0.0, 1.0);
+
+    final adjustedAggression = (aggression +
+            (recentSpies * 0.08) +
+            (skippedValet > 0 ? 0.06 : 0.0) -
+            (recentMatchFails * 0.06))
+        .clamp(0.0, 1.0);
+
+    final adjustedUnpredictability =
+        (unpredictability + (visibleDisruptions * 0.08)).clamp(0.0, 1.0);
+
+    final adjustedConfidence = (confidence +
+            (currentHandMaxCeiling != null ? 0.06 : 0.0) +
+            (recentLooks > 0 ? 0.04 : 0.0) +
+            (skipped7 > 0
+                ? (readTier == OpponentReadTier.strong ? 0.07 : 0.03)
+                : 0.0) -
+            (visibleDisruptions * 0.08) -
+            (recentMatchFails * 0.05))
+        .clamp(0.10, 1.0);
+
     return OpponentStyleEstimate(
       playerId: playerId,
-      optimization: optimization,
-      aggression: aggression,
-      unpredictability: unpredictability,
-      confidence: confidence,
+      optimization: adjustedOptimization,
+      aggression: adjustedAggression,
+      unpredictability: adjustedUnpredictability,
+      confidence: adjustedConfidence,
       avgDiscardedPoints: avgDiscarded,
       observedDecisions: decisions,
     );
   }
 
-  OpponentIndexIntel estimateOpponentIndexIntel(String playerId, int handSize) {
+  OpponentIndexIntel estimateOpponentIndexIntel(
+    String playerId,
+    int handSize, {
+    OpponentReadTier readTier = OpponentReadTier.medium,
+  }) {
     if (handSize <= 0) {
       return OpponentIndexIntel(
         playerId: playerId,
@@ -962,6 +1247,15 @@ class DiscardTracker {
     final powerUses = getPowerUseCount(playerId);
     final observedDecisions = getObservedDecisionCount(playerId);
     final visibleSwapCount = _playerVisibleSwapCount[playerId] ?? 0;
+    final visibleDisruptions = getVisibleDisruptionCount(playerId);
+    final recentMatchFails = getRecentMatchFailCount(playerId);
+    final recentLooks = getRecentSelfLookCount(playerId);
+    final recentSpies = getRecentSpyCount(playerId);
+    final currentHandMaxCeiling = getCurrentHandMaxCardCeiling(playerId);
+    final currentMinUpperBound = getCurrentMinCardUpperBound(playerId);
+    final skipped7 = getPowerSkipCount(playerId, powerValue: '7');
+    final skipped10 = getPowerSkipCount(playerId, powerValue: '10');
+    final skippedValet = getPowerSkipCount(playerId, powerValue: 'V');
     final visibleSwapRatio = observedReplacements <= 0
         ? 0.0
         : (visibleSwapCount / observedReplacements).clamp(0.0, 1.0);
@@ -981,6 +1275,30 @@ class DiscardTracker {
     } else if (powerUses >= 1) {
       cardCeiling -= 0.15;
     }
+    if (currentHandMaxCeiling != null) {
+      cardCeiling = min(cardCeiling, currentHandMaxCeiling.toDouble());
+    }
+    if (currentMinUpperBound != null && handSize >= 1) {
+      final adjustedScoreCap =
+          ((cardCeiling * max(handSize - 1, 0)) + currentMinUpperBound)
+              .clamp(0.0, 999.0);
+      cardCeiling = min(cardCeiling, currentMinUpperBound + 0.8);
+      final currentScoreCeiling = cardCeiling * handSize;
+      if (adjustedScoreCap < currentScoreCeiling) {
+        cardCeiling = (adjustedScoreCap / handSize).clamp(0.0, 13.0);
+      }
+    }
+    cardCeiling -= recentLooks * 0.20;
+    if (handSize <= 2) {
+      cardCeiling -= recentSpies * 0.18;
+      if (skipped10 > 0) cardCeiling -= 0.15;
+      if (skippedValet > 0) cardCeiling -= 0.20;
+    }
+    if (skipped7 > 0) {
+      cardCeiling -= readTier == OpponentReadTier.strong ? 0.32 : 0.16;
+    }
+    cardCeiling += recentMatchFails * 0.35;
+    cardCeiling += visibleDisruptions * 0.45;
     cardCeiling += visibleSwapRatio * 2.10;
     if (visibleSwapCount >= 2) {
       cardCeiling += 0.35;
@@ -994,7 +1312,15 @@ class DiscardTracker {
     confidence += (min(observedDecisions, 10) / 10.0) * 0.25;
     confidence += startKnownRatio * 0.15;
     confidence += (min(powerUses, 6) / 6.0) * 0.10;
+    confidence += currentHandMaxCeiling != null ? 0.12 : 0.0;
+    confidence += currentMinUpperBound != null ? 0.10 : 0.0;
+    confidence += recentLooks > 0 ? 0.05 : 0.0;
+    confidence += skipped7 > 0
+        ? (readTier == OpponentReadTier.strong ? 0.08 : 0.04)
+        : 0.0;
     if (capValues.isEmpty) confidence -= 0.12;
+    confidence -= recentMatchFails * 0.05;
+    confidence -= visibleDisruptions * 0.08;
     confidence -= visibleSwapRatio * 0.22;
     confidence = confidence.clamp(0.05, 0.92);
 
@@ -1020,6 +1346,12 @@ class DiscardTracker {
     String playerId, {
     required int replacedIndex,
   }) {
+    _bumpHandChangeSerial(playerId);
+    _playerVisibleDisruptionCount[playerId] =
+        (_playerVisibleDisruptionCount[playerId] ?? 0) + 1;
+    _playerCurrentHandMaxCardCeiling.remove(playerId);
+    _playerCurrentMinCardUpperBound.remove(playerId);
+    _playerMinCardUpperBoundSerial.remove(playerId);
     _recordReplacementIndexVisibility(
       playerId,
       replacedIndex: replacedIndex,
@@ -1070,6 +1402,19 @@ class DiscardTracker {
     final counts =
         _playerReplacedIndexCounts.putIfAbsent(playerId, () => <int, int>{});
     counts[replacedIndex] = (counts[replacedIndex] ?? 0) + 1;
+  }
+
+  void _bumpHandChangeSerial(String playerId) {
+    _playerHandChangeSerial[playerId] =
+        (_playerHandChangeSerial[playerId] ?? 0) + 1;
+  }
+
+  void _clearPositionIntel(String playerId) {
+    _playerReplacedIndexHistory.remove(playerId);
+    _playerReplacedIndexCounts.remove(playerId);
+    _playerIndexUpperBounds.remove(playerId);
+    _playerVisibleSwapByIndexCount.remove(playerId);
+    _playerVisibleSwapCount.remove(playerId);
   }
 
   List<int> _tail(List<int> values, int lookback) {

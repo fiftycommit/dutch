@@ -15,6 +15,7 @@ import '../services/ui/stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
 import '../services/game/bot/hardcore_bot_config.dart';
+import '../services/game/bot/bot_dutch_strategy.dart';
 import '../services/game/bot/human_threat_tracker.dart';
 import '../services/learning/bot_learning_service.dart';
 import '../services/learning/ai_telemetry_service.dart';
@@ -502,6 +503,7 @@ class GameProvider with ChangeNotifier implements IGameController {
     final human = _gameState!.currentPlayer;
     final beforeScore = human.getEstimatedScore();
     _gameState!.drawnCard = _gameState!.discardPile.removeLast();
+    BotDutchStrategy.discardTracker.recordTakeFromDiscard(human.id);
     _hapticService.cardTap();
     _gameState!.addToHistory(ActionHistoryMessages.takeFromDiscard(
         human.name, _gameState!.drawnCard!));

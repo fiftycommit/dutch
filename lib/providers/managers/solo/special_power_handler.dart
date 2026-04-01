@@ -3,6 +3,7 @@ import '../../../models/player.dart';
 import '../../../models/game_state.dart';
 import '../../../utils/action_history_messages.dart';
 import '../../../services/game/game_logic.dart';
+import '../../../services/game/bot/bot_dutch_strategy.dart';
 import '../../../services/logging/game_logger_service.dart';
 import '../../game_tracking_provider.dart';
 
@@ -20,6 +21,7 @@ class SpecialPowerHandler {
   void skipPower(GameState gameState) {
     final human = gameState.currentPlayer;
     final specialCard = gameState.specialCardToActivate;
+    final powerValue = specialCard?.value;
 
     if (human.isHuman && specialCard != null) {
       final powerType = _getPowerType(specialCard);
@@ -37,6 +39,13 @@ class SpecialPowerHandler {
     gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
     gameState.specialCardToActivate = null;
+    if (powerValue != null) {
+      BotDutchStrategy.discardTracker.recordPowerSkip(
+        human.id,
+        powerValue,
+        turnCount: gameState.turnCount,
+      );
+    }
     gameState.addToHistory(ActionHistoryMessages.powerSkipped());
   }
 
@@ -139,6 +148,19 @@ class SpecialPowerHandler {
 
     PlayingCard? myCard = currentPlayer.hand[ownCardIndex];
     PlayingCard? theirCard = targetPlayer.hand[targetCardIndex];
+
+    BotDutchStrategy.discardTracker.recordPowerUse(
+      currentPlayer.id,
+      turnCount: gameState.turnCount,
+    );
+    BotDutchStrategy.discardTracker.observeVisibleReplacementIndex(
+      currentPlayer.id,
+      replacedIndex: ownCardIndex,
+    );
+    BotDutchStrategy.discardTracker.observeVisibleReplacementIndex(
+      targetPlayer.id,
+      replacedIndex: targetCardIndex,
+    );
 
     currentPlayer.hand[ownCardIndex] = theirCard;
     targetPlayer.hand[targetCardIndex] = myCard;

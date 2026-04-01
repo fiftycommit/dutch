@@ -147,6 +147,7 @@ class GameLogic {
       discardedBy: gameState.currentPlayer.id,
       wasExchange: false,
       actionType: DiscardActionType.drawnDiscard,
+      turnCount: gameState.turnCount,
     );
 
     // Log
@@ -210,6 +211,7 @@ class GameLogic {
       discardedBy: player.id,
       wasExchange: true,
       actionType: DiscardActionType.exchangeDiscard,
+      turnCount: gameState.turnCount,
       replacedIndex: cardIndex,
     );
 
@@ -306,6 +308,10 @@ class GameLogic {
     } else {
       gameState.addToHistory(ActionHistoryMessages.matchFailed(
           player.name, playerCard, topDiscard));
+      BotDutchStrategy.discardTracker.recordMatchFailed(
+        player.id,
+        turnCount: gameState.turnCount,
+      );
 
       // Log
       GameLoggerService.instance.logCustomAction(
@@ -340,6 +346,7 @@ class GameLogic {
       player.clearJokerInference();
     }
     player.clearUnknownCardHint(newHand.length - 1);
+    BotDutchStrategy.discardTracker.recordPenalty(player.id);
 
     gameState.addToHistory(ActionHistoryMessages.penalty(player.name));
   }
@@ -350,6 +357,17 @@ class GameLogic {
         gameState.currentPlayer.id,
         turnCount: gameState.turnCount,
       );
+      if (target.id == gameState.currentPlayer.id) {
+        BotDutchStrategy.discardTracker.recordSelfLook(
+          gameState.currentPlayer.id,
+          turnCount: gameState.turnCount,
+        );
+      } else {
+        BotDutchStrategy.discardTracker.recordSpy(
+          gameState.currentPlayer.id,
+          turnCount: gameState.turnCount,
+        );
+      }
       gameState.addToHistory(
           "${gameState.currentPlayer.name} a regardé une carte de ${target.name}.");
     }
@@ -639,6 +657,7 @@ class GameLogic {
       gameState.currentPlayer.id,
       turnCount: gameState.turnCount,
     );
+    BotDutchStrategy.discardTracker.recordVisibleJokerShuffle(targetPlayer.id);
 
     List<PlayingCard>? knownBeforeJoker;
     if (_usesAdvancedJokerModel(targetPlayer)) {

@@ -68,7 +68,11 @@ class GameLoggerService {
           p.isHuman ? 'HUMAIN' : 'BOT (${p.botBehavior?.name ?? "unknown"})';
       _logBuffer.writeln('  [${i + 1}] ${p.name} - $type');
       if (!p.isHuman) {
-        final skill = p.botSkillLevel?.name ?? '?';
+        final rawSkill = p.botSkillLevel?.name;
+        final skill = switch (rawSkill) {
+          'gold' || 'platinum' => 'difficult',
+          _ => rawSkill ?? '?',
+        };
         final hasAI = p.aiParameters != null && p.aiParameters!.isNotEmpty;
         final src = hasAI ? 'SERVEUR' : 'LOCAL';
         if (hasAI) {

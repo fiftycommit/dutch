@@ -27,8 +27,10 @@ class BotConfig {
   /// Détermine la phase de jeu du bot
   /// Logique basée sur la CERTITUDE, pas sur des estimations de score
   static BotGamePhase getBotPhase(Player bot, GameState gameState) {
-    // Platine : analyse contextuelle pure, pas de phases fixes
-    if (bot.botSkillLevel == BotSkillLevel.platinum) {
+    // Niveau fort unique : les anciens bots Or utilisent désormais
+    // la logique contextuelle du palier Platine.
+    if (bot.botSkillLevel == BotSkillLevel.gold ||
+        bot.botSkillLevel == BotSkillLevel.platinum) {
       return _getPlatinumContextualPhase(bot, gameState);
     }
 
@@ -63,7 +65,7 @@ class BotConfig {
     return BotGamePhase.optimization;
   }
 
-  /// Phase contextuelle pour Platine : jamais d'exploration passive
+  /// Phase contextuelle pour le palier fort : jamais d'exploration passive
   static BotGamePhase _getPlatinumContextualPhase(Player bot, GameState gs) {
     final knownScore = bot.getKnownScore();
     final unknownCount = BotMemoryManager.getUnknownIndices(bot).length;
@@ -106,7 +108,7 @@ class BotConfig {
       }
 
       double difficultyFactor = 1.0;
-      if (difficulty.name == "Platine") {
+      if (difficulty.name == "Difficile") {
         difficultyFactor = 1.05;
       } else if (difficulty.name == "Bronze") {
         difficultyFactor = 0.95;
@@ -129,9 +131,7 @@ class BotConfig {
           return criticalMoment ? 700 : 450;
         case "Argent":
           return criticalMoment ? 900 : 550;
-        case "Or":
-          return criticalMoment ? 1100 : 700;
-        case "Platine":
+        case "Difficile":
           return criticalMoment ? 1300 : 800;
         default:
           return 600;
@@ -139,7 +139,7 @@ class BotConfig {
     }
 
     if (behavior == BotBehavior.aggressive) {
-      return difficulty.name == "Or" || difficulty.name == "Platine"
+      return difficulty.name == "Difficile"
           ? 550
           : 450;
     }
@@ -192,9 +192,8 @@ class BotConfig {
       case BotSkillLevel.silver:
         return BotDifficulty.silver;
       case BotSkillLevel.gold:
-        return BotDifficulty.gold;
       case BotSkillLevel.platinum:
-        return BotDifficulty.platinum;
+        return BotDifficulty.difficult;
     }
   }
 

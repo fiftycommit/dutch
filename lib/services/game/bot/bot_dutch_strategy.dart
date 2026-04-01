@@ -33,8 +33,7 @@ class BotDutchStrategy {
         ? knownScore
         : knownScore + (expectedUnknown * unknownCount).round();
     final unresolvedValetUncertainty =
-        (tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
-            _hasUnresolvedValetUncertainty(bot);
+        tier == _DutchTier.difficult && _hasUnresolvedValetUncertainty(bot);
     final canDutchState = _canDutchStateBased(gs, bot, difficulty);
     final canBlindDutchOnOpponentError =
         _canBlindDutchOnOpponentError(gs, bot, tier);
@@ -91,10 +90,16 @@ class BotDutchStrategy {
     } else {
       opportunities.add('lecture adverse fiable');
     }
+    if (context.inferredReadyOpponents > 0) {
+      opportunities.add('signaux publics de fermeture adverse');
+    }
+    if (context.inferredVulnerableOpponents > 0) {
+      blockers.add('menace adverse publiquement perturbée');
+    }
     if (context.minEstimateConfidence < 0.20) {
       blockers.add('angle mort adverse');
     }
-    if (profile.tier == _DutchTier.platinum) {
+    if (profile.tier == _DutchTier.difficult) {
       if (context.hasLatentLeader) {
         blockers.add(
             'leader latent (tempo=${context.maxTempoScore.toStringAsFixed(2)})');
@@ -218,12 +223,27 @@ class BotDutchStrategy {
       opponent.memorizedCardIndices,
       opponent.hand.length,
     );
+    final readTier = _publicReadTierForDutchTier(profile.tier);
     final base =
-        discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
-    final style = discardTracker.estimateOpponentStyle(opponent.id);
+        discardTracker.estimateOpponentHand(
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
+    final style = discardTracker.estimateOpponentStyle(
+      opponent.id,
+      readTier: readTier,
+    );
     final indexIntel = discardTracker.estimateOpponentIndexIntel(
-        opponent.id, opponent.hand.length);
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
     final estimatedScore = _estimateOpponentScore(observer, opponent, profile);
+    final targetedRecently = opponent.lastTargetedByPowerTurn >= 0 &&
+        (gs.turnCount - opponent.lastTargetedByPowerTurn) <= 2;
+    final adjustedEstimate =
+        estimatedScore + (targetedRecently ? (opponent.hand.length <= 2 ? 2 : 1) : 0);
 
     final spiedCards = observer.getSpiedCards(opponent.id);
     int knownSpied = 0;
@@ -245,7 +265,7 @@ class BotDutchStrategy {
     );
 
     return OpponentDutchEstimate(
-      estimatedScore: estimatedScore,
+      estimatedScore: adjustedEstimate,
       confidence: confidence,
     );
   }
@@ -256,10 +276,8 @@ class BotDutchStrategy {
         return 'bronze';
       case _DutchTier.silver:
         return 'argent';
-      case _DutchTier.gold:
-        return 'or';
-      case _DutchTier.platinum:
-        return 'platine';
+      case _DutchTier.difficult:
+        return 'difficile';
     }
   }
 
@@ -276,15 +294,15 @@ class BotDutchStrategy {
     // Tous niveaux: main vide => Dutch immédiat (score 0 garanti).
     if (bot.hand.isEmpty) return true;
 
-    // Or/Platine: si une incertitude vient d'un Valet subi et n'est pas
+    // Palier fort: si une incertitude vient d'un Valet subi et n'est pas
     // revalidée, Dutch est interdit.
-    if ((tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
+    if (tier == _DutchTier.difficult &&
         _hasUnresolvedValetUncertainty(bot)) {
       return false;
     }
 
-    // Règle premium (Or/Platine): score 0 certain => Dutch immédiat.
-    if (tier == _DutchTier.gold || tier == _DutchTier.platinum) {
+    // Règle premium du palier fort: score 0 certain => Dutch immédiat.
+    if (tier == _DutchTier.difficult) {
       final knownUnknownCount = BotMemoryManager.getUnknownIndices(bot).length;
       final hasGuaranteedZeroScore =
           knownUnknownCount == 0 ? bot.getKnownScore() == 0 : false;
@@ -299,16 +317,11 @@ class BotDutchStrategy {
       case _DutchTier.silver:
         if (!_canDutchStateBased(gs, bot, difficulty)) return false;
         return _shouldSilverDutch(gs, bot, difficulty, phase, personality);
-      case _DutchTier.gold:
+      case _DutchTier.difficult:
         if (!_canDutchStateBased(gs, bot, difficulty)) {
           return _canBlindDutchOnOpponentError(gs, bot, tier);
         }
-        return _shouldGoldDutch(gs, bot, difficulty, phase, personality);
-      case _DutchTier.platinum:
-        if (!_canDutchStateBased(gs, bot, difficulty)) {
-          return _canBlindDutchOnOpponentError(gs, bot, tier);
-        }
-        return _shouldPlatinumDutch(gs, bot, difficulty, personality);
+        return _shouldDifficultDutch(gs, bot, difficulty, personality);
     }
   }
 
@@ -345,8 +358,7 @@ class BotDutchStrategy {
     BotDifficulty difficulty,
   ) {
     final tier = _tierFromDifficulty(difficulty);
-    if ((tier == _DutchTier.gold || tier == _DutchTier.platinum) &&
-        _hasUnresolvedValetUncertainty(bot)) {
+    if (tier == _DutchTier.difficult && _hasUnresolvedValetUncertainty(bot)) {
       return false;
     }
 
@@ -377,7 +389,7 @@ class BotDutchStrategy {
     return false;
   }
 
-  /// Exception contrôlée: Dutch "à l'aveugle" (Or/Platine)
+  /// Exception contrôlée: Dutch "à l'aveugle" (palier fort)
   /// uniquement en duel si:
   /// - score perçu faible malgré inconnues,
   /// - adversaire vient de rater un match (erreur publique),
@@ -387,7 +399,7 @@ class BotDutchStrategy {
     Player bot,
     _DutchTier tier,
   ) {
-    if (tier != _DutchTier.gold && tier != _DutchTier.platinum) return false;
+    if (tier != _DutchTier.difficult) return false;
 
     final opponents = gs.players.where((p) => p.id != bot.id).toList();
     if (opponents.length != 1) return false;
@@ -410,7 +422,7 @@ class BotDutchStrategy {
     final expectedUnknownValue = BotMemoryManager.getExpectedDeckCardValue(gs);
     final perceivedScore =
         knownScore + (expectedUnknownValue * unknownCount).round();
-    final blindScoreCap = tier == _DutchTier.platinum ? 8 : 7;
+    const blindScoreCap = 8;
     if (perceivedScore > blindScoreCap) return false;
 
     return true;
@@ -427,25 +439,16 @@ class BotDutchStrategy {
     return _shouldDutchStateBased(gs, bot, difficulty, phase, personality);
   }
 
-  /// Gold Dutch : opportuniste contextuel, analyse de table
-  static bool _shouldGoldDutch(
-    GameState gs,
-    Player bot,
-    BotDifficulty difficulty,
-    BotGamePhase phase,
-    BotPersonality? personality,
-  ) {
-    return _shouldDutchStateBased(gs, bot, difficulty, phase, personality);
-  }
-
-  /// Platinum Dutch : ultra-opportuniste, pas de phase exploration
-  static bool _shouldPlatinumDutch(
+  /// Difficile Dutch : lecture contextuelle complète, sans être
+  /// verrouillé par une phase d'exploration artificielle.
+  static bool _shouldDifficultDutch(
     GameState gs,
     Player bot,
     BotDifficulty difficulty,
     BotPersonality? personality,
   ) {
-    // Platine n'est jamais bridé par la phase — il analyse contextuellement
+    // Le palier fort n'est jamais bridé par la phase:
+    // on laisse l'analyse contextuelle trancher.
     return _shouldDutchStateBased(
         gs, bot, difficulty, BotGamePhase.endgame, personality);
   }
@@ -479,9 +482,8 @@ class BotDutchStrategy {
       return false;
     }
 
-    // Score 0 certain = Dutch immédiat seulement pour Or/Platine.
-    if ((profile.tier == _DutchTier.gold ||
-            profile.tier == _DutchTier.platinum) &&
+    // Score 0 certain = Dutch immédiat pour le palier fort.
+    if (profile.tier == _DutchTier.difficult &&
         unknownCount == 0 &&
         myKnownScore == 0) {
       return true;
@@ -508,7 +510,7 @@ class BotDutchStrategy {
       phase,
     );
 
-    final moiDuelRushMode = profile.tier == _DutchTier.platinum &&
+    final moiDuelRushMode = profile.tier == _DutchTier.difficult &&
         bot.botBehavior == BotBehavior.moi &&
         context.opponentCount == 1 &&
         unknownCount == 0 &&
@@ -524,7 +526,7 @@ class BotDutchStrategy {
     // En 1v1, si le bot a espionné des cartes adverses et que le plancher
     // factuel (somme des cartes espionnées) dépasse déjà notre score,
     // on peut Dutch en confiance même si l'adversaire a 3-4 cartes.
-    if (profile.tier == _DutchTier.platinum &&
+    if (profile.tier == _DutchTier.difficult &&
         context.opponentCount == 1 &&
         unknownCount == 0 &&
         duelOpponent != null) {
@@ -560,7 +562,7 @@ class BotDutchStrategy {
 
     // Platine "race logic": en course de fin, on autorise un Dutch agressif
     // même avant la zone "safe" classique.
-    if (profile.tier == _DutchTier.platinum &&
+    if (profile.tier == _DutchTier.difficult &&
         expertConclusions?.forceImmediateClose == true) {
       final raceCap = context.bestOpponentEstimate + 1;
       final forceRaceWinProb = _estimateRaceWinProbability(
@@ -585,7 +587,7 @@ class BotDutchStrategy {
       return false; // derrière avec certitude
     }
 
-    // Guard platine: sur marge nulle avec lecture incertaine, ne pas
+    // Guard palier fort: sur marge nulle avec lecture incertaine, ne pas
     // court-circuiter l'analyse contextuelle. Un retour anticipé n'est sûr
     // que si l'un des cas suivants est vrai :
     //   • score ≤ 1 : quasi-impossible de perdre
@@ -595,43 +597,13 @@ class BotDutchStrategy {
         myScore < context.bestOpponentEstimate ||
         context.minEstimateConfidence >= 0.45;
 
-    // Platine: verrouille vite les très bas scores en endgame
-    if (profile.tier == _DutchTier.platinum &&
+    // Le palier fort verrouille vite les très bas scores en endgame.
+    if (profile.tier == _DutchTier.difficult &&
         phase == BotGamePhase.endgame &&
         myScore <= 2) {
       if (earlyCallAllowed) return true;
     }
-    // Score très bas + table "large": seuls les niveaux experts convertissent
-    // agressivement cette fenêtre, les tiers bas restent plus prudents.
-    if (unknownCount == 0 && myKnownScore <= 2) {
-      final allOpponentsHaveMany = gs.players
-          .where((p) => p.id != bot.id)
-          .every((p) => p.hand.length >= 3);
-      if (allOpponentsHaveMany) {
-        if (profile.tier == _DutchTier.platinum && earlyCallAllowed) return true;
-      }
-    }
-
-    if (profile.tier == _DutchTier.platinum && unknownCount == 0) {
-      if (myKnownScore <= 3) {
-        // À score 3, même Platine n'accélère pas sur table explosive.
-        if (expertConclusions?.tableExplosive == true && myKnownScore > 2) {
-          // continuer vers la décision contextuelle plus bas
-        } else {
-          if (earlyCallAllowed) return true;
-        }
-      }
-      if (expertConclusions?.forceImmediateClose == true && myKnownScore <= 2) {
-        if (earlyCallAllowed) return true;
-      }
-      if (phase == BotGamePhase.endgame &&
-          myKnownScore <= 4 &&
-          context.minOpponentCards <= 3) {
-        if (earlyCallAllowed) return true;
-      }
-    }
-
-    if (profile.tier == _DutchTier.platinum &&
+    if (profile.tier == _DutchTier.difficult &&
         myKnownScore <= 2 &&
         unknownCount == 0 &&
         context.tablePressure >= 0.6) {
@@ -641,8 +613,12 @@ class BotDutchStrategy {
     final adjustedOpponentEstimate =
         (context.bestOpponentEstimate - profile.opponentEstimatePenalty)
             .clamp(0, 999);
+    final publicReadyPressure = context.inferredReadyOpponents > 0;
+    final strongPublicReadyPressure = context.maxPublicReadyThreat >= 0.72;
+    final publicVulnerabilityRelief = context.inferredVulnerableOpponents > 0 &&
+        context.inferredReadyOpponents == 0;
 
-    if (profile.tier == _DutchTier.platinum &&
+    if (profile.tier == _DutchTier.difficult &&
         duelAgainstHumanOrMoi &&
         expertConclusions != null &&
         expertConclusions.opponentCanFinishSoon &&
@@ -651,7 +627,7 @@ class BotDutchStrategy {
       return true;
     }
 
-    if (profile.tier == _DutchTier.platinum &&
+    if (profile.tier == _DutchTier.difficult &&
         expertConclusions != null &&
         expertConclusions.opponentCanFinishSoon) {
       final raceAllowance = expertConclusions.duelActive
@@ -682,6 +658,22 @@ class BotDutchStrategy {
       }
     }
 
+    if (profile.tier == _DutchTier.difficult && publicReadyPressure) {
+      final publicAllowance = strongPublicReadyPressure ? 1 : 0;
+      final publicRaceFloor = strongPublicReadyPressure ? 0.54 : 0.58;
+      final publicRaceWinProb = _estimateRaceWinProbability(
+        myScore: myScore,
+        adjustedOpponentEstimate: adjustedOpponentEstimate + publicAllowance,
+        context: context,
+        conclusions: expertConclusions,
+      );
+      if (myScore <= (adjustedOpponentEstimate + publicAllowance) &&
+          myScore <= 5 &&
+          publicRaceWinProb >= publicRaceFloor) {
+        return true;
+      }
+    }
+
     // RÈGLE FONDAMENTALE : ne Dutch que si on pense avoir le plus petit score
     // Si même score, celui qui Dutch gagne → on autorise l'égalité
     if (myScore > adjustedOpponentEstimate) {
@@ -699,6 +691,9 @@ class BotDutchStrategy {
       return false;
     }
     if (blindSpot && context.minOpponentCards <= 2 && myScore > 1) {
+      return false;
+    }
+    if (publicVulnerabilityRelief && uncertainRead && margin <= 2 && myScore > 0) {
       return false;
     }
 
@@ -755,9 +750,9 @@ class BotDutchStrategy {
       }
     }
 
-    // Platine ultra-opportuniste mais sans suicide:
+    // Le palier fort reste opportuniste, mais sans suicide:
     // il accélère quand il a un vrai edge estimé.
-    if (profile.tier == _DutchTier.platinum) {
+    if (profile.tier == _DutchTier.difficult) {
       final hasRealEdge = margin >= 1;
       final strongEdge = margin >= 2;
       // emergencyLowScore: marge >= 1 requise (on n'appelle plus à l'égalité pure,
@@ -776,14 +771,18 @@ class BotDutchStrategy {
       final stableTable = context.avgOpponentCards >= 3;
       if ((strongEdge && (fastTable || myScore <= 4)) ||
           (hasRealEdge && myScore <= 3 && stableTable) ||
+          (publicReadyPressure &&
+              myScore <= 3 &&
+              margin >= 0 &&
+              context.minEstimateConfidence >= 0.34) ||
           pressureCloseLead ||
           emergencyLowScore) {
         return true;
       }
     }
 
-    // Les tiers non-platinum deviennent très conservateurs en grande table.
-    if (profile.tier != _DutchTier.platinum) {
+    // Les tiers hors palier fort deviennent très conservateurs en grande table.
+    if (profile.tier != _DutchTier.difficult) {
       if (gs.players.length >= 8 && myScore > 0) {
         return false;
       }
@@ -860,7 +859,7 @@ class BotDutchStrategy {
     // Les conclusions dérivées de la table influencent directement la décision.
     if (expertConclusions != null) {
       if (expertConclusions.tableExplosive && myScore > 2) {
-        risk += profile.tier == _DutchTier.platinum ? 1.0 : 0.8;
+        risk += profile.tier == _DutchTier.difficult ? 0.9 : 0.8;
       }
       if (expertConclusions.opponentMomentumHot && myScore > 1) {
         risk += 0.65;
@@ -871,6 +870,11 @@ class BotDutchStrategy {
       if (expertConclusions.opponentCanFinishSoon && myScore <= 2) {
         opportunity += 0.35;
       }
+    }
+    if (profile.tier == _DutchTier.difficult) {
+      opportunity += context.maxPublicReadyThreat * 0.55;
+      opportunity -= context.maxPublicVulnerability * 0.25;
+      risk += context.maxPublicVulnerability * 0.18;
     }
 
     // Le decisionBias platine (3.20) est calibré pour une grande table.
@@ -900,6 +904,10 @@ class BotDutchStrategy {
     double maxProjectedFinishRisk = 0;
     bool hasLatentLeader = false;
     double vulnerabilityRelief = 0;
+    int inferredReadyOpponents = 0;
+    int inferredVulnerableOpponents = 0;
+    double maxPublicReadyThreat = 0;
+    double maxPublicVulnerability = 0;
 
     for (final opponent in gs.players) {
       if (opponent.id == bot.id) continue;
@@ -932,16 +940,34 @@ class BotDutchStrategy {
         minEstimateConfidence = estimateConfidence;
       }
 
-      final style = discardTracker.estimateOpponentStyle(opponent.id);
+      final style = discardTracker.estimateOpponentStyle(
+        opponent.id,
+        readTier: _publicReadTierForDutchTier(profile.tier),
+      );
+      final publicSignal = _analyzePublicDutchSignal(opponent, profile.tier);
       final fewCardsPressure = ((4 - cards).clamp(0, 3)) / 3.0;
       stylePressure += (style.optimization * 0.7 + style.aggression * 0.3) *
           (0.6 + fewCardsPressure * 0.8) *
           style.confidence;
+      stylePressure += publicSignal.readyThreat * 0.35;
+      vulnerabilityRelief += publicSignal.vulnerability * 0.28;
       if (targetedRecently) {
         vulnerabilityRelief += cards <= 2 ? 0.18 : 0.10;
       }
+      if (publicSignal.readyThreat >= 0.55) {
+        inferredReadyOpponents++;
+      }
+      if (publicSignal.vulnerability >= 0.50) {
+        inferredVulnerableOpponents++;
+      }
+      if (publicSignal.readyThreat > maxPublicReadyThreat) {
+        maxPublicReadyThreat = publicSignal.readyThreat;
+      }
+      if (publicSignal.vulnerability > maxPublicVulnerability) {
+        maxPublicVulnerability = publicSignal.vulnerability;
+      }
 
-      if (profile.tier == _DutchTier.platinum) {
+      if (profile.tier == _DutchTier.difficult) {
         final tempo = _computeTempoSignalForOpponent(
           gs,
           opponent,
@@ -967,6 +993,12 @@ class BotDutchStrategy {
         if (projectedFinishRisk >= 0.60) {
           hasLatentLeader = true;
         }
+        if (publicSignal.readyThreat >= 0.70 && cards <= 2) {
+          hasLatentLeader = true;
+          if (publicSignal.readyThreat > maxProjectedFinishRisk) {
+            maxProjectedFinishRisk = publicSignal.readyThreat;
+          }
+        }
         avgTempoScore += tempo.tempoScore;
       }
     }
@@ -986,13 +1018,17 @@ class BotDutchStrategy {
         maxBurstRisk: 0,
         maxProjectedFinishRisk: 0,
         hasLatentLeader: false,
+        inferredReadyOpponents: 0,
+        inferredVulnerableOpponents: 0,
+        maxPublicReadyThreat: 0,
+        maxPublicVulnerability: 0,
       );
     }
 
     final avgOpponentEstimate = totalOpponentEstimate / opponentCount;
     final avgOpponentCards = totalOpponentCards / opponentCount;
     final avgEstimateConfidence = totalEstimateConfidence / opponentCount;
-    final avgTempo = profile.tier == _DutchTier.platinum
+    final avgTempo = profile.tier == _DutchTier.difficult
         ? avgTempoScore / opponentCount
         : 0.0;
 
@@ -1025,6 +1061,10 @@ class BotDutchStrategy {
       maxBurstRisk: maxBurstRisk,
       maxProjectedFinishRisk: maxProjectedFinishRisk,
       hasLatentLeader: hasLatentLeader,
+      inferredReadyOpponents: inferredReadyOpponents,
+      inferredVulnerableOpponents: inferredVulnerableOpponents,
+      maxPublicReadyThreat: maxPublicReadyThreat,
+      maxPublicVulnerability: maxPublicVulnerability,
     );
   }
 
@@ -1053,8 +1093,11 @@ class BotDutchStrategy {
     );
     final isLatentLeader = burstMatches || velocity >= 2;
 
-    final handEstimate =
-        discardTracker.estimateOpponentHand(opponent.id, cards);
+    final handEstimate = discardTracker.estimateOpponentHand(
+      opponent.id,
+      cards,
+      readTier: OpponentReadTier.strong,
+    );
     final avgCardEstimate = cards <= 0
         ? 0.0
         : (handEstimate.estimatedScore / cards).clamp(1.0, 10.0);
@@ -1090,6 +1133,66 @@ class BotDutchStrategy {
       recentMatches: recentMatches3,
       isLatentLeader: isLatentLeader,
       burstRisk: burstRisk,
+    );
+  }
+
+  static _PublicDutchSignal _analyzePublicDutchSignal(
+    Player opponent,
+    _DutchTier tier,
+  ) {
+    final cards = opponent.hand.length;
+    final handCeiling = discardTracker.getCurrentHandMaxCardCeiling(opponent.id);
+    final minUpperBound =
+        discardTracker.getCurrentMinCardUpperBound(opponent.id);
+    final recentLooks = discardTracker.getRecentSelfLookCount(opponent.id);
+    final recentSpies = discardTracker.getRecentSpyCount(opponent.id);
+    final recentMatchFails = discardTracker.getRecentMatchFailCount(opponent.id);
+    final visibleDisruptions =
+        discardTracker.getVisibleDisruptionCount(opponent.id);
+    final skipped7 = discardTracker.getPowerSkipCount(
+      opponent.id,
+      powerValue: '7',
+    );
+    final skipped10 = discardTracker.getPowerSkipCount(
+      opponent.id,
+      powerValue: '10',
+    );
+    final skippedValet = discardTracker.getPowerSkipCount(
+      opponent.id,
+      powerValue: 'V',
+    );
+
+    double readyThreat = 0.0;
+    if (handCeiling != null) readyThreat += 0.26;
+    if (minUpperBound != null) readyThreat += 0.16;
+    if (recentLooks > 0) readyThreat += 0.14;
+    if (recentSpies > 0 && cards <= 2) readyThreat += 0.16;
+    if (skipped7 > 0) {
+      readyThreat += tier == _DutchTier.difficult ? 0.28 : 0.12;
+    }
+    if (cards <= 2 && skipped10 > 0) readyThreat += 0.08;
+    if (cards <= 2 && skippedValet > 0) readyThreat += 0.10;
+    if (cards <= 2) {
+      readyThreat += 0.12;
+    } else if (cards == 3) {
+      readyThreat += 0.05;
+    }
+    readyThreat -= visibleDisruptions * 0.18;
+    readyThreat -= recentMatchFails * 0.14;
+    readyThreat = readyThreat.clamp(0.0, 1.0);
+
+    double vulnerability = 0.0;
+    vulnerability += visibleDisruptions * 0.32;
+    vulnerability += recentMatchFails * 0.24;
+    if (cards <= 2 && handCeiling == null && skipped7 == 0 && recentLooks == 0) {
+      vulnerability += 0.10;
+    }
+    vulnerability -= readyThreat * 0.22;
+    vulnerability = vulnerability.clamp(0.0, 1.0);
+
+    return _PublicDutchSignal(
+      readyThreat: readyThreat,
+      vulnerability: vulnerability,
     );
   }
 
@@ -1168,12 +1271,23 @@ class BotDutchStrategy {
       opponent.memorizedCardIndices,
       opponent.hand.length,
     );
+    final readTier = _publicReadTierForDutchTier(profile.tier);
     final indexIntel = discardTracker.estimateOpponentIndexIntel(
-        opponent.id, opponent.hand.length);
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
     final discardEstimate = discardTracker
-        .estimateOpponentHand(opponent.id, opponent.hand.length)
+        .estimateOpponentHand(
+          opponent.id,
+          opponent.hand.length,
+          readTier: readTier,
+        )
         .estimatedScore;
-    final style = discardTracker.estimateOpponentStyle(opponent.id);
+    final style = discardTracker.estimateOpponentStyle(
+      opponent.id,
+      readTier: readTier,
+    );
     final styledEstimate = _applyStyleToOpponentEstimate(
       discardEstimate,
       opponent.hand.length,
@@ -1245,11 +1359,8 @@ class BotDutchStrategy {
       case _DutchTier.silver:
         styleImpactWeight = 0.20;
         break;
-      case _DutchTier.gold:
-        styleImpactWeight = 0.60;
-        break;
-      case _DutchTier.platinum:
-        styleImpactWeight = 1.0;
+      case _DutchTier.difficult:
+        styleImpactWeight = 0.80;
         break;
     }
 
@@ -1288,8 +1399,7 @@ class BotDutchStrategy {
       final capWeight = switch (tier) {
         _DutchTier.bronze => 0.10,
         _DutchTier.silver => 0.18,
-        _DutchTier.gold => 0.38,
-        _DutchTier.platinum => 0.58,
+        _DutchTier.difficult => 0.48,
       };
       final cappedScore = min(adjusted, indexIntel.estimatedScoreCeiling);
       adjusted = (adjusted * (1 - capWeight)) + (cappedScore * capWeight);
@@ -1303,15 +1413,10 @@ class BotDutchStrategy {
       case _DutchTier.silver:
         duelThreatBias = indexIntel.startKnownRatio * 0.30;
         break;
-      case _DutchTier.gold:
-        duelThreatBias = indexIntel.startKnownRatio * 0.70 +
-            indexIntel.lowRejectRate * 0.55 +
-            (indexIntel.powerUses >= 2 ? 0.30 : 0.0);
-        break;
-      case _DutchTier.platinum:
-        duelThreatBias = indexIntel.startKnownRatio * 1.10 +
-            indexIntel.lowRejectRate * 0.95 +
-            (min(indexIntel.powerUses, 6) / 6.0) * 0.90;
+      case _DutchTier.difficult:
+        duelThreatBias = indexIntel.startKnownRatio * 0.92 +
+            indexIntel.lowRejectRate * 0.76 +
+            (min(indexIntel.powerUses, 6) / 6.0) * 0.55;
         break;
     }
     adjusted -= duelThreatBias * indexIntel.confidence;
@@ -1330,8 +1435,7 @@ class BotDutchStrategy {
     final tierFactor = switch (tier) {
       _DutchTier.bronze => 0.85,
       _DutchTier.silver => 0.95,
-      _DutchTier.gold => 1.00,
-      _DutchTier.platinum => 1.05,
+      _DutchTier.difficult => 1.03,
     };
 
     final cardCountBonus = cards <= 2 ? 0.08 : 0.0;
@@ -1355,11 +1459,22 @@ class BotDutchStrategy {
       opponent.memorizedCardIndices,
       opponent.hand.length,
     );
+    final readTier = _publicReadTierForDutchTier(tier);
     final base =
-        discardTracker.estimateOpponentHand(opponent.id, opponent.hand.length);
-    final style = discardTracker.estimateOpponentStyle(opponent.id);
+        discardTracker.estimateOpponentHand(
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
+    final style = discardTracker.estimateOpponentStyle(
+      opponent.id,
+      readTier: readTier,
+    );
     final indexIntel = discardTracker.estimateOpponentIndexIntel(
-        opponent.id, opponent.hand.length);
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
     final spied = observer.getSpiedCards(opponent.id);
     int knownSpied = 0;
     if (spied != null && spied.isNotEmpty) {
@@ -1387,10 +1502,8 @@ class BotDutchStrategy {
         return 0.10;
       case _DutchTier.silver:
         return 0.25;
-      case _DutchTier.gold:
-        return 0.65;
-      case _DutchTier.platinum:
-        return 0.80;
+      case _DutchTier.difficult:
+        return 0.72;
     }
   }
 
@@ -1409,8 +1522,7 @@ class BotDutchStrategy {
     _DutchDecisionContext context,
     BotGamePhase phase,
   ) {
-    if (profile.tier != _DutchTier.gold &&
-        profile.tier != _DutchTier.platinum) {
+    if (profile.tier != _DutchTier.difficult) {
       return null;
     }
 
@@ -1436,12 +1548,10 @@ class BotDutchStrategy {
         !opponentMomentumHot &&
         context.minOpponentCards >= 4 &&
         context.tablePressure < 0.8;
-    final forceImmediateClose = profile.tier == _DutchTier.platinum
-        ? (opponentCanFinishSoon &&
-            (opponentMomentumHot ||
-                context.maxBurstRisk >= 0.58 ||
-                context.maxProjectedFinishRisk >= 0.66))
-        : (opponentCanFinishSoon && opponentMomentumHot);
+    final forceImmediateClose = opponentCanFinishSoon &&
+        (opponentMomentumHot ||
+            context.maxBurstRisk >= 0.58 ||
+            context.maxProjectedFinishRisk >= 0.66);
 
     return _ExpertDutchConclusions(
       duelActive: duelActive,
@@ -1512,10 +1622,8 @@ class BotDutchStrategy {
         return threshold.clamp(4, 10);
       case _DutchTier.silver:
         return threshold.clamp(3, 8);
-      case _DutchTier.gold:
-        return threshold.clamp(2, 8);
-      case _DutchTier.platinum:
-        return threshold.clamp(1, 7);
+      case _DutchTier.difficult:
+        return threshold.clamp(2, 7);
     }
   }
 
@@ -1689,47 +1797,26 @@ class BotDutchStrategy {
           badDrawOpportunityWeight: 0.04,
           decisionBias: -1.45,
         );
-      case _DutchTier.gold:
+      case _DutchTier.difficult:
         return const _DutchDecisionProfile(
-          tier: _DutchTier.gold,
+          tier: _DutchTier.difficult,
           hybridBaseThreshold: 4,
-          opponentEstimatePenalty: 1,
-          baseRisk: 3.2,
-          scoreRiskPerPoint: 0.22,
-          uncertaintyRiskWeight: 1.20,
-          cardDisadvantageRiskWeight: 0.70,
-          urgencyRiskReduction: 0.20,
-          endgameRiskReduction: 0.28,
-          timingRiskReduction: 0.12,
-          cardGapWeight: 0.18,
-          leadWeight: 0.12,
-          urgencyWeight: 0.32,
-          pressureWeight: 0.20,
-          endgameOpportunityBonus: 0.14,
-          timingOpportunityBonus: 0.12,
-          badDrawOpportunityWeight: 0.06,
-          decisionBias: 0.20,
-        );
-      case _DutchTier.platinum:
-        return const _DutchDecisionProfile(
-          tier: _DutchTier.platinum,
-          hybridBaseThreshold: 3,
           opponentEstimatePenalty: 0,
-          baseRisk: 0.55,
-          scoreRiskPerPoint: 0.03,
-          uncertaintyRiskWeight: 0.30,
-          cardDisadvantageRiskWeight: 0.18,
-          urgencyRiskReduction: 0.90,
-          endgameRiskReduction: 1.20,
-          timingRiskReduction: 0.90,
-          cardGapWeight: 0.42,
-          leadWeight: 0.30,
-          urgencyWeight: 1.05,
-          pressureWeight: 0.65,
-          endgameOpportunityBonus: 1.20,
-          timingOpportunityBonus: 1.30,
-          badDrawOpportunityWeight: 0.24,
-          decisionBias: 3.20,
+          baseRisk: 1.80,
+          scoreRiskPerPoint: 0.12,
+          uncertaintyRiskWeight: 0.75,
+          cardDisadvantageRiskWeight: 0.45,
+          urgencyRiskReduction: 0.42,
+          endgameRiskReduction: 0.68,
+          timingRiskReduction: 0.38,
+          cardGapWeight: 0.28,
+          leadWeight: 0.20,
+          urgencyWeight: 0.62,
+          pressureWeight: 0.36,
+          endgameOpportunityBonus: 0.34,
+          timingOpportunityBonus: 0.42,
+          badDrawOpportunityWeight: 0.10,
+          decisionBias: 1.05,
         );
     }
   }
@@ -1740,22 +1827,18 @@ class BotDutchStrategy {
         return _DutchTier.bronze;
       case 'Argent':
         return _DutchTier.silver;
+      case 'Difficile':
       case 'Or':
+      case 'Platine':
       case 'Hard':
       case 'Insane':
-        return _DutchTier.gold;
-      case 'Platine':
       case 'Nightmare':
       case 'Impossible':
-        return _DutchTier.platinum;
+        return _DutchTier.difficult;
       default:
         if (difficulty.matchAccuracy >= 0.99 &&
             difficulty.reactionSpeed >= 0.98) {
-          return _DutchTier.platinum;
-        }
-        if (difficulty.matchAccuracy >= 0.95 &&
-            difficulty.reactionSpeed >= 0.9) {
-          return _DutchTier.gold;
+          return _DutchTier.difficult;
         }
         if (difficulty.matchAccuracy >= 0.9) {
           return _DutchTier.silver;
@@ -1763,9 +1846,19 @@ class BotDutchStrategy {
         return _DutchTier.bronze;
     }
   }
+
+  static OpponentReadTier _publicReadTierForDutchTier(_DutchTier tier) {
+    switch (tier) {
+      case _DutchTier.difficult:
+        return OpponentReadTier.strong;
+      case _DutchTier.bronze:
+      case _DutchTier.silver:
+        return OpponentReadTier.medium;
+    }
+  }
 }
 
-enum _DutchTier { bronze, silver, gold, platinum }
+enum _DutchTier { bronze, silver, difficult }
 
 class _DutchDecisionProfile {
   final _DutchTier tier;
@@ -1823,6 +1916,10 @@ class _DutchDecisionContext {
   final double maxBurstRisk;
   final double maxProjectedFinishRisk;
   final bool hasLatentLeader;
+  final int inferredReadyOpponents;
+  final int inferredVulnerableOpponents;
+  final double maxPublicReadyThreat;
+  final double maxPublicVulnerability;
 
   const _DutchDecisionContext({
     required this.opponentCount,
@@ -1838,6 +1935,20 @@ class _DutchDecisionContext {
     required this.maxBurstRisk,
     required this.maxProjectedFinishRisk,
     required this.hasLatentLeader,
+    required this.inferredReadyOpponents,
+    required this.inferredVulnerableOpponents,
+    required this.maxPublicReadyThreat,
+    required this.maxPublicVulnerability,
+  });
+}
+
+class _PublicDutchSignal {
+  final double readyThreat;
+  final double vulnerability;
+
+  const _PublicDutchSignal({
+    required this.readyThreat,
+    required this.vulnerability,
   });
 }
 

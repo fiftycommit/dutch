@@ -12,6 +12,7 @@ import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
 import 'bot_dutch_strategy.dart';
 import 'bot_personality.dart';
+import 'discard_tracker.dart';
 import 'duel_tuning.dart';
 import 'bot_power_notifications_stub.dart'
     if (dart.library.ui) 'bot_power_notifications_flutter.dart'
@@ -426,7 +427,8 @@ class BotPowerHandler {
     if (target == null || target.hand.isEmpty) return;
 
     // HARDCORE FIX: Les niveaux hardcore ciblent intelligemment
-    final isHardcore = difficulty.name == "Or" ||
+    final isHardcore = difficulty.name == "Difficile" ||
+        difficulty.name == "Or" ||
         difficulty.name == "Platine" ||
         difficulty.name == "Hard" ||
         difficulty.name == "Insane" ||
@@ -435,23 +437,86 @@ class BotPowerHandler {
 
     int idx;
     if (isHardcore) {
-      // Priorité: cibler les positions que l'adversaire n'a PAS échangées.
-      // Ce sont celles qu'il n'a pas encore optimisées → souvent les pires.
-      final weakIdx = BotDutchStrategy.discardTracker
-          .pickLikelyWeakUntouchedIndex(target.id, target.hand.length);
-
-      // Éviter d'espionner une position qu'on connaît déjà
-      final alreadySpied = bot.getSpiedCards(target.id);
-      final isAlreadyKnown = weakIdx != null &&
-          alreadySpied != null &&
-          alreadySpied.containsKey(weakIdx);
-
-      if (weakIdx != null && !isAlreadyKnown) {
-        idx = weakIdx;
-      } else if (_random.nextDouble() < 0.7) {
-        idx = _random.nextBool() ? 0 : target.hand.length - 1;
+      final publicSignal = _analyzePublicPowerSignal(target, difficulty);
+      final myPerceived = _estimateBotPerceivedScore(bot);
+      final shouldProbeDutchWeakness =
+          publicSignal.readyThreat >= 0.55 || myPerceived <= 4;
+      final shouldSetupFutureValet =
+          !shouldProbeDutchWeakness && _canPlanValetSteal(bot, difficulty);
+      if (shouldProbeDutchWeakness) {
+        final alreadySpied = bot.getSpiedCards(target.id);
+        // Si l'adversaire semble prêt à Dutch, le 10 sert d'abord à trouver
+        // une carte qui casse sa fenêtre, donc on vise en priorité un slot
+        // publiquement faible / peu optimisé plutôt qu'un slot "fort".
+        final weakIdx = BotDutchStrategy.discardTracker
+                .pickLikelyWeakUntouchedIndex(
+                  target.id,
+                  target.hand.length,
+                ) ??
+            (myPerceived <= 4
+                ? null
+                : BotDutchStrategy.discardTracker.pickStoppedTouchingIndex(
+                    target.id,
+                    target.hand.length,
+                  ));
+        final isAlreadyKnown = weakIdx != null &&
+            alreadySpied != null &&
+            alreadySpied.containsKey(weakIdx);
+        if (weakIdx != null && !isAlreadyKnown) {
+          idx = weakIdx;
+        } else if (_random.nextDouble() < 0.7) {
+          idx = _random.nextBool() ? 0 : target.hand.length - 1;
+        } else {
+          idx = _random.nextInt(target.hand.length);
+        }
+      } else if (shouldSetupFutureValet) {
+        final alreadySpied = bot.getSpiedCards(target.id);
+        final strongIdx = BotDutchStrategy.discardTracker
+                .pickUntouchedInitiallyRevealedIndex(
+                  target.id,
+                  target.hand.length,
+                ) ??
+            BotDutchStrategy.discardTracker.pickStoppedTouchingIndex(
+              target.id,
+              target.hand.length,
+            ) ??
+            BotDutchStrategy.discardTracker.pickLikelyStrongIndex(
+              target.id,
+              target.hand.length,
+            );
+        final isAlreadyKnown = strongIdx != null &&
+            alreadySpied != null &&
+            alreadySpied.containsKey(strongIdx);
+        if (strongIdx != null && !isAlreadyKnown) {
+          idx = strongIdx;
+        } else {
+          final fallbackWeakIdx = BotDutchStrategy.discardTracker
+              .pickLikelyWeakUntouchedIndex(target.id, target.hand.length);
+          final weakAlreadyKnown = fallbackWeakIdx != null &&
+              alreadySpied != null &&
+              alreadySpied.containsKey(fallbackWeakIdx);
+          if (fallbackWeakIdx != null && !weakAlreadyKnown) {
+            idx = fallbackWeakIdx;
+          } else {
+            idx = _random.nextInt(target.hand.length);
+          }
+        }
       } else {
-        idx = _random.nextInt(target.hand.length);
+        // Par défaut, on cherche une faiblesse ou un slot encore flou.
+        final weakIdx = BotDutchStrategy.discardTracker
+            .pickLikelyWeakUntouchedIndex(target.id, target.hand.length);
+        final alreadySpied = bot.getSpiedCards(target.id);
+        final isAlreadyKnown = weakIdx != null &&
+            alreadySpied != null &&
+            alreadySpied.containsKey(weakIdx);
+
+        if (weakIdx != null && !isAlreadyKnown) {
+          idx = weakIdx;
+        } else if (_random.nextDouble() < 0.7) {
+          idx = _random.nextBool() ? 0 : target.hand.length - 1;
+        } else {
+          idx = _random.nextInt(target.hand.length);
+        }
       }
     } else {
       idx = _random.nextInt(target.hand.length);
@@ -559,6 +624,53 @@ class BotPowerHandler {
       if (urgentHumans.isNotEmpty) {
         urgentHumans.sort((a, b) => a.hand.length.compareTo(b.hand.length));
         return urgentHumans.first;
+      }
+
+      final publicTargets = List<Player>.from(opponents)
+        ..sort((a, b) {
+          final sa = _analyzePublicPowerSignal(a, difficulty);
+          final sb = _analyzePublicPowerSignal(b, difficulty);
+          final aScore = (sa.readyThreat * 3.0) +
+              ((4 - a.hand.length).clamp(0, 3) * 0.22) -
+              (sa.vulnerability * 0.5);
+          final bScore = (sb.readyThreat * 3.0) +
+              ((4 - b.hand.length).clamp(0, 3) * 0.22) -
+              (sb.vulnerability * 0.5);
+          return bScore.compareTo(aScore);
+        });
+      if (publicTargets.isNotEmpty) {
+        final topSignal = _analyzePublicPowerSignal(publicTargets.first, difficulty);
+        if (topSignal.readyThreat >= 0.58) {
+          return publicTargets.first;
+        }
+      }
+    }
+
+    if (_isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty)) {
+      final canPlanValet = _canPlanValetSteal(bot, difficulty);
+      final publicTargets = List<Player>.from(opponents)
+        ..sort((a, b) {
+          final sa = _analyzePublicPowerSignal(a, difficulty);
+          final sb = _analyzePublicPowerSignal(b, difficulty);
+          final aSetup =
+              canPlanValet ? (sa.readyThreat * 3.2) + (sa.vulnerability * 0.4) : 0.0;
+          final bSetup =
+              canPlanValet ? (sb.readyThreat * 3.2) + (sb.vulnerability * 0.4) : 0.0;
+          final aThreat = _adaptivePlatinumThreatScore(gs, bot, a, difficulty) +
+              aSetup +
+              (sa.readyThreat * 8.0) -
+              (sa.vulnerability * 1.8);
+          final bThreat = _adaptivePlatinumThreatScore(gs, bot, b, difficulty) +
+              bSetup +
+              (sb.readyThreat * 8.0) -
+              (sb.vulnerability * 1.8);
+          return bThreat.compareTo(aThreat);
+        });
+      if (publicTargets.isNotEmpty) {
+        final topSignal = _analyzePublicPowerSignal(publicTargets.first, difficulty);
+        if (topSignal.readyThreat >= 0.48 || publicTargets.first.hand.length <= 2) {
+          return publicTargets.first;
+        }
       }
     }
 
@@ -1035,12 +1147,14 @@ class BotPowerHandler {
     final spied = bot.getSpiedCards(opponent.id);
     final opponentEstimate = BotDutchStrategy.estimateOpponentForObserver(
         gs, bot, opponent, difficulty);
+    final publicSignal = _analyzePublicPowerSignal(opponent, difficulty);
     final myPerceived = _estimateBotPerceivedScore(bot);
     final behind = myPerceived > opponentEstimate.estimatedScore;
     final isMoiStyle = bot.botBehavior == BotBehavior.moi;
     final underPressure = report.minOpponentCards <= 2 ||
         report.hasOpponentWithOneCard ||
-        report.bestOpponentScore <= (myPerceived + 1.5);
+        report.bestOpponentScore <= (myPerceived + 1.5) ||
+        publicSignal.readyThreat >= 0.58;
 
     final opponentVelocity = BotDutchStrategy.discardTracker.getCardVelocity(
       opponent.id,
@@ -1054,8 +1168,10 @@ class BotPowerHandler {
       requiredMatches: 2,
       withinTurns: 3,
     );
-    final raceRisk =
-        opponent.hand.length <= 2 || opponentVelocity >= 2 || opponentBurst;
+    final raceRisk = opponent.hand.length <= 2 ||
+        opponentVelocity >= 2 ||
+        opponentBurst ||
+        publicSignal.readyThreat >= 0.60;
     final earlyOpeningWindow =
         gs.turnCount <= 1 || gs.actionCount <= (gs.players.length * 2);
     final canOpeningDisruption = (isMoiStyle || antiHumanLikeOpponent) &&
@@ -1151,7 +1267,8 @@ class BotPowerHandler {
         (isMoiStyle &&
             hasKnownPayload &&
             (underPressure || opponent.hand.length <= bot.hand.length)) ||
-        (antiHumanLikeOpponent && (hasKnownPayload || bestGain >= 0.2));
+        (antiHumanLikeOpponent && (hasKnownPayload || bestGain >= 0.2)) ||
+        (publicSignal.vulnerability >= 0.50 && bestGain >= -0.10);
     final hasInformationEdge = bestOwnKnown || bestOppKnown;
     final shouldSwapForEntropy =
         canEntropySabotage && !hasInformationEdge && bestGain >= -0.05;
@@ -1342,6 +1459,7 @@ class BotPowerHandler {
     Player opponent,
   ) {
     final tracker = BotDutchStrategy.discardTracker;
+    final readTier = OpponentReadTier.strong;
     tracker.observePublicMemorizedIndices(
       opponent.id,
       opponent.memorizedCardIndices,
@@ -1360,11 +1478,20 @@ class BotPowerHandler {
       maxPoints: 4,
       lookback: 4,
     );
-    final style = tracker.estimateOpponentStyle(opponent.id);
-    final estimate =
-        tracker.estimateOpponentHand(opponent.id, opponent.hand.length);
-    final indexIntel =
-        tracker.estimateOpponentIndexIntel(opponent.id, opponent.hand.length);
+    final style = tracker.estimateOpponentStyle(
+      opponent.id,
+      readTier: readTier,
+    );
+    final estimate = tracker.estimateOpponentHand(
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
+    final indexIntel = tracker.estimateOpponentIndexIntel(
+      opponent.id,
+      opponent.hand.length,
+      readTier: readTier,
+    );
     final powerUses = tracker.getPowerUseCount(opponent.id);
     final recentPowerUses = tracker.getRecentPowerUseCountInTurns(
       opponent.id,
@@ -1730,6 +1857,13 @@ class BotPowerHandler {
     String reason = 'Pas d\'avantage à utiliser ce pouvoir',
   }) {
     final powerVal = gameState.specialCardToActivate?.value ?? '?';
+    if (powerVal != '?') {
+      BotDutchStrategy.discardTracker.recordPowerSkip(
+        bot.id,
+        powerVal,
+        turnCount: gameState.turnCount,
+      );
+    }
 
     gameState.phase = GamePhase.playing;
     gameState.isWaitingForSpecialPower = false;
@@ -1761,6 +1895,7 @@ class BotPowerHandler {
 
   static bool _isPlatinumDifficulty(BotDifficulty difficulty) {
     switch (difficulty.name) {
+      case 'Difficile':
       case 'Platine':
       case 'Nightmare':
       case 'Impossible':
@@ -1776,6 +1911,7 @@ class BotPowerHandler {
       case 'Bronze':
         return true;
       case 'Argent':
+      case 'Difficile':
       case 'Or':
       case 'Platine':
       case 'Hard':
@@ -1813,6 +1949,15 @@ class BotPowerHandler {
             !_isGoldDifficulty(difficulty) &&
             !_isPlatinumDifficulty(difficulty);
     }
+  }
+
+  static OpponentReadTier _publicReadTierForDifficulty(
+    BotDifficulty difficulty,
+  ) {
+    if (_isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty)) {
+      return OpponentReadTier.strong;
+    }
+    return OpponentReadTier.medium;
   }
 
   static bool _shouldSilverSkipPower7(GameState gs, Player bot) {
@@ -1925,10 +2070,15 @@ class BotPowerHandler {
     if (opponents.length < 2) return null;
 
     final scored = opponents
-        .map((p) => (
-              player: p,
-              score: _adaptivePlatinumThreatScore(gs, observer, p, difficulty)
-            ))
+        .map((p) {
+          final signal = _analyzePublicPowerSignal(p, difficulty);
+          return (
+            player: p,
+            score: _adaptivePlatinumThreatScore(gs, observer, p, difficulty) +
+                (signal.readyThreat * 8.5) -
+                (signal.vulnerability * 1.6)
+          );
+        })
         .toList(growable: false)
       ..sort((a, b) => b.score.compareTo(a.score));
 
@@ -1990,6 +2140,7 @@ class BotPowerHandler {
     Player player,
     BotDifficulty difficulty,
   ) {
+    final readTier = _publicReadTierForDifficulty(difficulty);
     BotDutchStrategy.discardTracker.observePublicMemorizedIndices(
       player.id,
       player.memorizedCardIndices,
@@ -2001,10 +2152,16 @@ class BotPowerHandler {
       player,
       difficulty,
     );
-    final style =
-        BotDutchStrategy.discardTracker.estimateOpponentStyle(player.id);
+    final style = BotDutchStrategy.discardTracker.estimateOpponentStyle(
+      player.id,
+      readTier: readTier,
+    );
     final indexIntel = BotDutchStrategy.discardTracker
-        .estimateOpponentIndexIntel(player.id, player.hand.length);
+        .estimateOpponentIndexIntel(
+      player.id,
+      player.hand.length,
+      readTier: readTier,
+    );
     final cardsThreat = ((6 - player.hand.length).clamp(0, 5)).toDouble();
     final scoreThreat = (18.0 - handEstimate.estimatedScore).clamp(0.0, 18.0);
     final uncertaintyThreat =
@@ -2031,6 +2188,7 @@ class BotPowerHandler {
     final projectedFinishRisk =
         _computeProjectedFinishRiskForPlayer(gs, player);
     final trajectoryClean = _isTrajectoryClean(gs, player);
+    final publicSignal = _analyzePublicPowerSignal(player, difficulty);
     final intelGap =
         ((player.hand.length * 6.5) - indexIntel.estimatedScoreCeiling)
             .clamp(0.0, 18.0);
@@ -2060,6 +2218,8 @@ class BotPowerHandler {
     if (indexIntel.powerUses >= 2) {
       score += (min(indexIntel.powerUses, 6) * 0.55);
     }
+    score += publicSignal.readyThreat * 8.0;
+    score -= publicSignal.vulnerability * 2.2;
 
     if (player.isHuman && player.hand.length <= 2) {
       score += 14.0;
@@ -2083,9 +2243,93 @@ class BotPowerHandler {
   }
 
   static double _opponentOptimizationSignal(String playerId) {
-    final style =
-        BotDutchStrategy.discardTracker.estimateOpponentStyle(playerId);
+    final style = BotDutchStrategy.discardTracker.estimateOpponentStyle(
+      playerId,
+      readTier: OpponentReadTier.strong,
+    );
     return (style.optimization * 0.8 + style.aggression * 0.2).clamp(0.0, 1.0);
+  }
+
+  static bool _canPlanValetSteal(Player bot, BotDifficulty difficulty) {
+    if (!(_isGoldDifficulty(difficulty) || _isPlatinumDifficulty(difficulty))) {
+      return false;
+    }
+    final unknownOwn = BotMemoryManager.getUnknownIndices(bot);
+    if (unknownOwn.isNotEmpty) return true;
+    return _worstKnownCardPoints(bot) >= 8;
+  }
+
+  static _PublicPowerSignal _analyzePublicPowerSignal(
+    Player player,
+    BotDifficulty difficulty,
+  ) {
+    final cards = player.hand.length;
+    final readTier = _publicReadTierForDifficulty(difficulty);
+    final handEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(
+      player.id,
+      cards,
+      readTier: readTier,
+    );
+    final style = BotDutchStrategy.discardTracker.estimateOpponentStyle(
+      player.id,
+      readTier: readTier,
+    );
+    final indexIntel = BotDutchStrategy.discardTracker.estimateOpponentIndexIntel(
+      player.id,
+      cards,
+      readTier: readTier,
+    );
+    final ceiling =
+        BotDutchStrategy.discardTracker.getCurrentHandMaxCardCeiling(player.id);
+    final minUpper =
+        BotDutchStrategy.discardTracker.getCurrentMinCardUpperBound(player.id);
+    final skipped7 = BotDutchStrategy.discardTracker.getPowerSkipCount(
+      player.id,
+      powerValue: '7',
+    );
+    final recentLooks =
+        BotDutchStrategy.discardTracker.getRecentSelfLookCount(player.id);
+    final recentSpies =
+        BotDutchStrategy.discardTracker.getRecentSpyCount(player.id);
+    final recentFails =
+        BotDutchStrategy.discardTracker.getRecentMatchFailCount(player.id);
+    final disruptions =
+        BotDutchStrategy.discardTracker.getVisibleDisruptionCount(player.id);
+
+    double readyThreat = 0.0;
+    if (ceiling != null) readyThreat += 0.24;
+    if (minUpper != null) readyThreat += 0.14;
+    if (skipped7 > 0) {
+      readyThreat += readTier == OpponentReadTier.strong ? 0.26 : 0.12;
+    }
+    if (recentLooks > 0) readyThreat += 0.12;
+    if (recentSpies > 0 && cards <= 2) readyThreat += 0.15;
+    if (cards <= 2) readyThreat += 0.14;
+    readyThreat +=
+        (style.optimization * 0.18 * style.confidence).clamp(0.0, 0.18);
+    if (cards > 0) {
+      final avgCard = (handEstimate.estimatedScore / cards).clamp(1.0, 10.0);
+      readyThreat += ((5.0 - avgCard) / 10.0).clamp(0.0, 0.22);
+    }
+    readyThreat += ((cards * 6.5 - indexIntel.estimatedScoreCeiling) / 20.0)
+        .clamp(0.0, 0.16);
+    readyThreat -= disruptions * 0.16;
+    readyThreat -= recentFails * 0.12;
+    readyThreat = readyThreat.clamp(0.0, 1.0);
+
+    double vulnerability = 0.0;
+    vulnerability += disruptions * 0.32;
+    vulnerability += recentFails * 0.26;
+    if (cards <= 2 && ceiling == null && recentLooks == 0) {
+      vulnerability += 0.08;
+    }
+    vulnerability -= readyThreat * 0.20;
+    vulnerability = vulnerability.clamp(0.0, 1.0);
+
+    return _PublicPowerSignal(
+      readyThreat: readyThreat,
+      vulnerability: vulnerability,
+    );
   }
 
   static void _refreshPlatinumKillWindow(GameState gs, Player bot) {
@@ -2213,8 +2457,11 @@ class BotPowerHandler {
     }
     burstRisk = burstRisk.clamp(0.0, 1.0);
 
-    final handEstimate =
-        BotDutchStrategy.discardTracker.estimateOpponentHand(player.id, cards);
+    final handEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(
+      player.id,
+      cards,
+      readTier: OpponentReadTier.strong,
+    );
     final avgCardEstimate = cards <= 0
         ? 0.0
         : (handEstimate.estimatedScore / cards).clamp(1.0, 10.0);
@@ -2277,7 +2524,11 @@ class BotPowerHandler {
       withinTurns: 3,
     );
     final indexIntel = BotDutchStrategy.discardTracker
-        .estimateOpponentIndexIntel(player.id, cards);
+        .estimateOpponentIndexIntel(
+      player.id,
+      cards,
+      readTier: OpponentReadTier.strong,
+    );
     final trajectoryClean = _isTrajectoryClean(gs, player);
 
     double probability = 0.05;
@@ -2486,6 +2737,16 @@ class _DuelValetPlan {
     required this.opponent,
     required this.ownCardIndex,
     required this.opponentCardIndex,
+  });
+}
+
+class _PublicPowerSignal {
+  final double readyThreat;
+  final double vulnerability;
+
+  const _PublicPowerSignal({
+    required this.readyThreat,
+    required this.vulnerability,
   });
 }
 

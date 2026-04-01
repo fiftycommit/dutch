@@ -5,6 +5,7 @@ import '../../learning/ai_telemetry_service.dart';
 import 'bot_difficulty.dart';
 import 'bot_dutch_strategy.dart';
 import 'bot_memory_manager.dart';
+import 'discard_tracker.dart';
 
 /// Mode de ciblage pour les pouvoirs
 enum TargetMode {
@@ -148,6 +149,7 @@ class BotThreatAnalyzer {
     bool isHardcoreMode = false,
     BotDifficulty? difficulty,
   }) {
+    final readTier = _publicReadTierForDifficulty(difficulty);
     final opponents = <OpponentThreat>[];
     int totalCards = 0;
     double totalScore = 0;
@@ -160,8 +162,11 @@ class BotThreatAnalyzer {
 
       final cards = p.hand.length;
       // Estimer le score via l'algorithme entonnoir (défausses observées)
-      final estimate =
-          BotDutchStrategy.discardTracker.estimateOpponentHand(p.id, cards);
+      final estimate = BotDutchStrategy.discardTracker.estimateOpponentHand(
+        p.id,
+        cards,
+        readTier: readTier,
+      );
       final score = p.getEstimatedScoreForOpponent(
         avgDiscardedPoints: estimate.avgDiscardedPoints > 0
             ? estimate.avgDiscardedPoints
@@ -182,7 +187,7 @@ class BotThreatAnalyzer {
       }
 
       // Calcul du threatScore unifié (avec bonus Hardcore si activé)
-      final tempoEnabled = difficulty?.name == 'Platine';
+      final tempoEnabled = difficulty?.name == 'Difficile';
       double threat = _calculateUnifiedThreatScore(
         p,
         gs,
@@ -355,8 +360,11 @@ class BotThreatAnalyzer {
     }
 
     // 2) Score estimé (via entonnoir)
-    final opEstimate =
-        BotDutchStrategy.discardTracker.estimateOpponentHand(player.id, cards);
+    final opEstimate = BotDutchStrategy.discardTracker.estimateOpponentHand(
+      player.id,
+      cards,
+      readTier: OpponentReadTier.strong,
+    );
     final estimated = player.getEstimatedScoreForOpponent(
       avgDiscardedPoints: opEstimate.avgDiscardedPoints > 0
           ? opEstimate.avgDiscardedPoints
@@ -458,6 +466,24 @@ class BotThreatAnalyzer {
     }
 
     return score;
+  }
+
+  static OpponentReadTier _publicReadTierForDifficulty(
+    BotDifficulty? difficulty,
+  ) {
+    if (difficulty == null) return OpponentReadTier.medium;
+    switch (difficulty.name) {
+      case 'Difficile':
+      case 'Or':
+      case 'Platine':
+      case 'Hard':
+      case 'Insane':
+      case 'Nightmare':
+      case 'Impossible':
+        return OpponentReadTier.strong;
+      default:
+        return OpponentReadTier.medium;
+    }
   }
 
   static _MatchSignal _computeMatchSignal(
@@ -647,13 +673,15 @@ class BotThreatAnalyzer {
 
     // Intelligence selon difficulté
     final smartChance = difficulty != null
-        ? (difficulty.name == "Platine"
-            ? 0.95
-            : difficulty.name == "Or"
-                ? 0.85
-                : difficulty.name == "Argent"
-                    ? 0.70
-                    : 0.50)
+        ? (difficulty.name == "Difficile"
+            ? 0.92
+            : difficulty.name == "Argent"
+                ? 0.70
+                : difficulty.name == "Platine"
+                    ? 0.92
+                    : difficulty.name == "Or"
+                        ? 0.92
+                        : 0.50)
         : 0.80;
 
     if (_random.nextDouble() < smartChance) {
@@ -787,10 +815,12 @@ class BotThreatAnalyzer {
       return false;
     }
 
-    double counterChance = difficulty.name == "Platine"
-        ? 0.90
-        : difficulty.name == "Or"
-            ? 0.80
+    double counterChance = difficulty.name == "Difficile"
+        ? 0.85
+        : difficulty.name == "Platine"
+            ? 0.85
+            : difficulty.name == "Or"
+                ? 0.85
             : difficulty.name == "Argent"
                 ? 0.60
                 : 0.30;
@@ -806,7 +836,8 @@ class BotThreatAnalyzer {
   /// Détermine si les bots devraient coordonner une attaque contre le leader
   static bool shouldCoordinateAttack(
       GameState gs, Player bot, BotDifficulty difficulty) {
-    if (difficulty.name != "Or" &&
+    if (difficulty.name != "Difficile" &&
+        difficulty.name != "Or" &&
         difficulty.name != "Platine" &&
         difficulty.name != "Hard" &&
         difficulty.name != "Insane" &&
@@ -823,8 +854,10 @@ class BotThreatAnalyzer {
     // Si le leader est dangereux (peu de cartes ou score bas)
     if (topThreat.hasFewCards || topThreat.estimatedScore <= 8) {
       double coordChance =
-          difficulty.name == "Platine" || difficulty.name == "Impossible"
-              ? 0.85
+          difficulty.name == "Difficile" ||
+                  difficulty.name == "Platine" ||
+                  difficulty.name == "Impossible"
+              ? 0.82
               : difficulty.name == "Nightmare"
                   ? 0.80
                   : difficulty.name == "Insane"

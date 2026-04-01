@@ -891,13 +891,7 @@ class RulesScreen extends StatelessWidget {
             'Dutch à 6 points ou moins',
             'Réaction correcte à la défausse',
           ], const Color(0xFFC0C0C0)),
-          _buildBotCard(context, '🥇 Bots Or', 'Experts', [
-            'Excellente mémoire (oubli 2%/tour)',
-            'Très précis (confusion 5%)',
-            'Dutch agressif à 4 points',
-            'Réaction rapide à la défausse',
-          ], const Color(0xFFFFD700)),
-          _buildBotCard(context, '💎 Bots Platine', 'ULTIMES - Quasi imbattables !', [
+          _buildBotCard(context, '💎 Bots Difficiles', 'Forts', [
             'Mémoire PARFAITE (n\'oublient jamais)',
             'AUCUNE erreur sur les échanges',
             'Dutch ultra-agressif à 2 points',

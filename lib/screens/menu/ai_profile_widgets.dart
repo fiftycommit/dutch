@@ -561,15 +561,15 @@ class BotMatchupCard extends StatelessWidget {
   });
 
   static const _diffLabels = {
-    'hard': 'Or',
-    'platinum': 'Platine',
+    'hard': 'Difficile',
+    'platinum': 'Difficile',
     'easy': 'Bronze',
     'medium': 'Argent',
     'mix': 'Mix',
   };
 
   static const _diffColors = {
-    'hard': Colors.orange,
+    'hard': Colors.purple,
     'platinum': Colors.purple,
     'easy': Colors.brown,
     'medium': Colors.grey,
