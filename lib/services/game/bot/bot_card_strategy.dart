@@ -9,6 +9,7 @@ import 'bot_config.dart';
 import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
 import 'bot_dutch_strategy.dart';
+import 'bot_power_handler.dart';
 import 'duel_tuning.dart';
 import 'human_threat_tracker.dart';
 import 'moi_ml_profile.dart';
@@ -800,6 +801,30 @@ class BotCardStrategy {
     BotDifficulty difficulty,
     List<int> unknownIndices,
   ) {
+    // ═══════════════════════════════════════════════════════════════════════
+    // BRONZE BIENVEILLANT : Priorité 0 — défausser la carte du "pending match"
+    // Si le bot a espionné une carte identique à une des siennes (pouvoir 10),
+    // il défausse sa carte pour offrir un match à l'humain.
+    // ═══════════════════════════════════════════════════════════════════════
+    final pendingMatchIdx = BotPowerHandler.getPendingMatchIndex(bot.id);
+    if (pendingMatchIdx != null && pendingMatchIdx < bot.hand.length) {
+      // Vérifier que la carte mémorisée est toujours là et correspond
+      final pendingCard = bot.mentalMap.length > pendingMatchIdx 
+          ? bot.mentalMap[pendingMatchIdx] 
+          : null;
+      if (pendingCard != null) {
+        // Défausser cette carte (même si la pioche est meilleure)
+        // Le but est d'offrir un match, pas d'optimiser le score du bot
+        _replaceCard(gs, bot, pendingMatchIdx, drawn, difficulty);
+        BotPowerHandler.clearPendingMatch(bot.id);
+        bot.consecutiveBadDraws = 0;
+        return;
+      } else {
+        // La carte n'est plus connue → effacer le pending match
+        BotPowerHandler.clearPendingMatch(bot.id);
+      }
+    }
+
     // Bronze par contexte:
     // 1) remplacer une carte connue strictement supérieure à la pioche;
     // 2) sinon explorer une inconnue;

@@ -1,0 +1,19 @@
+[
+  {
+    "gameId": "game-opt",
+    "startTime": "2024-01-01T10:00:00.000Z",
+    "endTime": "2024-01-01T10:30:00.000Z",
+    "usedSBMM": true,
+    "numberOfPlayers": 2,
+    "finalRank": 1,
+    "finalScore": 10,
+    "calledDutch": false,
+    "wonDutch": false,
+    "profileBefore": {
+      "aggression": 0.3
+    },
+    "profileAfter": {
+      "aggression": 0.5
+    }
+  }
+]

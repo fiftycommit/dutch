@@ -28,6 +28,62 @@ class BotPowerHandler {
   static int _platinumKillWindowLastTurn = -1;
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // BRONZE : Compteur partagé des Valets sur l'humain (max 2 par manche)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static const int _maxBronzeValetsOnHuman = 2;
+  static int _bronzeValetsOnHumanThisRound = 0;
+  static String _lastHumanIdForValetCount = '';
+
+  /// Reset le compteur de Valets Bronze sur l'humain (nouvelle manche)
+  static void resetBronzeValetCount() {
+    _bronzeValetsOnHumanThisRound = 0;
+    _lastHumanIdForValetCount = '';
+  }
+
+  /// Vérifie si les bots Bronze peuvent encore Valet l'humain
+  static bool _canBronzeValetHuman(GameState gs) {
+    final human = gs.players.where((p) => p.isHuman).firstOrNull;
+    if (human == null) return false;
+    // Reset si nouvel humain (nouvelle partie)
+    if (_lastHumanIdForValetCount != human.id) {
+      _bronzeValetsOnHumanThisRound = 0;
+      _lastHumanIdForValetCount = human.id;
+    }
+    return _bronzeValetsOnHumanThisRound < _maxBronzeValetsOnHuman;
+  }
+
+  /// Incrémente le compteur de Valets sur l'humain
+  static void _recordBronzeValetOnHuman() {
+    _bronzeValetsOnHumanThisRound++;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BRONZE : Mémoire du pouvoir 10 pour offrir un match à l'humain
+  // ═══════════════════════════════════════════════════════════════════════════
+  /// Map<botId, index de la carte à défausser pour offrir un match>
+  static final Map<String, int> _pendingMatchFromSpy = {};
+
+  /// Le bot Bronze a-t-il une carte à défausser pour offrir un match ?
+  static int? getPendingMatchIndex(String botId) => _pendingMatchFromSpy[botId];
+
+  /// Enregistre l'index de la carte à défausser pour match
+  static void setPendingMatchIndex(String botId, int index) {
+    _pendingMatchFromSpy[botId] = index;
+  }
+
+  /// Efface la mémoire du match pending (après défausse ou nouvelle manche)
+  static void clearPendingMatch(String botId) {
+    _pendingMatchFromSpy.remove(botId);
+  }
+
+  /// Reset toutes les mémoires Bronze pour nouvelle manche
+  static void resetBronzeMemory() {
+    _bronzeValetsOnHumanThisRound = 0;
+    _lastHumanIdForValetCount = '';
+    _pendingMatchFromSpy.clear();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // TÉLÉMÉTRIE : Mesure d'impact des pouvoirs
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -428,6 +484,18 @@ class BotPowerHandler {
 
     if (_isBronzeDifficulty(difficulty)) {
       _applyBronzeSpyDistraction(gameState, bot);
+
+      // BRONZE BIENVEILLANT : Si le bot a espionné une carte identique à une
+      // des siennes, il mémorise l'index pour la défausser au prochain tour
+      // → offre un match à l'humain
+      for (int i = 0; i < bot.mentalMap.length && i < bot.hand.length; i++) {
+        final known = bot.mentalMap[i];
+        if (known != null && known.value == spiedCard.value) {
+          // Le bot a la même valeur → défausser cette carte au prochain tour
+          setPendingMatchIndex(bot.id, i);
+          break;
+        }
+      }
     }
 
     // Log
@@ -667,7 +735,7 @@ class BotPowerHandler {
   /// Or/Platine: cible les 2 joueurs les plus forts.
   /// Si choix ambigu, inclut un humain dans les cibles.
   /// Protection anti-focus humain:
-  /// - Bronze: max 1 ciblage humain / 4 tours de table.
+  /// - Bronze: JAMAIS l'humain sauf s'il a ≤ 2 cartes ET quota de 2 Valets/manche pas atteint.
   /// - Argent: max 1 ciblage humain / 2 tours de table.
   static (Player, Player)? _chooseValetTargets(
     GameState gs,
@@ -677,36 +745,47 @@ class BotPowerHandler {
   }) {
     final isBronzeValet = bot.botSkillLevel == BotSkillLevel.bronze ||
         _isBronzeDifficulty(difficulty);
-    final humanCooldownTurns = _humanValetCooldownTurns(bot, difficulty);
 
     if (isBronzeValet) {
-      final candidates =
+      // BRONZE : Nouvelle logique bienveillante
+      // L'humain n'est ciblable QUE si :
+      // 1. Il a ≤ 2 cartes (dangereux, proche de Dutch)
+      // 2. Le quota de 2 Valets/manche n'est pas atteint
+      final human = gs.players.where((p) => p.isHuman).firstOrNull;
+      final humanIsDangerous = human != null && human.hand.length <= 2;
+      final canTargetHuman = humanIsDangerous && _canBronzeValetHuman(gs);
+
+      // Construire le pool de cibles (exclure l'humain sauf s'il est ciblable)
+      final allCandidates =
           gs.players.where((p) => p.hand.isNotEmpty).toList(growable: false);
-      if (candidates.length < 2) return null;
+      if (allCandidates.length < 2) return null;
 
-      final protectedHumanIds =
-          _protectedHumanIds(gs, candidates, humanCooldownTurns);
-
-      List<Player> pool = candidates
-          .where((p) => !protectedHumanIds.contains(p.id))
+      // Pool sans l'humain (sauf s'il est ciblable)
+      List<Player> pool = allCandidates
+          .where((p) => !p.isHuman || canTargetHuman)
           .toList(growable: false);
+      
       if (pool.length < 2) {
-        pool = List<Player>.from(candidates);
+        // Pas assez de cibles sans l'humain → skip le Valet
+        return null;
       }
 
       final first = pool[_random.nextInt(pool.length)];
       List<Player> secondPool =
           pool.where((p) => p.id != first.id).toList(growable: false);
-      if (secondPool.isEmpty) {
-        secondPool =
-            candidates.where((p) => p.id != first.id).toList(growable: false);
-      }
       if (secondPool.isEmpty) return null;
 
       final second = secondPool[_random.nextInt(secondPool.length)];
+      
+      // Si l'humain est ciblé, incrémenter le compteur
+      if (first.isHuman || second.isHuman) {
+        _recordBronzeValetOnHuman();
+      }
+      
       return (first, second);
     }
 
+    final humanCooldownTurns = _humanValetCooldownTurns(bot, difficulty);
     final opponents =
         gs.players.where((p) => p.id != bot.id && p.hand.isNotEmpty).toList();
     if (opponents.length < 2) return null;
@@ -1566,8 +1645,7 @@ class BotPowerHandler {
 
   /// Choisit la cible du Joker selon l'analyse de menace contextuelle
   /// Règles :
-  /// Bronze: cible le joueur (hors bot) avec le moins de cartes > 1.
-  /// Aucune distinction humain/bot: seulement la dangerosité.
+  /// Bronze: JAMAIS l'humain. Cible uniquement les autres bots.
   /// Silver/Gold/Platinum:
   /// 1. Le joueur le plus menaçant selon le score de menace unifié
   /// 2. À menace égale, l'humain est préféré (via tiebreaker +3)
@@ -1579,11 +1657,13 @@ class BotPowerHandler {
     BotDifficulty difficulty, {
     BotPersonality? personality,
   }) {
+    // BRONZE : JAMAIS cibler l'humain avec le Joker
     if (_isBronzeDifficulty(difficulty)) {
+      // Ne cibler que les autres bots, jamais l'humain
       final candidates = gs.players
-          .where((p) => p.id != bot.id && p.hand.length > 1)
+          .where((p) => p.id != bot.id && !p.isHuman && p.hand.length > 1)
           .toList(growable: false);
-      if (candidates.isEmpty) return null;
+      if (candidates.isEmpty) return null; // Skip si aucun bot disponible
       candidates.sort((a, b) {
         final byCards = a.hand.length.compareTo(b.hand.length);
         if (byCards != 0) return byCards;

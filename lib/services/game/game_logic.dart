@@ -7,6 +7,7 @@ import '../../models/game_settings.dart';
 import '../../utils/action_history_messages.dart';
 import '../logging/game_logger_service.dart';
 import 'bot/bot_dutch_strategy.dart';
+import 'bot/bot_power_handler.dart';
 import 'bot/discard_tracker.dart';
 
 class GameLogic {
@@ -21,6 +22,8 @@ class GameLogic {
   }) {
     // Reset le tracker de défausses pour la nouvelle manche
     BotDutchStrategy.discardTracker.reset();
+    // Reset toutes les mémoires Bronze pour la nouvelle manche (Valets + pending match)
+    BotPowerHandler.resetBronzeMemory();
 
     List<PlayingCard> deck = GameState.createFullDeck();
 

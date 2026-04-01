@@ -1,0 +1,12 @@
+{
+  "clientId": "test-slots-1775051407539",
+  "slotId": 1,
+  "profileId": "slot-1-profile",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "lastUpdatedAt": "2024-01-01T00:00:00.000Z",
+  "gamesAnalyzed": 2,
+  "learnedParameters": {
+    "slot": 1
+  },
+  "updatedAt": "2026-04-01T13:50:07.540Z"
+}

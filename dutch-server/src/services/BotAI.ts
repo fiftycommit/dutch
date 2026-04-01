@@ -31,6 +31,12 @@ interface OpponentSwap {
   turnNumber: number;
 }
 
+interface PendingMatchFromSpy {
+  cardValue: string; // valeur de la carte vue chez l'adversaire
+  cardIndex: number; // index de MA carte identique à défausser
+  turnSpied: number; // tour où j'ai espionné
+}
+
 interface BotMemory {
   mentalMap: (PlayingCard | null)[];
   discoveredAtTurn: (number | null)[]; // quand chaque carte a été découverte (pour fraîcheur Argent)
@@ -42,13 +48,62 @@ interface BotMemory {
   // Platine exclusif
   discardTracker: Map<string, number>; // valeur carte → nombre vu dans la défausse
   opponentSwapHistory: OpponentSwap[]; // swaps observés des adversaires
+  // Bronze exclusif — carte identique vue avec le 10, à défausser au prochain tour
+  pendingMatchFromSpy: PendingMatchFromSpy | null;
 }
 
 const botMemories = new Map<string, BotMemory>();
 
+// Compteur partagé des Valets utilisés sur l'humain par manche (Bronze uniquement)
+// Clé = ID du joueur humain, valeur = nombre de Valets utilisés sur lui cette manche
+const valetAttacksOnHuman = new Map<string, number>();
+const MAX_VALET_ATTACKS_BRONZE = 2;
+
 export class BotAI {
   private static random(): number {
     return Math.random();
+  }
+
+  // ============================================================
+  // GESTION VALETS BRONZE (limite partagée entre tous les bots)
+  // ============================================================
+
+  /**
+   * Retourne l'ID du joueur humain pour tracker les attaques.
+   */
+  private static getHumanId(gs: GameState): string | null {
+    const human = gs.players.find(p => p.isHuman);
+    return human?.id ?? null;
+  }
+
+  /**
+   * Vérifie si les bots Bronze peuvent encore Valet l'humain (limite de 2 par manche).
+   */
+  private static canValetHuman(gs: GameState): boolean {
+    const humanId = this.getHumanId(gs);
+    if (!humanId) return false;
+    const attacks = valetAttacksOnHuman.get(humanId) ?? 0;
+    return attacks < MAX_VALET_ATTACKS_BRONZE;
+  }
+
+  /**
+   * Incrémente le compteur de Valets sur l'humain.
+   */
+  private static recordValetOnHuman(gs: GameState): void {
+    const humanId = this.getHumanId(gs);
+    if (!humanId) return;
+    const current = valetAttacksOnHuman.get(humanId) ?? 0;
+    valetAttacksOnHuman.set(humanId, current + 1);
+  }
+
+  /**
+   * Reset le compteur de Valets sur l'humain (appelé au début de chaque manche).
+   */
+  private static resetValetCountForRound(gs: GameState): void {
+    const humanId = this.getHumanId(gs);
+    if (humanId) {
+      valetAttacksOnHuman.set(humanId, 0);
+    }
   }
 
   // ============================================================
@@ -67,6 +122,7 @@ export class BotAI {
         minTurnsBeforeDutch: 0,
         discardTracker: new Map(),
         opponentSwapHistory: [],
+        pendingMatchFromSpy: null,
       });
     }
     return botMemories.get(player.id)!;
@@ -487,6 +543,8 @@ export class BotAI {
     // Premier tour : initialiser la mémoire avec erreurs selon le niveau
     if (memory.turnCounter === 1) {
       this.initializeBotMemory(bot, difficulty);
+      // Reset du compteur de Valets Bronze sur l'humain au début de la manche
+      this.resetValetCountForRound(gameState);
     }
 
     // Confusion passive (Bronze/Argent : distraits par les défausses)
@@ -825,6 +883,29 @@ export class BotAI {
     const drawnVal = drawn.points;
     const memory = this.getBotMemory(bot);
 
+    // === BRONZE : défausser la carte identique vue avec le pouvoir 10 au tour précédent ===
+    // PHILOSOPHIE BRONZE : si le bot a vu une carte identique avec le 10, il la défausse
+    // au tour suivant pour permettre au joueur de matcher
+    if (difficulty.name === 'Bronze' && memory.pendingMatchFromSpy) {
+      const pending = memory.pendingMatchFromSpy;
+      const cardToDiscard = memory.mentalMap[pending.cardIndex];
+
+      // Vérifier que la carte est toujours là et correspond
+      if (cardToDiscard && cardToDiscard.value === pending.cardValue) {
+        // Remplacer cette carte par la pioche (défausser l'identique)
+        const confused = this.random() < difficulty.confusionOnSwap;
+        if (!confused) {
+          this.updateMentalMap(bot, pending.cardIndex, drawn);
+        }
+        GameLogic.replaceCard(gs, pending.cardIndex);
+        // Nettoyer le pending
+        memory.pendingMatchFromSpy = null;
+        return;
+      }
+      // La carte n'est plus là (échangée, etc.) — annuler le pending
+      memory.pendingMatchFromSpy = null;
+    }
+
     // === POWER-AWARE : défausser un 7/10 pioché pour déclencher le pouvoir ===
     // Tous sauf Bronze — le bot comprend que défausser une carte à pouvoir a une valeur ajoutée
     if (difficulty.name !== 'Bronze' && drawn.isSpecial && (drawn.value === '7' || drawn.value === '10')) {
@@ -1127,7 +1208,11 @@ export class BotAI {
   static async useBotSpecialPower(gameState: GameState, playerMMR?: number): Promise<void> {
     if (gameState.phase !== GamePhase.specialPower || !gameState.specialCardToActivate) return;
 
-    const bot = getCurrentPlayer(gameState);
+    // Le joueur qui utilise le pouvoir peut être différent du currentPlayer (cas des matchs)
+    const bot = gameState.specialPowerPlayerId
+      ? gameState.players.find(p => p.id === gameState.specialPowerPlayerId) ?? getCurrentPlayer(gameState)
+      : getCurrentPlayer(gameState);
+    
     const card = gameState.specialCardToActivate;
 
     const difficulty = playerMMR === undefined
@@ -1174,12 +1259,32 @@ export class BotAI {
       return;
     }
 
-    // Bronze : toujours utiliser, cible aléatoire, pas de stockage
+    // Bronze : toujours utiliser, cible aléatoire
+    // PHILOSOPHIE BRONZE : si le bot voit une carte identique à l'une des siennes,
+    // il va défausser sa carte au tour d'après (permettant un match au joueur humain)
     if (difficulty.name === 'Bronze') {
       const target = opponents[Math.floor(this.random() * opponents.length)];
       const idx = Math.floor(this.random() * target.hand.length);
       GameLogic.lookAtCard(gs, target, idx);
-      // Bronze ne retient pas l'info
+
+      // Vérifier si le bot a une carte identique dans sa main (même valeur)
+      const spiedCard = target.hand[idx];
+      const memory = this.getBotMemory(bot);
+
+      for (let i = 0; i < bot.hand.length; i++) {
+        // On ne vérifie que les cartes connues du bot
+        if (memory.mentalMap[i] && memory.mentalMap[i]!.value === spiedCard.value) {
+          // Le bot a une carte identique ! Il va la défausser au prochain tour
+          memory.pendingMatchFromSpy = {
+            cardValue: spiedCard.value,
+            cardIndex: i,
+            turnSpied: memory.turnCounter,
+          };
+          break;
+        }
+      }
+
+      // Bronze oublie normalement
       this.applyContextualForget(bot, difficulty, 'spy');
       return;
     }
@@ -1266,22 +1371,56 @@ export class BotAI {
       return;
     }
 
-    // Bronze : 50/50 entre échanger entre 2 autres OU inclure soi-même
+    // Bronze : Valet utilisé de façon bienveillante
+    // PHILOSOPHIE BRONZE : 
+    // - N'attaquer l'humain QUE s'il est dangereux (≤ 2 cartes) ET quota pas atteint (2 max par manche)
+    // - Sinon, échanger entre bots ou avec soi-même contre un bot
     if (difficulty.name === 'Bronze') {
+      const human = opponents.find(p => p.isHuman);
+      const nonHumanOpponents = opponents.filter(p => !p.isHuman);
+      // L'humain est ciblable s'il a ≤ 2 cartes ET qu'on peut encore le Valet
+      const canTargetHuman = human && human.hand.length <= 2 && this.canValetHuman(gs);
+
       if (opponents.length >= 2 && this.random() < 0.5) {
-        // Échange entre 2 adversaires aléatoires (pas de ciblage)
-        const t1 = opponents[Math.floor(this.random() * opponents.length)];
-        let t2 = t1;
-        while (t2 === t1) {
-          t2 = opponents[Math.floor(this.random() * opponents.length)];
+        // Cas 1 : Échange entre 2 adversaires (pas soi-même)
+        if (canTargetHuman && nonHumanOpponents.length >= 1) {
+          // L'humain est dangereux et ciblable → l'inclure dans l'échange
+          const otherTarget = nonHumanOpponents[Math.floor(this.random() * nonHumanOpponents.length)];
+          const idx1 = Math.floor(this.random() * human!.hand.length);
+          const idx2 = Math.floor(this.random() * otherTarget.hand.length);
+          this.recordValetOnHuman(gs);
+          GameLogic.swapCards(gs, human!, idx1, otherTarget, idx2);
+        } else if (nonHumanOpponents.length >= 2) {
+          // L'humain n'est pas ciblable → échange entre 2 bots uniquement
+          const t1 = nonHumanOpponents[Math.floor(this.random() * nonHumanOpponents.length)];
+          let t2 = t1;
+          while (t2 === t1) {
+            t2 = nonHumanOpponents[Math.floor(this.random() * nonHumanOpponents.length)];
+          }
+          const idx1 = Math.floor(this.random() * t1.hand.length);
+          const idx2 = Math.floor(this.random() * t2.hand.length);
+          GameLogic.swapCards(gs, t1, idx1, t2, idx2);
+        } else {
+          // Pas assez de bots, skip
+          GameLogic.skipSpecialPower(gs);
+          return;
         }
-        const idx1 = Math.floor(this.random() * t1.hand.length);
-        const idx2 = Math.floor(this.random() * t2.hand.length);
-        GameLogic.swapCards(gs, t1, idx1, t2, idx2);
       } else {
-        // Échange sa propre carte (index aléatoire, PAS la pire) avec un adversaire aléatoire
+        // Cas 2 : Échange sa propre carte avec un adversaire
+        let target: Player;
+        if (canTargetHuman) {
+          // L'humain est dangereux et ciblable → le cibler
+          this.recordValetOnHuman(gs);
+          target = human!;
+        } else if (nonHumanOpponents.length > 0) {
+          // L'humain n'est pas dangereux → cibler un bot
+          target = nonHumanOpponents[Math.floor(this.random() * nonHumanOpponents.length)];
+        } else {
+          // Seulement l'humain disponible et il n'est pas dangereux → skip
+          GameLogic.skipSpecialPower(gs);
+          return;
+        }
         const myIdx = Math.floor(this.random() * bot.hand.length);
-        const target = opponents[Math.floor(this.random() * opponents.length)];
         const targetIdx = Math.floor(this.random() * target.hand.length);
         this.forgetCard(bot, myIdx);
         GameLogic.swapCards(gs, bot, myIdx, target, targetIdx);
@@ -1418,15 +1557,23 @@ export class BotAI {
     bot: Player,
     difficulty: BotDifficultyConfig
   ): void {
-    // Bronze : cible n'importe qui avec des cartes (pas de filtre >= 2)
+    // Bronze : JAMAIS cibler le joueur humain avec le Joker
+    // Le Joker vide aussi la mémoire du bot qui l'utilise
     if (difficulty.name === 'Bronze') {
-      const targets = gs.players.filter((p) => p.id !== bot.id && p.hand.length > 0);
-      if (targets.length === 0) {
+      // Ne cibler que les autres bots, jamais l'humain
+      const nonHumanTargets = gs.players.filter((p) => p.id !== bot.id && !p.isHuman && p.hand.length > 0);
+      
+      if (nonHumanTargets.length === 0) {
+        // Aucun bot disponible → skip le pouvoir (ne pas cibler l'humain)
         GameLogic.skipSpecialPower(gs);
         return;
       }
-      const target = targets[Math.floor(this.random() * targets.length)];
+
+      const target = nonHumanTargets[Math.floor(this.random() * nonHumanTargets.length)];
       GameLogic.jokerEffect(gs, target);
+
+      // Le bot Bronze vide systématiquement sa mémoire après avoir utilisé le Joker
+      this.resetMentalMap(bot);
       return;
     }
 

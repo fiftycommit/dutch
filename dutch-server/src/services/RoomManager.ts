@@ -815,15 +815,18 @@ export class RoomManager {
 
     this.broadcastGameState(roomCode, 'ACTION_RESULT');
 
-    // Si c'est un bot, auto-résoudre
+    // Si c'est un bot, utiliser le pouvoir via BotAI
     const player = room.gameState.players.find(p => p.id === power.playerId);
     if (player && !player.isHuman) {
-      setTimeout(() => {
+      setTimeout(async () => {
         const currentRoom = this.rooms.get(roomCode);
         if (!currentRoom?.gameState) return;
         if (currentRoom.gameState.phase !== GamePhase.specialPower) return;
         if (currentRoom.gameState.specialPowerPlayerId !== power.playerId) return;
-        GameLogic.skipSpecialPower(currentRoom.gameState);
+        
+        // Utiliser le pouvoir via BotAI (au lieu de skip systématique)
+        await BotAI.useBotSpecialPower(currentRoom.gameState);
+        
         this.broadcastGameState(roomCode, 'ACTION_RESULT');
         this.activateNextPendingPower(roomCode);
       }, 800);
