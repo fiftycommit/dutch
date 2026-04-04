@@ -1,88 +1,122 @@
 /**
- * Admin Auth Gate — shared login + password change for all dashboards.
+ * Admin Auth Gate — Firebase Google Sign-In for all dashboards.
  *
- * Usage in any dashboard HTML:
+ * Usage:
  *   <div id="auth-gate"></div>
- *   <div id="app-content" style="display:none"> ... dashboard content ... </div>
+ *   <div id="app-content" style="display:none"> ... </div>
  *   <script src="/admin-auth.js"></script>
- *   <script>
- *     initAdminAuth({ onReady() { // called once authenticated } });
- *   </script>
+ *   <script>initAdminAuth({ onReady() { ... } });</script>
  */
 
-/* ── State ── */
-let _adminSecret = sessionStorage.getItem('adminSecret') || '';
+/* ── Firebase Config ── */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
+  authDomain: 'dutch-game-1dd01.firebaseapp.com',
+  projectId: 'dutch-game-1dd01',
+};
 
-/** Get the current admin secret (for use in fetch headers) */
-function getAdminSecret() { return _adminSecret; }
+let _firebaseApp = null;
+let _firebaseAuth = null;
+let _idToken = '';
+
+/** Get current ID token for API calls */
+function getAdminSecret() { return _idToken; }
 
 /** Helper to call admin-protected APIs */
 async function adminFetch(url, opts = {}) {
+  // Refresh token if needed
+  if (_firebaseAuth?.currentUser) {
+    _idToken = await _firebaseAuth.currentUser.getIdToken();
+  }
   const res = await fetch(url, {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      'X-Admin-Secret': _adminSecret,
+      'Authorization': `Bearer ${_idToken}`,
       ...(opts.headers || {}),
     },
   });
-  if (res.status === 403) throw new Error('Forbidden');
+  if (res.status === 403 || res.status === 401) throw new Error('Forbidden');
   return res.json();
 }
 
-/* ── UI ��─ */
-function initAdminAuth({ onReady }) {
+/* ── Load Firebase SDK ── */
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function initFirebase() {
+  await loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+  await loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
+  _firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+  _firebaseAuth = firebase.auth();
+}
+
+/* ── Main ── */
+async function initAdminAuth({ onReady }) {
   const gate = document.getElementById('auth-gate');
   const app = document.getElementById('app-content');
 
-  // If we already have a secret in session, try it
-  if (_adminSecret) {
-    verifyAndProceed(onReady, gate, app);
-    return;
-  }
+  showLoading(gate);
 
-  showLoginForm(gate, app, onReady);
+  await initFirebase();
+
+  // Check if already signed in
+  _firebaseAuth.onAuthStateChanged(async (user) => {
+    if (user) {
+      _idToken = await user.getIdToken();
+      const ok = await checkAdminAccess(user);
+      if (ok) {
+        gate.style.display = 'none';
+        app.style.display = '';
+        onReady();
+      } else {
+        showDenied(gate, user);
+      }
+    } else {
+      showLoginForm(gate, app, onReady);
+    }
+  });
 }
 
-async function verifyAndProceed(onReady, gate, app) {
+async function checkAdminAccess(user) {
   try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: _adminSecret }),
+    const res = await fetch('/api/admin/verify', {
+      headers: { 'Authorization': `Bearer ${_idToken}` },
     });
     const data = await res.json();
-    if (!data.success) {
-      sessionStorage.removeItem('adminSecret');
-      _adminSecret = '';
-      showLoginForm(gate, app, onReady);
-      return;
-    }
-    if (data.mustChangePassword) {
-      showChangePasswordForm(gate, app, onReady);
-      return;
-    }
-    gate.style.display = 'none';
-    app.style.display = '';
-    onReady();
+    return data.success === true;
   } catch {
-    sessionStorage.removeItem('adminSecret');
-    _adminSecret = '';
-    showLoginForm(gate, app, onReady);
+    return false;
   }
+}
+
+function showLoading(gate) {
+  gate.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+      <div style="color:#fbbf24;font-size:1.2em">Chargement...</div>
+    </div>
+  `;
 }
 
 function showLoginForm(gate, app, onReady) {
   gate.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100vh">
-      <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
-        <h1 style="text-align:center;margin-bottom:24px;color:#fbbf24;font-size:1.6em">🔒 Connexion Admin</h1>
-        <input type="password" id="auth-password" placeholder="Mot de passe" autofocus
-          style="width:100%;padding:12px 16px;border:1px solid #2d3148;background:#12141e;color:#e2e8f0;border-radius:8px;font-size:14px;margin-bottom:16px;outline:none">
+      <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.4);text-align:center">
+        <h1 style="margin-bottom:8px;color:#fbbf24;font-size:1.6em">Dutch Admin</h1>
+        <p style="color:#94a3b8;font-size:13px;margin-bottom:24px">Connecte-toi avec ton compte Google pour acceder au panel admin.</p>
         <div id="auth-error" style="color:#f87171;font-size:13px;margin-bottom:12px"></div>
-        <button id="auth-submit"
-          style="width:100%;padding:12px;border:none;border-radius:8px;background:#fbbf24;color:#000;font-size:14px;font-weight:600;cursor:pointer">
-          Connexion
+        <button id="auth-google-btn"
+          style="width:100%;padding:12px;border:none;border-radius:8px;background:#fff;color:#333;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Se connecter avec Google
         </button>
       </div>
     </div>
@@ -90,135 +124,39 @@ function showLoginForm(gate, app, onReady) {
   gate.style.display = '';
   app.style.display = 'none';
 
-  const input = document.getElementById('auth-password');
-  const btn = document.getElementById('auth-submit');
-  const error = document.getElementById('auth-error');
-
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  btn.addEventListener('click', doLogin);
-
-  async function doLogin() {
-    const password = input.value.trim();
-    if (!password) return;
+  document.getElementById('auth-google-btn').addEventListener('click', async () => {
+    const error = document.getElementById('auth-error');
     error.textContent = '';
-    btn.disabled = true;
-    btn.textContent = '...';
-
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        error.textContent = data.error || 'Mot de passe invalide';
-        btn.disabled = false;
-        btn.textContent = 'Connexion';
-        return;
-      }
-
-      _adminSecret = password;
-      sessionStorage.setItem('adminSecret', password);
-
-      if (data.mustChangePassword) {
-        showChangePasswordForm(gate, app, onReady);
-      } else {
-        gate.style.display = 'none';
-        app.style.display = '';
-        onReady();
-      }
-    } catch {
-      error.textContent = 'Erreur de connexion';
-      btn.disabled = false;
-      btn.textContent = 'Connexion';
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await _firebaseAuth.signInWithPopup(provider);
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      error.textContent = e.message || 'Erreur de connexion';
     }
-  }
+  });
 }
 
-function showChangePasswordForm(gate, app, onReady) {
+function showDenied(gate, user) {
   gate.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100vh">
-      <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
-        <h1 style="text-align:center;margin-bottom:8px;color:#fbbf24;font-size:1.5em">🔑 Changement de mot de passe</h1>
-        <p style="text-align:center;color:#94a3b8;font-size:13px;margin-bottom:24px">
-          Première connexion — vous devez définir un nouveau mot de passe.
+      <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.4);text-align:center">
+        <h1 style="margin-bottom:8px;color:#f87171;font-size:1.5em">Acces refuse</h1>
+        <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">
+          Le compte <strong style="color:#e2e8f0">${user.email}</strong> n'est pas administrateur.
         </p>
-        <input type="password" id="cp-new" placeholder="Nouveau mot de passe (min. 8 caractères)"
-          style="width:100%;padding:12px 16px;border:1px solid #2d3148;background:#12141e;color:#e2e8f0;border-radius:8px;font-size:14px;margin-bottom:12px;outline:none">
-        <input type="password" id="cp-confirm" placeholder="Confirmer le mot de passe"
-          style="width:100%;padding:12px 16px;border:1px solid #2d3148;background:#12141e;color:#e2e8f0;border-radius:8px;font-size:14px;margin-bottom:16px;outline:none">
-        <div id="cp-error" style="color:#f87171;font-size:13px;margin-bottom:12px"></div>
-        <button id="cp-submit"
-          style="width:100%;padding:12px;border:none;border-radius:8px;background:#fbbf24;color:#000;font-size:14px;font-weight:600;cursor:pointer">
-          Changer le mot de passe
+        <button onclick="adminLogout()"
+          style="padding:10px 24px;border:1px solid #2d3148;border-radius:8px;background:transparent;color:#94a3b8;cursor:pointer;font-size:13px">
+          Se deconnecter
         </button>
       </div>
     </div>
   `;
-  gate.style.display = '';
-  app.style.display = 'none';
-
-  const newInput = document.getElementById('cp-new');
-  const confirmInput = document.getElementById('cp-confirm');
-  const btn = document.getElementById('cp-submit');
-  const error = document.getElementById('cp-error');
-
-  newInput.focus();
-  confirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') doChange(); });
-  btn.addEventListener('click', doChange);
-
-  async function doChange() {
-    const newPw = newInput.value;
-    const confirm = confirmInput.value;
-    error.textContent = '';
-
-    if (newPw.length < 8) {
-      error.textContent = 'Le mot de passe doit faire au moins 8 caractères';
-      return;
-    }
-    if (newPw !== confirm) {
-      error.textContent = 'Les mots de passe ne correspondent pas';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = '...';
-
-    try {
-      const res = await fetch('/api/admin/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: _adminSecret, newPassword: newPw }),
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        error.textContent = data.error || 'Erreur lors du changement';
-        btn.disabled = false;
-        btn.textContent = 'Changer le mot de passe';
-        return;
-      }
-
-      // Update stored secret to the new password
-      _adminSecret = newPw;
-      sessionStorage.setItem('adminSecret', newPw);
-
-      gate.style.display = 'none';
-      app.style.display = '';
-      onReady();
-    } catch {
-      error.textContent = 'Erreur de connexion';
-      btn.disabled = false;
-      btn.textContent = 'Changer le mot de passe';
-    }
-  }
 }
 
-/** Logout — clear session and reload */
-function adminLogout() {
-  _adminSecret = '';
-  sessionStorage.removeItem('adminSecret');
+/** Logout */
+async function adminLogout() {
+  if (_firebaseAuth) await _firebaseAuth.signOut();
+  _idToken = '';
   location.reload();
 }

@@ -1,41 +1,30 @@
 import { Router } from 'express';
 import { firestoreService } from '../services/FirestoreService';
-import { requireAdmin, adminLimiter } from '../middleware/adminAuthMiddleware';
-import { adminAuthService } from '../services/AdminAuthService';
+import { requireAdmin, adminLimiter, isAdmin } from '../middleware/adminAuthMiddleware';
+import { auth } from '../services/FirebaseAdmin';
 
 const router = Router();
 
 // ---------------------------------------------------------------------------
-// POST /api/admin/login — Vérifier le mot de passe admin (rate-limited, pas de requireAdmin)
+// GET /api/admin/verify — Vérifie si le token Firebase est admin (pas de requireAdmin)
+// Utilisé par le login gate JS pour vérifier l'accès avant d'afficher le dashboard
 // ---------------------------------------------------------------------------
-router.post('/login', adminLimiter, (req, res) => {
-    const { password } = req.body;
-    if (!password || !adminAuthService.verify(password)) {
-        const ip = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress;
-        console.warn(`[SECURITY] Admin login failed — IP: ${ip}, time: ${new Date().toISOString()}`);
-        res.status(403).json({ success: false, error: 'Mot de passe invalide' });
-        return;
-    }
-    res.json({
-        success: true,
-        mustChangePassword: adminAuthService.getMustChangePassword(),
-    });
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/admin/change-password — Changer le mot de passe admin (rate-limited)
-// ---------------------------------------------------------------------------
-router.post('/change-password', adminLimiter, (req, res) => {
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-        res.status(400).json({ success: false, error: 'Champs requis: currentPassword, newPassword' });
+router.get('/verify', adminLimiter, async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ') || !auth) {
+        res.status(401).json({ success: false, error: 'Token requis' });
         return;
     }
     try {
-        adminAuthService.changePassword(currentPassword, newPassword);
-        res.json({ success: true });
-    } catch (error: any) {
-        res.status(400).json({ success: false, error: error.message });
+        const decoded = await auth.verifyIdToken(authHeader.slice(7));
+        const admin = await isAdmin(decoded.uid);
+        if (!admin) {
+            res.status(403).json({ success: false, error: 'Compte non administrateur' });
+            return;
+        }
+        res.json({ success: true, uid: decoded.uid, email: decoded.email });
+    } catch {
+        res.status(401).json({ success: false, error: 'Token invalide' });
     }
 });
 
