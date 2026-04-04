@@ -649,7 +649,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'réalisé par Max, Irfat et EL Roy',
+                  'réalisé par Max, Irfat, Leon et EL Roy',
                   style: TextStyle(
                     fontSize: subtitleSize,
                     letterSpacing: 2,
@@ -834,7 +834,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   ),
                   if (!isVerySmall)
                     Text(
-                      'réalisé par Max, Irfat et EL Roy',
+                      'réalisé par Max, Irfat, LEON et EL Roy',
                       style: TextStyle(
                         fontSize: isSmall ? 13 : 16,
                         letterSpacing: isSmall ? 1.5 : 4,

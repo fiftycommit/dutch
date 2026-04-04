@@ -1134,6 +1134,13 @@ class BotCardStrategy {
     final expectedUnknown = BotMemoryManager.getExpectedDeckCardValue(gs);
     final veryBadDrawFloor = max(8, expectedUnknown.ceil() + 2);
 
+    // Règle générale : ne jamais remplacer une inconnue par une carte
+    // nettement plus mauvaise que l'espérance (~6 pts).
+    // Un 10/V/D/R sur une inconnue coûte en moyenne 4-7 pts pour rien.
+    if (drawnVal >= 10 && drawnVal > expectedUnknown.ceil() + 2) {
+      return true;
+    }
+
     if (knownScore <= 2 && drawnVal >= veryBadDrawFloor) {
       return true;
     }

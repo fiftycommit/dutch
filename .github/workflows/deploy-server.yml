@@ -108,6 +108,8 @@ jobs:
             set -e
 
             # ── Nginx Config ──
+            mkdir -p /etc/nginx/snippets
+            cp /root/apps/dutch-server/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
             cp /root/apps/dutch-server/nginx/dutch-server.conf /etc/nginx/sites-available/dutch-server
             ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"

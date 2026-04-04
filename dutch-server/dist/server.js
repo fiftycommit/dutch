@@ -58,113 +58,17 @@ const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const chatKeyRoutes_1 = __importStar(require("./routes/chatKeyRoutes"));
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
+const adminAuthMiddleware_1 = require("./middleware/adminAuthMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const RoomRegistryService_1 = require("./services/RoomRegistryService");
 const startedAt = new Date().toISOString();
-function renderHomePage(roomCount) {
-    return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Dutch Game Server</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          max-width: 800px;
-          margin: 50px auto;
-          padding: 20px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-        }
-        .container {
-          background: rgba(255,255,255,0.1);
-          backdrop-filter: blur(10px);
-          border-radius: 20px;
-          padding: 40px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-        h1 { margin-top: 0; font-size: 3em; text-align: center; }
-        .status {
-          background: rgba(255,255,255,0.2);
-          padding: 15px;
-          border-radius: 10px;
-          margin: 20px 0;
-        }
-        .status-item {
-          display: flex;
-          justify-content: space-between;
-          margin: 10px 0;
-          font-size: 1.1em;
-        }
-        .badge {
-          background: #48bb78;
-          padding: 5px 15px;
-          border-radius: 20px;
-          font-weight: bold;
-        }
-        .endpoint {
-          background: rgba(0,0,0,0.3);
-          padding: 10px;
-          border-radius: 5px;
-          margin: 5px 0;
-          font-family: monospace;
-        }
-        a { color: #90cdf4; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>🎮 Dutch Game Server</h1>
-        <div class="status">
-          <div class="status-item">
-            <span>Status</span>
-            <span class="badge">🟢 ONLINE</span>
-          </div>
-          <div class="status-item">
-            <span>Rooms actives</span>
-            <span><strong>${roomCount}</strong></span>
-          </div>
-          <div class="status-item">
-            <span>Version</span>
-            <span>1.0.0</span>
-          </div>
-        </div>
-
-        <h2>🤖 Intelligence Artificielle</h2>
-        <div style="text-align: center; margin: 20px 0;">
-          <a href="/bot-stats" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: transform 0.2s;">
-            📊 Centre d'entraînement — Stats des bots
-          </a>
-        </div>
-        <p style="text-align: center; opacity: 0.8; margin-top: 10px;">
-          Consulte les performances des bots par niveau de difficulté et l'équilibrage du SBMM !
-        </p>
-
-        <h2>📡 Endpoints</h2>
-        <div class="endpoint">GET <a href="/health">/health</a> - Health check</div>
-        <div class="endpoint">GET <a href="/rooms">/rooms</a> - Liste des rooms</div>
-        <div class="endpoint">WebSocket /socket.io - Connexion multijoueur</div>
-
-        <h2>🎯 Comment jouer ?</h2>
-        <p>Télécharge l'application mobile Dutch Game pour jouer en ligne avec tes amis !</p>
-
-        <p style="text-align: center; margin-top: 40px; opacity: 0.7;">
-          Propulsé par Socket.IO • Node.js • TypeScript
-        </p>
-      </div>
-    </body>
-    </html>
-  `;
-}
 function startServer() {
     const app = (0, express_1.default)();
     const httpServer = (0, node_http_1.createServer)(app);
     const allowedOrigins = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',')
         : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
+    app.disable('x-powered-by');
     app.use((0, cors_1.default)({ origin: allowedOrigins }));
     app.use(express_1.default.json());
     app.use(SecurityService_1.SecurityService.apiLimiter); // API Rate Limiting
@@ -206,15 +110,6 @@ function startServer() {
             (0, socketAuthMiddleware_1.handleSocketDisconnect)(socket);
         });
     });
-    app.get('/status', (req, res) => {
-        // Authentification basique optionnelle (décommente pour activer)
-        // const auth = req.headers.authorization;
-        // const token = process.env.STATUS_TOKEN || 'your-secret-token';
-        // if (auth !== `Bearer ${token}`) {
-        //   return res.status(401).json({ error: 'Unauthorized' });
-        // }
-        res.send(renderHomePage(roomManager.getRoomCount()));
-    });
     app.get('/health', (req, res) => {
         res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
     });
@@ -235,19 +130,14 @@ function startServer() {
     app.get('/version', (req, res) => {
         res.json({ status: 'ok' });
     });
-    app.get('/rooms/debug', (req, res) => {
-        const secret = req.headers['x-admin-secret'];
-        if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-            res.status(403).json({ error: 'Accès refusé' });
-            return;
-        }
+    app.get('/rooms/debug', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdmin, (req, res) => {
         res.json(roomManager.listRoomsDebug());
     });
     app.get('/rooms/public', (req, res) => {
         const publicRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
         res.json({ success: true, rooms: publicRooms });
     });
-    app.get('/rooms/stats', (req, res) => {
+    app.get('/rooms/stats', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdmin, (req, res) => {
         const stats = publicRoomService_1.publicRoomService.getStats();
         res.json({ success: true, stats });
     });
@@ -269,18 +159,29 @@ function startServer() {
     // Routes Chat keys (chiffrement E2E)
     (0, chatKeyRoutes_1.setChatIo)(io);
     app.use('/api/chats', chatKeyRoutes_1.default);
-    // Dashboard admin
+    // Fichier JS partagé pour l'auth admin (accessible publiquement)
+    app.get('/admin-auth.js', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-auth.js'));
+    });
+    // Pages admin — HTML servi sans auth pour permettre le login, les API restent protégées
+    app.get('/admin-login', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-login.html'));
+    });
+    app.get(['/status', '/admin-home'], (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-home.html'));
+    });
     app.get('/admin', (req, res) => {
         res.sendFile(node_path_1.default.join(__dirname, '../public/admin.html'));
     });
-    // Dashboard des stats des bots
     app.get('/bot-stats', (req, res) => {
         res.sendFile(node_path_1.default.join(__dirname, '../public/bot-stats.html'));
+    });
+    app.get('/bot-dashboard', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/bot-dashboard.html'));
     });
     app.get('/shuffle-analysis', (req, res) => {
         res.sendFile(node_path_1.default.join(__dirname, '../public/shuffle-analysis.html'));
     });
-    // Dashboard profil joueur (SBMM)
     app.get('/player-profile', (req, res) => {
         res.sendFile('player-profile.html', { root: './public' });
     });
