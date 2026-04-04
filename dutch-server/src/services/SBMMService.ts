@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { sanitizeId } from '../utils/sanitize';
 
 // ============================================================
 // INTERFACES
@@ -86,7 +87,7 @@ export class SBMMService {
   // ============================================================
 
   getProfile(playerId: string): PlayerSBMMProfile {
-    const filePath = path.join(this.profilesDir, `${playerId}.json`);
+    const filePath = path.join(this.profilesDir, `${sanitizeId(playerId)}.json`);
     if (fs.existsSync(filePath)) {
       try {
         return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -98,7 +99,7 @@ export class SBMMService {
   }
 
   private saveProfile(profile: PlayerSBMMProfile): void {
-    const filePath = path.join(this.profilesDir, `${profile.playerId}.json`);
+    const filePath = path.join(this.profilesDir, `${sanitizeId(profile.playerId)}.json`);
     fs.writeFileSync(filePath, JSON.stringify(profile, null, 2));
   }
 

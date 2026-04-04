@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { sanitizeId } from '../utils/sanitize';
 
 
 interface PlayerPattern {
@@ -153,7 +154,7 @@ export class PlayerCloningService {
       accuracy: this.calculateAccuracy(games.length),
     };
 
-    const filepath = path.join(this.dataDir, `${clonedBotId}.json`);
+    const filepath = path.join(this.dataDir, `${sanitizeId(clonedBotId)}.json`);
     await fs.writeFile(filepath, JSON.stringify(clone, null, 2));
 
     console.log(`✅ Clone créé pour ${playerName}: ${clonedBotId} (${games.length} parties analysées)`);
@@ -177,7 +178,7 @@ export class PlayerCloningService {
    */
   async getClone(clonedBotId: string): Promise<ClonedPlayer | null> {
     try {
-      const filepath = path.join(this.dataDir, `${clonedBotId}.json`);
+      const filepath = path.join(this.dataDir, `${sanitizeId(clonedBotId)}.json`);
       const data = await fs.readFile(filepath, 'utf-8');
       return JSON.parse(data);
     } catch {
@@ -251,7 +252,7 @@ export class PlayerCloningService {
     clone.gamesAnalyzed = allGamesCount;
     clone.accuracy = this.calculateAccuracy(allGamesCount);
 
-    const filepath = path.join(this.dataDir, `${clonedBotId}.json`);
+    const filepath = path.join(this.dataDir, `${sanitizeId(clonedBotId)}.json`);
     await fs.writeFile(filepath, JSON.stringify(clone, null, 2));
 
     console.log(`✅ Clone mis à jour: ${clonedBotId} (${allGamesCount} parties)`);

@@ -1,14 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { SBMMService } from '../services/SBMMService';
+import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireAdmin } from '../middleware/adminAuthMiddleware';
 
 const router = Router();
+
+// Toutes les routes nécessitent une authentification Firebase
+router.use(requireAuth);
 const sbmmService = new SBMMService();
 
 // GET /api/sbmm/bot-mix?playerId=X&botCount=3
 // Retourne le mix de BotSkillLevel recommandé pour un joueur
 router.get('/bot-mix', (req: Request, res: Response) => {
   try {
-    const playerId = req.query.playerId as string;
+    // Force playerId to authenticated user's UID (prevents IDOR)
+    const playerId = (req as AuthenticatedRequest).user!.uid;
     const botCount = Number.parseInt(req.query.botCount as string, 10);
 
     if (!playerId) {
@@ -30,7 +36,9 @@ router.get('/bot-mix', (req: Request, res: Response) => {
 // Enregistre le résultat d'une partie et ajuste MMR/cursor
 router.post('/record-game', (req: Request, res: Response) => {
   try {
-    const { playerId, gameId, rank, score, botResults, totalPlayers, dutchCalled, dutchWon } = req.body;
+    const { gameId, rank, score, botResults, totalPlayers, dutchCalled, dutchWon } = req.body;
+    // Force playerId to authenticated user's UID (prevents IDOR)
+    const playerId = (req as AuthenticatedRequest).user!.uid;
 
     if (!playerId || !gameId || rank === undefined || score === undefined) {
       return res.status(400).json({ error: 'Champs requis: playerId, gameId, rank, score' });
@@ -64,10 +72,8 @@ router.post('/record-game', (req: Request, res: Response) => {
 // Retourne le profil SBMM complet d'un joueur
 router.get('/player-profile/:playerId', (req: Request, res: Response) => {
   try {
-    const playerId = req.params.playerId as string;
-    if (!playerId) {
-      return res.status(400).json({ error: 'playerId requis' });
-    }
+    // Force playerId to authenticated user's UID (prevents IDOR)
+    const playerId = (req as AuthenticatedRequest).user!.uid;
 
     const profile = sbmmService.getProfile(playerId);
     res.json(profile);
@@ -91,7 +97,7 @@ router.get('/bot-stats', (req: Request, res: Response) => {
 
 // POST /api/sbmm/reset
 // Reset toutes les données SBMM
-router.post('/reset', (req: Request, res: Response) => {
+router.post('/reset', requireAdmin, (req: Request, res: Response) => {
   try {
     const result = sbmmService.resetAll();
     res.json({ success: true, ...result });

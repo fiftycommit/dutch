@@ -173,7 +173,10 @@
   <script>
     async function loadData() {
       try {
-        const response = await fetch('/api/bot-learning/shuffle-stats');
+        const headers = typeof getAdminSecret === 'function' && getAdminSecret()
+          ? { 'Authorization': `Bearer ${getAdminSecret()}` }
+          : {};
+        const response = await fetch('/api/bot-learning/shuffle-stats', { headers });
         const data = await response.json();
         
         document.getElementById('loading').style.display = 'none';

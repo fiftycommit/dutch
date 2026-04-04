@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '../services/FirebaseAdmin';
+import { firestoreService } from '../services/FirestoreService';
 
 // ─── Firebase Auth Middleware (Express REST) ────────────────────────────────
 // Remplace l'ancien authMiddleware.ts basé sur JWT.
@@ -27,6 +28,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   try {
     const decoded = await auth.verifyIdToken(header.slice(7));
+
+    // Check if user is banned
+    if (await firestoreService.isUserBanned(decoded.uid)) {
+      res.status(403).json({ success: false, error: 'Compte banni' });
+      return;
+    }
+
     (req as AuthenticatedRequest).user = {
       uid: decoded.uid,
       email: decoded.email || null,

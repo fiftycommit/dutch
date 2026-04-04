@@ -286,6 +286,8 @@
     </style>
 </head>
 <body>
+    <div id="auth-gate"></div>
+    <div id="app-content" style="display:none">
     <div class="container">
         <header>
             <h1>🤖 Dashboard des Bots</h1>
@@ -347,7 +349,10 @@
 
         async function fetchAPI(endpoint) {
             try {
-                const response = await fetch(`${API_BASE}/api/bot-learning${endpoint}`);
+                const headers = typeof getAdminSecret === 'function' && getAdminSecret()
+                    ? { 'Authorization': `Bearer ${getAdminSecret()}` }
+                    : {};
+                const response = await fetch(`${API_BASE}/api/bot-learning${endpoint}`, { headers });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
             } catch (error) {
@@ -570,11 +575,17 @@
             ]);
         }
 
-        // Chargement initial
-        loadAllData();
-
-        // Auto-refresh toutes les 30 secondes
-        setInterval(loadAllData, 30000);
+        // Loaded via initAdminAuth onReady
+    </script>
+    </div><!-- /app-content -->
+    <script src="/admin-auth.js"></script>
+    <script>
+      initAdminAuth({
+        onReady() {
+          loadAllData();
+          setInterval(loadAllData, 30000);
+        }
+      });
     </script>
 </body>
 </html>

@@ -40,6 +40,14 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
   try {
     const decoded = await auth.verifyIdToken(token);
 
+    // Check if user is banned
+    if (await firestoreService.isUserBanned(decoded.uid)) {
+      const ip = socket.handshake.address;
+      console.warn(`[SECURITY] Banned user rejected — uid: ${decoded.uid}, IP: ${ip}`);
+      next(new Error('Compte banni'));
+      return;
+    }
+
     // Charger ou créer le profil Firestore
     const profile = await firestoreService.getOrCreateUser(decoded.uid, {
       email: decoded.email || null,

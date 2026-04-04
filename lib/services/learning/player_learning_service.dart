@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' show exp;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../models/game_state.dart';
@@ -29,6 +30,15 @@ class PlayerLearningService implements IPlayerLearningService {
 
   Future<bool> _canReachBackendQuickly() {
     return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
+  }
+
+  static Future<Map<String, String>> _authHeaders() async {
+    final token =
+        await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
 
   Future<PlayerProfile> getProfile({required int slotId}) async {
@@ -237,12 +247,14 @@ class PlayerLearningService implements IPlayerLearningService {
         'games': [_mapGhostGameRecord(record)]
       };
 
+      final headers = await _authHeaders();
+
       if (existingCloneId != null && existingCloneId.isNotEmpty) {
         final uri = Uri.parse('$_botLearningUrl/clone/$existingCloneId');
         final response = await http
             .put(
               uri,
-              headers: {'Content-Type': 'application/json'},
+              headers: headers,
               body: jsonEncode(payload),
             )
             .timeout(_apiTimeout);
@@ -260,7 +272,7 @@ class PlayerLearningService implements IPlayerLearningService {
       final response = await http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: createBody,
           )
           .timeout(_apiTimeout);
@@ -358,10 +370,11 @@ class PlayerLearningService implements IPlayerLearningService {
             .toList(),
       };
 
+      final headers = await _authHeaders();
       await http
           .post(
             Uri.parse('$_serverUrl/upload'),
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode(payload),
           )
           .timeout(_apiTimeout);

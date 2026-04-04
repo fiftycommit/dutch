@@ -242,7 +242,11 @@
       return;
     }
 
-    const res = await fetch(`/api/player-learning/profile?clientId=${encodeURIComponent(clientId)}&slotId=${encodeURIComponent(slotId)}`);
+    const url = `/api/player-learning/profile?clientId=${encodeURIComponent(clientId)}&slotId=${encodeURIComponent(slotId)}`;
+    const headers = typeof getAdminSecret === 'function' && getAdminSecret()
+      ? { 'Authorization': `Bearer ${getAdminSecret()}` }
+      : {};
+    const res = await fetch(url, { headers });
     const data = await res.json();
 
     if (!res.ok) {

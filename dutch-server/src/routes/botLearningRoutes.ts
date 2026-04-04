@@ -5,8 +5,13 @@ import { BotLearningService } from '../services/BotLearningService';
 import { PlayerCloningService } from '../services/PlayerCloningService';
 import { BotPersonalityService } from '../services/BotPersonalityService';
 import { BotGameRecord } from '../models/BotLearning';
+import { requireAuth } from '../middleware/authMiddleware';
+import { requireAdmin } from '../middleware/adminAuthMiddleware';
 
 const router = Router();
+
+// Toutes les routes nécessitent une authentification Firebase
+router.use(requireAuth);
 const botLearningService = new BotLearningService();
 const cloningService = new PlayerCloningService();
 const personalityService = new BotPersonalityService();
@@ -611,7 +616,7 @@ router.get('/learning-status', async (req: Request, res: Response) => {
  * POST /api/bot-learning/pause
  * Met en pause ou reprend l'apprentissage
  */
-router.post('/pause', (req: Request, res: Response) => {
+router.post('/pause', requireAdmin, (req: Request, res: Response) => {
   const { paused } = req.body;
   botLearningService.setPaused(!!paused);
   res.json({ success: true, paused: botLearningService.isPaused() });
@@ -621,7 +626,7 @@ router.post('/pause', (req: Request, res: Response) => {
  * POST /api/bot-learning/reset
  * Réinitialise toutes les données d'apprentissage
  */
-router.post('/reset', async (req: Request, res: Response) => {
+router.post('/reset', requireAdmin, async (req: Request, res: Response) => {
   try {
     const result = await botLearningService.resetAll();
     res.json({ success: true, ...result });

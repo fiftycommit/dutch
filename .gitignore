@@ -89,3 +89,12 @@ env/*.local.json
 !dutch-server/data/bot-learning/genetic/.gitkeep
 !dutch-server/data/bot-learning/adaptive/.gitkeep
 !dutch-server/data/bot-learning/leaderboard/.gitkeep
+
+# Runtime data (SQLite, player learning, Firebase creds)
+dutch-server/data/dutch.db
+dutch-server/data/dutch.db-shm
+dutch-server/data/dutch.db-journal
+dutch-server/data/dutch.db-wal
+dutch-server/data/player-learning/**/*.json
+!dutch-server/data/player-learning/**/.gitkeep
+dutch-server/data/firebase-service-account.json

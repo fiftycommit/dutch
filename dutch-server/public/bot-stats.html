@@ -544,6 +544,11 @@
       }
     }
 
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     function toNumber(value, fallback = 0) {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : fallback;
@@ -577,6 +582,10 @@
     }
 
     async function fetchJsonOrThrow(url) {
+      // Use adminFetch (from admin-auth.js) to send the Bearer token
+      if (typeof adminFetch === 'function') {
+        return adminFetch(url);
+      }
       const response = await fetch(url, {
         headers: { 'Accept': 'application/json' },
       });
@@ -650,10 +659,10 @@
                 <div class="bot-rank">${rankEmoji}</div>
                 <div class="bot-details">
                   <div class="bot-name">
-                    ${bot.botId || 'Bot inconnu'}
-                    <span class="badge ${skillLevel}">${skillLevel}</span>
+                    ${escapeHtml(bot.botId || 'Bot inconnu')}
+                    <span class="badge ${escapeHtml(skillLevel)}">${escapeHtml(skillLevel)}</span>
                   </div>
-                  <div class="bot-meta">${bot.behavior || 'balanced'} • ${toNumber(bot.totalGames, 0)} parties</div>
+                  <div class="bot-meta">${escapeHtml(bot.behavior || 'balanced')} • ${toNumber(bot.totalGames, 0)} parties</div>
                 </div>
               </div>
               <div class="bot-stats">
@@ -694,8 +703,8 @@
             <div class="bot-entry rank-other">
               <div class="bot-info">
                 <div class="bot-details">
-                  <div class="bot-name">${game.botName || 'Bot inconnu'}</div>
-                  <div class="bot-meta">${date} • ${game.gameMode || 'quick'} • ${toNumber(game.numberOfPlayers, 0)} joueurs${typeof game.pBeatHuman === 'number' ? ` • Vs humain ${(game.pBeatHuman * 100).toFixed(0)}%` : ''}</div>
+                  <div class="bot-name">${escapeHtml(game.botName || 'Bot inconnu')}</div>
+                  <div class="bot-meta">${escapeHtml(date)} • ${escapeHtml(game.gameMode || 'quick')} • ${toNumber(game.numberOfPlayers, 0)} joueurs${typeof game.pBeatHuman === 'number' ? ` • Vs humain ${(game.pBeatHuman * 100).toFixed(0)}%` : ''}</div>
                 </div>
               </div>
               <div class="bot-stats">

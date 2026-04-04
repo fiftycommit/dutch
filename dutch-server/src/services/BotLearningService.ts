@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { sanitizeId } from '../utils/sanitize';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
 import { QLearningService } from './QLearningService';
 import { NeuralNetworkService } from './NeuralNetworkService';
@@ -177,7 +178,7 @@ export class BotLearningService {
    */
   async saveGameRecord(record: BotGameRecord): Promise<void> {
     try {
-      const filename = `${record.gameId}_${record.botId}_${Date.now()}.json`;
+      const filename = `${sanitizeId(record.gameId)}_${sanitizeId(record.botId)}_${Date.now()}.json`;
       const filepath = path.join(this.dataDir, 'games', filename);
 
       // Toujours sauvegarder la partie sur disque
@@ -211,7 +212,7 @@ export class BotLearningService {
    */
   private async updateBotProfile(record: BotGameRecord): Promise<void> {
     try {
-      const profilePath = path.join(this.dataDir, 'profiles', `${record.botId}.json`);
+      const profilePath = path.join(this.dataDir, 'profiles', `${sanitizeId(record.botId)}.json`);
       
       let profile: BotProfile;
       
@@ -594,7 +595,7 @@ export class BotLearningService {
    */
   async getBotParameters(behavior: string, skillLevel: string): Promise<Record<string, any> | null> {
     try {
-      const botId = `${behavior}_${skillLevel}`;
+      const botId = `${sanitizeId(behavior)}_${sanitizeId(skillLevel)}`;
       const profilePath = path.join(this.dataDir, 'profiles', `${botId}.json`);
       
       const data = await fs.readFile(profilePath, 'utf-8');

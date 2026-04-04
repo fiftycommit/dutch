@@ -1,13 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { PlayerLearningService } from '../services/PlayerLearningService';
 import { PlayerLearningUploadPayload } from '../models/PlayerLearning';
+import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const router = Router();
+
+// Toutes les routes nécessitent une authentification Firebase
+router.use(requireAuth);
 const playerLearningService = new PlayerLearningService();
 
 router.post('/upload', async (req: Request, res: Response) => {
   try {
     const payload: PlayerLearningUploadPayload = req.body;
+    // Force clientId to authenticated user's UID (prevents IDOR)
+    payload.clientId = (req as AuthenticatedRequest).user!.uid;
 
     if (!payload.clientId || !payload.slotId || !payload.profile) {
       return res.status(400).json({ error: 'Données invalides' });
@@ -24,11 +30,12 @@ router.post('/upload', async (req: Request, res: Response) => {
 
 router.get('/profile', async (req: Request, res: Response) => {
   try {
-    const clientId = req.query.clientId as string;
+    // Force clientId to authenticated user's UID (prevents IDOR)
+    const clientId = (req as AuthenticatedRequest).user!.uid;
     const slotId = Number.parseInt(req.query.slotId as string);
 
     if (!clientId || Number.isNaN(slotId)) {
-      return res.status(400).json({ error: 'clientId et slotId requis' });
+      return res.status(400).json({ error: 'slotId requis' });
     }
 
     const profile = await playerLearningService.getProfile(clientId, slotId);

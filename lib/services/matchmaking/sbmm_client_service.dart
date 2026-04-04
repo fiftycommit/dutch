@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../network/network_probe_service.dart';
@@ -16,6 +17,15 @@ class SBMMClientService {
     return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
   }
 
+  static Future<Map<String, String>> _authHeaders() async {
+    final token =
+        await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
   /// Demande au serveur le mix de BotSkillLevel pour ce joueur.
   /// Retourne une liste de niveaux de bots (ex: ['bronze', 'silver', 'silver']).
   /// En cas d'erreur, retourne null (le caller doit fallback).
@@ -25,11 +35,13 @@ class SBMMClientService {
       if (!isOnline) return null;
 
       final playerId = await ClientIdService.ensureClientId();
+      final headers = await _authHeaders();
 
       final response = await http
           .get(
             Uri.parse(
                 '$_baseUrl/bot-mix?playerId=$playerId&botCount=$botCount'),
+            headers: headers,
           )
           .timeout(_timeout);
 
@@ -79,6 +91,7 @@ class SBMMClientService {
       if (!isOnline) return;
 
       final playerId = await ClientIdService.ensureClientId();
+      final headers = await _authHeaders();
 
       final body = {
         'playerId': playerId,
@@ -94,7 +107,7 @@ class SBMMClientService {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/record-game'),
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode(body),
           )
           .timeout(_timeout);

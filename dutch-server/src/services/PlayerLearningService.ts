@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
+import { sanitizeId } from '../utils/sanitize';
 import {
   PlayerLearningUploadPayload,
   PlayerProfileSnapshot,
@@ -26,11 +27,11 @@ export class PlayerLearningService {
   }
 
   private profilePath(clientId: string, slotId: number) {
-    return path.join(this.dataDir, 'profiles', `${clientId}_slot_${slotId}.json`);
+    return path.join(this.dataDir, 'profiles', `${sanitizeId(clientId)}_slot_${slotId}.json`);
   }
 
   private historyPath(clientId: string, slotId: number) {
-    return path.join(this.dataDir, 'history', `${clientId}_slot_${slotId}.json`);
+    return path.join(this.dataDir, 'history', `${sanitizeId(clientId)}_slot_${slotId}.json`);
   }
 
   async upload(payload: PlayerLearningUploadPayload): Promise<void> {
