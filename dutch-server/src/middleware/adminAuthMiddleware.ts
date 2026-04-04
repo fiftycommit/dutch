@@ -21,44 +21,20 @@ export const adminLimiter = rateLimit({
   },
 });
 
-// ─── Admin UID helpers ──────────────────────────────────────────────────────
-const ADMIN_DOC = 'admin_config/settings';
-
-async function getAdminUids(): Promise<string[]> {
-  if (!firestore) return [];
-  try {
-    const doc = await firestore.doc(ADMIN_DOC).get();
-    if (!doc.exists) return [];
-    return doc.data()?.adminUids || [];
-  } catch {
-    return [];
-  }
-}
-
-async function addAdminUid(uid: string): Promise<void> {
-  if (!firestore) return;
-  const doc = firestore.doc(ADMIN_DOC);
-  const snap = await doc.get();
-  if (!snap.exists) {
-    await doc.set({ adminUids: [uid], createdAt: new Date() });
-  } else {
-    const uids: string[] = snap.data()?.adminUids || [];
-    if (!uids.includes(uid)) {
-      uids.push(uid);
-      await doc.update({ adminUids: uids });
-    }
-  }
-}
+// ─── Admin check ────────────────────────────────────────────────────────────
+// L'email admin est défini via la variable d'env ADMIN_EMAIL (secret GitHub).
+// Seul cet email peut accéder aux dashboards admin.
 
 export async function isAdmin(uid: string): Promise<boolean> {
-  const uids = await getAdminUids();
-  // First user becomes admin automatically
-  if (uids.length === 0) {
-    await addAdminUid(uid);
-    console.log(`[AdminAuth] First admin registered: ${uid}`);
-    return true;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail || !auth) return false;
+
+  try {
+    const user = await auth.getUser(uid);
+    return user.email?.toLowerCase() === adminEmail.toLowerCase();
+  } catch {
+    return false;
   }
-  return uids.includes(uid);
 }
 
 // ─── Admin Auth Middleware ───────────────────────────────────────────────────
@@ -78,7 +54,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
         next();
         return;
       }
-      console.warn(`[SECURITY] Non-admin Firebase user — uid: ${decoded.uid}, IP: ${ip}, path: ${req.path}`);
+      console.warn(`[SECURITY] Non-admin Firebase user — uid: ${decoded.uid}, email: ${decoded.email}, IP: ${ip}, path: ${req.path}`);
       res.status(403).json({ success: false, error: 'Accès refusé — compte non administrateur' });
       return;
     } catch {
