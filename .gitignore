@@ -21,6 +21,7 @@ tmp/
 .scannerwork/
 
 *.txt
+!web/robots.txt
 
 # IntelliJ related
 *.iml
