@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dutch Game Server</title>
+  <script src="/admin-auth.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      min-height: 100vh;
+    }
+    .container {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    h1 { margin-top: 0; font-size: 3em; text-align: center; }
+    .status {
+      background: rgba(255,255,255,0.2);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 1.1em;
+    }
+    .badge {
+      background: #48bb78;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+    }
+    .endpoint {
+      background: rgba(0,0,0,0.3);
+      padding: 10px;
+      border-radius: 5px;
+      margin: 5px 0;
+      font-family: monospace;
+    }
+    a { color: #90cdf4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .logout-btn {
+      position: fixed; top: 16px; right: 16px;
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+      color: white; padding: 8px 16px; border-radius: 8px;
+      cursor: pointer; font-size: 13px;
+    }
+    .logout-btn:hover { background: rgba(255,255,255,0.25); }
+  </style>
+</head>
+<body>
+
+<div id="auth-gate"></div>
+
+<div id="app-content" style="display:none">
+  <button class="logout-btn" onclick="adminLogout()">Deconnexion</button>
+  <div class="container">
+    <h1>Dutch Game Server</h1>
+    <div class="status">
+      <div class="status-item">
+        <span>Status</span>
+        <span class="badge">ONLINE</span>
+      </div>
+      <div class="status-item">
+        <span>Rooms actives</span>
+        <span><strong id="room-count">...</strong></span>
+      </div>
+      <div class="status-item">
+        <span>Version</span>
+        <span>1.0.0</span>
+      </div>
+    </div>
+
+    <h2>Dashboards</h2>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0;">
+      <a href="/admin" style="display: inline-block; background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.4); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Admin</a>
+      <a href="/bot-stats" style="display: inline-block; background: rgba(102,126,234,0.2); border: 1px solid rgba(102,126,234,0.4); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Bot Stats</a>
+      <a href="/player-profile" style="display: inline-block; background: rgba(72,187,120,0.2); border: 1px solid rgba(72,187,120,0.4); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Player Profile</a>
+      <a href="/shuffle-analysis" style="display: inline-block; background: rgba(252,129,129,0.2); border: 1px solid rgba(252,129,129,0.4); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Shuffle Analysis</a>
+    </div>
+
+    <h2>Endpoints</h2>
+    <div class="endpoint">GET <a href="/health">/health</a> - Health check</div>
+    <div class="endpoint">GET /rooms/public - Rooms publiques</div>
+    <div class="endpoint">WebSocket /socket.io - Connexion multijoueur</div>
+
+    <p style="text-align: center; margin-top: 40px; opacity: 0.7;">
+      Socket.IO - Node.js - TypeScript
+    </p>
+  </div>
+</div>
+
+<script>
+  initAdminAuth({
+    onReady() {
+      // Charger le room count via l'API health (public)
+      fetch('/health')
+        .then(r => r.json())
+        .then(d => { document.getElementById('room-count').textContent = d.rooms ?? 0; })
+        .catch(() => { document.getElementById('room-count').textContent = '?'; });
+    }
+  });
+</script>
+</body>
+</html>
