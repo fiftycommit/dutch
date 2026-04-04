@@ -96,11 +96,12 @@ jobs:
         env:
           GIT_SHA: ${{ github.sha }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
         with:
           host: dutch-game.me
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON
+          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON,ADMIN_SECRET
           command_timeout: 10m
           script: |
             set -e
@@ -154,6 +155,7 @@ jobs:
                   GIT_SHA: process.env.GIT_SHA || '',
                   BUILD_TIME: process.env.BUILD_TIME || '',
                   FIREBASE_SERVICE_ACCOUNT_JSON: firebaseCreds,
+                  ADMIN_SECRET: process.env.ADMIN_SECRET || '',
                 },
                 max_memory_restart: '700M',
               }],
@@ -162,6 +164,7 @@ jobs:
             # Inject shell vars that the quoted heredoc can't expand
             export BUILD_TIME
             export GIT_SHA
+            export ADMIN_SECRET
 
             pm2 delete dutch-server 2>/dev/null || true
             pm2 start ecosystem.config.cjs
