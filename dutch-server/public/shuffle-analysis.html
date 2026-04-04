@@ -305,6 +305,7 @@
     }
 
     initAdminAuth({
+      redirectUnauthenticatedTo: getAdminLoginUrl('/shuffle-analysis'),
       onReady() { loadData(); }
     });
   </script>

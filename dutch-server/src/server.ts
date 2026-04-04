@@ -33,6 +33,7 @@ export function startServer() {
     ? process.env.ALLOWED_ORIGINS.split(',')
     : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
 
+  app.disable('x-powered-by');
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
   app.use(SecurityService.apiLimiter); // API Rate Limiting
@@ -80,10 +81,6 @@ export function startServer() {
     socket.on('disconnect', () => {
       handleSocketDisconnect(socket);
     });
-  });
-
-  app.get('/status', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/status.html'));
   });
 
   app.get('/health', (req, res) => {
@@ -154,13 +151,25 @@ export function startServer() {
     res.sendFile(path.join(__dirname, '../public/admin-auth.js'));
   });
 
-  // Dashboards admin — HTML servi sans auth (le login gate est côté JS, les API sont protégées)
+  // Pages admin — HTML servi sans auth pour permettre le login, les API restent protégées
+  app.get('/admin-login', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/admin-login.html'));
+  });
+
+  app.get(['/status', '/admin-home'], (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/admin-home.html'));
+  });
+
   app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/admin.html'));
   });
 
   app.get('/bot-stats', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/bot-stats.html'));
+  });
+
+  app.get('/bot-dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/bot-dashboard.html'));
   });
 
   app.get('/shuffle-analysis', (req, res) => {

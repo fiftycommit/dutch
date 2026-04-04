@@ -110,14 +110,14 @@
         <div class="title">🧠 Player Profile Debug</div>
         <div class="sub">Snapshots uploadés depuis l'app • SBMM local + monitoring serveur</div>
       </div>
-      <div class="sub"><a href="/status" style="color:#90cdf4;">/status</a> • <a href="/bot-stats" style="color:#90cdf4;">/bot-stats</a></div>
+      <div class="sub"><a href="/admin-home" style="color:#90cdf4;">/admin-home</a> • <a href="/bot-stats" style="color:#90cdf4;">/bot-stats</a></div>
     </div>
 
     <div class="card">
       <div class="row">
         <div>
-          <label>clientId (SharedPreferences: multiplayer_client_id)</label>
-          <input id="clientId" placeholder="ex: 170665...-123456" />
+          <label>Compte connecté</label>
+          <input id="clientId" value="UID forcé côté serveur" disabled />
         </div>
         <div>
           <label>slotId</label>
@@ -234,15 +234,8 @@
   }
 
   async function loadProfile() {
-    const clientId = document.getElementById('clientId').value.trim();
     const slotId = document.getElementById('slotId').value;
-
-    if (!clientId) {
-      alert('clientId requis');
-      return;
-    }
-
-    const url = `/api/player-learning/profile?clientId=${encodeURIComponent(clientId)}&slotId=${encodeURIComponent(slotId)}`;
+    const url = `/api/player-learning/profile?slotId=${encodeURIComponent(slotId)}`;
     const headers = typeof getAdminSecret === 'function' && getAdminSecret()
       ? { 'Authorization': `Bearer ${getAdminSecret()}` }
       : {};
@@ -263,7 +256,10 @@
     renderCharts(data.profile, data.history);
   }
 
-  initAdminAuth({ onReady() {} });
+  initAdminAuth({
+    redirectUnauthenticatedTo: getAdminLoginUrl('/player-profile'),
+    onReady() {}
+  });
 </script>
   </div><!-- /app-content -->
 </body>

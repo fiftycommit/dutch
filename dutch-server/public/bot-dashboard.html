@@ -347,6 +347,22 @@
         const API_BASE = window.location.origin;
         let mmrChart = null;
 
+        function escapeHtml(value) {
+            if (typeof value !== 'string') return '';
+            return value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function safeCssToken(value, fallback = 'balanced') {
+            if (typeof value !== 'string') return fallback;
+            const sanitized = value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            return sanitized || fallback;
+        }
+
         async function fetchAPI(endpoint) {
             try {
                 const headers = typeof getAdminSecret === 'function' && getAdminSecret()
@@ -464,8 +480,8 @@
                 <div class="bot-item">
                     <div class="bot-rank">#${index + 1}</div>
                     <div class="bot-info">
-                        <div class="bot-name">${bot.botName || 'Bot inconnu'} ${mmrTrend}</div>
-                        <div class="bot-behavior">${bot.behavior || 'balanced'} • ${bot.skillLevel || 'silver'} • ${mmrChange > 0 ? '+' : ''}${mmrChange.toFixed(0)} MMR</div>
+                        <div class="bot-name">${escapeHtml(bot.botName || 'Bot inconnu')} ${mmrTrend}</div>
+                        <div class="bot-behavior">${escapeHtml(bot.behavior || 'balanced')} • ${escapeHtml(bot.skillLevel || 'silver')} • ${mmrChange > 0 ? '+' : ''}${mmrChange.toFixed(0)} MMR</div>
                     </div>
                     <div class="bot-mmr">${Math.round(bot.mmr || 1500)} MMR</div>
                     <div class="bot-winrate">${((bot.wins / bot.totalGames) * 100).toFixed(1)}% WR</div>
@@ -536,29 +552,29 @@
 
             container.innerHTML = personalities.map(p => `
                 <div class="personality-card">
-                    <div class="personality-name">${p.name}</div>
-                    <div class="personality-desc">${p.description}</div>
+                    <div class="personality-name">${escapeHtml(p.name || 'Personnalité')}</div>
+                    <div class="personality-desc">${escapeHtml(p.description || '')}</div>
                     <div class="personality-traits">
                         <div class="trait">
                             <span class="trait-name">Agressivité</span>
                             <div class="trait-bar">
-                                <div class="trait-fill" style="width: ${p.traits.aggressiveness * 100}%"></div>
+                                <div class="trait-fill" style="width: ${Number(p.traits.aggressiveness || 0) * 100}%"></div>
                             </div>
-                            <span class="trait-value">${(p.traits.aggressiveness * 100).toFixed(0)}%</span>
+                            <span class="trait-value">${(Number(p.traits.aggressiveness || 0) * 100).toFixed(0)}%</span>
                         </div>
                         <div class="trait">
                             <span class="trait-name">Prudence</span>
                             <div class="trait-bar">
-                                <div class="trait-fill" style="width: ${p.traits.caution * 100}%"></div>
+                                <div class="trait-fill" style="width: ${Number(p.traits.caution || 0) * 100}%"></div>
                             </div>
-                            <span class="trait-value">${(p.traits.caution * 100).toFixed(0)}%</span>
+                            <span class="trait-value">${(Number(p.traits.caution || 0) * 100).toFixed(0)}%</span>
                         </div>
                         <div class="trait">
                             <span class="trait-name">Prise de risque</span>
                             <div class="trait-bar">
-                                <div class="trait-fill" style="width: ${p.traits.riskTolerance * 100}%"></div>
+                                <div class="trait-fill" style="width: ${Number(p.traits.riskTolerance || 0) * 100}%"></div>
                             </div>
-                            <span class="trait-value">${(p.traits.riskTolerance * 100).toFixed(0)}%</span>
+                            <span class="trait-value">${(Number(p.traits.riskTolerance || 0) * 100).toFixed(0)}%</span>
                         </div>
                     </div>
                 </div>
@@ -581,6 +597,7 @@
     <script src="/admin-auth.js"></script>
     <script>
       initAdminAuth({
+        redirectUnauthenticatedTo: getAdminLoginUrl('/bot-dashboard'),
         onReady() {
           loadAllData();
           setInterval(loadAllData, 30000);

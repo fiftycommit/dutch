@@ -5,7 +5,7 @@ import { BotLearningService } from '../services/BotLearningService';
 import { PlayerCloningService } from '../services/PlayerCloningService';
 import { BotPersonalityService } from '../services/BotPersonalityService';
 import { BotGameRecord } from '../models/BotLearning';
-import { requireAuth } from '../middleware/authMiddleware';
+import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireAdmin } from '../middleware/adminAuthMiddleware';
 
 const router = Router();
@@ -17,11 +17,15 @@ const cloningService = new PlayerCloningService();
 const personalityService = new BotPersonalityService();
 const trainingSeriesPath = path.join(__dirname, '../../data/bot-learning/training-series.jsonl');
 
+function getAuthUid(req: Request): string {
+  return (req as AuthenticatedRequest).user!.uid;
+}
+
 /**
  * POST /api/bot-learning/record
  * Enregistre une partie de bot
  */
-router.post('/record', async (req: Request, res: Response) => {
+router.post('/record', requireAdmin, async (req: Request, res: Response) => {
   try {
     const record: BotGameRecord = req.body;
     
@@ -43,7 +47,7 @@ router.post('/record', async (req: Request, res: Response) => {
  * GET /api/bot-learning/top-bots
  * Récupère les meilleurs bots
  */
-router.get('/top-bots', async (req: Request, res: Response) => {
+router.get('/top-bots', requireAdmin, async (req: Request, res: Response) => {
   try {
     const limit = Number.parseInt(req.query.limit as string) || 10;
     const behavior = req.query.behavior as string | undefined;
@@ -62,7 +66,7 @@ router.get('/top-bots', async (req: Request, res: Response) => {
  * GET /api/bot-learning/parameters/:behavior/:skillLevel
  * Récupère les paramètres appris d'un bot
  */
-router.get('/parameters/:behavior/:skillLevel', async (req: Request, res: Response) => {
+router.get('/parameters/:behavior/:skillLevel', requireAdmin, async (req: Request, res: Response) => {
   try {
     const behavior = req.params.behavior as string;
     const skillLevel = req.params.skillLevel as string;
@@ -84,7 +88,7 @@ router.get('/parameters/:behavior/:skillLevel', async (req: Request, res: Respon
  * GET /api/bot-learning/stats
  * Récupère les statistiques globales
  */
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', requireAdmin, async (req: Request, res: Response) => {
   try {
     const stats = await botLearningService.getStats();
     res.json(stats);
@@ -98,7 +102,7 @@ router.get('/stats', async (req: Request, res: Response) => {
  * GET /api/bot-learning/ml-stats
  * Récupère les statistiques des modèles ML
  */
-router.get('/ml-stats', async (req: Request, res: Response) => {
+router.get('/ml-stats', requireAdmin, async (req: Request, res: Response) => {
   try {
     const mlStats = botLearningService.getMLStats();
     res.json(mlStats);
@@ -112,7 +116,7 @@ router.get('/ml-stats', async (req: Request, res: Response) => {
  * POST /api/bot-learning/predict-action
  * Prédit la meilleure action avec le réseau de neurones
  */
-router.post('/predict-action', async (req: Request, res: Response) => {
+router.post('/predict-action', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { gameState, action } = req.body;
     const prediction = botLearningService.predictAction(gameState, action);
@@ -129,7 +133,8 @@ router.post('/predict-action', async (req: Request, res: Response) => {
  */
 router.post('/clone-player', async (req: Request, res: Response) => {
   try {
-    const { playerId, playerName, games } = req.body;
+    const { playerName, games } = req.body;
+    const playerId = getAuthUid(req);
     
     if (!playerId || !playerName || !games || games.length === 0) {
       return res.status(400).json({ error: 'Données invalides' });
@@ -150,7 +155,9 @@ router.post('/clone-player', async (req: Request, res: Response) => {
 router.get('/clones', async (req: Request, res: Response) => {
   try {
     const clones = await cloningService.listClones();
-    res.json(clones);
+    const authUid = getAuthUid(req);
+    const ownClones = clones.filter(clone => clone.playerId === authUid);
+    res.json(ownClones);
   } catch (error) {
     console.error('Erreur récupération clones:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -168,6 +175,10 @@ router.get('/clone/:clonedBotId', async (req: Request, res: Response) => {
     
     if (!clone) {
       return res.status(404).json({ error: 'Clone non trouvé' });
+    }
+
+    if (clone.playerId !== getAuthUid(req)) {
+      return res.status(403).json({ error: 'Accès refusé' });
     }
     
     res.json(clone);
@@ -190,6 +201,14 @@ router.put('/clone/:clonedBotId', async (req: Request, res: Response) => {
     }
     
     const clonedBotId = Array.isArray(req.params.clonedBotId) ? req.params.clonedBotId[0] : req.params.clonedBotId;
+    const existingClone = await cloningService.getClone(clonedBotId);
+    if (!existingClone) {
+      return res.status(404).json({ error: 'Clone non trouvé' });
+    }
+    if (existingClone.playerId !== getAuthUid(req)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
     const clone = await cloningService.updateClone(clonedBotId, games);
     
     if (!clone) {
@@ -207,7 +226,7 @@ router.put('/clone/:clonedBotId', async (req: Request, res: Response) => {
  * GET /api/bot-learning/personalities
  * Liste toutes les personnalités disponibles
  */
-router.get('/personalities', async (req: Request, res: Response) => {
+router.get('/personalities', requireAdmin, async (req: Request, res: Response) => {
   try {
     const personalities = personalityService.getAllPersonalities();
     res.json(personalities);
@@ -221,7 +240,7 @@ router.get('/personalities', async (req: Request, res: Response) => {
  * POST /api/bot-learning/training-series
  * Enregistre un point de suivi d'entraînement (bots vs fantômes)
  */
-router.post('/training-series', async (req: Request, res: Response) => {
+router.post('/training-series', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { timestamp, totalMatches, botWinRate } = req.body || {};
 
@@ -247,7 +266,7 @@ router.post('/training-series', async (req: Request, res: Response) => {
  * GET /api/bot-learning/training-series
  * Retourne la série de suivi d'entraînement
  */
-router.get('/training-series', async (req: Request, res: Response) => {
+router.get('/training-series', requireAdmin, async (req: Request, res: Response) => {
   try {
     const limit = Math.min(Number.parseInt(req.query.limit as string) || 200, 1000);
 
@@ -283,7 +302,7 @@ router.get('/training-series', async (req: Request, res: Response) => {
  * GET /api/bot-learning/personality/:id
  * Récupère une personnalité spécifique
  */
-router.get('/personality/:id', async (req: Request, res: Response) => {
+router.get('/personality/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const personality = personalityService.getPersonality(id);
@@ -303,7 +322,7 @@ router.get('/personality/:id', async (req: Request, res: Response) => {
  * GET /api/bot-learning/personality/random
  * Récupère une personnalité aléatoire
  */
-router.get('/personality-random', async (req: Request, res: Response) => {
+router.get('/personality-random', requireAdmin, async (req: Request, res: Response) => {
   try {
     const personality = personalityService.getRandomPersonality();
     res.json(personality);
@@ -317,7 +336,7 @@ router.get('/personality-random', async (req: Request, res: Response) => {
  * GET /api/bot-learning/personality/difficulty/:level
  * Récupère une personnalité selon la difficulté
  */
-router.get('/personality/difficulty/:level', async (req: Request, res: Response) => {
+router.get('/personality/difficulty/:level', requireAdmin, async (req: Request, res: Response) => {
   try {
     const level = req.params.level as 'easy' | 'medium' | 'hard';
     
@@ -337,7 +356,7 @@ router.get('/personality/difficulty/:level', async (req: Request, res: Response)
  * GET /api/bot-learning/team/:count
  * Crée une équipe équilibrée de personnalités
  */
-router.get('/team/:count', async (req: Request, res: Response) => {
+router.get('/team/:count', requireAdmin, async (req: Request, res: Response) => {
   try {
     const countParam = Array.isArray(req.params.count) ? req.params.count[0] : req.params.count;
     const count = Number.parseInt(countParam);
@@ -358,7 +377,7 @@ router.get('/team/:count', async (req: Request, res: Response) => {
  * POST /api/bot-learning/personality
  * Crée une personnalité personnalisée
  */
-router.post('/personality', async (req: Request, res: Response) => {
+router.post('/personality', requireAdmin, async (req: Request, res: Response) => {
   try {
     const personality = req.body;
     
@@ -380,7 +399,7 @@ router.post('/personality', async (req: Request, res: Response) => {
  * GET /api/bot-learning/leaderboard
  * Récupère le classement mondial
  */
-router.get('/leaderboard', async (req: Request, res: Response) => {
+router.get('/leaderboard', requireAdmin, async (req: Request, res: Response) => {
   try {
     const limit = Number.parseInt(req.query.limit as string) || 100;
     const leaderboard = botLearningService.getLeaderboardService().getTopBots(limit);
@@ -395,7 +414,7 @@ router.get('/leaderboard', async (req: Request, res: Response) => {
  * GET /api/bot-learning/leaderboard/stats
  * Récupère les stats du leaderboard
  */
-router.get('/leaderboard/stats', async (req: Request, res: Response) => {
+router.get('/leaderboard/stats', requireAdmin, async (req: Request, res: Response) => {
   try {
     const stats = botLearningService.getLeaderboardService().getStats();
     res.json(stats);
@@ -409,7 +428,7 @@ router.get('/leaderboard/stats', async (req: Request, res: Response) => {
  * POST /api/bot-learning/tournament/create
  * Crée un nouveau tournoi
  */
-router.post('/tournament/create', async (req: Request, res: Response) => {
+router.post('/tournament/create', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, type, participants } = req.body;
     
@@ -429,7 +448,7 @@ router.post('/tournament/create', async (req: Request, res: Response) => {
  * POST /api/bot-learning/tournament/:id/run
  * Lance un tournoi
  */
-router.post('/tournament/:id/run', async (req: Request, res: Response) => {
+router.post('/tournament/:id/run', requireAdmin, async (req: Request, res: Response) => {
   try {
     const tournamentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const tournament = await botLearningService.getTournamentService().runTournament(tournamentId);
@@ -444,7 +463,7 @@ router.post('/tournament/:id/run', async (req: Request, res: Response) => {
  * GET /api/bot-learning/tournament/:id
  * Récupère un tournoi
  */
-router.get('/tournament/:id', async (req: Request, res: Response) => {
+router.get('/tournament/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const tournamentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const tournament = botLearningService.getTournamentService().getTournament(tournamentId);
@@ -464,7 +483,7 @@ router.get('/tournament/:id', async (req: Request, res: Response) => {
  * GET /api/bot-learning/tournaments
  * Liste tous les tournois
  */
-router.get('/tournaments', async (req: Request, res: Response) => {
+router.get('/tournaments', requireAdmin, async (req: Request, res: Response) => {
   try {
     const status = req.query.status as 'pending' | 'in_progress' | 'completed' | undefined;
     const tournaments = await botLearningService.getTournamentService().listTournaments(status);
@@ -479,7 +498,7 @@ router.get('/tournaments', async (req: Request, res: Response) => {
  * POST /api/bot-learning/genetic/initialize
  * Initialise la population génétique
  */
-router.post('/genetic/initialize', async (req: Request, res: Response) => {
+router.post('/genetic/initialize', requireAdmin, async (req: Request, res: Response) => {
   try {
     const generation = await botLearningService.getGeneticService().initializePopulation();
     res.json(generation);
@@ -493,7 +512,7 @@ router.post('/genetic/initialize', async (req: Request, res: Response) => {
  * POST /api/bot-learning/genetic/evolve
  * Évolue vers la prochaine génération
  */
-router.post('/genetic/evolve', async (req: Request, res: Response) => {
+router.post('/genetic/evolve', requireAdmin, async (req: Request, res: Response) => {
   try {
     const generation = await botLearningService.getGeneticService().evolveGeneration();
     res.json(generation);
@@ -507,7 +526,7 @@ router.post('/genetic/evolve', async (req: Request, res: Response) => {
  * GET /api/bot-learning/genetic/population
  * Récupère la population actuelle
  */
-router.get('/genetic/population', async (req: Request, res: Response) => {
+router.get('/genetic/population', requireAdmin, async (req: Request, res: Response) => {
   try {
     const population = botLearningService.getGeneticService().getPopulation();
     res.json(population);
@@ -521,7 +540,7 @@ router.get('/genetic/population', async (req: Request, res: Response) => {
  * GET /api/bot-learning/genetic/best
  * Récupère le meilleur bot de la génération
  */
-router.get('/genetic/best', async (req: Request, res: Response) => {
+router.get('/genetic/best', requireAdmin, async (req: Request, res: Response) => {
   try {
     const bestBot = botLearningService.getGeneticService().getBestBot();
     res.json(bestBot || { message: 'Aucun bot disponible' });
@@ -537,7 +556,8 @@ router.get('/genetic/best', async (req: Request, res: Response) => {
  */
 router.post('/adaptive/analyze', async (req: Request, res: Response) => {
   try {
-    const { playerId, games } = req.body;
+    const { games } = req.body;
+    const playerId = getAuthUid(req);
     
     if (!playerId || !games || !Array.isArray(games)) {
       return res.status(400).json({ error: 'Données invalides' });
@@ -557,7 +577,8 @@ router.post('/adaptive/analyze', async (req: Request, res: Response) => {
  */
 router.post('/adaptive/adjust', async (req: Request, res: Response) => {
   try {
-    const { botBaseMMR, playerId, targetSkillLevel } = req.body;
+    const { botBaseMMR, targetSkillLevel } = req.body;
+    const playerId = getAuthUid(req);
     
     if (!botBaseMMR || !playerId || !targetSkillLevel) {
       return res.status(400).json({ error: 'Données invalides' });
@@ -581,7 +602,7 @@ router.post('/adaptive/adjust', async (req: Request, res: Response) => {
  */
 router.get('/adaptive/recommend/:playerId', async (req: Request, res: Response) => {
   try {
-    const playerId = Array.isArray(req.params.playerId) ? req.params.playerId[0] : req.params.playerId;
+    const playerId = getAuthUid(req);
     const difficulty = botLearningService.getAdaptiveService().recommendDifficulty(playerId);
     res.json({ playerId, recommendedDifficulty: difficulty });
   } catch (error) {
@@ -591,7 +612,7 @@ router.get('/adaptive/recommend/:playerId', async (req: Request, res: Response) 
 });
 
 // Route pour analyser les patterns de mélange
-router.get('/shuffle-stats', async (req, res) => {
+router.get('/shuffle-stats', requireAdmin, async (req, res) => {
   try {
     const stats = await botLearningService.getShuffleStats();
     res.json(stats);
@@ -607,7 +628,7 @@ router.get('/shuffle-stats', async (req, res) => {
  * GET /api/bot-learning/learning-status
  * Retourne le statut de l'apprentissage (actif ou en pause)
  */
-router.get('/learning-status', async (req: Request, res: Response) => {
+router.get('/learning-status', requireAdmin, async (req: Request, res: Response) => {
   const pendingCount = await botLearningService.getPendingCount();
   res.json({ paused: botLearningService.isPaused(), pendingCount });
 });

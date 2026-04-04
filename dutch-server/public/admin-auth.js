@@ -22,6 +22,31 @@ let _idToken = '';
 /** Get current ID token for API calls */
 function getAdminSecret() { return _idToken; }
 
+function sanitizeAdminPath(path, fallback = '/admin-home') {
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
+    return fallback;
+  }
+  if (path === '/admin-login') {
+    return fallback;
+  }
+  return path;
+}
+
+function getAdminNextPath(fallback = '/admin-home') {
+  const params = new URLSearchParams(window.location.search);
+  return sanitizeAdminPath(params.get('next'), fallback);
+}
+
+function getAdminLoginUrl(nextPath) {
+  const params = new URLSearchParams();
+  const safeNextPath = sanitizeAdminPath(nextPath, '');
+  if (safeNextPath) {
+    params.set('next', safeNextPath);
+  }
+  const query = params.toString();
+  return query ? `/admin-login?${query}` : '/admin-login';
+}
+
 /** Helper to call admin-protected APIs */
 async function adminFetch(url, opts = {}) {
   // Refresh token if needed
@@ -60,9 +85,15 @@ async function initFirebase() {
 }
 
 /* ── Main ── */
-async function initAdminAuth({ onReady }) {
+async function initAdminAuth({
+  onReady,
+  redirectAuthenticatedTo = '',
+  redirectUnauthenticatedTo = '',
+} = {}) {
   const gate = document.getElementById('auth-gate');
   const app = document.getElementById('app-content');
+  const safeAuthenticatedRedirect = sanitizeAdminPath(redirectAuthenticatedTo, '');
+  const safeUnauthenticatedRedirect = sanitizeAdminPath(redirectUnauthenticatedTo, '');
 
   showLoading(gate);
 
@@ -74,13 +105,23 @@ async function initAdminAuth({ onReady }) {
       _idToken = await user.getIdToken();
       const ok = await checkAdminAccess(user);
       if (ok) {
+        if (safeAuthenticatedRedirect && window.location.pathname !== safeAuthenticatedRedirect) {
+          window.location.replace(safeAuthenticatedRedirect);
+          return;
+        }
         gate.style.display = 'none';
         app.style.display = '';
-        onReady();
+        if (typeof onReady === 'function') {
+          onReady();
+        }
       } else {
         showDenied(gate, user);
       }
     } else {
+      if (safeUnauthenticatedRedirect) {
+        window.location.replace(safeUnauthenticatedRedirect);
+        return;
+      }
       showLoginForm(gate, app, onReady);
     }
   });

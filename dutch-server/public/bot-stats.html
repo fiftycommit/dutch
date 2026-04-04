@@ -753,6 +753,7 @@
     
     // Init via admin auth gate
     initAdminAuth({
+      redirectUnauthenticatedTo: getAdminLoginUrl('/bot-stats'),
       onReady() {
         loadStats();
         setInterval(loadStats, 30000);
