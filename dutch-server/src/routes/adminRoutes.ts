@@ -1,29 +1,46 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { firestoreService } from '../services/FirestoreService';
+import { requireAdmin, adminLimiter } from '../middleware/adminAuthMiddleware';
+import { adminAuthService } from '../services/AdminAuthService';
 
 const router = Router();
 
 // ---------------------------------------------------------------------------
-// Admin auth middleware – vérifie le header X-Admin-Secret contre ADMIN_SECRET
+// POST /api/admin/login — Vérifier le mot de passe admin (rate-limited, pas de requireAdmin)
 // ---------------------------------------------------------------------------
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET) {
-    console.warn('⚠️ ADMIN_SECRET non défini — panel admin désactivé');
-}
-
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-    if (!ADMIN_SECRET) {
-        res.status(503).json({ success: false, error: 'Admin désactivé' });
+router.post('/login', adminLimiter, (req, res) => {
+    const { password } = req.body;
+    if (!password || !adminAuthService.verify(password)) {
+        const ip = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress;
+        console.warn(`[SECURITY] Admin login failed — IP: ${ip}, time: ${new Date().toISOString()}`);
+        res.status(403).json({ success: false, error: 'Mot de passe invalide' });
         return;
     }
-    const secret = req.headers['x-admin-secret'] as string | undefined;
-    if (!secret || secret !== ADMIN_SECRET) {
-        res.status(403).json({ success: false, error: 'Accès refusé' });
+    res.json({
+        success: true,
+        mustChangePassword: adminAuthService.getMustChangePassword(),
+    });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/change-password — Changer le mot de passe admin (rate-limited)
+// ---------------------------------------------------------------------------
+router.post('/change-password', adminLimiter, (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+        res.status(400).json({ success: false, error: 'Champs requis: currentPassword, newPassword' });
         return;
     }
-    next();
-}
+    try {
+        adminAuthService.changePassword(currentPassword, newPassword);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
 
+// --- Toutes les routes suivantes nécessitent l'authentification admin ---
+router.use(adminLimiter);
 router.use(requireAdmin);
 
 // ---------------------------------------------------------------------------

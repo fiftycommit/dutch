@@ -26,9 +26,9 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
   const token = socket.handshake.auth?.token;
 
   if (!token) {
-    // Mode invité : pas de token, on laisse passer pour la rétrocompatibilité
-    socket.data.user = null;
-    next();
+    const ip = socket.handshake.address;
+    console.warn(`[SECURITY] Socket connection rejected — no token — IP: ${ip}, time: ${new Date().toISOString()}`);
+    next(new Error('Authentication required'));
     return;
   }
 
@@ -63,6 +63,8 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
 
     next();
   } catch {
+    const ip = socket.handshake.address;
+    console.warn(`[SECURITY] Socket auth failed — invalid token — IP: ${ip}, time: ${new Date().toISOString()}`);
     next(new Error('Token invalide'));
   }
 }

@@ -111,21 +111,15 @@
 </head>
 <body>
 
-<!-- Login Screen -->
-<div id="login-screen">
-  <div class="login-box">
-    <h1>🔒 Dutch Admin</h1>
-    <input type="password" id="secret-input" placeholder="Admin Secret" autofocus>
-    <div class="error" id="login-error"></div>
-    <button class="btn btn-primary btn-full" onclick="tryLogin()">Connexion</button>
-  </div>
-</div>
+<!-- Auth Gate (login + password change) -->
+<div id="auth-gate"></div>
 
 <!-- Dashboard -->
-<div id="dashboard">
+<div id="app-content" style="display:none">
+<div id="dashboard" style="display:block">
   <header>
     <h1>🎮 Dutch Admin</h1>
-    <button class="btn btn-ghost btn-sm" onclick="logout()">Déconnexion</button>
+    <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Déconnexion</button>
   </header>
 
   <div class="container">
@@ -162,50 +156,23 @@
     <div class="actions" id="modal-actions"></div>
   </div>
 </div>
+</div><!-- /app-content -->
 
+<script src="/admin-auth.js"></script>
 <script>
-  let adminSecret = '';
   let currentPage = 1;
-
   const $ = id => document.getElementById(id);
 
-  // ── Auth ──
-  $('secret-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
-  $('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsers(1); });
+  // Use shared admin auth
+  const api = adminFetch;
 
-  async function tryLogin() {
-    adminSecret = $('secret-input').value.trim();
-    if (!adminSecret) return;
-    $('login-error').textContent = '';
-    try {
-      const res = await api('/api/admin/stats');
-      if (res.success) {
-        $('login-screen').style.display = 'none';
-        $('dashboard').style.display = 'block';
-        loadStats();
-        loadUsers(1);
-      }
-    } catch {
-      $('login-error').textContent = 'Secret invalide';
+  initAdminAuth({
+    onReady() {
+      $('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsers(1); });
+      loadStats();
+      loadUsers(1);
     }
-  }
-
-  function logout() {
-    adminSecret = '';
-    $('dashboard').style.display = 'none';
-    $('login-screen').style.display = 'flex';
-    $('secret-input').value = '';
-  }
-
-  // ── API helper ──
-  async function api(url, opts = {}) {
-    const res = await fetch(url, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': adminSecret, ...(opts.headers || {}) },
-    });
-    if (res.status === 403) throw new Error('Forbidden');
-    return res.json();
-  }
+  });
 
   // ── Stats ──
   async function loadStats() {

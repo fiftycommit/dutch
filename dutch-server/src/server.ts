@@ -19,6 +19,7 @@ import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers, userFocused } from './middleware/socketAuthMiddleware';
+import { requireAdmin, adminLimiter } from './middleware/adminAuthMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
 
@@ -180,13 +181,7 @@ export function startServer() {
     });
   });
 
-  app.get('/status', (req, res) => {
-    // Authentification basique optionnelle (décommente pour activer)
-    // const auth = req.headers.authorization;
-    // const token = process.env.STATUS_TOKEN || 'your-secret-token';
-    // if (auth !== `Bearer ${token}`) {
-    //   return res.status(401).json({ error: 'Unauthorized' });
-    // }
+  app.get('/status', adminLimiter, requireAdmin, (req, res) => {
     res.send(renderHomePage(roomManager.getRoomCount()));
   });
 
@@ -213,12 +208,7 @@ export function startServer() {
     res.json({ status: 'ok' });
   });
 
-  app.get('/rooms/debug', (req, res) => {
-    const secret = req.headers['x-admin-secret'] as string | undefined;
-    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-      res.status(403).json({ error: 'Accès refusé' });
-      return;
-    }
+  app.get('/rooms/debug', adminLimiter, requireAdmin, (req, res) => {
     res.json(roomManager.listRoomsDebug());
   });
 
@@ -227,7 +217,7 @@ export function startServer() {
     res.json({ success: true, rooms: publicRooms });
   });
 
-  app.get('/rooms/stats', (req, res) => {
+  app.get('/rooms/stats', adminLimiter, requireAdmin, (req, res) => {
     const stats = publicRoomService.getStats();
     res.json({ success: true, stats });
   });
@@ -258,12 +248,16 @@ export function startServer() {
   setChatIo(io);
   app.use('/api/chats', chatKeyRoutes);
 
-  // Dashboard admin
+  // Fichier JS partagé pour l'auth admin (accessible publiquement)
+  app.get('/admin-auth.js', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/admin-auth.js'));
+  });
+
+  // Dashboards admin — HTML servi sans auth (le login gate est côté JS, les API sont protégées)
   app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/admin.html'));
   });
 
-  // Dashboard des stats des bots
   app.get('/bot-stats', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/bot-stats.html'));
   });
@@ -272,7 +266,6 @@ export function startServer() {
     res.sendFile(path.join(__dirname, '../public/shuffle-analysis.html'));
   });
 
-  // Dashboard profil joueur (SBMM)
   app.get('/player-profile', (req, res) => {
     res.sendFile('player-profile.html', { root: './public' });
   });

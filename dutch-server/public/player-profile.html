@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Player Profile • Dutch</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/admin-auth.js"></script>
   <style>
     body {
       margin: 0;
@@ -101,6 +102,8 @@
   </style>
 </head>
 <body>
+  <div id="auth-gate"></div>
+  <div id="app-content" style="display:none">
   <div class="container">
     <div class="header">
       <div>
@@ -255,6 +258,9 @@
 
     renderCharts(data.profile, data.history);
   }
+
+  initAdminAuth({ onReady() {} });
 </script>
+  </div><!-- /app-content -->
 </body>
 </html>

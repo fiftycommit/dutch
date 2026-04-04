@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bot Learning Stats - Dutch Game</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/admin-auth.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -215,6 +216,8 @@
   </style>
 </head>
 <body>
+  <div id="auth-gate"></div>
+  <div id="app-content" style="display:none">
   <div class="container">
     <h1>🤖 Bot Learning Dashboard</h1>
     <p class="subtitle">Statistiques d'apprentissage automatique des bots</p>
@@ -739,11 +742,14 @@
       }
     }
     
-    // Charger au démarrage
-    loadStats();
-    
-    // Auto-refresh toutes les 30 secondes
-    setInterval(loadStats, 30000);
+    // Init via admin auth gate
+    initAdminAuth({
+      onReady() {
+        loadStats();
+        setInterval(loadStats, 30000);
+      }
+    });
   </script>
+  </div><!-- /app-content -->
 </body>
 </html>
