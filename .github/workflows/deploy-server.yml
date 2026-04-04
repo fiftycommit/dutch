@@ -54,7 +54,7 @@ jobs:
       - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: dutch-game.me
+          host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "build/web/*"
@@ -73,7 +73,7 @@ jobs:
       - name: Clean server source
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: dutch-game.me
+          host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
@@ -83,7 +83,7 @@ jobs:
       - name: Deploy server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: dutch-game.me
+          host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "dutch-server/*"
@@ -99,7 +99,7 @@ jobs:
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
         with:
-          host: dutch-game.me
+          host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON,ADMIN_SECRET,ADMIN_EMAIL
