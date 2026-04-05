@@ -198,6 +198,10 @@ export function startServer() {
     res.sendFile('player-profile.html', { root: './public' });
   });
 
+  app.get('/rules', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/rules.html'));
+  });
+
   const PORT = process.env.PORT || 3000;
 
   httpServer.listen(PORT, () => {

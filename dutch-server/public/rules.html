@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Règles du Dutch — Comment jouer au jeu de cartes Dutch (Cabo, Tamalou)</title>
+  <meta name="description" content="Règles complètes du jeu de cartes Dutch (aussi appelé Cabo, Tamalou, Golf). Apprenez à jouer : valeur des cartes, pouvoirs spéciaux, déroulement d'une partie et modes de jeu.">
+  <link rel="canonical" href="https://dutch-game.me/rules">
+  <meta property="og:title" content="Règles du Dutch — Jeu de cartes de mémoire et stratégie">
+  <meta property="og:description" content="Apprenez les règles du Dutch en 5 minutes. Valeur des cartes, pouvoirs spéciaux, mode multijoueur.">
+  <meta property="og:url" content="https://dutch-game.me/rules">
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="https://dutch-game.me/icons/Icon-512.png">
+  <meta property="og:locale" content="fr_FR">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "Comment jouer au Dutch (jeu de cartes)",
+    "description": "Règles complètes du jeu de cartes Dutch, aussi connu sous les noms Cabo, Tamalou ou Golf.",
+    "step": [
+      {"@type": "HowToStep", "name": "Distribution", "text": "Chaque joueur reçoit 4 cartes face cachée et peut en mémoriser 2 au début."},
+      {"@type": "HowToStep", "name": "Tour de jeu", "text": "Piochez une carte, échangez-la avec une de vos cartes ou défaussez-la."},
+      {"@type": "HowToStep", "name": "Pouvoirs", "text": "Certaines cartes défaussées activent des pouvoirs : espionner, échanger, mélanger ou révéler."},
+      {"@type": "HowToStep", "name": "Appeler Dutch", "text": "Quand vous pensez avoir le score le plus bas, déclarez Dutch pour terminer la manche."}
+    ]
+  }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(to bottom, #0d2818, #1a472a);
+      color: rgba(255,255,255,0.9);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 740px; margin: 0 auto; padding: 32px 20px; }
+    h1 { font-size: 2em; margin-bottom: 8px; color: #fff; }
+    .subtitle { color: rgba(255,255,255,0.6); margin-bottom: 32px; font-size: 1.05em; }
+    .subtitle a { color: #81c784; text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+    section {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    h2 { color: #81c784; font-size: 1.3em; margin-bottom: 12px; }
+    h3 { color: #a5d6a7; font-size: 1.05em; margin: 16px 0 8px; }
+    p { margin-bottom: 12px; }
+    ul, ol { margin: 8px 0 16px 24px; }
+    li { margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; text-align: left; }
+    th { background: rgba(255,255,255,0.1); font-weight: 600; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 12px 0; }
+    .card-item {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .card-item .value { color: #81c784; font-weight: bold; font-size: 1.1em; }
+    .card-item .value.negative { color: #ef5350; }
+    .warning {
+      background: rgba(183,28,28,0.2);
+      border-left: 4px solid #ff5252;
+      border-radius: 8px;
+      padding: 14px;
+      margin: 12px 0;
+    }
+    .warning.orange {
+      background: rgba(230,81,0,0.2);
+      border-left-color: #ff9800;
+    }
+    .power { display: flex; gap: 12px; align-items: center; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 8px; }
+    .power-name { color: #81c784; font-weight: 600; min-width: 120px; }
+    .step { display: flex; gap: 14px; margin-bottom: 14px; }
+    .step-num {
+      min-width: 32px; height: 32px;
+      background: linear-gradient(135deg, #2E7D32, #4CAF50);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 0.9em; flex-shrink: 0;
+    }
+    .cta {
+      display: inline-block;
+      background: linear-gradient(135deg, #2E7D32, #4CAF50);
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1.1em;
+      margin-top: 16px;
+    }
+    .cta:hover { opacity: 0.9; }
+    footer { text-align: center; padding: 32px 0 16px; color: rgba(255,255,255,0.4); font-size: 0.9em; }
+    footer a { color: #81c784; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Règles du Dutch</h1>
+    <p class="subtitle">Aussi connu sous les noms <strong>Cabo</strong>, <strong>Tamalou</strong> ou <strong>Golf</strong> &mdash; <a href="https://dutch-game.me/">Jouer en ligne gratuitement</a></p>
+
+    <section>
+      <h2>Le Dutch, c'est quoi ?</h2>
+      <p>Le Dutch est un <strong>jeu de cartes de mémoire</strong> pour 2 à 6 joueurs. Chaque joueur reçoit 4 cartes <strong>face cachée</strong> et ne peut en regarder que 2 au début de la partie. Ensuite, impossible de les revoir ! Il faut mémoriser ses cartes et tenter d'avoir le score le plus bas possible.</p>
+    </section>
+
+    <section>
+      <h2>But du jeu</h2>
+      <p>Terminer la manche avec <strong>le moins de points possible</strong>. Les points sont calculés en additionnant la valeur de vos 4 cartes.</p>
+    </section>
+
+    <section>
+      <h2>Valeur des cartes</h2>
+      <table>
+        <tr><th>Carte</th><th>Points</th></tr>
+        <tr><td>As</td><td>1 pt</td></tr>
+        <tr><td>2 à 10</td><td>Valeur de la carte</td></tr>
+        <tr><td>Valet</td><td>11 pts</td></tr>
+        <tr><td>Dame</td><td>12 pts</td></tr>
+      </table>
+
+      <h3>Cartes spéciales</h3>
+      <div class="card-grid">
+        <div class="card-item">
+          <div>Joker</div>
+          <div class="value">0 pt</div>
+        </div>
+        <div class="card-item">
+          <div>Roi rouge (&#9829; &#9830;)</div>
+          <div class="value">0 pt</div>
+        </div>
+        <div class="card-item">
+          <div>Roi noir (&#9824; &#9827;)</div>
+          <div class="value negative">13 pts</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Défausse collective</h2>
+      <p>Quand un joueur défausse une carte, les autres joueurs peuvent immédiatement défausser une carte du <strong>même rang</strong>, peu importe la couleur ou l'enseigne.</p>
+      <div class="warning">
+        <strong>Attention !</strong> Si vous défaussez la mauvaise carte, vous la reprenez et piochez une carte de pénalité.
+      </div>
+    </section>
+
+    <section>
+      <h2>Pouvoirs spéciaux</h2>
+      <p>Certaines cartes activent un pouvoir quand elles sont défaussées :</p>
+      <div class="power"><span class="power-name">7</span> <span><strong>Révéler</strong> &mdash; Regarder une de vos propres cartes</span></div>
+      <div class="power"><span class="power-name">10</span> <span><strong>Espionner</strong> &mdash; Voir une carte d'un adversaire</span></div>
+      <div class="power"><span class="power-name">Valet (&#9829; &#9830;)</span> <span><strong>Échanger</strong> &mdash; Échanger 2 cartes entre adversaires</span></div>
+      <div class="power"><span class="power-name">Joker</span> <span><strong>Mélanger</strong> &mdash; Mélanger la main d'un joueur</span></div>
+    </section>
+
+    <section>
+      <h2>Déroulement d'une partie</h2>
+      <div class="step"><div class="step-num">1</div><div><strong>Phase de mémorisation</strong> &mdash; Appuyez sur deux de vos cartes pour les révéler. Elles restent visibles 3 secondes puis se retournent.</div></div>
+      <div class="step"><div class="step-num">2</div><div><strong>Votre tour</strong> &mdash; Deux actions possibles : piocher une carte ou appeler Dutch.</div></div>
+      <div class="step"><div class="step-num">3</div><div><strong>Piocher</strong> &mdash; Tirez une carte de la pioche ou de la défausse. Échangez-la avec une carte de votre main, ou défaussez-la directement.</div></div>
+      <div class="step"><div class="step-num">4</div><div><strong>Réaction</strong> &mdash; Après chaque défausse, tous les joueurs ont quelques secondes pour réagir (défausser une carte du même rang).</div></div>
+      <div class="step"><div class="step-num">5</div><div><strong>Appeler Dutch</strong> &mdash; Quand vous pensez avoir le plus petit score, appuyez sur Dutch. La manche s'arrête immédiatement.</div></div>
+      <div class="warning orange">
+        <strong>Règle du Dutch :</strong> Si vous appelez Dutch sans avoir le plus petit score, vous êtes classé dernier ! En cas d'égalité, le joueur qui a appelé Dutch est classé premier.
+      </div>
+    </section>
+
+    <section>
+      <h2>Modes de jeu</h2>
+      <ul>
+        <li><strong>Partie rapide</strong> &mdash; Une seule manche, résultat immédiat.</li>
+        <li><strong>Tournoi</strong> &mdash; Plusieurs manches successives jusqu'à la finale.</li>
+        <li><strong>Multijoueur en ligne</strong> &mdash; Jouez en temps réel avec d'autres joueurs.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Système de rang</h2>
+      <p>Gagnez des <strong>RP (Points de Rang)</strong> en jouant pour monter dans les rangs. Plus votre rang est élevé, plus les bots sont difficiles !</p>
+      <table>
+        <tr><th>Rang</th><th>Points requis</th></tr>
+        <tr><td>Bronze</td><td>0 &ndash; 299 RP</td></tr>
+        <tr><td>Argent</td><td>300 &ndash; 599 RP</td></tr>
+        <tr><td>Or</td><td>600 &ndash; 899 RP</td></tr>
+        <tr><td>Platine</td><td>900+ RP</td></tr>
+      </table>
+    </section>
+
+    <section style="text-align:center;">
+      <h2>Prêt à jouer ?</h2>
+      <p>Lancez une partie gratuite contre des bots ou invitez vos amis en multijoueur.</p>
+      <a href="https://dutch-game.me/" class="cta">Jouer au Dutch maintenant</a>
+    </section>
+
+    <footer>
+      <a href="https://dutch-game.me/">dutch-game.me</a> &mdash; Jeu de cartes Dutch en ligne, gratuit et multijoueur.
+    </footer>
+  </div>
+</body>
+</html>
