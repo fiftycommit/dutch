@@ -86,6 +86,48 @@
       display: flex; align-items: center; justify-content: center;
       font-weight: bold; font-size: 0.9em; flex-shrink: 0;
     }
+    .reaction-box {
+      background: linear-gradient(135deg, #1B5E20, #2E7D32);
+      border: 1px solid #4CAF50;
+      border-radius: 10px;
+      padding: 14px;
+      flex: 1;
+    }
+    .reaction-box .highlight { color: #81c784; font-weight: bold; }
+    .reaction-details {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    .reaction-details li { margin-bottom: 4px; list-style: none; }
+    .reaction-details li::before { content: "• "; color: #81c784; }
+    .mode-card {
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .mode-card h3 { color: #fff; margin: 0 0 4px; }
+    .mode-card p { color: rgba(255,255,255,0.9); margin: 0; font-size: 0.95em; }
+    .sbmm-card {
+      background: rgba(255,255,255,0.07);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .sbmm-card h3 { color: #fff; margin: 0 0 4px; font-size: 1em; }
+    .sbmm-card p { margin: 0; font-size: 0.95em; }
+    .rp-bonus { color: #FFD700; font-weight: bold; font-size: 1.05em; margin-top: 16px; }
+    .bot-card {
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .bot-card h3 { margin: 0 0 2px; font-size: 1.05em; }
+    .bot-card .bot-subtitle { font-style: italic; color: rgba(255,255,255,0.7); font-size: 0.9em; margin-bottom: 8px; }
+    .bot-card ul { margin: 0; padding: 0; list-style: none; }
+    .bot-card li { margin-bottom: 4px; font-size: 0.95em; }
     .cta {
       display: inline-block;
       background: linear-gradient(135deg, #2E7D32, #4CAF50);
@@ -107,18 +149,22 @@
     <h1>Règles du Dutch</h1>
     <p class="subtitle">Aussi connu sous les noms <strong>Cabo</strong>, <strong>Tamalou</strong> ou <strong>Golf</strong> &mdash; <a href="https://dutch-game.me/">Jouer en ligne gratuitement</a></p>
 
+    <!-- §1 Introduction -->
     <section>
       <h2>Le Dutch, c'est quoi ?</h2>
-      <p>Le Dutch est un <strong>jeu de cartes de mémoire</strong> pour 2 à 6 joueurs. Chaque joueur reçoit 4 cartes <strong>face cachée</strong> et ne peut en regarder que 2 au début de la partie. Ensuite, impossible de les revoir ! Il faut mémoriser ses cartes et tenter d'avoir le score le plus bas possible.</p>
+      <p>Un jeu de cartes basé sur la mémoire pour 2 à 6 joueurs. Vous avez 4 cartes face cachée, et vous pouvez en mémoriser 2 au début de la partie. Ensuite, impossible de les revoir !</p>
     </section>
 
+    <!-- §2 Objectif -->
     <section>
-      <h2>But du jeu</h2>
-      <p>Terminer la manche avec <strong>le moins de points possible</strong>. Les points sont calculés en additionnant la valeur de vos 4 cartes.</p>
+      <h2>Le but du jeu</h2>
+      <p>Terminer la manche avec <strong style="color:#81c784">le moins de points possible</strong>. Les points sont calculés en additionnant la valeur de vos 4 cartes.</p>
     </section>
 
+    <!-- §3 Valeur des cartes -->
     <section>
       <h2>Valeur des cartes</h2>
+      <p>Chaque carte a une valeur qui compte dans votre score final :</p>
       <table>
         <tr><th>Carte</th><th>Points</th></tr>
         <tr><td>As</td><td>1 pt</td></tr>
@@ -127,7 +173,7 @@
         <tr><td>Dame</td><td>12 pts</td></tr>
       </table>
 
-      <h3>Cartes spéciales</h3>
+      <h3>Quelques exceptions à la règle :</h3>
       <div class="card-grid">
         <div class="card-item">
           <div>Joker</div>
@@ -144,56 +190,165 @@
       </div>
     </section>
 
+    <!-- §4 Défausse collective -->
     <section>
       <h2>Défausse collective</h2>
-      <p>Quand un joueur défausse une carte, les autres joueurs peuvent immédiatement défausser une carte du <strong>même rang</strong>, peu importe la couleur ou l'enseigne.</p>
+      <p>Quand un joueur défausse, les autres peuvent défausser une carte du <strong style="color:#81c784">même rang</strong> &mdash; peu importe la couleur ou l'enseigne.</p>
       <div class="warning">
-        <strong>Attention !</strong> Si vous défaussez la mauvaise carte, vous la reprenez et piochez une carte de pénalité.
+        <strong>Attention !</strong> Mauvaise carte &rarr; vous la reprenez et piochez une pénalité. Regarder une carte sans autorisation &rarr; pénalité.
       </div>
     </section>
 
+    <!-- §5 Pouvoirs spéciaux -->
     <section>
       <h2>Pouvoirs spéciaux</h2>
-      <p>Certaines cartes activent un pouvoir quand elles sont défaussées :</p>
-      <div class="power"><span class="power-name">7</span> <span><strong>Révéler</strong> &mdash; Regarder une de vos propres cartes</span></div>
-      <div class="power"><span class="power-name">10</span> <span><strong>Espionner</strong> &mdash; Voir une carte d'un adversaire</span></div>
+      <p>Activé quand la carte est défaussée :</p>
+      <div class="power"><span class="power-name">Tous les 10</span> <span><strong>Espionner</strong> &mdash; Voir une carte d'un adversaire</span></div>
       <div class="power"><span class="power-name">Valet (&#9829; &#9830;)</span> <span><strong>Échanger</strong> &mdash; Échanger 2 cartes entre adversaires</span></div>
       <div class="power"><span class="power-name">Joker</span> <span><strong>Mélanger</strong> &mdash; Mélanger la main d'un joueur</span></div>
+      <div class="power"><span class="power-name">7</span> <span><strong>Révéler</strong> &mdash; Voir une de vos propres cartes</span></div>
     </section>
 
+    <!-- §6 Déroulement d'une partie -->
     <section>
       <h2>Déroulement d'une partie</h2>
-      <div class="step"><div class="step-num">1</div><div><strong>Phase de mémorisation</strong> &mdash; Appuyez sur deux de vos cartes pour les révéler. Elles restent visibles 3 secondes puis se retournent.</div></div>
-      <div class="step"><div class="step-num">2</div><div><strong>Votre tour</strong> &mdash; Deux actions possibles : piocher une carte ou appeler Dutch.</div></div>
-      <div class="step"><div class="step-num">3</div><div><strong>Piocher</strong> &mdash; Tirez une carte de la pioche ou de la défausse. Échangez-la avec une carte de votre main, ou défaussez-la directement.</div></div>
-      <div class="step"><div class="step-num">4</div><div><strong>Réaction</strong> &mdash; Après chaque défausse, tous les joueurs ont quelques secondes pour réagir (défausser une carte du même rang).</div></div>
+      <div class="step"><div class="step-num">1</div><div><strong>Phase de mémorisation</strong> &mdash; Appuyez sur deux cartes pour les révéler. Elles restent visibles 3 secondes puis se retournent.</div></div>
+      <div class="step"><div class="step-num">2</div><div><strong>Votre tour</strong> &mdash; Deux actions possibles : Piocher une carte ou appeler Dutch.</div></div>
+      <div class="step"><div class="step-num">3</div><div><strong>Piocher</strong> &mdash; Tirez une carte. Échangez-la avec une carte de votre main, ou défaussez-la directement (bouton JETER).</div></div>
+
+      <!-- Step 4 — Phase de réaction (mis en valeur) -->
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="reaction-box">
+          <strong>&#9889; Phase de réaction</strong>
+          <p style="margin:8px 0">Quand une carte est défaussée, <span class="highlight">tous les joueurs peuvent défausser une carte du même rang</span>.</p>
+          <div class="reaction-details">
+            <strong>&#127919; Important :</strong>
+            <ul style="margin-top:6px">
+              <li>Seule la valeur compte (ex : 7&#9829; défaussé &rarr; n'importe quel 7 peut suivre)</li>
+              <li>L'enseigne (&#9824; &#9829; &#9830; &#9827;) n'a aucune importance</li>
+              <li>La couleur (rouge/noir) n'a aucune importance</li>
+              <li>Si la carte défaussée a un pouvoir, il s'active à la fin du temps de réaction</li>
+              <li>Basez-vous sur votre mémoire !</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <div class="step"><div class="step-num">5</div><div><strong>Appeler Dutch</strong> &mdash; Quand vous pensez avoir le plus petit score, appuyez sur Dutch. La manche s'arrête immédiatement.</div></div>
       <div class="warning orange">
         <strong>Règle du Dutch :</strong> Si vous appelez Dutch sans avoir le plus petit score, vous êtes classé dernier ! En cas d'égalité, le joueur qui a appelé Dutch est classé premier.
       </div>
     </section>
 
+    <!-- §7 Modes de jeu -->
     <section>
       <h2>Modes de jeu</h2>
-      <ul>
-        <li><strong>Partie rapide</strong> &mdash; Une seule manche, résultat immédiat.</li>
-        <li><strong>Tournoi</strong> &mdash; Plusieurs manches successives jusqu'à la finale.</li>
-        <li><strong>Multijoueur en ligne</strong> &mdash; Jouez en temps réel avec d'autres joueurs.</li>
-      </ul>
+      <div class="mode-card" style="background:linear-gradient(135deg,#1B5E20,#2E7D32)">
+        <h3>Partie Rapide</h3>
+        <p>Lancez une partie composée d'une seule manche.</p>
+      </div>
+      <div class="mode-card" style="background:linear-gradient(135deg,#2E7D32,#388E3C)">
+        <h3>Tournoi</h3>
+        <p>Enchaînez plusieurs manches successives jusqu'à atteindre la finale.</p>
+      </div>
+      <div class="mode-card" style="background:linear-gradient(135deg,#1A237E,#283593)">
+        <h3>Multijoueur</h3>
+        <p>Jouez avec d'autres joueurs en ligne.</p>
+      </div>
     </section>
 
+    <!-- §8 Réglages et SBMM -->
     <section>
-      <h2>Système de rang</h2>
+      <h2>Réglages et SBMM</h2>
+      <p>Dans les réglages, vous pouvez personnaliser le temps de réaction, le niveau des bots, et activer le SBMM (Skill-Based Matchmaking).</p>
+      <div class="sbmm-card">
+        <h3>SBMM désactivé</h3>
+        <p>Choisissez manuellement le niveau des bots et le nombre de joueurs.</p>
+      </div>
+      <div class="sbmm-card">
+        <h3>SBMM activé</h3>
+        <p>Seul le nombre de joueurs est configurable. Le niveau des bots s'ajuste automatiquement à votre niveau.</p>
+      </div>
+    </section>
+
+    <!-- §9 Système de Rang -->
+    <section>
+      <h2>&#127942; Système de Rang</h2>
       <p>Gagnez des <strong>RP (Points de Rang)</strong> en jouant pour monter dans les rangs. Plus votre rang est élevé, plus les bots sont difficiles !</p>
       <table>
         <tr><th>Rang</th><th>Points requis</th></tr>
-        <tr><td>Bronze</td><td>0 &ndash; 299 RP</td></tr>
-        <tr><td>Argent</td><td>300 &ndash; 599 RP</td></tr>
-        <tr><td>Or</td><td>600 &ndash; 899 RP</td></tr>
-        <tr><td>Platine</td><td>900+ RP</td></tr>
+        <tr><td>&#129353; Bronze</td><td>0 &ndash; 299 RP</td></tr>
+        <tr><td>&#129352; Argent</td><td>300 &ndash; 599 RP</td></tr>
+        <tr><td>&#129351; Or</td><td>600 &ndash; 899 RP</td></tr>
+        <tr><td>&#128142; Platine</td><td>900+ RP</td></tr>
       </table>
     </section>
 
+    <!-- §10 Points de Rang (RP) -->
+    <section>
+      <h2>&#128202; Points de Rang (RP)</h2>
+      <p>Les RP gagnés/perdus dépendent de votre rang actuel.<br>
+        En Bronze, les défaites coûtent cher mais les victoires rapportent peu.<br>
+        En Platine, c'est l'inverse : les bots sont si forts que perdre est moins punitif.</p>
+      <table>
+        <tr><th>Position</th><th>Bronze</th><th>Argent</th><th>Or</th><th>Platine</th></tr>
+        <tr><td>&#127942; 1er</td><td>+30</td><td>+45</td><td>+55</td><td>+70</td></tr>
+        <tr><td>2ème</td><td>+15</td><td>+20</td><td>+25</td><td>+30</td></tr>
+        <tr><td>3ème</td><td>-25</td><td>-20</td><td>-18</td><td>-15</td></tr>
+        <tr><td>4ème</td><td>-50</td><td>-40</td><td>-30</td><td>-20</td></tr>
+      </table>
+
+      <p class="rp-bonus">&#127873; Bonus Dutch (tous rangs)</p>
+      <ul>
+        <li>Dutch + 1er : <strong>+20 RP</strong></li>
+        <li>Dutch + 1er + main vide : <strong>+30 RP supplémentaires</strong> &rarr; Total possible : +50 RP de bonus !</li>
+      </ul>
+      <div class="warning">
+        <strong>&#9888;&#65039; Malus Dutch</strong> &mdash; Dutch raté (pas 1er) : <strong>-30 RP</strong>
+      </div>
+    </section>
+
+    <!-- §11 Niveaux des Bots -->
+    <section>
+      <h2>&#129302; Niveaux des Bots</h2>
+      <p>Les bots s'adaptent à votre rang. Plus vous montez, plus ils sont redoutables !</p>
+
+      <div class="bot-card" style="background:rgba(205,127,50,0.1); border:1px solid rgba(205,127,50,0.5)">
+        <h3 style="color:#CD7F32">&#129353; Bots Bronze</h3>
+        <div class="bot-subtitle">Débutants et distraits</div>
+        <ul>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#CD7F32">&bull;</span> Oublient souvent vos cartes (25%/tour)</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#CD7F32">&bull;</span> Se trompent lors des échanges (45%)</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#CD7F32">&bull;</span> Dutch à 12 points ou moins</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#CD7F32">&bull;</span> Réaction lente à la défausse</li>
+        </ul>
+      </div>
+
+      <div class="bot-card" style="background:rgba(192,192,192,0.1); border:1px solid rgba(192,192,192,0.5)">
+        <h3 style="color:#C0C0C0">&#129352; Bots Argent</h3>
+        <div class="bot-subtitle">Compétents</div>
+        <ul>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#C0C0C0">&bull;</span> Bonne mémoire (oubli 10%/tour)</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#C0C0C0">&bull;</span> Rarement confus (15%)</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#C0C0C0">&bull;</span> Dutch à 6 points ou moins</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#C0C0C0">&bull;</span> Réaction correcte à la défausse</li>
+        </ul>
+      </div>
+
+      <div class="bot-card" style="background:rgba(0,206,209,0.1); border:1px solid rgba(0,206,209,0.5)">
+        <h3 style="color:#00CED1">&#128142; Bots Difficiles</h3>
+        <div class="bot-subtitle">Forts</div>
+        <ul>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#00CED1">&bull;</span> Mémoire PARFAITE (n'oublient jamais)</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#00CED1">&bull;</span> AUCUNE erreur sur les échanges</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#00CED1">&bull;</span> Dutch ultra-agressif à 2 points</li>
+          <li style="color:rgba(255,255,255,0.85)"><span style="color:#00CED1">&bull;</span> Réaction instantanée (95%)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CTA -->
     <section style="text-align:center;">
       <h2>Prêt à jouer ?</h2>
       <p>Lancez une partie gratuite contre des bots ou invitez vos amis en multijoueur.</p>
