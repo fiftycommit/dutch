@@ -166,7 +166,7 @@ class RulesScreen extends StatelessWidget {
                   _stepCard(context, '2', 'Votre tour',
                       'Deux actions possibles : Piocher une carte ou appeler Dutch.'),
                   _stepCard(context, '3', 'Piocher',
-                      'Tirez une carte de la pioche (on ne peut pas prendre dans la défausse). Échangez-la avec une carte de votre main, ou défaussez-la directement (bouton JETER).'),
+                      'Piochez une carte (impossible de prendre dans la défausse). Échangez-la avec une carte de votre main, ou défaussez-la directement (bouton JETER).'),
                   _reactionBlock(context),
                   _stepCard(context, '5', 'Appeler Dutch',
                       'Quand vous pensez avoir le plus petit score, appuyez sur Dutch. La manche s\'arrête immédiatement.'),
