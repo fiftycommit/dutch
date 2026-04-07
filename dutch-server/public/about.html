@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dutch — Jeu de cartes de mémoire en ligne gratuit (Cabo, Tamalou, Golf)</title>
+  <meta name="description" content="Dutch est un jeu de cartes de mémoire et de stratégie pour 2 à 6 joueurs, jouable gratuitement en ligne. Aussi connu sous les noms Cabo, Tamalou ou Golf.">
+  <link rel="canonical" href="https://dutch-game.me/about">
+  <meta property="og:title" content="Dutch — Jeu de cartes de mémoire en ligne gratuit">
+  <meta property="og:description" content="Découvrez Dutch, le jeu de cartes de mémoire et stratégie. Jouez seul contre des bots ou en multijoueur en ligne.">
+  <meta property="og:url" content="https://dutch-game.me/about">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://dutch-game.me/icons/Icon-512.png">
+  <meta property="og:locale" content="fr_FR">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Dutch",
+    "alternateName": ["Cabo", "Tamalou", "Golf card game"],
+    "description": "Jeu de cartes de mémoire et de stratégie pour 2 à 6 joueurs, jouable gratuitement en ligne.",
+    "url": "https://dutch-game.me",
+    "applicationCategory": "GameApplication",
+    "operatingSystem": "Web, Android, iOS",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.5",
+      "ratingCount": "50"
+    }
+  }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(to bottom, #0d2818, #1a472a);
+      color: rgba(255,255,255,0.9);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 740px; margin: 0 auto; padding: 32px 20px; }
+    h1 { font-size: 2em; margin-bottom: 8px; color: #fff; }
+    .subtitle { color: rgba(255,255,255,0.6); margin-bottom: 32px; font-size: 1.05em; }
+    .subtitle a { color: #81c784; text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+    section {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    h2 { color: #81c784; font-size: 1.3em; margin-bottom: 12px; }
+    h3 { color: #a5d6a7; font-size: 1.05em; margin: 16px 0 8px; }
+    p { margin-bottom: 12px; }
+    ul { margin: 8px 0 16px 24px; }
+    li { margin-bottom: 6px; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 16px 0; }
+    .feature-card {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .feature-card .icon { font-size: 2em; margin-bottom: 8px; }
+    .feature-card h3 { color: #81c784; margin: 0 0 6px; }
+    .feature-card p { margin: 0; font-size: 0.95em; color: rgba(255,255,255,0.8); }
+    .names-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 12px 0; }
+    .name-card {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .name-card .region { color: rgba(255,255,255,0.5); font-size: 0.85em; }
+    .name-card .name { color: #81c784; font-weight: bold; font-size: 1.1em; }
+    .cta {
+      display: inline-block;
+      background: linear-gradient(135deg, #2E7D32, #4CAF50);
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1.1em;
+      margin-top: 16px;
+    }
+    .cta:hover { opacity: 0.9; }
+    .cta-secondary {
+      display: inline-block;
+      border: 2px solid #4CAF50;
+      color: #81c784;
+      text-decoration: none;
+      padding: 12px 28px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1em;
+      margin-top: 12px;
+      margin-left: 12px;
+    }
+    .cta-secondary:hover { background: rgba(76,175,80,0.1); }
+    nav { margin-bottom: 24px; }
+    nav a { color: #81c784; text-decoration: none; margin-right: 16px; font-size: 0.95em; }
+    nav a:hover { text-decoration: underline; }
+    footer { text-align: center; padding: 32px 0 16px; color: rgba(255,255,255,0.4); font-size: 0.9em; }
+    footer a { color: #81c784; text-decoration: none; margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="https://dutch-game.me/">Jouer</a>
+      <a href="https://dutch-game.me/rules">Règles</a>
+      <a href="https://dutch-game.me/strategies">Stratégies</a>
+      <a href="https://dutch-game.me/faq">FAQ</a>
+    </nav>
+
+    <h1>Dutch — Le jeu de cartes de mémoire</h1>
+    <p class="subtitle">Jouez gratuitement en ligne &mdash; seul contre des bots ou en multijoueur avec vos amis</p>
+
+    <!-- Qu'est-ce que le Dutch ? -->
+    <section>
+      <h2>Qu'est-ce que le jeu de cartes Dutch ?</h2>
+      <p>Le <strong>Dutch</strong> (aussi appelé <strong>Cabo</strong>, <strong>Tamalou</strong> ou <strong>Golf</strong>) est un <strong>jeu de cartes de mémoire et de stratégie</strong> qui se joue de 2 à 6 joueurs avec un jeu de 52 cartes + 2 jokers.</p>
+      <p>Le principe est simple : chaque joueur reçoit <strong>4 cartes face cachée</strong> et ne peut en regarder que 2 au début. Ensuite, il faut mémoriser ses cartes, échanger intelligemment et être le premier à déclarer <strong>"Dutch !"</strong> quand on pense avoir le score le plus bas.</p>
+      <p>C'est un jeu qui mêle <strong>mémoire</strong>, <strong>bluff</strong> et <strong>prise de risque</strong> — accessible aux débutants mais avec une vraie profondeur stratégique pour les joueurs expérimentés.</p>
+    </section>
+
+    <!-- Les différents noms -->
+    <section>
+      <h2>Un jeu, plusieurs noms</h2>
+      <p>Ce jeu de cartes est joué dans le monde entier sous différents noms :</p>
+      <div class="names-grid">
+        <div class="name-card">
+          <div class="name">Dutch</div>
+          <div class="region">France, Belgique</div>
+        </div>
+        <div class="name-card">
+          <div class="name">Cabo</div>
+          <div class="region">Amérique du Nord</div>
+        </div>
+        <div class="name-card">
+          <div class="name">Tamalou</div>
+          <div class="region">France, Maghreb</div>
+        </div>
+        <div class="name-card">
+          <div class="name">Golf</div>
+          <div class="region">International</div>
+        </div>
+        <div class="name-card">
+          <div class="name">Cambio</div>
+          <div class="region">Europe</div>
+        </div>
+        <div class="name-card">
+          <div class="name">Cactus</div>
+          <div class="region">Québec</div>
+        </div>
+      </div>
+      <p>Quelle que soit l'appellation, les règles de base restent les mêmes : <strong>mémoriser, échanger, et déclarer quand on a le score le plus bas</strong>.</p>
+    </section>
+
+    <!-- Fonctionnalités -->
+    <section>
+      <h2>Pourquoi jouer au Dutch en ligne ?</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="icon">&#127183;</div>
+          <h3>100% gratuit</h3>
+          <p>Pas de pub, pas d'achat in-app. Juste le jeu.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#129302;</div>
+          <h3>Bots intelligents</h3>
+          <p>3 niveaux de difficulté qui s'adaptent à votre rang.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#127760;</div>
+          <h3>Multijoueur en ligne</h3>
+          <p>Jouez en temps réel avec vos amis ou des inconnus.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#127942;</div>
+          <h3>Classement et rangs</h3>
+          <p>Montez de Bronze à Platine grâce aux Points de Rang.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#9889;</div>
+          <h3>Parties rapides</h3>
+          <p>Une manche en 3-5 minutes. Parfait pour une pause.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#127941;</div>
+          <h3>Mode tournoi</h3>
+          <p>Enchaînez les manches pour une expérience plus intense.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comment ça marche -->
+    <section>
+      <h2>Comment jouer au Dutch en ligne ?</h2>
+      <p>C'est simple et rapide :</p>
+      <ul>
+        <li><strong>Ouvrez l'application</strong> sur votre navigateur, Android ou iOS</li>
+        <li><strong>Choisissez votre mode</strong> : partie rapide, tournoi, ou multijoueur</li>
+        <li><strong>Jouez !</strong> Mémorisez vos cartes, échangez malin, et déclarez Dutch au bon moment</li>
+      </ul>
+      <p>Pas besoin de créer un compte pour jouer contre les bots. Le compte (via Google) débloque le multijoueur, le classement et la sauvegarde de votre progression.</p>
+    </section>
+
+    <!-- Pour qui ? -->
+    <section>
+      <h2>Pour qui est fait le Dutch ?</h2>
+      <ul>
+        <li><strong>Familles et amis</strong> &mdash; Un jeu accessible dès 8 ans, parfait pour les soirées</li>
+        <li><strong>Joueurs compétitifs</strong> &mdash; Le système de rang et le SBMM offrent un vrai défi</li>
+        <li><strong>Fans de jeux de cartes</strong> &mdash; Si vous aimez le Uno, le Skyjo ou le 6 qui prend, le Dutch est fait pour vous</li>
+        <li><strong>Joueurs en déplacement</strong> &mdash; Une partie se joue en 3-5 minutes, idéal en transport</li>
+      </ul>
+    </section>
+
+    <!-- CTA -->
+    <section style="text-align:center;">
+      <h2>Prêt à essayer ?</h2>
+      <p>Lancez une partie gratuite maintenant — aucune inscription requise.</p>
+      <a href="https://dutch-game.me/" class="cta">Jouer au Dutch</a>
+      <a href="https://dutch-game.me/rules" class="cta-secondary">Lire les règles</a>
+    </section>
+
+    <footer>
+      <a href="https://dutch-game.me/">Jouer</a>
+      <a href="https://dutch-game.me/rules">Règles</a>
+      <a href="https://dutch-game.me/strategies">Stratégies</a>
+      <a href="https://dutch-game.me/faq">FAQ</a>
+      <br><br>
+      <span><a href="https://dutch-game.me/">dutch-game.me</a> &mdash; Jeu de cartes Dutch en ligne, gratuit et multijoueur.</span>
+    </footer>
+  </div>
+</body>
+</html>

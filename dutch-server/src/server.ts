@@ -106,6 +106,24 @@ export function startServer() {
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://dutch-game.me/about</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/strategies</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/faq</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://dutch-game.me/login</loc>
     <lastmod>${lastMod}</lastmod>
     <changefreq>monthly</changefreq>
@@ -200,6 +218,18 @@ export function startServer() {
 
   app.get('/rules', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/rules.html'));
+  });
+
+  app.get('/about', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/about.html'));
+  });
+
+  app.get('/strategies', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/strategies.html'));
+  });
+
+  app.get('/faq', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/faq.html'));
   });
 
   const PORT = process.env.PORT || 3000;
