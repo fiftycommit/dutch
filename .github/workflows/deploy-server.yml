@@ -30,10 +30,12 @@ jobs:
             --release \
             --base-href / \
             --tree-shake-icons \
-            ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"}
+            ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"} \
+            ${FIREBASE_APP_CHECK_WEB_SITE_KEY:+--dart-define=FIREBASE_APP_CHECK_WEB_SITE_KEY="$FIREBASE_APP_CHECK_WEB_SITE_KEY"}
           cp build/web/index.html build/web/404.html
         env:
           FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
+          FIREBASE_APP_CHECK_WEB_SITE_KEY: ${{ secrets.FIREBASE_APP_CHECK_WEB_SITE_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:

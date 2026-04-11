@@ -7,6 +7,8 @@ const SecurityService_1 = require("../services/SecurityService");
 const FriendsService_1 = require("../services/FriendsService");
 const FirestoreService_1 = require("../services/FirestoreService");
 const PushNotificationService_1 = require("../services/PushNotificationService");
+const GameState_1 = require("../models/GameState");
+const Room_1 = require("../models/Room");
 const RoomRegistryService_1 = require("../services/RoomRegistryService");
 function setupRoomHandler(socket, roomManager, io) {
     const authSocket = socket;
@@ -415,11 +417,26 @@ function setupRoomHandler(socket, roomManager, io) {
         roomManager.sendFullStateToPlayer(roomCode, socket.id);
     });
     // Relancer une partie (rematch)
-    socket.on('room:restart', (data, callback) => {
+    socket.on('room:restart', async (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            const success = roomManager.restartGame(roomCode, socket.id);
+            let success = roomManager.restartGame(roomCode, socket.id);
             if (success) {
+                const room = roomManager.getRoom(roomCode);
+                if (room?.gameMode === GameState_1.GameMode.tournament &&
+                    room.status === Room_1.RoomStatus.waiting) {
+                    success = roomManager.startGame(roomCode, {
+                        fillBots: room.settings?.fillBots !== false,
+                    });
+                    if (success) {
+                        roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
+                            message: 'La manche suivante commence !',
+                            reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
+                        });
+                        roomManager.broadcastPresence(roomCode);
+                        await roomManager.checkAndPlayBotTurn(roomCode);
+                    }
+                }
                 console.log(`Game restarted in room ${roomCode} by ${socket.id}`);
             }
             callback({ success });

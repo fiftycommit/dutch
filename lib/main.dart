@@ -2,29 +2,31 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'utils/ui_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'core/service_locator.dart';
+import 'core/firebase_app_check_bootstrap.dart';
 import 'core/interfaces/i_haptic_service.dart';
-import 'core/interfaces/i_stats_service.dart';
 import 'core/interfaces/i_bot_ai_service.dart';
+import 'core/interfaces/i_stats_service.dart';
+import 'firebase_options.dart';
+import 'models/game_settings.dart';
 import 'providers/game_provider.dart';
 import 'providers/game_tracking_provider.dart';
 import 'providers/multiplayer_game_provider.dart';
 import 'providers/settings_provider.dart';
-import 'models/game_settings.dart';
 import 'providers/auth_provider.dart';
 import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
-import 'services/push/push_notification_service.dart';
-import 'widgets/notifications/notification_overlay_controller.dart';
-import 'services/notifications/in_app_notification_service.dart';
 import 'services/logging/error_reporting_service.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'firebase_options.dart';
+import 'services/notifications/in_app_notification_service.dart';
+import 'services/push/push_notification_service.dart';
+import 'utils/ui_constants.dart';
+import 'widgets/notifications/notification_overlay_controller.dart';
 
 /// Global navigator key for legacy code compatibility (bot_ai.dart)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -64,6 +66,8 @@ void main() {
         DeviceOrientation.portraitDown,
       ]),
     ]);
+
+    await activateFirebaseAppCheck();
 
     // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
     // setPersistence n'est supporté que sur le web

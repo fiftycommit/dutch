@@ -456,7 +456,6 @@ class MultiplayerGameProvider
       _timerManager.reset();
       for (final player in _playersInLobby) {
         player['ready'] = false;
-        player['isSpectator'] = false;
       }
       // Update cumulative scores from restart data
       if (data['cumulativeScores'] is List) {
@@ -664,7 +663,7 @@ class MultiplayerGameProvider
   void acknowledgeTournamentEliminated() {
     _tournamentEliminated = false;
     _tournamentEliminatedMessage = null;
-    _resetRoomState();
+    notifyListeners();
   }
 
   void acknowledgeTournamentEnded() {
@@ -734,6 +733,11 @@ class MultiplayerGameProvider
       // Spectator (forfeited player) should still see results when game ends
       _isPlaying = true;
       _isInLobby = false;
+    } else if (me == null) {
+      // Joueur éliminé d'un tournoi: il reste dans la room
+      // mais ne fait pas partie de la manche suivante.
+      _isPlaying = false;
+      _isInLobby = _roomCode != null;
     }
 
     _timerManager.syncReactionPhase(_gameState);
@@ -1066,9 +1070,12 @@ class MultiplayerGameProvider
     return success;
   }
 
-  /// Host: relance la partie (remet la room en waiting, tous les joueurs vont au lobby)
+  /// En tournoi, n'importe quel survivant peut lancer la manche suivante.
+  /// En partie rapide, seul l'hôte peut relancer.
   Future<bool> restartGame() async =>
-      isHost ? await _multiplayerService.restartGame() : false;
+      (roomGameMode == GameMode.tournament || isHost)
+          ? await _multiplayerService.restartGame()
+          : false;
 
   /// Retour indépendant au salon depuis l'écran de résultats (tout joueur)
   void returnToLobbyFromResults() {
@@ -1094,7 +1101,6 @@ class MultiplayerGameProvider
     _timerManager.reset();
     for (final player in _playersInLobby) {
       player['ready'] = false;
-      player['isSpectator'] = false;
     }
     notifyListeners();
   }

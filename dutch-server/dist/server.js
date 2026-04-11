@@ -125,6 +125,42 @@ function startServer() {
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>https://dutch-game.me/rules</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/about</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/strategies</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/faq</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/login</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://dutch-game.me/setup</loc>
+    <lastmod>${lastMod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
 </urlset>`);
     });
     app.get('/version', (req, res) => {
@@ -184,6 +220,18 @@ function startServer() {
     });
     app.get('/player-profile', (req, res) => {
         res.sendFile('player-profile.html', { root: './public' });
+    });
+    app.get('/rules', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/rules.html'));
+    });
+    app.get('/about', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/about.html'));
+    });
+    app.get('/strategies', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/strategies.html'));
+    });
+    app.get('/faq', (req, res) => {
+        res.sendFile(node_path_1.default.join(__dirname, '../public/faq.html'));
     });
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Server } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
-import { getCurrentPlayer } from '../models/GameState';
+import { GameMode, getCurrentPlayer } from '../models/GameState';
+import { createCard } from '../models/Card';
 
 type EmittedEvent = {
   target: string;
@@ -413,6 +414,109 @@ test('only host can restart game', (t) => {
   const restarted = manager.restartGame(room.id, 'p2-only');
   assert.equal(restarted, false);
   assert.equal(room.status, 'ended');
+});
+
+test('restartGame keeps eliminated tournament player in lobby as spectator', (t) => {
+  const { io, manager } = createManager();
+  t.after(() => manager.dispose());
+
+  const room = manager.createRoom('host-tournament', {
+    minPlayers: 2,
+    maxPlayers: 3,
+    fillBots: false,
+  });
+  manager.setGameMode(room.id, 'host-tournament', GameMode.tournament);
+  manager.joinRoom(room.id, 'p2-tournament', 'P2', 'c2-tournament');
+  manager.joinRoom(room.id, 'p3-tournament', 'P3', 'c3-tournament');
+
+  manager.setReady(room.id, 'host-tournament', true);
+  manager.setReady(room.id, 'p2-tournament', true);
+  manager.setReady(room.id, 'p3-tournament', true);
+  manager.startGame(room.id, { fillBots: false });
+
+  const host = room.gameState!.players.find((p) => p.id === 'host-tournament');
+  const player2 = room.gameState!.players.find((p) => p.id === 'p2-tournament');
+  const player3 = room.gameState!.players.find((p) => p.id === 'p3-tournament');
+  assert.ok(host);
+  assert.ok(player2);
+  assert.ok(player3);
+
+  host!.hand = [createCard('spades', 'R')];
+  player2!.hand = [createCard('hearts', 'A')];
+  player3!.hand = [createCard('hearts', '2')];
+
+  manager.handleGameEnd(room.id);
+  const restarted = manager.restartGame(room.id, 'host-tournament');
+
+  assert.equal(restarted, true);
+  assert.equal(room.status, 'waiting');
+  assert.equal(room.players.length, 3);
+
+  const eliminatedLobbyPlayer = room.players.find(
+    (p) => p.id === 'host-tournament'
+  );
+  assert.ok(eliminatedLobbyPlayer);
+  assert.equal(eliminatedLobbyPlayer?.isSpectator, true);
+  assert.equal(eliminatedLobbyPlayer?.ready, false);
+
+  assert.notEqual(room.hostPlayerId, 'host-tournament');
+  assert.equal(manager.setReady(room.id, 'host-tournament', true), false);
+
+  const eliminatedEvents = io.findEventsFor(
+    'host-tournament',
+    'tournament:eliminated'
+  );
+  assert.ok(eliminatedEvents.length >= 1);
+
+  manager.setReady(room.id, 'p2-tournament', true);
+  manager.setReady(room.id, 'p3-tournament', true);
+  const nextRoundStarted = manager.startGame(room.id, { fillBots: false });
+
+  assert.equal(nextRoundStarted, true);
+  assert.ok(room.gameState);
+  assert.deepEqual(
+    room.gameState!.players.map((p) => p.id).sort(),
+    ['p2-tournament', 'p3-tournament']
+  );
+});
+
+test('tournament survivor can restart next round', (t) => {
+  const { manager } = createManager();
+  t.after(() => manager.dispose());
+
+  const room = manager.createRoom('host-tour-survivor', {
+    minPlayers: 2,
+    maxPlayers: 3,
+    fillBots: false,
+  });
+  manager.setGameMode(room.id, 'host-tour-survivor', GameMode.tournament);
+  manager.joinRoom(room.id, 'p2-tour-survivor', 'P2', 'c2-tour-survivor');
+  manager.joinRoom(room.id, 'p3-tour-survivor', 'P3', 'c3-tour-survivor');
+
+  manager.setReady(room.id, 'host-tour-survivor', true);
+  manager.setReady(room.id, 'p2-tour-survivor', true);
+  manager.setReady(room.id, 'p3-tour-survivor', true);
+  manager.startGame(room.id, { fillBots: false });
+
+  const host = room.gameState!.players.find((p) => p.id == 'host-tour-survivor');
+  const player2 = room.gameState!.players.find((p) => p.id == 'p2-tour-survivor');
+  const player3 = room.gameState!.players.find((p) => p.id == 'p3-tour-survivor');
+  assert.ok(host);
+  assert.ok(player2);
+  assert.ok(player3);
+
+  host!.hand = [createCard('spades', 'R')];
+  player2!.hand = [createCard('hearts', 'A')];
+  player3!.hand = [createCard('hearts', '2')];
+
+  manager.handleGameEnd(room.id);
+
+  const survivorRestart = manager.restartGame(room.id, 'p2-tour-survivor');
+  assert.equal(survivorRestart, true);
+
+  const eliminated = room.players.find((p) => p.id === 'host-tour-survivor');
+  assert.equal(eliminated?.isSpectator, true);
+  assert.equal(manager.setReady(room.id, 'host-tour-survivor', true), false);
 });
 
 // ============ Tests closeRoom ============

@@ -7,6 +7,7 @@ const node_test_1 = __importDefault(require("node:test"));
 const strict_1 = __importDefault(require("node:assert/strict"));
 const RoomManager_1 = require("../services/RoomManager");
 const GameState_1 = require("../models/GameState");
+const Card_1 = require("../models/Card");
 class FakeServer {
     constructor() {
         this.events = [];
@@ -324,6 +325,81 @@ function createManager(options = {}) {
     const restarted = manager.restartGame(room.id, 'p2-only');
     strict_1.default.equal(restarted, false);
     strict_1.default.equal(room.status, 'ended');
+});
+(0, node_test_1.default)('restartGame keeps eliminated tournament player in lobby as spectator', (t) => {
+    const { io, manager } = createManager();
+    t.after(() => manager.dispose());
+    const room = manager.createRoom('host-tournament', {
+        minPlayers: 2,
+        maxPlayers: 3,
+        fillBots: false,
+    });
+    manager.setGameMode(room.id, 'host-tournament', GameState_1.GameMode.tournament);
+    manager.joinRoom(room.id, 'p2-tournament', 'P2', 'c2-tournament');
+    manager.joinRoom(room.id, 'p3-tournament', 'P3', 'c3-tournament');
+    manager.setReady(room.id, 'host-tournament', true);
+    manager.setReady(room.id, 'p2-tournament', true);
+    manager.setReady(room.id, 'p3-tournament', true);
+    manager.startGame(room.id, { fillBots: false });
+    const host = room.gameState.players.find((p) => p.id === 'host-tournament');
+    const player2 = room.gameState.players.find((p) => p.id === 'p2-tournament');
+    const player3 = room.gameState.players.find((p) => p.id === 'p3-tournament');
+    strict_1.default.ok(host);
+    strict_1.default.ok(player2);
+    strict_1.default.ok(player3);
+    host.hand = [(0, Card_1.createCard)('spades', 'R')];
+    player2.hand = [(0, Card_1.createCard)('hearts', 'A')];
+    player3.hand = [(0, Card_1.createCard)('hearts', '2')];
+    manager.handleGameEnd(room.id);
+    const restarted = manager.restartGame(room.id, 'host-tournament');
+    strict_1.default.equal(restarted, true);
+    strict_1.default.equal(room.status, 'waiting');
+    strict_1.default.equal(room.players.length, 3);
+    const eliminatedLobbyPlayer = room.players.find((p) => p.id === 'host-tournament');
+    strict_1.default.ok(eliminatedLobbyPlayer);
+    strict_1.default.equal(eliminatedLobbyPlayer?.isSpectator, true);
+    strict_1.default.equal(eliminatedLobbyPlayer?.ready, false);
+    strict_1.default.notEqual(room.hostPlayerId, 'host-tournament');
+    strict_1.default.equal(manager.setReady(room.id, 'host-tournament', true), false);
+    const eliminatedEvents = io.findEventsFor('host-tournament', 'tournament:eliminated');
+    strict_1.default.ok(eliminatedEvents.length >= 1);
+    manager.setReady(room.id, 'p2-tournament', true);
+    manager.setReady(room.id, 'p3-tournament', true);
+    const nextRoundStarted = manager.startGame(room.id, { fillBots: false });
+    strict_1.default.equal(nextRoundStarted, true);
+    strict_1.default.ok(room.gameState);
+    strict_1.default.deepEqual(room.gameState.players.map((p) => p.id).sort(), ['p2-tournament', 'p3-tournament']);
+});
+(0, node_test_1.default)('tournament survivor can restart next round', (t) => {
+    const { manager } = createManager();
+    t.after(() => manager.dispose());
+    const room = manager.createRoom('host-tour-survivor', {
+        minPlayers: 2,
+        maxPlayers: 3,
+        fillBots: false,
+    });
+    manager.setGameMode(room.id, 'host-tour-survivor', GameState_1.GameMode.tournament);
+    manager.joinRoom(room.id, 'p2-tour-survivor', 'P2', 'c2-tour-survivor');
+    manager.joinRoom(room.id, 'p3-tour-survivor', 'P3', 'c3-tour-survivor');
+    manager.setReady(room.id, 'host-tour-survivor', true);
+    manager.setReady(room.id, 'p2-tour-survivor', true);
+    manager.setReady(room.id, 'p3-tour-survivor', true);
+    manager.startGame(room.id, { fillBots: false });
+    const host = room.gameState.players.find((p) => p.id == 'host-tour-survivor');
+    const player2 = room.gameState.players.find((p) => p.id == 'p2-tour-survivor');
+    const player3 = room.gameState.players.find((p) => p.id == 'p3-tour-survivor');
+    strict_1.default.ok(host);
+    strict_1.default.ok(player2);
+    strict_1.default.ok(player3);
+    host.hand = [(0, Card_1.createCard)('spades', 'R')];
+    player2.hand = [(0, Card_1.createCard)('hearts', 'A')];
+    player3.hand = [(0, Card_1.createCard)('hearts', '2')];
+    manager.handleGameEnd(room.id);
+    const survivorRestart = manager.restartGame(room.id, 'p2-tour-survivor');
+    strict_1.default.equal(survivorRestart, true);
+    const eliminated = room.players.find((p) => p.id === 'host-tour-survivor');
+    strict_1.default.equal(eliminated?.isSpectator, true);
+    strict_1.default.equal(manager.setReady(room.id, 'host-tour-survivor', true), false);
 });
 // ============ Tests closeRoom ============
 (0, node_test_1.default)('closeRoom marks room as closing and notifies players', (t) => {

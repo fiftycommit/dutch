@@ -321,12 +321,11 @@ class RoomManager {
         if (!room)
             return false;
         this.pruneWaitingRoom(room);
-        // Ne garder que les joueurs PRÊTS (humains connectés et prêts, ou bots)
-        room.players = room.players.filter((p) => {
-            if (!p.isHuman)
-                return true; // Garder les bots
-            return p.connected !== false && p.ready; // Humains: connectés ET prêts
-        });
+        const preservedTournamentSpectators = room.gameMode === GameState_1.GameMode.tournament
+            ? room.players.filter((p) => p.isHuman && p.isSpectator)
+            : [];
+        const readyHumans = room.players.filter((p) => p.isHuman && !p.isSpectator && p.connected !== false && p.ready);
+        room.players = [...readyHumans, ...preservedTournamentSpectators];
         this.reindexPlayers(room);
         this.ensureHost(room);
         const minPlayers = typeof room.settings?.minPlayers === 'number'
@@ -341,8 +340,7 @@ class RoomManager {
             return false;
         if (!host.ready)
             return false;
-        const readyHumans = room.players.filter((p) => p.isHuman && p.connected !== false && p.ready).length;
-        if (readyHumans < minPlayers)
+        if (readyHumans.length < minPlayers)
             return false;
         if (this.activePlayerCount(room) > maxPlayers)
             return false;
@@ -351,26 +349,30 @@ class RoomManager {
         let targetPlayerCount = maxPlayers;
         if (room.settings.numberOfBots !== undefined) {
             // Nombre de bots spécifié explicitement
-            targetPlayerCount = Math.min(room.players.length + room.settings.numberOfBots, maxPlayers);
+            targetPlayerCount = Math.min(readyHumans.length + room.settings.numberOfBots, maxPlayers);
         }
         else if (!fillBots) {
             // Ne pas ajouter de bots
-            targetPlayerCount = room.players.length;
+            targetPlayerCount = readyHumans.length;
         }
+        const activePlayers = [...readyHumans];
         // Ajouter les bots jusqu'au nombre cible
         const sbmmLevels = room.settings.sbmmBotLevels;
         let botIndex = 0;
-        while (room.players.length < targetPlayerCount) {
+        while (activePlayers.length < targetPlayerCount) {
+            let bot;
             if (sbmmLevels && botIndex < sbmmLevels.length) {
                 // SBMM : chaque bot a son propre skill level
-                room.players.push(this.createBotWithSkill(room.players.length, sbmmLevels[botIndex]));
+                bot = this.createBotWithSkill(room.players.length, sbmmLevels[botIndex]);
             }
             else {
-                room.players.push(this.createBot(room.players.length, difficulty));
+                bot = this.createBot(room.players.length, difficulty);
             }
+            room.players.push(bot);
+            activePlayers.push(bot);
             botIndex++;
         }
-        const gameState = (0, GameState_1.createGameState)(room.players, room.gameMode, difficulty);
+        const gameState = (0, GameState_1.createGameState)(activePlayers, room.gameMode, difficulty);
         GameLogic_1.GameLogic.initializeGame(gameState);
         // Si le joueur tiré au sort est le même qu'à la partie précédente, on re-tire parmi les autres
         if (room.lastStartingPlayerId && gameState.players.length > 1) {
@@ -956,12 +958,18 @@ class RoomManager {
         const room = this.rooms.get(roomCode);
         if (!room)
             return false;
-        // Seul l'hôte peut relancer
-        if (room.hostPlayerId !== requesterId)
-            return false;
         // La partie doit être terminée
         if (room.status !== Room_1.RoomStatus.ended)
             return false;
+        const requester = room.players.find((p) => p.id === requesterId);
+        const tournamentRequesterAllowed = room.gameMode === GameState_1.GameMode.tournament &&
+            requester?.isHuman == true &&
+            requester.isSpectator != true;
+        // En partie rapide, seul l'hôte peut relancer.
+        // En tournoi, n'importe quel survivant peut lancer la manche suivante.
+        if (room.hostPlayerId !== requesterId && !tournamentRequesterAllowed) {
+            return false;
+        }
         // En mode tournoi, gérer l'élimination
         let eliminatedPlayerId = null;
         if (room.gameMode === GameState_1.GameMode.tournament && room.gameState) {
@@ -969,55 +977,59 @@ class RoomManager {
             const ranking = [...room.gameState.players]
                 .filter(p => !room.gameState.eliminatedPlayerIds.includes(p.id))
                 .sort((a, b) => (0, Player_1.calculateScore)(a) - (0, Player_1.calculateScore)(b));
-            // S'il reste plus de 2 joueurs, éliminer le dernier
-            if (ranking.length > 2) {
+            if (ranking.length >= 2) {
                 const eliminated = ranking[ranking.length - 1];
                 eliminatedPlayerId = eliminated.id;
                 console.log(`🏆 Tournoi ${roomCode}: ${eliminated.name} éliminé (score: ${(0, Player_1.calculateScore)(eliminated)})`);
+                if (ranking.length === 2) {
+                    // C'était la finale, le tournoi est terminé après cette élimination
+                    console.log(`🏆 Tournoi ${roomCode} terminé! Gagnant: ${ranking[0]?.name}`);
+                }
             }
-            else if (ranking.length <= 2) {
-                // C'était la finale, le tournoi est terminé
+            else if (ranking.length === 1) {
                 console.log(`🏆 Tournoi ${roomCode} terminé! Gagnant: ${ranking[0]?.name}`);
             }
         }
-        // Remove bots so we can refill them or play just humans
-        // En mode tournoi, aussi retirer le joueur éliminé
-        room.players = room.players.filter((p) => {
-            if (!p.isHuman)
-                return false; // Toujours retirer les bots
-            if (room.gameMode === GameState_1.GameMode.tournament && p.id === eliminatedPlayerId) {
-                // Notifier le joueur éliminé
-                this.io.to(p.id).emit('tournament:eliminated', {
+        // Toujours retirer les bots entre deux manches.
+        room.players = room.players.filter((p) => p.isHuman);
+        // En mode tournoi, le joueur éliminé reste dans le salon
+        // mais devient spectateur pour les manches suivantes.
+        for (const player of room.players) {
+            if (room.gameMode === GameState_1.GameMode.tournament && player.id === eliminatedPlayerId) {
+                player.isSpectator = true;
+                player.ready = false;
+                player.hand = [];
+                player.hasFolded = false;
+                player.knownCards = [];
+                this.io.to(player.id).emit('tournament:eliminated', {
                     roomCode,
                     message: 'Vous avez été éliminé du tournoi !',
-                    finalRank: room.players.filter(pl => pl.isHuman).length,
+                    finalRank: room.players.filter((p) => p.isHuman && !p.isSpectator).length + 1,
                 });
-                return false; // Retirer le joueur éliminé
+                continue;
             }
-            return true;
-        });
+            player.ready = room.gameMode === GameState_1.GameMode.tournament;
+            player.hand = [];
+            player.hasFolded = false;
+            player.knownCards = [];
+            player.isSpectator = false;
+        }
         // Vérifier qu'il reste assez de joueurs pour continuer
-        const humanCount = room.players.filter(p => p.isHuman).length;
-        if (room.gameMode === GameState_1.GameMode.tournament && humanCount < 2) {
+        const remainingActiveHumans = room.players.filter((p) => p.isHuman && !p.isSpectator);
+        if (room.gameMode === GameState_1.GameMode.tournament && remainingActiveHumans.length < 2) {
             // Pas assez de joueurs, le tournoi est terminé
+            room.playersInResults = undefined;
             this.io.to(roomCode).emit('tournament:ended', {
                 roomCode,
                 message: 'Tournoi terminé !',
-                winner: room.players[0]?.name || 'Inconnu',
+                winner: remainingActiveHumans[0]?.name || 'Inconnu',
             });
             // Ne pas relancer, garder le status 'ended'
             return false;
         }
         room.status = Room_1.RoomStatus.waiting;
         room.gameState = null;
-        room.players.forEach(p => {
-            p.ready = false;
-            p.hand = [];
-            p.hasFolded = false;
-            p.knownCards = [];
-            p.isSpectator = false;
-            // Re-mark connected players as non-spectator (forfeited players rejoin lobby)
-        });
+        room.playersInResults = undefined;
         this.reindexPlayers(room);
         this.ensureHost(room);
         // Incrémenter le round si mode tournoi
@@ -1189,7 +1201,7 @@ class RoomManager {
         if (room?.status !== Room_1.RoomStatus.waiting)
             return false;
         const player = room.players.find((p) => p.id === socketId);
-        if (!player || !player.isHuman)
+        if (!player || !player.isHuman || player.isSpectator)
             return false;
         player.ready = ready;
         player.connected = true;
@@ -1751,12 +1763,21 @@ class RoomManager {
     }
     ensureHost(room) {
         const now = this.now();
-        const host = room.players.find((p) => p.id === room.hostPlayerId && p.isHuman && p.connected && !this.isPlayerStale(p, now));
+        const host = room.players.find((p) => p.id === room.hostPlayerId &&
+            p.isHuman &&
+            p.connected &&
+            !p.isSpectator &&
+            !this.isPlayerStale(p, now));
         if (host)
             return;
-        const nextHost = room.players.find((p) => p.isHuman && p.connected && !this.isPlayerStale(p, now));
+        const nextHost = room.players.find((p) => p.isHuman && p.connected && !p.isSpectator && !this.isPlayerStale(p, now));
         if (nextHost) {
             room.hostPlayerId = nextHost.id;
+            return;
+        }
+        const fallbackHost = room.players.find((p) => p.isHuman && p.connected && !this.isPlayerStale(p, now));
+        if (fallbackHost) {
+            room.hostPlayerId = fallbackHost.id;
         }
     }
     pruneWaitingRoom(room) {

@@ -7,6 +7,8 @@ import { AuthenticatedSocket } from '../middleware/socketAuthMiddleware';
 import { FriendsService } from '../services/FriendsService';
 import { firestoreService } from '../services/FirestoreService';
 import { PushNotificationService } from '../services/PushNotificationService';
+import { GameMode } from '../models/GameState';
+import { RoomStatus } from '../models/Room';
 import {
   FIREBASE_UNAVAILABLE_ERROR_CODE,
   isRoomRegistryUnavailableError,
@@ -501,12 +503,30 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
   });
 
   // Relancer une partie (rematch)
-  socket.on('room:restart', (data, callback) => {
+  socket.on('room:restart', async (data, callback) => {
     try {
       const roomCode = data.roomCode?.toString().toUpperCase();
-      const success = roomManager.restartGame(roomCode, socket.id);
+      let success = roomManager.restartGame(roomCode, socket.id);
 
       if (success) {
+        const room = roomManager.getRoom(roomCode);
+
+        if (room?.gameMode === GameMode.tournament &&
+            room.status === RoomStatus.waiting) {
+          success = roomManager.startGame(roomCode, {
+            fillBots: room.settings?.fillBots !== false,
+          });
+
+          if (success) {
+            roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
+              message: 'La manche suivante commence !',
+              reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
+            });
+            roomManager.broadcastPresence(roomCode);
+            await roomManager.checkAndPlayBotTurn(roomCode);
+          }
+        }
+
         console.log(`Game restarted in room ${roomCode} by ${socket.id}`);
       }
 

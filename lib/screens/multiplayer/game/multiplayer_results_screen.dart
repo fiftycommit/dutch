@@ -103,6 +103,11 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           isTournamentFinal: isFinalRound,
           eliminatedPlayerIds: eliminatedIds.isEmpty ? null : eliminatedIds,
           shouldRedirect: () {
+            if (provider.isPlaying &&
+                provider.gameState != null &&
+                provider.gameState!.phase != GamePhase.ended) {
+              return true;
+            }
             // Room was closed/destroyed or player was removed → exit
             if (provider.roomCode == null) {
               return true;
@@ -124,6 +129,12 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
             return false;
           },
           onRedirect: () {
+            if (provider.isPlaying &&
+                provider.gameState != null &&
+                provider.gameState!.phase != GamePhase.ended) {
+              context.go('/multiplayer/memorization');
+              return;
+            }
             if (provider.wasBanned) {
               provider.acknowledgeBanned(); // resets room state
               context.go('/multiplayer');
@@ -226,6 +237,9 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     bool isTournament = false,
     bool isTournamentOver = false,
   }) {
+    final isLocalEliminated =
+        isTournament && provider.isLocalPlayerEliminated();
+
     // Joueur kické / expulsé : bouton quitter directement
     if (provider.wasKicked) {
       return [
@@ -240,34 +254,39 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
+    if (isTournament && !isTournamentOver) {
+      if (isLocalEliminated) {
+        return [
+          shared.ResultsActionButton(
+            label: "Retour à l'accueil",
+            backgroundColor: Colors.red.shade700,
+            onPressed: () {
+              provider.leaveAfterResults();
+              context.go('/');
+            },
+          ),
+        ];
+      }
+
+      return [
+        shared.ResultsActionButton(
+          label: 'MANCHE SUIVANTE >>',
+          backgroundColor: Colors.amber.shade700,
+          onPressed: () {
+            provider.restartGame();
+          },
+        ),
+      ];
+    }
+
     // Tous les joueurs : retour indépendant au salon
     return [
       shared.ResultsActionButton(
-        label: isTournament && !isTournamentOver
-            ? "MANCHE SUIVANTE >>"
-            : "Retour au Salon",
-        backgroundColor: isTournament && !isTournamentOver
-            ? Colors.amber.shade700
-            : Colors.green.shade700,
-        onPressed: () {
-          if (isTournament && !isTournamentOver && provider.isHost) {
-            // Le host déclenche le restart serveur (élimination + round suivant)
-            provider.restartGame();
-          } else {
-            provider.returnToLobbyFromResults();
-          }
-          context.go('/lobby');
-        },
-      ),
-
-      const SizedBox(height: 12),
-
-      shared.ResultsActionButton(
-        label: "Quitter le salon",
-        backgroundColor: Colors.red.shade700,
+        label: 'Retour à l\'accueil',
+        backgroundColor: Colors.green.shade700,
         onPressed: () {
           provider.leaveAfterResults();
-          context.go('/multiplayer');
+          context.go('/');
         },
       ),
     ];
