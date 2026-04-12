@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { createHmac, randomBytes } from 'node:crypto';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireAppCheck } from '../middleware/appCheckMiddleware';
 import { firestore } from '../services/FirebaseAdmin';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { onlineUsers } from '../middleware/socketAuthMiddleware';
 import type { Server } from 'socket.io';
+import { SecurityService } from '../services/SecurityService';
 
 let _io: Server | null = null;
 
@@ -13,6 +15,8 @@ export function setChatIo(io: Server) {
 }
 
 const router = Router();
+router.use(requireAuth);
+router.use(requireAppCheck);
 
 // Récupère ou génère le secret 32-bytes d'un utilisateur (stocké dans user_secrets, hors users)
 async function getOrCreateSecret(uid: string): Promise<Buffer> {
@@ -44,7 +48,7 @@ function deriveKey(secret1: Buffer, secret2: Buffer, chatId: string): string {
 // GET /api/chats/:friendId/key
 // Retourne la clé de chiffrement symétrique pour la conversation avec un ami.
 // La clé est déterministe : même résultat que l'ami appelle lui aussi cet endpoint.
-router.get('/:friendId/key', requireAuth, async (req, res) => {
+router.get('/:friendId/key', SecurityService.userDataLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const myId = authReq.user!.uid;
   const friendId = String(req.params.friendId);
@@ -74,7 +78,7 @@ router.get('/:friendId/key', requireAuth, async (req, res) => {
 
 // POST /api/chats/:chatId/notify
 // Envoie une push notification au destinataire d'un message.
-router.post('/:chatId/notify', requireAuth, async (req, res) => {
+router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const senderId = authReq.user!.uid;
   const chatId = req.params.chatId as string;

@@ -3,9 +3,11 @@ import { Server } from 'socket.io';
 import { FriendsService } from '../services/FriendsService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireAppCheck } from '../middleware/appCheckMiddleware';
 import { FIREBASE_UNAVAILABLE_ERROR_CODE, roomRegistryService } from '../services/RoomRegistryService';
 import { firestoreService } from '../services/FirestoreService';
 import { RoomManager } from '../services/RoomManager';
+import { SecurityService } from '../services/SecurityService';
 
 const router = Router();
 
@@ -32,16 +34,17 @@ function isFirestoreUnavailable(error: unknown): boolean {
 
 // Toutes les routes nécessitent l'authentification
 router.use(requireAuth);
+router.use(requireAppCheck);
 
 // GET /api/friends
-router.get('/', async (req, res) => {
+router.get('/', SecurityService.userDataLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const friends = await FriendsService.getFriends(authReq.user!.uid);
   res.json({ success: true, friends });
 });
 
 // GET /api/friends/summary — amis + demandes en un seul appel
-router.get('/summary', async (req, res) => {
+router.get('/summary', SecurityService.userDataLimiter, async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const uid = authReq.user!.uid;
@@ -67,7 +70,7 @@ router.get('/summary', async (req, res) => {
 });
 
 // GET /api/friends/requests
-router.get('/requests', async (req, res) => {
+router.get('/requests', SecurityService.userDataLimiter, async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const [incoming, outgoing] = await Promise.all([
@@ -91,7 +94,7 @@ router.get('/requests', async (req, res) => {
 });
 
 // GET /api/friends/lookup?username=foo
-router.get('/lookup', async (req, res) => {
+router.get('/lookup', SecurityService.socialLookupLimiter, async (req, res) => {
   try {
     const username = typeof req.query.username === 'string'
       ? req.query.username.trim()
@@ -121,7 +124,7 @@ router.get('/lookup', async (req, res) => {
 });
 
 // POST /api/friends/request
-router.post('/request', async (req, res) => {
+router.post('/request', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { username } = req.body;
 
@@ -141,7 +144,7 @@ router.post('/request', async (req, res) => {
 });
 
 // POST /api/friends/accept
-router.post('/accept', async (req, res) => {
+router.post('/accept', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -161,7 +164,7 @@ router.post('/accept', async (req, res) => {
 });
 
 // POST /api/friends/reject
-router.post('/reject', async (req, res) => {
+router.post('/reject', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -181,7 +184,7 @@ router.post('/reject', async (req, res) => {
 });
 
 // POST /api/friends/cancel
-router.post('/cancel', async (req, res) => {
+router.post('/cancel', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { requestId } = req.body;
 
@@ -201,7 +204,7 @@ router.post('/cancel', async (req, res) => {
 });
 
 // POST /api/friends/invite
-router.post('/invite', async (req, res) => {
+router.post('/invite', SecurityService.socialActionLimiter, async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { roomCode, friendUserId } = req.body;
@@ -294,9 +297,11 @@ router.post('/invite', async (req, res) => {
 });
 
 // DELETE /api/friends/:userId
-router.delete('/:userId', async (req, res) => {
+router.delete('/:userId', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const friendId = req.params.userId; // String directement, plus de parseInt
+  const friendId = Array.isArray(req.params.userId)
+    ? req.params.userId[0]
+    : req.params.userId;
 
   if (!friendId) {
     res.status(400).json({ success: false, error: 'userId invalide' });
@@ -308,7 +313,7 @@ router.delete('/:userId', async (req, res) => {
 });
 
 // POST /api/friends/block
-router.post('/block', async (req, res) => {
+router.post('/block', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { userId } = req.body;
 
@@ -328,9 +333,11 @@ router.post('/block', async (req, res) => {
 });
 
 // DELETE /api/friends/block/:userId
-router.delete('/block/:userId', async (req, res) => {
+router.delete('/block/:userId', SecurityService.socialActionLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const targetId = req.params.userId; // String directement, plus de parseInt
+  const targetId = Array.isArray(req.params.userId)
+    ? req.params.userId[0]
+    : req.params.userId;
 
   if (!targetId) {
     res.status(400).json({ success: false, error: 'userId invalide' });
@@ -342,7 +349,7 @@ router.delete('/block/:userId', async (req, res) => {
 });
 
 // GET /api/friends/blocked
-router.get('/blocked', async (req, res) => {
+router.get('/blocked', SecurityService.userDataLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const blocked = await FriendsService.getBlockedUsers(authReq.user!.uid);
   res.json({ success: true, blocked });

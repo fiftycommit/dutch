@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../network/secure_api_headers.dart';
 import 'socket_connection_handler.dart';
 
 /// Informations sur une room sauvegardée
@@ -38,17 +39,14 @@ class SavedRoomsRepository {
     _authToken = token;
   }
 
-  Map<String, String>? _authHeaders() {
+  Future<Map<String, String>?> _authHeaders() async {
     final token = _authToken;
     if (token == null) return null;
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
+    return SecureApiHeaders.json(bearerToken: token);
   }
 
   Future<List<SavedRoom>> getMyRooms() async {
-    final headers = _authHeaders();
+    final headers = await _authHeaders();
     if (headers == null) {
       return <SavedRoom>[];
     }
@@ -81,7 +79,7 @@ class SavedRoomsRepository {
   }
 
   Future<void> removeRoom(String roomCode) async {
-    final headers = _authHeaders();
+    final headers = await _authHeaders();
     if (headers == null) {
       return;
     }

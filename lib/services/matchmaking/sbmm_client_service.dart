@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../network/network_probe_service.dart';
+import '../network/secure_api_headers.dart';
 import '../multiplayer/client_id_service.dart';
 
 /// Client pour le nouveau système SBMM serveur.
@@ -18,12 +18,7 @@ class SBMMClientService {
   }
 
   static Future<Map<String, String>> _authHeaders() async {
-    final token =
-        await FirebaseAuth.instance.currentUser?.getIdToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
+    return SecureApiHeaders.authorizedJson();
   }
 
   /// Demande au serveur le mix de BotSkillLevel pour ce joueur.

@@ -121,7 +121,7 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       roomRegistryService.ensureAvailable();
 
       // Rate limit sur les tentatives de join
-      const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket.handshake.address);
+      const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket);
       if (!joinAllowed) {
         callback({ success: false, error: 'Trop de tentatives, réessayez dans une minute' });
         return;

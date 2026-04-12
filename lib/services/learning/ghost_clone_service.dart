@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/player_learning_data.dart';
+import '../network/secure_api_headers.dart';
 import '../network/network_probe_service.dart';
 import 'player_learning_service.dart';
 
@@ -247,7 +248,12 @@ class GhostCloneService {
       if (!isOnline) return null;
 
       final uri = Uri.parse('$_serverUrl/clone/$cloneId');
-      final response = await http.get(uri).timeout(_apiTimeout);
+      final response = await http
+          .get(
+            uri,
+            headers: await SecureApiHeaders.authorizedJson(),
+          )
+          .timeout(_apiTimeout);
       if (response.statusCode != 200) return null;
 
       final json = jsonDecode(response.body);
@@ -284,7 +290,7 @@ class GhostCloneService {
       final response = await http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
+            headers: await SecureApiHeaders.authorizedJson(),
             body: body,
           )
           .timeout(_apiTimeout);

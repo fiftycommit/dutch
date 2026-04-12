@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
 import '../auth/auth_service.dart';
 import '../network/network_probe_service.dart';
+import '../network/secure_api_headers.dart';
 import '../logging/error_reporting_service.dart';
 
 class FriendInfo {
@@ -168,10 +169,7 @@ class FriendsApiService {
 
   Future<Map<String, String>> _headers() async {
     final token = await _authService.getStoredToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
+    return SecureApiHeaders.json(bearerToken: token);
   }
 
   Future<bool> _canReachBackend() async {

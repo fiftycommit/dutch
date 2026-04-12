@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'client_id_service.dart';
@@ -108,7 +109,16 @@ class SocketConnectionHandler {
     };
 
     if (_authToken != null) {
-      options['auth'] = {'token': _authToken};
+      final authPayload = <String, dynamic>{'token': _authToken};
+      try {
+        final appCheckToken = await FirebaseAppCheck.instance.getToken();
+        if (appCheckToken != null && appCheckToken.isNotEmpty) {
+          authPayload['appCheckToken'] = appCheckToken;
+        }
+      } catch (_) {
+        // On laisse la connexion tenter sa chance; le serveur tranchera.
+      }
+      options['auth'] = authPayload;
     }
 
     _socket = io.io(serverUrl, options);

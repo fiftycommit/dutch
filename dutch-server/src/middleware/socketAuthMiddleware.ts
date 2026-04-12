@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io';
-import { auth } from '../services/FirebaseAdmin';
+import { admin, auth } from '../services/FirebaseAdmin';
 import { firestoreService } from '../services/FirestoreService';
+import { SecurityService } from '../services/SecurityService';
 
 // Map uid -> Set<socketId> pour tracker les users en ligne
 export const onlineUsers = new Map<string, Set<string>>();
@@ -24,9 +25,34 @@ export interface AuthenticatedSocket extends Socket {
 
 export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void) {
   const token = socket.handshake.auth?.token;
+  const ip = SecurityService.getSocketClientIp(socket);
+
+  if (process.env.NODE_ENV === 'production') {
+    const appCheckToken = typeof socket.handshake.auth?.appCheckToken === 'string'
+      ? socket.handshake.auth.appCheckToken.trim()
+      : '';
+
+    if (admin.apps.length === 0) {
+      next(new Error('Firebase App Check non configure'));
+      return;
+    }
+
+    if (!appCheckToken) {
+      console.warn(`[SECURITY] Socket connection rejected - no App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
+      next(new Error('App Check requis'));
+      return;
+    }
+
+    try {
+      await admin.appCheck().verifyToken(appCheckToken);
+    } catch {
+      console.warn(`[SECURITY] Socket connection rejected - invalid App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
+      next(new Error('App Check invalide'));
+      return;
+    }
+  }
 
   if (!token) {
-    const ip = socket.handshake.address;
     console.warn(`[SECURITY] Socket connection rejected — no token — IP: ${ip}, time: ${new Date().toISOString()}`);
     next(new Error('Authentication required'));
     return;
@@ -42,7 +68,6 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
 
     // Check if user is banned
     if (await firestoreService.isUserBanned(decoded.uid)) {
-      const ip = socket.handshake.address;
       console.warn(`[SECURITY] Banned user rejected — uid: ${decoded.uid}, IP: ${ip}`);
       next(new Error('Compte banni'));
       return;
@@ -71,7 +96,6 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
 
     next();
   } catch {
-    const ip = socket.handshake.address;
     console.warn(`[SECURITY] Socket auth failed — invalid token — IP: ${ip}, time: ${new Date().toISOString()}`);
     next(new Error('Token invalide'));
   }

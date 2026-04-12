@@ -69,6 +69,7 @@ function startServer() {
         ? process.env.ALLOWED_ORIGINS.split(',')
         : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
     app.disable('x-powered-by');
+    app.set('trust proxy', 1);
     app.use((0, cors_1.default)({ origin: allowedOrigins }));
     app.use(express_1.default.json());
     app.use(SecurityService_1.SecurityService.apiLimiter); // API Rate Limiting
@@ -88,8 +89,7 @@ function startServer() {
     // Socket Connection Rate Limiting
     io.use(async (socket, next) => {
         try {
-            const ip = socket.handshake.address;
-            await SecurityService_1.SecurityService.checkConnectionLimit(ip);
+            await SecurityService_1.SecurityService.checkConnectionLimit(socket);
             next();
         }
         catch {
@@ -169,7 +169,7 @@ function startServer() {
     app.get('/rooms/debug', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdmin, (req, res) => {
         res.json(roomManager.listRoomsDebug());
     });
-    app.get('/rooms/public', (req, res) => {
+    app.get('/rooms/public', SecurityService_1.SecurityService.publicEndpointLimiter, (req, res) => {
         const publicRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
         res.json({ success: true, rooms: publicRooms });
     });

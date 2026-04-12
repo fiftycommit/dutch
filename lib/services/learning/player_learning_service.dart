@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math' show exp;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../models/game_state.dart';
@@ -10,6 +9,7 @@ import '../../models/player_learning_data.dart';
 import '../../core/interfaces/i_learning_service.dart';
 import '../multiplayer/client_id_service.dart';
 import '../network/network_probe_service.dart';
+import '../network/secure_api_headers.dart';
 
 class PlayerLearningService implements IPlayerLearningService {
   static const String _profileKeyPrefix = 'player_profile_slot_';
@@ -33,12 +33,7 @@ class PlayerLearningService implements IPlayerLearningService {
   }
 
   static Future<Map<String, String>> _authHeaders() async {
-    final token =
-        await FirebaseAuth.instance.currentUser?.getIdToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
+    return SecureApiHeaders.authorizedJson();
   }
 
   Future<PlayerProfile> getProfile({required int slotId}) async {

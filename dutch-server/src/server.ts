@@ -58,8 +58,7 @@ export function startServer() {
   // Socket Connection Rate Limiting
   io.use(async (socket, next) => {
     try {
-      const ip = socket.handshake.address;
-      await SecurityService.checkConnectionLimit(ip);
+      await SecurityService.checkConnectionLimit(socket);
       next();
     } catch {
       next(new Error('Rate limit exceeded'));
@@ -147,7 +146,7 @@ export function startServer() {
     res.json(roomManager.listRoomsDebug());
   });
 
-  app.get('/rooms/public', (req, res) => {
+  app.get('/rooms/public', SecurityService.publicEndpointLimiter, (req, res) => {
     const publicRooms = publicRoomService.getAvailableRooms();
     res.json({ success: true, rooms: publicRooms });
   });

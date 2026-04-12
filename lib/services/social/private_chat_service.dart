@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 
 import '../multiplayer/socket_connection_handler.dart';
 import 'chat_crypto_service.dart';
+import '../network/secure_api_headers.dart';
 
 enum ChatMessageType { text, image, audio }
 
@@ -353,10 +354,7 @@ class PrivateChatService {
 
       await _httpClient.post(
         Uri.parse('$_baseUrl/api/chats/$chatId/notify'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: await SecureApiHeaders.json(bearerToken: token),
         body: '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
       );
     } catch (_) {

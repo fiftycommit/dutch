@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../multiplayer/socket_connection_handler.dart';
+import '../network/secure_api_headers.dart';
 
 /// Chiffrement AES-256-GCM des messages avant stockage Firestore.
 /// La clé est dérivée côté dutch-server (jamais stockée dans Firebase).
@@ -40,7 +41,7 @@ class ChatCryptoService {
 
     final response = await http.get(
       Uri.parse('$_baseUrl/api/chats/$friendId/key'),
-      headers: {'Authorization': 'Bearer $token'},
+      headers: await SecureApiHeaders.json(bearerToken: token),
     );
 
     if (response.statusCode != 200) {

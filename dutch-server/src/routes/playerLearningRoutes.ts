@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { requireAppCheck } from '../middleware/appCheckMiddleware';
 import { PlayerLearningService } from '../services/PlayerLearningService';
+import { SecurityService } from '../services/SecurityService';
 import { PlayerLearningUploadPayload } from '../models/PlayerLearning';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 
@@ -7,9 +9,10 @@ const router = Router();
 
 // Toutes les routes nécessitent une authentification Firebase
 router.use(requireAuth);
+router.use(requireAppCheck);
 const playerLearningService = new PlayerLearningService();
 
-router.post('/upload', async (req: Request, res: Response) => {
+router.post('/upload', SecurityService.learningWriteLimiter, async (req: Request, res: Response) => {
   try {
     const payload: PlayerLearningUploadPayload = req.body;
     // Force clientId to authenticated user's UID (prevents IDOR)
@@ -28,7 +31,7 @@ router.post('/upload', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/profile', async (req: Request, res: Response) => {
+router.get('/profile', SecurityService.learningReadLimiter, async (req: Request, res: Response) => {
   try {
     // Force clientId to authenticated user's UID (prevents IDOR)
     const clientId = (req as AuthenticatedRequest).user!.uid;

@@ -4,6 +4,7 @@
 
 import { Socket } from 'socket.io';
 import { publicRoomService } from '../services/publicRoomService';
+import { SecurityService } from '../services/SecurityService';
 
 /**
  * Configure les handlers pour les rooms publiques
@@ -13,8 +14,18 @@ export function setupPublicRoomHandlers(socket: Socket, rooms: Map<string, any>)
   /**
    * Récupérer la liste des rooms publiques disponibles
    */
-  socket.on('rooms:getPublic', (data, callback) => {
+  socket.on('rooms:getPublic', async (data, callback) => {
     try {
+      if (!await SecurityService.checkPublicRoomQueryLimit(socket)) {
+        if (typeof callback === 'function') {
+          callback({
+            success: false,
+            error: 'Trop de requetes sur les salons publics',
+          });
+        }
+        return;
+      }
+
       console.log(`🔍 ${socket.id} demande les rooms publiques - data:`, data, 'callback type:', typeof callback);
       
       const availableRooms = publicRoomService.getAvailableRooms();
@@ -57,8 +68,18 @@ export function setupPublicRoomHandlers(socket: Socket, rooms: Map<string, any>)
   /**
    * Obtenir les statistiques des rooms publiques
    */
-  socket.on('rooms:stats', (callback) => {
+  socket.on('rooms:stats', async (callback) => {
     try {
+      if (!await SecurityService.checkPublicRoomQueryLimit(socket)) {
+        if (typeof callback === 'function') {
+          callback({
+            success: false,
+            error: 'Trop de requetes sur les salons publics',
+          });
+        }
+        return;
+      }
+
       const stats = publicRoomService.getStats();
       
       console.log(`📊 ${socket.id} demande les stats: ${JSON.stringify(stats)}`);

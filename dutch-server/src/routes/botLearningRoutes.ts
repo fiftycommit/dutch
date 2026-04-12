@@ -7,11 +7,14 @@ import { BotPersonalityService } from '../services/BotPersonalityService';
 import { BotGameRecord } from '../models/BotLearning';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireAdmin } from '../middleware/adminAuthMiddleware';
+import { requireAppCheck } from '../middleware/appCheckMiddleware';
+import { SecurityService } from '../services/SecurityService';
 
 const router = Router();
 
 // Toutes les routes nécessitent une authentification Firebase
 router.use(requireAuth);
+router.use(SecurityService.learningReadLimiter);
 const botLearningService = new BotLearningService();
 const cloningService = new PlayerCloningService();
 const personalityService = new BotPersonalityService();
@@ -131,7 +134,7 @@ router.post('/predict-action', requireAdmin, async (req: Request, res: Response)
  * POST /api/bot-learning/clone-player
  * Crée un clone d'un joueur
  */
-router.post('/clone-player', async (req: Request, res: Response) => {
+router.post('/clone-player', requireAppCheck, SecurityService.learningWriteLimiter, async (req: Request, res: Response) => {
   try {
     const { playerName, games } = req.body;
     const playerId = getAuthUid(req);
@@ -152,7 +155,7 @@ router.post('/clone-player', async (req: Request, res: Response) => {
  * GET /api/bot-learning/clones
  * Liste tous les clones disponibles
  */
-router.get('/clones', async (req: Request, res: Response) => {
+router.get('/clones', requireAppCheck, async (req: Request, res: Response) => {
   try {
     const clones = await cloningService.listClones();
     const authUid = getAuthUid(req);
@@ -168,7 +171,7 @@ router.get('/clones', async (req: Request, res: Response) => {
  * GET /api/bot-learning/clone/:clonedBotId
  * Récupère un clone spécifique
  */
-router.get('/clone/:clonedBotId', async (req: Request, res: Response) => {
+router.get('/clone/:clonedBotId', requireAppCheck, async (req: Request, res: Response) => {
   try {
     const clonedBotId = Array.isArray(req.params.clonedBotId) ? req.params.clonedBotId[0] : req.params.clonedBotId;
     const clone = await cloningService.getClone(clonedBotId);
@@ -192,7 +195,7 @@ router.get('/clone/:clonedBotId', async (req: Request, res: Response) => {
  * PUT /api/bot-learning/clone/:clonedBotId
  * Met à jour un clone avec de nouvelles parties
  */
-router.put('/clone/:clonedBotId', async (req: Request, res: Response) => {
+router.put('/clone/:clonedBotId', requireAppCheck, SecurityService.learningWriteLimiter, async (req: Request, res: Response) => {
   try {
     const { games } = req.body;
     
