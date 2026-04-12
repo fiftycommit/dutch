@@ -34,6 +34,7 @@ export function startServer() {
     : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
 
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
   app.use(SecurityService.apiLimiter); // API Rate Limiting

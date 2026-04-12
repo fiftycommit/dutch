@@ -2,7 +2,6 @@ import { auth as firebaseAuth } from './FirebaseAdmin';
 import { firestoreService, FirestoreUser } from './FirestoreService';
 import { ValidationService } from './ValidationService';
 
-const DEFAULT_FIREBASE_WEB_API_KEY = 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc';
 const FIREBASE_PASSWORD_SIGN_IN_URL =
   'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword';
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
@@ -79,7 +78,7 @@ export class PasswordAuthService {
     adminAuth = firebaseAuth,
     firestore = firestoreService,
     fetchImpl = fetch,
-    apiKey = process.env.FIREBASE_WEB_API_KEY || DEFAULT_FIREBASE_WEB_API_KEY,
+    apiKey = process.env.FIREBASE_WEB_API_KEY || '',
   }: PasswordAuthServiceDeps = {}) {
     this.adminAuth = adminAuth;
     this.firestore = firestore;

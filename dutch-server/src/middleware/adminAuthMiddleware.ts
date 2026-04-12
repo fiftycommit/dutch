@@ -9,16 +9,6 @@ export const adminLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Trop de tentatives, réessayez plus tard.' },
-  keyGenerator: (req) => {
-    const xff = req.headers['x-forwarded-for'];
-    if (typeof xff === 'string' && xff.trim().length > 0) {
-      return xff.split(',')[0].trim();
-    }
-    if (Array.isArray(xff) && xff.length > 0 && xff[0]) {
-      return xff[0].split(',')[0].trim();
-    }
-    return req.ip || req.socket.remoteAddress || 'unknown';
-  },
 });
 
 // ─── Admin check ────────────────────────────────────────────────────────────

@@ -62,7 +62,7 @@ router.get('/check-username', requireAppCheck, async (req, res) => {
 });
 
 // GET /api/auth/resolve-login?identifier=xxx
-// Route conservée temporairement pour ne plus fuiter d'e-mail vers le client.
+// Route legacy explicitement retirée pour éviter toute ambiguïté.
 router.get('/resolve-login', authLimiter, requireAppCheck, async (req, res) => {
   const abuseDecision = authAbuseService.assess(req, 'login_resolve');
   if (abuseDecision.blocked) {
@@ -79,12 +79,10 @@ router.get('/resolve-login', authLimiter, requireAppCheck, async (req, res) => {
     return;
   }
 
-  if (emailRegex.test(rawIdentifier)) {
-    res.json({ success: true, loginEmail: rawIdentifier.toLowerCase() });
-    return;
-  }
-
-  res.status(404).json({ success: false, error: 'Connexion par pseudo désactivée' });
+  res.status(410).json({
+    success: false,
+    error: 'Cette route est obsolète. Utilisez login-password.',
+  });
 });
 
 // POST /api/auth/register-password
