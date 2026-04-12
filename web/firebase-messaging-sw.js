@@ -7,7 +7,7 @@ firebase.initializeApp({
   appId: '1:751846261054:web:29d46acb9a6c102d056c6f',
   messagingSenderId: '751846261054',
   projectId: 'dutch-game-1dd01',
-  authDomain: 'dutch-game-1dd01.firebaseapp.com',
+  authDomain: 'dutch-game.me',
   storageBucket: 'dutch-game-1dd01.firebasestorage.app',
   measurementId: 'G-SXR0DN53BW',
 });

@@ -11,7 +11,7 @@
 /* ── Firebase Config ── */
 const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
-  authDomain: 'dutch-game-1dd01.firebaseapp.com',
+  authDomain: 'dutch-game.me',
   projectId: 'dutch-game-1dd01',
 };
 

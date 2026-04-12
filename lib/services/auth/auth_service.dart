@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import '../multiplayer/socket_connection_handler.dart';
@@ -49,7 +50,6 @@ class AuthResult {
 
 class AuthService {
   static const String _baseUrl = SocketConnectionHandler.serverUrl;
-  static final RegExp _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   /// Produit un username valide depuis n'importe quelle chaîne :
   /// lowercase, espaces remplacés par '_', caractères non autorisés supprimés, 20 car max.
@@ -276,84 +276,56 @@ class AuthService {
   Future<AuthResult> register(String username, String displayName, String email,
       String password) async {
     try {
-      // 1. Créer le compte Firebase
-      try {
-        await _firebaseAuth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/auth/register-password'),
+            headers: await _buildJsonHeaders(includeAppCheck: true),
+            body: jsonEncode({
+              'username': username,
+              'displayName': displayName,
+              'email': email,
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      final data = _decodeJsonMap(response.body);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data['success'] != true) {
+        return AuthResult(
+          success: false,
+          error: _extractServerError(
+            data,
+            fallback: 'Impossible de créer le compte',
+          ),
         );
-      } catch (e) {
-        // Sur macOS, keychain peut échouer mais le compte est créé
-        if (_firebaseAuth.currentUser == null ||
-            _firebaseAuth.currentUser!.email != email) {
-          rethrow;
-        }
-        if (kDebugMode) debugPrint('Register keychain warning: $e');
       }
 
-      final fbUser = _firebaseAuth.currentUser!;
-
-      // 2. Mettre le displayName dans Firebase Auth
-      await fbUser.updateDisplayName(displayName);
-
-      // 3. Récupérer le token
-      final token = await fbUser.getIdToken();
-
-      if (token == null) {
+      final customToken = data['customToken'] as String?;
+      if (customToken == null || customToken.isEmpty) {
         return const AuthResult(
-            success: false, error: 'Erreur de création de compte');
-      }
-
-      // 4. Enregistrer username + displayName sur le serveur (Firestore)
-      try {
-        await http
-            .put(
-              Uri.parse('$_baseUrl/api/auth/profile'),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $token',
-              },
-              body: jsonEncode({
-                'displayName': displayName,
-                'username': username,
-              }),
-            )
-            .timeout(const Duration(seconds: 10));
-      } catch (e) {
-        if (kDebugMode) debugPrint('Profile update after register: $e');
-      }
-
-      final user = UserInfo(
-        id: fbUser.uid,
-        username: username,
-        displayName: displayName,
-      );
-
-      return AuthResult(success: true, token: token, user: user);
-    } on FirebaseAuthException catch (e) {
-      // Même pattern : vérifier si l'auth a réussi malgré l'erreur keychain
-      final fbUser = _firebaseAuth.currentUser;
-      if (fbUser != null && fbUser.email == email) {
-        final token = await fbUser.getIdToken();
-        return AuthResult(
-          success: true,
-          token: token,
-          user: UserInfo(
-              id: fbUser.uid, username: username, displayName: displayName),
+          success: false,
+          error: 'Réponse serveur invalide',
         );
       }
-      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+
+      final firebaseResult = await _signInWithCustomToken(customToken);
+      if (!firebaseResult.success || firebaseResult.user == null) {
+        return firebaseResult;
+      }
+
+      final userMap = data['user'];
+      if (userMap is Map<String, dynamic>) {
+        return AuthResult(
+          success: true,
+          token: firebaseResult.token,
+          user: UserInfo.fromJson(userMap),
+        );
+      }
+
+      return firebaseResult;
     } catch (e) {
-      final fbUser = _firebaseAuth.currentUser;
-      if (fbUser != null && fbUser.email == email) {
-        final token = await fbUser.getIdToken();
-        return AuthResult(
-          success: true,
-          token: token,
-          user: UserInfo(
-              id: fbUser.uid, username: username, displayName: displayName),
-        );
-      }
       if (kDebugMode) debugPrint('Register error: $e');
       return AuthResult(success: false, error: 'Impossible de créer le compte');
     }
@@ -370,165 +342,44 @@ class AuthService {
         return const AuthResult(success: false, error: 'Mot de passe requis');
       }
 
-      final resolvedEmail = await _resolveEmailForLogin(rawIdentifier);
-      if (resolvedEmail == null) {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/api/auth/login-password'),
+            headers: await _buildJsonHeaders(includeAppCheck: true),
+            body: jsonEncode({
+              'identifier': rawIdentifier,
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = _decodeJsonMap(response.body);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data['success'] != true) {
+        return AuthResult(
+          success: false,
+          error: _extractServerError(
+            data,
+            fallback: 'Email ou mot de passe incorrect',
+          ),
+        );
+      }
+
+      final customToken = data['customToken'] as String?;
+      if (customToken == null || customToken.isEmpty) {
         return const AuthResult(
           success: false,
-          error: 'Email ou pseudo introuvable',
+          error: 'Réponse serveur invalide',
         );
       }
 
-      UserCredential credential;
-      try {
-        credential = await _firebaseAuth.signInWithEmailAndPassword(
-          email: resolvedEmail,
-          password: password,
-        );
-      } catch (e) {
-        // Sur macOS, le Keychain peut échouer après un login réussi.
-        // Vérifier si l'utilisateur est quand même connecté.
-        final fallbackUser = _firebaseAuth.currentUser;
-        if (fallbackUser != null && fallbackUser.email == resolvedEmail) {
-          final token = await fallbackUser.getIdToken();
-          final user = await fetchProfile() ??
-              UserInfo(
-                id: fallbackUser.uid,
-                username: fallbackUser.displayName ??
-                    fallbackUser.email?.split('@').first ??
-                    '',
-                displayName: fallbackUser.displayName ??
-                    fallbackUser.email?.split('@').first ??
-                    '',
-              );
-          return AuthResult(success: true, token: token, user: user);
-        }
-        rethrow;
-      }
-
-      final token = await credential.user?.getIdToken();
-
-      if (token == null || credential.user == null) {
-        return const AuthResult(success: false, error: 'Erreur de connexion');
-      }
-
-      // Récupérer le vrai profil (username) depuis Firestore
-      final user = await fetchProfile() ??
-          UserInfo(
-            id: credential.user!.uid,
-            username: credential.user!.displayName ??
-                credential.user!.email?.split('@').first ??
-                '',
-            displayName: credential.user!.displayName ??
-                credential.user!.email?.split('@').first ??
-                '',
-          );
-
-      return AuthResult(success: true, token: token, user: user);
-    } on FirebaseAuthException catch (e) {
-      return AuthResult(success: false, error: _mapFirebaseError(e.code));
+      return _signInWithCustomToken(customToken);
     } catch (e) {
       if (kDebugMode) debugPrint('Login error: $e');
       return AuthResult(
           success: false, error: 'Impossible de contacter le serveur');
     }
-  }
-
-  Future<String?> _resolveEmailForLogin(String identifier) async {
-    final normalized = identifier.trim();
-    if (_emailRegex.hasMatch(normalized)) {
-      return normalized.toLowerCase();
-    }
-
-    final resolvedFromIdentifier =
-        await _resolveEmailFromIdentifier(normalized);
-    if (resolvedFromIdentifier != null) {
-      return resolvedFromIdentifier;
-    }
-
-    final resolvedFromServer = await _resolveEmailFromUsername(normalized);
-    if (resolvedFromServer != null) {
-      return resolvedFromServer;
-    }
-
-    return null;
-  }
-
-  Future<String?> _resolveEmailFromIdentifier(String identifier) async {
-    final canReachBackend = await NetworkProbeService.canReachBackend(
-      timeout: const Duration(milliseconds: 900),
-    );
-    if (!canReachBackend) return null;
-
-    try {
-      final response = await http
-          .get(
-            Uri.parse(
-              '$_baseUrl/api/auth/resolve-login?identifier=${Uri.encodeComponent(identifier)}',
-            ),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-
-      final decoded = jsonDecode(response.body);
-      return _extractEmailFromLookupPayload(decoded);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<String?> _resolveEmailFromUsername(String username) async {
-    final canReachBackend = await NetworkProbeService.canReachBackend(
-      timeout: const Duration(milliseconds: 900),
-    );
-    if (!canReachBackend) return null;
-
-    try {
-      final normalizedUsername = username.trim().toLowerCase();
-      final response = await http
-          .get(
-            Uri.parse(
-              '$_baseUrl/api/auth/check-username?username=${Uri.encodeComponent(normalizedUsername)}',
-            ),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-
-      final decoded = jsonDecode(response.body);
-      return _extractEmailFromLookupPayload(decoded);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String? _extractEmailFromLookupPayload(dynamic payload) {
-    if (payload is! Map) return null;
-
-    final userMap = payload['user'];
-    final dataMap = payload['data'];
-
-    final candidates = <dynamic>[
-      payload['email'],
-      payload['resolvedEmail'],
-      payload['loginEmail'],
-      payload['identifierEmail'],
-      if (userMap is Map) userMap['email'],
-      if (dataMap is Map) dataMap['email'],
-    ];
-
-    for (final candidate in candidates) {
-      if (candidate is! String) continue;
-      final normalized = candidate.trim().toLowerCase();
-      if (_emailRegex.hasMatch(normalized)) {
-        return normalized;
-      }
-    }
-    return null;
   }
 
   Future<AuthResult> forgotPassword(String email) async {
@@ -556,6 +407,7 @@ class AuthService {
           .get(
             Uri.parse(
                 '$_baseUrl/api/auth/check-username?username=${Uri.encodeComponent(username)}'),
+            headers: await _buildJsonHeaders(includeAppCheck: true),
           )
           .timeout(const Duration(seconds: 5));
 
@@ -590,6 +442,90 @@ class AuthService {
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       if (kDebugMode) debugPrint('saveProfile error: $e');
+    }
+  }
+
+  Future<Map<String, String>> _buildJsonHeaders({
+    bool includeAppCheck = false,
+    String? bearerToken,
+  }) async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+
+    if (bearerToken != null && bearerToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $bearerToken';
+    }
+
+    if (includeAppCheck) {
+      final appCheckToken = await _getAppCheckToken();
+      if (appCheckToken != null && appCheckToken.isNotEmpty) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
+    }
+
+    return headers;
+  }
+
+  Future<String?> _getAppCheckToken() async {
+    try {
+      return await FirebaseAppCheck.instance.getToken();
+    } catch (e) {
+      if (kDebugMode) debugPrint('App Check token error: $e');
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _decodeJsonMap(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return const <String, dynamic>{};
+  }
+
+  String _extractServerError(
+    Map<String, dynamic> payload, {
+    required String fallback,
+  }) {
+    final error = payload['error'];
+    if (error is String && error.trim().isNotEmpty) {
+      return error.trim();
+    }
+    return fallback;
+  }
+
+  Future<AuthResult> _signInWithCustomToken(String customToken) async {
+    try {
+      final credential = await _firebaseAuth.signInWithCustomToken(customToken);
+      final token = await credential.user?.getIdToken();
+
+      if (token == null || credential.user == null) {
+        return const AuthResult(success: false, error: 'Erreur de connexion');
+      }
+
+      final user = await fetchProfile() ??
+          UserInfo(
+            id: credential.user!.uid,
+            username: credential.user!.displayName ??
+                credential.user!.email?.split('@').first ??
+                '',
+            displayName: credential.user!.displayName ??
+                credential.user!.email?.split('@').first ??
+                '',
+          );
+
+      return AuthResult(success: true, token: token, user: user);
+    } on FirebaseAuthException catch (e) {
+      final fallbackUser = _firebaseAuth.currentUser;
+      if (fallbackUser != null) {
+        final token = await fallbackUser.getIdToken();
+        final user = await fetchProfile();
+        if (token != null && user != null) {
+          return AuthResult(success: true, token: token, user: user);
+        }
+      }
+      return AuthResult(success: false, error: _mapFirebaseError(e.code));
     }
   }
 
