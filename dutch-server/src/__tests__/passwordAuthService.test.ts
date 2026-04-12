@@ -76,6 +76,7 @@ describe('PasswordAuthService', () => {
 
   it('connecte un utilisateur via pseudo sans exposer son email au client', async () => {
     const requestedBodies: string[] = [];
+    const requestedHeaders: Array<Record<string, string>> = [];
 
     const service = new PasswordAuthService({
       apiKey: 'public-key',
@@ -137,6 +138,7 @@ describe('PasswordAuthService', () => {
       },
       fetchImpl: async (_input, init) => {
         requestedBodies.push(String(init?.body ?? ''));
+        requestedHeaders.push(init?.headers as Record<string, string>);
         return {
           ok: true,
           async json() {
@@ -152,6 +154,7 @@ describe('PasswordAuthService', () => {
     const result = await service.loginWithPassword({
       identifier: 'Test1',
       password: 'secret123',
+      appCheckToken: 'app-check-token-123',
     });
 
     assert.deepStrictEqual(result, {
@@ -161,6 +164,10 @@ describe('PasswordAuthService', () => {
     });
     assert.match(requestedBodies[0], /"email":"hidden@example\.com"/);
     assert.doesNotMatch(requestedBodies[0], /"identifier":"Test1"/);
+    assert.strictEqual(
+      requestedHeaders[0]['X-Firebase-AppCheck'],
+      'app-check-token-123',
+    );
   });
 
   it('rejette un pseudo inexistant avec une erreur générique', async () => {

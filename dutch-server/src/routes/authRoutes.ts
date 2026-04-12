@@ -144,6 +144,10 @@ router.post('/login-password', authLimiter, requireAppCheck, async (req, res) =>
     const result = await passwordAuthService.loginWithPassword({
       identifier: typeof identifier === 'string' ? identifier : '',
       password: typeof password === 'string' ? password : '',
+      appCheckToken:
+        typeof req.headers['x-firebase-appcheck'] === 'string'
+          ? req.headers['x-firebase-appcheck']
+          : undefined,
     });
 
     res.json({

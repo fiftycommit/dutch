@@ -60,6 +60,7 @@ export interface RegisterWithPasswordResult {
 export interface LoginWithPasswordInput {
   identifier: string;
   password: string;
+  appCheckToken?: string;
 }
 
 export interface LoginWithPasswordResult {
@@ -177,6 +178,7 @@ export class PasswordAuthService {
 
     const identifier = input.identifier.trim();
     const password = input.password;
+    const appCheckToken = input.appCheckToken?.trim();
 
     if (!identifier) {
       throw new PasswordAuthError(
@@ -217,7 +219,11 @@ export class PasswordAuthService {
       loginEmail = usernameLookup.data.email.trim().toLowerCase();
     }
 
-    const passwordLogin = await this.verifyPassword(loginEmail, password);
+    const passwordLogin = await this.verifyPassword(
+      loginEmail,
+      password,
+      appCheckToken,
+    );
 
     if (expectedUid && passwordLogin.localId !== expectedUid) {
       console.warn(
@@ -269,12 +275,21 @@ export class PasswordAuthService {
   private async verifyPassword(
     email: string,
     password: string,
+    appCheckToken?: string,
   ): Promise<{ localId: string; email: string }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+
     const response = await this.fetchImpl(
       `${FIREBASE_PASSWORD_SIGN_IN_URL}?key=${encodeURIComponent(this.apiKey)}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           email,
           password,
