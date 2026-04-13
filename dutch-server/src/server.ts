@@ -19,13 +19,15 @@ import roomRoutes from './routes/roomRoutes';
 import adminRoutes from './routes/adminRoutes';
 import chatKeyRoutes, { setChatIo } from './routes/chatKeyRoutes';
 import { socketAuthMiddleware, handleSocketDisconnect, onlineUsers, userFocused } from './middleware/socketAuthMiddleware';
-import { requireAdmin, adminLimiter } from './middleware/adminAuthMiddleware';
+import { requireAdmin, requireAdminPage, adminLimiter } from './middleware/adminAuthMiddleware';
+import { requireAppCheck } from './middleware/appCheckMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
+import { RedisService } from './services/RedisService';
 
 const startedAt = new Date().toISOString();
 
-export function startServer() {
+export async function startServer() {
   const app = express();
   const httpServer = createServer(app);
 
@@ -48,9 +50,16 @@ export function startServer() {
     pingInterval: 25000,
   });
 
+  const redisRuntime = await RedisService.initialize();
+  const redisAdapter = RedisService.getAdapterFactory();
+  if (redisAdapter) {
+    io.adapter(redisAdapter);
+  }
+
   // Injecter les références de présence pour le service d'amis
   FriendsService.setOnlineUsersRef(onlineUsers);
   FriendsService.setUserFocusedRef(userFocused);
+  FriendsService.setIo(io);
 
   // Socket Auth Middleware (Firebase token verification)
   io.use(socketAuthMiddleware);
@@ -65,13 +74,20 @@ export function startServer() {
     }
   });
 
-  const roomManager = new RoomManager(io);
+  const roomManager = new RoomManager(io, {
+    sharedRoomStore: redisRuntime.roomStore,
+  });
+  await roomManager.hydrateFromSharedStore();
   roomRegistryService.startPeriodicSync(roomManager);
 
   io.on('connection', (socket) => {
     const user = socket.data.user;
     const userInfo = user ? ` (user: ${user.username})` : ' (guest)';
     console.log(`Client connected: ${socket.id}${userInfo}`);
+
+    if (user?.uid) {
+      socket.join(FriendsService.getUserRoom(user.uid));
+    }
 
     setupConnectionHandler(socket, roomManager);
     setupRoomHandler(socket, roomManager, io);
@@ -146,7 +162,7 @@ export function startServer() {
     res.json(roomManager.listRoomsDebug());
   });
 
-  app.get('/rooms/public', SecurityService.publicEndpointLimiter, (req, res) => {
+  app.get('/rooms/public', requireAppCheck, SecurityService.publicEndpointLimiter, (req, res) => {
     const publicRooms = publicRoomService.getAvailableRooms();
     res.json({ success: true, rooms: publicRooms });
   });
@@ -187,32 +203,32 @@ export function startServer() {
     res.sendFile(path.join(__dirname, '../public/admin-auth.js'));
   });
 
-  // Pages admin — HTML servi sans auth pour permettre le login, les API restent protégées
+  // Login admin public ; les autres pages admin sont protégées par une session httpOnly.
   app.get('/admin-login', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/admin-login.html'));
   });
 
-  app.get(['/status', '/admin-home'], (req, res) => {
+  app.get(['/status', '/admin-home'], adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, '../public/admin-home.html'));
   });
 
-  app.get('/admin', (req, res) => {
+  app.get('/admin', adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, '../public/admin.html'));
   });
 
-  app.get('/bot-stats', (req, res) => {
+  app.get('/bot-stats', adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, '../public/bot-stats.html'));
   });
 
-  app.get('/bot-dashboard', (req, res) => {
+  app.get('/bot-dashboard', adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, '../public/bot-dashboard.html'));
   });
 
-  app.get('/shuffle-analysis', (req, res) => {
+  app.get('/shuffle-analysis', adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, '../public/shuffle-analysis.html'));
   });
 
-  app.get('/player-profile', (req, res) => {
+  app.get('/player-profile', adminLimiter, requireAdminPage, (req, res) => {
     res.sendFile('player-profile.html', { root: './public' });
   });
 
@@ -237,6 +253,9 @@ export function startServer() {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Dutch Server running on port ${PORT}`);
     console.log(`📡 Socket.IO ready for connections`);
+    if (redisRuntime.enabled) {
+      console.log('🧠 Redis shared state enabled');
+    }
   });
 
   return { app, io, httpServer, roomManager };

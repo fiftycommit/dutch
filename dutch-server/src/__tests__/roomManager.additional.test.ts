@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Server } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
 import { GamePhase, GameMode } from '../models/GameState';
+import { RoomSnapshotCodec } from '../services/RoomSnapshotCodec';
 
 type EmittedEvent = {
   target: string;
@@ -270,6 +271,76 @@ test('resumeGame sets isPaused to false', (t) => {
 
   manager.resumeGame(room.id, 'host-1', 'Player 1');
   assert.equal(room.isPaused, false);
+});
+
+test('hydrateFromSharedStore recovers an expired pause and resumes the room', async (t) => {
+  let storedRoom: any;
+  const fakeStore = {
+    async loadAllRooms() {
+      if (!storedRoom) return [];
+      return [storedRoom];
+    },
+    async loadRoom(roomCode: string) {
+      if (storedRoom?.id === roomCode.toUpperCase()) {
+        return storedRoom;
+      }
+      return undefined;
+    },
+    async saveRoom(room: any) {
+      storedRoom = RoomSnapshotCodec.deserialize(RoomSnapshotCodec.serialize(room));
+    },
+    async deleteRoom(roomCode: string) {
+      if (storedRoom?.id === roomCode.toUpperCase()) {
+        storedRoom = undefined;
+      }
+    },
+    async withRoomLock<T>(_roomCode: string, operation: () => Promise<T>) {
+      return await operation();
+    },
+  };
+
+  const pauseStartTime = 1_000;
+  const { manager: sourceManager } = createManager({
+    now: () => pauseStartTime,
+  });
+  t.after(() => sourceManager.dispose());
+
+  const room = sourceManager.createRoom('host-1', {
+    minPlayers: 2,
+    maxPlayers: 2,
+    fillBots: false,
+  });
+  sourceManager.joinRoom(room.id, 'player-2', 'P2', 'c2');
+  sourceManager.setReady(room.id, 'host-1', true);
+  sourceManager.setReady(room.id, 'player-2', true);
+  sourceManager.startGame(room.id, { fillBots: false });
+  sourceManager.pauseGame(room.id, 'host-1', 'Player 1');
+  sourceManager.resumeGame(room.id, 'host-1', 'Player 1');
+
+  room.isPaused = true;
+  room.pausedByPlayerId = 'host-1';
+  room.pausedByName = 'Player 1';
+  room.pauseStartTime = pauseStartTime;
+  storedRoom = RoomSnapshotCodec.deserialize(RoomSnapshotCodec.serialize(room));
+
+  const { manager: recoveredManager } = createManager({
+    now: () => pauseStartTime + 89_970,
+    sharedRoomStore: fakeStore as any,
+  });
+  t.after(() => recoveredManager.dispose());
+
+  await recoveredManager.hydrateFromSharedStore();
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
+  const recoveredRoom = recoveredManager.getRoom(room.id);
+  assert.ok(recoveredRoom);
+  assert.equal(recoveredRoom?.isPaused, false);
+  assert.equal(recoveredRoom?.pausedByPlayerId, undefined);
+
+  const recoveredHost = recoveredRoom?.players.find((player) => player.id === 'host-1');
+  assert.ok(recoveredHost);
+  assert.equal(recoveredHost?.isSpectator, true);
+  assert.equal(recoveredHost?.connected, false);
 });
 
 // ============ Tests forfeitGame ============

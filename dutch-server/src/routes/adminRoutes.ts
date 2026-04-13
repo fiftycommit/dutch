@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { firestoreService } from '../services/FirestoreService';
-import { requireAdmin, adminLimiter, isAdmin } from '../middleware/adminAuthMiddleware';
+import {
+    ADMIN_SESSION_COOKIE_NAME,
+    ADMIN_SESSION_MAX_AGE_MS,
+    requireAdmin,
+    adminLimiter,
+    isAdmin,
+} from '../middleware/adminAuthMiddleware';
 import { auth } from '../services/FirebaseAdmin';
 
 const router = Router();
@@ -26,6 +32,57 @@ router.get('/verify', adminLimiter, async (req, res) => {
     } catch {
         res.status(401).json({ success: false, error: 'Token invalide' });
     }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/session — Crée une session admin httpOnly pour protéger les pages HTML
+// ---------------------------------------------------------------------------
+router.post('/session', adminLimiter, async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ') || !auth) {
+        res.status(401).json({ success: false, error: 'Token requis' });
+        return;
+    }
+
+    try {
+        const idToken = authHeader.slice(7);
+        const decoded = await auth.verifyIdToken(idToken);
+        const admin = await isAdmin(decoded.uid);
+        if (!admin) {
+            res.status(403).json({ success: false, error: 'Compte non administrateur' });
+            return;
+        }
+
+        const sessionCookie = await auth.createSessionCookie(idToken, {
+            expiresIn: ADMIN_SESSION_MAX_AGE_MS,
+        });
+
+        res.cookie(ADMIN_SESSION_COOKIE_NAME, sessionCookie, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: ADMIN_SESSION_MAX_AGE_MS,
+            path: '/',
+        });
+        res.set('Cache-Control', 'no-store');
+        res.json({ success: true });
+    } catch {
+        res.status(401).json({ success: false, error: 'Token invalide' });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/session — Supprime la session admin du navigateur
+// ---------------------------------------------------------------------------
+router.delete('/session', adminLimiter, async (_req, res) => {
+    res.clearCookie(ADMIN_SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true });
 });
 
 // --- Toutes les routes suivantes nécessitent l'authentification admin ---

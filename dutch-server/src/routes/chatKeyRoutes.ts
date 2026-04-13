@@ -7,6 +7,7 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { onlineUsers } from '../middleware/socketAuthMiddleware';
 import type { Server } from 'socket.io';
 import { SecurityService } from '../services/SecurityService';
+import { FriendsService } from '../services/FriendsService';
 
 let _io: Server | null = null;
 
@@ -109,17 +110,12 @@ router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, re
 
     // Emit socket event for in-app notification (iOS fallback without APNs)
     if (_io) {
-      const recipientSockets = onlineUsers.get(recipientId);
-      if (recipientSockets) {
-        for (const socketId of recipientSockets) {
-          _io.to(socketId).emit('chat:private_message', {
-            chatId,
-            senderId,
-            senderName,
-            preview: preview || '📩 Nouveau message',
-          });
-        }
-      }
+      _io.to(FriendsService.getUserRoom(recipientId)).emit('chat:private_message', {
+        chatId,
+        senderId,
+        senderName,
+        preview: preview || '📩 Nouveau message',
+      });
     }
 
     res.json({ success: true });

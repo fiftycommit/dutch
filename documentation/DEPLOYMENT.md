@@ -43,9 +43,18 @@ Le provisionnement initial n'est plus automatisé par un script du repo.
 - Node.js 20.x
 - PM2
 - Nginx
+- Redis si tu veux activer le multijoueur partagé multi-instance
 - Certbot
 - Répertoires de déploiement attendus par GitHub Actions
 - Utilisateur et service du bot trainer si tu veux conserver l'entraînement distant
+
+### Secrets GitHub Actions à prévoir pour Redis
+
+Si tu veux activer Redis en production, ajoute aussi :
+- `REDIS_ENABLED` : `true`
+- `REDIS_URL` : ex. `redis://127.0.0.1:6379` ou URL de ton Redis managé
+
+Le workflow de déploiement les injecte maintenant dans PM2. Sans ces secrets, le serveur reste en mode local sans Redis.
 
 ## 📊 URLs en production
 

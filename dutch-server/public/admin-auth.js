@@ -55,6 +55,7 @@ async function adminFetch(url, opts = {}) {
   }
   const res = await fetch(url, {
     ...opts,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${_idToken}`,
@@ -62,6 +63,22 @@ async function adminFetch(url, opts = {}) {
     },
   });
   if (res.status === 403 || res.status === 401) throw new Error('Forbidden');
+  return res.json();
+}
+
+async function ensureAdminSession() {
+  const res = await fetch('/api/admin/session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Authorization': `Bearer ${_idToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Session admin refusée (${res.status})`);
+  }
+
   return res.json();
 }
 
@@ -82,6 +99,42 @@ async function initFirebase() {
   await loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
   _firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
   _firebaseAuth = firebase.auth();
+}
+
+function isSafariLikeBrowser() {
+  const ua = navigator.userAgent || '';
+  const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/i.test(ua);
+  const isIOSWebKit = /iPhone|iPad|iPod/i.test(ua);
+  return isSafari || isIOSWebKit;
+}
+
+function isPopupFallbackError(error) {
+  const code = error?.code || '';
+  return [
+    'auth/popup-blocked',
+    'auth/popup-closed-by-user',
+    'auth/cancelled-popup-request',
+    'auth/internal-error',
+  ].includes(code);
+}
+
+async function signInWithGoogleForAdmin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+
+  // Safari / iOS gèrent mieux la redirection complète que le popup Firebase.
+  if (isSafariLikeBrowser()) {
+    await _firebaseAuth.signInWithRedirect(provider);
+    return;
+  }
+
+  try {
+    await _firebaseAuth.signInWithPopup(provider);
+  } catch (error) {
+    if (!isPopupFallbackError(error)) {
+      throw error;
+    }
+    await _firebaseAuth.signInWithRedirect(provider);
+  }
 }
 
 /* ── Main ── */
@@ -105,6 +158,15 @@ async function initAdminAuth({
       _idToken = await user.getIdToken();
       const ok = await checkAdminAccess(user);
       if (ok) {
+        try {
+          await ensureAdminSession();
+        } catch (error) {
+          showError(
+            gate,
+            `Impossible d'ouvrir la session admin: ${error?.message || 'erreur inconnue'}`,
+          );
+          return;
+        }
         if (safeAuthenticatedRedirect && window.location.pathname !== safeAuthenticatedRedirect) {
           window.location.replace(safeAuthenticatedRedirect);
           return;
@@ -169,8 +231,7 @@ function showLoginForm(gate, app, onReady) {
     const error = document.getElementById('auth-error');
     error.textContent = '';
     try {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      await _firebaseAuth.signInWithPopup(provider);
+      await signInWithGoogleForAdmin();
       // onAuthStateChanged will handle the rest
     } catch (e) {
       error.textContent = e.message || 'Erreur de connexion';
@@ -195,8 +256,31 @@ function showDenied(gate, user) {
   `;
 }
 
+function showError(gate, message) {
+  gate.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+      <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,.4);text-align:center">
+        <h1 style="margin-bottom:8px;color:#f87171;font-size:1.5em">Erreur</h1>
+        <p style="color:#e2e8f0;font-size:14px;line-height:1.5">${message}</p>
+        <button onclick="location.reload()"
+          style="margin-top:16px;padding:10px 24px;border:1px solid #2d3148;border-radius:8px;background:transparent;color:#94a3b8;cursor:pointer;font-size:13px">
+          Recharger
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 /** Logout */
 async function adminLogout() {
+  try {
+    await fetch('/api/admin/session', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+  } catch (_) {
+    // Best effort : on supprime quand même la session Firebase côté client.
+  }
   if (_firebaseAuth) await _firebaseAuth.signOut();
   _idToken = '';
   location.reload();

@@ -1,5 +1,6 @@
 import { firestoreService } from './FirestoreService';
 import { PublicUser } from '../models/User';
+import type { Server } from 'socket.io';
 
 export interface FriendInfo {
   userId: string;
@@ -26,8 +27,13 @@ export interface BlockedInfo {
 // Référence vers la map d'utilisateurs en ligne (injectée depuis socketAuthMiddleware)
 let onlineUsersRef: Map<string, Set<string>> = new Map();
 let userFocusedRef: Map<string, boolean> = new Map();
+let ioRef: Server | null = null;
 
 export class FriendsService {
+  static setIo(io: Server) {
+    ioRef = io;
+  }
+
   static setOnlineUsersRef(ref: Map<string, Set<string>>) {
     onlineUsersRef = ref;
   }
@@ -36,7 +42,16 @@ export class FriendsService {
     userFocusedRef = ref;
   }
 
-  static isUserOnline(userId: string): boolean {
+  static getUserRoom(userId: string): string {
+    return `user:${userId}`;
+  }
+
+  static async isUserOnline(userId: string): Promise<boolean> {
+    if (ioRef) {
+      const sockets = await ioRef.in(this.getUserRoom(userId)).allSockets();
+      return sockets.size > 0;
+    }
+
     const sockets = onlineUsersRef.get(userId);
     if (!sockets || sockets.size === 0) return false;
     // Si le focus est explicitement false (app en arrière-plan), l'utilisateur est "hors ligne"
@@ -61,7 +76,7 @@ export class FriendsService {
           username: user.username,
           displayName: user.displayName,
           addedAt: user.createdAt?.toDate?.()?.toISOString() || '',
-          isOnline: this.isUserOnline(uid),
+          isOnline: await this.isUserOnline(uid),
         });
       }
     }

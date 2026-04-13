@@ -15,11 +15,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "firebase-admin": "^13.6.1",
     "rate-limiter-flexible": "^9.0.1",
+    "redis": "^5.8.2",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

@@ -270,15 +270,12 @@ router.post('/invite', SecurityService.socialActionLimiter, async (req, res) => 
 
     // Notification temps réel si l'ami est en ligne
     if (friendsIo) {
-      const friendSocketIds = FriendsService.getUserSocketIds(normalizedFriendUserId);
-      for (const sid of friendSocketIds) {
-        friendsIo.to(sid).emit('room:invite', {
-          roomCode: normalizedRoomCode,
-          fromUserId: authReq.user!.uid,
-          fromUsername: sender?.username || '',
-          fromDisplayName: inviterName,
-        });
-      }
+      friendsIo.to(FriendsService.getUserRoom(normalizedFriendUserId)).emit('room:invite', {
+        roomCode: normalizedRoomCode,
+        fromUserId: authReq.user!.uid,
+        fromUsername: sender?.username || '',
+        fromDisplayName: inviterName,
+      });
     }
 
     res.json({ success: true, addedPlayer });

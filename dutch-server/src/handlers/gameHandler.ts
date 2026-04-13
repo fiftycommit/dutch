@@ -9,17 +9,18 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:draw_card', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
+        const currentPlayer = getCurrentPlayer(room.gameState);
+        if (currentPlayer.id !== socket.id) return;
+        if (currentPlayer.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.drawCard(room.gameState);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        GameLogic.drawCard(room.gameState);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+      });
     } catch (error) {
       console.error('Error draw_card:', error);
     }
@@ -28,38 +29,39 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:replace_card', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
+        const currentPlayer = getCurrentPlayer(room.gameState);
+        if (currentPlayer.id !== socket.id) return;
+        if (currentPlayer.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.replaceCard(room.gameState, data.cardIndex);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        GameLogic.replaceCard(room.gameState, data.cardIndex);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
 
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+          return;
+        }
 
-      if (room.gameState.phase === GamePhase.specialPower) {
-        roomManager.startTurnTimer(data.roomCode);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.specialPower) {
+          roomManager.startTurnTimer(data.roomCode);
+          return;
+        }
 
-      if (room.gameState.phase === GamePhase.reaction) {
-        const reactionTime =
-          typeof room.settings?.reactionTimeMs === 'number'
-            ? room.settings.reactionTimeMs
-            : 3000;
-        roomManager.startReactionTimer(data.roomCode, reactionTime);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.reaction) {
+          const reactionTime =
+            typeof room.settings?.reactionTimeMs === 'number'
+              ? room.settings.reactionTimeMs
+              : 3000;
+          roomManager.startReactionTimer(data.roomCode, reactionTime);
+          return;
+        }
 
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
+        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
+      });
     } catch (error) {
       console.error('Error replace_card:', error);
     }
@@ -72,54 +74,55 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         console.log(`[DISCARD] BLOCKED: Rate limited for ${socket.id}`);
         return;
       }
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) {
-        console.log(`[DISCARD] BLOCKED: Room not found or no gameState`);
-        return;
-      }
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) {
+          console.log('[DISCARD] BLOCKED: Room not found or no gameState');
+          return;
+        }
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      console.log(`[DISCARD] currentPlayer.id=${currentPlayer.id}, socket.id=${socket.id}`);
-      if (currentPlayer.id !== socket.id) {
-        console.log(`[DISCARD] BLOCKED: Not current player's turn`);
-        return;
-      }
-      if (currentPlayer.isSpectator) {
-        console.log(`[DISCARD] BLOCKED: Player is spectator`);
-        return;
-      }
+        const currentPlayer = getCurrentPlayer(room.gameState);
+        console.log(`[DISCARD] currentPlayer.id=${currentPlayer.id}, socket.id=${socket.id}`);
+        if (currentPlayer.id !== socket.id) {
+          console.log('[DISCARD] BLOCKED: Not current player\'s turn');
+          return;
+        }
+        if (currentPlayer.isSpectator) {
+          console.log('[DISCARD] BLOCKED: Player is spectator');
+          return;
+        }
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      console.log(`[DISCARD] Before: phase=${room.gameState.phase}, isWaitingForSpecialPower=${room.gameState.isWaitingForSpecialPower}`);
-      GameLogic.discardDrawnCard(room.gameState);
-      console.log(`[DISCARD] After: phase=${room.gameState.phase}, isWaitingForSpecialPower=${room.gameState.isWaitingForSpecialPower}`);
+        console.log(`[DISCARD] Before: phase=${room.gameState.phase}, isWaitingForSpecialPower=${room.gameState.isWaitingForSpecialPower}`);
+        GameLogic.discardDrawnCard(room.gameState);
+        console.log(`[DISCARD] After: phase=${room.gameState.phase}, isWaitingForSpecialPower=${room.gameState.isWaitingForSpecialPower}`);
 
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
 
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+          return;
+        }
 
-      if (room.gameState.phase === GamePhase.specialPower) {
-        console.log(`[DISCARD] Special power phase, starting power timer`);
-        roomManager.startTurnTimer(data.roomCode);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.specialPower) {
+          console.log('[DISCARD] Special power phase, starting power timer');
+          roomManager.startTurnTimer(data.roomCode);
+          return;
+        }
 
-      if (room.gameState.phase === GamePhase.reaction) {
-        const reactionTime =
-          typeof room.settings?.reactionTimeMs === 'number'
-            ? room.settings.reactionTimeMs
-            : 3000;
-        console.log(`[DISCARD] Starting reaction timer: ${reactionTime}ms`);
-        roomManager.startReactionTimer(data.roomCode, reactionTime);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.reaction) {
+          const reactionTime =
+            typeof room.settings?.reactionTimeMs === 'number'
+              ? room.settings.reactionTimeMs
+              : 3000;
+          console.log(`[DISCARD] Starting reaction timer: ${reactionTime}ms`);
+          roomManager.startReactionTimer(data.roomCode, reactionTime);
+          return;
+        }
 
-      console.log(`[DISCARD] No reaction phase, checking bot turn`);
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
+        console.log('[DISCARD] No reaction phase, checking bot turn');
+        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
+      });
     } catch (error) {
       console.error('Error discard_card:', error);
     }
@@ -128,19 +131,20 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:take_from_discard', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      const currentPlayer = getCurrentPlayer(room.gameState);
-      if (currentPlayer.id !== socket.id) return;
-      if (currentPlayer.isSpectator) return;
+        const currentPlayer = getCurrentPlayer(room.gameState);
+        if (currentPlayer.id !== socket.id) return;
+        if (currentPlayer.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.takeFromDiscard(room.gameState);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        GameLogic.takeFromDiscard(room.gameState);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
 
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
+        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
+      });
     } catch (error) {
       console.error('Error take_from_discard:', error);
     }
@@ -149,24 +153,25 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:call_dutch', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      const player = room.gameState.players.find(
-        (p: Player) => p.id === socket.id
-      );
-      if (!player || player.isSpectator) return;
+        const player = room.gameState.players.find(
+          (p: Player) => p.id === socket.id
+        );
+        if (!player || player.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.callDutch(room.gameState, player.id);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
-        message: `${player.name} appelle DUTCH !`,
+        GameLogic.callDutch(room.gameState, player.id);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
+          message: `${player.name} appelle DUTCH !`,
+        });
+
+        if (room.gameState.phase === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+        }
       });
-
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-      }
     } catch (error) {
       console.error('Error call_dutch:', error);
     }
@@ -180,20 +185,21 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         console.log(`[MATCH] Rate limited for ${socket.id} - too many match attempts`);
         return;
       }
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      if (room.gameState.phase !== GamePhase.reaction) return;
+        if (room.gameState.phase !== GamePhase.reaction) return;
 
-      const player = room.gameState.players.find(
-        (p: Player) => p.id === socket.id
-      );
-      if (!player || player.isSpectator) return;
+        const player = room.gameState.players.find(
+          (p: Player) => p.id === socket.id
+        );
+        if (!player || player.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.attemptMatch(room.gameState, player.id, data.cardIndex);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        GameLogic.attemptMatch(room.gameState, player.id, data.cardIndex);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+      });
     } catch (error) {
       console.error('Error attempt_match:', error);
     }
@@ -211,7 +217,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('special_power:target_selection', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
+      const room = await roomManager.loadRoom(data.roomCode);
       if (!room?.gameState) return;
 
       const currentPlayer = getCurrentPlayer(room.gameState);
@@ -227,123 +233,113 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:use_special_power', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
-      const isMatchPower = room.gameState.specialPowerPlayerId != null;
-      const authorizedPlayerId = isMatchPower
-        ? room.gameState.specialPowerPlayerId
-        : getCurrentPlayer(room.gameState).id;
-      if (authorizedPlayerId !== socket.id) return;
+        const isMatchPower = room.gameState.specialPowerPlayerId != null;
+        const authorizedPlayerId = isMatchPower
+          ? room.gameState.specialPowerPlayerId
+          : getCurrentPlayer(room.gameState).id;
+        if (authorizedPlayerId !== socket.id) return;
 
-      const currentPlayer = room.gameState.players.find(p => p.id === socket.id);
-      if (!currentPlayer || currentPlayer.isSpectator) return;
+        const currentPlayer = room.gameState.players.find(p => p.id === socket.id);
+        if (!currentPlayer || currentPlayer.isSpectator) return;
 
-      const specialCard = room.gameState.specialCardToActivate;
-      if (!specialCard) return;
+        const specialCard = room.gameState.specialCardToActivate;
+        if (!specialCard) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      // Appeler useSpecialPower avec les données appropriées
-      const result = GameLogic.useSpecialPower(room.gameState, {
-        cardIndex: data.cardIndex,
-        targetPlayerIndex: data.targetPlayerIndex,
-        targetCardIndex: data.targetCardIndex,
-        player1Index: data.player1Index,
-        card1Index: data.card1Index,
-        player2Index: data.player2Index,
-        card2Index: data.card2Index,
-      });
-
-      // Envoyer la carte espionnée au joueur (pour 7 et 10)
-      if (result.spiedCard) {
-        socket.emit('game:spied_card', {
-          roomCode: data.roomCode,
-          card: result.spiedCard,
-          targetPlayerName: specialCard.value === '7' ? 'vous' :
-            (data.targetPlayerIndex === undefined ?
-              'Anonyme' : room.gameState.players[data.targetPlayerIndex]?.name)
+        const result = GameLogic.useSpecialPower(room.gameState, {
+          cardIndex: data.cardIndex,
+          targetPlayerIndex: data.targetPlayerIndex,
+          targetCardIndex: data.targetCardIndex,
+          player1Index: data.player1Index,
+          card1Index: data.card1Index,
+          player2Index: data.player2Index,
+          card2Index: data.card2Index,
         });
 
-        // Notification au joueur espionné (pouvoir 10 uniquement)
-        if (specialCard.value === '10' && data.targetPlayerIndex !== undefined) {
-          const spiedPlayer = room.gameState.players[data.targetPlayerIndex];
-          if (spiedPlayer && spiedPlayer.isHuman && spiedPlayer.id !== currentPlayer.id) {
-            const io = roomManager.getIO();
-            io.to(spiedPlayer.id).emit('special_power:spy_notification', {
-              byPlayerName: currentPlayer.name,
-              cardIndex: data.targetCardIndex,
-              roomCode: data.roomCode,
-            });
-          }
-        }
-      }
-
-      // Notifications Valet : prévenir les joueurs affectés
-      if (result.affectedPlayers && result.affectedPlayers.length > 0) {
-        const io = roomManager.getIO();
-        for (const affected of result.affectedPlayers) {
-          const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
-          if (affectedPlayer?.isHuman) {
-            io.to(affected.playerId).emit('special_power:swap_notification', {
-              byPlayerName: currentPlayer.name,
-              cardIndex: affected.cardIndex,
-              swapPartnerName: affected.swapPartnerName,
-              receivedCardPosition: affected.receivedCardPosition,
-              roomCode: data.roomCode,
-            });
-          }
-        }
-      }
-
-      // Notification Joker : prévenir le joueur mélangé
-      if (result.shuffledPlayer) {
-        const io = roomManager.getIO();
-        const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer!.playerId);
-        if (shuffledPlayer?.isHuman) {
-          io.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
-            byPlayerName: currentPlayer.name,
+        if (result.spiedCard) {
+          socket.emit('game:spied_card', {
             roomCode: data.roomCode,
+            card: result.spiedCard,
+            targetPlayerName: specialCard.value === '7' ? 'vous' :
+              (data.targetPlayerIndex === undefined ?
+                'Anonyme' : room.gameState.players[data.targetPlayerIndex]?.name)
           });
+
+          if (specialCard.value === '10' && data.targetPlayerIndex !== undefined) {
+            const spiedPlayer = room.gameState.players[data.targetPlayerIndex];
+            if (spiedPlayer && spiedPlayer.isHuman && spiedPlayer.id !== currentPlayer.id) {
+              const io = roomManager.getIO();
+              io.to(spiedPlayer.id).emit('special_power:spy_notification', {
+                byPlayerName: currentPlayer.name,
+                cardIndex: data.targetCardIndex,
+                roomCode: data.roomCode,
+              });
+            }
+          }
         }
-      }
 
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
-        specialPowerUsed: {
-          byPlayerId: currentPlayer.id,
-          byPlayerName: currentPlayer.name,
-          powerType: specialCard.value,
-        },
+        if (result.affectedPlayers && result.affectedPlayers.length > 0) {
+          const io = roomManager.getIO();
+          for (const affected of result.affectedPlayers) {
+            const affectedPlayer = room.gameState.players.find(p => p.id === affected.playerId);
+            if (affectedPlayer?.isHuman) {
+              io.to(affected.playerId).emit('special_power:swap_notification', {
+                byPlayerName: currentPlayer.name,
+                cardIndex: affected.cardIndex,
+                swapPartnerName: affected.swapPartnerName,
+                receivedCardPosition: affected.receivedCardPosition,
+                roomCode: data.roomCode,
+              });
+            }
+          }
+        }
+
+        if (result.shuffledPlayer) {
+          const io = roomManager.getIO();
+          const shuffledPlayer = room.gameState.players.find(p => p.id === result.shuffledPlayer!.playerId);
+          if (shuffledPlayer?.isHuman) {
+            io.to(result.shuffledPlayer.playerId).emit('special_power:joker_notification', {
+              byPlayerName: currentPlayer.name,
+              roomCode: data.roomCode,
+            });
+          }
+        }
+
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
+          specialPowerUsed: {
+            byPlayerId: currentPlayer.id,
+            byPlayerName: currentPlayer.name,
+            powerType: specialCard.value,
+          },
+        });
+
+        if (room.gameState.phase === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+          return;
+        }
+
+        if (isMatchPower) {
+          room.gameState.specialPowerPlayerId = null;
+          roomManager.activateNextPendingPower(data.roomCode, { lockAlreadyHeld: true });
+          return;
+        }
+
+        if (room.gameState.phase === GamePhase.reaction) {
+          const baseReactionTime =
+            typeof room.settings?.reactionTimeMs === 'number'
+              ? room.settings.reactionTimeMs
+              : 3000;
+
+          roomManager.startReactionTimer(data.roomCode, baseReactionTime);
+          return;
+        }
+
+        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
       });
-
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-        return;
-      }
-
-      // Si c'était un pouvoir de match, passer au prochain pouvoir en attente
-      if (isMatchPower) {
-        room.gameState.specialPowerPlayerId = null;
-        roomManager.activateNextPendingPower(data.roomCode);
-        return;
-      }
-
-      if (room.gameState.phase === GamePhase.reaction) {
-        const baseReactionTime =
-          typeof room.settings?.reactionTimeMs === 'number'
-            ? room.settings.reactionTimeMs
-            : 3000;
-
-        // Le temps passé à sélectionner ne doit plus être rajouté ici
-        // car cela crée un délai perceptible (le client attend l'animation)
-        const reactionTime = baseReactionTime;
-
-        roomManager.startReactionTimer(data.roomCode, reactionTime);
-        return;
-      }
-
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
     } catch (error) {
       console.error('Error use_special_power:', error);
     }
@@ -352,49 +348,46 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:skip_special_power', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      // Autoriser le joueur pouvoiré (match power) ou le joueur actif (normal)
-      const isMatchPower = room.gameState.specialPowerPlayerId != null;
-      const authorizedPlayerId = isMatchPower
-        ? room.gameState.specialPowerPlayerId
-        : getCurrentPlayer(room.gameState).id;
-      if (authorizedPlayerId !== socket.id) return;
+        const isMatchPower = room.gameState.specialPowerPlayerId != null;
+        const authorizedPlayerId = isMatchPower
+          ? room.gameState.specialPowerPlayerId
+          : getCurrentPlayer(room.gameState).id;
+        if (authorizedPlayerId !== socket.id) return;
 
-      const player = room.gameState.players.find(p => p.id === socket.id);
-      if (!player || player.isSpectator) return;
+        const player = room.gameState.players.find(p => p.id === socket.id);
+        if (!player || player.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-      GameLogic.skipSpecialPower(room.gameState);
-      roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        GameLogic.skipSpecialPower(room.gameState);
+        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
 
-      if (room.gameState.phase === GamePhase.ended) {
-        roomManager.handleGameEnd(data.roomCode);
-        return;
-      }
+        if (room.gameState.phase === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+          return;
+        }
 
-      // Si c'était un pouvoir de match, passer au prochain
-      if (isMatchPower) {
-        room.gameState.specialPowerPlayerId = null;
-        roomManager.activateNextPendingPower(data.roomCode);
-        return;
-      }
+        if (isMatchPower) {
+          room.gameState.specialPowerPlayerId = null;
+          roomManager.activateNextPendingPower(data.roomCode, { lockAlreadyHeld: true });
+          return;
+        }
 
-      if (room.gameState.phase === GamePhase.reaction) {
-        const baseReactionTime =
-          typeof room.settings?.reactionTimeMs === 'number'
-            ? room.settings.reactionTimeMs
-            : 3000;
+        if (room.gameState.phase === GamePhase.reaction) {
+          const baseReactionTime =
+            typeof room.settings?.reactionTimeMs === 'number'
+              ? room.settings.reactionTimeMs
+              : 3000;
 
-        const reactionTime = baseReactionTime;
+          roomManager.startReactionTimer(data.roomCode, baseReactionTime);
+          return;
+        }
 
-        roomManager.startReactionTimer(data.roomCode, reactionTime);
-        return;
-      }
-
-      await roomManager.checkAndPlayBotTurn(data.roomCode);
+        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
+      });
     } catch (error) {
       console.error('Error skip_special_power:', error);
     }
@@ -404,15 +397,14 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:pause', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room) return;
 
-      // Allow any player to pause? Or only host? Users usually want anyone to pause in casual games.
-      // Let's allow any non-spectator player.
-      const player = room.players.find(p => p.id === socket.id);
-      if (!player || player.isSpectator) return;
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player || player.isSpectator) return;
 
-      roomManager.pauseGame(data.roomCode, socket.id, player.name);
+        roomManager.pauseGame(data.roomCode, socket.id, player.name);
+      });
     } catch (error) {
       console.error('Error game:pause:', error);
     }
@@ -421,13 +413,14 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:resume', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room) return;
 
-      const player = room.players.find(p => p.id === socket.id);
-      if (!player || player.isSpectator) return;
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player || player.isSpectator) return;
 
-      roomManager.resumeGame(data.roomCode, socket.id, player.name);
+        roomManager.resumeGame(data.roomCode, socket.id, player.name);
+      });
     } catch (error) {
       console.error('Error game:resume:', error);
     }
@@ -436,8 +429,9 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:forfeit', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      // data: { roomCode }
-      roomManager.forfeitGame(data.roomCode, socket.id);
+      await roomManager.withRoomMutation(data.roomCode, async () => {
+        roomManager.forfeitGame(data.roomCode, socket.id);
+      });
     } catch (error) {
       console.error('Error game:forfeit:', error);
     }
@@ -447,18 +441,19 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('player:ready', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      const room = roomManager.getRoom(data.roomCode);
-      if (!room?.gameState) return;
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) return;
 
-      const player = room.players.find(p => p.id === socket.id);
-      if (!player) return;
-      if (player.isSpectator) return;
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player) return;
+        if (player.isSpectator) return;
 
-      roomManager.recordPlayerAction(data.roomCode, socket.id);
-      const success = roomManager.markPlayerReady(data.roomCode, socket.id);
-      if (success) {
-        console.log(`[READY] Player ${player.name} marked ready in room ${data.roomCode}`);
-      }
+        roomManager.recordPlayerAction(data.roomCode, socket.id);
+        const success = roomManager.markPlayerReady(data.roomCode, socket.id);
+        if (success) {
+          console.log(`[READY] Player ${player.name} marked ready in room ${data.roomCode}`);
+        }
+      });
     } catch (error) {
       console.error('Error player:ready:', error);
     }
@@ -470,9 +465,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;
       const { roomCode, botDifficulty, luckDifficulty } = data;
 
-      const success = roomManager.updateRoomSettings(roomCode, socket.id, {
-        botDifficulty,
-        luckDifficulty,
+      let success = false;
+      await roomManager.withRoomMutation(roomCode, async () => {
+        success = roomManager.updateRoomSettings(roomCode, socket.id, {
+          botDifficulty,
+          luckDifficulty,
+        });
       });
 
       if (success) {
@@ -483,4 +481,3 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 }
-

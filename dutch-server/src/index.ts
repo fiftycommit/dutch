@@ -1,3 +1,6 @@
 import { startServer } from './server';
 
-startServer();
+void startServer().catch((error) => {
+  console.error('Fatal server startup error:', error);
+  process.exit(1);
+});

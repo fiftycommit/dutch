@@ -45,6 +45,7 @@ export interface GameState {
   specialPowerPlayerId: string | null; // joueur qui utilise le pouvoir (peut différer du currentPlayer lors d'un match)
   dutchCallerId: string | null;
   reactionStartTime: Date | null;
+  reactionDeadlineAt: number | null;
   actionHistory: string[];
   reactionTimeRemaining: number;
   lastSpiedCard: PlayingCard | null;
@@ -85,6 +86,7 @@ export function createGameState(
     specialPowerPlayerId: null,
     dutchCallerId: null,
     reactionStartTime: null,
+    reactionDeadlineAt: null,
     actionHistory: [],
     reactionTimeRemaining: 0,
     lastSpiedCard: null,

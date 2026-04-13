@@ -17,10 +17,12 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
     }
   );
 
-  socket.on('presence:focus', (data) => {
+  socket.on('presence:focus', async (data) => {
     const roomCode = data?.roomCode?.toString().toUpperCase();
     if (!roomCode) return;
-    roomManager.updateFocus(roomCode, socket.id, data?.focused === true);
+    await roomManager.withRoomMutation(roomCode, async () => {
+      roomManager.updateFocus(roomCode, socket.id, data?.focused === true);
+    });
   });
 
   // Mise à jour du focus utilisateur global (hors room) — permet de détecter app en arrière-plan
@@ -30,27 +32,31 @@ export function setupConnectionHandler(socket: Socket, roomManager: RoomManager)
     userFocused.set(uid, data?.focused === true);
   });
 
-  socket.on('presence:ack', (data) => {
+  socket.on('presence:ack', async (data) => {
     const roomCode = data?.roomCode?.toString().toUpperCase();
     if (!roomCode) return;
-    roomManager.confirmPresence(roomCode, socket.id);
+    await roomManager.withRoomMutation(roomCode, async () => {
+      roomManager.confirmPresence(roomCode, socket.id);
+    });
   });
 
-  socket.on('presence:timeout_kick', (data) => {
+  socket.on('presence:timeout_kick', async (data) => {
     const roomCode = data?.roomCode?.toString().toUpperCase();
     const playerId = data?.playerId?.toString();
     const isForeground = data?.isForeground === true;
 
     if (!roomCode || !playerId) return;
 
-    if (isForeground) {
-      roomManager.kickPlayer(roomCode, playerId, 'Inactif sur un pouvoir (Forfait)');
-    } else {
-      roomManager.triggerPresenceCheck(roomCode, playerId, 'Inactif sur un pouvoir', {
-        deadlineMs: 10000,
-        sendPush: true,
-      });
-    }
+    await roomManager.withRoomMutation(roomCode, async () => {
+      if (isForeground) {
+        roomManager.kickPlayer(roomCode, playerId, 'Inactif sur un pouvoir (Forfait)');
+      } else {
+        roomManager.triggerPresenceCheck(roomCode, playerId, 'Inactif sur un pouvoir', {
+          deadlineMs: 10000,
+          sendPush: true,
+        });
+      }
+    });
   });
 
   socket.on('disconnect', () => {

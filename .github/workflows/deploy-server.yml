@@ -49,29 +49,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Clean old source before upload (scp doesn't delete removed files)
-      - name: Clean server source
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 164.92.234.245
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            rm -rf /root/apps/dutch-server/src /root/apps/dutch-server/dist
-
-      # Upload server code
-      - name: Deploy server
+      - name: Upload server release
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "dutch-server/*"
-          target: "/root/apps/dutch-server"
+          target: "/root/apps/dutch-server/releases/${{ github.sha }}"
           strip_components: 1
 
-      # Install, build, restart
-      - name: Install and restart services
+      - name: Build and switch backend
         uses: appleboy/ssh-action@v1.0.3
         env:
           GIT_SHA: ${{ github.sha }}
@@ -79,65 +67,102 @@ jobs:
           FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          REDIS_ENABLED: ${{ secrets.REDIS_ENABLED }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
         with:
           host: 164.92.234.245
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON,FIREBASE_WEB_API_KEY,ADMIN_SECRET,ADMIN_EMAIL
+          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON,FIREBASE_WEB_API_KEY,ADMIN_SECRET,ADMIN_EMAIL,REDIS_ENABLED,REDIS_URL
           command_timeout: 10m
           script: |
-            set -e
+            set -euo pipefail
+
+            APP_ROOT=/root/apps/dutch-server
+            RELEASES_DIR=$APP_ROOT/releases
+            SHARED_DIR=$APP_ROOT/shared
+            RELEASE_DIR=$RELEASES_DIR/$GIT_SHA
+            CURRENT_LINK=$APP_ROOT/current
+            ACTIVE_PORT_FILE=$SHARED_DIR/active-port
+            LEGACY_APP_NAME=dutch-server
+
+            mkdir -p "$RELEASES_DIR" "$SHARED_DIR/data" /etc/nginx/snippets
+
+            ACTIVE_PORT=3000
+            if [ -f "$ACTIVE_PORT_FILE" ]; then
+              ACTIVE_PORT=$(cat "$ACTIVE_PORT_FILE")
+            fi
+
+            if [ "$ACTIVE_PORT" = "3001" ]; then
+              NEXT_PORT=3000
+              NEXT_COLOR=blue
+              PREVIOUS_COLOR=green
+            else
+              ACTIVE_PORT=3000
+              NEXT_PORT=3001
+              NEXT_COLOR=green
+              PREVIOUS_COLOR=blue
+            fi
+
+            NEXT_APP_NAME="dutch-server-$NEXT_COLOR"
+            PREVIOUS_APP_NAME="dutch-server-$PREVIOUS_COLOR"
+
+            # ── Shared secrets/data ──
+            echo "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$SHARED_DIR/data/firebase-service-account.json"
+            chmod 600 "$SHARED_DIR/data/firebase-service-account.json"
+
+            mkdir -p "$SHARED_DIR/data/bot-learning"/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
+            mkdir -p "$SHARED_DIR/data/player-learning"/{profiles,history}
+            chmod -R 755 "$SHARED_DIR/data"
+
+            ln -sfn "$SHARED_DIR/data" "$RELEASE_DIR/data"
 
             # ── Nginx Config ──
             mkdir -p /etc/nginx/snippets
-            cp /root/apps/dutch-server/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
-            cp /root/apps/dutch-server/nginx/dutch-server.conf /etc/nginx/sites-available/dutch-server
+            cat > /etc/nginx/snippets/dutch-backend-upstream.conf <<UPSTREAM
+            upstream dutch_backend {
+                keepalive 64;
+                server 127.0.0.1:${ACTIVE_PORT};
+            }
+            UPSTREAM
+            cp "$RELEASE_DIR/nginx/security-headers.conf" /etc/nginx/snippets/security-headers.conf
+            cp "$RELEASE_DIR/nginx/dutch-server.conf" /etc/nginx/sites-available/dutch-server
             ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"
 
-            # ── Backend ──
-            echo "🔨 Building backend..."
-            cd /root/apps/dutch-server
-            # Install ALL deps (including devDeps needed for tsc)
-            npm install 2>&1 || true
+            # ── Backend build ──
+            echo "🔨 Building backend release $GIT_SHA on port $NEXT_PORT..."
+            cd "$RELEASE_DIR"
+            npm ci || npm install
             npm run build || { echo "❌ Build failed"; exit 1; }
-            # Remove devDeps after build
-            npm prune --production 2>&1 || true
+            npm prune --production || true
 
-            # ML data dirs
-            mkdir -p data/bot-learning/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
-            mkdir -p data/player-learning/{profiles,history}
-            chmod -R 755 data/
-
-            # ── PM2 restart ──
+            # ── PM2 blue/green handoff ──
             BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-            # Write Firebase creds to file (avoids shell escaping issues with JSON)
-            echo "$FIREBASE_SERVICE_ACCOUNT_JSON" > /root/apps/dutch-server/data/firebase-service-account.json
-            chmod 600 /root/apps/dutch-server/data/firebase-service-account.json
-
             cat > ecosystem.config.cjs << 'PMCFG'
             const fs = require('fs');
             let firebaseCreds = '';
             try {
-              firebaseCreds = fs.readFileSync('/root/apps/dutch-server/data/firebase-service-account.json', 'utf-8').trim();
+              firebaseCreds = fs.readFileSync('/root/apps/dutch-server/shared/data/firebase-service-account.json', 'utf-8').trim();
             } catch(e) {}
             module.exports = {
               apps: [{
-                name: 'dutch-server',
-                cwd: '/root/apps/dutch-server',
+                name: process.env.PM2_APP_NAME || 'dutch-server-green',
+                cwd: process.env.RELEASE_DIR || '/root/apps/dutch-server/current',
                 script: 'dist/index.js',
                 instances: 1,
                 exec_mode: 'fork',
                 env: {
                   NODE_ENV: 'production',
-                  PORT: 3000,
+                  PORT: Number(process.env.APP_PORT || '3001'),
                   GIT_SHA: process.env.GIT_SHA || '',
                   BUILD_TIME: process.env.BUILD_TIME || '',
                   FIREBASE_SERVICE_ACCOUNT_JSON: firebaseCreds,
                   FIREBASE_WEB_API_KEY: process.env.FIREBASE_WEB_API_KEY || '',
                   ADMIN_SECRET: process.env.ADMIN_SECRET || '',
                   ADMIN_EMAIL: process.env.ADMIN_EMAIL || '',
+                  REDIS_ENABLED: process.env.REDIS_ENABLED || '',
+                  REDIS_URL: process.env.REDIS_URL || '',
                 },
                 max_memory_restart: '700M',
               }],
@@ -148,19 +173,51 @@ jobs:
             export GIT_SHA
             export ADMIN_SECRET
             export ADMIN_EMAIL
+            export REDIS_ENABLED
+            export REDIS_URL
+            export APP_PORT=$NEXT_PORT
+            export PM2_APP_NAME=$NEXT_APP_NAME
+            export RELEASE_DIR
 
-            pm2 startOrRestart ecosystem.config.cjs --only dutch-server --update-env
-            pm2 save
+            pm2 startOrRestart ecosystem.config.cjs --only "$NEXT_APP_NAME" --update-env
 
-            # Quick health check (wait longer for initialization)
+            # Health check on inactive port before switching traffic
             sleep 8
-            if curl -sf http://localhost:3000/health > /dev/null; then
-              echo "✅ Backend is healthy!"
+            if curl -sf "http://localhost:${NEXT_PORT}/health" > /dev/null; then
+              echo "✅ New backend is healthy on port ${NEXT_PORT}"
             else
-              echo "❌ Backend health check failed!"
-              pm2 logs dutch-server --lines 20 --nostream
+              echo "❌ Backend health check failed on port ${NEXT_PORT}"
+              pm2 logs "$NEXT_APP_NAME" --lines 20 --nostream
               exit 1
             fi
+
+            cat > /etc/nginx/snippets/dutch-backend-upstream.conf <<UPSTREAM
+            upstream dutch_backend {
+                keepalive 64;
+                server 127.0.0.1:${NEXT_PORT};
+            }
+            UPSTREAM
+            nginx -t
+            systemctl reload nginx
+
+            echo "$NEXT_PORT" > "$ACTIVE_PORT_FILE"
+            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+
+            # Petit délai de drain pour éviter la fenêtre de 502 pendant la bascule.
+            sleep 15
+
+            if pm2 describe "$PREVIOUS_APP_NAME" > /dev/null 2>&1; then
+              pm2 delete "$PREVIOUS_APP_NAME"
+            fi
+            if pm2 describe "$LEGACY_APP_NAME" > /dev/null 2>&1; then
+              pm2 delete "$LEGACY_APP_NAME"
+            fi
+
+            pm2 save
+
+            # Nettoyer les anciens releases en gardant les 3 plus récents
+            cd "$RELEASES_DIR"
+            ls -1dt */ 2>/dev/null | tail -n +4 | xargs -r rm -rf
 
             echo "✅ Deploy complete"
 
