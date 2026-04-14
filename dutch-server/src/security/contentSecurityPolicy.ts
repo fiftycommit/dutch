@@ -20,7 +20,7 @@ function joinCsp(directives: string[]): string {
 
 export const strictAdminContentSecurityPolicy = joinCsp([
   ...commonDirectives,
-  "script-src 'self' https://www.gstatic.com",
+  "script-src 'self' 'unsafe-inline' https://www.gstatic.com",
 ]);
 
 export const analyticsAdminContentSecurityPolicy = joinCsp([
