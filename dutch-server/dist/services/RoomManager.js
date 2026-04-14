@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoomManager = void 0;
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
+const node_crypto_1 = require("node:crypto");
 const GameLogic_1 = require("./GameLogic");
 const BotAI_1 = require("./BotAI");
 const GameState_1 = require("../models/GameState");
@@ -50,10 +51,12 @@ class RoomManager {
     constructor(io, options = {}) {
         this.io = io;
         this.rooms = new Map();
+        this.runtimeRecoveredRooms = new Set();
         this.actionTimers = new Map();
         this.presenceTimers = new Map();
         this.presenceChecks = new Map();
         this.cleanupTimer = null;
+        this.pendingPersistRooms = new Set();
         this.botCastingCache = null;
         this.botCastingCacheLoadedAtMs = 0;
         this.turnTimeoutMs = options.turnTimeoutMs ?? 90000;
@@ -63,6 +66,7 @@ class RoomManager {
         this.cleanupIntervalMs = options.cleanupIntervalMs ?? 10000;
         this.stalePlayerMs = options.stalePlayerMs ?? 15000;
         this.now = options.now ?? (() => Date.now());
+        this.sharedRoomStore = options.sharedRoomStore;
         this.timerManager = new TimerManager_1.TimerManager({
             getRoom: (roomCode) => this.getRoom(roomCode),
             broadcastGameState: (roomCode, updateType, data) => this.broadcastGameState(roomCode, updateType, data),
@@ -70,8 +74,42 @@ class RoomManager {
         });
         this.startCleanupLoop();
     }
+    async hydrateFromSharedStore() {
+        if (!this.sharedRoomStore) {
+            return;
+        }
+        const rooms = await this.sharedRoomStore.loadAllRooms();
+        for (const room of rooms) {
+            this.rooms.set(room.id, room);
+            this.recoverRoomRuntimeState(room);
+        }
+    }
     getRoom(roomCode) {
         return this.rooms.get(roomCode);
+    }
+    async loadRoom(roomCode) {
+        if (!this.sharedRoomStore) {
+            return this.rooms.get(roomCode);
+        }
+        return this.syncRoomFromSharedStore(roomCode);
+    }
+    async withRoomMutation(roomCode, operation) {
+        const sharedRoomStore = this.sharedRoomStore;
+        if (!sharedRoomStore) {
+            return await operation(this.rooms.get(roomCode));
+        }
+        return sharedRoomStore.withRoomLock(roomCode, async () => {
+            const room = await this.syncRoomFromSharedStore(roomCode, true);
+            const result = await operation(room);
+            const updatedRoom = this.rooms.get(roomCode);
+            if (updatedRoom) {
+                await sharedRoomStore.saveRoom(updatedRoom);
+            }
+            else {
+                await sharedRoomStore.deleteRoom(roomCode);
+            }
+            return result;
+        });
     }
     findConnectedPlayerByUserId(roomCode, userId) {
         const room = this.rooms.get(roomCode);
@@ -151,6 +189,7 @@ class RoomManager {
         room.players.push(hostPlayer);
         this.touchRoom(room);
         this.rooms.set(roomCode, room);
+        this.scheduleRoomPersist(roomCode);
         return room;
     }
     joinRoom(roomCode, socketId, playerName, clientId, userId, username) {
@@ -478,54 +517,10 @@ class RoomManager {
         room.isPaused = true;
         room.pausedByPlayerId = pausedByPlayerId;
         room.pausedByName = pausedByName;
-        room.pauseStartTime = Date.now();
+        room.pauseStartTime = this.now();
         this.clearTurnTimer(roomCode);
         this.timerManager.pauseTimer(roomCode);
-        // Warning à 60s : "sera expulsé dans 30 secondes"
-        const warn1 = setTimeout(() => {
-            const r = this.rooms.get(roomCode);
-            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
-                return;
-            this.io.to(roomCode).emit('game:pause_warning', {
-                roomCode,
-                pausedBy: pausedByName,
-                secondsRemaining: 30,
-                message: `${pausedByName} sera expulsé dans 30 secondes s'il ne lève pas la pause.`,
-            });
-        }, 60000);
-        // Warning à 75s : "sera expulsé dans 15 secondes"
-        const warn2 = setTimeout(() => {
-            const r = this.rooms.get(roomCode);
-            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
-                return;
-            this.io.to(roomCode).emit('game:pause_warning', {
-                roomCode,
-                pausedBy: pausedByName,
-                secondsRemaining: 15,
-                message: `${pausedByName} sera expulsé dans 15 secondes s'il ne lève pas la pause.`,
-            });
-        }, 75000);
-        // Kick + auto-resume à 90s
-        const kick = setTimeout(() => {
-            const r = this.rooms.get(roomCode);
-            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
-                return;
-            console.log(`⏱️ Pause timeout: kick de ${pausedByName} (${pausedByPlayerId})`);
-            // Lever la pause d'abord (sans broadcast séparé, resumeGame va broadcaster)
-            r.pauseTimeoutHandle = undefined;
-            this.markSpectator(roomCode, pausedByPlayerId, 'pause trop longue');
-            // Si le joueur n'était plus dans la room après kick, la pause est déjà levée
-            // Sinon on force la reprise
-            if (r.isPaused) {
-                this.resumeGame(roomCode, pausedByPlayerId, 'Système', true);
-            }
-        }, 90000);
-        // On stocke les 3 handles dans un seul pour nettoyer facilement
-        // On les encapsule dans un handle composite via clearTimeout multiple
-        room.pauseTimeoutHandle = kick;
-        // Store warn handles on the kick handle object (hack simple)
-        kick._warn1 = warn1;
-        kick._warn2 = warn2;
+        this.schedulePauseTimers(roomCode, pausedByPlayerId, pausedByName, room.pauseStartTime);
         this.broadcastGameState(roomCode, 'GAME_PAUSED', {
             pausedBy: pausedByName,
             pausedByPlayerId,
@@ -565,13 +560,25 @@ class RoomManager {
         }
         this.broadcastGameState(roomCode, 'GAME_RESUMED', { resumedBy: resumedByName });
     }
-    async endReactionPhase(roomCode) {
+    async endReactionPhase(roomCode, context = {}) {
+        if (this.sharedRoomStore && !context.lockAlreadyHeld) {
+            await this.withRoomMutation(roomCode, async (room) => {
+                if (!room?.gameState)
+                    return;
+                await this.endReactionPhaseInternal(roomCode);
+            });
+            return;
+        }
+        await this.endReactionPhaseInternal(roomCode);
+    }
+    async endReactionPhaseInternal(roomCode) {
         this.clearReactionTimer(roomCode);
         const room = this.rooms.get(roomCode);
         if (!room?.gameState)
             return;
         room.gameState.lastSpiedCard = null;
         room.gameState.reactionStartTime = null;
+        room.gameState.reactionDeadlineAt = null;
         // S'il y a des pouvoirs en attente (matchs pendant la réaction), les résoudre
         if (room.gameState.pendingMatchPowers.length > 0) {
             await this.processPendingMatchPowers(roomCode);
@@ -580,7 +587,7 @@ class RoomManager {
         room.gameState.phase = GameState_1.GamePhase.playing;
         GameLogic_1.GameLogic.nextPlayer(room.gameState);
         this.broadcastGameState(roomCode, 'PHASE_CHANGE');
-        await this.checkAndPlayBotTurn(roomCode);
+        await this.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
     }
     /**
      * Résout les pouvoirs en attente suite à des matchs pendant la réaction.
@@ -596,7 +603,7 @@ class RoomManager {
             room.gameState.phase = GameState_1.GamePhase.playing;
             GameLogic_1.GameLogic.nextPlayer(room.gameState);
             this.broadcastGameState(roomCode, 'PHASE_CHANGE');
-            await this.checkAndPlayBotTurn(roomCode);
+            await this.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
             return;
         }
         // Séparer les pouvoirs passifs (7, 10) des pouvoirs actifs (Valet, Joker).
@@ -612,14 +619,14 @@ class RoomManager {
         pending.push(...passivePowers);
         if (activePowers.length === 0) {
             // Que des pouvoirs passifs → résoudre directement, pas de loterie
-            this.activateNextPendingPower(roomCode);
+            this.activateNextPendingPower(roomCode, { lockAlreadyHeld: true });
             return;
         }
         if (activePowers.length === 1) {
             // Un seul pouvoir actif → pas besoin de loterie
             activePowers[0].drawNumber = order;
             pending.push(...activePowers);
-            this.activateNextPendingPower(roomCode);
+            this.activateNextPendingPower(roomCode, { lockAlreadyHeld: true });
             return;
         }
         // Plusieurs pouvoirs actifs → loterie pour l'ordre entre eux uniquement
@@ -639,12 +646,25 @@ class RoomManager {
         // Petit délai pour que les joueurs voient les numéros
         await this.delay(2000);
         // Activer le premier pouvoir
-        this.activateNextPendingPower(roomCode);
+        this.activateNextPendingPower(roomCode, { lockAlreadyHeld: true });
     }
     /**
      * Active le prochain pouvoir en attente dans la queue
      */
-    activateNextPendingPower(roomCode) {
+    activateNextPendingPower(roomCode, context = {}) {
+        if (this.sharedRoomStore && !context.lockAlreadyHeld) {
+            void this.withRoomMutation(roomCode, async (room) => {
+                if (!room?.gameState)
+                    return;
+                this.activateNextPendingPowerInternal(roomCode);
+            }).catch((error) => {
+                console.error(`Error activating pending power for room ${roomCode}:`, error);
+            });
+            return;
+        }
+        this.activateNextPendingPowerInternal(roomCode);
+    }
+    activateNextPendingPowerInternal(roomCode) {
         const room = this.rooms.get(roomCode);
         if (!room?.gameState)
             return;
@@ -673,17 +693,17 @@ class RoomManager {
         const player = room.gameState.players.find(p => p.id === power.playerId);
         if (player && !player.isHuman) {
             setTimeout(async () => {
-                const currentRoom = this.rooms.get(roomCode);
-                if (!currentRoom?.gameState)
-                    return;
-                if (currentRoom.gameState.phase !== GameState_1.GamePhase.specialPower)
-                    return;
-                if (currentRoom.gameState.specialPowerPlayerId !== power.playerId)
-                    return;
-                // Utiliser le pouvoir via BotAI (au lieu de skip systématique)
-                await BotAI_1.BotAI.useBotSpecialPower(currentRoom.gameState);
-                this.broadcastGameState(roomCode, 'ACTION_RESULT');
-                this.activateNextPendingPower(roomCode);
+                await this.withRoomMutation(roomCode, async (currentRoom) => {
+                    if (!currentRoom?.gameState)
+                        return;
+                    if (currentRoom.gameState.phase !== GameState_1.GamePhase.specialPower)
+                        return;
+                    if (currentRoom.gameState.specialPowerPlayerId !== power.playerId)
+                        return;
+                    await BotAI_1.BotAI.useBotSpecialPower(currentRoom.gameState);
+                    this.broadcastGameState(roomCode, 'ACTION_RESULT');
+                    this.activateNextPendingPower(roomCode, { lockAlreadyHeld: true });
+                });
             }, 800);
         }
         else {
@@ -697,23 +717,35 @@ class RoomManager {
     startMatchPowerTimer(roomCode, playerId) {
         this.clearTurnTimer(roomCode);
         const timer = setTimeout(() => {
-            const room = this.rooms.get(roomCode);
-            if (!room?.gameState)
-                return;
-            if (room.gameState.phase !== GameState_1.GamePhase.specialPower)
-                return;
-            if (room.gameState.specialPowerPlayerId !== playerId)
-                return;
-            this.actionTimers.delete(roomCode);
-            GameLogic_1.GameLogic.skipSpecialPower(room.gameState);
-            this.broadcastGameState(roomCode, 'ACTION_RESULT', {
-                message: '⏱️ Pouvoir spécial expiré (60s) : pouvoir ignoré.',
+            void this.withRoomMutation(roomCode, async (room) => {
+                if (!room?.gameState)
+                    return;
+                if (room.gameState.phase !== GameState_1.GamePhase.specialPower)
+                    return;
+                if (room.gameState.specialPowerPlayerId !== playerId)
+                    return;
+                this.actionTimers.delete(roomCode);
+                GameLogic_1.GameLogic.skipSpecialPower(room.gameState);
+                this.broadcastGameState(roomCode, 'ACTION_RESULT', {
+                    message: '⏱️ Pouvoir spécial expiré (60s) : pouvoir ignoré.',
+                });
+                this.activateNextPendingPower(roomCode, { lockAlreadyHeld: true });
             });
-            this.activateNextPendingPower(roomCode);
         }, this.specialPowerTimeoutMs);
         this.actionTimers.set(roomCode, timer);
     }
-    async checkAndPlayBotTurn(roomCode) {
+    async checkAndPlayBotTurn(roomCode, context = {}) {
+        if (this.sharedRoomStore && !context.lockAlreadyHeld) {
+            await this.withRoomMutation(roomCode, async (room) => {
+                if (!room?.gameState)
+                    return;
+                await this.checkAndPlayBotTurnInternal(roomCode);
+            });
+            return;
+        }
+        await this.checkAndPlayBotTurnInternal(roomCode);
+    }
+    async checkAndPlayBotTurnInternal(roomCode) {
         const room = this.rooms.get(roomCode);
         if (!room?.gameState)
             return;
@@ -1491,9 +1523,30 @@ class RoomManager {
         room.gameState.turnStartTime = this.now();
         room.gameState.turnTimeoutMs = timeoutMs;
         this.broadcastGameState(roomCode, 'TIMER_UPDATE');
-        const playerId = currentPlayer.id;
+        this.scheduleTurnTimeout(roomCode, currentPlayer.id, timeoutMs);
+    }
+    clearTurnTimer(roomCode) {
+        const timer = this.actionTimers.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.actionTimers.delete(roomCode);
+        }
+        // Réinitialiser le timestamp de tour
+        const room = this.rooms.get(roomCode);
+        if (room?.gameState) {
+            room.gameState.turnStartTime = null;
+        }
+    }
+    scheduleTurnTimeout(roomCode, playerId, timeoutMs) {
         const timer = setTimeout(() => {
-            const currentRoom = this.rooms.get(roomCode);
+            void this.handleTurnTimeout(roomCode, playerId).catch((error) => {
+                console.error(`Error in turn timeout for room ${roomCode}:`, error);
+            });
+        }, timeoutMs);
+        this.actionTimers.set(roomCode, timer);
+    }
+    async handleTurnTimeout(roomCode, playerId) {
+        await this.withRoomMutation(roomCode, async (currentRoom) => {
             if (!currentRoom?.gameState)
                 return;
             const currentGameState = currentRoom.gameState;
@@ -1519,24 +1572,11 @@ class RoomManager {
                     this.startReactionTimer(roomCode, reactionTime);
                     return;
                 }
-                void this.checkAndPlayBotTurn(roomCode);
+                await this.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
                 return;
             }
             this.triggerPresenceCheck(roomCode, playerId, 'Temps de jeu écoulé');
-        }, timeoutMs);
-        this.actionTimers.set(roomCode, timer);
-    }
-    clearTurnTimer(roomCode) {
-        const timer = this.actionTimers.get(roomCode);
-        if (timer) {
-            clearTimeout(timer);
-            this.actionTimers.delete(roomCode);
-        }
-        // Réinitialiser le timestamp de tour
-        const room = this.rooms.get(roomCode);
-        if (room?.gameState) {
-            room.gameState.turnStartTime = null;
-        }
+        });
     }
     triggerPresenceCheck(roomCode, playerId, reason, options) {
         const room = this.rooms.get(roomCode);
@@ -1566,10 +1606,14 @@ class RoomManager {
         if (existing)
             clearTimeout(existing);
         const timer = setTimeout(() => {
-            const current = this.presenceChecks.get(roomCode);
-            if (current?.playerId !== playerId)
-                return;
-            this.markSpectator(roomCode, playerId, 'Inactif');
+            void this.withRoomMutation(roomCode, async () => {
+                const current = this.presenceChecks.get(roomCode);
+                if (current?.playerId !== playerId)
+                    return;
+                this.markSpectator(roomCode, playerId, 'Inactif');
+            }).catch((error) => {
+                console.error(`Error in presence timeout for room ${roomCode}:`, error);
+            });
         }, deadlineMs);
         this.presenceTimers.set(key, timer);
     }
@@ -1706,7 +1750,7 @@ class RoomManager {
             this.startReactionTimer(roomCode, reactionTime);
             return;
         }
-        void this.checkAndPlayBotTurn(roomCode);
+        void this.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
     }
     /**
      * Ajoute un joueur invité (déconnecté) dans une room en attente.
@@ -1802,6 +1846,7 @@ class RoomManager {
     }
     touchRoom(room) {
         room.lastActivityAt = this.now();
+        this.scheduleRoomPersist(room.id);
     }
     startCleanupLoop() {
         if (this.cleanupTimer)
@@ -2052,6 +2097,176 @@ class RoomManager {
             }
         }
         this.rooms.delete(roomCode);
+        this.runtimeRecoveredRooms.delete(roomCode);
+        this.forgetRoomFromSharedStore(roomCode);
+    }
+    async syncRoomFromSharedStore(roomCode, keepLocalIfMissing = false) {
+        if (!this.sharedRoomStore) {
+            return this.rooms.get(roomCode);
+        }
+        const normalizedRoomCode = roomCode.toUpperCase();
+        const room = await this.sharedRoomStore.loadRoom(normalizedRoomCode);
+        if (room) {
+            this.rooms.set(normalizedRoomCode, room);
+            this.recoverRoomRuntimeState(room);
+            return room;
+        }
+        if (!keepLocalIfMissing) {
+            this.rooms.delete(normalizedRoomCode);
+        }
+        return this.rooms.get(normalizedRoomCode);
+    }
+    recoverRoomRuntimeState(room) {
+        if (this.runtimeRecoveredRooms.has(room.id)) {
+            return;
+        }
+        this.runtimeRecoveredRooms.add(room.id);
+        if (!room.gameState) {
+            return;
+        }
+        if (room.isPaused) {
+            this.recoverPausedRoom(room);
+            return;
+        }
+        if (room.gameState.phase === GameState_1.GamePhase.reaction && room.gameState.reactionDeadlineAt) {
+            const remaining = room.gameState.reactionDeadlineAt - this.now();
+            if (remaining <= 0) {
+                void this.endReactionPhase(room.id);
+                return;
+            }
+            this.timerManager.startReactionTimer(room.id, remaining);
+            return;
+        }
+        if ((room.gameState.phase === GameState_1.GamePhase.playing ||
+            room.gameState.phase === GameState_1.GamePhase.specialPower) &&
+            room.gameState.turnStartTime != null &&
+            room.gameState.turnTimeoutMs > 0) {
+            const currentPlayer = (0, GameState_1.getCurrentPlayer)(room.gameState);
+            if (currentPlayer.isHuman && !currentPlayer.isSpectator) {
+                const deadlineAt = room.gameState.turnStartTime + room.gameState.turnTimeoutMs;
+                const remaining = deadlineAt - this.now();
+                if (remaining <= 0) {
+                    void this.handleTurnTimeout(room.id, currentPlayer.id);
+                    return;
+                }
+                this.broadcastGameState(room.id, 'TIMER_UPDATE');
+                this.scheduleTurnTimeout(room.id, currentPlayer.id, remaining);
+                return;
+            }
+        }
+        if (room.gameState.phase === GameState_1.GamePhase.playing &&
+            !(0, GameState_1.getCurrentPlayer)(room.gameState).isHuman) {
+            void this.checkAndPlayBotTurn(room.id);
+        }
+    }
+    recoverPausedRoom(room) {
+        const pausedByPlayerId = room.pausedByPlayerId;
+        const pausedByName = room.pausedByName;
+        const pauseStartTime = room.pauseStartTime;
+        if (!pausedByPlayerId || !pausedByName || pauseStartTime == null) {
+            return;
+        }
+        const pauseDeadline = pauseStartTime + 90000;
+        if (pauseDeadline <= this.now()) {
+            void this.withRoomMutation(room.id, async (currentRoom) => {
+                if (!currentRoom ||
+                    !currentRoom.isPaused ||
+                    currentRoom.pausedByPlayerId !== pausedByPlayerId) {
+                    return;
+                }
+                currentRoom.pauseTimeoutHandle = undefined;
+                this.markSpectator(room.id, pausedByPlayerId, 'pause trop longue');
+                if (currentRoom.isPaused) {
+                    this.resumeGame(room.id, pausedByPlayerId, 'Système', true);
+                }
+            }).catch((error) => {
+                console.error(`Error recovering expired pause for room ${room.id}:`, error);
+            });
+            return;
+        }
+        this.schedulePauseTimers(room.id, pausedByPlayerId, pausedByName, pauseStartTime);
+    }
+    schedulePauseTimers(roomCode, pausedByPlayerId, pausedByName, pauseStartTime) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        const elapsedMs = Math.max(0, this.now() - pauseStartTime);
+        const warn30DelayMs = Math.max(0, 60000 - elapsedMs);
+        const warn15DelayMs = Math.max(0, 75000 - elapsedMs);
+        const kickDelayMs = Math.max(0, 90000 - elapsedMs);
+        const warn1 = setTimeout(() => {
+            const r = this.rooms.get(roomCode);
+            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                return;
+            this.io.to(roomCode).emit('game:pause_warning', {
+                roomCode,
+                pausedBy: pausedByName,
+                secondsRemaining: 30,
+                message: `${pausedByName} sera expulsé dans 30 secondes s'il ne lève pas la pause.`,
+            });
+        }, warn30DelayMs);
+        const warn2 = setTimeout(() => {
+            const r = this.rooms.get(roomCode);
+            if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                return;
+            this.io.to(roomCode).emit('game:pause_warning', {
+                roomCode,
+                pausedBy: pausedByName,
+                secondsRemaining: 15,
+                message: `${pausedByName} sera expulsé dans 15 secondes s'il ne lève pas la pause.`,
+            });
+        }, warn15DelayMs);
+        const kick = setTimeout(() => {
+            void this.withRoomMutation(roomCode, async (r) => {
+                if (!r || !r.isPaused || r.pausedByPlayerId !== pausedByPlayerId)
+                    return;
+                console.log(`⏱️ Pause timeout: kick de ${pausedByName} (${pausedByPlayerId})`);
+                r.pauseTimeoutHandle = undefined;
+                this.markSpectator(roomCode, pausedByPlayerId, 'pause trop longue');
+                if (r.isPaused) {
+                    this.resumeGame(roomCode, pausedByPlayerId, 'Système', true);
+                }
+            }).catch((error) => {
+                console.error(`Error in pause timeout for room ${roomCode}:`, error);
+            });
+        }, kickDelayMs);
+        room.pauseTimeoutHandle = kick;
+        kick._warn1 = warn1;
+        kick._warn2 = warn2;
+    }
+    scheduleRoomPersist(roomCode) {
+        if (!this.sharedRoomStore) {
+            return;
+        }
+        const normalizedRoomCode = roomCode.toUpperCase();
+        if (this.pendingPersistRooms.has(normalizedRoomCode)) {
+            return;
+        }
+        this.pendingPersistRooms.add(normalizedRoomCode);
+        queueMicrotask(() => {
+            void this.persistRoomNow(normalizedRoomCode);
+        });
+    }
+    async persistRoomNow(roomCode) {
+        this.pendingPersistRooms.delete(roomCode);
+        if (!this.sharedRoomStore) {
+            return;
+        }
+        const room = this.rooms.get(roomCode);
+        if (!room) {
+            await this.sharedRoomStore.deleteRoom(roomCode);
+            return;
+        }
+        await this.sharedRoomStore.saveRoom(room);
+    }
+    forgetRoomFromSharedStore(roomCode) {
+        if (!this.sharedRoomStore) {
+            return;
+        }
+        this.pendingPersistRooms.delete(roomCode.toUpperCase());
+        void this.sharedRoomStore.deleteRoom(roomCode).catch((error) => {
+            console.error(`Error deleting room ${roomCode} from Redis:`, error);
+        });
     }
     getPersonalizedState(gameState, playerId) {
         const state = { ...gameState };
@@ -2096,7 +2311,7 @@ class RoomManager {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let code;
         do {
-            code = Array.from({ length: 6 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+            code = Array.from({ length: 8 }, () => chars.charAt((0, node_crypto_1.randomInt)(chars.length))).join('');
         } while (this.rooms.has(code));
         return code;
     }

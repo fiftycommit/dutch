@@ -59,12 +59,16 @@ const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
 const chatKeyRoutes_1 = __importStar(require("./routes/chatKeyRoutes"));
 const socketAuthMiddleware_1 = require("./middleware/socketAuthMiddleware");
 const adminAuthMiddleware_1 = require("./middleware/adminAuthMiddleware");
+const appCheckMiddleware_1 = require("./middleware/appCheckMiddleware");
 const FriendsService_1 = require("./services/FriendsService");
 const RoomRegistryService_1 = require("./services/RoomRegistryService");
+const RedisService_1 = require("./services/RedisService");
+const contentSecurityPolicy_1 = require("./security/contentSecurityPolicy");
 const startedAt = new Date().toISOString();
-function startServer() {
+async function startServer() {
     const app = (0, express_1.default)();
     const httpServer = (0, node_http_1.createServer)(app);
+    const publicDir = node_path_1.default.join(__dirname, '../public');
     const allowedOrigins = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',')
         : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
@@ -81,9 +85,15 @@ function startServer() {
         pingTimeout: 60000,
         pingInterval: 25000,
     });
+    const redisRuntime = await RedisService_1.RedisService.initialize();
+    const redisAdapter = RedisService_1.RedisService.getAdapterFactory();
+    if (redisAdapter) {
+        io.adapter(redisAdapter);
+    }
     // Injecter les références de présence pour le service d'amis
     FriendsService_1.FriendsService.setOnlineUsersRef(socketAuthMiddleware_1.onlineUsers);
     FriendsService_1.FriendsService.setUserFocusedRef(socketAuthMiddleware_1.userFocused);
+    FriendsService_1.FriendsService.setIo(io);
     // Socket Auth Middleware (Firebase token verification)
     io.use(socketAuthMiddleware_1.socketAuthMiddleware);
     // Socket Connection Rate Limiting
@@ -96,12 +106,18 @@ function startServer() {
             next(new Error('Rate limit exceeded'));
         }
     });
-    const roomManager = new RoomManager_1.RoomManager(io);
+    const roomManager = new RoomManager_1.RoomManager(io, {
+        sharedRoomStore: redisRuntime.roomStore,
+    });
+    await roomManager.hydrateFromSharedStore();
     RoomRegistryService_1.roomRegistryService.startPeriodicSync(roomManager);
     io.on('connection', (socket) => {
         const user = socket.data.user;
         const userInfo = user ? ` (user: ${user.username})` : ' (guest)';
         console.log(`Client connected: ${socket.id}${userInfo}`);
+        if (user?.uid) {
+            socket.join(FriendsService_1.FriendsService.getUserRoom(user.uid));
+        }
         (0, connectionHandler_1.setupConnectionHandler)(socket, roomManager);
         (0, roomHandler_1.setupRoomHandler)(socket, roomManager, io);
         (0, gameHandler_1.setupGameHandler)(socket, roomManager);
@@ -166,10 +182,14 @@ function startServer() {
     app.get('/version', (req, res) => {
         res.json({ status: 'ok' });
     });
+    const withContentSecurityPolicy = (policy) => (req, res, next) => {
+        res.setHeader('Content-Security-Policy', policy);
+        next();
+    };
     app.get('/rooms/debug', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdmin, (req, res) => {
         res.json(roomManager.listRoomsDebug());
     });
-    app.get('/rooms/public', SecurityService_1.SecurityService.publicEndpointLimiter, (req, res) => {
+    app.get('/rooms/public', appCheckMiddleware_1.requireAppCheck, SecurityService_1.SecurityService.publicEndpointLimiter, (req, res) => {
         const publicRooms = publicRoomService_1.publicRoomService.getAvailableRooms();
         res.json({ success: true, rooms: publicRooms });
     });
@@ -197,46 +217,56 @@ function startServer() {
     app.use('/api/chats', chatKeyRoutes_1.default);
     // Fichier JS partagé pour l'auth admin (accessible publiquement)
     app.get('/admin-auth.js', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-auth.js'));
+        res.sendFile(node_path_1.default.join(publicDir, 'admin-auth.js'));
     });
-    // Pages admin — HTML servi sans auth pour permettre le login, les API restent protégées
-    app.get('/admin-login', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-login.html'));
+    app.use('/admin-assets', express_1.default.static(node_path_1.default.join(publicDir, 'admin-assets'), {
+        index: false,
+        fallthrough: true,
+        setHeaders(res) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        },
+    }));
+    // Login admin public ; les autres pages admin sont protégées par une session httpOnly.
+    app.get('/admin-login', withContentSecurityPolicy(contentSecurityPolicy_1.strictAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'admin-login.html'));
     });
-    app.get(['/status', '/admin-home'], (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/admin-home.html'));
+    app.get(['/status', '/admin-home'], adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.strictAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'admin-home.html'));
     });
-    app.get('/admin', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/admin.html'));
+    app.get('/admin', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.strictAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'admin.html'));
     });
-    app.get('/bot-stats', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/bot-stats.html'));
+    app.get('/bot-stats', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.analyticsAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'bot-stats.html'));
     });
-    app.get('/bot-dashboard', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/bot-dashboard.html'));
+    app.get('/bot-dashboard', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.analyticsAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'bot-dashboard.html'));
     });
-    app.get('/shuffle-analysis', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/shuffle-analysis.html'));
+    app.get('/shuffle-analysis', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.analyticsAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'shuffle-analysis.html'));
     });
-    app.get('/player-profile', (req, res) => {
-        res.sendFile('player-profile.html', { root: './public' });
+    app.get('/player-profile', adminAuthMiddleware_1.adminLimiter, adminAuthMiddleware_1.requireAdminPage, withContentSecurityPolicy(contentSecurityPolicy_1.analyticsAdminContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'player-profile.html'));
     });
-    app.get('/rules', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/rules.html'));
+    app.get('/rules', withContentSecurityPolicy(contentSecurityPolicy_1.publicHtmlContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'rules.html'));
     });
-    app.get('/about', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/about.html'));
+    app.get('/about', withContentSecurityPolicy(contentSecurityPolicy_1.publicHtmlContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'about.html'));
     });
-    app.get('/strategies', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/strategies.html'));
+    app.get('/strategies', withContentSecurityPolicy(contentSecurityPolicy_1.publicHtmlContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'strategies.html'));
     });
-    app.get('/faq', (req, res) => {
-        res.sendFile(node_path_1.default.join(__dirname, '../public/faq.html'));
+    app.get('/faq', withContentSecurityPolicy(contentSecurityPolicy_1.publicHtmlContentSecurityPolicy), (req, res) => {
+        res.sendFile(node_path_1.default.join(publicDir, 'faq.html'));
     });
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {
         console.log(`🚀 Dutch Server running on port ${PORT}`);
         console.log(`📡 Socket.IO ready for connections`);
+        if (redisRuntime.enabled) {
+            console.log('🧠 Redis shared state enabled');
+        }
     });
     return { app, io, httpServer, roomManager };
 }

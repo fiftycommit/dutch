@@ -21,6 +21,7 @@ class TimerManager {
         this.lastBroadcastAt.set(roomCode, 0);
         room.gameState.reactionTimeRemaining = durationMs;
         room.gameState.reactionStartTime = new Date(startTime);
+        room.gameState.reactionDeadlineAt = endTime;
         const timer = setInterval(() => {
             const currentRoom = this.roomAccess.getRoom(roomCode);
             if (!currentRoom || !currentRoom.gameState) {
@@ -53,6 +54,10 @@ class TimerManager {
         if (timer) {
             clearInterval(timer);
             this.timers.delete(roomCode);
+        }
+        const room = this.roomAccess.getRoom(roomCode);
+        if (room?.gameState) {
+            room.gameState.reactionDeadlineAt = null;
         }
         this.endTimes.delete(roomCode);
         this.lastBroadcastAt.delete(roomCode);

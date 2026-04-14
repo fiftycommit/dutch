@@ -73,7 +73,7 @@ class JoinModeSelectionScreen extends StatelessWidget {
                                   icon: Icons.vpn_key,
                                   title: 'Salon Privé',
                                   description:
-                                      'Entre le code à 6 caractères pour rejoindre',
+                                      'Entre le code à 8 caractères pour rejoindre',
                                   color: Colors.orange.shade700,
                                   onTap: () =>
                                       context.push('/multiplayer/join-private'),

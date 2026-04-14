@@ -107,7 +107,7 @@ class _DeferredScreen extends StatelessWidget {
 }
 
 /// Configuration du routeur pour l'application
-/// Permet d'avoir des URLs propres sur le web (ex: /room/ABC123)
+/// Permet d'avoir des URLs propres sur le web (ex: /room/AB12CD34)
 class AppRouter {
   static String? currentLocation;
   static final GlobalKey<NavigatorState> _rootNavigatorKey =
@@ -500,7 +500,7 @@ class AppRouter {
             ),
 
             // Route dynamique pour rejoindre une room via URL partagée
-            // Ex: dutch-game.me/room/ABC123?name=Max
+            // Ex: dutch-game.me/room/AB12CD34?name=Max
             GoRoute(
               path: '/room/:roomCode',
               name: 'room',

@@ -24,7 +24,7 @@ export enum RoomStatus {
 }
 
 export interface Room {
-  id: string; // Code room (ex: "ABC123")
+  id: string; // Code room (ex: "AB12CD34")
   hostPlayerId: string;
   settings: GameSettings;
   gameMode: GameMode;

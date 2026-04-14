@@ -66,6 +66,19 @@ test('joinRoom adds player to room', (t) => {
   assert.ok(room.players.some(p => p.id === 'player-2'));
 });
 
+test('createRoom generates 8-character cryptographic room codes', (t) => {
+  const { manager } = createManager();
+  t.after(() => manager.dispose());
+
+  const room = manager.createRoom('host-1', {
+    minPlayers: 2,
+    maxPlayers: 4,
+    fillBots: false,
+  });
+
+  assert.match(room.id, /^[A-Z0-9]{8}$/);
+});
+
 test('joinRoom returns error for full room', (t) => {
   const { manager } = createManager();
   t.after(() => manager.dispose());

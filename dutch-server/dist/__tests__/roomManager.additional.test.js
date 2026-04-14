@@ -7,6 +7,7 @@ const node_test_1 = __importDefault(require("node:test"));
 const strict_1 = __importDefault(require("node:assert/strict"));
 const RoomManager_1 = require("../services/RoomManager");
 const GameState_1 = require("../models/GameState");
+const RoomSnapshotCodec_1 = require("../services/RoomSnapshotCodec");
 class FakeServer {
     constructor() {
         this.events = [];
@@ -50,6 +51,16 @@ function createManager(options = {}) {
     strict_1.default.ok(!result.error);
     strict_1.default.equal(room.players.length, 2);
     strict_1.default.ok(room.players.some(p => p.id === 'player-2'));
+});
+(0, node_test_1.default)('createRoom generates 8-character cryptographic room codes', (t) => {
+    const { manager } = createManager();
+    t.after(() => manager.dispose());
+    const room = manager.createRoom('host-1', {
+        minPlayers: 2,
+        maxPlayers: 4,
+        fillBots: false,
+    });
+    strict_1.default.match(room.id, /^[A-Z0-9]{8}$/);
 });
 (0, node_test_1.default)('joinRoom returns error for full room', (t) => {
     const { manager } = createManager();
@@ -204,6 +215,69 @@ function createManager(options = {}) {
     strict_1.default.equal(room.isPaused, true);
     manager.resumeGame(room.id, 'host-1', 'Player 1');
     strict_1.default.equal(room.isPaused, false);
+});
+(0, node_test_1.default)('hydrateFromSharedStore recovers an expired pause and resumes the room', async (t) => {
+    let storedRoom;
+    const fakeStore = {
+        async loadAllRooms() {
+            if (!storedRoom)
+                return [];
+            return [storedRoom];
+        },
+        async loadRoom(roomCode) {
+            if (storedRoom?.id === roomCode.toUpperCase()) {
+                return storedRoom;
+            }
+            return undefined;
+        },
+        async saveRoom(room) {
+            storedRoom = RoomSnapshotCodec_1.RoomSnapshotCodec.deserialize(RoomSnapshotCodec_1.RoomSnapshotCodec.serialize(room));
+        },
+        async deleteRoom(roomCode) {
+            if (storedRoom?.id === roomCode.toUpperCase()) {
+                storedRoom = undefined;
+            }
+        },
+        async withRoomLock(_roomCode, operation) {
+            return await operation();
+        },
+    };
+    const pauseStartTime = 1000;
+    const { manager: sourceManager } = createManager({
+        now: () => pauseStartTime,
+    });
+    t.after(() => sourceManager.dispose());
+    const room = sourceManager.createRoom('host-1', {
+        minPlayers: 2,
+        maxPlayers: 2,
+        fillBots: false,
+    });
+    sourceManager.joinRoom(room.id, 'player-2', 'P2', 'c2');
+    sourceManager.setReady(room.id, 'host-1', true);
+    sourceManager.setReady(room.id, 'player-2', true);
+    sourceManager.startGame(room.id, { fillBots: false });
+    sourceManager.pauseGame(room.id, 'host-1', 'Player 1');
+    sourceManager.resumeGame(room.id, 'host-1', 'Player 1');
+    room.isPaused = true;
+    room.pausedByPlayerId = 'host-1';
+    room.pausedByName = 'Player 1';
+    room.pauseStartTime = pauseStartTime;
+    storedRoom = RoomSnapshotCodec_1.RoomSnapshotCodec.deserialize(RoomSnapshotCodec_1.RoomSnapshotCodec.serialize(room));
+    const { manager: recoveredManager } = createManager({
+        now: () => pauseStartTime + 89970,
+        sharedRoomStore: fakeStore,
+    });
+    t.after(() => recoveredManager.dispose());
+    await recoveredManager.hydrateFromSharedStore();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const recoveredRoom = recoveredManager.getRoom(room.id);
+    strict_1.default.ok(recoveredRoom);
+    strict_1.default.equal(recoveredRoom?.isPaused, false);
+    strict_1.default.equal(recoveredRoom?.pausedByPlayerId, undefined);
+    const recoveredHost = recoveredRoom?.players.find((player) => player.id === 'host-1');
+    strict_1.default.ok(recoveredHost);
+    strict_1.default.equal(recoveredHost?.isSpectator, true);
+    strict_1.default.equal(recoveredHost?.connected, false);
 });
 // ============ Tests forfeitGame ============
 (0, node_test_1.default)('forfeitGame converts player to spectator', (t) => {

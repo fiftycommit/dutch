@@ -18,6 +18,12 @@ const FIREBASE_CONFIG = {
 let _firebaseApp = null;
 let _firebaseAuth = null;
 let _idToken = '';
+const SCRIPT_INTEGRITY = {
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js':
+    'sha384-sEVIly94UBRLKWdkYoPpSG7GD/e79YHMrxVyZaOk712Ga7+EAw6w1EFi+xBzBdd+',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js':
+    'sha384-EkqK+ezBWJuvO3hfrSx2iVqr3YQbhmnzn8kPhOpBZ+0GMVU5oGSgptwIu8D84HjE',
+};
 
 /** Get current ID token for API calls */
 function getAdminSecret() { return _idToken; }
@@ -88,6 +94,11 @@ function loadScript(src) {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
     const s = document.createElement('script');
     s.src = src;
+    const integrity = SCRIPT_INTEGRITY[src];
+    if (integrity) {
+      s.integrity = integrity;
+      s.crossOrigin = 'anonymous';
+    }
     s.onload = resolve;
     s.onerror = reject;
     document.head.appendChild(s);

@@ -16,6 +16,7 @@ class JoinPrivateRoomScreen extends StatefulWidget {
 }
 
 class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
+  static const int _roomCodeLength = 8;
   String _playerName = 'Joueur';
   final _codeController = TextEditingController();
   bool _isJoining = false;
@@ -63,8 +64,8 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
   Future<void> _joinRoom() async {
     final code = _codeController.text.trim().toUpperCase();
 
-    if (code.length != 6) {
-      _showError('Le code doit contenir 6 caractères');
+    if (code.length != _roomCodeLength) {
+      _showError('Le code doit contenir $_roomCodeLength caractères');
       return;
     }
 
@@ -175,7 +176,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Entre le code à 6 caractères partagé par l\'hôte',
+                                      'Entre le code à $_roomCodeLength caractères partagé par l\'hôte',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 12,
@@ -193,7 +194,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                             enabled: !_isJoining,
                                             textCapitalization:
                                                 TextCapitalization.characters,
-                                            maxLength: 6,
+                                            maxLength: _roomCodeLength,
                                             textAlign: TextAlign.center,
                                             style: const TextStyle(
                                               color: Colors.black87,
@@ -379,7 +380,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                     ),
                                     SizedBox(height: isMobile ? 8 : 12),
                                     Text(
-                                      'Entre le code à 6 caractères partagé par l\'hôte',
+                                      'Entre le code à $_roomCodeLength caractères partagé par l\'hôte',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: isMobile ? 14 : 16,
@@ -392,7 +393,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       enabled: !_isJoining,
                                       textCapitalization:
                                           TextCapitalization.characters,
-                                      maxLength: 6,
+                                      maxLength: _roomCodeLength,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: Colors.black87,
@@ -409,7 +410,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                         labelText: 'Code du salon',
                                         labelStyle: const TextStyle(
                                             color: Colors.black87),
-                                        hintText: 'ABC123',
+                                        hintText: 'AB12CD34',
                                         hintStyle: TextStyle(
                                           color: Colors.black26,
                                           letterSpacing: 8,

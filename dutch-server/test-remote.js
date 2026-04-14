@@ -213,7 +213,7 @@ async function runTests() {
     await host.connect();
     const result = await host.createRoom();
     roomCode = result.roomCode;
-    if (!roomCode || roomCode.length !== 6) {
+    if (!roomCode || roomCode.length !== 8) {
       throw new Error('Invalid room code');
     }
   });

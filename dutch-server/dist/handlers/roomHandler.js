@@ -97,6 +97,7 @@ function setupRoomHandler(socket, roomManager, io) {
                 return;
             }
             const playerName = socketUser.displayName || 'Joueur';
+            await roomManager.loadRoom(roomCode);
             const duplicateConnected = roomManager.findConnectedPlayerByUserId(roomCode, socketUser.uid);
             if (duplicateConnected && duplicateConnected.id !== socket.id) {
                 io?.to(duplicateConnected.id).emit('room:duplicate_login_attempt', {
@@ -116,9 +117,12 @@ function setupRoomHandler(socket, roomManager, io) {
                 username: socketUser.username,
                 clientId: data.clientId?.toString(),
             });
-            const result = roomManager.joinRoom(roomCode, socket.id, playerName, data.clientId, socketUser.uid, socketUser.username);
-            if (result.error || !result.room) {
-                callback({ success: false, error: result.error ?? 'Room introuvable' });
+            let result;
+            await roomManager.withRoomMutation(roomCode, async () => {
+                result = roomManager.joinRoom(roomCode, socket.id, playerName, data.clientId, socketUser.uid, socketUser.username);
+            });
+            if (!result || result.error || !result.room) {
+                callback({ success: false, error: result?.error ?? 'Room introuvable' });
                 return;
             }
             // Remove previous socket from room channel to avoid duplicate events
@@ -169,8 +173,13 @@ function setupRoomHandler(socket, roomManager, io) {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
             const ready = data.ready !== false;
-            const success = roomManager.setReady(roomCode, socket.id, ready);
-            callback?.({ success });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.setReady(roomCode, socket.id, ready);
+                callback?.({ success });
+            }).catch((error) => {
+                console.error('Error setting ready state:', error);
+                callback?.({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error setting ready state:', error);
@@ -180,48 +189,48 @@ function setupRoomHandler(socket, roomManager, io) {
     socket.on('room:start_game', async (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            const room = roomManager.getRoom(roomCode);
-            if (!room) {
-                callback({ success: false, error: 'Room introuvable' });
-                return;
-            }
-            if (room.hostPlayerId !== socket.id) {
-                callback({ success: false, error: "Seul l'hôte peut démarrer" });
-                return;
-            }
-            const minPlayers = typeof room.settings?.minPlayers === 'number'
-                ? room.settings.minPlayers
-                : 2;
-            const readyHumans = room.players.filter((p) => p.isHuman && p.connected !== false && p.ready).length;
-            if (!room.players.find((p) => p.id === socket.id)?.ready) {
-                callback({
-                    success: false,
-                    error: "L'hôte doit être prêt",
+            await roomManager.withRoomMutation(roomCode, async (room) => {
+                if (!room) {
+                    callback({ success: false, error: 'Room introuvable' });
+                    return;
+                }
+                if (room.hostPlayerId !== socket.id) {
+                    callback({ success: false, error: "Seul l'hôte peut démarrer" });
+                    return;
+                }
+                const minPlayers = typeof room.settings?.minPlayers === 'number'
+                    ? room.settings.minPlayers
+                    : 2;
+                const readyHumans = room.players.filter((p) => p.isHuman && p.connected !== false && p.ready).length;
+                if (!room.players.find((p) => p.id === socket.id)?.ready) {
+                    callback({
+                        success: false,
+                        error: "L'hôte doit être prêt",
+                    });
+                    return;
+                }
+                if (readyHumans < minPlayers) {
+                    callback({
+                        success: false,
+                        error: `Minimum ${minPlayers} joueurs prêts requis`,
+                    });
+                    return;
+                }
+                const fillBots = data.fillBots === undefined ? room.settings?.fillBots !== false : data.fillBots === true;
+                const started = roomManager.startGame(roomCode, {
+                    fillBots,
                 });
-                return;
-            }
-            if (readyHumans < minPlayers) {
-                callback({
-                    success: false,
-                    error: `Minimum ${minPlayers} joueurs prêts requis`,
+                callback({ success: started });
+                if (!started)
+                    return;
+                console.log(`Game started in room ${roomCode}`);
+                roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
+                    message: 'La partie commence !',
+                    reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
                 });
-                return;
-            }
-            // Utiliser fillBots des settings de la room par défaut, sauf si explicitement spécifié
-            const fillBots = data.fillBots === undefined ? room.settings?.fillBots !== false : data.fillBots === true;
-            const started = roomManager.startGame(roomCode, {
-                fillBots,
+                roomManager.broadcastPresence(roomCode);
+                await roomManager.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
             });
-            callback({ success: started });
-            if (!started)
-                return;
-            console.log(`Game started in room ${roomCode}`);
-            roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
-                message: 'La partie commence !',
-                reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
-            });
-            roomManager.broadcastPresence(roomCode);
-            await roomManager.checkAndPlayBotTurn(roomCode);
         }
         catch (error) {
             console.error('Error starting game:', error);
@@ -244,14 +253,16 @@ function setupRoomHandler(socket, roomManager, io) {
             callback?.({ success: false, error: error.message });
         }
     });
-    socket.on('room:leave', (data) => {
+    socket.on('room:leave', async (data) => {
         const roomCode = data?.roomCode?.toString().toUpperCase();
         if (!roomCode)
             return;
         socket.leave(roomCode);
-        roomManager.handleLeave(roomCode, socket.id);
+        await roomManager.withRoomMutation(roomCode, async () => {
+            roomManager.handleLeave(roomCode, socket.id);
+        });
         // Mettre à jour le compteur pour les rooms publiques
-        const updatedRoom = roomManager.getRoom(roomCode);
+        const updatedRoom = await roomManager.loadRoom(roomCode);
         if (updatedRoom) {
             (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, updatedRoom.players.length);
         }
@@ -264,7 +275,7 @@ function setupRoomHandler(socket, roomManager, io) {
             void RoomRegistryService_1.roomRegistryService
                 .removeMember(roomCode, socketUser.uid)
                 .then(async () => {
-                const room = roomManager.getRoom(roomCode);
+                const room = await roomManager.loadRoom(roomCode);
                 if (room) {
                     await RoomRegistryService_1.roomRegistryService.upsertRoom(room);
                 }
@@ -284,20 +295,24 @@ function setupRoomHandler(socket, roomManager, io) {
     socket.on('room:close', (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            const result = roomManager.closeRoom(roomCode, socket.id);
-            if (result.success) {
-                socket.leave(roomCode);
-                // Supprimer du service de rooms publiques
-                (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, 0);
-                RoomRegistryService_1.roomRegistryService.unbindSocketMembership(socket.id);
-                void RoomRegistryService_1.roomRegistryService.archiveRoom(roomCode).catch((error) => {
-                    if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                        console.error('Error archiving room in room registry:', error);
-                    }
-                });
-                console.log(`Room ${roomCode} closed by host ${socket.id}`);
-            }
-            callback(result);
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const result = roomManager.closeRoom(roomCode, socket.id);
+                if (result.success) {
+                    socket.leave(roomCode);
+                    (0, publicRoomHandlers_1.onPublicRoomPlayerLeft)(roomCode, 0);
+                    RoomRegistryService_1.roomRegistryService.unbindSocketMembership(socket.id);
+                    void RoomRegistryService_1.roomRegistryService.archiveRoom(roomCode).catch((error) => {
+                        if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                            console.error('Error archiving room in room registry:', error);
+                        }
+                    });
+                    console.log(`Room ${roomCode} closed by host ${socket.id}`);
+                }
+                callback(result);
+            }).catch((error) => {
+                console.error('Error closing room:', error);
+                callback({ success: false, reason: error.message });
+            });
         }
         catch (error) {
             console.error('Error closing room:', error);
@@ -308,28 +323,33 @@ function setupRoomHandler(socket, roomManager, io) {
     socket.on('room:transfer_host', (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            const success = roomManager.transferHost(roomCode, socket.id);
-            if (success) {
-                if (socketUser?.uid) {
-                    const room = roomManager.getRoom(roomCode);
-                    const requester = room?.players.find((p) => p.id === socket.id);
-                    if (room && requester) {
-                        void RoomRegistryService_1.roomRegistryService
-                            .upsertRoom(room)
-                            .then(async () => {
-                            await RoomRegistryService_1.roomRegistryService.upsertMember(room, requester);
-                            RoomRegistryService_1.roomRegistryService.bindSocketMembership(socket.id, roomCode, socketUser.uid);
-                        })
-                            .catch((error) => {
-                            if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                                console.error('Error syncing host transfer to room registry:', error);
-                            }
-                        });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.transferHost(roomCode, socket.id);
+                if (success) {
+                    if (socketUser?.uid) {
+                        const room = await roomManager.loadRoom(roomCode);
+                        const requester = room?.players.find((p) => p.id === socket.id);
+                        if (room && requester) {
+                            void RoomRegistryService_1.roomRegistryService
+                                .upsertRoom(room)
+                                .then(async () => {
+                                await RoomRegistryService_1.roomRegistryService.upsertMember(room, requester);
+                                RoomRegistryService_1.roomRegistryService.bindSocketMembership(socket.id, roomCode, socketUser.uid);
+                            })
+                                .catch((error) => {
+                                if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                                    console.error('Error syncing host transfer to room registry:', error);
+                                }
+                            });
+                        }
                     }
+                    console.log(`Host transferred to ${socket.id} in room ${roomCode}`);
                 }
-                console.log(`Host transferred to ${socket.id} in room ${roomCode}`);
-            }
-            callback({ success });
+                callback({ success });
+            }).catch((error) => {
+                console.error('Error transferring host:', error);
+                callback({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error transferring host:', error);
@@ -352,7 +372,7 @@ function setupRoomHandler(socket, roomManager, io) {
                 const rooms = [];
                 const staleRoomCodes = [];
                 for (const entry of entries) {
-                    const room = roomManager.getRoom(entry.roomCode);
+                    const room = await roomManager.loadRoom(entry.roomCode);
                     if (!room || room.status === 'closing') {
                         staleRoomCodes.push(entry.roomCode);
                         continue;
@@ -400,11 +420,16 @@ function setupRoomHandler(socket, roomManager, io) {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
             const gameMode = data.gameMode;
-            const success = roomManager.setGameMode(roomCode, socket.id, gameMode);
-            if (success) {
-                console.log(`Game mode changed to ${gameMode} in room ${roomCode}`);
-            }
-            callback({ success });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.setGameMode(roomCode, socket.id, gameMode);
+                if (success) {
+                    console.log(`Game mode changed to ${gameMode} in room ${roomCode}`);
+                }
+                callback({ success });
+            }).catch((error) => {
+                console.error('Error setting game mode:', error);
+                callback({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error setting game mode:', error);
@@ -420,26 +445,28 @@ function setupRoomHandler(socket, roomManager, io) {
     socket.on('room:restart', async (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            let success = roomManager.restartGame(roomCode, socket.id);
-            if (success) {
-                const room = roomManager.getRoom(roomCode);
-                if (room?.gameMode === GameState_1.GameMode.tournament &&
-                    room.status === Room_1.RoomStatus.waiting) {
-                    success = roomManager.startGame(roomCode, {
-                        fillBots: room.settings?.fillBots !== false,
-                    });
-                    if (success) {
-                        roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
-                            message: 'La manche suivante commence !',
-                            reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
+            await roomManager.withRoomMutation(roomCode, async () => {
+                let success = roomManager.restartGame(roomCode, socket.id);
+                if (success) {
+                    const room = await roomManager.loadRoom(roomCode);
+                    if (room?.gameMode === GameState_1.GameMode.tournament &&
+                        room.status === Room_1.RoomStatus.waiting) {
+                        success = roomManager.startGame(roomCode, {
+                            fillBots: room.settings?.fillBots !== false,
                         });
-                        roomManager.broadcastPresence(roomCode);
-                        await roomManager.checkAndPlayBotTurn(roomCode);
+                        if (success) {
+                            roomManager.broadcastGameState(roomCode, 'GAME_STARTED', {
+                                message: 'La manche suivante commence !',
+                                reactionTimeMs: room.settings?.reactionTimeMs ?? 3000,
+                            });
+                            roomManager.broadcastPresence(roomCode);
+                            await roomManager.checkAndPlayBotTurn(roomCode, { lockAlreadyHeld: true });
+                        }
                     }
+                    console.log(`Game restarted in room ${roomCode} by ${socket.id}`);
                 }
-                console.log(`Game restarted in room ${roomCode} by ${socket.id}`);
-            }
-            callback({ success });
+                callback({ success });
+            });
         }
         catch (error) {
             console.error('Error restarting game:', error);
@@ -450,8 +477,13 @@ function setupRoomHandler(socket, roomManager, io) {
     socket.on('room:backToLobby', (data, callback) => {
         try {
             const roomCode = data.roomCode?.toString().toUpperCase();
-            const success = roomManager.backToLobby(roomCode, socket.id);
-            callback({ success });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.backToLobby(roomCode, socket.id);
+                callback({ success });
+            }).catch((error) => {
+                console.error('Error returning to lobby:', error);
+                callback({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error returning to lobby:', error);
@@ -469,26 +501,31 @@ function setupRoomHandler(socket, roomManager, io) {
                 callback({ success: false, error: 'clientId requis' });
                 return;
             }
-            const success = roomManager.kickPlayer(roomCode, socket.id, targetClientId);
-            if (success) {
-                if (kickedUid) {
-                    void RoomRegistryService_1.roomRegistryService.removeMember(roomCode, kickedUid).catch((error) => {
-                        if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                            console.error('Error syncing kick to room registry:', error);
-                        }
-                    });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.kickPlayer(roomCode, socket.id, targetClientId);
+                if (success) {
+                    if (kickedUid) {
+                        void RoomRegistryService_1.roomRegistryService.removeMember(roomCode, kickedUid).catch((error) => {
+                            if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                                console.error('Error syncing kick to room registry:', error);
+                            }
+                        });
+                    }
+                    const updatedRoom = await roomManager.loadRoom(roomCode);
+                    if (updatedRoom) {
+                        void RoomRegistryService_1.roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
+                            if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                                console.error('Error updating room after kick:', error);
+                            }
+                        });
+                    }
+                    console.log(`Player ${targetClientId} kicked from ${roomCode} (can rejoin)`);
                 }
-                const updatedRoom = roomManager.getRoom(roomCode);
-                if (updatedRoom) {
-                    void RoomRegistryService_1.roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
-                        if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                            console.error('Error updating room after kick:', error);
-                        }
-                    });
-                }
-                console.log(`Player ${targetClientId} kicked from ${roomCode} (can rejoin)`);
-            }
-            callback({ success });
+                callback({ success });
+            }).catch((error) => {
+                console.error('Error kicking player:', error);
+                callback({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error kicking player:', error);
@@ -523,26 +560,31 @@ function setupRoomHandler(socket, roomManager, io) {
                 callback({ success: false, error: 'clientId requis' });
                 return;
             }
-            const success = roomManager.banPlayer(roomCode, socket.id, targetClientId);
-            if (success) {
-                if (bannedUid) {
-                    void RoomRegistryService_1.roomRegistryService.removeMember(roomCode, bannedUid).catch((error) => {
-                        if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                            console.error('Error syncing ban to room registry:', error);
-                        }
-                    });
+            void roomManager.withRoomMutation(roomCode, async () => {
+                const success = roomManager.banPlayer(roomCode, socket.id, targetClientId);
+                if (success) {
+                    if (bannedUid) {
+                        void RoomRegistryService_1.roomRegistryService.removeMember(roomCode, bannedUid).catch((error) => {
+                            if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                                console.error('Error syncing ban to room registry:', error);
+                            }
+                        });
+                    }
+                    const updatedRoom = await roomManager.loadRoom(roomCode);
+                    if (updatedRoom) {
+                        void RoomRegistryService_1.roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
+                            if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
+                                console.error('Error updating room after ban:', error);
+                            }
+                        });
+                    }
+                    console.log(`Player ${targetClientId} BANNED from ${roomCode}`);
                 }
-                const updatedRoom = roomManager.getRoom(roomCode);
-                if (updatedRoom) {
-                    void RoomRegistryService_1.roomRegistryService.upsertRoom(updatedRoom).catch((error) => {
-                        if (!(0, RoomRegistryService_1.isRoomRegistryUnavailableError)(error)) {
-                            console.error('Error updating room after ban:', error);
-                        }
-                    });
-                }
-                console.log(`Player ${targetClientId} BANNED from ${roomCode}`);
-            }
-            callback({ success });
+                callback({ success });
+            }).catch((error) => {
+                console.error('Error banning player:', error);
+                callback({ success: false, error: error.message });
+            });
         }
         catch (error) {
             console.error('Error banning player:', error);
@@ -575,9 +617,12 @@ function setupRoomHandler(socket, roomManager, io) {
             const friendUsername = friendUser?.username?.trim() || '';
             // Ajouter l'ami comme joueur déconnecté dans la room
             const normalizedRoomCode = roomCode.toString().toUpperCase();
-            const player = roomManager.addInvitedPlayer(normalizedRoomCode, friendUserId, friendUsername, friendDisplayName);
+            let player = null;
+            await roomManager.withRoomMutation(normalizedRoomCode, async () => {
+                player = roomManager.addInvitedPlayer(normalizedRoomCode, friendUserId, friendUsername, friendDisplayName);
+            });
             if (player) {
-                const room = roomManager.getRoom(normalizedRoomCode);
+                const room = await roomManager.loadRoom(normalizedRoomCode);
                 if (room) {
                     RoomRegistryService_1.roomRegistryService.upsertMember(room, player).catch(() => { });
                 }
@@ -585,15 +630,12 @@ function setupRoomHandler(socket, roomManager, io) {
             // Enregistrer le salon dans activeRooms de l'ami
             RoomRegistryService_1.roomRegistryService.registerInvitedMember(normalizedRoomCode, friendUserId).catch(() => { });
             // Notification temps réel via socket
-            const friendSocketIds = FriendsService_1.FriendsService.getUserSocketIds(friendUserId);
-            for (const sid of friendSocketIds) {
-                io?.to(sid).emit('room:invite', {
-                    roomCode: normalizedRoomCode,
-                    fromUserId: socketUser.uid,
-                    fromUsername: socketUser.username,
-                    fromDisplayName: inviterName,
-                });
-            }
+            io?.to(FriendsService_1.FriendsService.getUserRoom(friendUserId)).emit('room:invite', {
+                roomCode: normalizedRoomCode,
+                fromUserId: socketUser.uid,
+                fromUsername: socketUser.username,
+                fromDisplayName: inviterName,
+            });
             // Notification push
             await PushNotificationService_1.PushNotificationService.notifyRoomInvite(friendUserId, inviterName, normalizedRoomCode);
             callback?.({ success: true });
@@ -615,7 +657,7 @@ function setupRoomHandler(socket, roomManager, io) {
                 callback?.({ success: false, error: 'roomCode et targetClientId requis' });
                 return;
             }
-            const room = roomManager.getRoom(roomCode);
+            const room = await roomManager.loadRoom(roomCode);
             if (!room) {
                 callback?.({ success: false, error: 'Room introuvable' });
                 return;
@@ -688,16 +730,13 @@ function setupRoomHandler(socket, roomManager, io) {
             const result = await FriendsService_1.FriendsService.sendRequest(socketUser.uid, username);
             if (result.success && result.toUserId) {
                 // Notifier le destinataire via socket
-                const targetSocketIds = FriendsService_1.FriendsService.getUserSocketIds(result.toUserId);
                 const senderUser = await FirestoreService_1.firestoreService.getUser(socketUser.uid);
-                for (const sid of targetSocketIds) {
-                    io?.to(sid).emit('friend:request_received', {
-                        requestId: result.requestId,
-                        fromUserId: socketUser.uid,
-                        fromUsername: socketUser.username,
-                        fromDisplayName: senderUser?.displayName || socketUser.username,
-                    });
-                }
+                io?.to(FriendsService_1.FriendsService.getUserRoom(result.toUserId)).emit('friend:request_received', {
+                    requestId: result.requestId,
+                    fromUserId: socketUser.uid,
+                    fromUsername: socketUser.username,
+                    fromDisplayName: senderUser?.displayName || socketUser.username,
+                });
                 // Push notification
                 await PushNotificationService_1.PushNotificationService.notifyFriendRequest(result.toUserId, socketUser.username, senderUser?.displayName || socketUser.username);
             }
@@ -717,15 +756,12 @@ function setupRoomHandler(socket, roomManager, io) {
             const result = await FriendsService_1.FriendsService.acceptRequest(socketUser.uid, requestId);
             if (result.success && result.toUserId) {
                 // Notifier l'expéditeur original
-                const targetSocketIds = FriendsService_1.FriendsService.getUserSocketIds(result.toUserId);
                 const accepterUser = await FirestoreService_1.firestoreService.getUser(socketUser.uid);
-                for (const sid of targetSocketIds) {
-                    io?.to(sid).emit('friend:accepted', {
-                        userId: socketUser.uid,
-                        username: socketUser.username,
-                        displayName: accepterUser?.displayName || socketUser.username,
-                    });
-                }
+                io?.to(FriendsService_1.FriendsService.getUserRoom(result.toUserId)).emit('friend:accepted', {
+                    userId: socketUser.uid,
+                    username: socketUser.username,
+                    displayName: accepterUser?.displayName || socketUser.username,
+                });
                 // Push notification
                 await PushNotificationService_1.PushNotificationService.notifyFriendAccepted(result.toUserId, socketUser.username, accepterUser?.displayName || socketUser.username);
             }

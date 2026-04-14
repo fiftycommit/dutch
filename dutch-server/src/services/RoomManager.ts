@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { randomInt } from 'node:crypto';
 import { GameLogic } from './GameLogic';
 import { BotAI } from './BotAI';
 import {
@@ -2740,8 +2741,8 @@ export class RoomManager {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code: string;
     do {
-      code = Array.from({ length: 6 }, () =>
-        chars.charAt(Math.floor(Math.random() * chars.length))
+      code = Array.from({ length: 8 }, () =>
+        chars.charAt(randomInt(chars.length))
       ).join('');
     } while (this.rooms.has(code));
     return code;
