@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connexion Admin - Dutch Game</title>
-  <script src="/admin-auth.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -144,11 +143,7 @@
     </div>
   </div>
 
-  <script>
-    initAdminAuth({
-      redirectAuthenticatedTo: getAdminNextPath('/admin-home'),
-      onReady() {}
-    });
-  </script>
+  <script src="/admin-auth.js"></script>
+  <script src="/admin-assets/admin-login.js"></script>
 </body>
 </html>

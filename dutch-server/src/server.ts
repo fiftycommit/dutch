@@ -24,12 +24,18 @@ import { requireAppCheck } from './middleware/appCheckMiddleware';
 import { FriendsService } from './services/FriendsService';
 import { roomRegistryService } from './services/RoomRegistryService';
 import { RedisService } from './services/RedisService';
+import {
+  analyticsAdminContentSecurityPolicy,
+  publicHtmlContentSecurityPolicy,
+  strictAdminContentSecurityPolicy,
+} from './security/contentSecurityPolicy';
 
 const startedAt = new Date().toISOString();
 
 export async function startServer() {
   const app = express();
   const httpServer = createServer(app);
+  const publicDir = path.join(__dirname, '../public');
 
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
@@ -158,6 +164,15 @@ export async function startServer() {
     res.json({ status: 'ok' });
   });
 
+  const withContentSecurityPolicy = (policy: string) => (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    res.setHeader('Content-Security-Policy', policy);
+    next();
+  };
+
   app.get('/rooms/debug', adminLimiter, requireAdmin, (req, res) => {
     res.json(roomManager.listRoomsDebug());
   });
@@ -200,52 +215,66 @@ export async function startServer() {
 
   // Fichier JS partagé pour l'auth admin (accessible publiquement)
   app.get('/admin-auth.js', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/admin-auth.js'));
+    res.sendFile(path.join(publicDir, 'admin-auth.js'));
   });
+
+  app.use('/admin-assets', express.static(path.join(publicDir, 'admin-assets'), {
+    index: false,
+    fallthrough: true,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    },
+  }));
 
   // Login admin public ; les autres pages admin sont protégées par une session httpOnly.
-  app.get('/admin-login', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/admin-login.html'));
+  app.get('/admin-login', withContentSecurityPolicy(strictAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'admin-login.html'));
   });
 
-  app.get(['/status', '/admin-home'], adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/admin-home.html'));
+  app.get(
+    ['/status', '/admin-home'],
+    adminLimiter,
+    requireAdminPage,
+    withContentSecurityPolicy(strictAdminContentSecurityPolicy),
+    (req, res) => {
+      res.sendFile(path.join(publicDir, 'admin-home.html'));
+    },
+  );
+
+  app.get('/admin', adminLimiter, requireAdminPage, withContentSecurityPolicy(strictAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'admin.html'));
   });
 
-  app.get('/admin', adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/admin.html'));
+  app.get('/bot-stats', adminLimiter, requireAdminPage, withContentSecurityPolicy(analyticsAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'bot-stats.html'));
   });
 
-  app.get('/bot-stats', adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/bot-stats.html'));
+  app.get('/bot-dashboard', adminLimiter, requireAdminPage, withContentSecurityPolicy(analyticsAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'bot-dashboard.html'));
   });
 
-  app.get('/bot-dashboard', adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/bot-dashboard.html'));
+  app.get('/shuffle-analysis', adminLimiter, requireAdminPage, withContentSecurityPolicy(analyticsAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'shuffle-analysis.html'));
   });
 
-  app.get('/shuffle-analysis', adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/shuffle-analysis.html'));
+  app.get('/player-profile', adminLimiter, requireAdminPage, withContentSecurityPolicy(analyticsAdminContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'player-profile.html'));
   });
 
-  app.get('/player-profile', adminLimiter, requireAdminPage, (req, res) => {
-    res.sendFile('player-profile.html', { root: './public' });
+  app.get('/rules', withContentSecurityPolicy(publicHtmlContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'rules.html'));
   });
 
-  app.get('/rules', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/rules.html'));
+  app.get('/about', withContentSecurityPolicy(publicHtmlContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'about.html'));
   });
 
-  app.get('/about', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/about.html'));
+  app.get('/strategies', withContentSecurityPolicy(publicHtmlContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'strategies.html'));
   });
 
-  app.get('/strategies', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/strategies.html'));
-  });
-
-  app.get('/faq', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/faq.html'));
+  app.get('/faq', withContentSecurityPolicy(publicHtmlContentSecurityPolicy), (req, res) => {
+    res.sendFile(path.join(publicDir, 'faq.html'));
   });
 
   const PORT = process.env.PORT || 3000;

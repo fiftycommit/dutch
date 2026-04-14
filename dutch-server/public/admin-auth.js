@@ -247,13 +247,16 @@ function showDenied(gate, user) {
         <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">
           Le compte <strong style="color:#e2e8f0">${user.email}</strong> n'est pas administrateur.
         </p>
-        <button onclick="adminLogout()"
+        <button id="auth-denied-logout-btn"
           style="padding:10px 24px;border:1px solid #2d3148;border-radius:8px;background:transparent;color:#94a3b8;cursor:pointer;font-size:13px">
           Se deconnecter
         </button>
       </div>
     </div>
   `;
+  document.getElementById('auth-denied-logout-btn')?.addEventListener('click', () => {
+    void adminLogout();
+  });
 }
 
 function showError(gate, message) {
@@ -262,13 +265,16 @@ function showError(gate, message) {
       <div style="background:rgba(26,29,41,0.95);border-radius:16px;padding:40px;width:100%;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,.4);text-align:center">
         <h1 style="margin-bottom:8px;color:#f87171;font-size:1.5em">Erreur</h1>
         <p style="color:#e2e8f0;font-size:14px;line-height:1.5">${message}</p>
-        <button onclick="location.reload()"
+        <button id="auth-error-reload-btn"
           style="margin-top:16px;padding:10px 24px;border:1px solid #2d3148;border-radius:8px;background:transparent;color:#94a3b8;cursor:pointer;font-size:13px">
           Recharger
         </button>
       </div>
     </div>
   `;
+  document.getElementById('auth-error-reload-btn')?.addEventListener('click', () => {
+    location.reload();
+  });
 }
 
 /** Logout */

@@ -119,7 +119,7 @@
 <div id="dashboard" style="display:block">
   <header>
     <h1>🎮 Dutch Admin</h1>
-    <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Déconnexion</button>
+    <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
   </header>
 
   <div class="container">
@@ -133,7 +133,7 @@
     <!-- Users table -->
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="Rechercher par username, pseudo ou email…">
-      <button class="btn btn-primary btn-sm" onclick="loadUsers(1)">Rechercher</button>
+      <button class="btn btn-primary btn-sm" id="search-button">Rechercher</button>
     </div>
 
     <table>
@@ -159,115 +159,6 @@
 </div><!-- /app-content -->
 
 <script src="/admin-auth.js"></script>
-<script>
-  let currentPage = 1;
-  const $ = id => document.getElementById(id);
-
-  // Use shared admin auth
-  const api = adminFetch;
-
-  initAdminAuth({
-    redirectUnauthenticatedTo: getAdminLoginUrl('/admin'),
-    onReady() {
-      $('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsers(1); });
-      loadStats();
-      loadUsers(1);
-    }
-  });
-
-  // ── Stats ──
-  async function loadStats() {
-    const { stats } = await api('/api/admin/stats');
-    $('stat-total').textContent = stats.totalUsers;
-    $('stat-banned').textContent = stats.bannedUsers;
-    $('stat-recent').textContent = stats.recentUsers;
-  }
-
-  // ── Users ──
-  async function loadUsers(page = 1) {
-    currentPage = page;
-    const search = $('search-input').value.trim();
-    const qs = new URLSearchParams({ page, limit: 50 });
-    if (search) qs.set('search', search);
-
-    const { users, pagination } = await api(`/api/admin/users?${qs}`);
-    const tbody = $('users-tbody');
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td>${u.id}</td>
-        <td><strong>${esc(u.username)}</strong></td>
-        <td>${esc(u.displayName)}</td>
-        <td>${esc(u.email || '—')}</td>
-        <td>${fmtDate(u.createdAt)}</td>
-        <td>${u.lastLoginAt ? fmtDate(u.lastLoginAt) : '—'}</td>
-        <td>${u.isBanned ? '<span class="badge badge-ban">Banni</span>' : '<span class="badge badge-ok">Actif</span>'}</td>
-        <td><button class="btn btn-ghost btn-sm" onclick="openUser(${u.id})">Voir</button></td>
-      </tr>
-    `).join('');
-
-    // Pagination
-    const pg = $('pagination');
-    pg.innerHTML = '';
-    for (let i = 1; i <= pagination.totalPages; i++) {
-      const btn = document.createElement('button');
-      btn.className = `btn btn-sm ${i === page ? 'btn-primary' : 'btn-ghost'}`;
-      btn.textContent = i;
-      btn.onclick = () => loadUsers(i);
-      pg.appendChild(btn);
-    }
-  }
-
-  // ── User Modal ──
-  async function openUser(id) {
-    const { user } = await api(`/api/admin/users/${id}`);
-    $('modal-title').textContent = `@${user.username}`;
-    $('modal-body').innerHTML = `
-      <div class="detail-row"><span class="label">ID</span><span>${user.id}</span></div>
-      <div class="detail-row"><span class="label">Pseudo</span><span>${esc(user.displayName)}</span></div>
-      <div class="detail-row"><span class="label">Email</span><span>${esc(user.email || '—')}</span></div>
-      <div class="detail-row"><span class="label">Créé le</span><span>${fmtDate(user.createdAt)}</span></div>
-      <div class="detail-row"><span class="label">Dernière connexion</span><span>${user.lastLoginAt ? fmtDate(user.lastLoginAt) : '—'}</span></div>
-      <div class="detail-row"><span class="label">Amis</span><span>${user.friendCount}</span></div>
-      <div class="detail-row"><span class="label">Statut</span><span>${user.isBanned ? '<span class="badge badge-ban">Banni</span>' : '<span class="badge badge-ok">Actif</span>'}</span></div>
-    `;
-    $('modal-actions').innerHTML = `
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Fermer</button>
-      ${user.isBanned
-        ? `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">Débannir</button>`
-        : `<button class="btn btn-danger btn-sm" onclick="banUser(${user.id})">Bannir</button>`
-      }
-      <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${esc(user.username)}')">Supprimer</button>
-    `;
-    $('user-modal').classList.add('active');
-  }
-
-  function closeModal() { $('user-modal').classList.remove('active'); }
-  $('user-modal').addEventListener('click', e => { if (e.target === $('user-modal')) closeModal(); });
-
-  async function banUser(id) {
-    if (!confirm('Bannir cet utilisateur ?')) return;
-    await api(`/api/admin/users/${id}/ban`, { method: 'POST' });
-    closeModal(); loadStats(); loadUsers(currentPage);
-  }
-  async function unbanUser(id) {
-    if (!confirm('Débannir cet utilisateur ?')) return;
-    await api(`/api/admin/users/${id}/unban`, { method: 'POST' });
-    closeModal(); loadStats(); loadUsers(currentPage);
-  }
-  async function deleteUser(id, name) {
-    if (!confirm(`Supprimer définitivement @${name} et toutes ses données ?`)) return;
-    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
-    closeModal(); loadStats(); loadUsers(currentPage);
-  }
-
-  // ── Helpers ──
-  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso + 'Z');
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  }
-</script>
+<script src="/admin-assets/admin-users.js"></script>
 </body>
 </html>

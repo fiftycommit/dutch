@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Home - Dutch Game</title>
-  <script src="/admin-auth.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -200,7 +199,7 @@
   <div id="auth-gate"></div>
 
   <div id="app-content" style="display:none">
-    <button class="logout-btn" onclick="adminLogout()">Déconnexion</button>
+    <button class="logout-btn" id="logout-btn">Déconnexion</button>
 
     <main class="shell">
       <section class="hero">
@@ -277,21 +276,7 @@
     </main>
   </div>
 
-  <script>
-    initAdminAuth({
-      redirectUnauthenticatedTo: getAdminLoginUrl('/admin-home'),
-      onReady() {
-        fetch('/health')
-          .then(response => response.json())
-          .then(data => {
-            document.getElementById('room-count').textContent = data.rooms ?? 0;
-          })
-          .catch(() => {
-            document.getElementById('room-count').textContent = '?';
-            document.getElementById('server-status').textContent = 'UNKNOWN';
-          });
-      }
-    });
-  </script>
+  <script src="/admin-auth.js"></script>
+  <script src="/admin-assets/admin-home.js"></script>
 </body>
 </html>
