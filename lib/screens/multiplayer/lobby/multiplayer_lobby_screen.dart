@@ -328,19 +328,20 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     final scale = _uiScale(context);
     double f(double size) => size * scale;
 
+    final isLoggedIn = context.read<AuthProvider>().isLoggedIn;
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
       child: Row(
         children: [
-          // Bouton retour (revenir au menu sans quitter la room)
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             iconSize: f(22),
             tooltip: 'Retour',
             onPressed: () => context.go('/multiplayer'),
           ),
-          SizedBox(width: f(8)),
-          Expanded(
+          SizedBox(width: f(4)),
+          Flexible(
             child: Text(
               "Salle d'attente",
               style: TextStyle(
@@ -348,33 +349,94 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Bouton inviter un ami (hôte uniquement)
-          if (provider.isHost && context.read<AuthProvider>().isLoggedIn)
-            IconButton(
-              icon: const Icon(Icons.person_add, color: Colors.white),
-              iconSize: f(22),
-              tooltip: 'Inviter un ami',
+          const Spacer(),
+          if (provider.isHost && isLoggedIn) ...[
+            _buildHeaderAction(
+              context,
+              icon: Icons.person_add,
+              label: 'Inviter',
               onPressed: () => _showInviteFriendDialog(context, provider),
             ),
-          // Bouton paramètres (hôte uniquement)
-          if (provider.isHost)
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white),
-              iconSize: f(22),
-              tooltip: 'Paramètres',
+            SizedBox(width: f(6)),
+          ],
+          if (provider.isHost) ...[
+            _buildHeaderAction(
+              context,
+              icon: Icons.tune,
+              label: 'Paramètres',
               onPressed: () => _showSettingsDialog(context, provider),
             ),
-          // Bouton quitter la room
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            iconSize: f(22),
-            tooltip: 'Quitter la room',
+            SizedBox(width: f(6)),
+          ],
+          _buildHeaderAction(
+            context,
+            icon: Icons.logout,
+            label: 'Quitter',
             onPressed: () => _handleLeaveOrClose(context, provider),
+            destructive: true,
           ),
+          SizedBox(width: f(8)),
           _buildConnectionIndicator(context, provider, colors),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderAction(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    bool destructive = false,
+  }) {
+    final scale = _uiScale(context);
+    double f(double size) => size * scale;
+
+    final bg = destructive
+        ? Colors.redAccent.withValues(alpha: 0.18)
+        : Colors.white.withValues(alpha: 0.10);
+    final borderColor = destructive
+        ? Colors.redAccent.withValues(alpha: 0.45)
+        : Colors.white.withValues(alpha: 0.22);
+    final fg = destructive ? const Color(0xFFFF8A80) : Colors.white;
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(f(14)),
+          onTap: onPressed,
+          child: Container(
+            constraints: BoxConstraints(minHeight: f(36)),
+            padding:
+                EdgeInsets.symmetric(horizontal: f(10), vertical: f(6)),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(f(14)),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: fg, size: f(16)),
+                SizedBox(width: f(6)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                    fontSize: f(13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
