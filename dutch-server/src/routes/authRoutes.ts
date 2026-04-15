@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { requireAppCheck } from '../middleware/appCheckMiddleware';
 import { firestoreService } from '../services/FirestoreService';
 import { authAbuseService } from '../services/AuthAbuseService';
 import {
@@ -45,7 +44,7 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 // GET /api/auth/check-username?username=xxx
-router.get('/check-username', requireAppCheck, async (req, res) => {
+router.get('/check-username', async (req, res) => {
   const abuseDecision = authAbuseService.assess(req, 'username_check');
   if (abuseDecision.blocked) {
     authAbuseService.reject(res, abuseDecision);
@@ -63,7 +62,7 @@ router.get('/check-username', requireAppCheck, async (req, res) => {
 
 // GET /api/auth/resolve-login?identifier=xxx
 // Route legacy explicitement retirée pour éviter toute ambiguïté.
-router.get('/resolve-login', authLimiter, requireAppCheck, async (req, res) => {
+router.get('/resolve-login', authLimiter, async (req, res) => {
   const abuseDecision = authAbuseService.assess(req, 'login_resolve');
   if (abuseDecision.blocked) {
     authAbuseService.reject(res, abuseDecision);
@@ -86,7 +85,7 @@ router.get('/resolve-login', authLimiter, requireAppCheck, async (req, res) => {
 });
 
 // POST /api/auth/register-password
-router.post('/register-password', authLimiter, requireAppCheck, async (req, res) => {
+router.post('/register-password', authLimiter, async (req, res) => {
   const abuseDecision = authAbuseService.assess(req, 'password_register');
   if (abuseDecision.blocked) {
     authAbuseService.reject(res, abuseDecision);
@@ -129,7 +128,7 @@ router.post('/register-password', authLimiter, requireAppCheck, async (req, res)
 });
 
 // POST /api/auth/login-password
-router.post('/login-password', authLimiter, requireAppCheck, async (req, res) => {
+router.post('/login-password', authLimiter, async (req, res) => {
   const abuseDecision = authAbuseService.assess(req, 'password_login');
   if (abuseDecision.blocked) {
     authAbuseService.reject(res, abuseDecision);
