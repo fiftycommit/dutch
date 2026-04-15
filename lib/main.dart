@@ -67,7 +67,11 @@ void main() {
       ]),
     ]);
 
-    await activateFirebaseAppCheck();
+    try {
+      await activateFirebaseAppCheck();
+    } catch (error, stackTrace) {
+      errorService.reportZoneError(error, stackTrace);
+    }
 
     // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
     // setPersistence n'est supporté que sur le web
