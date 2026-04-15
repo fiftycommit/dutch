@@ -11,7 +11,10 @@
 /* ── Firebase Config ── */
 const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
-  authDomain: 'dutch-game.me',
+  // Admin login must keep the Firebase-hosted auth helper domain.
+  // Routing popup/redirect through dutch-game.me lets Cloudflare inject
+  // challenge scripts into /__/auth/handler, which breaks Firebase Auth.
+  authDomain: 'dutch-game-1dd01.firebaseapp.com',
   projectId: 'dutch-game-1dd01',
 };
 
