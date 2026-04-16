@@ -10,6 +10,7 @@ import 'bot/bot_card_strategy.dart';
 import 'bot/bot_power_handler.dart';
 import 'bot/bot_personality.dart';
 import 'bot/bot_fair_play_audit.dart';
+import 'bot/bot_gossip_service.dart';
 
 export 'bot/bot_config.dart'
     show
@@ -56,6 +57,9 @@ class BotAI {
       gameState: gameState,
     );
 
+    // Hook gossip : observations partagées + alliance + speech éventuel
+    BotGossipService.instance.onBotTurn(bot, gameState);
+
     // Appliquer la décroissance de la mémoire
     BotMemoryManager.applyMemoryDecay(bot, difficulty,
         personality: personality);
@@ -98,6 +102,7 @@ class BotAI {
       personality: personality,
     );
     if (shouldCallDutch) {
+      BotGossipService.instance.onBotCallsDutch(bot, gameState.turnCount);
       GameLogic.callDutch(gameState);
       return;
     }

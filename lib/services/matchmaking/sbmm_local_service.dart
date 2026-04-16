@@ -218,7 +218,14 @@ class SBMMLocalService {
   }
 
   /// Enregistre le résultat d'une partie et ajuste le cursor.
-  /// Fenêtre 5 parties, calibration express sur les 3 premières.
+  ///
+  /// Le cursor bouge selon 4 mécanismes :
+  /// 1. **Poids du lobby** sur le placement : 1v1 pèse ~45% d'un 1v5.
+  /// 2. **Facteur lobby** sur la réactivité : gros lobby → facteur ×1.8,
+  ///    1v1 → facteur ×0.5. Un smurf en lobby plein monte très vite.
+  /// 3. **Anti-smurf** : 2+ victoires consécutives en lobby ≥4 → facteur ×2.5.
+  /// 4. **Amortissement directionnel** : freinage léger quand le cursor
+  ///    s'éloigne du centre, aucun frein quand il revient vers le milieu.
   static Future<SBMMLocalProfile> recordGame({
     required int rank,
     required int totalPlayers,
@@ -239,19 +246,51 @@ class SBMMLocalService {
       recent.removeRange(0, recent.length - _maxRecentResults);
     }
 
+    // Fenêtre glissante de 7 parties.
     final window =
-        recent.length > 5 ? recent.sublist(recent.length - 5) : recent;
+        recent.length > 7 ? recent.sublist(recent.length - 7) : recent;
+
+    // Placement pondéré par la taille du lobby.
     final placementScores = window.map((r) {
       if (r.totalPlayers <= 1) return 0.5;
-      return (r.totalPlayers - r.rank) / (r.totalPlayers - 1);
+      final rawPlacement =
+          (r.totalPlayers - r.rank) / (r.totalPlayers - 1);
+      final lobbyWeight =
+          sqrt((r.totalPlayers - 1).clamp(1, 9)) / sqrt(5);
+      return 0.5 + (rawPlacement - 0.5) * lobbyWeight;
     }).toList();
+
     final avgPlacement =
         placementScores.reduce((a, b) => a + b) / placementScores.length;
     final delta = avgPlacement - 0.5;
 
+    // ── Facteur de base ──
     final gamesPlayed = profile.gamesPlayed + 1;
-    final factor = gamesPlayed < 3 ? 0.25 : 0.12;
-    final newCursor = (profile.cursor + delta * factor).clamp(0.0, 1.0);
+    final baseFactor = gamesPlayed <= 5 ? 0.15 : 0.10;
+
+    // ── Facteur lobby : gros lobby = plus réactif ──
+    // 2j → ×0.5, 3j → ×0.83, 4j → ×1.15, 5j → ×1.48, 6j → ×1.8
+    final lobbyFactor = 0.5 + (totalPlayers - 2) * 0.325;
+
+    // ── Anti-smurf : victoires consécutives en lobby ≥4 ──
+    final recentWins = window.reversed
+        .take(3)
+        .where((r) => r.rank == 1 && r.totalPlayers >= 4)
+        .length;
+    final smurfBoost = recentWins >= 2 ? 2.5 : 1.0;
+
+    // ── Amortissement directionnel ──
+    // S'éloigne du centre → frein léger. Revient vers le centre → aucun frein.
+    final distFromCenter = (profile.cursor - 0.5).abs();
+    final movingAway = (delta > 0 && profile.cursor >= 0.5) ||
+        (delta < 0 && profile.cursor <= 0.5);
+    final damping = movingAway
+        ? 1.0 - (distFromCenter * 1.2).clamp(0.0, 0.6)
+        : 1.0;
+
+    final effectiveFactor = baseFactor * lobbyFactor * smurfBoost * damping;
+    final newCursor =
+        (profile.cursor + delta * effectiveFactor).clamp(0.0, 1.0);
 
     final updated = profile.copyWith(
       cursor: newCursor,
@@ -265,9 +304,11 @@ class SBMMLocalService {
 
     if (kDebugMode) {
       debugPrint(
-        '🎯 SBMM local: cursor ${profile.cursor.toStringAsFixed(2)} → '
-        '${newCursor.toStringAsFixed(2)} (rank $rank/$totalPlayers, '
-        'games: $gamesPlayed)',
+        '🎯 SBMM: ${profile.cursor.toStringAsFixed(3)} → '
+        '${newCursor.toStringAsFixed(3)} '
+        '(rank $rank/$totalPlayers, lobby: ×${lobbyFactor.toStringAsFixed(1)}, '
+        'smurf: ×${smurfBoost.toStringAsFixed(1)}, '
+        'damp: ${damping.toStringAsFixed(2)}, games: $gamesPlayed)',
       );
     }
 
@@ -330,10 +371,10 @@ class SBMMLocalProfile {
   });
 
   factory SBMMLocalProfile.initial() {
-    const mmr = 500.0;
+    const mmr = 600.0;
     return SBMMLocalProfile(
       mmr: mmr,
-      cursor: SBMMLocalService.mmrToCursor(mmr),
+      cursor: 0.5,
       gamesPlayed: 0,
       wins: 0,
       recentResults: const [],

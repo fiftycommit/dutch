@@ -1,3 +1,4 @@
+import 'dart:math' show sqrt;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import '../../models/game_state.dart';
 import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/game/bot/bot_gossip_service.dart';
 import '../../services/game/bot_factory.dart';
 import '../../services/matchmaking/sbmm_client_service.dart';
 import '../../services/matchmaking/sbmm_local_service.dart';
@@ -572,6 +574,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       final int numberOfBots = selectedNumberOfPlayers - 1;
 
       BotFactory.resetUsedNames();
+      BotGossipService.instance.reset();
       List<Player> players = [
         Player(id: 'human', name: 'Vous', isHuman: true, position: 0)
       ];
@@ -673,10 +676,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       });
 
     final skillLabel = SBMMLocalService.skillLabelFromCursor(result.cursor);
+    final archetypeLabel = _archetypeLabel(result.archetype);
 
     return Column(
       children: [
-        _playerSkillBadge(f, skillLabel),
+        _playerSkillBadge(f, skillLabel, archetypeLabel),
         SizedBox(height: f(10)),
         Text(
           "Adversaires de cette partie",
@@ -697,7 +701,22 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   pairCounts[key]!),
           ],
         ),
+        SizedBox(height: f(8)),
+        _lobbyWeightIndicator(f, selectedNumberOfPlayers),
       ],
+    );
+  }
+
+  Widget _lobbyWeightIndicator(double Function(double) f, int playerCount) {
+    final weight = sqrt((playerCount - 1).clamp(1, 9)) / sqrt(5);
+    final pct = (weight * 100).round();
+    return Text(
+      'Impact sur la progression : $pct%',
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.5),
+        fontSize: f(11),
+        fontStyle: FontStyle.italic,
+      ),
     );
   }
 
@@ -750,7 +769,17 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     );
   }
 
-  Widget _playerSkillBadge(double Function(double) f, String label) {
+  static String _archetypeLabel(PlayerArchetype archetype) {
+    return switch (archetype) {
+      PlayerArchetype.dominant => 'Dominant',
+      PlayerArchetype.dutcher => 'Dutcher',
+      PlayerArchetype.learner => 'Prudent',
+      PlayerArchetype.balanced => 'Équilibré',
+    };
+  }
+
+  Widget _playerSkillBadge(
+      double Function(double) f, String label, String archetype) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
       decoration: BoxDecoration(
@@ -767,7 +796,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
           Icon(Icons.person_outline, color: Colors.amber, size: f(14)),
           SizedBox(width: f(6)),
           Text(
-            label,
+            '$label • $archetype',
             style: TextStyle(
               color: Colors.white,
               fontSize: f(12),

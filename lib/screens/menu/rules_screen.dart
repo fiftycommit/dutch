@@ -234,9 +234,11 @@ class RulesScreen extends StatelessWidget {
                   SizedBox(height: ScreenUtils.spacing(context, 8)),
                   Text(
                     '• Objectif : vous faire gagner ~1 partie sur 2. Si vous dominez, les bots montent en niveau. Si vous êtes submergé, ils redescendent.\n'
-                    '• Calibration rapide : vos 3 premières parties ajustent le niveau 2× plus vite pour trouver votre place.\n'
-                    '• Fenêtre courte : seules vos 5 dernières parties comptent, l\'ajustement est continu et réactif.\n'
-                    '• 3 niveaux de bots : 🥉 Bronze, 🥈 Argent, 🥇 Or. Le mix d\'une partie peut combiner plusieurs niveaux.',
+                    '• Poids du lobby : plus il y a d\'adversaires, plus le résultat compte. Gagner à 6 joueurs fait monter le curseur 2× plus qu\'à 2 joueurs.\n'
+                    '• Progression douce : le curseur bouge lentement et ralentit aux extrêmes — pas de yoyo brutal.\n'
+                    '• Fenêtre glissante : vos 7 dernières parties comptent, l\'ajustement est continu.\n'
+                    '• 3 niveaux de bots : 🥉 Bronze, 🥈 Argent, 🥇 Or. Le mix d\'une partie peut combiner plusieurs niveaux.\n'
+                    '• Personnalité des bots : Équilibré, Rapide ou Agressif — choisie en réaction à votre style de jeu.',
                     style: _body(context),
                   ),
                   SizedBox(height: ScreenUtils.spacing(context, 12)),

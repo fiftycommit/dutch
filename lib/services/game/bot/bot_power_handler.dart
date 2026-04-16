@@ -11,6 +11,7 @@ import '../game_logic.dart';
 import 'bot_memory_manager.dart';
 import 'bot_threat_analyzer.dart';
 import 'bot_dutch_strategy.dart';
+import 'bot_gossip_service.dart';
 import 'bot_personality.dart';
 import 'discard_tracker.dart';
 import 'duel_tuning.dart';
@@ -1816,6 +1817,16 @@ class BotPowerHandler {
         gs.players.where((p) => p.id != bot.id && p.hand.length >= 2).toList();
     if (possibleTargets.isEmpty) return null;
 
+    // Alliance : si ce bot est allié, prioriser la cible commune.
+    final allianceTargetId =
+        BotGossipService.instance.allianceTargetFor(bot.id, gs.turnCount);
+    if (allianceTargetId != null) {
+      final allianceTarget = possibleTargets
+          .where((p) => p.id == allianceTargetId)
+          .firstOrNull;
+      if (allianceTarget != null) return allianceTarget;
+    }
+
     if (_isPlatinumDifficulty(difficulty)) {
       _refreshPlatinumKillWindow(gs, bot);
       final lockedTarget =
@@ -1848,17 +1859,20 @@ class BotPowerHandler {
     final validThreats =
         report.sortedByThreat.where((o) => o.cardsLeft >= 2).toList();
 
-    if (validThreats.isEmpty) return null;
-
-    // RÈGLE : Si l'humain est dans le top 2 des menaces, le cibler
-    final humanInTop2 = validThreats.take(2).any((o) => o.isHuman);
-    if (humanInTop2) {
-      final humanThreat = validThreats.firstWhere((o) => o.isHuman);
-      return humanThreat.player;
+    if (validThreats.isNotEmpty) {
+      // RÈGLE : Si l'humain est dans le top 2 des menaces, le cibler
+      final humanInTop2 = validThreats.take(2).any((o) => o.isHuman);
+      if (humanInTop2) {
+        final humanThreat = validThreats.firstWhere((o) => o.isHuman);
+        return humanThreat.player;
+      }
+      return validThreats.first.player;
     }
 
-    // Sinon : cibler le joueur le plus menaçant
-    return validThreats.first.player;
+    // Fallback : l'analyse de menace n'a rien retourné mais on avait bien
+    // des cibles dans le filtre simple. Cibler le premier venu plutôt que
+    // laisser tomber le pouvoir.
+    return possibleTargets.isNotEmpty ? possibleTargets.first : null;
   }
 
   static void _skipPower(

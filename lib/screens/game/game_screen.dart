@@ -10,6 +10,7 @@ import 'package:dutch_game/widgets/dialogs/shared/unified_power_dialogs.dart';
 import 'package:dutch_game/widgets/dialogs/shared/power_lottery_dialog.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/dialogs/game/game_dialogs.dart';
+import 'package:dutch_game/widgets/game/bot_gossip_overlay.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
@@ -192,6 +193,13 @@ class _GameScreenState extends State<GameScreen>
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppColors.textDisabled)),
                   ),
+                // Gossip / alliance overlay (speeches bots + bannière)
+                const Positioned(
+                  top: 56,
+                  left: 12,
+                  right: 64,
+                  child: IgnorePointer(child: BotGossipOverlay()),
+                ),
                 // Bouton Pause
                 Positioned(
                   top: 10,
