@@ -10,6 +10,8 @@ import '../../models/game_settings.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/game/bot_factory.dart';
+import '../../services/matchmaking/sbmm_client_service.dart';
+import '../../services/matchmaking/sbmm_local_service.dart';
 import '../../core/service_locator.dart';
 import '../../core/interfaces/i_haptic_service.dart';
 
@@ -31,6 +33,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   Difficulty selectedBotDifficulty = Difficulty.medium;
   bool _isLoading = false;
   int selectedNumberOfPlayers = 4;
+
+  // Preview du mix SBMM pour le nombre de joueurs courant
+  SBMMBotMixResult? _previewResult;
+  bool _previewLoading = false;
+  int? _previewRequestedForCount;
 
   Difficulty _normalizeDisplayedBotDifficulty(Difficulty difficulty) {
     return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
@@ -58,6 +65,48 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
           );
         }
       });
+    }
+    _refreshBotPreview();
+  }
+
+  Future<void> _refreshBotPreview() async {
+    final botCount = selectedNumberOfPlayers - 1;
+    if (botCount <= 0) return;
+    if (_previewRequestedForCount == botCount && _previewLoading) return;
+    _previewRequestedForCount = botCount;
+    if (mounted) setState(() => _previewLoading = true);
+
+    final result = await SBMMClientService.getBotMix(botCount: botCount);
+
+    // Si un autre refresh a été demandé entre temps, ignorer ce résultat
+    if (!mounted || _previewRequestedForCount != botCount) return;
+    setState(() {
+      _previewResult = result;
+      _previewLoading = false;
+    });
+
+    if (SBMMLocalService.consumeTamperFlag() && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 4),
+          content: Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "T'as voulu jouer, t'as perdu. Progression SBMM remise à zéro.",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -268,6 +317,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                             fontSize: f(12),
                           ),
                         ),
+                        SizedBox(height: f(12)),
+                        _buildBotLevelPreview(f),
                       ],
                     ),
                   ),
@@ -475,6 +526,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                         selectedNumberOfPlayers = newSelection.first;
                       });
                       _saveNumberOfPlayers(newSelection.first);
+                      _refreshBotPreview();
                     },
                     style: playerSegmentStyle,
                   ),
@@ -571,6 +623,208 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         );
       }
     }
+  }
+
+  Widget _buildBotLevelPreview(double Function(double) f) {
+    final result = _previewResult;
+
+    if (result == null || result.botLevels.isEmpty) {
+      if (_previewLoading) {
+        return SizedBox(
+          height: f(22),
+          width: f(22),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.amber.withValues(alpha: 0.7),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    final counts = <String, int>{};
+    for (final lvl in result.botLevels) {
+      counts[lvl] = (counts[lvl] ?? 0) + 1;
+    }
+
+    final orderedKeys = const ['bronze', 'silver', 'gold']
+        .where(counts.containsKey)
+        .toList();
+
+    final behaviorCounts = <String, int>{};
+    for (final b in result.botBehaviors) {
+      behaviorCounts[b] = (behaviorCounts[b] ?? 0) + 1;
+    }
+    final orderedBehaviors = const ['balanced', 'fast', 'aggressive', 'moi']
+        .where(behaviorCounts.containsKey)
+        .toList();
+
+    final skillLabel = SBMMLocalService.skillLabelFromCursor(result.cursor);
+
+    return Column(
+      children: [
+        _playerSkillBadge(f, skillLabel),
+        SizedBox(height: f(10)),
+        Text(
+          "Adversaires de cette partie",
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.75),
+            fontSize: f(12),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: f(8)),
+        Wrap(
+          spacing: f(8),
+          runSpacing: f(6),
+          alignment: WrapAlignment.center,
+          children: [
+            for (final key in orderedKeys)
+              _botLevelBadge(f, key, counts[key]!),
+          ],
+        ),
+        if (orderedBehaviors.isNotEmpty) ...[
+          SizedBox(height: f(8)),
+          Wrap(
+            spacing: f(8),
+            runSpacing: f(6),
+            alignment: WrapAlignment.center,
+            children: [
+              for (final b in orderedBehaviors)
+                _botBehaviorBadge(f, b, behaviorCounts[b]!),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _botBehaviorBadge(double Function(double) f, String behavior, int count) {
+    late final IconData icon;
+    late final String label;
+    late final Color accent;
+    switch (behavior) {
+      case 'fast':
+        icon = Icons.flash_on;
+        label = 'Rapide';
+        accent = const Color(0xFF42A5F5);
+        break;
+      case 'aggressive':
+        icon = Icons.local_fire_department;
+        label = 'Agressif';
+        accent = const Color(0xFFEF5350);
+        break;
+      case 'moi':
+        icon = Icons.content_copy;
+        label = 'Miroir';
+        accent = const Color(0xFFAB47BC);
+        break;
+      case 'balanced':
+      default:
+        icon = Icons.balance;
+        label = 'Équilibré';
+        accent = const Color(0xFF66BB6A);
+        break;
+    }
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.6), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: accent, size: f(14)),
+          SizedBox(width: f(5)),
+          Text(
+            '$label × $count',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f(12),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _playerSkillBadge(double Function(double) f, String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: f(12), vertical: f(6)),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person_outline, color: Colors.amber, size: f(14)),
+          SizedBox(width: f(6)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f(12),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _botLevelBadge(double Function(double) f, String level, int count) {
+    late final String emoji;
+    late final String label;
+    late final Color accent;
+    switch (level) {
+      case 'bronze':
+        emoji = '🥉';
+        label = 'Bronze';
+        accent = const Color(0xFFCD7F32);
+        break;
+      case 'silver':
+        emoji = '🥈';
+        label = 'Argent';
+        accent = const Color(0xFFB0B0B0);
+        break;
+      case 'gold':
+      default:
+        emoji = '🥇';
+        label = 'Or';
+        accent = const Color(0xFFFFC107);
+        break;
+    }
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.6), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: TextStyle(fontSize: f(14))),
+          SizedBox(width: f(5)),
+          Text(
+            '$label × $count',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f(12),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /*

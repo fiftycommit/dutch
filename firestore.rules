@@ -19,10 +19,19 @@ service cloud.firestore {
         // Seuls les participants peuvent lire les messages
         allow read: if isParticipant(chatId);
         // Un participant peut créer un message seulement en son propre nom
+        // Cap sur text (chiffré côté client → overhead base64) pour éviter
+        // qu'un XSS n'insère des docs massifs.
         allow create: if isParticipant(chatId)
-          && request.resource.data.senderId == request.auth.uid;
-        // Un participant peut mettre à jour un message (deletedFor, deletedForAll)
-        allow update: if isParticipant(chatId);
+          && request.resource.data.senderId == request.auth.uid
+          && (!('text' in request.resource.data)
+              || request.resource.data.text is string
+                 && request.resource.data.text.size() <= 16000);
+        // Les updates sont strictement limités aux champs de suppression
+        // (empêche un participant d'altérer senderId/content/timestamp d'un
+        // message existant, y compris ceux de l'autre participant).
+        allow update: if isParticipant(chatId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['deletedFor', 'deletedForAll']);
       }
     }
 

@@ -65,65 +65,49 @@ class BotFactory {
   // SBMM BOTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Crée les bots en mode SBMM (matchmaking adaptatif serveur)
+  /// Crée les bots en mode SBMM (matchmaking adaptatif).
   ///
-  /// Appelle le serveur pour obtenir le mix optimal de BotSkillLevel
-  /// basé sur le MMR et l'historique du joueur. Fallback local si serveur
-  /// indisponible.
+  /// Interroge SBMMClientService qui consulte le serveur en best-effort puis
+  /// retombe sur le profil local persistant. Le résultat est donc toujours
+  /// défini — y compris en localhost/dev et offline.
   static Future<List<Player>> createSBMMBots({
     required int numberOfBots,
     required int saveSlot,
     required bool isTournament,
   }) async {
-    final isOnline = await _canReachBackendQuickly();
-    final sbmmResult = isOnline
-        ? await SBMMClientService.getBotMix(botCount: numberOfBots)
-        : null;
-
-    if (sbmmResult != null) {
-      // Stocker les niveaux pour les passer au serveur via les settings
-      _lastSBMMBotLevels = sbmmResult.botLevels;
-
-      return _buildBotsFromLevels(sbmmResult.botLevels, numberOfBots);
-    }
-
-    // Fallback : utiliser le MMR local pour déterminer le niveau
-    if (kDebugMode) {
-      debugPrint(isOnline
-          ? '⚠️ SBMM fallback local (bot-mix indisponible)'
-          : '⚠️ SBMM offline détecté, fallback local immédiat');
-    }
-    final profile = await PlayerLearningService().getProfile(slotId: saveSlot);
-    final skillLevel = _mmrToSkillLevel(profile.mmr);
-    _lastSBMMBotLevels = List.generate(numberOfBots, (_) => skillLevel.name);
-
-    return List.generate(
-        numberOfBots,
-        (i) => Player(
-              id: 'bot_$i',
-              name: getBotName(BotBehavior.balanced, skillLevel),
-              isHuman: false,
-              botBehavior: BotBehavior.balanced,
-              botSkillLevel: skillLevel,
-              position: i + 1,
-            ));
+    final sbmmResult =
+        await SBMMClientService.getBotMix(botCount: numberOfBots);
+    _lastSBMMBotLevels = sbmmResult.botLevels;
+    return _buildBotsFromLevels(
+      sbmmResult.botLevels,
+      sbmmResult.botBehaviors,
+      numberOfBots,
+    );
   }
 
   /// Derniers niveaux SBMM retournés par le serveur (pour les passer dans les settings)
   static List<String>? _lastSBMMBotLevels;
   static List<String>? get lastSBMMBotLevels => _lastSBMMBotLevels;
 
-  /// Convertit une liste de noms de niveaux en Players
-  static List<Player> _buildBotsFromLevels(List<String> levels, int count) {
+  /// Convertit une liste de niveaux + personnalités en Players.
+  /// Les personnalités sont choisies par [SBMMLocalService] en counter-archetype.
+  static List<Player> _buildBotsFromLevels(
+    List<String> levels,
+    List<String> behaviors,
+    int count,
+  ) {
     return List.generate(count, (i) {
       final level = i < levels.length
           ? _parseSkillLevel(levels[i])
           : BotSkillLevel.silver;
+      final behavior = i < behaviors.length
+          ? _parseBehavior(behaviors[i])
+          : BotBehavior.balanced;
       return Player(
         id: 'bot_$i',
-        name: getBotName(BotBehavior.balanced, level),
+        name: getBotName(behavior, level),
         isHuman: false,
-        botBehavior: BotBehavior.balanced,
+        botBehavior: behavior,
         botSkillLevel: level,
         position: i + 1,
       );
@@ -136,7 +120,7 @@ class BotFactory {
         return BotSkillLevel.bronze;
       case 'gold':
       case 'platinum':
-        return BotSkillLevel.platinum;
+        return BotSkillLevel.gold;
       case 'silver':
       default:
         return BotSkillLevel.silver;
@@ -585,14 +569,6 @@ class BotFactory {
     return params;
   }
 
-  /// Convertit un MMR en BotSkillLevel (pour affichage/nom uniquement)
-  static BotSkillLevel _mmrToSkillLevel(int mmr) {
-    if (mmr >= 900) return BotSkillLevel.platinum;
-    if (mmr >= 600) return BotSkillLevel.platinum;
-    if (mmr >= 300) return BotSkillLevel.silver;
-    return BotSkillLevel.bronze;
-  }
-
   static BotSkillLevel difficultyToSkillLevel(Difficulty difficulty) {
     switch (_normalizeStrongDifficulty(difficulty)) {
       case Difficulty.easy:
@@ -601,7 +577,7 @@ class BotFactory {
         return BotSkillLevel.silver;
       case Difficulty.hard:
       case Difficulty.platinum:
-        return BotSkillLevel.platinum;
+        return BotSkillLevel.gold;
       case Difficulty.mix:
         return BotSkillLevel.silver;
     }

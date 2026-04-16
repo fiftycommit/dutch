@@ -51,7 +51,6 @@ const publicRoomHandlers_1 = require("./handlers/publicRoomHandlers");
 const publicRoomService_1 = require("./services/publicRoomService");
 const botLearningRoutes_1 = __importDefault(require("./routes/botLearningRoutes"));
 const playerLearningRoutes_1 = __importDefault(require("./routes/playerLearningRoutes"));
-const sbmmRoutes_1 = __importDefault(require("./routes/sbmmRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const friendsRoutes_1 = __importStar(require("./routes/friendsRoutes"));
 const roomRoutes_1 = __importDefault(require("./routes/roomRoutes"));
@@ -201,8 +200,6 @@ async function startServer() {
     app.use('/api/bot-learning', botLearningRoutes_1.default);
     // Routes pour l'apprentissage des joueurs (profil SBMM)
     app.use('/api/player-learning', playerLearningRoutes_1.default);
-    // Routes SBMM (nouveau système de matchmaking)
-    app.use('/api/sbmm', sbmmRoutes_1.default);
     // Routes Auth (inscription, connexion, profil)
     app.use('/api/auth', authRoutes_1.default);
     // Routes Friends (amis, demandes, blocage)

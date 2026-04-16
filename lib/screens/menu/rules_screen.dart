@@ -217,11 +217,38 @@ class RulesScreen extends StatelessWidget {
                     style: _body(context),
                   ),
                   SizedBox(height: ScreenUtils.spacing(context, 12)),
-                  _sbmmCard(context, 'SBMM désactivé',
-                      'Choisissez manuellement le niveau des bots et le nombre de joueurs.'),
+                  _sbmmCard(context, 'Mode manuel',
+                      'Choisissez vous-même le niveau des bots (Facile / Moyen / Difficile) et le nombre de joueurs.'),
                   SizedBox(height: ScreenUtils.spacing(context, 8)),
-                  _sbmmCard(context, 'SBMM activé',
-                      'Seul le nombre de joueurs est configurable. Le niveau des bots s\'ajuste automatiquement à votre niveau.'),
+                  _sbmmCard(context, 'Mode adaptatif (par défaut)',
+                      'Le jeu calcule automatiquement le mix de bots le plus juste pour vous : vous ne devez ni vous ennuyer, ni être dépassé.'),
+                  SizedBox(height: ScreenUtils.spacing(context, 12)),
+                  Text(
+                    'Comment ça marche',
+                    style: TextStyle(
+                      color: const Color(0xFF81c784),
+                      fontSize: ScreenUtils.scaleFont(context, 15),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: ScreenUtils.spacing(context, 8)),
+                  Text(
+                    '• Objectif : vous faire gagner ~1 partie sur 2. Si vous dominez, les bots montent en niveau. Si vous êtes submergé, ils redescendent.\n'
+                    '• Calibration rapide : vos 3 premières parties ajustent le niveau 2× plus vite pour trouver votre place.\n'
+                    '• Fenêtre courte : seules vos 5 dernières parties comptent, l\'ajustement est continu et réactif.\n'
+                    '• 3 niveaux de bots : 🥉 Bronze, 🥈 Argent, 🥇 Or. Le mix d\'une partie peut combiner plusieurs niveaux.',
+                    style: _body(context),
+                  ),
+                  SizedBox(height: ScreenUtils.spacing(context, 12)),
+                  Text(
+                    'Avant chaque partie, l\'écran de configuration affiche la composition prévue des bots — aucune surprise.',
+                    style: TextStyle(
+                      color: Colors.amber.shade200,
+                      fontSize: ScreenUtils.scaleFont(context, 13),
+                      fontStyle: FontStyle.italic,
+                      height: 1.4,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -891,12 +918,12 @@ class RulesScreen extends StatelessWidget {
             'Dutch à 6 points ou moins',
             'Réaction correcte à la défausse',
           ], const Color(0xFFC0C0C0)),
-          _buildBotCard(context, '💎 Bots Difficiles', 'Forts', [
+          _buildBotCard(context, '🥇 Bots Or', 'Redoutables', [
             'Mémoire PARFAITE (n\'oublient jamais)',
             'AUCUNE erreur sur les échanges',
             'Dutch ultra-agressif à 2 points',
             'Réaction instantanée (95%)',
-          ], const Color(0xFF00CED1)),
+          ], const Color(0xFFFFC107)),
         ],
       ),
     );

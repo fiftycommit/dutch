@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/matchmaking/sbmm_local_service.dart';
 import '../../utils/ui_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -227,7 +228,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
           settings.useSBMM,
           (val) => settings.toggleSBMM(val),
         ),
+        _buildActionTile(
+          title: "Réinitialiser la progression SBMM",
+          subtitle: "Remet le niveau des bots au démarrage",
+          icon: Icons.restart_alt,
+          onTap: _confirmResetSBMM,
+        ),
       ],
+    );
+  }
+
+  Future<void> _confirmResetSBMM() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.backgroundMedium,
+        title: const Text(
+          'Réinitialiser le SBMM ?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Ton cursor et ton historique récent seront effacés. Les prochaines parties repartiront au niveau initial.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Réinitialiser',
+              style: TextStyle(color: Colors.amber),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await SBMMLocalService.reset();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Progression SBMM réinitialisée'),
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 
@@ -259,6 +305,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.amber,
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.amber),
+        title: Text(
+          title,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+        ),
+        trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+        onTap: onTap,
       ),
     );
   }

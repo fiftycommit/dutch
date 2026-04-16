@@ -1,77 +1,31 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import '../network/network_probe_service.dart';
-import '../network/secure_api_headers.dart';
-import '../multiplayer/client_id_service.dart';
+import 'sbmm_local_service.dart';
 
-/// Client pour le nouveau système SBMM serveur.
-/// Remplace la génération locale de bots "miroirs" par un appel serveur
-/// qui détermine le mix de BotSkillLevel optimal pour le joueur.
+/// Façade SBMM côté client.
+///
+/// Le SBMM est 100% local : pas de compte, pas de sync cross-device.
+/// Ce service délègue à [SBMMLocalService] et préserve l'API utilisée par
+/// le reste de l'app ([BotFactory], [GameProvider], setup screen).
 class SBMMClientService {
-  static const String _baseUrl = 'https://dutch-game.me/api/sbmm';
-  static const Duration _timeout = Duration(seconds: 5);
-  static const Duration _networkProbeTimeout = Duration(milliseconds: 700);
-
-  static Future<bool> _canReachBackendQuickly() {
-    return NetworkProbeService.canReachBackend(timeout: _networkProbeTimeout);
-  }
-
-  static Future<Map<String, String>> _authHeaders() async {
-    return SecureApiHeaders.authorizedJson();
-  }
-
-  /// Demande au serveur le mix de BotSkillLevel pour ce joueur.
-  /// Retourne une liste de niveaux de bots (ex: ['bronze', 'silver', 'silver']).
-  /// En cas d'erreur, retourne null (le caller doit fallback).
-  static Future<SBMMBotMixResult?> getBotMix({required int botCount}) async {
-    try {
-      final isOnline = await _canReachBackendQuickly();
-      if (!isOnline) return null;
-
-      final playerId = await ClientIdService.ensureClientId();
-      final headers = await _authHeaders();
-
-      final response = await http
-          .get(
-            Uri.parse(
-                '$_baseUrl/bot-mix?playerId=$playerId&botCount=$botCount'),
-            headers: headers,
-          )
-          .timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final botLevels = (data['botLevels'] as List).cast<String>();
-        final cursor = (data['cursor'] as num).toDouble();
-        final mmr = (data['mmr'] as num).toInt();
-
-        if (kDebugMode) {
-          debugPrint(
-              '🎯 SBMM bot-mix: $botLevels (cursor: ${cursor.toStringAsFixed(2)}, MMR: $mmr)');
-        }
-
-        return SBMMBotMixResult(
-          botLevels: botLevels,
-          cursor: cursor,
-          mmr: mmr,
-        );
-      }
-
-      if (kDebugMode) {
-        debugPrint('⚠️ SBMM bot-mix erreur: ${response.statusCode}');
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ SBMM bot-mix exception: $e');
-      }
-      return null;
+  static Future<SBMMBotMixResult> getBotMix({required int botCount}) async {
+    final local = await SBMMLocalService.getBotMix(botCount: botCount);
+    if (kDebugMode) {
+      debugPrint(
+        '🎯 SBMM: ${local.botLevels} / ${local.botBehaviors} '
+        '(cursor: ${local.cursor.toStringAsFixed(2)}, MMR: ${local.mmr}, '
+        'archetype: ${local.archetype.name})',
+      );
     }
+    return SBMMBotMixResult(
+      botLevels: local.botLevels,
+      botBehaviors: local.botBehaviors,
+      cursor: local.cursor,
+      mmr: local.mmr,
+      archetype: local.archetype,
+    );
   }
 
-  /// Enregistre le résultat d'une partie SBMM sur le serveur.
-  /// Fire-and-forget : ne bloque pas, ne crash pas.
+  /// Enregistre le résultat d'une partie (ajuste le cursor local).
   static Future<void> recordGame({
     required String gameId,
     required int rank,
@@ -81,61 +35,31 @@ class SBMMClientService {
     required bool dutchCalled,
     required bool dutchWon,
   }) async {
-    try {
-      final isOnline = await _canReachBackendQuickly();
-      if (!isOnline) return;
-
-      final playerId = await ClientIdService.ensureClientId();
-      final headers = await _authHeaders();
-
-      final body = {
-        'playerId': playerId,
-        'gameId': gameId,
-        'rank': rank,
-        'score': score,
-        'botResults': botResults.map((b) => b.toJson()).toList(),
-        'totalPlayers': totalPlayers,
-        'dutchCalled': dutchCalled,
-        'dutchWon': dutchWon,
-      };
-
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/record-game'),
-            headers: headers,
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
-
-      if (kDebugMode) {
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          debugPrint(
-              '✅ SBMM record-game: newMMR=${data['newMMR']}, newCursor=${data['newCursor']}');
-        } else {
-          debugPrint('⚠️ SBMM record-game erreur: ${response.statusCode}');
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ SBMM record-game exception: $e');
-    }
+    await SBMMLocalService.recordGame(
+      rank: rank,
+      totalPlayers: totalPlayers,
+      dutchCalled: dutchCalled,
+      dutchWon: dutchWon,
+    );
   }
 }
 
-/// Résultat de l'appel bot-mix
 class SBMMBotMixResult {
   final List<String> botLevels;
+  final List<String> botBehaviors;
   final double cursor;
   final int mmr;
+  final PlayerArchetype archetype;
 
   const SBMMBotMixResult({
     required this.botLevels,
+    required this.botBehaviors,
     required this.cursor,
     required this.mmr,
+    required this.archetype,
   });
 }
 
-/// Résultat d'un bot individuel pour record-game
 class SBMMBotResult {
   final String level;
   final int rank;

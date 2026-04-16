@@ -121,24 +121,6 @@ export class SecurityService {
         keyGenerator: (req) => this.getRateLimitKey(req),
     });
 
-    public static readonly sbmmReadLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 180,
-        standardHeaders: true,
-        legacyHeaders: false,
-        message: { success: false, error: 'Trop de requêtes matchmaking, réessayez plus tard.' },
-        keyGenerator: (req) => this.getRateLimitKey(req),
-    });
-
-    public static readonly sbmmWriteLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 90,
-        standardHeaders: true,
-        legacyHeaders: false,
-        message: { success: false, error: 'Trop de mises à jour matchmaking, réessayez plus tard.' },
-        keyGenerator: (req) => this.getRateLimitKey(req),
-    });
-
     public static readonly chatNotifyLimiter = rateLimit({
         windowMs: 5 * 60 * 1000,
         max: 90,

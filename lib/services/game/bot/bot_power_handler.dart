@@ -198,7 +198,7 @@ class BotPowerHandler {
       powerExecuted = await _usePowerValet(gameState, bot, difficulty, context,
           personality: personality);
     } else if (val == 'JOKER') {
-      await _usePowerJoker(gameState, bot, difficulty, context,
+      powerExecuted = await _usePowerJoker(gameState, bot, difficulty, context,
           personality: personality);
     }
 
@@ -1741,7 +1741,7 @@ class BotPowerHandler {
   // POUVOIR JOKER : Mélanger la main d'un joueur
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<void> _usePowerJoker(
+  static Future<bool> _usePowerJoker(
     GameState gs,
     Player bot,
     BotDifficulty difficulty,
@@ -1750,7 +1750,14 @@ class BotPowerHandler {
   }) async {
     Player? target =
         _chooseJokerTarget(gs, bot, difficulty, personality: personality);
-    target ??= bot;
+
+    // Silver+ : jamais s'attaquer soi-même. Si aucune cible valide → skip.
+    // Bronze : fallback sur soi-même autorisé (conséquence de la règle
+    // "Bronze ne cible jamais l'humain" en 1v1, design volontaire).
+    if (target == null) {
+      if (!_isBronzeDifficulty(difficulty)) return false;
+      target = bot;
+    }
 
     GameLogic.jokerEffect(gs, target);
 
@@ -1769,6 +1776,8 @@ class BotPowerHandler {
         target.name,
       );
     }
+
+    return true;
   }
 
   /// Choisit la cible du Joker selon l'analyse de menace contextuelle

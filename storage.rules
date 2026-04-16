@@ -15,10 +15,15 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*|audio/.*');
     }
 
-    // Fonds d'écran de chat
+    // Fonds d'écran de chat — fileName attendu au format "{uid1}_{uid2}.jpg"
+    // (chatId trié). On exige que l'uid soit participant du chat.
     match /chat_wallpapers/{fileName} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && (fileName.matches('^' + request.auth.uid + '_.+\\.jpg$')
+         || fileName.matches('^.+_' + request.auth.uid + '\\.jpg$'));
       allow write: if request.auth != null
+        && (fileName.matches('^' + request.auth.uid + '_.+\\.jpg$')
+         || fileName.matches('^.+_' + request.auth.uid + '\\.jpg$'))
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

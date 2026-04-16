@@ -12,7 +12,6 @@ import { setupPublicRoomHandlers } from './handlers/publicRoomHandlers';
 import { publicRoomService } from './services/publicRoomService';
 import botLearningRoutes from './routes/botLearningRoutes';
 import playerLearningRoutes from './routes/playerLearningRoutes';
-import sbmmRoutes from './routes/sbmmRoutes';
 import authRoutes from './routes/authRoutes';
 import friendsRoutes, { setFriendsIo } from './routes/friendsRoutes';
 import roomRoutes from './routes/roomRoutes';
@@ -192,9 +191,6 @@ export async function startServer() {
 
   // Routes pour l'apprentissage des joueurs (profil SBMM)
   app.use('/api/player-learning', playerLearningRoutes);
-
-  // Routes SBMM (nouveau système de matchmaking)
-  app.use('/api/sbmm', sbmmRoutes);
 
   // Routes Auth (inscription, connexion, profil)
   app.use('/api/auth', authRoutes);

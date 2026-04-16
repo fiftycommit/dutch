@@ -161,22 +161,6 @@ SecurityService.learningWriteLimiter = (0, express_rate_limit_1.rateLimit)({
     message: { success: false, error: 'Trop d\'ecritures learning, reessayez plus tard.' },
     keyGenerator: (req) => _a.getRateLimitKey(req),
 });
-SecurityService.sbmmReadLimiter = (0, express_rate_limit_1.rateLimit)({
-    windowMs: 15 * 60 * 1000,
-    max: 180,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, error: 'Trop de requêtes matchmaking, réessayez plus tard.' },
-    keyGenerator: (req) => _a.getRateLimitKey(req),
-});
-SecurityService.sbmmWriteLimiter = (0, express_rate_limit_1.rateLimit)({
-    windowMs: 15 * 60 * 1000,
-    max: 90,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, error: 'Trop de mises à jour matchmaking, réessayez plus tard.' },
-    keyGenerator: (req) => _a.getRateLimitKey(req),
-});
 SecurityService.chatNotifyLimiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 5 * 60 * 1000,
     max: 90,
