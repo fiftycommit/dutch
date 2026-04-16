@@ -642,22 +642,35 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       return const SizedBox.shrink();
     }
 
-    final counts = <String, int>{};
-    for (final lvl in result.botLevels) {
-      counts[lvl] = (counts[lvl] ?? 0) + 1;
+    // Pair chaque bot (niveau, personnalité) et compte les paires identiques
+    final pairCounts = <String, int>{};
+    final pairCount = result.botLevels.length;
+    for (var i = 0; i < pairCount; i++) {
+      final lvl = result.botLevels[i];
+      final beh = i < result.botBehaviors.length
+          ? result.botBehaviors[i]
+          : 'balanced';
+      final key = '$lvl|$beh';
+      pairCounts[key] = (pairCounts[key] ?? 0) + 1;
     }
 
-    final orderedKeys = const ['bronze', 'silver', 'gold']
-        .where(counts.containsKey)
-        .toList();
-
-    final behaviorCounts = <String, int>{};
-    for (final b in result.botBehaviors) {
-      behaviorCounts[b] = (behaviorCounts[b] ?? 0) + 1;
-    }
-    final orderedBehaviors = const ['balanced', 'fast', 'aggressive', 'moi']
-        .where(behaviorCounts.containsKey)
-        .toList();
+    const levelOrder = {'bronze': 0, 'silver': 1, 'gold': 2};
+    const behaviorOrder = {
+      'balanced': 0,
+      'fast': 1,
+      'aggressive': 2,
+      'moi': 3,
+    };
+    final sortedPairs = pairCounts.keys.toList()
+      ..sort((a, b) {
+        final pa = a.split('|');
+        final pb = b.split('|');
+        final lvlCmp = (levelOrder[pa[0]] ?? 0)
+            .compareTo(levelOrder[pb[0]] ?? 0);
+        if (lvlCmp != 0) return lvlCmp;
+        return (behaviorOrder[pa[1]] ?? 0)
+            .compareTo(behaviorOrder[pb[1]] ?? 0);
+      });
 
     final skillLabel = SBMMLocalService.skillLabelFromCursor(result.cursor);
 
@@ -679,53 +692,46 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
           runSpacing: f(6),
           alignment: WrapAlignment.center,
           children: [
-            for (final key in orderedKeys)
-              _botLevelBadge(f, key, counts[key]!),
+            for (final key in sortedPairs)
+              _botPairBadge(f, key.split('|')[0], key.split('|')[1],
+                  pairCounts[key]!),
           ],
         ),
-        if (orderedBehaviors.isNotEmpty) ...[
-          SizedBox(height: f(8)),
-          Wrap(
-            spacing: f(8),
-            runSpacing: f(6),
-            alignment: WrapAlignment.center,
-            children: [
-              for (final b in orderedBehaviors)
-                _botBehaviorBadge(f, b, behaviorCounts[b]!),
-            ],
-          ),
-        ],
       ],
     );
   }
 
-  Widget _botBehaviorBadge(double Function(double) f, String behavior, int count) {
-    late final IconData icon;
-    late final String label;
+  Widget _botPairBadge(
+      double Function(double) f, String level, String behavior, int count) {
+    late final String levelEmoji;
+    late final String levelLabel;
     late final Color accent;
-    switch (behavior) {
-      case 'fast':
-        icon = Icons.flash_on;
-        label = 'Rapide';
-        accent = const Color(0xFF42A5F5);
+    switch (level) {
+      case 'bronze':
+        levelEmoji = '🥉';
+        levelLabel = 'Bronze';
+        accent = const Color(0xFFCD7F32);
         break;
-      case 'aggressive':
-        icon = Icons.local_fire_department;
-        label = 'Agressif';
-        accent = const Color(0xFFEF5350);
+      case 'silver':
+        levelEmoji = '🥈';
+        levelLabel = 'Argent';
+        accent = const Color(0xFFB0B0B0);
         break;
-      case 'moi':
-        icon = Icons.content_copy;
-        label = 'Miroir';
-        accent = const Color(0xFFAB47BC);
-        break;
-      case 'balanced':
+      case 'gold':
       default:
-        icon = Icons.balance;
-        label = 'Équilibré';
-        accent = const Color(0xFF66BB6A);
+        levelEmoji = '🥇';
+        levelLabel = 'Or';
+        accent = const Color(0xFFFFC107);
         break;
     }
+
+    final behLabel = switch (behavior) {
+      'fast' => 'Rapide',
+      'aggressive' => 'Agressif',
+      'moi' => 'Miroir',
+      _ => 'Équilibré',
+    };
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
       decoration: BoxDecoration(
@@ -733,20 +739,13 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: accent.withValues(alpha: 0.6), width: 1),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: accent, size: f(14)),
-          SizedBox(width: f(5)),
-          Text(
-            '$label × $count',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: f(12),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+      child: Text(
+        '$levelEmoji $levelLabel • $behLabel × $count',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: f(12),
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -769,53 +768,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
           SizedBox(width: f(6)),
           Text(
             label,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: f(12),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _botLevelBadge(double Function(double) f, String level, int count) {
-    late final String emoji;
-    late final String label;
-    late final Color accent;
-    switch (level) {
-      case 'bronze':
-        emoji = '🥉';
-        label = 'Bronze';
-        accent = const Color(0xFFCD7F32);
-        break;
-      case 'silver':
-        emoji = '🥈';
-        label = 'Argent';
-        accent = const Color(0xFFB0B0B0);
-        break;
-      case 'gold':
-      default:
-        emoji = '🥇';
-        label = 'Or';
-        accent = const Color(0xFFFFC107);
-        break;
-    }
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.6), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: TextStyle(fontSize: f(14))),
-          SizedBox(width: f(5)),
-          Text(
-            '$label × $count',
             style: TextStyle(
               color: Colors.white,
               fontSize: f(12),
