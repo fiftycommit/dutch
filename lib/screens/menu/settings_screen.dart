@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/matchmaking/sbmm_local_service.dart';
+import '../../services/ui/stats_service.dart';
 import '../../utils/ui_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -264,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           style: const TextStyle(color: Colors.white),
         ),
         content: Text(
-          'Le cursor et l\'historique récent de $slotName seront effacés. Les autres profils ne sont pas touchés.',
+          'Le cursor SBMM, le RP et l\'historique récent de $slotName seront effacés. Les autres profils ne sont pas touchés.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -283,7 +284,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
     if (confirmed != true || !mounted) return;
-    await SBMMLocalService.reset(slotId: slotId);
+    await Future.wait([
+      SBMMLocalService.reset(slotId: slotId),
+      StatsService.resetStats(slotId: slotId),
+    ]);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
