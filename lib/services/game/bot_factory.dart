@@ -75,8 +75,10 @@ class BotFactory {
     required int saveSlot,
     required bool isTournament,
   }) async {
-    final sbmmResult =
-        await SBMMClientService.getBotMix(botCount: numberOfBots);
+    final sbmmResult = await SBMMClientService.getBotMix(
+      botCount: numberOfBots,
+      slotId: saveSlot,
+    );
     _lastSBMMBotLevels = sbmmResult.botLevels;
     return _buildBotsFromLevels(
       sbmmResult.botLevels,

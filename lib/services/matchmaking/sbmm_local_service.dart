@@ -1,35 +1,31 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// SBMM local : source de vérité côté client pour le cursor/skill du joueur.
 ///
 /// Persiste le profil SBMM en SharedPreferences avec signature HMAC-SHA256.
+/// Le profil est scopé par slot local (Joueur 1/2/3) : chaque profil de la
+/// sélection initiale a son propre cursor et son propre archétype.
 /// Toute modification manuelle du payload est détectée au chargement et
 /// déclenche un reset avec flag [consumeTamperFlag] pour affichage UI.
 class SBMMLocalService {
-  static const String _prefsKeyBase = 'sbmm_local_profile_v2';
-  static const String _legacyKeyV1 = 'sbmm_local_profile_v1';
-  static const String _guestKeySuffix = 'guest';
+  static const String _prefsKeyBase = 'sbmm_local_profile_slot';
   static const int _maxRecentResults = 20;
-  static const int _currentVersion = 3;
-  static const int _legacyVersionV2 = 2;
+  static const int _currentVersion = 4;
 
-  static SBMMLocalProfile? _cachedProfile;
-  static String? _cachedProfileKey;
+  // Clés historiques purgées silencieusement au premier accès.
+  static const String _legacyKeyV1 = 'sbmm_local_profile_v1';
+  static const String _legacyKeyV2Base = 'sbmm_local_profile_v2';
+
+  static final Map<int, SBMMLocalProfile> _cachedProfiles = {};
   static bool _tamperDetected = false;
+  static bool _legacyPurged = false;
 
-  /// Scope le profil par UID Firebase : chaque compte a son propre cursor.
-  /// Utilisateur non connecté → scope "guest".
-  static String _currentScope() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    return (uid == null || uid.isEmpty) ? _guestKeySuffix : uid;
-  }
-
-  static String _currentPrefsKey() => '${_prefsKeyBase}_${_currentScope()}';
+  static String _scopeFor(int slotId) => 'slot_$slotId';
+  static String _prefsKey(int slotId) => '${_prefsKeyBase}_$slotId';
 
   /// À true si la dernière lecture a détecté un payload altéré.
   /// L'appel remet le flag à false (one-shot).
@@ -39,94 +35,81 @@ class SBMMLocalService {
     return v;
   }
 
-  static Future<SBMMLocalProfile> getProfile() async {
-    final currentKey = _currentPrefsKey();
-    if (_cachedProfile != null && _cachedProfileKey == currentKey) {
-      return _cachedProfile!;
-    }
-    final prefs = await SharedPreferences.getInstance();
+  static Future<void> _purgeLegacyKeysOnce(SharedPreferences prefs) async {
+    if (_legacyPurged) return;
+    _legacyPurged = true;
 
-    // Purge ancienne version non signée (migration silencieuse)
     if (prefs.containsKey(_legacyKeyV1)) {
       await prefs.remove(_legacyKeyV1);
     }
-
-    // Migration depuis l'ancienne clé globale (partagée entre comptes) vers
-    // la clé scopée par UID : le premier compte qui lit hérite du profil
-    // existant, les suivants partent de zéro.
-    if (!prefs.containsKey(currentKey) && prefs.containsKey(_prefsKeyBase)) {
-      final legacy = prefs.getString(_prefsKeyBase);
-      if (legacy != null) {
-        await prefs.setString(currentKey, legacy);
-      }
-      await prefs.remove(_prefsKeyBase);
+    if (prefs.containsKey(_legacyKeyV2Base)) {
+      await prefs.remove(_legacyKeyV2Base);
     }
-
-    final raw = prefs.getString(currentKey);
-    if (raw != null) {
-      final scope = _currentScope();
-      final parsed = _parseAndVerify(raw, scope);
-      if (parsed != null) {
-        _cachedProfile = parsed.profile;
-        _cachedProfileKey = currentKey;
-        // Migration v2 → v3 : ré-écrire signé avec binding UID.
-        if (parsed.needsResave) await _saveProfile(parsed.profile);
-        return _cachedProfile!;
-      }
-      // Signature invalide, version inconnue, ou payload signé pour un autre
-      // compte → reset + flag tamper.
-      _tamperDetected = true;
-      if (kDebugMode) {
-        debugPrint('🚨 SBMM: signature invalide, profil réinitialisé');
-      }
+    // Anciennes clés scopées par UID Firebase : sbmm_local_profile_v2_<uid>.
+    final toRemove = prefs
+        .getKeys()
+        .where((k) => k.startsWith('${_legacyKeyV2Base}_'))
+        .toList();
+    for (final k in toRemove) {
+      await prefs.remove(k);
     }
-
-    _cachedProfile = SBMMLocalProfile.initial();
-    _cachedProfileKey = currentKey;
-    await _saveProfile(_cachedProfile!);
-    return _cachedProfile!;
   }
 
-  /// Vérifie la signature + la correspondance de scope. Accepte le format v2
-  /// (sans binding UID) comme migration silencieuse depuis l'ancien schéma :
-  /// le payload sera ré-signé en v3 au prochain `_saveProfile`.
-  static ({SBMMLocalProfile profile, bool needsResave})? _parseAndVerify(
-    String raw,
-    String expectedScope,
-  ) {
+  static Future<SBMMLocalProfile> getProfile({required int slotId}) async {
+    final cached = _cachedProfiles[slotId];
+    if (cached != null) return cached;
+
+    final prefs = await SharedPreferences.getInstance();
+    await _purgeLegacyKeysOnce(prefs);
+
+    final raw = prefs.getString(_prefsKey(slotId));
+    if (raw != null) {
+      final profile = _parseAndVerify(raw, _scopeFor(slotId));
+      if (profile != null) {
+        _cachedProfiles[slotId] = profile;
+        return profile;
+      }
+      // Signature invalide, version inconnue, ou payload signé pour un autre
+      // slot → reset + flag tamper.
+      _tamperDetected = true;
+      if (kDebugMode) {
+        debugPrint('🚨 SBMM: signature invalide slot $slotId, profil réinitialisé');
+      }
+    }
+
+    final fresh = SBMMLocalProfile.initial();
+    _cachedProfiles[slotId] = fresh;
+    await _saveProfile(fresh, slotId: slotId);
+    return fresh;
+  }
+
+  /// Vérifie la signature + la correspondance de scope.
+  static SBMMLocalProfile? _parseAndVerify(String raw, String expectedScope) {
     try {
       final wrapped = jsonDecode(raw) as Map<String, dynamic>;
       final data = wrapped['d'] as String;
       final sig = wrapped['s'] as String;
       final version = wrapped['v'] as int?;
+      if (version != _currentVersion) return null;
 
-      bool needsResave = false;
-      if (version == _currentVersion) {
-        final scope = wrapped['u'] as String?;
-        if (scope != expectedScope) return null;
-        if (_sign('$scope|$data') != sig) return null;
-      } else if (version == _legacyVersionV2) {
-        // v2 : signature sur data seulement, pas de binding UID.
-        if (_signLegacyV2(data) != sig) return null;
-        needsResave = true;
-      } else {
-        return null;
-      }
+      final scope = wrapped['u'] as String?;
+      if (scope != expectedScope) return null;
+      if (_sign('$scope|$data') != sig) return null;
 
-      final profile = SBMMLocalProfile.fromJson(
+      return SBMMLocalProfile.fromJson(
         jsonDecode(data) as Map<String, dynamic>,
       );
-      return (profile: profile, needsResave: needsResave);
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> _saveProfile(SBMMLocalProfile profile) async {
-    final scope = _currentScope();
-    final key = '${_prefsKeyBase}_$scope';
-    _cachedProfile = profile;
-    _cachedProfileKey = key;
+  static Future<void> _saveProfile(
+    SBMMLocalProfile profile, {
+    required int slotId,
+  }) async {
+    final scope = _scopeFor(slotId);
+    _cachedProfiles[slotId] = profile;
     final prefs = await SharedPreferences.getInstance();
     final data = jsonEncode(profile.toJson());
     final wrapped = jsonEncode({
@@ -135,7 +118,7 @@ class SBMMLocalService {
       'd': data,
       's': _sign('$scope|$data'),
     });
-    await prefs.setString(key, wrapped);
+    await prefs.setString(_prefsKey(slotId), wrapped);
   }
 
   // ---------------------------------------------------------------------------
@@ -165,10 +148,6 @@ class SBMMLocalService {
     return hmac.convert(utf8.encode(payload)).toString();
   }
 
-  /// Signature v2 : uniquement `data`, sans binding UID. Conservée pour la
-  /// migration silencieuse des profils écrits avant v3.
-  static String _signLegacyV2(String payload) => _sign(payload);
-
   /// Sigmoïde centrée à 600 MMR.
   static double mmrToCursor(double mmr) => 1 / (1 + exp(-(mmr - 600) / 200));
 
@@ -190,8 +169,11 @@ class SBMMLocalService {
   /// Les personnalités (BotBehavior) sont choisies en contre-archétype du
   /// joueur : un joueur "dutcher" affronte des bots rapides, un "dominant"
   /// des bots agressifs, etc. L'adaptation reste invisible (pas annoncée).
-  static Future<SBMMLocalMix> getBotMix({required int botCount}) async {
-    final profile = await getProfile();
+  static Future<SBMMLocalMix> getBotMix({
+    required int botCount,
+    required int slotId,
+  }) async {
+    final profile = await getProfile(slotId: slotId);
     final rng = Random();
     final levels = <String>[];
     final spread = botCount > 1 ? 0.15 : 0.0;
@@ -287,12 +269,13 @@ class SBMMLocalService {
   /// 4. **Amortissement directionnel** : freinage léger quand le cursor
   ///    s'éloigne du centre, aucun frein quand il revient vers le milieu.
   static Future<SBMMLocalProfile> recordGame({
+    required int slotId,
     required int rank,
     required int totalPlayers,
     bool dutchCalled = false,
     bool dutchWon = false,
   }) async {
-    final profile = await getProfile();
+    final profile = await getProfile(slotId: slotId);
 
     final result = SBMMLocalResult(
       rank: rank,
@@ -360,11 +343,11 @@ class SBMMLocalService {
       lastUpdated: DateTime.now().toIso8601String(),
     );
 
-    await _saveProfile(updated);
+    await _saveProfile(updated, slotId: slotId);
 
     if (kDebugMode) {
       debugPrint(
-        '🎯 SBMM: ${profile.cursor.toStringAsFixed(3)} → '
+        '🎯 SBMM[slot $slotId]: ${profile.cursor.toStringAsFixed(3)} → '
         '${newCursor.toStringAsFixed(3)} '
         '(rank $rank/$totalPlayers, lobby: ×${lobbyFactor.toStringAsFixed(1)}, '
         'smurf: ×${smurfBoost.toStringAsFixed(1)}, '
@@ -375,14 +358,23 @@ class SBMMLocalService {
     return updated;
   }
 
-  static Future<void> reset() async {
-    _cachedProfile = null;
-    _cachedProfileKey = null;
+  /// Réinitialise le profil SBMM du slot donné, ou de tous les slots si null.
+  static Future<void> reset({int? slotId}) async {
     _tamperDetected = false;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_currentPrefsKey());
-    await prefs.remove(_prefsKeyBase);
-    await prefs.remove(_legacyKeyV1);
+    if (slotId != null) {
+      _cachedProfiles.remove(slotId);
+      await prefs.remove(_prefsKey(slotId));
+      return;
+    }
+    _cachedProfiles.clear();
+    final toRemove = prefs
+        .getKeys()
+        .where((k) => k.startsWith('${_prefsKeyBase}_'))
+        .toList();
+    for (final k in toRemove) {
+      await prefs.remove(k);
+    }
   }
 
   /// Wording doux pour afficher le skill du joueur — 3 tiers alignés sur

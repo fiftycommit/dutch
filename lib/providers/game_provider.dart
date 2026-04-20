@@ -1141,6 +1141,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
       await SBMMClientService.recordGame(
         gameId: '${DateTime.now().millisecondsSinceEpoch}',
+        slotId: _currentSlotId,
         rank: playerRank,
         score: _gameState!.getFinalScore(human),
         botResults: botResults,

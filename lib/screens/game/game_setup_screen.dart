@@ -78,7 +78,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     _previewRequestedForCount = botCount;
     if (mounted) setState(() => _previewLoading = true);
 
-    final result = await SBMMClientService.getBotMix(botCount: botCount);
+    final result = await SBMMClientService.getBotMix(
+      botCount: botCount,
+      slotId: widget.saveSlot,
+    );
 
     // Si un autre refresh a été demandé entre temps, ignorer ce résultat
     if (!mounted || _previewRequestedForCount != botCount) return;

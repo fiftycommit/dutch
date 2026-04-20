@@ -7,11 +7,17 @@ import 'sbmm_local_service.dart';
 /// Ce service délègue à [SBMMLocalService] et préserve l'API utilisée par
 /// le reste de l'app ([BotFactory], [GameProvider], setup screen).
 class SBMMClientService {
-  static Future<SBMMBotMixResult> getBotMix({required int botCount}) async {
-    final local = await SBMMLocalService.getBotMix(botCount: botCount);
+  static Future<SBMMBotMixResult> getBotMix({
+    required int botCount,
+    required int slotId,
+  }) async {
+    final local = await SBMMLocalService.getBotMix(
+      botCount: botCount,
+      slotId: slotId,
+    );
     if (kDebugMode) {
       debugPrint(
-        '🎯 SBMM: ${local.botLevels} / ${local.botBehaviors} '
+        '🎯 SBMM[slot $slotId]: ${local.botLevels} / ${local.botBehaviors} '
         '(cursor: ${local.cursor.toStringAsFixed(2)}, MMR: ${local.mmr}, '
         'archetype: ${local.archetype.name})',
       );
@@ -25,9 +31,10 @@ class SBMMClientService {
     );
   }
 
-  /// Enregistre le résultat d'une partie (ajuste le cursor local).
+  /// Enregistre le résultat d'une partie (ajuste le cursor local du slot).
   static Future<void> recordGame({
     required String gameId,
+    required int slotId,
     required int rank,
     required int score,
     required List<SBMMBotResult> botResults,
@@ -36,6 +43,7 @@ class SBMMClientService {
     required bool dutchWon,
   }) async {
     await SBMMLocalService.recordGame(
+      slotId: slotId,
       rank: rank,
       totalPlayers: totalPlayers,
       dutchCalled: dutchCalled,

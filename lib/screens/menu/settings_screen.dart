@@ -267,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await SBMMLocalService.reset();
+    await SBMMLocalService.reset(slotId: widget.initialSlot);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
