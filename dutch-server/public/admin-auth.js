@@ -115,40 +115,12 @@ async function initFirebase() {
   _firebaseAuth = firebase.auth();
 }
 
-function isSafariLikeBrowser() {
-  const ua = navigator.userAgent || '';
-  const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/i.test(ua);
-  const isIOSWebKit = /iPhone|iPad|iPod/i.test(ua);
-  return isSafari || isIOSWebKit;
-}
-
-function isPopupFallbackError(error) {
-  const code = error?.code || '';
-  return [
-    'auth/popup-blocked',
-    'auth/popup-closed-by-user',
-    'auth/cancelled-popup-request',
-    'auth/internal-error',
-  ].includes(code);
-}
-
 async function signInWithGoogleForAdmin() {
+  // signInWithRedirect casse sur Safari à cause du handler cross-domain
+  // (dutch-game-1dd01.firebaseapp.com). On reste sur popup partout, comme
+  // l'app Flutter web.
   const provider = new firebase.auth.GoogleAuthProvider();
-
-  // Safari / iOS gèrent mieux la redirection complète que le popup Firebase.
-  if (isSafariLikeBrowser()) {
-    await _firebaseAuth.signInWithRedirect(provider);
-    return;
-  }
-
-  try {
-    await _firebaseAuth.signInWithPopup(provider);
-  } catch (error) {
-    if (!isPopupFallbackError(error)) {
-      throw error;
-    }
-    await _firebaseAuth.signInWithRedirect(provider);
-  }
+  await _firebaseAuth.signInWithPopup(provider);
 }
 
 /* ── Main ── */
