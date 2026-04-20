@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,13 +11,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Toute modification manuelle du payload est détectée au chargement et
 /// déclenche un reset avec flag [consumeTamperFlag] pour affichage UI.
 class SBMMLocalService {
-  static const String _prefsKey = 'sbmm_local_profile_v2';
+  static const String _prefsKeyBase = 'sbmm_local_profile_v2';
   static const String _legacyKeyV1 = 'sbmm_local_profile_v1';
+  static const String _guestKeySuffix = 'guest';
   static const int _maxRecentResults = 20;
-  static const int _currentVersion = 2;
+  static const int _currentVersion = 3;
+  static const int _legacyVersionV2 = 2;
 
   static SBMMLocalProfile? _cachedProfile;
+  static String? _cachedProfileKey;
   static bool _tamperDetected = false;
+
+  /// Scope le profil par UID Firebase : chaque compte a son propre cursor.
+  /// Utilisateur non connecté → scope "guest".
+  static String _currentScope() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return (uid == null || uid.isEmpty) ? _guestKeySuffix : uid;
+  }
+
+  static String _currentPrefsKey() => '${_prefsKeyBase}_${_currentScope()}';
 
   /// À true si la dernière lecture a détecté un payload altéré.
   /// L'appel remet le flag à false (one-shot).
@@ -27,7 +40,10 @@ class SBMMLocalService {
   }
 
   static Future<SBMMLocalProfile> getProfile() async {
-    if (_cachedProfile != null) return _cachedProfile!;
+    final currentKey = _currentPrefsKey();
+    if (_cachedProfile != null && _cachedProfileKey == currentKey) {
+      return _cachedProfile!;
+    }
     final prefs = await SharedPreferences.getInstance();
 
     // Purge ancienne version non signée (migration silencieuse)
@@ -35,14 +51,30 @@ class SBMMLocalService {
       await prefs.remove(_legacyKeyV1);
     }
 
-    final raw = prefs.getString(_prefsKey);
+    // Migration depuis l'ancienne clé globale (partagée entre comptes) vers
+    // la clé scopée par UID : le premier compte qui lit hérite du profil
+    // existant, les suivants partent de zéro.
+    if (!prefs.containsKey(currentKey) && prefs.containsKey(_prefsKeyBase)) {
+      final legacy = prefs.getString(_prefsKeyBase);
+      if (legacy != null) {
+        await prefs.setString(currentKey, legacy);
+      }
+      await prefs.remove(_prefsKeyBase);
+    }
+
+    final raw = prefs.getString(currentKey);
     if (raw != null) {
-      final parsed = _parseAndVerify(raw);
+      final scope = _currentScope();
+      final parsed = _parseAndVerify(raw, scope);
       if (parsed != null) {
-        _cachedProfile = parsed;
+        _cachedProfile = parsed.profile;
+        _cachedProfileKey = currentKey;
+        // Migration v2 → v3 : ré-écrire signé avec binding UID.
+        if (parsed.needsResave) await _saveProfile(parsed.profile);
         return _cachedProfile!;
       }
-      // Signature invalide ou corrompu → reset + flag
+      // Signature invalide, version inconnue, ou payload signé pour un autre
+      // compte → reset + flag tamper.
       _tamperDetected = true;
       if (kDebugMode) {
         debugPrint('🚨 SBMM: signature invalide, profil réinitialisé');
@@ -50,36 +82,60 @@ class SBMMLocalService {
     }
 
     _cachedProfile = SBMMLocalProfile.initial();
+    _cachedProfileKey = currentKey;
     await _saveProfile(_cachedProfile!);
     return _cachedProfile!;
   }
 
-  static SBMMLocalProfile? _parseAndVerify(String raw) {
+  /// Vérifie la signature + la correspondance de scope. Accepte le format v2
+  /// (sans binding UID) comme migration silencieuse depuis l'ancien schéma :
+  /// le payload sera ré-signé en v3 au prochain `_saveProfile`.
+  static ({SBMMLocalProfile profile, bool needsResave})? _parseAndVerify(
+    String raw,
+    String expectedScope,
+  ) {
     try {
       final wrapped = jsonDecode(raw) as Map<String, dynamic>;
       final data = wrapped['d'] as String;
       final sig = wrapped['s'] as String;
       final version = wrapped['v'] as int?;
-      if (version != _currentVersion) return null;
-      if (_sign(data) != sig) return null;
-      return SBMMLocalProfile.fromJson(
+
+      bool needsResave = false;
+      if (version == _currentVersion) {
+        final scope = wrapped['u'] as String?;
+        if (scope != expectedScope) return null;
+        if (_sign('$scope|$data') != sig) return null;
+      } else if (version == _legacyVersionV2) {
+        // v2 : signature sur data seulement, pas de binding UID.
+        if (_signLegacyV2(data) != sig) return null;
+        needsResave = true;
+      } else {
+        return null;
+      }
+
+      final profile = SBMMLocalProfile.fromJson(
         jsonDecode(data) as Map<String, dynamic>,
       );
+      return (profile: profile, needsResave: needsResave);
     } catch (_) {
       return null;
     }
   }
 
   static Future<void> _saveProfile(SBMMLocalProfile profile) async {
+    final scope = _currentScope();
+    final key = '${_prefsKeyBase}_$scope';
     _cachedProfile = profile;
+    _cachedProfileKey = key;
     final prefs = await SharedPreferences.getInstance();
     final data = jsonEncode(profile.toJson());
     final wrapped = jsonEncode({
       'v': _currentVersion,
+      'u': scope,
       'd': data,
-      's': _sign(data),
+      's': _sign('$scope|$data'),
     });
-    await prefs.setString(_prefsKey, wrapped);
+    await prefs.setString(key, wrapped);
   }
 
   // ---------------------------------------------------------------------------
@@ -108,6 +164,10 @@ class SBMMLocalService {
     final hmac = Hmac(sha256, _secret());
     return hmac.convert(utf8.encode(payload)).toString();
   }
+
+  /// Signature v2 : uniquement `data`, sans binding UID. Conservée pour la
+  /// migration silencieuse des profils écrits avant v3.
+  static String _signLegacyV2(String payload) => _sign(payload);
 
   /// Sigmoïde centrée à 600 MMR.
   static double mmrToCursor(double mmr) => 1 / (1 + exp(-(mmr - 600) / 200));
@@ -317,9 +377,11 @@ class SBMMLocalService {
 
   static Future<void> reset() async {
     _cachedProfile = null;
+    _cachedProfileKey = null;
     _tamperDetected = false;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefsKey);
+    await prefs.remove(_currentPrefsKey());
+    await prefs.remove(_prefsKeyBase);
     await prefs.remove(_legacyKeyV1);
   }
 
