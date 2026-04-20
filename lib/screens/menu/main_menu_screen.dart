@@ -146,6 +146,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     await prefs.setInt('lastSelectedSlot', slotId);
   }
 
+  /// Recharge les stats des 3 slots (RP, rang) depuis SharedPreferences.
+  /// Appelé au retour de Réglages / Stats pour refléter un reset éventuel.
+  Future<void> _refreshSlotsData() async {
+    final results = await Future.wait([
+      StatsService.getStats(slotId: 1),
+      StatsService.getStats(slotId: 2),
+      StatsService.getStats(slotId: 3),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      slotsData = {
+        1: results[0],
+        2: results[1],
+        3: results[2],
+      };
+    });
+  }
+
+  Future<void> _openSettings() async {
+    await context.push('/settings?slot=${selectedSlot ?? 1}');
+    if (!mounted) return;
+    await _refreshSlotsData();
+  }
+
   Future<void> _ensureMultiplayerWarmupStarted() {
     final current = _multiplayerWarmupFuture;
     if (current != null) {
@@ -731,8 +755,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           LabeledIconButton(
                             icon: Icons.settings,
                             label: 'Réglages',
-                            onPressed: () => context
-                                .push('/settings?slot=${selectedSlot ?? 1}'),
+                            onPressed: _openSettings,
                           ),
                           const SizedBox(width: 20),
                           LabeledIconButton(
@@ -758,8 +781,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                       : [
                           SmallIconButton(
                             icon: Icons.settings,
-                            onPressed: () => context
-                                .push('/settings?slot=${selectedSlot ?? 1}'),
+                            onPressed: _openSettings,
                           ),
                           const SizedBox(width: 18),
                           SmallIconButton(
@@ -919,8 +941,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         child: LabeledIconButton(
                           icon: Icons.settings,
                           label: 'Réglages',
-                          onPressed: () => context
-                              .push('/settings?slot=${selectedSlot ?? 1}'),
+                          onPressed: _openSettings,
                         ),
                       ),
                       const SizedBox(width: 20),
