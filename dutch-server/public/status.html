@@ -103,6 +103,7 @@
 
 <script>
   initAdminAuth({
+    redirectUnauthenticatedTo: getAdminLoginUrl('/status'),
     onReady() {
       // Charger le room count via l'API health (public)
       fetch('/health')
