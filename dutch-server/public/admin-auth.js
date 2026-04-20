@@ -11,10 +11,10 @@
 /* ── Firebase Config ── */
 const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
-  // Admin login must keep the Firebase-hosted auth helper domain.
-  // Routing popup/redirect through dutch-game.me lets Cloudflare inject
-  // challenge scripts into /__/auth/handler, which breaks Firebase Auth.
-  authDomain: 'dutch-game-1dd01.firebaseapp.com',
+  // Same-origin authDomain: nginx proxie /__/auth/ vers Firebase (conf ligne 218)
+  // et l'app Flutter web l'utilise aussi. Safari bloque les cookies popup
+  // cross-origin, d'où l'auth/internal-error quand on tape firebaseapp.com.
+  authDomain: 'dutch-game.me',
   projectId: 'dutch-game-1dd01',
 };
 
