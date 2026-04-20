@@ -15,17 +15,31 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with SingleTickerProviderStateMixin {
   Map<int, String> _slotNames = {
     1: 'Joueur 1',
     2: 'Joueur 2',
     3: 'Joueur 3',
   };
 
+  late final TabController _tabController;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: (widget.initialSlot - 1).clamp(0, 2),
+    );
     _loadSlotNames();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSlotNames() async {
@@ -55,70 +69,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsProvider>(context);
 
-    return DefaultTabController(
-      initialIndex: (widget.initialSlot - 1).clamp(0, 2),
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('RÉGLAGES',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          backgroundColor: AppColors.backgroundMedium,
-          surfaceTintColor: Colors.transparent,
-          scrolledUnderElevation: 0,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () async {
-              final didPop = await Navigator.of(context).maybePop();
-              if (!didPop && context.mounted) context.go('/');
-            },
-          ),
-          bottom: TabBar(
-            indicatorColor: Colors.amber,
-            labelColor: Colors.amber,
-            unselectedLabelColor: AppColors.textDisabled,
-            tabs: [
-              Tab(
-                child: Text(
-                  _slotNames[1] ?? _defaultSlotName(1),
-                  overflow: TextOverflow.ellipsis,
-                ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('RÉGLAGES',
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.backgroundMedium,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () async {
+            final didPop = await Navigator.of(context).maybePop();
+            if (!didPop && context.mounted) context.go('/');
+          },
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.amber,
+          labelColor: Colors.amber,
+          unselectedLabelColor: AppColors.textDisabled,
+          tabs: [
+            Tab(
+              child: Text(
+                _slotNames[1] ?? _defaultSlotName(1),
+                overflow: TextOverflow.ellipsis,
               ),
-              Tab(
-                child: Text(
-                  _slotNames[2] ?? _defaultSlotName(2),
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ),
+            Tab(
+              child: Text(
+                _slotNames[2] ?? _defaultSlotName(2),
+                overflow: TextOverflow.ellipsis,
               ),
-              Tab(
-                child: Text(
-                  _slotNames[3] ?? _defaultSlotName(3),
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ),
+            Tab(
+              child: Text(
+                _slotNames[3] ?? _defaultSlotName(3),
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
           ),
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [AppColors.backgroundMedium, AppColors.backgroundDark],
-            ),
-          ),
-          child: TabBarView(
-            physics: const NeverScrollableScrollPhysics(),
-            children: List.generate(3, (index) => _buildSettingsPage(settings)),
+        child: TabBarView(
+          controller: _tabController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: List.generate(
+            3,
+            (index) => _buildSettingsPage(settings, slotId: index + 1),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSettingsPage(SettingsProvider settings) {
+  Widget _buildSettingsPage(SettingsProvider settings, {required int slotId}) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -232,24 +247,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: "Réinitialiser la progression SBMM",
           subtitle: "Remet le niveau des bots au démarrage",
           icon: Icons.restart_alt,
-          onTap: _confirmResetSBMM,
+          onTap: () => _confirmResetSBMM(slotId: slotId),
         ),
       ],
     );
   }
 
-  Future<void> _confirmResetSBMM() async {
+  Future<void> _confirmResetSBMM({required int slotId}) async {
+    final slotName = _slotNames[slotId] ?? _defaultSlotName(slotId);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.backgroundMedium,
-        title: const Text(
-          'Réinitialiser le SBMM ?',
-          style: TextStyle(color: Colors.white),
+        title: Text(
+          'Réinitialiser le SBMM de $slotName ?',
+          style: const TextStyle(color: Colors.white),
         ),
-        content: const Text(
-          'Ton cursor et ton historique récent seront effacés. Les prochaines parties repartiront au niveau initial.',
-          style: TextStyle(color: Colors.white70),
+        content: Text(
+          'Le cursor et l\'historique récent de $slotName seront effacés. Les autres profils ne sont pas touchés.',
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
@@ -267,12 +283,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await SBMMLocalService.reset(slotId: widget.initialSlot);
+    await SBMMLocalService.reset(slotId: slotId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Progression SBMM réinitialisée'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text('Progression SBMM de $slotName réinitialisée'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
