@@ -128,7 +128,8 @@ jobs:
             cp "$RELEASE_DIR/nginx/security-headers.conf" /etc/nginx/snippets/security-headers.conf
             cp "$RELEASE_DIR/nginx/dutch-server.conf" /etc/nginx/sites-available/dutch-server
             ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
-            nginx -t && systemctl reload nginx || echo "⚠️ Nginx reload failed, check config"
+            nginx -t
+            systemctl reload nginx
 
             # ── Backend build ──
             echo "🔨 Building backend release $GIT_SHA on port $NEXT_PORT..."
