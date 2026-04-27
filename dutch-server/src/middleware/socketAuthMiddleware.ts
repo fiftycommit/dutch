@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io';
-import { admin, auth } from '../services/FirebaseAdmin';
+import { auth } from '../services/FirebaseAdmin';
 import { firestoreService } from '../services/FirestoreService';
 import { SecurityService } from '../services/SecurityService';
 
@@ -27,30 +27,32 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
   const token = socket.handshake.auth?.token;
   const ip = SecurityService.getSocketClientIp(socket);
 
-  if (process.env.NODE_ENV === 'production') {
-    const appCheckToken = typeof socket.handshake.auth?.appCheckToken === 'string'
-      ? socket.handshake.auth.appCheckToken.trim()
-      : '';
-
-    if (admin.apps.length === 0) {
-      next(new Error('Firebase App Check non configure'));
-      return;
-    }
-
-    if (!appCheckToken) {
-      console.warn(`[SECURITY] Socket connection rejected - no App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
-      next(new Error('App Check requis'));
-      return;
-    }
-
-    try {
-      await admin.appCheck().verifyToken(appCheckToken);
-    } catch {
-      console.warn(`[SECURITY] Socket connection rejected - invalid App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
-      next(new Error('App Check invalide'));
-      return;
-    }
-  }
+  // App Check désactivé temporairement (compte Apple Dev gratuit, App Attest indisponible).
+  // À réactiver une fois la licence Apple Dev payante en place + capability App Attest configurée.
+  // if (process.env.NODE_ENV === 'production') {
+  //   const appCheckToken = typeof socket.handshake.auth?.appCheckToken === 'string'
+  //     ? socket.handshake.auth.appCheckToken.trim()
+  //     : '';
+  //
+  //   if (admin.apps.length === 0) {
+  //     next(new Error('Firebase App Check non configure'));
+  //     return;
+  //   }
+  //
+  //   if (!appCheckToken) {
+  //     console.warn(`[SECURITY] Socket connection rejected - no App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
+  //     next(new Error('App Check requis'));
+  //     return;
+  //   }
+  //
+  //   try {
+  //     await admin.appCheck().verifyToken(appCheckToken);
+  //   } catch {
+  //     console.warn(`[SECURITY] Socket connection rejected - invalid App Check - IP: ${ip}, time: ${new Date().toISOString()}`);
+  //     next(new Error('App Check invalide'));
+  //     return;
+  //   }
+  // }
 
   if (!token) {
     console.warn(`[SECURITY] Socket connection rejected — no token — IP: ${ip}, time: ${new Date().toISOString()}`);

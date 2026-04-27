@@ -112,7 +112,9 @@ class _GameScreenState extends State<GameScreen>
                 .clamp(0, totalRounds)
                 .toInt();
 
-            final size = MediaQuery.of(context).size;
+            final mq = MediaQuery.of(context);
+            final size = mq.size;
+            final topPad = mq.padding.top;
             final isPortrait = size.height > size.width;
 
             if (kIsWeb && isPortrait) {
@@ -144,7 +146,7 @@ class _GameScreenState extends State<GameScreen>
                 ),
                 if (gameState.gameMode == GameMode.tournament)
                   Positioned(
-                    top: 10,
+                    top: topPad + 10,
                     left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -194,15 +196,15 @@ class _GameScreenState extends State<GameScreen>
                             strokeWidth: 2, color: AppColors.textDisabled)),
                   ),
                 // Gossip / alliance overlay (speeches bots + bannière)
-                const Positioned(
-                  top: 56,
+                Positioned(
+                  top: topPad + 56,
                   left: 12,
                   right: 64,
-                  child: IgnorePointer(child: BotGossipOverlay()),
+                  child: const IgnorePointer(child: BotGossipOverlay()),
                 ),
                 // Bouton Pause
                 Positioned(
-                  top: 10,
+                  top: topPad + 10,
                   right: 10,
                   child: IconButton(
                     onPressed: () => gameProvider.pauseGame(),
@@ -327,6 +329,14 @@ class _GameScreenState extends State<GameScreen>
   }
 
   Widget _buildDutchNotification(GameState gs) {
+    final callerId = gs.dutchCallerId;
+    final caller = callerId != null
+        ? gs.players.where((p) => p.id == callerId).firstOrNull
+        : null;
+    final callerName = caller == null
+        ? 'DUTCH'
+        : caller.isHuman ? 'VOUS AVEZ' : '${caller.name.toUpperCase()} A';
+
     return Container(
       color: Colors.amber.withValues(alpha: 0.9),
       child: Center(
@@ -334,8 +344,7 @@ class _GameScreenState extends State<GameScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.campaign, size: 80, color: Colors.black),
-            Text(
-                "${gs.dutchCallerId == null ? 'DUTCH' : 'QUELQU\'UN'} A CRIÉ DUTCH !",
+            Text("$callerName CRIÉ DUTCH !",
                 textAlign: TextAlign.center,
                 style:
                     const TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),

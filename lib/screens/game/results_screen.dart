@@ -137,32 +137,30 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 if (isTournament && !isTournamentOver)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Column(
                       children: [
-                        SizedBox(
-                          width: 180,
-                          child: shared.ResultsActionButton(
-                            label: 'ABANDONNER',
-                            backgroundColor: Colors.red.shade700,
-                            onPressed: () => _confirmAbandonTournament(
-                              ctx,
-                              gameProvider,
-                              remainingRounds,
-                              gameState,
-                            ),
-                          ),
+                        shared.ResultsActionButton(
+                          label: 'MANCHE SUIVANTE',
+                          backgroundColor: Colors.amber.shade700,
+                          onPressed: () async {
+                            await gameProvider.startNextTournamentRound();
+                            if (ctx.mounted) ctx.go('/solo/memorization');
+                          },
                         ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 180,
-                          child: shared.ResultsActionButton(
-                            label: 'MANCHE SUIVANTE >>',
-                            backgroundColor: Colors.amber.shade700,
-                            onPressed: () async {
-                              await gameProvider.startNextTournamentRound();
-                              if (ctx.mounted) ctx.go('/solo/memorization');
-                            },
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => _confirmAbandonTournament(
+                            ctx,
+                            gameProvider,
+                            remainingRounds,
+                            gameState,
+                          ),
+                          child: const Text(
+                            'Abandonner le tournoi',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ],
@@ -204,7 +202,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     showDialog(
       context: ctx,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a2e),
+        backgroundColor: AppColors.dialogBackground,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [

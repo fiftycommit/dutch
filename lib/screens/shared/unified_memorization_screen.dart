@@ -548,7 +548,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                   isIphoneLandscape ? 2 : (isCompact ? 2 : 5)),
                         ],
                         Text(
-                          "Clique sur 2 cartes pour les mémoriser.",
+                          "Appuie sur 2 cartes pour les mémoriser.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.textSecondary,
@@ -598,7 +598,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                               child: Text(
                                 canConfirm
                                     ? "C'EST BON !"
-                                    : "CHOISIS ${2 - _selectedCards.length} CARTE(S)",
+                                    : _selectedCards.isEmpty
+                                        ? "CHOISIS 2 CARTES"
+                                        : "ENCORE 1 CARTE",
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold),
                               ),

@@ -193,7 +193,7 @@ class ResultsScreen extends StatelessWidget {
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1a2a3a),
+          backgroundColor: AppColors.dialogBackground,
           title: const Text('Télécharger le log',
               style: TextStyle(color: Colors.white)),
           content: const Text('Que souhaitez-vous télécharger ?',
@@ -390,13 +390,13 @@ class ResultsScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.blue,
+                          color: Colors.amber.shade700,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
                           "VOUS",
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontWeight: FontWeight.bold,
                             fontSize: AppFontSizes.small,
                           ),

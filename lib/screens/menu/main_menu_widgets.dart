@@ -245,8 +245,9 @@ class _SlotEditButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Zone tactile élargie (minimum 32×32px) pour faciliter le tap précis
-    final padding = ((32.0 - buttonSize) / 2).clamp(0.0, 12.0);
+    // Zone tactile minimum 44×44px (WCAG / Apple HIG)
+    const double minTouchTarget = 44.0;
+    final padding = ((minTouchTarget - buttonSize) / 2).clamp(0.0, 16.0);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,

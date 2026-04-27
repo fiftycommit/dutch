@@ -144,8 +144,39 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
             widget.isTournament ? 'Configuration Tournoi' : 'Nouvelle Partie',
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.gradientBottom,
+        backgroundColor: AppColors.gradientTop,
         iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+          child: ElevatedButton(
+            onPressed: _isLoading
+                ? null
+                : () {
+                    ServiceLocator().get<IHapticService>().buttonTap();
+                    _startGame(context, useSBMM);
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 52),
+              textStyle: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('COMMENCER'),
+          ),
+        ),
       ),
       body: Container(
         color: AppColors.gradientBottom,
@@ -159,15 +190,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
             final scale = (constraints.maxHeight / 680).clamp(0.55, 1.0);
             final isCompact = scale < 0.85;
-            double f(double size) => size * scale;
+            double f(double size) =>
+                (size * scale).clamp(AppFontSizes.minimum, size);
 
             final spacingSmall = f(20);
             final spacingMedium = f(30);
-            final spacingLarge = f(50);
-            final buttonPadding = EdgeInsets.symmetric(
-              horizontal: f(50),
-              vertical: f(15),
-            );
 
             // Couleurs pour les segments
             const unselectedBg = Color(0xFF2D4F3C);
@@ -535,23 +562,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                     },
                     style: playerSegmentStyle,
                   ),
-                ),
-                SizedBox(height: spacingLarge),
-                ElevatedButton(
-                  onPressed: () {
-                    ServiceLocator().get<IHapticService>().buttonTap();
-                    _startGame(context, useSBMM);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: buttonPadding,
-                    textStyle: TextStyle(
-                      fontSize: f(18),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  child: const Text("COMMENCER"),
                 ),
               ],
             );
