@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -34,6 +35,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   // Tracking pour éviter de re-trigger les side effects
   bool _hasNavigatedToGame = false;
 
+  // Overlay du toast "hors ligne" affiché quand un bouton désactivé est tapé.
+  OverlayEntry? _offlineToastEntry;
+
+  // État réseau (mis à jour instantanément via connectivity_plus pour réagir
+  // au mode avion, sans attendre le timeout heartbeat de Socket.IO).
+  bool _hasNetwork = true;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+
   Difficulty _normalizeDisplayedBotDifficulty(Difficulty difficulty) {
     return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
   }
@@ -52,6 +61,36 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       });
       _provider!.addListener(_onProviderChanged);
     });
+    _initConnectivity();
+  }
+
+  Future<void> _initConnectivity() async {
+    try {
+      final initial = await Connectivity().checkConnectivity();
+      if (!mounted) return;
+      setState(() => _hasNetwork = _isConnected(initial));
+    } catch (_) {
+      // plugin indisponible : on suppose qu'il y a du réseau
+    }
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen((results) {
+      if (!mounted) return;
+      final hasNet = _isConnected(results);
+      if (hasNet != _hasNetwork) {
+        setState(() => _hasNetwork = hasNet);
+      }
+    });
+  }
+
+  bool _isConnected(List<ConnectivityResult> results) =>
+      results.any((r) => r != ConnectivityResult.none);
+
+  /// Renvoie l'état "effectif" : si le réseau est coupé (mode avion),
+  /// on bascule en `disconnected` sans attendre le heartbeat Socket.IO.
+  SocketConnectionState _effectiveConnectionState(
+      MultiplayerGameProvider provider) {
+    if (!_hasNetwork) return SocketConnectionState.disconnected;
+    return provider.connectionState;
   }
 
   void _onProviderChanged() {
@@ -202,7 +241,27 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     _chatController.dispose();
     _chatScrollController.dispose();
     _eventSubscription?.cancel();
+    _connectivitySub?.cancel();
+    _offlineToastEntry?.remove();
+    _offlineToastEntry = null;
     super.dispose();
+  }
+
+  void _showOfflineToast() {
+    if (!mounted) return;
+    if (_offlineToastEntry != null) return; // déjà visible, pas de spam
+    ServiceLocator().get<IHapticService>().error();
+    final entry = OverlayEntry(
+      builder: (_) => _OfflineToast(
+        onDismiss: () {
+          if (!mounted) return;
+          _offlineToastEntry?.remove();
+          _offlineToastEntry = null;
+        },
+      ),
+    );
+    _offlineToastEntry = entry;
+    Overlay.of(context, rootOverlay: true).insert(entry);
   }
 
   void _dismissKeyboard() {
@@ -294,21 +353,27 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                                       ),
                               ),
                               SizedBox(height: contentSpacing),
-                              _buildBottomButtons(
-                                context,
-                                provider,
-                                colors,
-                                canStart,
-                                connectedHumans,
-                                maxPlayers,
-                                minPlayers,
-                                compact: isCompactLandscape,
+                              _OfflineGate(
+                                isOnline: _effectiveConnectionState(provider) ==
+                                    SocketConnectionState.connected,
+                                onBlockedTap: _showOfflineToast,
+                                child: _buildBottomButtons(
+                                  context,
+                                  provider,
+                                  colors,
+                                  canStart,
+                                  connectedHumans,
+                                  maxPlayers,
+                                  minPlayers,
+                                  compact: isCompactLandscape,
+                                ),
                               ),
                               SizedBox(height: bottomSpacing),
                             ],
                           ),
                         ),
                       ),
+                      _buildOfflineBanner(provider),
                     ],
                   ),
                 ),
@@ -358,7 +423,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               context,
               icon: Icons.person_add,
               label: 'Inviter',
-              onPressed: () => _showInviteFriendDialog(context, provider),
+              onPressed: _effectiveConnectionState(provider) ==
+                      SocketConnectionState.connected
+                  ? () => _showInviteFriendDialog(context, provider)
+                  : _showOfflineToast,
+              enabled: _effectiveConnectionState(provider) ==
+                  SocketConnectionState.connected,
             ),
             SizedBox(width: f(6)),
           ],
@@ -367,7 +437,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               context,
               icon: Icons.tune,
               label: 'Paramètres',
-              onPressed: () => _showSettingsDialog(context, provider),
+              onPressed: _effectiveConnectionState(provider) ==
+                      SocketConnectionState.connected
+                  ? () => _showSettingsDialog(context, provider)
+                  : _showOfflineToast,
+              enabled: _effectiveConnectionState(provider) ==
+                  SocketConnectionState.connected,
             ),
             SizedBox(width: f(6)),
           ],
@@ -378,8 +453,6 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             onPressed: () => _handleLeaveOrClose(context, provider),
             destructive: true,
           ),
-          SizedBox(width: f(8)),
-          _buildConnectionIndicator(context, provider, colors),
         ],
       ),
     );
@@ -391,6 +464,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     required String label,
     required VoidCallback onPressed,
     bool destructive = false,
+    bool enabled = true,
   }) {
     final scale = _uiScale(context);
     double f(double size) => size * scale;
@@ -403,9 +477,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         : Colors.white.withValues(alpha: 0.22);
     final fg = destructive ? const Color(0xFFFF8A80) : Colors.white;
 
-    return Semantics(
+    final actionWidget = Semantics(
       button: true,
       label: label,
+      enabled: enabled,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -439,60 +514,67 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         ),
       ),
     );
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: actionWidget,
+    );
   }
 
-  Widget _buildConnectionIndicator(
-    BuildContext context,
-    MultiplayerGameProvider provider,
-    ColorScheme colors,
-  ) {
-    final scale = _uiScale(context);
-    double f(double size) => size * scale;
+  Widget _buildOfflineBanner(MultiplayerGameProvider provider) {
+    final state = _effectiveConnectionState(provider);
+    if (state == SocketConnectionState.connected) {
+      return const SizedBox.shrink();
+    }
 
-    String label;
-    Color color;
-    IconData icon;
-
-    switch (provider.connectionState) {
-      case SocketConnectionState.connected:
-        label = 'Connecte';
-        color = colors.tertiary;
-        icon = Icons.wifi;
-        break;
-      case SocketConnectionState.connecting:
-        label = 'Connexion...';
-        color = Colors.orange;
-        icon = Icons.wifi_find;
-        break;
-      case SocketConnectionState.reconnecting:
-        label = 'Reconnexion...';
-        color = Colors.orange;
-        icon = Icons.wifi_off;
-        break;
-      case SocketConnectionState.disconnected:
-        label = 'Hors ligne';
-        color = colors.error;
-        icon = Icons.wifi_off;
-        break;
+    final String label;
+    final IconData icon;
+    final Color color;
+    if (!_hasNetwork) {
+      label = 'Pas de réseau — vérifie ta connexion';
+      icon = Icons.wifi_off;
+      color = const Color(0xFFB23A48);
+    } else {
+      switch (state) {
+        case SocketConnectionState.connecting:
+          label = 'Connexion au serveur…';
+          icon = Icons.wifi_find;
+          color = const Color(0xFFB35C00);
+          break;
+        case SocketConnectionState.reconnecting:
+          label = 'Reconnexion…';
+          icon = Icons.wifi_off;
+          color = const Color(0xFFB35C00);
+          break;
+        case SocketConnectionState.disconnected:
+          label = 'Non connecté — interactions désactivées';
+          icon = Icons.wifi_off;
+          color = const Color(0xFFB23A48);
+          break;
+        case SocketConnectionState.connected:
+          return const SizedBox.shrink();
+      }
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: f(10), vertical: f(5)),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(f(14)),
-      ),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: color,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.max,
         children: [
-          Icon(icon, color: Colors.white, size: f(14)),
-          SizedBox(width: f(4)),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: f(12),
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -864,6 +946,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     double scale,
   ) {
     final chatFlex = scale < 0.8 ? 1 : 2;
+    final isOnline =
+        _effectiveConnectionState(provider) == SocketConnectionState.connected;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -879,11 +963,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         SizedBox(width: 12 * scale),
         Expanded(
           flex: chatFlex,
-          child: LobbyChatPanel(
-            provider: provider,
-            chatController: _chatController,
-            chatScrollController: _chatScrollController,
-            onDismissKeyboard: _dismissKeyboard,
+          child: _OfflineGate(
+            isOnline: isOnline,
+            onBlockedTap: _showOfflineToast,
+            child: LobbyChatPanel(
+              provider: provider,
+              chatController: _chatController,
+              chatScrollController: _chatScrollController,
+              onDismissKeyboard: _dismissKeyboard,
+            ),
           ),
         ),
       ],
@@ -898,6 +986,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   ) {
     final chatHeight = (MediaQuery.of(context).size.height * 0.28)
         .clamp(120.0 * scale, 200.0 * scale);
+    final isOnline =
+        _effectiveConnectionState(provider) == SocketConnectionState.connected;
     return Column(
       children: [
         Expanded(
@@ -912,11 +1002,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         SizedBox(height: 12 * scale),
         SizedBox(
           height: chatHeight,
-          child: LobbyChatPanel(
-            provider: provider,
-            chatController: _chatController,
-            chatScrollController: _chatScrollController,
-            onDismissKeyboard: _dismissKeyboard,
+          child: _OfflineGate(
+            isOnline: isOnline,
+            onBlockedTap: _showOfflineToast,
+            child: LobbyChatPanel(
+              provider: provider,
+              chatController: _chatController,
+              chatScrollController: _chatScrollController,
+              onDismissKeyboard: _dismissKeyboard,
+            ),
           ),
         ),
       ],
@@ -1421,5 +1515,156 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       if (player['isSpectator'] == true) return false;
       return player['connected'] != false;
     }).length;
+  }
+}
+
+/// Encadre un sous-arbre interactif et capte tous les taps quand on est hors
+/// ligne, en déclenchant `onBlockedTap`. Quand en ligne, le widget est
+/// transparent et laisse passer les évènements normalement.
+class _OfflineGate extends StatelessWidget {
+  final bool isOnline;
+  final Widget child;
+  final VoidCallback onBlockedTap;
+
+  const _OfflineGate({
+    required this.isOnline,
+    required this.child,
+    required this.onBlockedTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: isOnline ? 1.0 : 0.5,
+          child: child,
+        ),
+        if (!isOnline)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onBlockedTap,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Toast centré sur l'écran avec barre de progression de 5 s.
+/// Joue un haptic d'erreur à l'apparition et s'auto-ferme à la fin.
+class _OfflineToast extends StatefulWidget {
+  final VoidCallback onDismiss;
+
+  const _OfflineToast({required this.onDismiss});
+
+  @override
+  State<_OfflineToast> createState() => _OfflineToastState();
+}
+
+class _OfflineToastState extends State<_OfflineToast>
+    with SingleTickerProviderStateMixin {
+  static const Duration _totalDuration = Duration(seconds: 5);
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _totalDuration)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.onDismiss();
+        }
+      })
+      ..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Material(
+                color: Colors.transparent,
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    final progress = 1.0 - _controller.value;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A).withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFB23A48).withValues(alpha: 0.7),
+                          width: 1.4,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            blurRadius: 20,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_off,
+                              color: Color(0xFFFF8A80), size: 36),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Action indisponible',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Tu es hors ligne — reconnecte-toi pour continuer',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 4,
+                              backgroundColor: Colors.white12,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFF8A80),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

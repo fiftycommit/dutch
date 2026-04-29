@@ -190,8 +190,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
             final scale = (constraints.maxHeight / 680).clamp(0.55, 1.0);
             final isCompact = scale < 0.85;
-            double f(double size) =>
-                (size * scale).clamp(AppFontSizes.minimum, size);
+            double f(double size) {
+              final minimum =
+                  size < AppFontSizes.minimum ? size : AppFontSizes.minimum;
+              return (size * scale).clamp(minimum, size).toDouble();
+            }
 
             final spacingSmall = f(20);
             final spacingMedium = f(30);

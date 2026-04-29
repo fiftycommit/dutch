@@ -165,6 +165,12 @@ class AppRouter {
     return _defaultSafeBg;
   }
 
+  static bool _shouldEnableSelectionArea(String location) {
+    // Safari peut laisser la couche web de SelectionArea au-dessus des
+    // contrôles de configuration, ce qui masque les sélecteurs interactifs.
+    return !location.startsWith('/solo/setup');
+  }
+
   static Page<void> _adaptivePage({
     required GoRouterState state,
     required Widget child,
@@ -228,7 +234,9 @@ class AppRouter {
         // (nécessite d'être à l'intérieur du Navigator pour avoir accès à l'Overlay)
         ShellRoute(
           builder: (context, state, child) =>
-              kIsWeb ? SelectionArea(child: child) : child,
+              kIsWeb && _shouldEnableSelectionArea(state.uri.path)
+                  ? SelectionArea(child: child)
+                  : child,
           routes: [
             // ============ ÉCRAN DE CHARGEMENT ============
             GoRoute(

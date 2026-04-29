@@ -672,13 +672,20 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'réalisé par Max, Irfat, Leon et EL Roy',
-                  style: TextStyle(
-                    fontSize: subtitleSize,
-                    letterSpacing: 2,
-                    color: Colors.amber,
-                    fontWeight: FontWeight.bold,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'réalisé par Max, Irfat, Leon et EL Roy',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: subtitleSize,
+                        letterSpacing: 2,
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(height: profileSpacing),
@@ -855,13 +862,20 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     ),
                   ),
                   if (!isVerySmall)
-                    Text(
-                      'réalisé par Max, Irfat, LEON et EL Roy',
-                      style: TextStyle(
-                        fontSize: isSmall ? 13 : 16,
-                        letterSpacing: isSmall ? 1.5 : 4,
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'réalisé par Max, Irfat, LEON et EL Roy',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: isSmall ? 13 : 16,
+                            letterSpacing: isSmall ? 1.5 : 4,
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                   SizedBox(height: spacing2),
