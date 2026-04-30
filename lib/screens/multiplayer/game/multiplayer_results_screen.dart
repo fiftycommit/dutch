@@ -254,20 +254,8 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    if (isTournament && !isTournamentOver) {
-      if (isLocalEliminated) {
-        return [
-          shared.ResultsActionButton(
-            label: "Retour à l'accueil",
-            backgroundColor: Colors.red.shade700,
-            onPressed: () {
-              provider.leaveAfterResults();
-              context.go('/');
-            },
-          ),
-        ];
-      }
-
+    // Manche intermédiaire de tournoi (joueur encore en lice) : passer à la suivante
+    if (isTournament && !isTournamentOver && !isLocalEliminated) {
       return [
         shared.ResultsActionButton(
           label: 'MANCHE SUIVANTE >>',
@@ -279,14 +267,14 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
       ];
     }
 
-    // Tous les joueurs : retour indépendant au salon
+    // Fin de partie (rapide, fin de tournoi, ou éliminé) : retour au salon
     return [
       shared.ResultsActionButton(
-        label: 'Retour à l\'accueil',
+        label: 'Retour au Salon',
         backgroundColor: Colors.green.shade700,
         onPressed: () {
-          provider.leaveAfterResults();
-          context.go('/');
+          provider.returnToLobbyFromResults();
+          context.go('/lobby');
         },
       ),
     ];
