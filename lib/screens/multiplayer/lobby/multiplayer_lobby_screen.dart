@@ -1321,63 +1321,68 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                   ),
 
                   if (!useSBMM) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SegmentedButton<Difficulty>(
-                          emptySelectionAllowed: true,
-                          segments: const [
-                            ButtonSegment(
-                              value: Difficulty.easy,
-                              label: Text('Facile'),
-                            ),
-                            ButtonSegment(
-                              value: Difficulty.medium,
-                              label: Text('Moyen'),
-                            ),
-                            ButtonSegment(
-                              value: Difficulty.platinum,
-                              label: Text('Difficile'),
-                            ),
-                          ],
-                          selected: botDifficulty == Difficulty.mix
-                              ? <Difficulty>{}
-                              : {botDifficulty},
-                          onSelectionChanged: (selection) {
-                            if (selection.isEmpty) return;
-                            setState(() => botDifficulty = selection.first);
-                          },
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SegmentedButton<Difficulty>(
+                        emptySelectionAllowed: true,
+                        style: SegmentedButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          selectedForegroundColor: Colors.white,
+                          selectedBackgroundColor: const Color(0xFF2E7D32),
                         ),
-                        ChoiceChip(
-                          avatar: Icon(
-                            Icons.shuffle,
-                            size: 16,
-                            color: botDifficulty == Difficulty.mix
-                                ? Colors.black
-                                : Colors.white,
+                        segments: const [
+                          ButtonSegment(
+                            value: Difficulty.easy,
+                            label: Text('Facile'),
                           ),
-                          label: const Text('Mix'),
-                          selected: botDifficulty == Difficulty.mix,
-                          onSelected: (_) {
-                            setState(() => botDifficulty = Difficulty.mix);
-                          },
-                          selectedColor: Colors.blueGrey.shade200,
-                          backgroundColor: Colors.blueGrey.shade700,
-                          labelStyle: TextStyle(
-                            color: botDifficulty == Difficulty.mix
-                                ? Colors.black
-                                : Colors.white,
-                            fontWeight: FontWeight.w600,
+                          ButtonSegment(
+                            value: Difficulty.medium,
+                            label: Text('Moyen'),
                           ),
-                          side: BorderSide(color: Colors.blueGrey.shade400),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                          ButtonSegment(
+                            value: Difficulty.platinum,
+                            label: Text('Difficile'),
                           ),
+                        ],
+                        selected: botDifficulty == Difficulty.mix
+                            ? <Difficulty>{}
+                            : {botDifficulty},
+                        onSelectionChanged: (selection) {
+                          if (selection.isEmpty) return;
+                          setState(() => botDifficulty = selection.first);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ChoiceChip(
+                        avatar: Icon(
+                          Icons.shuffle,
+                          size: 16,
+                          color: botDifficulty == Difficulty.mix
+                              ? Colors.black
+                              : Colors.white,
                         ),
-                      ],
+                        label: const Text('Mix'),
+                        selected: botDifficulty == Difficulty.mix,
+                        onSelected: (_) {
+                          setState(() => botDifficulty = Difficulty.mix);
+                        },
+                        selectedColor: Colors.blueGrey.shade200,
+                        backgroundColor: Colors.blueGrey.shade700,
+                        labelStyle: TextStyle(
+                          color: botDifficulty == Difficulty.mix
+                              ? Colors.black
+                              : Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        side: BorderSide(color: Colors.blueGrey.shade400),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
                     ),
                   ],
                 ],
