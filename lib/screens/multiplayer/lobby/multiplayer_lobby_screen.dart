@@ -14,6 +14,7 @@ import '../../../widgets/dialogs/connection_error_dialog.dart';
 import '../../../widgets/dialogs/multiplayer/multiplayer_dialogs.dart';
 import '../../../../../core/service_locator.dart';
 import '../../../../../core/interfaces/i_haptic_service.dart';
+import 'widgets/lobby_chat_bottom_sheet.dart';
 import 'widgets/lobby_chat_panel.dart';
 import 'widgets/lobby_players_panel.dart';
 import 'widgets/lobby_room_info.dart';
@@ -43,6 +44,15 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   bool _hasNetwork = true;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
+  // Section "Détails du salon" pliable. Ouverte par défaut pour rendre le
+  // code de room visible immédiatement ; l'utilisateur peut la replier.
+  bool _detailsExpanded = true;
+
+  // Suivi des messages chat lus pour afficher le badge "non lu" sur le bouton
+  // d'ouverture du bottom sheet (mobile portrait).
+  int _lastSeenChatCount = 0;
+  bool _chatSheetOpen = false;
+
   Difficulty _normalizeDisplayedBotDifficulty(Difficulty difficulty) {
     return difficulty == Difficulty.hard ? Difficulty.platinum : difficulty;
   }
@@ -60,6 +70,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         _handleGameEvent(event);
       });
       _provider!.addListener(_onProviderChanged);
+      // Considère les messages déjà présents comme "lus" à l'arrivée pour
+      // ne pas afficher un badge artificiel.
+      _lastSeenChatCount = _provider!.chatMessages.length;
     });
     _initConnectivity();
   }
@@ -97,6 +110,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (!mounted) return;
     final provider = _provider;
     if (provider == null) return;
+
+    // Si le bottom sheet du chat est ouvert, considère les nouveaux messages
+    // comme immédiatement lus (sinon le badge clignoterait au retour).
+    if (_chatSheetOpen) {
+      _lastSeenChatCount = provider.chatMessages.length;
+    }
 
     // Navigation vers le jeu si la partie a commencé
     if (!_hasNavigatedToGame &&
@@ -303,79 +322,90 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             provider.isReady &&
             provider.readyHumanCount >= minPlayers;
 
+        // Sur portrait étroit (mobile), le chat est déplacé dans un
+        // showModalBottomSheet pour libérer de l'espace et contourner les
+        // bugs Flutter Web iOS Safari (clavier qui ne s'ouvre pas avec un
+        // GestureDetector parent qui appelle unfocus()).
+        final useChatBottomSheet = !isLandscape && !isWide;
+        final unreadChat =
+            (provider.chatMessages.length - _lastSeenChatCount).clamp(0, 999);
+        final isOnline = _effectiveConnectionState(provider) ==
+            SocketConnectionState.connected;
+
         return PopScope(
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) {
               provider.leaveRoom();
             }
           },
-          child: GestureDetector(
-            onTap: _dismissKeyboard,
-            child: Scaffold(
-              resizeToAvoidBottomInset: true,
-              body: Container(
-                decoration: AppDecorations.pageBackground,
-                child: SafeArea(
-                  child: Column(
-                    children: [
-                      _buildHeader(context, provider, colors),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            children: [
-                              if (showPublicBadge)
-                                LobbyPublicBadge(uiScale: heightScale)
-                              else if (showRoomCode)
-                                LobbyRoomCodeCard(
-                                    provider: provider, uiScale: heightScale),
-                              if (provider.roomSettings != null)
-                                LobbySettingsRow(
-                                  provider: provider,
-                                  minPlayers: minPlayers,
-                                  maxPlayers: maxPlayers,
-                                  uiScale: heightScale,
-                                ),
-                              SizedBox(height: sectionSpacing),
-                              Expanded(
-                                child: isLandscape || isWide
-                                    ? _buildLandscapeLayout(
-                                        provider,
-                                        connectedHumans,
-                                        maxPlayers,
-                                        heightScale,
-                                      )
-                                    : _buildPortraitLayout(
-                                        provider,
-                                        connectedHumans,
-                                        maxPlayers,
-                                        heightScale,
-                                      ),
-                              ),
+          child: Scaffold(
+            resizeToAvoidBottomInset: true,
+            body: Container(
+              decoration: AppDecorations.pageBackground,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(context, provider, colors),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            _buildCollapsibleDetails(
+                              provider: provider,
+                              showPublicBadge: showPublicBadge,
+                              showRoomCode: showRoomCode,
+                              minPlayers: minPlayers,
+                              maxPlayers: maxPlayers,
+                              heightScale: heightScale,
+                            ),
+                            SizedBox(height: sectionSpacing),
+                            Expanded(
+                              child: isLandscape || isWide
+                                  ? _buildLandscapeLayout(
+                                      provider,
+                                      connectedHumans,
+                                      maxPlayers,
+                                      heightScale,
+                                    )
+                                  : _buildPortraitPlayersOnly(
+                                      provider,
+                                      connectedHumans,
+                                      maxPlayers,
+                                      heightScale,
+                                    ),
+                            ),
+                            if (useChatBottomSheet) ...[
                               SizedBox(height: contentSpacing),
-                              _OfflineGate(
-                                isOnline: _effectiveConnectionState(provider) ==
-                                    SocketConnectionState.connected,
-                                onBlockedTap: _showOfflineToast,
-                                child: _buildBottomButtons(
-                                  context,
-                                  provider,
-                                  colors,
-                                  canStart,
-                                  connectedHumans,
-                                  maxPlayers,
-                                  minPlayers,
-                                  compact: isCompactLandscape,
-                                ),
+                              LobbyChatButton(
+                                unreadCount: unreadChat,
+                                enabled: isOnline,
+                                onPressed: () =>
+                                    isOnline ? _openChatSheet() : _showOfflineToast(),
                               ),
-                              SizedBox(height: bottomSpacing),
                             ],
-                          ),
+                            SizedBox(height: contentSpacing),
+                            _OfflineGate(
+                              isOnline: isOnline,
+                              onBlockedTap: _showOfflineToast,
+                              child: _buildBottomButtons(
+                                context,
+                                provider,
+                                colors,
+                                canStart,
+                                connectedHumans,
+                                maxPlayers,
+                                minPlayers,
+                                compact: isCompactLandscape,
+                              ),
+                            ),
+                            SizedBox(height: bottomSpacing),
+                          ],
                         ),
                       ),
-                      _buildOfflineBanner(provider),
-                    ],
-                  ),
+                    ),
+                    _buildOfflineBanner(provider),
+                  ],
                 ),
               ),
             ),
@@ -394,6 +424,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     double f(double size) => size * scale;
 
     final isLoggedIn = context.read<AuthProvider>().isLoggedIn;
+    final width = MediaQuery.of(context).size.width;
+    // En dessous de 380dp, on regroupe Inviter + Paramètres dans un menu kebab
+    // pour éviter que les labels du header poussent le titre en ellipsis.
+    final isNarrow = width < 380;
+    final isOnline = _effectiveConnectionState(provider) ==
+        SocketConnectionState.connected;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: f(16), vertical: f(12)),
@@ -403,6 +439,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             iconSize: f(22),
             tooltip: 'Retour',
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             onPressed: () => context.go('/multiplayer'),
           ),
           SizedBox(width: f(4)),
@@ -410,7 +447,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             child: Text(
               "Salle d'attente",
               style: TextStyle(
-                fontSize: f(20),
+                fontSize: f(isNarrow ? 17 : 20),
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
@@ -418,43 +455,109 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ),
           ),
           const Spacer(),
-          if (provider.isHost && isLoggedIn) ...[
-            _buildHeaderAction(
+          if (provider.isHost && isNarrow)
+            _buildHostOverflowMenu(
               context,
-              icon: Icons.person_add,
-              label: 'Inviter',
-              onPressed: _effectiveConnectionState(provider) ==
-                      SocketConnectionState.connected
-                  ? () => _showInviteFriendDialog(context, provider)
-                  : _showOfflineToast,
-              enabled: _effectiveConnectionState(provider) ==
-                  SocketConnectionState.connected,
-            ),
-            SizedBox(width: f(6)),
+              provider,
+              isLoggedIn: isLoggedIn,
+              isOnline: isOnline,
+            )
+          else ...[
+            if (provider.isHost && isLoggedIn) ...[
+              _buildHeaderAction(
+                context,
+                icon: Icons.person_add,
+                label: 'Inviter',
+                onPressed: isOnline
+                    ? () => _showInviteFriendDialog(context, provider)
+                    : _showOfflineToast,
+                enabled: isOnline,
+              ),
+              SizedBox(width: f(6)),
+            ],
+            if (provider.isHost) ...[
+              _buildHeaderAction(
+                context,
+                icon: Icons.tune,
+                label: 'Paramètres',
+                onPressed: isOnline
+                    ? () => _showSettingsDialog(context, provider)
+                    : _showOfflineToast,
+                enabled: isOnline,
+              ),
+              SizedBox(width: f(6)),
+            ],
           ],
-          if (provider.isHost) ...[
-            _buildHeaderAction(
-              context,
-              icon: Icons.tune,
-              label: 'Paramètres',
-              onPressed: _effectiveConnectionState(provider) ==
-                      SocketConnectionState.connected
-                  ? () => _showSettingsDialog(context, provider)
-                  : _showOfflineToast,
-              enabled: _effectiveConnectionState(provider) ==
-                  SocketConnectionState.connected,
-            ),
-            SizedBox(width: f(6)),
-          ],
+          if (provider.isHost && isNarrow) SizedBox(width: f(6)),
           _buildHeaderAction(
             context,
             icon: Icons.logout,
             label: 'Quitter',
+            iconOnly: isNarrow,
             onPressed: () => _handleLeaveOrClose(context, provider),
             destructive: true,
           ),
         ],
       ),
+    );
+  }
+
+  /// Menu kebab regroupant Inviter + Paramètres pour les hôtes sur écrans
+  /// étroits. Les actions désactivées (offline) déclenchent le toast.
+  Widget _buildHostOverflowMenu(
+    BuildContext context,
+    MultiplayerGameProvider provider, {
+    required bool isLoggedIn,
+    required bool isOnline,
+  }) {
+    return PopupMenuButton<String>(
+      tooltip: 'Plus',
+      icon: const Icon(Icons.more_vert, color: Colors.white),
+      iconSize: 22,
+      // Touch target accessible : 44dp min.
+      padding: const EdgeInsets.all(10),
+      color: const Color(0xFF1a3a28),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      onSelected: (value) {
+        if (!isOnline) {
+          _showOfflineToast();
+          return;
+        }
+        switch (value) {
+          case 'invite':
+            _showInviteFriendDialog(context, provider);
+            break;
+          case 'settings':
+            _showSettingsDialog(context, provider);
+            break;
+        }
+      },
+      itemBuilder: (ctx) => [
+        if (isLoggedIn)
+          const PopupMenuItem<String>(
+            value: 'invite',
+            child: Row(
+              children: [
+                Icon(Icons.person_add, color: Colors.white, size: 18),
+                SizedBox(width: 10),
+                Text('Inviter', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+        const PopupMenuItem<String>(
+          value: 'settings',
+          child: Row(
+            children: [
+              Icon(Icons.tune, color: Colors.white, size: 18),
+              SizedBox(width: 10),
+              Text('Paramètres', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -465,6 +568,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     required VoidCallback onPressed,
     bool destructive = false,
     bool enabled = true,
+    bool iconOnly = false,
   }) {
     final scale = _uiScale(context);
     double f(double size) => size * scale;
@@ -477,6 +581,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         : Colors.white.withValues(alpha: 0.22);
     final fg = destructive ? const Color(0xFFFF8A80) : Colors.white;
 
+    // Garantit un touch target ≥ 44dp même au scale minimum.
+    final minSide = iconOnly ? 44.0 : 44.0;
+
     final actionWidget = Semantics(
       button: true,
       label: label,
@@ -487,9 +594,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           borderRadius: BorderRadius.circular(f(14)),
           onTap: onPressed,
           child: Container(
-            constraints: BoxConstraints(minHeight: f(36)),
-            padding:
-                EdgeInsets.symmetric(horizontal: f(10), vertical: f(6)),
+            constraints:
+                BoxConstraints(minHeight: minSide, minWidth: minSide),
+            padding: iconOnly
+                ? EdgeInsets.zero
+                : EdgeInsets.symmetric(horizontal: f(10), vertical: f(6)),
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(f(14)),
@@ -497,17 +606,20 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: fg, size: f(16)),
-                SizedBox(width: f(6)),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: fg,
-                    fontWeight: FontWeight.w600,
-                    fontSize: f(13),
+                Icon(icon, color: fg, size: f(18)),
+                if (!iconOnly) ...[
+                  SizedBox(width: f(6)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: f(13),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -978,42 +1090,154 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     );
   }
 
-  Widget _buildPortraitLayout(
+  /// Portrait mobile : seulement la liste des joueurs. Le chat est déporté
+  /// dans un `showModalBottomSheet` (cf. `_openChatSheet`).
+  Widget _buildPortraitPlayersOnly(
     MultiplayerGameProvider provider,
     int connectedHumans,
     int maxPlayers,
     double scale,
   ) {
-    final chatHeight = (MediaQuery.of(context).size.height * 0.28)
-        .clamp(120.0 * scale, 200.0 * scale);
-    final isOnline =
-        _effectiveConnectionState(provider) == SocketConnectionState.connected;
-    return Column(
-      children: [
-        Expanded(
-          flex: 2,
-          child: LobbyPlayersPanel(
-            provider: provider,
-            connectedHumans: connectedHumans,
-            maxPlayers: maxPlayers,
-            uiScale: scale,
-          ),
+    return LobbyPlayersPanel(
+      provider: provider,
+      connectedHumans: connectedHumans,
+      maxPlayers: maxPlayers,
+      uiScale: scale,
+    );
+  }
+
+  Future<void> _openChatSheet() async {
+    final provider = _provider;
+    if (provider == null) return;
+    setState(() {
+      _chatSheetOpen = true;
+      _lastSeenChatCount = provider.chatMessages.length;
+    });
+    await LobbyChatBottomSheet.show(
+      context,
+      provider: provider,
+      controller: _chatController,
+      scrollController: _chatScrollController,
+    );
+    if (!mounted) return;
+    setState(() {
+      _chatSheetOpen = false;
+      // Tout ce qui est arrivé pendant l'ouverture est lu.
+      _lastSeenChatCount = provider.chatMessages.length;
+    });
+  }
+
+  /// Section "Détails du salon" pliable. Affiche en repliée un résumé compact
+  /// (code/badge + mode + min/max) ; en dépliée, les widgets complets.
+  Widget _buildCollapsibleDetails({
+    required MultiplayerGameProvider provider,
+    required bool showPublicBadge,
+    required bool showRoomCode,
+    required int minPlayers,
+    required int maxPlayers,
+    required double heightScale,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final settings = provider.roomSettings;
+    final modeLabel = settings == null
+        ? null
+        : (settings.gameMode == GameMode.quick ? 'Rapide' : 'Tournoi');
+
+    final summary = <String>[
+      if (showPublicBadge)
+        'Salon public'
+      else if (showRoomCode)
+        provider.roomCode ?? '------',
+      if (modeLabel != null) modeLabel,
+      '$minPlayers–$maxPlayers joueurs',
+    ].join(' · ');
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      margin: EdgeInsets.symmetric(vertical: 4 * heightScale),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 1,
         ),
-        SizedBox(height: 12 * scale),
-        SizedBox(
-          height: chatHeight,
-          child: _OfflineGate(
-            isOnline: isOnline,
-            onBlockedTap: _showOfflineToast,
-            child: LobbyChatPanel(
-              provider: provider,
-              chatController: _chatController,
-              chatScrollController: _chatScrollController,
-              onDismissKeyboard: _dismissKeyboard,
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              ServiceLocator().get<IHapticService>().buttonTap();
+              setState(() => _detailsExpanded = !_detailsExpanded);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    _detailsExpanded
+                        ? Icons.info
+                        : Icons.info_outline,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _detailsExpanded ? 'Détails du salon' : summary,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  AnimatedRotation(
+                    duration: const Duration(milliseconds: 200),
+                    turns: _detailsExpanded ? 0.5 : 0,
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: colors.tertiary,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            sizeCurve: Curves.easeOutCubic,
+            crossFadeState: _detailsExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity, height: 0),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Column(
+                children: [
+                  if (showPublicBadge)
+                    LobbyPublicBadge(uiScale: heightScale)
+                  else if (showRoomCode)
+                    LobbyRoomCodeCard(
+                        provider: provider, uiScale: heightScale),
+                  if (provider.roomSettings != null)
+                    LobbySettingsRow(
+                      provider: provider,
+                      minPlayers: minPlayers,
+                      maxPlayers: maxPlayers,
+                      uiScale: heightScale,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
