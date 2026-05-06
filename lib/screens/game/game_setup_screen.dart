@@ -294,8 +294,66 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               }),
             );
             final content = Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              // start au lieu de center : empêche les enfants de "sauter"
+              // verticalement quand le contenu interne change de hauteur
+              // (passage Adaptatif <-> Manuel).
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
+                SizedBox(height: f(8)),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: f(40)),
+                  child: Container(
+                    padding: EdgeInsets.all(f(4)),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(f(12)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildModeSegment(
+                            f: f,
+                            icon: Icons.auto_awesome,
+                            label: 'Adaptatif',
+                            activeColor: Colors.amber,
+                            isActive: useSBMM,
+                            onTap: () {
+                              if (useSBMM) return;
+                              ServiceLocator()
+                                  .get<IHapticService>()
+                                  .buttonTap();
+                              context
+                                  .read<SettingsProvider>()
+                                  .toggleSBMM(true);
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildModeSegment(
+                            f: f,
+                            icon: Icons.tune,
+                            label: 'Manuel',
+                            activeColor: Colors.lightBlueAccent,
+                            isActive: !useSBMM,
+                            onTap: () {
+                              if (!useSBMM) return;
+                              ServiceLocator()
+                                  .get<IHapticService>()
+                                  .buttonTap();
+                              context
+                                  .read<SettingsProvider>()
+                                  .toggleSBMM(false);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: spacingSmall),
                 Text(
                   "Niveau des Bots",
                   style: TextStyle(
@@ -305,216 +363,223 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                   ),
                 ),
                 SizedBox(height: spacingSmall),
-                if (useSBMM) ...[
-                  Container(
-                    padding: EdgeInsets.all(f(20)),
-                    margin: EdgeInsets.symmetric(
-                      horizontal: f(40),
-                    ),
-                    decoration: BoxDecoration(
-                      // Fond plus opaque pour meilleur contraste
-                      color: Colors.black.withValues(alpha: 0.2),
-                      border: Border.all(color: Colors.amber, width: 1.5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          color: Colors.amber,
-                          size: f(40),
-                        ),
-                        SizedBox(height: f(10)),
-                        Text(
-                          "Mode Adaptatif Actif",
-                          style: TextStyle(
-                            color: Colors.amber,
-                            fontWeight: FontWeight.bold,
-                            fontSize: f(18),
-                          ),
-                        ),
-                        SizedBox(height: f(5)),
-                        Text(
-                          "Le niveau s'ajuste automatiquement à vos résultats.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            // Blanc pur pour lisibilité maximale
-                            color: Colors.white,
-                            fontSize: f(13),
-                          ),
-                        ),
-                        SizedBox(height: f(6)),
-                        Text(
-                          "Vous pouvez passer en mode manuel dans Réglages > SBMM (Adaptatif).",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: f(12),
-                          ),
-                        ),
-                        SizedBox(height: f(12)),
-                        _buildBotLevelPreview(f),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  Container(
-                    padding: EdgeInsets.all(f(20)),
-                    margin: EdgeInsets.symmetric(
-                      horizontal: f(40),
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      border:
-                          Border.all(color: Colors.lightBlueAccent, width: 1.5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.tune,
-                          color: Colors.lightBlueAccent,
-                          size: f(36),
-                        ),
-                        SizedBox(height: f(10)),
-                        Text(
-                          "Mode Manuel Actif",
-                          style: TextStyle(
-                            color: Colors.lightBlueAccent,
-                            fontWeight: FontWeight.bold,
-                            fontSize: f(18),
-                          ),
-                        ),
-                        SizedBox(height: f(5)),
-                        Text(
-                          "A vous de choisir le niveau de difficulté des bots !",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: f(13),
-                          ),
-                        ),
-                        SizedBox(height: f(6)),
-                        Text.rich(
-                          TextSpan(
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    switchInCurve: Curves.easeInOut,
+                    switchOutCurve: Curves.easeInOut,
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    layoutBuilder: (currentChild, previousChildren) {
+                      // Évite que les widgets sortants prennent de la place
+                      // pendant le fade (sinon double-hauteur le temps de la transition).
+                      return Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          ...previousChildren,
+                          if (currentChild != null) currentChild,
+                        ],
+                      );
+                    },
+                    child: useSBMM
+                        ? Container(
+                            key: const ValueKey('mode-sbmm'),
+                            padding: EdgeInsets.all(f(20)),
+                            margin: EdgeInsets.symmetric(horizontal: f(40)),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              border: Border.all(
+                                  color: Colors.amber, width: 1.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome,
+                                  color: Colors.amber,
+                                  size: f(40),
+                                ),
+                                SizedBox(height: f(10)),
+                                Text(
+                                  "Mode Adaptatif Actif",
+                                  style: TextStyle(
+                                    color: Colors.amber,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: f(18),
+                                  ),
+                                ),
+                                SizedBox(height: f(5)),
+                                Text(
+                                  "Le niveau s'ajuste automatiquement à vos résultats.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: f(13),
+                                  ),
+                                ),
+                                SizedBox(height: f(12)),
+                                _buildBotLevelPreview(f),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            key: const ValueKey('mode-manual'),
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const TextSpan(
-                                  text: "Vous pouvez passer en mode "),
-                              TextSpan(
-                                text: "Automatique",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                              Container(
+                                padding: EdgeInsets.all(f(20)),
+                                margin:
+                                    EdgeInsets.symmetric(horizontal: f(40)),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  border: Border.all(
+                                      color: Colors.lightBlueAccent,
+                                      width: 1.5),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      color: Colors.lightBlueAccent,
+                                      size: f(36),
+                                    ),
+                                    SizedBox(height: f(10)),
+                                    Text(
+                                      "Mode Manuel Actif",
+                                      style: TextStyle(
+                                        color: Colors.lightBlueAccent,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: f(18),
+                                      ),
+                                    ),
+                                    SizedBox(height: f(5)),
+                                    Text(
+                                      "A vous de choisir le niveau de difficulté des bots !",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: f(13),
+                                      ),
+                                    ),
+                                    SizedBox(height: f(6)),
+                                    Text(
+                                      "Le RP augmente uniquement en mode Adaptatif.",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.amber.shade200,
+                                        fontSize: f(12),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const TextSpan(
-                                text: " dans Réglages > SBMM (Adaptatif).",
+                              SizedBox(height: spacingSmall),
+                              Theme(
+                                data: Theme.of(context).copyWith(
+                                  segmentedButtonTheme:
+                                      SegmentedButtonThemeData(
+                                    style: botSegmentStyle,
+                                  ),
+                                ),
+                                child: Wrap(
+                                  spacing: f(10),
+                                  runSpacing: f(10),
+                                  crossAxisAlignment:
+                                      WrapCrossAlignment.center,
+                                  children: [
+                                    SegmentedButton<Difficulty>(
+                                      emptySelectionAllowed: true,
+                                      segments: [
+                                        ButtonSegment(
+                                          value: Difficulty.easy,
+                                          label: const Text("Facile"),
+                                          icon: Icon(Icons.sentiment_satisfied,
+                                              size: f(18)),
+                                        ),
+                                        ButtonSegment(
+                                          value: Difficulty.medium,
+                                          label: const Text("Moyen"),
+                                          icon: Icon(Icons.sentiment_neutral,
+                                              size: f(18)),
+                                        ),
+                                        ButtonSegment(
+                                          value: Difficulty.platinum,
+                                          label: const Text("Difficile"),
+                                          icon: Icon(Icons.diamond,
+                                              size: f(18)),
+                                        ),
+                                      ],
+                                      selected: selectedBotDifficulty ==
+                                              Difficulty.mix
+                                          ? <Difficulty>{}
+                                          : {selectedBotDifficulty},
+                                      onSelectionChanged:
+                                          (Set<Difficulty> newSelection) {
+                                        if (newSelection.isEmpty) return;
+                                        setState(() {
+                                          selectedBotDifficulty =
+                                              newSelection.first;
+                                        });
+                                        _saveBotDifficulty(newSelection.first);
+                                      },
+                                      style: botSegmentStyle,
+                                    ),
+                                    ChoiceChip(
+                                      avatar: Icon(
+                                        Icons.shuffle,
+                                        size: f(16),
+                                        color: selectedBotDifficulty ==
+                                                Difficulty.mix
+                                            ? Colors.black
+                                            : Colors.white,
+                                      ),
+                                      label: Text(
+                                        'Mix',
+                                        style: TextStyle(
+                                          fontSize: f(13),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      selected: selectedBotDifficulty ==
+                                          Difficulty.mix,
+                                      onSelected: (_) {
+                                        setState(() {
+                                          selectedBotDifficulty =
+                                              Difficulty.mix;
+                                        });
+                                        _saveBotDifficulty(Difficulty.mix);
+                                      },
+                                      selectedColor: selectedBotBg,
+                                      backgroundColor: unselectedBg,
+                                      side: const BorderSide(
+                                          color: segmentBorder),
+                                      labelStyle: TextStyle(
+                                        color: selectedBotDifficulty ==
+                                                Difficulty.mix
+                                            ? Colors.black
+                                            : Colors.white,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: f(8),
+                                        vertical: f(6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: f(12),
-                          ),
-                        ),
-                        SizedBox(height: f(4)),
-                        Text(
-                          "Le RP augmente uniquement en mode SBMM.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.amber.shade200,
-                            fontSize: f(12),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                  SizedBox(height: spacingSmall),
-                  Theme(
-                    data: Theme.of(context).copyWith(
-                      segmentedButtonTheme: SegmentedButtonThemeData(
-                        style: botSegmentStyle,
-                      ),
-                    ),
-                    child: Wrap(
-                      spacing: f(10),
-                      runSpacing: f(10),
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SegmentedButton<Difficulty>(
-                          emptySelectionAllowed: true,
-                          segments: [
-                            ButtonSegment(
-                              value: Difficulty.easy,
-                              label: const Text("Facile"),
-                              icon: Icon(Icons.sentiment_satisfied, size: f(18)),
-                            ),
-                            ButtonSegment(
-                              value: Difficulty.medium,
-                              label: const Text("Moyen"),
-                              icon: Icon(Icons.sentiment_neutral, size: f(18)),
-                            ),
-                            ButtonSegment(
-                              value: Difficulty.platinum,
-                              label: const Text("Difficile"),
-                              icon: Icon(Icons.diamond, size: f(18)),
-                            ),
-                          ],
-                          selected: selectedBotDifficulty == Difficulty.mix
-                              ? <Difficulty>{}
-                              : {selectedBotDifficulty},
-                          onSelectionChanged: (Set<Difficulty> newSelection) {
-                            if (newSelection.isEmpty) return;
-                            setState(() {
-                              selectedBotDifficulty = newSelection.first;
-                            });
-                            _saveBotDifficulty(newSelection.first);
-                          },
-                          style: botSegmentStyle,
-                        ),
-                        ChoiceChip(
-                          avatar: Icon(
-                            Icons.shuffle,
-                            size: f(16),
-                            color: selectedBotDifficulty == Difficulty.mix
-                                ? Colors.black
-                                : Colors.white,
-                          ),
-                          label: Text(
-                            'Mix',
-                            style: TextStyle(
-                              fontSize: f(13),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          selected: selectedBotDifficulty == Difficulty.mix,
-                          onSelected: (_) {
-                            setState(() {
-                              selectedBotDifficulty = Difficulty.mix;
-                            });
-                            _saveBotDifficulty(Difficulty.mix);
-                          },
-                          selectedColor: selectedBotBg,
-                          backgroundColor: unselectedBg,
-                          side: const BorderSide(color: segmentBorder),
-                          labelStyle: TextStyle(
-                            color: selectedBotDifficulty == Difficulty.mix
-                                ? Colors.black
-                                : Colors.white,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: f(8),
-                            vertical: f(6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
                 SizedBox(height: spacingSmall),
                 /*
                 // Description du niveau sélectionné (mode manuel uniquement)
@@ -642,6 +707,55 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         );
       }
     }
+  }
+
+  /// Segment du toggle Adaptatif/Manuel affiché en haut de l'écran.
+  Widget _buildModeSegment({
+    required double Function(double) f,
+    required IconData icon,
+    required String label,
+    required Color activeColor,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(f(10)),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: EdgeInsets.symmetric(vertical: f(10), horizontal: f(8)),
+          constraints: BoxConstraints(minHeight: f(44)),
+          decoration: BoxDecoration(
+            color: isActive
+                ? activeColor.withValues(alpha: 0.85)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(f(10)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: f(18),
+                color: isActive ? Colors.black : activeColor,
+              ),
+              SizedBox(width: f(8)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: f(13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildBotLevelPreview(double Function(double) f) {
