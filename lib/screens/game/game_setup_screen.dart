@@ -300,57 +300,36 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 SizedBox(height: f(8)),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: f(40)),
-                  child: Container(
-                    padding: EdgeInsets.all(f(4)),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(f(12)),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    segmentedButtonTheme: SegmentedButtonThemeData(
+                      style: botSegmentStyle,
+                    ),
+                  ),
+                  child: SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: true,
+                        label: const Text('Adaptatif'),
+                        icon: Icon(Icons.auto_awesome, size: f(18)),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildModeSegment(
-                            f: f,
-                            icon: Icons.auto_awesome,
-                            label: 'Adaptatif',
-                            activeColor: Colors.amber,
-                            isActive: useSBMM,
-                            onTap: () {
-                              if (useSBMM) return;
-                              ServiceLocator()
-                                  .get<IHapticService>()
-                                  .buttonTap();
-                              context
-                                  .read<SettingsProvider>()
-                                  .toggleSBMM(true);
-                            },
-                          ),
-                        ),
-                        Expanded(
-                          child: _buildModeSegment(
-                            f: f,
-                            icon: Icons.tune,
-                            label: 'Manuel',
-                            activeColor: Colors.lightBlueAccent,
-                            isActive: !useSBMM,
-                            onTap: () {
-                              if (!useSBMM) return;
-                              ServiceLocator()
-                                  .get<IHapticService>()
-                                  .buttonTap();
-                              context
-                                  .read<SettingsProvider>()
-                                  .toggleSBMM(false);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                      ButtonSegment(
+                        value: false,
+                        label: const Text('Manuel'),
+                        icon: Icon(Icons.tune, size: f(18)),
+                      ),
+                    ],
+                    selected: {useSBMM},
+                    onSelectionChanged: (Set<bool> sel) {
+                      if (sel.isEmpty) return;
+                      final next = sel.first;
+                      if (next == useSBMM) return;
+                      ServiceLocator()
+                          .get<IHapticService>()
+                          .buttonTap();
+                      context.read<SettingsProvider>().toggleSBMM(next);
+                    },
+                    style: botSegmentStyle,
                   ),
                 ),
                 SizedBox(height: spacingSmall),
@@ -385,44 +364,73 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                       );
                     },
                     child: useSBMM
-                        ? Container(
+                        ? SizedBox(
                             key: const ValueKey('mode-sbmm'),
-                            padding: EdgeInsets.all(f(20)),
-                            margin: EdgeInsets.symmetric(horizontal: f(40)),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              border: Border.all(
-                                  color: Colors.amber, width: 1.5),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome,
-                                  color: Colors.amber,
-                                  size: f(40),
-                                ),
-                                SizedBox(height: f(10)),
-                                Text(
-                                  "Mode Adaptatif Actif",
-                                  style: TextStyle(
-                                    color: Colors.amber,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: f(18),
+                            width: double.infinity,
+                            child: Padding(
+                              padding:
+                                  EdgeInsets.symmetric(horizontal: f(24)),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: [
+                                  // Bloc 1 : info sur le mode
+                                  Container(
+                                    padding: EdgeInsets.all(f(16)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.2),
+                                      border: Border.all(
+                                          color: Colors.amber, width: 1.5),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Icon(Icons.auto_awesome,
+                                            color: Colors.amber,
+                                            size: f(36)),
+                                        SizedBox(height: f(8)),
+                                        Text(
+                                          "Mode Adaptatif Actif",
+                                          style: TextStyle(
+                                            color: Colors.amber,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: f(17),
+                                          ),
+                                        ),
+                                        SizedBox(height: f(4)),
+                                        Text(
+                                          "Le niveau s'ajuste automatiquement à vos résultats.",
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: f(13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: f(5)),
-                                Text(
-                                  "Le niveau s'ajuste automatiquement à vos résultats.",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: f(13),
+                                  SizedBox(height: f(10)),
+                                  // Bloc 2 : preview des adversaires
+                                  Container(
+                                    padding: EdgeInsets.all(f(14)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.18),
+                                      border: Border.all(
+                                        color: Colors.amber
+                                            .withValues(alpha: 0.4),
+                                        width: 1,
+                                      ),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                    ),
+                                    child: _buildBotLevelPreview(f),
                                   ),
-                                ),
-                                SizedBox(height: f(12)),
-                                _buildBotLevelPreview(f),
-                              ],
+                                ],
+                              ),
                             ),
                           )
                         : Column(
@@ -580,15 +588,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                           ),
                   ),
                 ),
-                SizedBox(height: spacingSmall),
-                /*
-                // Description du niveau sélectionné (mode manuel uniquement)
-                if (!useSBMM &&
-                    (selectedBotDifficulty == Difficulty.hard ||
-                        selectedBotDifficulty == Difficulty.platinum)) ...[
-                  _buildDifficultyDescription(f, selectedBotDifficulty),
-                ],
-                */
                 SizedBox(height: spacingMedium),
                 Text(
                   "Nombre de joueurs",
@@ -709,55 +708,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
     }
   }
 
-  /// Segment du toggle Adaptatif/Manuel affiché en haut de l'écran.
-  Widget _buildModeSegment({
-    required double Function(double) f,
-    required IconData icon,
-    required String label,
-    required Color activeColor,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(f(10)),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: EdgeInsets.symmetric(vertical: f(10), horizontal: f(8)),
-          constraints: BoxConstraints(minHeight: f(44)),
-          decoration: BoxDecoration(
-            color: isActive
-                ? activeColor.withValues(alpha: 0.85)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(f(10)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: f(18),
-                color: isActive ? Colors.black : activeColor,
-              ),
-              SizedBox(width: f(8)),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? Colors.black : Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: f(13),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBotLevelPreview(double Function(double) f) {
     final result = _previewResult;
 
@@ -852,23 +802,19 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
   Widget _botPairBadge(
       double Function(double) f, String level, String behavior, int count) {
-    late final String levelEmoji;
     late final String levelLabel;
     late final Color accent;
     switch (level) {
       case 'bronze':
-        levelEmoji = '🥉';
         levelLabel = 'Bronze';
         accent = const Color(0xFFCD7F32);
         break;
       case 'silver':
-        levelEmoji = '🥈';
         levelLabel = 'Argent';
         accent = const Color(0xFFB0B0B0);
         break;
       case 'gold':
       default:
-        levelEmoji = '🥇';
         levelLabel = 'Or';
         accent = const Color(0xFFFFC107);
         break;
@@ -888,13 +834,20 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: accent.withValues(alpha: 0.6), width: 1),
       ),
-      child: Text(
-        '$levelEmoji $levelLabel • $behLabel × $count',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: f(12),
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.workspace_premium, color: accent, size: f(14)),
+          SizedBox(width: f(5)),
+          Text(
+            '$levelLabel • $behLabel${count > 1 ? ' × $count' : ''}',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f(12),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
