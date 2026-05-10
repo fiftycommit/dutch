@@ -69,6 +69,11 @@ class MultiplayerGameProvider
   bool get isHost =>
       _hostPlayerId != null && playerId != null && _hostPlayerId == playerId;
 
+  /// UID Firebase courant (extrait du JWT). Utilisé en filet de sécurité
+  /// dans les handlers de notification pour ne jamais afficher une notif
+  /// déclenchée par soi-même (au cas où un broadcast serveur fuirait).
+  String? get _myAuthUid => _multiplayerService.authUid;
+
   bool _isProcessingAction = false;
   @override
   bool get isProcessing => _isProcessingAction;
@@ -542,6 +547,10 @@ class MultiplayerGameProvider
       _handleAutoJoinFromInvite(roomCode);
     };
     _multiplayerService.onFriendRequestReceived = (data) {
+      // Filet de sécurité : ne jamais notifier l'expéditeur (le serveur
+      // ne devrait pas le faire, mais on s'en assure côté client).
+      final fromUserId = data['fromUserId'] as String?;
+      if (fromUserId != null && fromUserId == _myAuthUid) return;
       final currentLoc = AppRouter.currentLocation ?? '';
       if (currentLoc.startsWith('/friends')) return;
       final fromName = data['fromDisplayName'] as String? ??
@@ -555,6 +564,9 @@ class MultiplayerGameProvider
       ));
     };
     _multiplayerService.onFriendAccepted = (data) {
+      // Filet de sécurité : ne pas notifier celui qui vient d'accepter.
+      final fromUserId = data['userId'] as String?;
+      if (fromUserId != null && fromUserId == _myAuthUid) return;
       final currentLoc = AppRouter.currentLocation ?? '';
       if (currentLoc.startsWith('/friends')) return;
       final name = data['displayName'] as String? ??
@@ -568,6 +580,10 @@ class MultiplayerGameProvider
       ));
     };
     _multiplayerService.onWizzReceived = (data) {
+      // Filet de sécurité : si l'expéditeur c'est moi (clientId), ignorer.
+      final fromId = data['fromId'] as String?;
+      if (fromId != null && fromId == clientId) return;
+
       _wizzFromName = data['fromName'] as String? ?? 'Quelqu\'un';
       _showWizzAnimation = true;
       _hapticService.error();
@@ -594,6 +610,9 @@ class MultiplayerGameProvider
     };
     _multiplayerService.onPrivateMessage = (data) {
       final senderId = data['senderId'] as String?;
+      // Filet de sécurité : ne jamais notifier pour un message envoyé
+      // par soi-même (cas multi-device).
+      if (senderId != null && senderId == _myAuthUid) return;
       if (senderId != null &&
           senderId == InAppNotificationService.instance.activeChatFriendId) {
         return;
@@ -761,14 +780,33 @@ class MultiplayerGameProvider
     }
     notifyListeners();
 
-    final isMe =
+    // Détecte "c'est moi" via plusieurs identifiants pour résister aux
+    // courses possibles (playerId/clientId pas encore résolus) :
+    //  - id socket courant
+    //  - clientId stable persisté
+    //  - userId Firebase éventuellement présent dans la payload
+    final myUid = _myAuthUid;
+    final playerUserId = player['userId'] as String?;
+    bool isMe =
         player['id'] == playerId || player['clientId'] == this.clientId;
+    if (!isMe && myUid != null && playerUserId == myUid) {
+      isMe = true;
+    }
+    // Filet final : si je viens d'arriver dans une lobby qui ne contient
+    // que ce joueur, c'est forcément moi (création de salon).
+    if (!isMe && _playersInLobby.length == 1) {
+      isMe = true;
+    }
 
     final inGameContext = _isInRoomScreen();
 
     if (isMe) {
-      // Si c'est moi l'hôte, pas de notif (je me suis ajouté moi-même)
-      if (!isHost) {
+      // Si c'est moi l'hôte, pas de notif (je me suis ajouté moi-même).
+      // Filet de sécurité contre la course entre l'ack `createRoom` et
+      // l'event `room:player_joined` : si je suis le seul joueur du lobby
+      // à cet instant, c'est que je viens de créer la salle.
+      final isRoomCreator = _playersInLobby.length == 1;
+      if (!isHost && !isRoomCreator) {
         final hostInfo =
             _playersInLobby.where((p) => p['id'] == _hostPlayerId).firstOrNull;
         final hostName = hostInfo?['name'] as String? ?? 'L\'hôte';

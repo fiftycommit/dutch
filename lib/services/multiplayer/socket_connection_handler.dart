@@ -61,6 +61,9 @@ class SocketConnectionHandler {
   String? _authToken;
   String? _authUid;
 
+  /// Firebase UID extrait du JWT courant (null si non authentifié).
+  String? get authUid => _authUid;
+
   String? _extractUidFromJwt(String? token) {
     if (token == null || token.isEmpty) return null;
     try {

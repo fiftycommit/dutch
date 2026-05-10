@@ -143,9 +143,14 @@ class _CreatePublicRoomScreenState extends State<CreatePublicRoomScreen> {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 600;
-                    final isCompactLandscape = constraints.maxHeight < 400 &&
-                        constraints.maxWidth > constraints.maxHeight;
+                    // On se base sur la taille du *device* (hors inset clavier)
+                    // pour choisir le layout : sinon l'ouverture du clavier
+                    // ferait basculer en compact, démontant le TextField,
+                    // qui perd le focus, ce qui referme le clavier (boucle).
+                    final mediaSize = MediaQuery.of(context).size;
+                    final isMobile = mediaSize.width < 600;
+                    final isCompactLandscape = mediaSize.height < 400 &&
+                        mediaSize.width > mediaSize.height;
 
                     // Layout compact pour petit ecran en paysage
                     if (isCompactLandscape) {

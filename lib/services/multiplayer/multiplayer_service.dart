@@ -37,6 +37,7 @@ class MultiplayerService {
   bool get isConnected => _connectionHandler.isConnected;
   String? get playerId => _connectionHandler.playerId;
   String? get clientId => _connectionHandler.clientId;
+  String? get authUid => _connectionHandler.authUid;
   int get latencyMs => _connectionHandler.latencyMs;
   int get serverTimeOffsetMs => _connectionHandler.serverTimeOffsetMs;
   int get serverNowMs => _connectionHandler.serverNowMs;

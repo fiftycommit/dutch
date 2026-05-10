@@ -9,6 +9,8 @@ class LobbyPlayersPanel extends StatelessWidget {
   final int connectedHumans;
   final int maxPlayers;
   final double uiScale;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
 
   const LobbyPlayersPanel({
     super.key,
@@ -16,6 +18,8 @@ class LobbyPlayersPanel extends StatelessWidget {
     required this.connectedHumans,
     required this.maxPlayers,
     required this.uiScale,
+    this.isExpanded = true,
+    this.onToggleExpanded,
   });
 
   double _f(double size) => size * uiScale;
@@ -26,6 +30,20 @@ class LobbyPlayersPanel extends StatelessWidget {
     final hasScores = provider.cumulativeScores.isNotEmpty;
     final size = MediaQuery.of(context).size;
     final isCompactLandscape = size.height < 400 && size.width > size.height;
+    final canToggle = onToggleExpanded != null;
+
+    final headerRow = _buildHeader(colors, hasScores, isCompactLandscape);
+    final headerWidget = canToggle
+        ? InkWell(
+            borderRadius:
+                BorderRadius.circular(_f(isCompactLandscape ? 8 : 10)),
+            onTap: onToggleExpanded,
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: _f(2)),
+              child: headerRow,
+            ),
+          )
+        : headerRow;
 
     return Container(
       padding: EdgeInsets.all(_f(isCompactLandscape ? 8 : 12)),
@@ -45,23 +63,52 @@ class LobbyPlayersPanel extends StatelessWidget {
                   Text('...', style: TextStyle(color: AppColors.textDisabled)),
             );
           }
+          final listWidget = provider.playersInLobby.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: provider.playersInLobby.length,
+                  itemBuilder: (context, index) {
+                    return _buildPlayerItem(
+                        context, index, colors, isCompactLandscape);
+                  },
+                );
+          // Si pas pliable (landscape/wide), layout direct.
+          if (!canToggle) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                headerWidget,
+                SizedBox(height: _f(isCompactLandscape ? 6 : 10)),
+                Expanded(child: listWidget),
+              ],
+            );
+          }
+          // Pliable : header fixe + AnimatedCrossFade pour la liste,
+          // mêmes paramètres que `_buildCollapsibleDetails` du lobby.
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildHeader(colors, hasScores, isCompactLandscape),
-              SizedBox(height: _f(isCompactLandscape ? 6 : 10)),
-              Expanded(
-                child: provider.playersInLobby.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: provider.playersInLobby.length,
-                        itemBuilder: (context, index) {
-                          return _buildPlayerItem(
-                              context, index, colors, isCompactLandscape);
-                        },
-                      ),
+              headerWidget,
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 200),
+                sizeCurve: Curves.easeOutCubic,
+                crossFadeState: isExpanded
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox(width: double.infinity, height: 0),
+                secondChild: Padding(
+                  padding: EdgeInsets.only(
+                      top: _f(isCompactLandscape ? 6 : 10)),
+                  child: SizedBox(
+                    height: (constraints.maxHeight -
+                            _f(isCompactLandscape ? 40 : 48))
+                        .clamp(0, double.infinity),
+                    child: listWidget,
+                  ),
+                ),
               ),
             ],
           );
@@ -72,6 +119,7 @@ class LobbyPlayersPanel extends StatelessWidget {
 
   Widget _buildHeader(
       ColorScheme colors, bool hasScores, bool isCompactLandscape) {
+    final canToggle = onToggleExpanded != null;
     return Row(
       children: [
         Icon(Icons.people,
@@ -107,6 +155,19 @@ class LobbyPlayersPanel extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+        if (canToggle) ...[
+          if (!(hasScores && !isCompactLandscape)) const Spacer(),
+          SizedBox(width: _f(6)),
+          AnimatedRotation(
+            duration: const Duration(milliseconds: 200),
+            turns: isExpanded ? 0.5 : 0,
+            child: Icon(
+              Icons.keyboard_arrow_down,
+              color: colors.tertiary,
+              size: _f(isCompactLandscape ? 18 : 22),
             ),
           ),
         ],

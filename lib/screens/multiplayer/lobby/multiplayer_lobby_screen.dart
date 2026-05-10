@@ -48,6 +48,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   // code de room visible immédiatement ; l'utilisateur peut la replier.
   bool _detailsExpanded = true;
 
+  // Section "Joueurs" pliable (portrait mobile uniquement). Ouverte par défaut.
+  bool _playersExpanded = true;
+
   // Suivi des messages chat lus pour afficher le badge "non lu" sur le bouton
   // d'ouverture du bottom sheet (mobile portrait).
   int _lastSeenChatCount = 0;
@@ -1103,6 +1106,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       connectedHumans: connectedHumans,
       maxPlayers: maxPlayers,
       uiScale: scale,
+      isExpanded: _playersExpanded,
+      onToggleExpanded: () {
+        ServiceLocator().get<IHapticService>().buttonTap();
+        setState(() => _playersExpanded = !_playersExpanded);
+      },
     );
   }
 
