@@ -30,14 +30,10 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
 
   Future<void> _hydrateProfileName() async {
     final profile = await _socialRepository.getProfile();
-    if (!mounted || profile == null) {
-      return;
-    }
+    if (!mounted || profile == null) return;
     final profileName = profile.displayName.trim();
-    if (profileName.isNotEmpty && _playerName != profileName) {
-      setState(() {
-        _playerName = profileName;
-      });
+    if (profileName.isNotEmpty) {
+      _playerName = profileName;
     }
   }
 
@@ -45,11 +41,7 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
     final profile = await _socialRepository.getProfile();
     final profileName = profile?.displayName.trim() ?? '';
     if (profileName.isNotEmpty) {
-      if (_playerName != profileName && mounted) {
-        setState(() {
-          _playerName = profileName;
-        });
-      }
+      _playerName = profileName;
       return profileName;
     }
     return _playerName;
@@ -189,99 +181,57 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    // Row avec code + identité du compte connecté
-                                    Row(
-                                      children: [
-                                        // Champ code
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _codeController,
-                                            enabled: !_isJoining,
-                                            textCapitalization:
-                                                TextCapitalization.characters,
-                                            maxLength: _roomCodeLength,
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 4,
-                                            ),
-                                            inputFormatters: [
-                                              FilteringTextInputFormatter.allow(
-                                                  RegExp(r'[A-Za-z0-9]')),
-                                              UpperCaseTextFormatter(),
-                                            ],
-                                            decoration: InputDecoration(
-                                              labelText: 'Code du salon',
-                                              labelStyle: const TextStyle(
-                                                  color: Colors.black87,
-                                                  fontSize: 12),
-                                              counterText: '',
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 12),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade100,
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                    color:
-                                                        Colors.orange.shade700,
-                                                    width: 2),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        // Identité connectée (lecture seule)
-                                        Expanded(
-                                          child: Container(
-                                            height: 48,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey.shade100,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: Colors.grey.shade300,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.person,
-                                                  size: 18,
-                                                  color: Colors.orange.shade700,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Text(
-                                                    _playerName,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      color: Colors.black87,
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
+                                    TextField(
+                                      controller: _codeController,
+                                      enabled: !_isJoining,
+                                      textCapitalization:
+                                          TextCapitalization.characters,
+                                      maxLength: _roomCodeLength,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.black87,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 4,
+                                      ),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.allow(
+                                            RegExp(r'[A-Za-z0-9]')),
+                                        UpperCaseTextFormatter(),
                                       ],
+                                      decoration: InputDecoration(
+                                        labelText: 'Code du salon',
+                                        labelStyle: const TextStyle(
+                                            color: Colors.black87,
+                                            fontSize: 12),
+                                        counterText: '',
+                                        isDense: true,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade100,
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                              color: Colors.black, width: 1.5),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                              color: Colors.black, width: 1.5),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: BorderSide(
+                                              color: Colors.orange.shade700,
+                                              width: 2),
+                                        ),
+                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     // Bouton rejoindre
@@ -426,6 +376,14 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                         border: OutlineInputBorder(
                                           borderRadius:
                                               BorderRadius.circular(14),
+                                          borderSide: const BorderSide(
+                                              color: Colors.black, width: 1.5),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: const BorderSide(
+                                              color: Colors.black, width: 1.5),
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius:
@@ -434,40 +392,6 @@ class _JoinPrivateRoomScreenState extends State<JoinPrivateRoomScreen> {
                                               color: Colors.orange.shade700,
                                               width: 2),
                                         ),
-                                      ),
-                                    ),
-                                    SizedBox(height: isMobile ? 16 : 20),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.person,
-                                              color: Colors.orange.shade700),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              _playerName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: Colors.black87,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
                                       ),
                                     ),
                                     SizedBox(height: isMobile ? 24 : 32),
