@@ -203,7 +203,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   shared.ResultsActionButton(
                     label: 'TERMINER',
                     backgroundColor: Colors.amber.shade700,
-                    onPressed: () => ctx.go('/'),
+                    onPressed: () {
+                      final router = GoRouter.of(ctx);
+                      gameProvider.cancelGame();
+                      router.go('/');
+                    },
                   ),
               ],
               rpCalculator: showRP
