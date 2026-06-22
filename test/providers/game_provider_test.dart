@@ -5,6 +5,7 @@ import 'package:dutch_game/models/player.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import '../mocks/mock_services.dart';
+import '../helpers/test_helpers.dart';
 
 void main() {
   // Ensure Flutter binding is initialized for SharedPreferences
@@ -309,6 +310,27 @@ void main() {
 
     test('mode tournoi existe', () {
       expect(gameProvider.gameState!.gameMode, GameMode.tournament);
+    });
+
+    test('startNextTournamentRound prépare la manche suivante', () async {
+      final gameState = gameProvider.gameState!;
+      gameState.phase = GamePhase.ended;
+      gameState.players[0].hand = [createCard('hearts', 'A')];
+      gameState.players[1].hand = [createCard('hearts', '2')];
+      gameState.players[2].hand = [createCard('hearts', '3')];
+      gameState.players[3].hand = [createCard('spades', 'R')];
+
+      final started = await gameProvider.startNextTournamentRound();
+
+      expect(started, isTrue);
+      expect(gameProvider.gameState, isNotNull);
+      expect(gameProvider.gameState!.tournamentRound, 2);
+      expect(gameProvider.gameState!.phase, GamePhase.setup);
+      expect(gameProvider.gameState!.players.length, 3);
+      expect(
+        gameProvider.gameState!.players.map((p) => p.id),
+        isNot(contains('bot3')),
+      );
     });
   });
 }

@@ -1177,19 +1177,19 @@ class GameProvider with ChangeNotifier implements IGameController {
   int getTournamentRP(int finalPosition) =>
       _tournamentManager.calculateRP(finalPosition);
 
-  Future<void> startNextTournamentRound() async {
-    if (_gameState == null) return;
+  Future<bool> startNextTournamentRound() async {
+    if (_gameState == null) return false;
     _gameState!.updateCumulativeScores();
     _tournamentManager.updateCumulativeScores(_gameState!);
 
     if (_gameState!.gameMode == GameMode.tournament &&
         _gameState!.tournamentRound >= tournamentTotalRounds) {
-      return;
+      return false;
     }
 
     List<Player> survivors =
         _tournamentManager.prepareSurvivorsForNextRound(_gameState!);
-    if (survivors.length < 2) return;
+    if (survivors.length < 2) return false;
 
     await createNewGame(
       players: survivors,
@@ -1201,6 +1201,7 @@ class GameProvider with ChangeNotifier implements IGameController {
       saveSlot: _currentSlotId,
       useSBMM: _playerMMR != null,
     );
+    return true;
   }
 
   /// Annule la partie en cours **sans** enregistrer de résultat dans les stats.

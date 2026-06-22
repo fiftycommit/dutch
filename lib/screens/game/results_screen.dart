@@ -22,6 +22,7 @@ class ResultsScreen extends StatefulWidget {
 
 class _ResultsScreenState extends State<ResultsScreen> {
   bool _tournamentFinishTriggered = false;
+  bool _startingNextRound = false;
 
   @override
   void initState() {
@@ -140,11 +141,43 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     child: Column(
                       children: [
                         shared.ResultsActionButton(
-                          label: 'MANCHE SUIVANTE',
+                          label: _startingNextRound
+                              ? 'PRÉPARATION...'
+                              : 'MANCHE SUIVANTE',
                           backgroundColor: Colors.amber.shade700,
                           onPressed: () async {
-                            await gameProvider.startNextTournamentRound();
-                            if (ctx.mounted) ctx.go('/solo/memorization');
+                            if (_startingNextRound) return;
+                            final router = GoRouter.of(ctx);
+                            setState(() => _startingNextRound = true);
+                            try {
+                              final started =
+                                  await gameProvider.startNextTournamentRound();
+                              if (started) {
+                                router.go('/solo/memorization');
+                                return;
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Impossible de préparer la manche suivante.'),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Erreur manche suivante : $e'),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _startingNextRound = false);
+                              }
+                            }
                           },
                         ),
                         const SizedBox(height: 8),
