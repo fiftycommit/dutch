@@ -182,9 +182,10 @@ modèle aurait-il deviné le bon vainqueur à la fin de la partie ?
 | RandomForest | 0.7539 | 0.9229 |
 | XGBoost | 0.7554 | 0.9276 |
 
-Calculé sur 4 006 parties sur 4 000 : six parties de test ont un nombre de « gagnants »
-différent de 1 au dernier snapshot, des égalités de rang 1 légitimes (une propriété du jeu, pas
-un bug du pipeline), exclues naturellement par la jointure.
+L'accuracy-partie est calculée sur 4 006 observations : les 4 000 parties de test, dont six
+comportent plusieurs gagnants ex-aequo de rang 1. Ces égalités sont légitimes (une propriété du
+jeu, pas un bug du pipeline) et chaque gagnant est inclus dans le calcul : la métrique est donc
+pondérée par le nombre de gagnants, pas une métrique par partie au sens strict.
 
 C'est le chiffre à retenir de toute cette section : avec XGBoost et le dernier état connu de
 chaque bot, le modèle identifie le bon vainqueur dans environ 93 % des parties de test.
