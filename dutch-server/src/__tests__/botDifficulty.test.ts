@@ -28,28 +28,16 @@ describe('BotDifficulty', () => {
       assert.strictEqual(silver.reactionMatchChance, 0.55);
     });
 
-    it('gold has correct values', () => {
-      const gold = BotDifficulty.gold;
+    it('difficult has the strongest values (fusion ex-Or+Platine = Platine)', () => {
+      const difficult = BotDifficulty.difficult;
 
-      assert.strictEqual(gold.name, 'Or');
-      assert.strictEqual(gold.forgetChancePerTurn, 0.01);
-      assert.strictEqual(gold.confusionOnSwap, 0.01);
-      assert.strictEqual(gold.dutchThreshold, 3);
-      assert.strictEqual(gold.reactionSpeed, 0.96);
-      assert.strictEqual(gold.matchAccuracy, 0.97);
-      assert.strictEqual(gold.reactionMatchChance, 0.9);
-    });
-
-    it('platinum has perfect values', () => {
-      const platinum = BotDifficulty.platinum;
-
-      assert.strictEqual(platinum.name, 'Platine');
-      assert.strictEqual(platinum.forgetChancePerTurn, 0.0);
-      assert.strictEqual(platinum.confusionOnSwap, 0.0);
-      assert.strictEqual(platinum.dutchThreshold, 1);
-      assert.strictEqual(platinum.reactionSpeed, 1.0);
-      assert.strictEqual(platinum.matchAccuracy, 1.0);
-      assert.strictEqual(platinum.reactionMatchChance, 1.0);
+      assert.strictEqual(difficult.name, 'Difficile');
+      assert.strictEqual(difficult.forgetChancePerTurn, 0.0);
+      assert.strictEqual(difficult.confusionOnSwap, 0.0);
+      assert.strictEqual(difficult.dutchThreshold, 1);
+      assert.strictEqual(difficult.reactionSpeed, 1.0);
+      assert.strictEqual(difficult.matchAccuracy, 1.0);
+      assert.strictEqual(difficult.reactionMatchChance, 1.0);
     });
   });
 
@@ -66,16 +54,11 @@ describe('BotDifficulty', () => {
       assert.strictEqual(BotDifficulty.fromMMR(599).name, 'Argent');
     });
 
-    it('returns gold for MMR 600-899', () => {
-      assert.strictEqual(BotDifficulty.fromMMR(600).name, 'Or');
-      assert.strictEqual(BotDifficulty.fromMMR(750).name, 'Or');
-      assert.strictEqual(BotDifficulty.fromMMR(899).name, 'Or');
-    });
-
-    it('returns platinum for MMR >= 900', () => {
-      assert.strictEqual(BotDifficulty.fromMMR(900).name, 'Platine');
-      assert.strictEqual(BotDifficulty.fromMMR(1000).name, 'Platine');
-      assert.strictEqual(BotDifficulty.fromMMR(2000).name, 'Platine');
+    it('returns difficile for MMR >= 600 (ex Or 600-899 + Platine >=900 fusionnés)', () => {
+      assert.strictEqual(BotDifficulty.fromMMR(600).name, 'Difficile');
+      assert.strictEqual(BotDifficulty.fromMMR(750).name, 'Difficile');
+      assert.strictEqual(BotDifficulty.fromMMR(900).name, 'Difficile');
+      assert.strictEqual(BotDifficulty.fromMMR(2000).name, 'Difficile');
     });
   });
 
@@ -88,12 +71,10 @@ describe('BotDifficulty', () => {
       assert.strictEqual(BotDifficulty.fromRank('Argent').name, 'Argent');
     });
 
-    it('returns correct difficulty for Or rank', () => {
-      assert.strictEqual(BotDifficulty.fromRank('Or').name, 'Or');
-    });
-
-    it('returns correct difficulty for Platine rank', () => {
-      assert.strictEqual(BotDifficulty.fromRank('Platine').name, 'Platine');
+    it('returns difficile for legacy Or/Platine ranks + Difficile', () => {
+      assert.strictEqual(BotDifficulty.fromRank('Or').name, 'Difficile');
+      assert.strictEqual(BotDifficulty.fromRank('Platine').name, 'Difficile');
+      assert.strictEqual(BotDifficulty.fromRank('Difficile').name, 'Difficile');
     });
 
     it('returns silver as default for unknown rank', () => {
@@ -107,8 +88,7 @@ describe('BotDifficulty', () => {
       const levels = [
         BotDifficulty.bronze,
         BotDifficulty.silver,
-        BotDifficulty.gold,
-        BotDifficulty.platinum,
+        BotDifficulty.difficult,
       ];
 
       // forgetChancePerTurn should decrease (lower = better memory)

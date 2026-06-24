@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'playing_card.dart';
 import 'game_settings.dart';
+import '../services/game/engine_random.dart';
 
 class DutchAttempt {
   final int estimatedScore;
@@ -19,7 +20,7 @@ class DutchAttempt {
 }
 
 class Player {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   final String id;
   final String name;
@@ -838,7 +839,8 @@ class Player {
           ? BotBehavior.values[json['botBehavior'] as int]
           : null,
       botSkillLevel: json['botSkillLevel'] != null
-          ? BotSkillLevel.values[json['botSkillLevel'] as int]
+          // fromIndex : rétrocompat ancien index 3 (platinum) → difficile, anti-crash.
+          ? BotSkillLevel.fromIndex(json['botSkillLevel'] as int)
           : null,
       position: json['position'] as int? ?? 0,
       isSpectator: json['isSpectator'] as bool? ?? false,

@@ -53,7 +53,7 @@ const tests = [
   { name: 'GameMode.quick', value: GameMode.quick === 0 },
   { name: 'GamePhase.playing', value: GamePhase.playing === 1 },
   { name: 'BotBehavior.balanced', value: BotBehavior.balanced === 2 },
-  { name: 'BotSkillLevel.gold', value: BotSkillLevel.gold === 2 },
+  { name: 'BotSkillLevel.difficile', value: BotSkillLevel.difficile === 2 },
   { name: 'createPlayer', value: typeof createPlayer === 'function' },
   { name: 'createFullDeck', value: typeof createFullDeck === 'function' },
 ];

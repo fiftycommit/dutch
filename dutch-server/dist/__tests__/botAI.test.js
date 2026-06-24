@@ -14,7 +14,7 @@ const Card_1 = require("../models/Card");
     function createTestPlayers() {
         const human = (0, Player_1.createPlayer)('p1', 'Human', true, 0);
         const bot1 = (0, Player_1.createPlayer)('bot1', 'Bot Fast', false, 1, Player_1.BotBehavior.fast, Player_1.BotSkillLevel.silver);
-        const bot2 = (0, Player_1.createPlayer)('bot2', 'Bot Balanced', false, 2, Player_1.BotBehavior.balanced, Player_1.BotSkillLevel.gold);
+        const bot2 = (0, Player_1.createPlayer)('bot2', 'Bot Balanced', false, 2, Player_1.BotBehavior.balanced, Player_1.BotSkillLevel.difficile);
         return [human, bot1, bot2];
     }
     function createInitializedGameState() {
@@ -59,7 +59,7 @@ const Card_1 = require("../models/Card");
                 testState.currentPlayerIndex = 1; // Bot
                 // Give bot very low cards (score = 2) to encourage Dutch
                 // Use platinum to avoid minTurnsBeforeDutch delay
-                testState.players[1].botSkillLevel = Player_1.BotSkillLevel.platinum;
+                testState.players[1].botSkillLevel = Player_1.BotSkillLevel.difficile;
                 testState.players[1].hand = [
                     (0, Card_1.createCard)('hearts', 'A'), // 1 pt
                     (0, Card_1.createCard)('diamonds', 'A'), // 1 pt
@@ -123,7 +123,7 @@ const Card_1 = require("../models/Card");
                     (0, Card_1.createCard)('diamonds', '4'),
                 ];
                 state.players[1].knownCards = [true, false, false, false];
-                state.players[1].botSkillLevel = Player_1.BotSkillLevel.platinum; // High accuracy
+                state.players[1].botSkillLevel = Player_1.BotSkillLevel.difficile; // High accuracy
                 const handSizeBefore = state.players[1].hand.length;
                 const result = await BotAI_1.BotAI.tryReactionMatch(state, state.players[1], 1000);
                 if (result) {
@@ -252,14 +252,14 @@ const Card_1 = require("../models/Card");
         (0, node_test_1.it)('gold bot plays well', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
-            state.players[1].botSkillLevel = Player_1.BotSkillLevel.gold;
+            state.players[1].botSkillLevel = Player_1.BotSkillLevel.difficile;
             await BotAI_1.BotAI.playBotTurn(state);
             node_assert_1.default.ok(true);
         });
         (0, node_test_1.it)('platinum bot plays optimally', async () => {
             const state = createInitializedGameState();
             state.currentPlayerIndex = 1;
-            state.players[1].botSkillLevel = Player_1.BotSkillLevel.platinum;
+            state.players[1].botSkillLevel = Player_1.BotSkillLevel.difficile;
             await BotAI_1.BotAI.playBotTurn(state);
             node_assert_1.default.ok(true);
         });

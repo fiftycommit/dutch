@@ -33,7 +33,7 @@ void main() {
         name: 'Bot',
         isHuman: false,
         botBehavior: BotBehavior.balanced,
-        botSkillLevel: BotSkillLevel.platinum,
+        botSkillLevel: BotSkillLevel.difficile,
         position: 1,
       )
         ..hand = [

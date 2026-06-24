@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'bot_difficulty.dart';
+import '../engine_random.dart';
 
 /// Service de matchmaking pour générer des bots adaptés au niveau du joueur
 ///
@@ -8,7 +9,7 @@ import 'bot_difficulty.dart';
 /// - La différence vient de : mémoire, précision, réactivité
 /// - Le skill n'est pas discret (Bronze/Argent/Difficile) mais CONTINU basé sur le MMR
 class BotMatchmaking {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   /// Génère une liste de difficultés de bot adaptées au MMR du joueur
   ///

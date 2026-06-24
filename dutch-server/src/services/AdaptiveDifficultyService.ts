@@ -144,7 +144,7 @@ export class AdaptiveDifficultyService {
   async adjustBotDifficulty(
     botBaseMMR: number,
     playerId: string,
-    targetSkillLevel: 'bronze' | 'silver' | 'gold' | 'platinum'
+    targetSkillLevel: 'bronze' | 'silver' | 'difficile'
   ): Promise<BotDifficultyAdjustment> {
     const playerStats = this.playerStats.get(playerId);
     
@@ -194,31 +194,18 @@ export class AdaptiveDifficultyService {
         }
         break;
 
-      case 'gold':
-        // Bots plus difficiles
-        if (playerStats.skillLevel === 'beginner' || playerStats.skillLevel === 'intermediate') {
-          adjustmentFactor = 1.1; // +10% MMR
-          reason = 'Challenge modéré';
-        } else if (playerStats.skillLevel === 'advanced') {
-          adjustmentFactor = 1.2; // +20% MMR
-          reason = 'Challenge élevé';
-        } else {
-          adjustmentFactor = 1.3; // +30% MMR
-          reason = 'Expert : challenge maximum';
-        }
-        break;
-
-      case 'platinum':
-        // Bots très difficiles - doivent battre le joueur systématiquement
+      case 'difficile':
+        // Palier fort unique (fusion Or+Platine = valeurs Platine, les plus fortes).
+        // Bots très difficiles - doivent battre le joueur systématiquement.
         if (playerStats.skillLevel === 'beginner' || playerStats.skillLevel === 'intermediate') {
           adjustmentFactor = 1.4; // +40% MMR
-          reason = 'Platine : très difficile';
+          reason = 'Difficile : très difficile';
         } else if (playerStats.skillLevel === 'advanced') {
           adjustmentFactor = 1.5; // +50% MMR
-          reason = 'Platine : extrêmement difficile';
+          reason = 'Difficile : extrêmement difficile';
         } else {
           adjustmentFactor = 1.6; // +60% MMR
-          reason = 'Platine : quasi-imbattable';
+          reason = 'Difficile : quasi-imbattable';
         }
         break;
     }

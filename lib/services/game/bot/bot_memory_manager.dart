@@ -4,11 +4,12 @@ import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import 'bot_difficulty.dart';
 import 'bot_personality.dart';
+import '../engine_random.dart';
 
 /// Gestion de la mémoire des bots
 /// Principe GRASP: Information Expert - Gère la mémoire du bot
 class BotMemoryManager {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   /// Applique la décroissance de la mémoire du bot
   static void applyMemoryDecay(

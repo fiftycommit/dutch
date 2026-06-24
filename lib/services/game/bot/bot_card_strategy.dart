@@ -14,11 +14,12 @@ import 'discard_tracker.dart';
 import 'duel_tuning.dart';
 import 'human_threat_tracker.dart';
 import 'moi_ml_profile.dart';
+import '../engine_random.dart';
 
 /// Stratégie de gestion des cartes
 /// Principe GRASP: Information Expert - Décide quoi faire avec les cartes
 class BotCardStrategy {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   /// Vérifie si la carte piochée est meilleure (points inférieurs) qu'une autre carte
   /// Retourne true si drawnPoints < existingPoints
@@ -1426,6 +1427,7 @@ class BotCardStrategy {
     BotDifficulty difficulty,
     BotGamePhase phase, {
     BotPersonality? personality,
+    bool skipDelay = false,
   }) async {
     if (gameState.phase != GamePhase.reaction) return false;
     if (bot.isHuman) return false;
@@ -1445,7 +1447,8 @@ class BotCardStrategy {
     );
 
     if (decisionProfile.tier == _CardTier.silver) {
-      return _trySilverReactionMatch(gameState, bot, difficulty, hasKnownMatch);
+      return _trySilverReactionMatch(gameState, bot, difficulty, hasKnownMatch,
+          skipDelay: skipDelay);
     }
 
     // Bronze en blackout: il tente parfois un match totalement au hasard.
@@ -1453,7 +1456,9 @@ class BotCardStrategy {
         bot.hand.isNotEmpty) {
       if (_random.nextDouble() < reactionConclusions.blackoutRecklessChance) {
         final randomIndex = _random.nextInt(bot.hand.length);
-        await Future.delayed(const Duration(milliseconds: 120));
+        if (!skipDelay) {
+          await Future.delayed(const Duration(milliseconds: 120));
+        }
         return GameLogic.matchCard(gameState, bot, randomIndex);
       }
     }
@@ -1477,15 +1482,17 @@ class BotCardStrategy {
 
         if (knownCard.matches(topDiscard)) {
           if (_random.nextDouble() < difficulty.matchAccuracy) {
-            int reactionDelay =
-                (380 * (1 - difficulty.reactionSpeed)).round() + 120;
-            if (personality != null) {
-              reactionDelay =
-                  (reactionDelay * (personality.decisionSpeedMs / 2000.0))
-                      .round()
-                      .clamp(120, 900);
+            if (!skipDelay) {
+              int reactionDelay =
+                  (380 * (1 - difficulty.reactionSpeed)).round() + 120;
+              if (personality != null) {
+                reactionDelay =
+                    (reactionDelay * (personality.decisionSpeedMs / 2000.0))
+                        .round()
+                        .clamp(120, 900);
+              }
+              await Future.delayed(Duration(milliseconds: reactionDelay));
             }
-            await Future.delayed(Duration(milliseconds: reactionDelay));
 
             // GameLogic.matchCard() gère déjà la suppression dans mentalMap
             return GameLogic.matchCard(gameState, bot, i);
@@ -1505,8 +1512,9 @@ class BotCardStrategy {
     GameState gameState,
     Player bot,
     BotDifficulty difficulty,
-    bool hasKnownMatch,
-  ) async {
+    bool hasKnownMatch, {
+    bool skipDelay = false,
+  }) async {
     if (!hasKnownMatch) return false;
 
     final topDiscard = gameState.discardPile.last;
@@ -1536,15 +1544,19 @@ class BotCardStrategy {
       }
     }
 
-    int reactionDelay = (380 * (1 - difficulty.reactionSpeed)).round() + 120;
-    await Future.delayed(Duration(milliseconds: reactionDelay));
+    if (!skipDelay) {
+      int reactionDelay = (380 * (1 - difficulty.reactionSpeed)).round() + 120;
+      await Future.delayed(Duration(milliseconds: reactionDelay));
+    }
 
     final firstSuccess = GameLogic.matchCard(gameState, bot, firstAttemptIndex);
     if (firstSuccess) return true;
     if (retryIndex == null) return false;
 
     if (retryIndex >= bot.hand.length) return false;
-    await Future.delayed(const Duration(milliseconds: 120));
+    if (!skipDelay) {
+      await Future.delayed(const Duration(milliseconds: 120));
+    }
     return GameLogic.matchCard(gameState, bot, retryIndex);
   }
 

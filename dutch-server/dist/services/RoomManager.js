@@ -402,7 +402,9 @@ class RoomManager {
             let bot;
             if (sbmmLevels && botIndex < sbmmLevels.length) {
                 // SBMM : chaque bot a son propre skill level
-                bot = this.createBotWithSkill(room.players.length, sbmmLevels[botIndex]);
+                bot = this.createBotWithSkill(room.players.length, 
+                // fromIndex : rétrocompat ancien index 3 (platinum) → difficile.
+                (0, Player_1.botSkillLevelFromIndex)(sbmmLevels[botIndex]));
             }
             else {
                 bot = this.createBot(room.players.length, difficulty);
@@ -1852,6 +1854,7 @@ class RoomManager {
         if (this.cleanupTimer)
             return;
         this.cleanupTimer = setInterval(() => this.cleanupRooms(), this.cleanupIntervalMs);
+        this.cleanupTimer.unref(); // ne bloque pas la sortie du process (tests)
     }
     cleanupRooms() {
         const now = this.now();
@@ -2360,7 +2363,7 @@ class RoomManager {
             case GameState_1.Difficulty.easy:
                 return Player_1.BotSkillLevel.bronze;
             case GameState_1.Difficulty.hard:
-                return Player_1.BotSkillLevel.platinum;
+                return Player_1.BotSkillLevel.difficile;
             default:
                 return Player_1.BotSkillLevel.silver;
         }
@@ -2450,13 +2453,9 @@ class RoomManager {
             behavior = Player_1.BotBehavior.fast;
         else if (picked.behavior === 'aggressive')
             behavior = Player_1.BotBehavior.aggressive;
-        let skillLevel = Player_1.BotSkillLevel.bronze;
-        if (picked.skillLevel === 'platinum')
-            skillLevel = Player_1.BotSkillLevel.platinum;
-        else if (picked.skillLevel === 'gold')
-            skillLevel = Player_1.BotSkillLevel.gold;
-        else if (picked.skillLevel === 'silver')
-            skillLevel = Player_1.BotSkillLevel.silver;
+        // Parsing centralisé (enum-fidèle) ; défaut historique de ce site = bronze
+        // (inclut une chaîne inconnue/absente → bronze, comme avant).
+        const skillLevel = (0, Player_1.tryParseBotSkillLevel)(picked.skillLevel) ?? Player_1.BotSkillLevel.bronze;
         // Si le profil n'a pas de skillLevel, on retombe sur celui attendu par la difficulté
         const resolvedSkillLevel = picked.skillLevel ? skillLevel : desiredSkill;
         return {

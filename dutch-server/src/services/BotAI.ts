@@ -1679,10 +1679,8 @@ export class BotAI {
         return BotDifficulty.bronze;
       case BotSkillLevel.silver:
         return BotDifficulty.silver;
-      case BotSkillLevel.gold:
-        return BotDifficulty.gold;
-      case BotSkillLevel.platinum:
-        return BotDifficulty.platinum;
+      case BotSkillLevel.difficile:
+        return BotDifficulty.difficult;
       default:
         return BotDifficulty.silver;
     }

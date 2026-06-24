@@ -208,62 +208,36 @@ describe('AdaptiveDifficultyService', () => {
       assert.strictEqual(result.adjustmentFactor, 1);
     });
 
-    it('adjusts gold for beginner/intermediate', async () => {
+    // Fusion gold+platinum → difficile : un seul palier fort (valeurs platinum).
+    it('adjusts difficile for beginner/intermediate', async () => {
       const games = Array.from({ length: 10 }, () => ({
         finalRank: 4, finalScore: 25, avgDecisionTime: 4000, playerName: 'B',
       }));
-      await service.analyzePlayer('gold-beginner', games);
-      const result = await service.adjustBotDifficulty(1000, 'gold-beginner', 'gold');
-      assert.strictEqual(result.adjustmentFactor, 1.1);
-    });
-
-    it('adjusts gold for advanced', async () => {
-      const games = Array.from({ length: 10 }, (_, i) => ({
-        finalRank: i < 5 ? 1 : 2, finalScore: 8, avgDecisionTime: 1200, playerName: 'A',
-      }));
-      await service.analyzePlayer('gold-adv', games);
-      const result = await service.adjustBotDifficulty(1000, 'gold-adv', 'gold');
-      assert.strictEqual(result.adjustmentFactor, 1.2);
-    });
-
-    it('adjusts gold for expert', async () => {
-      const games = Array.from({ length: 5 }, () => ({
-        finalRank: 1, finalScore: 3, avgDecisionTime: 800, playerName: 'E',
-      }));
-      await service.analyzePlayer('gold-expert', games);
-      const result = await service.adjustBotDifficulty(1000, 'gold-expert', 'gold');
-      assert.strictEqual(result.adjustmentFactor, 1.3);
-    });
-
-    it('adjusts platinum for beginner/intermediate', async () => {
-      const games = Array.from({ length: 10 }, () => ({
-        finalRank: 4, finalScore: 25, avgDecisionTime: 4000, playerName: 'B',
-      }));
-      await service.analyzePlayer('plat-beginner', games);
-      const result = await service.adjustBotDifficulty(1000, 'plat-beginner', 'platinum');
+      await service.analyzePlayer('diff-beginner', games);
+      const result = await service.adjustBotDifficulty(1000, 'diff-beginner', 'difficile');
       assert.strictEqual(result.adjustmentFactor, 1.4);
     });
 
-    it('adjusts platinum for advanced', async () => {
+    it('adjusts difficile for advanced', async () => {
       const games = Array.from({ length: 10 }, (_, i) => ({
         finalRank: i < 5 ? 1 : 2, finalScore: 8, avgDecisionTime: 1200, playerName: 'A',
       }));
-      await service.analyzePlayer('plat-adv', games);
-      const result = await service.adjustBotDifficulty(1000, 'plat-adv', 'platinum');
+      await service.analyzePlayer('diff-adv', games);
+      const result = await service.adjustBotDifficulty(1000, 'diff-adv', 'difficile');
       assert.strictEqual(result.adjustmentFactor, 1.5);
     });
 
-    it('adjusts platinum for expert', async () => {
+    it('adjusts difficile for expert', async () => {
       const games = Array.from({ length: 5 }, () => ({
         finalRank: 1, finalScore: 3, avgDecisionTime: 800, playerName: 'E',
       }));
-      await service.analyzePlayer('plat-expert', games);
-      const result = await service.adjustBotDifficulty(1000, 'plat-expert', 'platinum');
+      await service.analyzePlayer('diff-expert', games);
+      const result = await service.adjustBotDifficulty(1000, 'diff-expert', 'difficile');
       assert.strictEqual(result.adjustmentFactor, 1.6);
     });
 
     it('works for all skill levels with each target', async () => {
-      for (const level of ['bronze', 'silver', 'gold', 'platinum'] as const) {
+      for (const level of ['bronze', 'silver', 'difficile'] as const) {
         const result = await service.adjustBotDifficulty(800, 'no-stats-player', level);
         assert.strictEqual(result.baseMMR, 800);
         assert.strictEqual(typeof result.adjustedMMR, 'number');

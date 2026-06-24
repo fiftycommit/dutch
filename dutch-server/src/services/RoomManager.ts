@@ -16,6 +16,8 @@ import {
   Player,
   BotBehavior,
   BotSkillLevel,
+  tryParseBotSkillLevel,
+  botSkillLevelFromIndex,
   calculateScore,
 } from '../models/Player';
 import {
@@ -529,7 +531,8 @@ export class RoomManager {
         // SBMM : chaque bot a son propre skill level
         bot = this.createBotWithSkill(
           room.players.length,
-          sbmmLevels[botIndex] as BotSkillLevel
+          // fromIndex : rétrocompat ancien index 3 (platinum) → difficile.
+          botSkillLevelFromIndex(sbmmLevels[botIndex])
         );
       } else {
         bot = this.createBot(room.players.length, difficulty);
@@ -2185,6 +2188,7 @@ export class RoomManager {
   private startCleanupLoop() {
     if (this.cleanupTimer) return;
     this.cleanupTimer = setInterval(() => this.cleanupRooms(), this.cleanupIntervalMs);
+    this.cleanupTimer.unref(); // ne bloque pas la sortie du process (tests)
   }
 
   private cleanupRooms() {
@@ -2797,7 +2801,7 @@ export class RoomManager {
       case Difficulty.easy:
         return BotSkillLevel.bronze;
       case Difficulty.hard:
-        return BotSkillLevel.platinum;
+        return BotSkillLevel.difficile;
       default:
         return BotSkillLevel.silver;
     }
@@ -2902,10 +2906,9 @@ export class RoomManager {
     if (picked.behavior === 'fast') behavior = BotBehavior.fast;
     else if (picked.behavior === 'aggressive') behavior = BotBehavior.aggressive;
 
-    let skillLevel = BotSkillLevel.bronze;
-    if (picked.skillLevel === 'platinum') skillLevel = BotSkillLevel.platinum;
-    else if (picked.skillLevel === 'gold') skillLevel = BotSkillLevel.gold;
-    else if (picked.skillLevel === 'silver') skillLevel = BotSkillLevel.silver;
+    // Parsing centralisé (enum-fidèle) ; défaut historique de ce site = bronze
+    // (inclut une chaîne inconnue/absente → bronze, comme avant).
+    const skillLevel = tryParseBotSkillLevel(picked.skillLevel) ?? BotSkillLevel.bronze;
 
     // Si le profil n'a pas de skillLevel, on retombe sur celui attendu par la difficulté
     const resolvedSkillLevel = picked.skillLevel ? skillLevel : desiredSkill;

@@ -7,6 +7,7 @@ import 'bot_difficulty.dart';
 import 'bot_memory_manager.dart';
 import 'bot_personality.dart';
 import 'hardcore_bot_config.dart';
+import '../engine_random.dart';
 
 export '../../../models/game_settings.dart' show BotBehavior, BotSkillLevel;
 export 'hardcore_bot_config.dart'
@@ -22,15 +23,13 @@ enum BotGamePhase {
 /// Configuration et utilitaires pour les bots
 /// Principe GRASP: Information Expert - Connaît les règles de configuration
 class BotConfig {
-  static final Random random = Random();
+  static Random get random => EngineRandom.instance;
 
   /// Détermine la phase de jeu du bot
   /// Logique basée sur la CERTITUDE, pas sur des estimations de score
   static BotGamePhase getBotPhase(Player bot, GameState gameState) {
-    // Niveau fort unique : les anciens bots Or utilisent désormais
-    // la logique contextuelle du palier Platine.
-    if (bot.botSkillLevel == BotSkillLevel.gold ||
-        bot.botSkillLevel == BotSkillLevel.platinum) {
+    // Niveau fort unique (difficile) : logique contextuelle du palier Platine.
+    if (bot.botSkillLevel == BotSkillLevel.difficile) {
       return _getPlatinumContextualPhase(bot, gameState);
     }
 
@@ -191,8 +190,7 @@ class BotConfig {
         return BotDifficulty.bronze;
       case BotSkillLevel.silver:
         return BotDifficulty.silver;
-      case BotSkillLevel.gold:
-      case BotSkillLevel.platinum:
+      case BotSkillLevel.difficile:
         return BotDifficulty.difficult;
     }
   }

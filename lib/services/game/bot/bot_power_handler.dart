@@ -15,6 +15,7 @@ import 'bot_gossip_service.dart';
 import 'bot_personality.dart';
 import 'discard_tracker.dart';
 import 'duel_tuning.dart';
+import '../engine_random.dart';
 import 'bot_power_notifications_stub.dart'
     if (dart.library.ui) 'bot_power_notifications_flutter.dart'
     as power_notifications;
@@ -22,7 +23,7 @@ import 'bot_power_notifications_stub.dart'
 /// Gestion des pouvoirs spéciaux des bots
 /// Principe GRASP: Controller - Orchestre l'utilisation des pouvoirs
 class BotPowerHandler {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
   static const int _bronzeHumanValetCooldownTurns = 4;
   static const int _silverHumanValetCooldownTurns = 2;
   static _PlatinumKillWindow? _platinumKillWindow;
@@ -2078,9 +2079,8 @@ class BotPowerHandler {
         return 1;
       case BotSkillLevel.silver:
         return 2;
-      case BotSkillLevel.gold:
-        return 3;
-      case BotSkillLevel.platinum:
+      // difficile hérite de la pondération platinum (= 4).
+      case BotSkillLevel.difficile:
         return 4;
     }
   }

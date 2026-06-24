@@ -15,60 +15,68 @@ class BotGossipOverlay extends StatefulWidget {
 class _BotGossipOverlayState extends State<BotGossipOverlay> {
   Timer? _sweepTimer;
 
+  // Reconstruit l'overlay quand speeches/alliance changent (remplace
+  // ValueListenableBuilder : GossipValue est un observable pur Dart).
+  void _onGossipChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    BotGossipService.instance.speeches.addListener(_onGossipChanged);
+    BotGossipService.instance.alliance.addListener(_onGossipChanged);
     // Rafraîchit l'UI toutes les 500ms pour expirer les speeches visuellement.
     _sweepTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
       final current = BotGossipService.instance.speeches.value;
       final fresh = current.where((s) => !s.isExpired).toList();
       if (fresh.length != current.length) {
+        // déclenche _onGossipChanged via le setter GossipValue
         BotGossipService.instance.speeches.value = fresh;
+      } else {
+        // expiration temporelle sans changement de liste : rebuild quand même
+        setState(() {});
       }
     });
   }
 
   @override
   void dispose() {
+    BotGossipService.instance.speeches.removeListener(_onGossipChanged);
+    BotGossipService.instance.alliance.removeListener(_onGossipChanged);
     _sweepTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final alliance = BotGossipService.instance.alliance.value;
+    final visible = BotGossipService.instance.speeches.value
+        .where((s) => !s.isExpired)
+        .toList()
+        .reversed
+        .take(3)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ValueListenableBuilder<BotAlliance?>(
-          valueListenable: BotGossipService.instance.alliance,
-          builder: (context, alliance, _) {
-            if (alliance == null) return const SizedBox.shrink();
-            return _AllianceBanner(alliance: alliance);
-          },
-        ),
-        ValueListenableBuilder<List<BotSpeech>>(
-          valueListenable: BotGossipService.instance.speeches,
-          builder: (context, speeches, _) {
-            final visible =
-                speeches.where((s) => !s.isExpired).toList().reversed.take(3).toList();
-            if (visible.isEmpty) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final s in visible)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: _SpeechBubble(speech: s),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+        if (alliance != null) _AllianceBanner(alliance: alliance),
+        if (visible.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final s in visible)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: _SpeechBubble(speech: s),
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }

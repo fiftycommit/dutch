@@ -15,7 +15,7 @@ async function simulateGame() {
   // 1. Créer les joueurs
   const players: Player[] = [
     createPlayer('player-1', 'Alice (Humain)', true, 0),
-    createPlayer('bot-1', 'Bob (Bot Équilibré)', false, 1, BotBehavior.balanced, BotSkillLevel.gold),
+    createPlayer('bot-1', 'Bob (Bot Équilibré)', false, 1, BotBehavior.balanced, BotSkillLevel.difficile),
     createPlayer('bot-2', 'Charlie (Bot Agressif)', false, 2, BotBehavior.aggressive, BotSkillLevel.silver),
   ];
 

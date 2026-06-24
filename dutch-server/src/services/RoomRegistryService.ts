@@ -321,6 +321,7 @@ class RoomRegistryService {
     this.syncTimer = setInterval(() => {
       void this.syncFromRoomManager(roomManager);
     }, intervalMs);
+    this.syncTimer.unref(); // ne bloque pas la sortie du process (tests)
   }
 
   stopPeriodicSync(): void {

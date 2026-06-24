@@ -1464,10 +1464,8 @@ class BotAI {
                 return BotDifficulty_1.BotDifficulty.bronze;
             case Player_1.BotSkillLevel.silver:
                 return BotDifficulty_1.BotDifficulty.silver;
-            case Player_1.BotSkillLevel.gold:
-                return BotDifficulty_1.BotDifficulty.gold;
-            case Player_1.BotSkillLevel.platinum:
-                return BotDifficulty_1.BotDifficulty.platinum;
+            case Player_1.BotSkillLevel.difficile:
+                return BotDifficulty_1.BotDifficulty.difficult;
             default:
                 return BotDifficulty_1.BotDifficulty.silver;
         }

@@ -29,18 +29,10 @@ export class BotDifficulty {
     reactionMatchChance: 0.55,
   };
 
-  static readonly gold: BotDifficultyConfig = {
-    name: 'Or',
-    forgetChancePerTurn: 0.01,
-    confusionOnSwap: 0.01,
-    dutchThreshold: 3,
-    reactionSpeed: 0.96,
-    matchAccuracy: 0.97,
-    reactionMatchChance: 0.9,
-  };
-
-  static readonly platinum: BotDifficultyConfig = {
-    name: 'Platine',
+  // Palier fort unique : fusion des anciens Or+Platine (= valeurs Platine, les
+  // plus fortes), alignée sur le client (BotDifficulty.difficult, 'Difficile').
+  static readonly difficult: BotDifficultyConfig = {
+    name: 'Difficile',
     forgetChancePerTurn: 0,
     confusionOnSwap: 0,
     dutchThreshold: 1,
@@ -54,10 +46,9 @@ export class BotDifficulty {
       return this.bronze;
     } else if (mmr < 600) {
       return this.silver;
-    } else if (mmr < 900) {
-      return this.gold;
     } else {
-      return this.platinum;
+      // Anciennes plages Or (600-899) + Platine (>=900) fusionnées.
+      return this.difficult;
     }
   }
 
@@ -67,10 +58,11 @@ export class BotDifficulty {
         return this.bronze;
       case 'Argent':
         return this.silver;
+      // Legacy 'Or'/'Platine' fusionnés en 'Difficile'.
       case 'Or':
-        return this.gold;
       case 'Platine':
-        return this.platinum;
+      case 'Difficile':
+        return this.difficult;
       default:
         return this.silver;
     }

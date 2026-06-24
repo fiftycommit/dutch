@@ -16,8 +16,7 @@ import 'package:dutch_game/services/game/bot/bot_power_handler.dart';
 import 'package:dutch_game/services/logging/game_logger_service.dart';
 
 const List<BotSkillLevel> _orderedSkills = [
-  BotSkillLevel.platinum,
-  BotSkillLevel.gold,
+  BotSkillLevel.difficile,
   BotSkillLevel.silver,
   BotSkillLevel.bronze,
 ];
@@ -89,9 +88,8 @@ class _CliConfig {
     }
     final b = skillCounts[BotSkillLevel.bronze] ?? 0;
     final s = skillCounts[BotSkillLevel.silver] ?? 0;
-    final g = skillCounts[BotSkillLevel.gold] ?? 0;
-    final p = skillCounts[BotSkillLevel.platinum] ?? 0;
-    return 'B$b S$s G$g P$p';
+    final d = skillCounts[BotSkillLevel.difficile] ?? 0;
+    return 'B$b S$s D$d';
   }
 
   factory _CliConfig.fromArgs(List<String> args) {
@@ -115,14 +113,12 @@ class _CliConfig {
         ? <BotSkillLevel, int>{
             BotSkillLevel.bronze: 0,
             BotSkillLevel.silver: 0,
-            BotSkillLevel.gold: 0,
-            BotSkillLevel.platinum: 2,
+            BotSkillLevel.difficile: 2,
           }
         : <BotSkillLevel, int>{
             BotSkillLevel.bronze: readInt('--bronze', 1).clamp(0, 20),
             BotSkillLevel.silver: readInt('--silver', 1).clamp(0, 20),
-            BotSkillLevel.gold: readInt('--gold', 1).clamp(0, 20),
-            BotSkillLevel.platinum: readInt('--platinum', 1).clamp(0, 20),
+            BotSkillLevel.difficile: readInt('--difficile', 1).clamp(0, 20),
           };
 
     final totalPlayers = skillCounts.values.fold(0, (a, b) => a + b);
@@ -300,7 +296,7 @@ class _LadderSimulator {
     final winnerSkill = winner?.botSkillLevel;
     if (inspectThisGame &&
         winner != null &&
-        winnerSkill != BotSkillLevel.platinum &&
+        winnerSkill != BotSkillLevel.difficile &&
         _capturedLosses < config.inspectLosses) {
       final log = GameLoggerService.instance.getLogContent();
       lossInsight = _buildLossInsight(
@@ -348,7 +344,7 @@ class _LadderSimulator {
             name: slot.name,
             isHuman: false,
             botBehavior: slot.behavior,
-            botSkillLevel: BotSkillLevel.platinum,
+            botSkillLevel: BotSkillLevel.difficile,
             position: position,
           ),
         );
@@ -359,8 +355,7 @@ class _LadderSimulator {
     final buildOrder = <BotSkillLevel>[
       BotSkillLevel.bronze,
       BotSkillLevel.silver,
-      BotSkillLevel.gold,
-      BotSkillLevel.platinum,
+      BotSkillLevel.difficile,
     ];
 
     final slots = <_PlayerSeatSlot>[];
@@ -665,38 +660,32 @@ class _SimulationAggregate {
   final Map<BotSkillLevel, _SkillStats> _bySkill = {
     BotSkillLevel.bronze: _SkillStats(),
     BotSkillLevel.silver: _SkillStats(),
-    BotSkillLevel.gold: _SkillStats(),
-    BotSkillLevel.platinum: _SkillStats(),
+    BotSkillLevel.difficile: _SkillStats(),
   };
   final Map<BotSkillLevel, int> _gameWinsBySkill = {
     BotSkillLevel.bronze: 0,
     BotSkillLevel.silver: 0,
-    BotSkillLevel.gold: 0,
-    BotSkillLevel.platinum: 0,
+    BotSkillLevel.difficile: 0,
   };
   final Map<BotSkillLevel, int> _gameLastBySkill = {
     BotSkillLevel.bronze: 0,
     BotSkillLevel.silver: 0,
-    BotSkillLevel.gold: 0,
-    BotSkillLevel.platinum: 0,
+    BotSkillLevel.difficile: 0,
   };
   final Map<BotSkillLevel, _GameSkillStats> _gameSkillRollup = {
     BotSkillLevel.bronze: _GameSkillStats(),
     BotSkillLevel.silver: _GameSkillStats(),
-    BotSkillLevel.gold: _GameSkillStats(),
-    BotSkillLevel.platinum: _GameSkillStats(),
+    BotSkillLevel.difficile: _GameSkillStats(),
   };
   final Map<BotSkillLevel, Map<int, int>> _seatAppearancesBySkill = {
     BotSkillLevel.bronze: <int, int>{},
     BotSkillLevel.silver: <int, int>{},
-    BotSkillLevel.gold: <int, int>{},
-    BotSkillLevel.platinum: <int, int>{},
+    BotSkillLevel.difficile: <int, int>{},
   };
   final Map<BotSkillLevel, Map<int, int>> _seatWinsBySkill = {
     BotSkillLevel.bronze: <int, int>{},
     BotSkillLevel.silver: <int, int>{},
-    BotSkillLevel.gold: <int, int>{},
-    BotSkillLevel.platinum: <int, int>{},
+    BotSkillLevel.difficile: <int, int>{},
   };
 
   int _platWinBronzeLastGames = 0;
@@ -753,7 +742,7 @@ class _SimulationAggregate {
       _gameLastBySkill[last.skill] = (_gameLastBySkill[last.skill] ?? 0) + 1;
     }
 
-    if (winner?.skill == BotSkillLevel.platinum &&
+    if (winner?.skill == BotSkillLevel.difficile &&
         last?.skill == BotSkillLevel.bronze) {
       _platWinBronzeLastGames++;
     }
@@ -809,16 +798,13 @@ class _SimulationAggregate {
       rollup.worstRankSum += maxRank;
     }
 
-    final pAvg = avgRankBySkill[BotSkillLevel.platinum];
-    final gAvg = avgRankBySkill[BotSkillLevel.gold];
+    final dAvg = avgRankBySkill[BotSkillLevel.difficile];
     final sAvg = avgRankBySkill[BotSkillLevel.silver];
     final bAvg = avgRankBySkill[BotSkillLevel.bronze];
-    if (pAvg != null &&
-        gAvg != null &&
+    if (dAvg != null &&
         sAvg != null &&
         bAvg != null &&
-        pAvg < gAvg &&
-        gAvg < sAvg &&
+        dAvg < sAvg &&
         sAvg < bAvg) {
       _orderedAverageRanksGames++;
     }
@@ -1006,9 +992,7 @@ String _skillShort(BotSkillLevel skill) {
       return 'B';
     case BotSkillLevel.silver:
       return 'S';
-    case BotSkillLevel.gold:
-      return 'G';
-    case BotSkillLevel.platinum:
-      return 'P';
+    case BotSkillLevel.difficile:
+      return 'D';
   }
 }

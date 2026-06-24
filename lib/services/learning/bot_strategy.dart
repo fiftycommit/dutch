@@ -150,19 +150,19 @@ class HardBotStrategy implements BotStrategy {
 /// Principe GRASP: Creator - Responsable de la création des stratégies
 class BotStrategyFactory {
   static BotStrategy createStrategy(String skillLevel) {
-    switch (skillLevel.toLowerCase()) {
-      case 'bronze':
-      case 'easy':
+    // Vocabulaire Difficulty ('easy'/'medium') conservé tel quel (distinct du skill).
+    final s = skillLevel.toLowerCase();
+    if (s == 'easy') return EasyBotStrategy();
+    if (s == 'medium') return MediumBotStrategy();
+    // Interprétation skill centralisée via le helper (défaut silver → Medium,
+    // identique à l'ancien default). 'hard'/'gold'/'platinum' → difficile → Hard.
+    switch (BotSkillLevel.fromString(skillLevel)) {
+      case BotSkillLevel.bronze:
         return EasyBotStrategy();
-      case 'silver':
-      case 'medium':
+      case BotSkillLevel.silver:
         return MediumBotStrategy();
-      case 'gold':
-      case 'platinum':
-      case 'hard':
+      case BotSkillLevel.difficile:
         return HardBotStrategy();
-      default:
-        return MediumBotStrategy();
     }
   }
 }

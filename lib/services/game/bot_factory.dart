@@ -116,18 +116,9 @@ class BotFactory {
     });
   }
 
-  static BotSkillLevel _parseSkillLevel(String raw) {
-    switch (raw) {
-      case 'bronze':
-        return BotSkillLevel.bronze;
-      case 'gold':
-      case 'platinum':
-        return BotSkillLevel.gold;
-      case 'silver':
-      default:
-        return BotSkillLevel.silver;
-    }
-  }
+  static BotSkillLevel _parseSkillLevel(String raw) =>
+      // Parsing centralisé (gold/platinum/or/platine → difficile via fromString).
+      BotSkillLevel.fromString(raw);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MANUAL BOTS
@@ -191,7 +182,7 @@ class BotFactory {
     final mixSkills = [
       BotSkillLevel.bronze,
       BotSkillLevel.silver,
-      BotSkillLevel.platinum,
+      BotSkillLevel.difficile,
     ];
     final players = <Player>[];
 
@@ -579,7 +570,7 @@ class BotFactory {
         return BotSkillLevel.silver;
       case Difficulty.hard:
       case Difficulty.platinum:
-        return BotSkillLevel.gold;
+        return BotSkillLevel.difficile;
       case Difficulty.mix:
         return BotSkillLevel.silver;
     }

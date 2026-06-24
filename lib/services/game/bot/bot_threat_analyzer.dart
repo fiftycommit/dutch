@@ -6,6 +6,7 @@ import 'bot_difficulty.dart';
 import 'bot_dutch_strategy.dart';
 import 'bot_memory_manager.dart';
 import 'discard_tracker.dart';
+import '../engine_random.dart';
 
 /// Mode de ciblage pour les pouvoirs
 enum TargetMode {
@@ -121,7 +122,7 @@ class _MatchSignal {
 /// Analyse des menaces et stratégies de ciblage
 /// Principe GRASP: Information Expert - Analyse l'état du jeu pour identifier les menaces
 class BotThreatAnalyzer {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   /// 🔥 HARDCORE : Noms des difficultés "impitoyables"
   static const hardcoreDifficultyNames = {

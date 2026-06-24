@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { sanitizeId } from '../utils/sanitize';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
+import { BotSkillLevel, tryParseBotSkillLevel } from '../models/Player';
 import { QLearningService } from './QLearningService';
 import { NeuralNetworkService } from './NeuralNetworkService';
 import { TournamentService } from './TournamentService';
@@ -301,11 +302,12 @@ export class BotLearningService {
    * Récupère le MMR initial selon le niveau
    */
   private getInitialMMR(skillLevel: string): number {
-    switch (skillLevel) {
-      case 'bronze': return 800;
-      case 'silver': return 1200;
-      case 'gold': return 1600;
-      case 'platinum': return 2000;
+    // Interprétation skill centralisée ; défaut historique (inconnu) = 1000.
+    switch (tryParseBotSkillLevel(skillLevel)) {
+      case BotSkillLevel.bronze: return 800;
+      case BotSkillLevel.silver: return 1200;
+      // difficile = valeur platinum (la plus forte).
+      case BotSkillLevel.difficile: return 2000;
       default: return 1000;
     }
   }
@@ -373,30 +375,24 @@ export class BotLearningService {
         break;
     }
 
-    // Ajuster selon le niveau
-    switch (skillLevel) {
-      case 'bronze':
+    // Ajuster selon le niveau (interprétation skill centralisée ; inconnu = aucun ajustement)
+    switch (tryParseBotSkillLevel(skillLevel)) {
+      case BotSkillLevel.bronze:
         baseParams.memoryAccuracy = 0.5;
         baseParams.memoryRetention = 0.4;
         baseParams.powerDefensiveRate = 0.3;
         baseParams.powerOffensiveRate = 0.2;
         baseParams.adaptability = 0.3;
         break;
-      case 'silver':
+      case BotSkillLevel.silver:
         baseParams.memoryAccuracy = 0.7;
         baseParams.memoryRetention = 0.7;
         baseParams.powerDefensiveRate = 0.5;
         baseParams.powerOffensiveRate = 0.4;
         baseParams.adaptability = 0.5;
         break;
-      case 'gold':
-        baseParams.memoryAccuracy = 0.9;
-        baseParams.memoryRetention = 0.85;
-        baseParams.powerDefensiveRate = 0.7;
-        baseParams.powerOffensiveRate = 0.6;
-        baseParams.adaptability = 0.7;
-        break;
-      case 'platinum':
+      // difficile = params platinum (les plus forts) — fusion gold+platinum.
+      case BotSkillLevel.difficile:
         baseParams.memoryAccuracy = 0.98;
         baseParams.memoryRetention = 0.95;
         baseParams.powerDefensiveRate = 0.85;

@@ -737,7 +737,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       pairCounts[key] = (pairCounts[key] ?? 0) + 1;
     }
 
-    const levelOrder = {'bronze': 0, 'silver': 1, 'gold': 2};
+    const levelOrder = {'bronze': 0, 'silver': 1, 'difficile': 2};
     const behaviorOrder = {
       'balanced': 0,
       'fast': 1,
@@ -813,10 +813,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         levelLabel = 'Argent';
         accent = const Color(0xFFB0B0B0);
         break;
-      case 'gold':
+      case 'difficile':
       default:
-        levelLabel = 'Or';
-        accent = const Color(0xFFFFC107);
+        levelLabel = 'Difficile';
+        accent = const Color(0xFFEF5350);
         break;
     }
 

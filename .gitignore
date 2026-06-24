@@ -99,3 +99,7 @@ dutch-server/data/dutch.db-wal
 dutch-server/data/player-learning/**/*.json
 !dutch-server/data/player-learning/**/.gitkeep
 dutch-server/data/firebase-service-account.json
+
+# FVM Version Cache
+.fvm/
+.fvmrc

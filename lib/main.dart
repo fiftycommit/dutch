@@ -15,6 +15,7 @@ import 'core/interfaces/i_bot_ai_service.dart';
 import 'core/interfaces/i_stats_service.dart';
 import 'firebase_options.dart';
 import 'models/game_settings.dart';
+import 'models/app_theme_ext.dart';
 import 'providers/game_provider.dart';
 import 'providers/game_tracking_provider.dart';
 import 'providers/multiplayer_game_provider.dart';

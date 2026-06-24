@@ -68,11 +68,8 @@ class GameLoggerService {
           p.isHuman ? 'HUMAIN' : 'BOT (${p.botBehavior?.name ?? "unknown"})';
       _logBuffer.writeln('  [${i + 1}] ${p.name} - $type');
       if (!p.isHuman) {
-        final rawSkill = p.botSkillLevel?.name;
-        final skill = switch (rawSkill) {
-          'gold' || 'platinum' => 'difficult',
-          _ => rawSkill ?? '?',
-        };
+        // .name vaut désormais directement bronze/silver/difficile.
+        final skill = p.botSkillLevel?.name ?? '?';
         final hasAI = p.aiParameters != null && p.aiParameters!.isNotEmpty;
         final src = hasAI ? 'SERVEUR' : 'LOCAL';
         if (hasAI) {
@@ -179,10 +176,9 @@ class GameLoggerService {
             '│ Score connu: $knownScore pts + $unknownCount carte(s) inconnue(s) (confiance: ${(confidence * 100).toInt()}%)');
       }
 
-      // Comptage de cartes (pour bots Or/Platine/Hardcore uniquement)
+      // Comptage de cartes (pour bots Difficile/Hardcore uniquement)
       final skillLevel = player.botSkillLevel;
-      final isSmartBot = skillLevel == BotSkillLevel.gold ||
-          skillLevel == BotSkillLevel.platinum ||
+      final isSmartBot = skillLevel == BotSkillLevel.difficile ||
           (player.aiParameters != null &&
               player.aiParameters!['hardcoreMode'] == 1.0);
       if (isSmartBot && allPlayers != null) {

@@ -450,7 +450,7 @@ GameState _createTestGameState() {
       isHuman: false,
       position: 2,
       botBehavior: BotBehavior.aggressive,
-      botSkillLevel: BotSkillLevel.gold,
+      botSkillLevel: BotSkillLevel.difficile,
     ),
   ];
 

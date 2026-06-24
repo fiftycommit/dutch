@@ -132,6 +132,7 @@ class PublicRoomService {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 60000);
+    this.cleanupInterval.unref(); // ne bloque pas la sortie du process (tests)
 
     console.log('⏰ Timer de nettoyage des rooms publiques démarré');
   }

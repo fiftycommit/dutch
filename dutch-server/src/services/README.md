@@ -99,7 +99,7 @@ import { Difficulty } from './models/GameState';
 // Créer des joueurs
 const players = [
   createPlayer('1', 'Humain', true, 0),
-  createPlayer('2', 'Bot 1', false, 1, BotBehavior.balanced, BotSkillLevel.gold),
+  createPlayer('2', 'Bot 1', false, 1, BotBehavior.balanced, BotSkillLevel.difficile),
   createPlayer('3', 'Bot 2', false, 2, BotBehavior.aggressive, BotSkillLevel.silver),
 ];
 

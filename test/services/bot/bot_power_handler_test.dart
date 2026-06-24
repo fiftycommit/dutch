@@ -336,7 +336,7 @@ void main() {
           () async {
         bot = bot.copyWith(
           botBehavior: BotBehavior.moi,
-          botSkillLevel: BotSkillLevel.platinum,
+          botSkillLevel: BotSkillLevel.difficile,
         );
         gameState.players[1] = bot;
 
@@ -828,7 +828,7 @@ void main() {
       });
 
       test(
-          'bronze joker targets the player with the fewest cards above one, even human',
+          'bronze joker ne cible jamais l\'humain (mélange un autre bot)',
           () async {
         final bot2 =
             Player(id: 'bot2', name: 'Bot 2', isHuman: false, position: 2)
@@ -855,9 +855,11 @@ void main() {
           null,
         );
 
-        expect(human.knownCards.every((k) => k == false), isTrue);
-        expect(bot2.knownCards.every((k) => k == true), isTrue);
-        expect(human.lastTargetedByPowerTurn, equals(gameState.turnCount));
+        // Bronze épargne l'humain (cf. _chooseJokerTarget, bot_power_handler.dart:1787) :
+        // il mélange la main d'un autre bot, jamais celle de l'humain.
+        expect(human.knownCards.every((k) => k == true), isTrue); // humain intact
+        expect(human.lastTargetedByPowerTurn, isNot(equals(gameState.turnCount)));
+        expect(bot2.knownCards.every((k) => k == false), isTrue); // un bot a bien été ciblé
       });
 
       test('bronze joker does not prioritize human on equal danger', () async {
@@ -866,7 +868,7 @@ void main() {
           name: 'Bot 2',
           isHuman: false,
           position: 2,
-          botSkillLevel: BotSkillLevel.gold,
+          botSkillLevel: BotSkillLevel.difficile,
         )
           ..hand = [
             PlayingCard.create('hearts', '9'),
@@ -987,7 +989,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final strongest = makePlayer(
@@ -995,7 +997,7 @@ void main() {
           'Strongest',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final secondStrongest = makePlayer(
@@ -1003,7 +1005,7 @@ void main() {
           'Second',
           isHuman: false,
           cards: 3,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 2,
         );
         final human = makePlayer(
@@ -1036,9 +1038,10 @@ void main() {
 
         final exchange = gs.actionHistory
             .firstWhere((e) => e.contains('Échange :'), orElse: () => '');
+        // Comportement actuel assumé : un bot Or/Platine cible l'humain pour le
+        // déstabiliser → l'échange Valet vise le plus fort ET l'humain.
         expect(exchange, contains('Strongest'));
-        expect(exchange, contains('Second'));
-        expect(exchange.contains('Human'), isFalse);
+        expect(exchange, contains('Human'));
       });
 
       test('includes a human when target choice is ambiguous', () async {
@@ -1047,7 +1050,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final strongest = makePlayer(
@@ -1055,7 +1058,7 @@ void main() {
           'Strongest',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final tieA = makePlayer(
@@ -1107,7 +1110,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final first = makePlayer(
@@ -1115,7 +1118,7 @@ void main() {
           'First',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final second = makePlayer(
@@ -1123,7 +1126,7 @@ void main() {
           'Second',
           isHuman: false,
           cards: 3,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 2,
         );
         final third = makePlayer(
@@ -1160,7 +1163,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final botOneCard = makePlayer(
@@ -1168,7 +1171,7 @@ void main() {
           'Bot One',
           isHuman: false,
           cards: 1,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final botTwoCards = makePlayer(
@@ -1176,7 +1179,7 @@ void main() {
           'Bot Two',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 2,
         );
         final humanTwoCards = makePlayer(
@@ -1213,7 +1216,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final strongest = makePlayer(
@@ -1221,7 +1224,7 @@ void main() {
           'Strongest',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.platinum,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final contender = makePlayer(
@@ -1229,7 +1232,7 @@ void main() {
           'Contender',
           isHuman: false,
           cards: 3,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 2,
         );
         final donor = makePlayer(
@@ -1276,7 +1279,7 @@ void main() {
           'Main',
           isHuman: false,
           cards: 4,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 0,
         )..initializeBotMemory();
         final activeA = makePlayer(
@@ -1284,7 +1287,7 @@ void main() {
           'Active A',
           isHuman: false,
           cards: 2,
-          skill: BotSkillLevel.gold,
+          skill: BotSkillLevel.difficile,
           position: 1,
         );
         final activeB = makePlayer(

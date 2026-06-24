@@ -28,25 +28,15 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(silver.matchAccuracy, 0.85);
             node_assert_1.default.strictEqual(silver.reactionMatchChance, 0.55);
         });
-        (0, node_test_1.it)('gold has correct values', () => {
-            const gold = BotDifficulty_1.BotDifficulty.gold;
-            node_assert_1.default.strictEqual(gold.name, 'Or');
-            node_assert_1.default.strictEqual(gold.forgetChancePerTurn, 0.01);
-            node_assert_1.default.strictEqual(gold.confusionOnSwap, 0.01);
-            node_assert_1.default.strictEqual(gold.dutchThreshold, 3);
-            node_assert_1.default.strictEqual(gold.reactionSpeed, 0.96);
-            node_assert_1.default.strictEqual(gold.matchAccuracy, 0.97);
-            node_assert_1.default.strictEqual(gold.reactionMatchChance, 0.9);
-        });
-        (0, node_test_1.it)('platinum has perfect values', () => {
-            const platinum = BotDifficulty_1.BotDifficulty.platinum;
-            node_assert_1.default.strictEqual(platinum.name, 'Platine');
-            node_assert_1.default.strictEqual(platinum.forgetChancePerTurn, 0.0);
-            node_assert_1.default.strictEqual(platinum.confusionOnSwap, 0.0);
-            node_assert_1.default.strictEqual(platinum.dutchThreshold, 1);
-            node_assert_1.default.strictEqual(platinum.reactionSpeed, 1.0);
-            node_assert_1.default.strictEqual(platinum.matchAccuracy, 1.0);
-            node_assert_1.default.strictEqual(platinum.reactionMatchChance, 1.0);
+        (0, node_test_1.it)('difficult has the strongest values (fusion ex-Or+Platine = Platine)', () => {
+            const difficult = BotDifficulty_1.BotDifficulty.difficult;
+            node_assert_1.default.strictEqual(difficult.name, 'Difficile');
+            node_assert_1.default.strictEqual(difficult.forgetChancePerTurn, 0.0);
+            node_assert_1.default.strictEqual(difficult.confusionOnSwap, 0.0);
+            node_assert_1.default.strictEqual(difficult.dutchThreshold, 1);
+            node_assert_1.default.strictEqual(difficult.reactionSpeed, 1.0);
+            node_assert_1.default.strictEqual(difficult.matchAccuracy, 1.0);
+            node_assert_1.default.strictEqual(difficult.reactionMatchChance, 1.0);
         });
     });
     (0, node_test_1.describe)('fromMMR', () => {
@@ -60,15 +50,11 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(450).name, 'Argent');
             node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(599).name, 'Argent');
         });
-        (0, node_test_1.it)('returns gold for MMR 600-899', () => {
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(600).name, 'Or');
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(750).name, 'Or');
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(899).name, 'Or');
-        });
-        (0, node_test_1.it)('returns platinum for MMR >= 900', () => {
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(900).name, 'Platine');
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(1000).name, 'Platine');
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(2000).name, 'Platine');
+        (0, node_test_1.it)('returns difficile for MMR >= 600 (ex Or 600-899 + Platine >=900 fusionnés)', () => {
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(600).name, 'Difficile');
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(750).name, 'Difficile');
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(900).name, 'Difficile');
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromMMR(2000).name, 'Difficile');
         });
     });
     (0, node_test_1.describe)('fromRank', () => {
@@ -78,11 +64,10 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
         (0, node_test_1.it)('returns correct difficulty for Argent rank', () => {
             node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Argent').name, 'Argent');
         });
-        (0, node_test_1.it)('returns correct difficulty for Or rank', () => {
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Or').name, 'Or');
-        });
-        (0, node_test_1.it)('returns correct difficulty for Platine rank', () => {
-            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Platine').name, 'Platine');
+        (0, node_test_1.it)('returns difficile for legacy Or/Platine ranks + Difficile', () => {
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Or').name, 'Difficile');
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Platine').name, 'Difficile');
+            node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Difficile').name, 'Difficile');
         });
         (0, node_test_1.it)('returns silver as default for unknown rank', () => {
             node_assert_1.default.strictEqual(BotDifficulty_1.BotDifficulty.fromRank('Unknown').name, 'Argent');
@@ -94,8 +79,7 @@ const BotDifficulty_1 = require("../services/BotDifficulty");
             const levels = [
                 BotDifficulty_1.BotDifficulty.bronze,
                 BotDifficulty_1.BotDifficulty.silver,
-                BotDifficulty_1.BotDifficulty.gold,
-                BotDifficulty_1.BotDifficulty.platinum,
+                BotDifficulty_1.BotDifficulty.difficult,
             ];
             // forgetChancePerTurn should decrease (lower = better memory)
             for (let i = 1; i < levels.length; i++) {

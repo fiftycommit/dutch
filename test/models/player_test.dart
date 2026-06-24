@@ -21,12 +21,12 @@ void main() {
         name: 'Bot',
         isHuman: false,
         botBehavior: BotBehavior.aggressive,
-        botSkillLevel: BotSkillLevel.gold,
+        botSkillLevel: BotSkillLevel.difficile,
       );
       
       expect(player.isHuman, false);
       expect(player.botBehavior, BotBehavior.aggressive);
-      expect(player.botSkillLevel, BotSkillLevel.gold);
+      expect(player.botSkillLevel, BotSkillLevel.difficile);
     });
 
     test('clone creates independent copy', () {
@@ -378,7 +378,7 @@ void main() {
         'name': 'Bot',
         'isHuman': false,
         'botBehavior': BotBehavior.aggressive.index,
-        'botSkillLevel': BotSkillLevel.gold.index,
+        'botSkillLevel': BotSkillLevel.difficile.index,
         'position': 1,
         'hand': <Map<String, dynamic>>[],
         'knownCards': <bool>[],
@@ -387,7 +387,7 @@ void main() {
       final bot = Player.fromJson(json);
       
       expect(bot.botBehavior, BotBehavior.aggressive);
-      expect(bot.botSkillLevel, BotSkillLevel.gold);
+      expect(bot.botSkillLevel, BotSkillLevel.difficile);
     });
 
     test('fromJson handles spectator', () {

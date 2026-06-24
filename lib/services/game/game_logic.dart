@@ -6,12 +6,13 @@ import '../../models/game_sub_states.dart';
 import '../../models/game_settings.dart';
 import '../../utils/action_history_messages.dart';
 import '../logging/game_logger_service.dart';
+import 'engine_random.dart';
 import 'bot/bot_dutch_strategy.dart';
 import 'bot/bot_power_handler.dart';
 import 'bot/discard_tracker.dart';
 
 class GameLogic {
-  static final Random _random = Random();
+  static Random get _random => EngineRandom.instance;
 
   static GameState initializeGame({
     required List<Player> players,
@@ -609,13 +610,13 @@ class GameLogic {
   static bool _usesBinaryUnknownModel(Player player) {
     if (player.isHuman) return false;
     final skill = player.botSkillLevel;
-    return skill == BotSkillLevel.gold || skill == BotSkillLevel.platinum;
+    return skill == BotSkillLevel.difficile;
   }
 
   static bool _usesAdvancedJokerModel(Player player) {
     if (player.isHuman) return false;
     final skill = player.botSkillLevel;
-    return skill == BotSkillLevel.gold || skill == BotSkillLevel.platinum;
+    return skill == BotSkillLevel.difficile;
   }
 
   static bool _shouldBronzeIgnoreSwap(Player player) {
@@ -677,7 +678,7 @@ class GameLogic {
     }
 
     List<PlayingCard> shuffledHand = List.from(targetPlayer.hand);
-    shuffledHand.shuffle(Random());
+    shuffledHand.shuffle(EngineRandom.instance);
     targetPlayer.hand = shuffledHand;
 
     targetPlayer.knownCards = List.filled(targetPlayer.hand.length, false);

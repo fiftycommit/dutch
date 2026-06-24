@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_settings.dart';
+import '../models/app_theme_ext.dart';
 import '../core/interfaces/i_haptic_service.dart';
 import '../core/service_locator.dart';
 import '../services/ui/sound_service.dart';

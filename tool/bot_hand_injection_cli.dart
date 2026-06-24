@@ -551,7 +551,7 @@ class _CliConfig {
         help: true,
         runMode: _RunMode.turn,
         botName: 'BOT',
-        botSkill: BotSkillLevel.platinum,
+        botSkill: BotSkillLevel.difficile,
         botBehavior: BotBehavior.balanced,
         botHand: [],
         botKnownIndices: [],
@@ -758,26 +758,18 @@ _RunMode _parseRunMode(String raw) {
 }
 
 BotSkillLevel _parseSkill(String raw) {
+  // Alias courts spécifiques au CLI, normalisés vers les libellés canoniques.
+  const shortAliases = {'b': 'bronze', 's': 'silver', 'g': 'gold', 'p': 'platinum'};
   final normalized = raw.trim().toLowerCase();
-  switch (normalized) {
-    case 'bronze':
-    case 'b':
-      return BotSkillLevel.bronze;
-    case 'silver':
-    case 'argent':
-    case 's':
-      return BotSkillLevel.silver;
-    case 'gold':
-    case 'or':
-    case 'g':
-      return BotSkillLevel.gold;
-    case 'platinum':
-    case 'platine':
-    case 'p':
-      return BotSkillLevel.platinum;
-    default:
-      throw FormatException('niveau inconnu: $raw');
+  final canonical = shortAliases[normalized] ?? normalized;
+  // Ensemble accepté historiquement par ce CLI (throw sinon — comportement identique :
+  // 'difficile'/'hard' restent refusés ici, contrairement au helper plus large).
+  const accepted = {'bronze', 'silver', 'argent', 'gold', 'or', 'platinum', 'platine'};
+  if (!accepted.contains(canonical)) {
+    throw FormatException('niveau inconnu: $raw');
   }
+  // Interprétation skill centralisée (enum-fidèle ; défaut jamais atteint ici).
+  return BotSkillLevel.fromString(canonical);
 }
 
 BotBehavior _parseBehavior(String raw) {
@@ -849,7 +841,7 @@ List<_OpponentSpec> _parseOpponents(String raw) {
     final cardsRaw = chunks.sublist(2).join(':');
     final hand = _parseCardList(cardsRaw);
     final isHuman = type == 'human' || type == 'h';
-    final skill = isHuman ? BotSkillLevel.gold : _parseSkill(type);
+    final skill = isHuman ? BotSkillLevel.difficile : _parseSkill(type);
 
     opponents.add(
       _OpponentSpec(

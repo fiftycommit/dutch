@@ -10,7 +10,7 @@ describe('BotAI', () => {
   function createTestPlayers(): Player[] {
     const human = createPlayer('p1', 'Human', true, 0);
     const bot1 = createPlayer('bot1', 'Bot Fast', false, 1, BotBehavior.fast, BotSkillLevel.silver);
-    const bot2 = createPlayer('bot2', 'Bot Balanced', false, 2, BotBehavior.balanced, BotSkillLevel.gold);
+    const bot2 = createPlayer('bot2', 'Bot Balanced', false, 2, BotBehavior.balanced, BotSkillLevel.difficile);
     return [human, bot1, bot2];
   }
 
@@ -67,7 +67,7 @@ describe('BotAI', () => {
 
         // Give bot very low cards (score = 2) to encourage Dutch
         // Use platinum to avoid minTurnsBeforeDutch delay
-        testState.players[1].botSkillLevel = BotSkillLevel.platinum;
+        testState.players[1].botSkillLevel = BotSkillLevel.difficile;
         testState.players[1].hand = [
           createCard('hearts', 'A'), // 1 pt
           createCard('diamonds', 'A'), // 1 pt
@@ -149,7 +149,7 @@ describe('BotAI', () => {
           createCard('diamonds', '4'),
         ];
         state.players[1].knownCards = [true, false, false, false];
-        state.players[1].botSkillLevel = BotSkillLevel.platinum; // High accuracy
+        state.players[1].botSkillLevel = BotSkillLevel.difficile; // High accuracy
 
         const handSizeBefore = state.players[1].hand.length;
         const result = await BotAI.tryReactionMatch(state, state.players[1], 1000);
@@ -316,7 +316,7 @@ describe('BotAI', () => {
     it('gold bot plays well', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
-      state.players[1].botSkillLevel = BotSkillLevel.gold;
+      state.players[1].botSkillLevel = BotSkillLevel.difficile;
 
       await BotAI.playBotTurn(state);
       assert.ok(true);
@@ -325,7 +325,7 @@ describe('BotAI', () => {
     it('platinum bot plays optimally', async () => {
       const state = createInitializedGameState();
       state.currentPlayerIndex = 1;
-      state.players[1].botSkillLevel = BotSkillLevel.platinum;
+      state.players[1].botSkillLevel = BotSkillLevel.difficile;
 
       await BotAI.playBotTurn(state);
       assert.ok(true);

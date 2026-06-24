@@ -1,26 +1,67 @@
-import 'package:flutter/material.dart';
 import 'game_state.dart';
 
 enum Difficulty { easy, medium, hard, platinum, mix }
 
 enum BotBehavior { fast, aggressive, balanced, moi }
 
-enum BotSkillLevel { bronze, silver, gold, platinum }
+enum BotSkillLevel {
+  bronze,
+  silver,
+  difficile;
 
-/// Thème visuel de l'application.
-/// [system] suit le réglage de l'appareil, [green] applique la palette verte du jeu solo.
-enum AppTheme { system, light, dark, green }
+  /// Point de traduction UNIQUE string→skill (rétrocompat des libellés stockés).
+  ///
+  /// Les anciens paliers `gold`/`platinum` (+ libellés `or`/`platine`/`hard`)
+  /// sont fusionnés en [difficile] (refonte 93b6d42). Les chaînes non reconnues
+  /// renvoient `null` pour que CHAQUE appelant applique son propre défaut
+  /// historique (silver / bronze / exception…) sans en cacher aucun.
+  static BotSkillLevel? tryParse(String? s) {
+    switch (s?.trim().toLowerCase()) {
+      case 'bronze':
+        return BotSkillLevel.bronze;
+      case 'silver':
+      case 'argent':
+        return BotSkillLevel.silver;
+      // Legacy fusionné : gold/platinum/or/platine → difficile.
+      case 'gold':
+      case 'or':
+      case 'platinum':
+      case 'platine':
+      case 'difficile':
+      case 'hard':
+        return BotSkillLevel.difficile;
+      default:
+        return null;
+    }
+  }
 
-extension AppThemeExt on AppTheme {
-  ThemeMode get themeMode {
-    switch (this) {
-      case AppTheme.system: return ThemeMode.system;
-      case AppTheme.light:  return ThemeMode.light;
-      case AppTheme.dark:   return ThemeMode.dark;
-      case AppTheme.green:  return ThemeMode.dark; // dark brightness, green palette
+  /// Variante non-nullable avec le défaut le plus courant ([silver]).
+  static BotSkillLevel fromString(String? s) =>
+      tryParse(s) ?? BotSkillLevel.silver;
+
+  /// Désérialisation par index avec rétrocompat des objets sérialisés AVANT la
+  /// fusion : ancien index 2 (gold) ET index 3 (platinum) → [difficile].
+  /// [difficile] s'écrit désormais en index 2. Index hors borne → [silver].
+  static BotSkillLevel fromIndex(int? i) {
+    switch (i) {
+      case 0:
+        return BotSkillLevel.bronze;
+      case 1:
+        return BotSkillLevel.silver;
+      case 2: // ex-gold, désormais difficile (= index courant de difficile)
+      case 3: // ex-platinum (rétrocompat anti-crash)
+        return BotSkillLevel.difficile;
+      default:
+        return BotSkillLevel.silver;
     }
   }
 }
+
+/// Thème visuel de l'application.
+/// [system] suit le réglage de l'appareil, [green] applique la palette verte du jeu solo.
+/// (L'extension [AppThemeExt] qui mappe vers `ThemeMode` Flutter vit dans
+/// `app_theme_ext.dart` pour garder ce fichier en Dart pur.)
+enum AppTheme { system, light, dark, green }
 
 class GameSettings {
   GameMode gameMode;

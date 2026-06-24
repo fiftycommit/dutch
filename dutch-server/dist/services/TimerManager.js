@@ -47,6 +47,9 @@ class TimerManager {
                 this.endReaction(roomCode);
             }
         }, 50);
+        // .unref() : ne bloque pas la sortie du process (utile en tests ; inerte en
+        // prod où le serveur HTTP garde le process vivant).
+        timer.unref();
         this.timers.set(roomCode, timer);
     }
     clearTimer(roomCode) {

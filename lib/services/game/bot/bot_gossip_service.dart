@@ -1,9 +1,34 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import '../../../models/game_state.dart';
 import '../../../models/game_settings.dart';
 import '../../../models/player.dart';
 import 'bot_dutch_strategy.dart';
+
+/// Mode debug pur (sans Flutter) — équivalent de `kDebugMode`.
+const bool _kDebug = !bool.fromEnvironment('dart.vm.product');
+
+/// Observable minimal **pur Dart** : remplace `ValueNotifier` sans dépendre de
+/// `dart:ui`/Flutter, pour que ce service reste compilable hors Flutter
+/// (ex. générateur ML lancé via `dart run`). Même API que ValueNotifier côté
+/// usage : `.value` (get/set, notifie au changement) + add/removeListener.
+class GossipValue<T> {
+  GossipValue(this._value);
+  T _value;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  T get value => _value;
+  set value(T newValue) {
+    if (_value == newValue) return;
+    _value = newValue;
+    // Copie défensive : un listener peut se désabonner pendant la notification.
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
+  }
+
+  void addListener(void Function() listener) => _listeners.add(listener);
+  void removeListener(void Function() listener) => _listeners.remove(listener);
+}
 
 /// Événement de parole / coordination émis par un bot.
 /// La couche UI s'abonne au stream [BotGossipService.speeches] pour afficher
@@ -80,10 +105,10 @@ class BotGossipService {
   BotGossipService._();
   static final BotGossipService instance = BotGossipService._();
 
-  final ValueNotifier<List<BotSpeech>> speeches =
-      ValueNotifier<List<BotSpeech>>(const []);
-  final ValueNotifier<BotAlliance?> alliance =
-      ValueNotifier<BotAlliance?>(null);
+  final GossipValue<List<BotSpeech>> speeches =
+      GossipValue<List<BotSpeech>>(const []);
+  final GossipValue<BotAlliance?> alliance =
+      GossipValue<BotAlliance?>(null);
 
   static const int _cooldownTurnsGlobal = 2;
   static const int _maxSpeechesPerBotPerRound = 3;
@@ -249,9 +274,9 @@ class BotGossipService {
         tone: BotSpeechTone.ally,
         ignoreCooldown: true);
     _clearPendingAlliance();
-    if (kDebugMode) {
-      debugPrint(
-          '🤝 Alliance: ${memberNames.join(" + ")} vs $targetName '
+    if (_kDebug) {
+      // ignore: avoid_print
+      print('🤝 Alliance: ${memberNames.join(" + ")} vs $targetName '
           '(expires turn ${currentTurn + _allianceDurationTurns})');
     }
     return true;
@@ -270,7 +295,7 @@ class BotGossipService {
     if (a == null) return;
     if (!a.isActive(currentTurn)) {
       alliance.value = null;
-      if (kDebugMode) debugPrint('🤝 Alliance expirée');
+      if (_kDebug) print('🤝 Alliance expirée'); // ignore: avoid_print
     }
   }
 

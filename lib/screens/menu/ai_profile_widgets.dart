@@ -562,7 +562,8 @@ class BotMatchupCard extends StatelessWidget {
 
   static const _diffLabels = {
     'hard': 'Difficile',
-    'platinum': 'Difficile',
+    'difficile': 'Difficile',
+    'platinum': 'Difficile', // legacy
     'easy': 'Bronze',
     'medium': 'Argent',
     'mix': 'Mix',
@@ -570,7 +571,8 @@ class BotMatchupCard extends StatelessWidget {
 
   static const _diffColors = {
     'hard': Colors.purple,
-    'platinum': Colors.purple,
+    'difficile': Colors.purple,
+    'platinum': Colors.purple, // legacy
     'easy': Colors.brown,
     'medium': Colors.grey,
     'mix': Colors.teal,

@@ -169,15 +169,15 @@ void main() {
       });
 
       test('maps gold correctly', () {
-        final difficulty = BotConfig.getSkillDifficulty(BotSkillLevel.gold);
+        final difficulty = BotConfig.getSkillDifficulty(BotSkillLevel.difficile);
 
-        expect(difficulty.name, 'Or');
+        expect(difficulty.name, 'Difficile');
       });
 
       test('maps platinum correctly', () {
-        final difficulty = BotConfig.getSkillDifficulty(BotSkillLevel.platinum);
+        final difficulty = BotConfig.getSkillDifficulty(BotSkillLevel.difficile);
 
-        expect(difficulty.name, 'Platine');
+        expect(difficulty.name, 'Difficile');
       });
     });
 
@@ -205,7 +205,7 @@ void main() {
       test('uses playerMMR when no aiParameters', () {
         final difficulty = BotConfig.getDifficulty(bot, 800);
 
-        expect(difficulty.name, 'Or');
+        expect(difficulty.name, 'Difficile');
       });
 
       test('uses botSkillLevel as fallback', () {
@@ -214,12 +214,12 @@ void main() {
           name: 'Bot Skill',
           isHuman: false,
           position: 1,
-          botSkillLevel: BotSkillLevel.gold,
+          botSkillLevel: BotSkillLevel.difficile,
         );
 
         final difficulty = BotConfig.getDifficulty(botWithSkill, null);
 
-        expect(difficulty.name, 'Or');
+        expect(difficulty.name, 'Difficile');
       });
     });
 

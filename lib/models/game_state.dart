@@ -3,6 +3,7 @@ import 'playing_card.dart';
 import 'player.dart';
 import 'game_settings.dart';
 import 'game_sub_states.dart';
+import '../services/game/engine_random.dart';
 
 enum GameMode { quick, tournament }
 
@@ -16,7 +17,7 @@ enum DealMode {
 }
 
 class GameState {
-  static final Random _dealRandom = Random();
+  static Random get _dealRandom => EngineRandom.instance;
 
   List<Player> players;
   GameMode gameMode;
@@ -198,12 +199,12 @@ class GameState {
   }
 
   void smartShuffle() {
-    deck.shuffle();
+    deck.shuffle(EngineRandom.instance);
     addToHistory("🎲 Mélange aléatoire");
   }
 
   void dealCards({DealMode mode = DealMode.roundRobin}) {
-    deck.shuffle();
+    deck.shuffle(EngineRandom.instance);
     for (var player in players) {
       player.hand = [];
       player.knownCards = [];
@@ -313,7 +314,7 @@ class GameState {
   }
 
   void shuffleDeckRandomly() {
-    deck.shuffle();
+    deck.shuffle(EngineRandom.instance);
   }
 
   List<Player> getFinalRanking() {

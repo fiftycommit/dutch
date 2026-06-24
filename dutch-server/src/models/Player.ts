@@ -9,8 +9,59 @@ export enum BotBehavior {
 export enum BotSkillLevel {
   bronze = 0,
   silver = 1,
-  gold = 2,
-  platinum = 3,
+  difficile = 2,
+}
+
+/**
+ * Point de traduction UNIQUE string→skill (rétrocompat des libellés persistés).
+ *
+ * Les anciens paliers gold/platinum (+ or/platine/hard) sont fusionnés en
+ * `difficile` (refonte 93b6d42). Renvoie `undefined` pour une chaîne non
+ * reconnue afin que CHAQUE appelant applique son propre défaut historique
+ * (silver / bronze / 1000…) sans en cacher aucun.
+ */
+export function tryParseBotSkillLevel(s?: string): BotSkillLevel | undefined {
+  switch ((s ?? '').trim().toLowerCase()) {
+    case 'bronze':
+      return BotSkillLevel.bronze;
+    case 'silver':
+    case 'argent':
+      return BotSkillLevel.silver;
+    // Legacy fusionné : gold/platinum/or/platine → difficile.
+    case 'gold':
+    case 'or':
+    case 'platinum':
+    case 'platine':
+    case 'difficile':
+    case 'hard':
+      return BotSkillLevel.difficile;
+    default:
+      return undefined;
+  }
+}
+
+/** Variante non-nullable avec le défaut le plus courant (silver). */
+export function botSkillLevelFromString(s?: string): BotSkillLevel {
+  return tryParseBotSkillLevel(s) ?? BotSkillLevel.silver;
+}
+
+/**
+ * Désérialisation par index avec rétrocompat des objets sérialisés AVANT la
+ * fusion : ancien index 2 (gold) ET index 3 (platinum) → difficile.
+ * difficile s'écrit désormais en index 2. Index hors borne → silver.
+ */
+export function botSkillLevelFromIndex(i?: number): BotSkillLevel {
+  switch (i) {
+    case 0:
+      return BotSkillLevel.bronze;
+    case 1:
+      return BotSkillLevel.silver;
+    case 2: // ex-gold, désormais difficile
+    case 3: // ex-platinum (rétrocompat anti-crash)
+      return BotSkillLevel.difficile;
+    default:
+      return BotSkillLevel.silver;
+  }
 }
 
 export interface Player {

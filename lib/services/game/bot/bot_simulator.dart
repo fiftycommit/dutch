@@ -2,11 +2,12 @@ import 'dart:math';
 import 'bot_difficulty.dart';
 import 'bot_config.dart';
 import '../../../models/playing_card.dart';
+import '../engine_random.dart';
 
 /// Framework de simulation Monte Carlo pour tester les bots
 /// Permet de mesurer winrate, stabilité, et faire des ablation tests
 class BotSimulator {
-  final Random _random = Random();
+  Random get _random => EngineRandom.instance;
   
   // ═══════════════════════════════════════════════════════════════════════════
   // CONFIGURATION
@@ -357,8 +358,8 @@ class SimulationConfig {
         playerSkillEstimate: simulatedPlayerSkill ?? 0,
       );
     }
-    // Difficulté Gold par défaut pour les simulations
-    return BotConfig.getSkillDifficulty(BotSkillLevel.gold);
+    // Difficulté Difficile par défaut pour les simulations
+    return BotConfig.getSkillDifficulty(BotSkillLevel.difficile);
   }
 }
 

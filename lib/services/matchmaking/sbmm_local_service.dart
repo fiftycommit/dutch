@@ -160,9 +160,9 @@ class SBMMLocalService {
     }
     if (cursor < 0.65) return 'silver';
     if (cursor < 0.75) {
-      return r.nextDouble() < (cursor - 0.65) / 0.1 ? 'gold' : 'silver';
+      return r.nextDouble() < (cursor - 0.65) / 0.1 ? 'difficile' : 'silver';
     }
-    return 'gold';
+    return 'difficile';
   }
 
   /// Génère le mix de bots pour une partie, en spread autour du cursor joueur.
@@ -186,7 +186,7 @@ class SBMMLocalService {
       levels.add(cursorToSkillLevel(eff, rng: rng));
     }
 
-    const order = {'bronze': 0, 'silver': 1, 'gold': 2};
+    const order = {'bronze': 0, 'silver': 1, 'difficile': 2};
     levels.sort((a, b) => (order[a] ?? 0).compareTo(order[b] ?? 0));
 
     final archetype = detectArchetype(profile);
