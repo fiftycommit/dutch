@@ -1,0 +1,14 @@
+# Environnement uv
+.venv/
+__pycache__/
+*.pyc
+
+# Données générées (volumineuses, reproductibles via le générateur Dart + seed)
+data/raw/games/
+data/raw/games_*backup*/
+data/raw/_*/
+data/processed/
+
+# Artefacts modèles (gros binaires) — metadata.json reste suivi (léger, utile pour 5_predict.py)
+models/*.joblib
+reports/figures/
