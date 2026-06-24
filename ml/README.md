@@ -1,18 +1,52 @@
 # Pipeline ML — Dutch'78
 
-## 1. Problème
+## 1. Contexte
 
-Prédire, à partir d'un état de partie en cours (le `gameState` qu'un bot observe au moment de
-décider d'une action), la probabilité que ce joueur gagne la partie (`finalRank == 1`). C'est une
-classification binaire, mais séquentielle : un même bot génère plusieurs snapshots au fil de la
-partie, tous rattachés à la même issue finale.
+Dutch'78 est un jeu de cartes de mémoire et de stratégie : chaque joueur connaît seulement une
+partie de ses propres cartes, doit deviner le reste au fil de la partie, et cherche à finir avec
+le score le plus faible possible. Les bots du jeu sont des joueurs artificiels qui peuvent
+remplacer un humain, avec un niveau de difficulté (facile à difficile) et un style de jeu
+(agressif, rapide, équilibré…) qui influencent leurs décisions à chaque tour.
 
-Les données viennent du vrai moteur de jeu Dart (`lib/`), pas d'une simulation simplifiée. Un
-générateur self-play headless (`tool/ml_dataset_generator.dart`) fait s'affronter des bots entre
-eux et journalise leur état de croyance à chaque tour ; le RNG est seedé, donc la génération est
-reproductible.
+Ce pipeline est un projet personnel de portfolio en data science, pensé pour montrer une chaîne
+complète : génération de données, feature engineering, modélisation, évaluation. Le jeu n'est
+ici qu'un terrain d'application ; la même démarche s'appliquerait à n'importe quel système
+produisant des séquences d'états avec une issue finale connue.
 
-## 2. Données
+## 2. Le problème
+
+Si on pouvait estimer, à tout moment d'une partie, la probabilité qu'un joueur la gagne,
+plusieurs usages deviendraient possibles : calibrer la difficulté des bots en cours de partie
+pour la garder serrée jusqu'au bout, par exemple, ou afficher un indicateur de tension en direct.
+C'est ce signal que ce pipeline cherche à apprendre.
+
+Concrètement : prédire, à partir d'un état de partie en cours (le `gameState` qu'un bot observe
+au moment de décider d'une action), la probabilité que ce joueur gagne la partie (`finalRank ==
+1`). C'est une classification binaire, mais séquentielle : un même bot génère plusieurs snapshots
+au fil de la partie, tous rattachés à la même issue finale.
+
+## 3. Démarche
+
+Apprendre ce signal demande un grand nombre de parties dont l'issue est déjà connue : c'est la
+matière première de tout apprentissage supervisé. Dutch'78 n'a pas, à ce stade, un volume de
+parties humaines journalisées côté serveur suffisant : il faudrait des mois de collecte avant
+d'avoir assez d'exemples pour entraîner quoi que ce soit de fiable.
+
+La solution retenue : générer ce volume artificiellement, en faisant rejouer le vrai moteur de
+jeu Dart (`lib/`) par des bots contre eux-mêmes (self-play), plutôt que d'écrire une simulation
+simplifiée des règles. Cela garantit que les parties générées respectent exactement les règles
+réelles du jeu (mêmes pouvoirs spéciaux, même calcul de score…), au prix d'un biais documenté
+plus loin (§9 Limites & biais) : ce sont des bots qui jouent contre des bots, jamais de vraies
+parties humaines.
+
+En pratique, un générateur self-play headless (`tool/ml_dataset_generator.dart`) fait
+s'affronter des bots entre eux et journalise leur état de croyance à chaque tour ; le RNG est
+seedé, donc la génération est reproductible. C'est ce dataset que la section suivante détaille.
+
+## 4. Données
+
+Le générateur de la section précédente produit un parquet de snapshots bruts. Cette section en
+détaille les volumes et les répartitions, avec deux pièges de lecture identifiés au passage :
 
 - 20 000 parties, `--seed=42`, 2 à 4 bots par partie.
 - 60 033 records (un par bot par partie), 563 632 snapshots (un par décision).
@@ -32,10 +66,16 @@ reproductible.
 - Taux de victoire (`won`) : 38.4 % au niveau ligne (snapshot) contre 33.4 % au niveau record
   (bot/partie). L'écart vient de la longueur de partie, puisque les bots gagnants jouent en
   moyenne plus de tours et produisent donc plus de snapshots ; l'accuracy-ligne est de fait une
-  moyenne pondérée par la longueur de partie, pas une moyenne par partie (cf. §5).
+  moyenne pondérée par la longueur de partie, pas une moyenne par partie (cf. §7).
 - Schéma complet du parquet brut (59 colonnes) en annexe, §Schéma.
 
-## 3. Anti-leakage
+## 5. Anti-leakage
+
+Un risque classique quand on construit des features à partir d'un historique d'événements est la
+fuite d'information : si une colonne encode, même indirectement, le résultat final ou un état que
+le bot n'a pas encore au moment de décider, le modèle obtient une performance artificiellement
+élevée à l'évaluation, sans avoir appris un signal réutilisable en situation réelle. Cette section
+documente comment cette fuite est évitée à chaque étape du pipeline.
 
 Règle d'or (`scripts/2_features.py:9-13`) : seuls les champs `gs_*`, l'état que le bot observe au
 moment de décider (`actions[i].gameState`), sont des features candidates légitimes. Tout `rec_*`
@@ -66,9 +106,16 @@ et test, sur 16 000 parties d'entraînement et 4 000 de test (448 891 et 114 741
 respectivement). La même logique de groupe est réutilisée en validation croisée (`GroupKFold`,
 script 3) ; il n'y a jamais de validation croisée ligne-à-ligne sur ces données.
 
-## 4. Modélisation
+## 6. Modélisation
 
-3 modèles, tous avec `random_state=42` fixé (`scripts/3_train.py`) :
+Une fois les features choisies et le split posé (§5), restait à choisir des modèles capables
+d'apprendre le signal du §2, et à vérifier que la performance ne tient pas à un seul choix
+d'algorithme. Trois familles sont comparées : un modèle linéaire (LogReg) et deux modèles à
+arbres (RandomForest, XGBoost), tous avec `random_state=42` fixé (`scripts/3_train.py`).
+
+Le taux de victoire n'est pas équilibré (38.4 % de lignes gagnantes au niveau snapshot, cf. §4),
+donc chaque modèle reçoit une stratégie de rééquilibrage explicite plutôt que de laisser faire la
+distribution des classes :
 
 | Modèle | Pipeline | Gestion du déséquilibre |
 |---|---|---|
@@ -88,11 +135,17 @@ sur `max_depth ∈ {10,15}` et `min_samples_leaf ∈ {5,20}`. La meilleure combi
 `max_depth=15, min_samples_leaf=20`, donne un modèle 20 fois plus léger (131 Mo) et un AUC
 meilleur que les 3 modèles (0.8520). Les deux valeurs retenues sont au bord supérieur de la
 grille testée, donc un optimum encore meilleur reste plausible avec une grille plus large ; non
-explorée ici par discipline de scope (cf. §7).
+explorée ici par discipline de scope (cf. §9).
 
-## 5. Résultats chiffrés
+## 7. Résultats chiffrés
+
+Cette section répond directement à la question posée en §2 : le modèle devine-t-il vraiment qui
+va gagner, et de combien dépasse-t-il un simple hasard pondéré par les classes ?
 
 ### Validation croisée groupée (`GroupKFold`, 5 folds, train uniquement, 16 000 parties)
+
+Avant de toucher au test, un premier contrôle sur le train seul, pour repérer un éventuel
+sur-apprentissage en amont :
 
 | Modèle | AUC | F1 |
 |---|---|---|
@@ -138,7 +191,11 @@ chaque bot, le modèle identifie le bon vainqueur dans environ 93 % des parties 
 
 Graphiques : `reports/confusion_matrices.png`, `reports/roc_curves.png`.
 
-## 6. Importances de features
+## 8. Importances de features
+
+Le score seul ne dit pas sur quoi le modèle s'appuie pour décider ; regarder les features les
+plus importantes permet de vérifier que le signal appris correspond à une intuition du jeu,
+plutôt qu'à un artefact caché du dataset.
 
 Les classements divergent entre modèles, ce qui est attendu : LogReg pondère un effet linéaire
 global, alors que RandomForest et XGBoost capturent des interactions et des seuils non-linéaires
@@ -159,7 +216,10 @@ l'estimation de croyance la plus synthétique du bot sur son propre score, appar
 classements à des rangs inégaux : 9 pour RandomForest (0.0504) et pour XGBoost (0.0111), mais 19
 pour LogReg (0.1074). Présente partout, jamais dominante.
 
-## 7. Limites & biais
+## 9. Limites & biais
+
+Les chiffres des sections précédentes valent dans un cadre précis ; voici ses limites connues,
+pour ne pas les sur-interpréter.
 
 Le dataset entier est du self-play, des bots contre des bots, jamais de vraies parties humaines.
 Les modèles apprennent donc à prédire l'issue de parties entre IA, pas le comportement de
@@ -177,7 +237,7 @@ uniquement du nombre de joueurs variable (2 à 4) et du niveau de compétence
 (`bronze`/`silver`/`difficile`).
 
 La grille testée pour le RandomForest reste limitée : l'optimum retrouvé (`max_depth=15,
-min_samples_leaf=20`, §4) est au bord supérieur de cette grille, donc un résultat encore meilleur
+min_samples_leaf=20`, §6) est au bord supérieur de cette grille, donc un résultat encore meilleur
 reste possible avec une grille plus large, non explorée ici.
 
 Les matrices de confusion montrent enfin un biais optimiste cohérent avec
@@ -196,7 +256,9 @@ de décision se décale pour mieux rattraper la classe minoritaire « gagnant »
 0.80), au prix d'une précision plus faible (environ 0.65). Le modèle a donc tendance à
 sur-prédire la victoire plutôt qu'à la sous-prédire.
 
-## 8. Chantiers suivants
+## 10. Chantiers suivants
+
+Pistes pour la suite, à peu près dans l'ordre où elles répondraient aux limites du §9.
 
 Deux pistes amélioreraient surtout la diversité du dataset actuel : activer les personnalités
 synthétiques de l'Étape 3 (`PROMPT_ML_DATASET.md`) pour varier les profils de bots, et, si une
@@ -217,7 +279,8 @@ encore fixé à ce stade.
 
 ## Environnement (uv)
 
-Stack gérée par [`uv`](https://docs.astral.sh/uv/), pas de `pip`/`python` nu.
+Pour exécuter ou reproduire ce pipeline localement, voici l'environnement Python utilisé. Stack
+gérée par [`uv`](https://docs.astral.sh/uv/), pas de `pip`/`python` nu.
 
 Choix : **`pyproject.toml`** (projet uv propre, non-packagé : `tool.uv.package = false`) +
 **`uv.lock`** (versions épinglées, reproductible). Le venv vit dans `ml/.venv` (gitignoré).
@@ -238,6 +301,9 @@ brew install libomp
 
 ## Arborescence
 
+Pour se repérer dans le dépôt, voici l'arborescence du dossier `ml/` et ce que produit chaque
+étape :
+
 ```
 ml/
 ├── pyproject.toml / uv.lock     # projet + lock uv
@@ -250,7 +316,7 @@ ml/
 │       └── features_test.parquet      # sortie script 2 (114 741, 46+won+rec_gameId)
 ├── models/                      # sorties script 3 (gitignorées sauf metadata.json)
 │   ├── logreg.joblib            # 7 KB
-│   ├── random_forest.joblib     # 131 MB (post-tuning, cf. §4)
+│   ├── random_forest.joblib     # 131 MB (post-tuning, cf. §6)
 │   ├── xgboost.joblib           # 802 KB
 │   └── metadata.json            # features, seeds, versions, résultats CV
 ├── reports/                     # sorties script 4 (PNG)
@@ -273,6 +339,8 @@ cd ..   # racine du repo Flutter
 
 ## Scripts
 
+Les 5 scripts s'enchaînent dans cet ordre, chacun consommant la sortie du précédent :
+
 ```bash
 cd ml
 uv run scripts/1_load_data.py   # JSON bruts -> snapshots_raw.parquet
@@ -284,7 +352,8 @@ uv run scripts/5_predict.py     # exemple d'inférence sur un snapshot réel du 
 
 ### `5_predict.py` (inférence)
 
-`5_predict.py` expose `predict_win_proba(snapshot: dict) -> float` et
+Seul script qui ne sert pas à entraîner mais à utiliser un modèle déjà entraîné, pour scorer un
+état de jeu donné. Il expose `predict_win_proba(snapshot: dict) -> float` et
 `predict_all_players(game_state: dict[str, dict]) -> dict[str, float]`. Le nom de fichier
 commence par un chiffre (pas un nom de module Python valide) : pour les réutiliser ailleurs,
 les importer par chemin comme le fait le script lui-même avec `2_features.py` (cf.
@@ -305,7 +374,8 @@ snapshot unique (cf. commentaire en tête du script pour le piège évité).
 
 ## Schéma réel observé du DataFrame aplati (59 colonnes, sortie script 1)
 
-Conventions de préfixe :
+Référence complète des colonnes du parquet brut, utile pour vérifier d'où vient une feature
+donnée ou pour réutiliser ces données dans un autre script. Conventions de préfixe :
 - `rec_*` — champ du **record parent** (métadonnée / cible / stat de fin de partie).
 - `gs_*` — champ de **`gameState`** (état observable par le bot à ce tour = futures features brutes).
 - sans préfixe — identifiant du snapshot + cible dérivée.
@@ -357,7 +427,7 @@ Conventions de préfixe :
 | `gs_bestMatchProbability` | float | proba du meilleur match |
 | `gs_botBehavior`, `gs_botSkillLevel` | str | redondants avec `rec_*` (cohérence vérifiable) |
 | `gs_usedSBMM` | bool | redondant avec `rec_usedSBMM` |
-| `gs_aiParams` | object | **toujours null** (cf. §7, personnalités synthétiques non activées) |
+| `gs_aiParams` | object | **toujours null** (cf. §9, personnalités synthétiques non activées) |
 | `gs_opponentsHandSizes` | list[int] | tailles mains adverses (colonne liste, parquet natif) |
 | `gs_discardedRanks_json` | str (JSON) | histogramme rangs défaussés `{rang: count}` |
 
@@ -371,10 +441,13 @@ absents du parquet :
 
 ## Notes déterminisme
 
+Récapitulatif, dispersé autrement dans les sections précédentes, des garanties et limites de
+reproductibilité de ce pipeline :
+
 - Génération reproductible via `--seed` (RNG `EngineRandom` central). Les délais d'animation
   sont **skippés** en génération (`skipDelay`) sans impact sur le contenu (temps d'horloge, pas RNG).
 - Les champs temporels (`startTime`, `timestamp`, `avgDecisionTime`…) viennent d'une horloge
-  virtuelle déterministe, blocklistés côté features (pas d'info prédictive réelle, cf. §3).
+  virtuelle déterministe, blocklistés côté features (pas d'info prédictive réelle, cf. §5).
 - Reproductibilité de `Random(seed)` liée à la version du SDK Dart (Flutter 3.41.9 / Dart 3.11.5).
 - Seeds ML : `random_state=42` partout (split, CV, LogReg, RandomForest, XGBoost,
   `DummyClassifier(strategy="stratified")`). `GroupKFold`/`GroupShuffleSplit` n'ont besoin
