@@ -1,6 +1,6 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-26 01:06 (CEST, 23:06 UTC)
+Dernière mise à jour : 2026-06-26 01:20 (CEST, 23:20 UTC)
 Agent ayant modifié ce fichier : Codex
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
@@ -11,7 +11,7 @@ Agent ayant modifié ce fichier : Codex
 
 Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
 
-**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. `rl/train_parallel.py` est ajouté et validé en smoke (K=4, checkpoints, TensorBoard, sauvegarde finale). Le FPS de croisière avec updates PPO est d'environ **1230 steps agent/s** sur la VM. Prochaine grande étape : fixer le volume `--total-timesteps` du premier run multi-heures et le lancer en arrière-plan.
+**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. `rl/train_parallel.py` est ajouté et validé en smoke (K=4, checkpoints, TensorBoard, sauvegarde finale). Le premier run réel 13 h est lancé dans tmux (`dutch_rl_train`) avec `--total-timesteps=57600000`, FPS observé ≈1230-1240 steps agent/s, logs dans `rl/runs/`.
 
 ---
 
@@ -231,7 +231,8 @@ L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtri
 3. ✅ **Fait (local/VM, validé)** — `DutchEnv.step()` gère désormais deux modes de défaillance sans casser `SubprocVecEnv` : process runner mort/timeout → épisode tronqué neutre ; erreur moteur `INTERNAL fatal:true` → log ERROR + épisode tronqué signalé.
 4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs (`engine_internal_error` seuil 8), sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
 5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu pour le premier run : ≈2547 FPS agent, RSS arbre ≈2.61 Go, stable sur 10k steps vectorisés.
-6. **Prochaine action** — fixer `--total-timesteps` pour un run multi-heures à partir du FPS de croisière K=4 avec PPO (~1230 steps agent/s). Ordres de grandeur : 1 h ≈ 4,4 M steps, 4 h ≈ 17,7 M, 13 h ≈ 57,6 M. Choisir la durée cible, puis lancer `train_parallel.py` en arrière-plan avec `nohup` ou `screen`/`tmux` (vérifier lequel est disponible sur la VM) pour survivre à une déconnexion SSH, et suivre via TensorBoard.
+6. ✅ **En cours (VM)** — run réel 13 h lancé dans tmux (`dutch_rl_train`) : `--total-timesteps=57600000`, K=4, checkpoints tous les 500k timesteps agent, logs/checkpoints sous `rl/runs/` et `rl/models/` (gitignorés).
+7. **Prochaine action** — ne pas modifier le code pendant le run sauf incident. Attendre la fin du run (ou faire un check-in périodique), puis évaluer le modèle obtenu vs bots existants et vs aléatoire avant de concevoir les agents « moyen » et « facile ».
 
 Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
 
@@ -244,6 +245,61 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-26 01:20 — Lancement du run réel 13 h PPO parallèle
+
+Changement :
+- Lancement du premier run réel PPO parallèle dans une session tmux persistante nommée `dutch_rl_train`.
+- Chemins persistants choisis :
+  - TensorBoard : `/home/max/dutch/rl/runs`
+  - Modèles/checkpoints : `/home/max/dutch/rl/models`
+  - Log stdout complet : `/home/max/dutch/rl/runs/train_parallel_20260625_231422.log`
+- `rl/runs/` et `rl/models/` sont bien gitignorés par `rl/.gitignore` ; ces artefacts ne doivent pas être committés.
+
+Commande exacte lancée depuis `/home/max/dutch/rl` :
+
+```bash
+uv run python train_parallel.py --num-workers=4 --total-timesteps=57600000 \
+  --checkpoint-freq=500000 --internal-error-threshold=8 \
+  --tensorboard-log-dir=/home/max/dutch/rl/runs \
+  --model-out=/home/max/dutch/rl/models \
+  2>&1 | tee -a /home/max/dutch/rl/runs/train_parallel_20260625_231422.log
+```
+
+Paramètres :
+- `num_workers=4`
+- `total_timesteps=57600000` (≈13 h visées avec le repère de croisière ≈1230 steps agent/s)
+- `checkpoint_freq=500000` (≈115 checkpoints attendus)
+- `internal_error_threshold=8`
+
+Horaires :
+- Démarrage tmux : 2026-06-25 23:14:54 UTC (2026-06-26 01:14:54 CEST).
+- Fin estimée à ≈1230 steps agent/s : 2026-06-26 vers 12:15 UTC (14:15 CEST).
+
+Processus principaux confirmés :
+- `uv run` : PID `18490`
+- Python venv : PID `18494`
+
+Suivi / rattachement :
+- Rattacher tmux : `tmux attach -t dutch_rl_train`
+- Détacher sans tuer : `Ctrl-B`, puis `D`
+- Suivre le log : `tail -f /home/max/dutch/rl/runs/train_parallel_20260625_231422.log`
+- TensorBoard : `cd /home/max/dutch/rl && uv run tensorboard --logdir runs`
+
+Résultat initial observé :
+- Run confirmé actif après 1-2 minutes, puis re-vérifié à environ 5 min.
+- Exemple observé : `iterations=200`, `total_timesteps=409600`, `fps=1241`, `ep_len_mean=49.6`, `ep_rew_mean=6.4`.
+- Compteurs défaillance observés dans le log : `engine_internal_errors=0`, `runner_crashes=0`, `runner_timeouts=0`.
+- TensorBoard écrit : `/home/max/dutch/rl/runs/MaskablePPO_1/events.out.tfevents...`.
+
+État actuel :
+- Aucune action de code attendue jusqu'à la fin du run ou un point de contrôle volontaire.
+- Le run lui-même ne doit générer que des artefacts gitignorés (`rl/runs/`, `rl/models/`).
+- `pubspec.lock` reste une modification locale hors périmètre.
+
+Prochaine action recommandée :
+- Attendre la fin du run (ou faire un check-in périodique de santé).
+- Après fin : évaluer le modèle obtenu contre les bots existants et contre un agent aléatoire (protocole à définir), avant de passer à la conception des agents « moyen » et « facile ».
 
 ### 2026-06-26 01:06 — Fermeture robuste après Ctrl-C dans `train_parallel.py`
 
