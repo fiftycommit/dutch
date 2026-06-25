@@ -1,6 +1,6 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-25 21:18
+Dernière mise à jour : 2026-06-25 22:26
 Agent ayant modifié ce fichier : Claude Code
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
@@ -166,8 +166,10 @@ Installé et vérifié sur `rlDutch` (au 2026-06-25) :
 Point d'optimisation connu (non bloquant) :
 - `uv` a installé les wheels CUDA (`nvidia-*`) alors que la VM est CPU-only → venv à 4,6 Go. Réinstaller torch CPU-only récupérerait ~3 Go (21 Go encore libres, donc pas urgent).
 
-Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert**
+Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (lors du setup initial)
 1. aller-retour scripté ; 2. reward terminale Python↔Dart ; 3. déterminisme ; 4. honnêteté du masque ; 5. formes fixes 2-6 joueurs ; 6. robustesse process (kill + timeout).
+
+> ⚠️ **La VM est en retard sur `main`.** Son code provient du rsync initial et son binaire `~/dutch/tool/rl_env_runner` est **antérieur au fix de la fuite mémoire `_logBuffer` (22:22)**. Avant tout long run : resynchroniser via git (clone/`git pull`), `flutter pub get`, recompiler le runner, revérifier `rl/test_roundtrip.py`.
 
 ---
 
@@ -222,7 +224,7 @@ Phase 2 RL (en cours) :
 
 L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtrip 6/6 sur la VM). La suite (phase 3 — entraînement parallélisé) :
 
-1. (Correctif léger) `GameLoggerService.instance.setEnabled(false)` dans le `main()` du runner + recompile, pour éviter une fuite mémoire `_logBuffer` sur les longs runs.
+1. ✅ **Fait (local, validé)** — fuite mémoire `_logBuffer` corrigée : `GameLoggerService.instance.setEnabled(false)` en tête du `main()` du runner, recompilé et validé en local (**15 tests Dart + roundtrip 6/6**). Commit/push sur `main` en attente de validation ; la VM devra ensuite `git pull` + recompiler pour recevoir le fix (cf. encadré « VM en retard »).
 2. (Optionnel) Slim torch en CPU-only sur la VM (récupère ~3 Go).
 3. Écrire `rl/train_parallel.py` : `SubprocVecEnv` K=3, `CheckpointCallback`, callback stop-file/time-limit, `tensorboard_log`, sauvegarde en `try/finally`.
 4. Ajouter une récupération sur crash dans `DutchEnv.step`.
@@ -240,6 +242,59 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-25 22:22 — Fix fuite mémoire GameLoggerService (headless)
+
+Changement :
+- Dans `tool/rl_env_runner.dart` : ajout de `GameLoggerService.instance.setEnabled(false)` en toute première ligne de `main()` + import du service.
+
+Pourquoi :
+- En mode headless RL, `startNewGame()`/`reset()` du logger ne sont jamais appelés, donc `_logBuffer` (StringBuffer) n'est jamais vidé et grossit indéfiniment au fil des tours → fuite mémoire sur les longs runs. Couper le logging à l'entrée neutralise toutes les écritures.
+
+Vérification de l'API (sans rien inventer) :
+- `GameLoggerService.instance` (singleton) et `setEnabled(bool)` existent (`lib/services/logging/game_logger_service.dart`). `_isEnabled` défaut `true`. Les 15 méthodes `logXxx` (dont `logTurnStart`, `logDraw`, `logDiscard`, `logMatch`, `logPowerUse`, `logDutch`, `logRoundEnd`, `logGameEnd`…) court-circuitent toutes sur `if (!_isEnabled) return;` avant tout `_logBuffer.write` → aucune accumulation une fois désactivé.
+
+Fichiers / commandes concernés :
+- Modifié : `tool/rl_env_runner.dart`.
+- `dart compile exe tool/rl_env_runner.dart -o tool/rl_env_runner` (binaire gitignoré, recompilé localement).
+- `flutter test test/rl/...` ; `rl/.venv/bin/python rl/test_roundtrip.py`.
+
+Résultat obtenu :
+- Recompilation OK, runner répond toujours au protocole NDJSON (reset).
+- **15/15 tests Dart verts** (déterminisme, masque, anti-fuite, byte-parity 100 seeds, pouvoirs 7/10/V/Joker).
+- **Roundtrip Python 6/6 vert** en local.
+
+État actuel :
+- Fix appliqué et validé en local. Commit/push **en attente de validation** (gate STOP).
+- Règle confirmée : la VM ne fait qu'exécuter, jamais éditer le code source — tout fix se fait en local puis se propage par git.
+
+Prochaine action recommandée :
+- Après GO : commit + push sur `main` (seul le `.dart` source part ; binaire reste gitignoré). Puis resync VM via git + recompile.
+
+### 2026-06-25 21:53 — Push du code RL sur GitHub (commit `ae0a120`)
+
+Changement :
+- Commit + push sur `origin/main` de tout le code RL phase 2 (16 fichiers, 2757 insertions).
+- Le code RL est désormais sur le repo → la VM doit **cloner/`git pull`** au lieu de recevoir des fichiers par rsync.
+
+Pourquoi :
+- Centraliser la source de vérité sur GitHub pour Claude Code, Codex et la VM.
+
+Fichiers / commandes concernés :
+- `git add -A && git commit -F- && git push origin main`.
+- Inclus : `tool/rl_env_runner.dart`, `lib/services/game/bot/headless_threat_signal.dart`, `rl/*.py` + `pyproject.toml`/`requirements.txt`/`.gitignore`, `test/rl/*`, `documentation/RL_RUNNER.md`, `docs/ai/HANDOFF.md`, `.gitignore`, `tool/ml_dataset_generator.dart` (2-6 joueurs).
+- Exclus (artefacts) : `rl/.venv`, `rl/models`, `rl/runs`, `rl/__pycache__`, binaire `tool/rl_env_runner`.
+
+Résultat obtenu :
+- Push OK : `4458a90..ae0a120  main -> main`. Branche locale synchro avec `origin/main`.
+
+État actuel :
+- Code RL sur `https://github.com/fiftycommit/dutch` (commit `ae0a120`).
+- La VM `rlDutch` a encore la version rsync ; à resynchroniser via git (cloner le repo ou pointer `~/dutch` sur le remote, puis recompiler le runner).
+- Note : ce handoff a été ré-édité après le push (entrée ci-dessus) → la version sur le repo est celle d'`ae0a120` (état 21:18) ; la version disque locale est en avance jusqu'au prochain commit.
+
+Prochaine action recommandée :
+- Sur la VM : remplacer le `~/dutch` rsync par un clone git (ou ajouter le remote + reset), `flutter pub get`, recompiler `tool/rl_env_runner`, revérifier `rl/test_roundtrip.py`. Puis démarrer la phase 3 (entraînement parallélisé).
 
 ### 2026-06-25 21:18 — Préparation du push GitHub du code RL (gitignore)
 

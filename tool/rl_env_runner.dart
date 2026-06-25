@@ -64,6 +64,7 @@ import 'package:dutch_game/services/game/bot/bot_power_handler.dart';
 import 'package:dutch_game/services/game/bot/bot_personality.dart';
 import 'package:dutch_game/services/game/bot/bot_threat_analyzer.dart';
 import 'package:dutch_game/services/game/bot/headless_threat_signal.dart';
+import 'package:dutch_game/services/logging/game_logger_service.dart';
 
 /// Micro-phase de décision du siège RL à l'intérieur d'un tour.
 enum RlMicroPhase { dutchOrDraw, postDraw, power }
@@ -664,6 +665,12 @@ Future<void> _emit(Map<String, dynamic> msg) async {
 }
 
 Future<void> main(List<String> args) async {
+  // Fuite mémoire headless : sans startNewGame()/reset(), le _logBuffer du
+  // GameLoggerService n'est jamais vidé et grossit indéfiniment au fil des
+  // tours. On coupe le logging dès l'entrée : toutes les méthodes logXxx
+  // court-circuitent sur !_isEnabled, donc plus aucune écriture dans le buffer.
+  GameLoggerService.instance.setEnabled(false);
+
   final debug = args.contains('--debug');
   var maxTurns = 500;
   for (final a in args) {
