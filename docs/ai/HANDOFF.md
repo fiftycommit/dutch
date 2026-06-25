@@ -1,7 +1,7 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-25 22:26
-Agent ayant modifié ce fichier : Claude Code
+Dernière mise à jour : 2026-06-25 23:12 (CEST, 21:12 UTC)
+Agent ayant modifié ce fichier : Codex
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
 
@@ -11,7 +11,7 @@ Agent ayant modifié ce fichier : Claude Code
 
 Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
 
-**État au 2026-06-25 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM**. Prochaine grande étape : l'entraînement PPO parallélisé multi-heures.
+**État au 2026-06-25 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. Prochaine grande étape : l'entraînement PPO parallélisé multi-heures.
 
 ---
 
@@ -166,10 +166,10 @@ Installé et vérifié sur `rlDutch` (au 2026-06-25) :
 Point d'optimisation connu (non bloquant) :
 - `uv` a installé les wheels CUDA (`nvidia-*`) alors que la VM est CPU-only → venv à 4,6 Go. Réinstaller torch CPU-only récupérerait ~3 Go (21 Go encore libres, donc pas urgent).
 
-Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (lors du setup initial)
+Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé après recompilation du runner avec fix logger le 2026-06-25 22:49 CEST / 20:49 UTC)
 1. aller-retour scripté ; 2. reward terminale Python↔Dart ; 3. déterminisme ; 4. honnêteté du masque ; 5. formes fixes 2-6 joueurs ; 6. robustesse process (kill + timeout).
 
-> ⚠️ **La VM est en retard sur `main`.** Son code provient du rsync initial et son binaire `~/dutch/tool/rl_env_runner` est **antérieur au fix de la fuite mémoire `_logBuffer` (22:22)**. Avant tout long run : resynchroniser via git (clone/`git pull`), `flutter pub get`, recompiler le runner, revérifier `rl/test_roundtrip.py`.
+> ✅ **VM validée après fix logger.** Le binaire `tool/rl_env_runner` est plus récent que `tool/rl_env_runner.dart` (`20:33` vs `20:32` UTC sur `ls -la`) et `rl/test_roundtrip.py` passe 6/6 depuis cette recompilation. Avant tout long run : conserver cette barrière 6/6 comme prérequis.
 
 ---
 
@@ -224,10 +224,10 @@ Phase 2 RL (en cours) :
 
 L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtrip 6/6 sur la VM). La suite (phase 3 — entraînement parallélisé) :
 
-1. ✅ **Fait (local, validé)** — fuite mémoire `_logBuffer` corrigée : `GameLoggerService.instance.setEnabled(false)` en tête du `main()` du runner, recompilé et validé en local (**15 tests Dart + roundtrip 6/6**). Commit/push sur `main` en attente de validation ; la VM devra ensuite `git pull` + recompiler pour recevoir le fix (cf. encadré « VM en retard »).
+1. ✅ **Fait (VM, validé)** — fuite mémoire `_logBuffer` corrigée : `GameLoggerService.instance.setEnabled(false)` en tête du `main()` du runner, binaire recompilé sur la VM, `flutter test test/rl/` passé **15/15**, puis `rl/test_roundtrip.py` relancé après recompilation et passé **6/6**.
 2. (Optionnel) Slim torch en CPU-only sur la VM (récupère ~3 Go).
-3. Écrire `rl/train_parallel.py` : `SubprocVecEnv` K=3, `CheckpointCallback`, callback stop-file/time-limit, `tensorboard_log`, sauvegarde en `try/finally`.
-4. Ajouter une récupération sur crash dans `DutchEnv.step`.
+3. ✅ **Fait (local/VM, validé)** — `DutchEnv.step()` gère désormais deux modes de défaillance sans casser `SubprocVecEnv` : process runner mort/timeout → épisode tronqué neutre ; erreur moteur `INTERNAL fatal:true` → log ERROR + épisode tronqué signalé.
+4. Écrire `rl/train_parallel.py` : `SubprocVecEnv` K à mesurer sur la VM (ne pas figer sans FPS réel), `CheckpointCallback`, callback stop-file/time-limit, `tensorboard_log`, sauvegarde en `try/finally`.
 5. Mesurer le FPS parallèle, fixer `total_timesteps` pour un run multi-heures.
 6. Lancer en arrière-plan avec monitoring TensorBoard.
 
@@ -242,6 +242,84 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-25 23:12 — Robustesse `DutchEnv.step()` avant entraînement parallèle
+
+Changement :
+- Patch de `rl/dutch_env.py` dans `DutchEnv.step()` pour distinguer deux modes de défaillance :
+  - Mode 1 infra : `RunnerCrashed` ou `RunnerTimeout` levés par `self._runner.step(...)` → fermeture du runner via `self._runner.close(quiet=True)`, transition Gymnasium valide avec `reward=0.0`, `terminated=False`, `truncated=True`, `obs=self._last_obs.copy()`, et `info["runner_crashed"]=True` ou `info["runner_timeout"]=True`.
+  - Mode 2 moteur vivant mais erreur applicative : message NDJSON `{"type":"error","code":"INTERNAL","fatal":true}` → log Python `ERROR`, compteur `self.engine_internal_error_count`, transition tronquée valide avec `info["engine_internal_error"]=True`, `engine_error_code`, `engine_error_message`, `engine_error_fatal`.
+- Les autres erreurs runner (`code != INTERNAL` ou `fatal` falsy) conservent le comportement existant : `RuntimeError`.
+
+Pourquoi :
+- Préparer `train_parallel.py` / `SubprocVecEnv` pour un run multi-heures : éviter qu'un accident infra rare tue un worker, tout en gardant les erreurs moteur `INTERNAL` visibles et comptabilisables comme signaux de bug.
+
+Fichiers / commandes concernés :
+- Modifié : `rl/dutch_env.py`.
+- Vérification préalable de cohérence : `RunnerProcess.close()` met bien `self.proc = None`, et `RunnerProcess.reset()` appelle `_ensure_alive()`, qui relance quand `_alive()` est faux (`self.proc is None` ou `poll() != None`).
+- Tests lancés :
+  - `flutter test test/rl/`
+  - `cd rl && uv run python test_roundtrip.py`
+
+Résultat obtenu :
+- **15/15 tests Dart RL verts**.
+- **Roundtrip Python 6/6 vert** :
+  1. aller-retour scripté ;
+  2. reward terminale Python↔Dart ;
+  3. déterminisme ;
+  4. honnêteté du masque ;
+  5. formes fixes 2-6 joueurs ;
+  6. robustesse process kill + timeout.
+
+État actuel :
+- Patch prêt à être committé avec ce handoff.
+- `pubspec.lock` reste modifié localement mais hors périmètre de ce patch.
+- Le binaire runner Dart n'a pas été modifié/recompilé par ce patch Python.
+
+Prochaine action recommandée :
+- Écrire `rl/train_parallel.py`, mesurer le FPS réel sur la VM avant de fixer `K`, puis choisir le volume `total_timesteps` du premier long run.
+
+### 2026-06-25 22:49 — Validation roundtrip VM après recompilation du runner
+
+Changement :
+- Vérification post-recompilation du binaire `tool/rl_env_runner` avec le fix logger (`GameLoggerService.instance.setEnabled(false)` en tête de `main()`).
+- Mise à jour de l'état VM dans ce handoff : la VM n'est plus considérée en retard pour ce point, le runner recompilé a été validé par la barrière Python.
+
+Pourquoi :
+- Confirmer que `rl/test_roundtrip.py` teste bien le binaire recompilé, et pas un ancien artefact antérieur au fix `_logBuffer`.
+
+Fichiers / commandes concernés :
+- Lecture timestamps : `ls -la tool/rl_env_runner tool/rl_env_runner.dart`.
+- Résultat timestamps : `tool/rl_env_runner` = `Jun 25 20:33`, `tool/rl_env_runner.dart` = `Jun 25 20:32` → le binaire est plus récent que la source.
+- Commande demandée via uv : `cd /home/max/dutch/rl && uv run python test_roundtrip.py`.
+- Note d'exécution : premier lancement sandboxé bloqué par le cache uv (`Could not create temporary file ... /home/max/.cache/uv/... Read-only file system`), puis relance autorisée de la même commande. `uv` a utilisé CPython 3.12.13, créé `rl/.venv` et installé 35 packages.
+
+Résultat obtenu :
+- `rl/test_roundtrip.py` passe **6/6**.
+- Sortie complète :
+
+```text
+Using CPython 3.12.13
+Creating virtual environment at: .venv
+Installed 35 packages in 754ms
+=== test_roundtrip : 6 vérifications ===
+  [OK ] 1. aller-retour scripté — épisode terminé en 15 steps, transitions cohérentes
+  [OK ] 2. reward terminale Python<->Dart — 8 fins de partie cohérentes (principal == rang normalisé)
+  [OK ] 3. déterminisme — 2 runs seed=7 identiques (349 observations)
+  [OK ] 4. honnêteté du masque — wrapper jamais hors masque ; action forcée => ILLEGAL_ACTION
+  [OK ] 5. formes fixes 2-6 joueurs — obs=(148,) mask=(165,) sur tables [2, 3, 4, 5, 6]
+  [OK ] 6. robustesse process (kill + timeout) — kill => reset relance ; binaire muet => RunnerTimeout
+=== TOUT VERT ===
+```
+
+État actuel :
+- Runner VM recompilé et validé.
+- Barrière Dart `flutter test test/rl/` : 15/15 vert (fait avant cette reprise).
+- Barrière Python `rl/test_roundtrip.py` : 6/6 vert après recompilation.
+- Aucun fichier source modifié pendant cette vérification ; seul `docs/ai/HANDOFF.md` a été mis à jour comme demandé.
+
+Prochaine action recommandée :
+- Passer à la phase 3 : écrire `rl/train_parallel.py` (`SubprocVecEnv` K=3, checkpoints, TensorBoard, stop-file/time-limit, sauvegarde `try/finally`) puis mesurer le FPS avant le long run.
 
 ### 2026-06-25 22:22 — Fix fuite mémoire GameLoggerService (headless)
 
