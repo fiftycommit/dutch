@@ -45,6 +45,10 @@ tmp/
 /coverage/
 dutch-server/coverage/
 
+# Exécutable compilé du runner RL (artefact de build, à recompiler via
+# `dart compile exe tool/rl_env_runner.dart -o tool/rl_env_runner`)
+/tool/rl_env_runner
+
 # Symbolication related
 app.*.symbols
 

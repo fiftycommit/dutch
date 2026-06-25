@@ -281,7 +281,7 @@ class GameRecorder {
 
 List<Player> buildBots() {
   final rng = EngineRandom.instance;
-  final n = 2 + rng.nextInt(3); // {2,3,4}
+  final n = 2 + rng.nextInt(5); // {2,3,4,5,6} — aligné sur le vrai jeu (UI 2-6)
   final behaviors = BotBehavior.values;
   final skills = BotSkillLevel.values;
   return List<Player>.generate(n, (i) {

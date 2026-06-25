@@ -1,0 +1,12 @@
+# Environnement uv
+.venv/
+__pycache__/
+*.pyc
+
+# Artefacts d'entraînement (gros binaires)
+models/
+logs/
+runs/
+
+# requirements.txt doit rester suivi malgré le `*.txt` global de la racine
+!requirements.txt

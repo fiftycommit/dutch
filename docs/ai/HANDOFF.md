@@ -1,0 +1,289 @@
+# Dutch RL — AI Handoff
+
+Dernière mise à jour : 2026-06-25 21:18
+Agent ayant modifié ce fichier : Claude Code
+
+> Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
+
+---
+
+## Résumé ultra-court
+
+Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
+
+**État au 2026-06-25 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM**. Prochaine grande étape : l'entraînement PPO parallélisé multi-heures.
+
+---
+
+## Objectif actuel
+
+Mettre en place la phase 2 RL du projet Dutch'78.
+
+Contraintes :
+- RL depuis zéro (le siège RL n'hérite d'aucune heuristique de bot ; il ne connaît que les règles du jeu).
+- PPO, pas Q-learning.
+- Plusieurs agents avec rewards différenciées (objectif multi-objectif : gagner vite + déstabiliser l'humain).
+- Architecture Dart ↔ Python décidée proprement (cf. section décisions).
+- Préserver la phase 1 ML supervisée.
+- Inspecter le vrai code avant toute modification.
+- Ne pas inventer la structure du projet.
+- Planifier avant de coder (mode plan + gates STOP explicites).
+
+---
+
+## Contexte projet
+
+Dutch'78 est un jeu de cartes multijoueur Flutter/Dart (racine) + Node/TypeScript (`dutch-server/`).
+
+Repo :
+- `https://github.com/fiftycommit/dutch` (privé — pas de clone HTTPS anonyme possible).
+
+Déploiement :
+- `dutch-game.me` (prod sur DigitalOcean, droplet 2 vCPU / 2 Go — trop petit pour l'entraînement RL, **ne pas y entraîner**).
+
+Phase 1 ML supervisée existante (à préserver) :
+- Générateur self-play Dart headless : `tool/ml_dataset_generator.dart`
+- RNG seedable : `lib/services/game/engine_random.dart`
+- Dossier ML Python : `ml/` (venv uv, `pyproject.toml`, `scripts/`, `data/`, `models/`, `reports/`, `README.md`)
+- Modèles entraînés : `ml/models/xgboost.joblib`, `ml/models/logreg.joblib`, `ml/models/random_forest.joblib`
+- Objectif phase 1 : prédiction du vainqueur.
+
+À préserver :
+- Ne pas casser le générateur existant (`tool/ml_dataset_generator.dart`).
+- Ne pas écraser les modèles de `ml/models/`.
+- Ne pas réutiliser l'ancien module expérimental `qlearning` (cf. ci-dessous).
+
+Module expérimental à NE PAS utiliser :
+- `dutch-server/src/services/QLearningService.ts` (+ `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts`) — dormants, exclus de la compilation TS, entraînés sur des données purgées. Confirmés inutilisés en prod. Ne pas les réveiller ni s'en inspirer pour la phase 2.
+
+---
+
+## Instructions obligatoires pour tout agent IA
+
+Tout agent qui reprend ce projet doit :
+
+1. Lire ce fichier (`docs/ai/HANDOFF.md`) avant de faire quoi que ce soit.
+2. Lire `AGENTS.md` s'il existe (il existe, à la racine du repo).
+3. Inspecter les fichiers réels avant de proposer ou modifier du code.
+4. Ne jamais inventer de noms de classes, méthodes, chemins ou signatures.
+5. Ne jamais modifier le code sans plan court validé ou nécessité clairement expliquée.
+6. Préserver la phase 1 ML supervisée.
+7. Ne pas utiliser l'ancien module expérimental `qlearning`.
+8. Ne pas faire de supposition silencieuse sur l'architecture.
+9. Mettre à jour ce fichier après chaque étape significative.
+10. En fin de réponse, dire explicitement si ce handoff a été mis à jour ou non.
+
+---
+
+## Règle obligatoire de mise à jour du handoff
+
+À chaque changement concret, ce fichier doit être mis à jour.
+
+Un changement concret inclut :
+- création, modification ou suppression d'un fichier ;
+- installation d'un outil ou d'une dépendance ;
+- commande Azure qui modifie l'infrastructure ;
+- changement d'état de la VM ;
+- nouvelle erreur bloquante ;
+- correction d'un bug ;
+- décision d'architecture validée ;
+- commande importante exécutée avec résultat significatif ;
+- modification d'un plan ;
+- découverte importante dans le code ;
+- changement de stratégie technique.
+
+Après chaque changement concret :
+1. Mettre à jour la section concernée.
+2. Ajouter une entrée datée dans `## Journal des mises à jour`.
+3. Mentionner :
+   - ce qui a changé ;
+   - pourquoi ;
+   - fichiers/commandes concernés ;
+   - résultat obtenu ;
+   - état actuel ;
+   - prochaine action recommandée.
+
+Ne pas attendre la fin d'une longue série d'actions. Le fichier doit rester utilisable même si la session s'interrompt brutalement.
+
+---
+
+## État infrastructure Azure
+
+Abonnement :
+- Azure for Students (ID `28f47268-4579-4782-aebb-acce0b99e0ab`).
+
+Régions / tailles testées (historique) :
+- `westeurope` : interdite — `RequestDisallowedByAzure` (n'accepte plus de nouveaux clients).
+- `northeurope` : interdite — `RequestDisallowedByAzure`.
+- `francecentral` : RG possible, mais `Standard_F4s_v2` (4 vCPU) → `SkuNotAvailable`.
+- `swedencentral` : `Standard_F4s_v2` → `SkuNotAvailable`, mais **`Standard_B4as_v2` → succès**.
+
+VM créée et opérationnelle :
+- Resource group : `rg-dutch-rl`
+- Nom VM : `rlDutch`
+- Région : `swedencentral`
+- Taille : `Standard_B4as_v2`
+- CPU/RAM observés : **4 vCPU AMD EPYC 7763 / 15 Gio RAM** (≈16 Go)
+- Disque : 29 Go (≈21 Go libres après setup)
+- OS : Ubuntu 22.04.5 LTS x86_64
+- IP publique : `20.91.236.73`
+
+État SSH : ✅ **RÉSOLU**
+- Accès fonctionnel via l'alias `dutch-rl-vm` (configuré dans `~/.ssh/config` en local).
+- Utilisateur : `max` (créé via le portail web Azure, **pas** `azureuser`).
+- Clé retenue : `~/.ssh/dutch-rl-azure` (dédiée). Trois clés locales sont en fait autorisées (`id_rsa`, `id_ed25519`, `dutch-rl-azure`).
+- Historique : la toute première tentative `ssh max@20.91.236.73` avait échoué (`Permission denied (publickey)`) car la clé par défaut ne correspondait pas ; résolu en pointant la bonne clé via l'alias.
+
+Commandes Azure utiles :
+
+```bash
+# Stopper la VM sans payer le compute
+az vm deallocate --resource-group rg-dutch-rl --name rlDutch
+
+# Redémarrer la VM
+az vm start --resource-group rg-dutch-rl --name rlDutch
+
+# Récupérer l'IP publique
+az vm show --resource-group rg-dutch-rl --name rlDutch -d --query publicIps -o tsv
+
+# Vérifier les quotas
+az vm list-usage --location swedencentral -o table
+```
+
+> ⚠️ Pense à `az vm deallocate` quand la VM n'entraîne pas, pour ne pas payer le compute inutilement.
+
+---
+
+## État de l'environnement sur la VM
+
+Installé et vérifié sur `rlDutch` (au 2026-06-25) :
+- **Flutter 3.44.4 / Dart 3.12.2** (`~/flutter`, ajouté au PATH via `~/.bashrc`). Flutter est requis — et pas seulement Dart — car `pubspec.yaml` déclare des dépendances `sdk: flutter`, donc `dart pub get` seul échoue.
+- `unzip`, `build-essential` (linker nécessaire à `dart compile exe`), `uv 0.11.24`.
+- Code projet transféré par **rsync** depuis le local (repo privé) sous `~/dutch/` : `lib/`, `tool/`, `rl/`, `pubspec.yaml`, `pubspec.lock`, `analysis_options.yaml`.
+- Runner Dart compilé : `~/dutch/tool/rl_env_runner` (répond au protocole NDJSON).
+- Environnement Python : venv `uv` **Python 3.12.13** dans `~/dutch/rl/.venv` (Ubuntu 22.04 n'a que Python 3.10, insuffisant) + `gymnasium`, `numpy`, `stable-baselines3 2.9.0`, `sb3-contrib 2.9.0`, `torch 2.12.1`.
+
+Point d'optimisation connu (non bloquant) :
+- `uv` a installé les wheels CUDA (`nvidia-*`) alors que la VM est CPU-only → venv à 4,6 Go. Réinstaller torch CPU-only récupérerait ~3 Go (21 Go encore libres, donc pas urgent).
+
+Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert**
+1. aller-retour scripté ; 2. reward terminale Python↔Dart ; 3. déterminisme ; 4. honnêteté du masque ; 5. formes fixes 2-6 joueurs ; 6. robustesse process (kill + timeout).
+
+---
+
+## Décisions d'architecture (phase 2 RL)
+
+### Décidées et implémentées
+- **Intégration Dart ↔ Python : subprocess + NDJSON sur stdin/stdout.** Le runner Dart headless (`tool/rl_env_runner.dart`) est la source de vérité des règles ; Python pilote via messages JSON ligne par ligne (`reset` / `observation` / `action` / `error` / `close`).
+- **Le Dart est l'autorité du moteur** : aucune règle de jeu réimplémentée en Python.
+- **Observation** : `Box(148,)` taille fixe (agrégats adversaires, pas de slots bruts ; anti-fuite : n'expose que les croyances mentalMap/knownCards/spyMemory, jamais les vraies cartes non vues). MAX_HAND=13, MAX_OPP=5.
+- **Action** : `Discrete(165)` masquée (MaskablePPO). Blocs contigus : call_dutch=0, continue_draw=1, discard_drawn=2, skip_power=3, replace 4-16, power7_look 17-29, power10_spy 30-94, powerV_swap 95-159, powerJoker 160-164. La réaction (D) est **exclue** en v1.
+- **Reward multi-objectif (MORL)** : scalarisation préférence-conditionnée `w1·principal + w2·destab`, poids ~Dirichlet(1,1) par épisode, concaténés à l'observation. Objectif 1 = gagner vite (terminal, rang normalisé). Objectif 2 = déstabiliser un proxy-humain dynamique (signal dense ré-dérivé de `HumanThreatTracker`, règle de proxy stable : reward_destab=0 si le proxy change).
+- **Algo** : `sb3-contrib` MaskablePPO (PPO masqué).
+- **Nombre de joueurs** : 2 à 6 (aligné sur le vrai jeu / UI).
+- **Déterminisme** : RNG seedable côté Dart (`engine_random.dart`), seeds incrémentaux par épisode côté Python.
+
+### Encore à décider / à faire
+- Hyperparamètres finaux et volume (total_timesteps) du run sérieux.
+- Parallélisation : `SubprocVecEnv` K=3 (cadré, pas encore lancé sur la VM).
+- Différenciation concrète des « agents » via le simplexe de poids (sélection, évaluation).
+- Sauvegarde checkpoints PPO + monitoring TensorBoard.
+- Baselines d'évaluation (vs bots existants, vs aléatoire).
+- Protocole de non-régression de la phase 1.
+
+---
+
+## Fichiers importants (vérifiés dans le repo réel)
+
+Phase 1 ML (à préserver, ne pas modifier) :
+- `tool/ml_dataset_generator.dart` — générateur self-play headless.
+- `lib/services/game/engine_random.dart` — RNG seedable.
+- `ml/models/xgboost.joblib`, `ml/models/logreg.joblib`, `ml/models/random_forest.joblib`.
+- `ml/` (pipeline Python : `scripts/`, `data/`, `reports/`, `README.md`).
+
+Phase 2 RL (en cours) :
+- `tool/rl_env_runner.dart` — env RL headless (source de vérité des règles côté Dart).
+- `lib/services/game/bot/headless_threat_signal.dart` — ré-dérivation headless du signal de menace.
+- `rl/runner_process.py` — pilote subprocess NDJSON.
+- `rl/encoding.py` — tables action/observation/masque.
+- `rl/dutch_env.py` — `gym.Env` mono-agent.
+- `rl/train_ppo.py` — entraîneur smoke (plomberie).
+- `rl/test_roundtrip.py` — barrière de validation (6 checks).
+- `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
+
+À éviter :
+- `dutch-server/src/services/QLearningService.ts` et apparentés (dormants, exclus de compilation).
+
+> Ne pas supposer que cette liste est exhaustive. Inspecter le repo réel avant toute modification.
+
+---
+
+## Prochaine étape immédiate
+
+L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtrip 6/6 sur la VM). La suite (phase 3 — entraînement parallélisé) :
+
+1. (Correctif léger) `GameLoggerService.instance.setEnabled(false)` dans le `main()` du runner + recompile, pour éviter une fuite mémoire `_logBuffer` sur les longs runs.
+2. (Optionnel) Slim torch en CPU-only sur la VM (récupère ~3 Go).
+3. Écrire `rl/train_parallel.py` : `SubprocVecEnv` K=3, `CheckpointCallback`, callback stop-file/time-limit, `tensorboard_log`, sauvegarde en `try/finally`.
+4. Ajouter une récupération sur crash dans `DutchEnv.step`.
+5. Mesurer le FPS parallèle, fixer `total_timesteps` pour un run multi-heures.
+6. Lancer en arrière-plan avec monitoring TensorBoard.
+
+Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
+
+---
+
+## Suivi sécurité (à traiter)
+
+- Une inspection antérieure de la prod (`pm2 jlist`) a exposé `FIREBASE_SERVICE_ACCOUNT_JSON` (clé privée) et `FIREBASE_WEB_API_KEY` dans un transcript. **Rotation de la clé de service Firebase recommandée.**
+
+---
+
+## Journal des mises à jour
+
+### 2026-06-25 21:18 — Préparation du push GitHub du code RL (gitignore)
+
+Changement :
+- Bascule du workflow VM : on passe du transfert manuel (rsync) au **clonage GitHub**. Le code RL va être poussé sur `fiftycommit/dutch`.
+- Complété `rl/.gitignore` : ajout de `!requirements.txt` (négation) car `rl/requirements.txt` était avalé par la règle globale `*.txt` de la racine, alors qu'il doit être suivi.
+
+Pourquoi :
+- Centraliser le code sur le repo pour que la VM (et tout agent) clone au lieu de recevoir des fichiers à la main.
+
+Fichiers / commandes concernés :
+- Modifié : `rl/.gitignore`.
+- Vérifs : `git ls-files --others --exclude-standard`, `git check-ignore`.
+
+Résultat obtenu :
+- Liste d'ajout propre (13 fichiers untracked + 2 modifiés), tous < 30 Ko. Artefacts lourds bien exclus : `rl/.venv` (505 Mo), `rl/models` (524 Ko), `rl/__pycache__`, binaire `tool/rl_env_runner`. `rl/requirements.txt` désormais inclus.
+
+État actuel :
+- Étape 1 (gitignore) terminée. Commit/push **en attente de validation** du `git status` par l'utilisateur (gate STOP).
+- À flaguer : `tool/ml_dataset_generator.dart` est modifié (2-4 → 2-6 joueurs, indissociable du runner pour la byte-parity).
+
+Prochaine action recommandée :
+- Après GO : `git add` du périmètre validé, commit (message décrivant runner Dart + signal MORL + wrapper Python + tests), `git push`. Puis cloner le repo sur la VM.
+
+### 2026-06-25 21:10 — Initialisation du handoff
+
+Changement :
+- Création de `docs/ai/HANDOFF.md` (+ dossier `docs/ai/`).
+- Réconciliation du template initial avec l'état réel vérifié du repo et de l'infra (le template décrivait un état antérieur « SSH bloqué / env non installé »).
+
+Pourquoi :
+- Permettre à Claude Code et Codex de reprendre le contexte sans session partagée, avec des faits exacts.
+
+Fichiers / commandes concernés :
+- Créé : `docs/ai/HANDOFF.md`. Aucun fichier fonctionnel touché.
+- Inspections lecture seule : `docs/`, `AGENTS.md`, `ml/models/`, `tool/ml_dataset_generator.dart`, `lib/services/game/engine_random.dart`, `dutch-server/src/services/QLearningService.ts`, `rl/`.
+
+Résultat obtenu :
+- Handoff créé, vérifié contre le repo réel (chemins confirmés, pas d'invention).
+
+État actuel :
+- VM Azure `rlDutch` (`20.91.236.73`, swedencentral, B4as_v2, 4 vCPU/15 Gio) créée et **accessible en SSH** via l'alias `dutch-rl-vm`.
+- Environnement RL installé sur la VM (Flutter 3.44.4/Dart 3.12.2, uv/Python 3.12, deps RL), runner compilé, `rl/test_roundtrip.py` **6/6 vert**.
+- Aucun code applicatif modifié.
+
+Prochaine action recommandée :
+- Démarrer la phase 3 (entraînement parallélisé) en suivant la section « Prochaine étape immédiate ».
