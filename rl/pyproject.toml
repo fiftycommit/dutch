@@ -10,6 +10,7 @@ dependencies = [
     "numpy>=1.26",
     "stable-baselines3>=2.3",
     "sb3-contrib>=2.3",
+    "tensorboard>=2.20.0",
 ]
 
 [tool.uv]
