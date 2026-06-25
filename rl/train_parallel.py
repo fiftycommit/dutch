@@ -174,7 +174,13 @@ def main() -> int:
         print("Interruption clavier reçue ; sauvegarde finale en cours.")
     finally:
         model.save(str(final_model))
-        env.close()
+        try:
+            env.close()
+        except (BrokenPipeError, ConnectionResetError, EOFError, OSError) as e:
+            print(
+                "Fermeture de l'environnement déjà interrompue "
+                f"(pipe cassé ou fermé) ; ignoré : {type(e).__name__}: {e}"
+            )
         print(f"Modèle final sauvegardé : {final_model}.zip")
         print(
             "Compteurs défaillances : "

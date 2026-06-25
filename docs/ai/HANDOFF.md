@@ -1,6 +1,6 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-26 00:24 (CEST, 22:24 UTC)
+Dernière mise à jour : 2026-06-26 01:06 (CEST, 23:06 UTC)
 Agent ayant modifié ce fichier : Codex
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
@@ -11,7 +11,7 @@ Agent ayant modifié ce fichier : Codex
 
 Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
 
-**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. `rl/train_parallel.py` est ajouté et validé en smoke (K=4, checkpoints, TensorBoard, sauvegarde finale). Prochaine grande étape : fixer le volume `--total-timesteps` du premier run multi-heures et le lancer en arrière-plan.
+**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. `rl/train_parallel.py` est ajouté et validé en smoke (K=4, checkpoints, TensorBoard, sauvegarde finale). Le FPS de croisière avec updates PPO est d'environ **1230 steps agent/s** sur la VM. Prochaine grande étape : fixer le volume `--total-timesteps` du premier run multi-heures et le lancer en arrière-plan.
 
 ---
 
@@ -184,7 +184,7 @@ Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé a
 - **Algo** : `sb3-contrib` MaskablePPO (PPO masqué).
 - **Nombre de joueurs** : 2 à 6 (aligné sur le vrai jeu / UI).
 - **Déterminisme** : RNG seedable côté Dart (`engine_random.dart`), seeds incrémentaux par épisode côté Python.
-- **Entraînement parallèle** : `SubprocVecEnv` **K=4** retenu pour le premier run sérieux après mesures empiriques sur la VM. Mesures longues 10k steps vectorisés : K=3 ≈2222 FPS agent, RSS arbre ≈2074→2078 MB ; K=4 ≈2547 FPS agent, RSS arbre ≈2610→2615 MB. Nombre de descendants observé = `2*K + 2` (workers Python + runners Dart + processus support Python forkserver/resource_tracker), stable.
+- **Entraînement parallèle** : `SubprocVecEnv` **K=4** retenu pour le premier run sérieux après mesures empiriques sur la VM. Mesures longues 10k steps vectorisés sans updates PPO : K=3 ≈2222 FPS agent, RSS arbre ≈2074→2078 MB ; K=4 ≈2547 FPS agent, RSS arbre ≈2610→2615 MB. Nombre de descendants observé = `2*K + 2` (workers Python + runners Dart + processus support Python forkserver/resource_tracker), stable. Mesure de croisière avec entraînement PPO réel : **≈1230 FPS agent** ; utiliser ce chiffre, pas 2547, pour dimensionner `--total-timesteps`.
 - **Hyperparamètres PPO v1** : `n_steps=512`, `batch_size=128`, `gamma=0.997`, `gae_lambda=0.95`, `learning_rate=3e-4`, `clip_range=0.2`, `ent_coef=0.01`, `vf_coef=0.5`, `max_grad_norm=0.5`, `n_epochs=10`, `target_kl=0.03`.
 
 ### Encore à décider / à faire
@@ -231,7 +231,7 @@ L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtri
 3. ✅ **Fait (local/VM, validé)** — `DutchEnv.step()` gère désormais deux modes de défaillance sans casser `SubprocVecEnv` : process runner mort/timeout → épisode tronqué neutre ; erreur moteur `INTERNAL fatal:true` → log ERROR + épisode tronqué signalé.
 4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs (`engine_internal_error` seuil 8), sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
 5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu pour le premier run : ≈2547 FPS agent, RSS arbre ≈2.61 Go, stable sur 10k steps vectorisés.
-6. **Prochaine action** — fixer `--total-timesteps` pour un run multi-heures à partir du FPS réel K=4 (~2550 steps agent/s). Ordres de grandeur : 1 h ≈ 9,2 M steps, 2 h ≈ 18,4 M, 4 h ≈ 36,7 M. Choisir une durée cible, puis lancer `train_parallel.py` en arrière-plan avec `nohup` ou `screen`/`tmux` (vérifier lequel est disponible sur la VM) pour survivre à une déconnexion SSH, et suivre via TensorBoard.
+6. **Prochaine action** — fixer `--total-timesteps` pour un run multi-heures à partir du FPS de croisière K=4 avec PPO (~1230 steps agent/s). Ordres de grandeur : 1 h ≈ 4,4 M steps, 4 h ≈ 17,7 M, 13 h ≈ 57,6 M. Choisir la durée cible, puis lancer `train_parallel.py` en arrière-plan avec `nohup` ou `screen`/`tmux` (vérifier lequel est disponible sur la VM) pour survivre à une déconnexion SSH, et suivre via TensorBoard.
 
 Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
 
@@ -244,6 +244,41 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-26 01:06 — Fermeture robuste après Ctrl-C dans `train_parallel.py`
+
+Changement :
+- Patch de `rl/train_parallel.py` dans le bloc `finally` de `main()` : `model.save(...)` reste inchangé et obligatoire, puis `env.close()` est maintenant entouré d'un `try/except` qui ignore uniquement les erreurs de fermeture déjà cassée : `BrokenPipeError`, `ConnectionResetError`, `EOFError`, `OSError`.
+- Message explicite en cas d'exception ignorée : fermeture de l'environnement déjà interrompue (pipe cassé ou fermé), avec le type et le message de l'exception.
+
+Pourquoi :
+- Pendant un run de croisière interrompu par `Ctrl-C`, le modèle final se sauvegardait correctement, mais `SubprocVecEnv.close()` pouvait ensuite lever `BrokenPipeError` ou `EOFError` si un pipe worker était déjà fermé/cassé. Résultat : traceback et code de sortie `1`, trompeur puisque la sauvegarde avait réussi.
+- Le patch ne masque pas une erreur de `model.save()` : seule la fermeture `env.close()` est tolérante.
+
+Fichiers / commandes concernés :
+- Modifié : `rl/train_parallel.py`.
+- Inspection SB3 : `stable_baselines3/common/vec_env/subproc_vec_env.py`, `close()` lit `remote.recv()` puis envoie `remote.send(("close", None))`, ce qui explique `EOFError` ou erreur de pipe selon l'état exact du worker.
+- Reproduction :
+  `uv run python train_parallel.py --num-workers=4 --total-timesteps=900000 --checkpoint-freq=200000 --tensorboard-log-dir=/tmp/dutch_rl_fps_check_runs --model-out=/tmp/dutch_rl_fps_check_models --internal-error-threshold=8`
+
+Résultat obtenu :
+- Reproduction après patch : interruption `Ctrl-C` après environ 80-90 s, pas de traceback, `EXIT_CODE=130` propre.
+- Modèle final confirmé présent avant nettoyage : `/tmp/dutch_rl_fps_check_models/maskable_ppo_parallel_final.zip`.
+- TensorBoard confirmé présent et non vide : `/tmp/dutch_rl_fps_check_runs/MaskablePPO_1/events.out.tfevents...`.
+- Compteurs erreurs à zéro : `engine_internal_errors=0`, `runner_crashes=0`, `runner_timeouts=0`.
+- Artefacts temporaires `/tmp/dutch_rl_fps_check_runs` et `/tmp/dutch_rl_fps_check_models` supprimés après vérification.
+
+FPS de croisière :
+- Le test long réel avec updates PPO a stabilisé autour de **1230 steps agent/s** sur K=4 (run précédent monté à environ 190 itérations / 389 120 timesteps avant interruption).
+- Ce chiffre est nettement inférieur à la sonde sans entraînement PPO (K=4 ≈2547 FPS agent). Pour calculer le `--total-timesteps` d'un run multi-heures, utiliser **≈1230 steps agent/s**, pas ≈2550.
+
+État actuel :
+- `train_parallel.py` gère correctement l'interruption volontaire : sauvegarde finale, fermeture tolérante si pipe déjà cassé, code retour `130`.
+- `pubspec.lock` reste modifié localement mais hors périmètre.
+
+Prochaine action recommandée :
+- Commit/push de `rl/train_parallel.py` + ce handoff, puis fixer le volume du run 13 h avec le repère ≈1230 FPS : ordre de grandeur **13 h ≈ 57,6 M timesteps agent**.
+- Vérifier la disponibilité de `nohup`, `screen` ou `tmux` sur la VM, lancer le run en arrière-plan et suivre via TensorBoard.
 
 ### 2026-06-26 00:24 — Ajout entraînement PPO parallèle + TensorBoard
 
@@ -293,7 +328,7 @@ Résultat obtenu :
 - `pubspec.lock` reste modifié localement mais hors périmètre.
 
 Prochaine action recommandée :
-- Fixer une durée cible du premier run multi-heures et convertir en `--total-timesteps` avec le FPS K=4 mesuré (~2550 steps agent/s) : 1 h ≈ 9,2 M, 2 h ≈ 18,4 M, 4 h ≈ 36,7 M.
+- Fixer une durée cible du premier run multi-heures et convertir en `--total-timesteps` avec le FPS K=4 réel avec updates PPO (~1230 steps agent/s) : 1 h ≈ 4,4 M, 4 h ≈ 17,7 M, 13 h ≈ 57,6 M.
 - Vérifier sur la VM la disponibilité de `nohup`, `screen` ou `tmux`, lancer `train_parallel.py` en arrière-plan, puis suivre via TensorBoard.
 
 ### 2026-06-25 23:12 — Robustesse `DutchEnv.step()` avant entraînement parallèle
