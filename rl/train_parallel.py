@@ -14,6 +14,7 @@ court avec TensorBoard et FPS réel.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -49,14 +50,21 @@ class FailureCountersCallback(BaseCallback):
         self,
         *,
         internal_error_threshold: int,
+        recoverable_error_window: int,
+        recoverable_error_threshold: int,
         log_every_steps: int = 10_000,
     ) -> None:
         super().__init__()
         self.internal_error_threshold = internal_error_threshold
+        self.recoverable_error_window = recoverable_error_window
+        self.recoverable_error_threshold = recoverable_error_threshold
         self.log_every_steps = log_every_steps
         self.engine_internal_errors = 0
+        self.engine_recoverable_errors = 0
         self.runner_crashes = 0
         self.runner_timeouts = 0
+        # num_timesteps des erreurs récupérables récentes (fenêtre glissante)
+        self._recoverable_window: deque[int] = deque()
         self._next_log_step = 0
 
     def _on_training_start(self) -> None:
@@ -66,6 +74,9 @@ class FailureCountersCallback(BaseCallback):
         for info in self.locals.get("infos", []):
             if info.get("engine_internal_error"):
                 self.engine_internal_errors += 1
+            if info.get("engine_recoverable_error"):
+                self.engine_recoverable_errors += 1
+                self._recoverable_window.append(self.num_timesteps)
             if info.get("runner_crashed"):
                 self.runner_crashes += 1
             if info.get("runner_timeout"):
@@ -75,6 +86,10 @@ class FailureCountersCallback(BaseCallback):
             self.logger.record(
                 "failures/engine_internal_errors",
                 self.engine_internal_errors,
+            )
+            self.logger.record(
+                "failures/engine_recoverable_errors",
+                self.engine_recoverable_errors,
             )
             self.logger.record("failures/runner_crashes", self.runner_crashes)
             self.logger.record("failures/runner_timeouts", self.runner_timeouts)
@@ -91,6 +106,27 @@ class FailureCountersCallback(BaseCallback):
                 f"({self.engine_internal_errors} > {self.internal_error_threshold})."
             )
             return False
+
+        # Garde-fou de FRÉQUENCE sur les erreurs récupérables (fenêtre glissante).
+        # Rares (quelques unités/millions de steps) -> le run continue sans broncher ;
+        # une fréquence anormale signale un vrai bug -> arrêt propre.
+        if self.recoverable_error_threshold > 0:
+            cutoff = self.num_timesteps - self.recoverable_error_window
+            while self._recoverable_window and self._recoverable_window[0] < cutoff:
+                self._recoverable_window.popleft()
+            if len(self._recoverable_window) > self.recoverable_error_threshold:
+                self.logger.record(
+                    "failures/engine_recoverable_error_stop",
+                    len(self._recoverable_window),
+                )
+                print(
+                    "Arrêt demandé : fréquence d'erreurs récupérables anormale "
+                    f"({len(self._recoverable_window)} erreurs sur la fenêtre de "
+                    f"{self.recoverable_error_window} steps > seuil "
+                    f"{self.recoverable_error_threshold}). "
+                    "Probable bug de fond plutôt qu'un désync rare."
+                )
+                return False
         return True
 
 
@@ -103,6 +139,20 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--tensorboard-log-dir", type=Path, default=base / "runs")
     parser.add_argument("--model-out", type=Path, default=base / "models")
     parser.add_argument("--internal-error-threshold", type=int, default=8)
+    parser.add_argument("--recoverable-error-window", type=int, default=200_000)
+    parser.add_argument(
+        "--recoverable-error-threshold",
+        type=int,
+        default=50,
+        help="Max d'erreurs récupérables tolérées dans la fenêtre glissante "
+        "avant arrêt propre ; <=0 pour désactiver le garde-fou.",
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        default=None,
+        help="Chemin .zip d'un checkpoint MaskablePPO à reprendre.",
+    )
     return parser.parse_args()
 
 
@@ -116,28 +166,43 @@ def main() -> int:
         raise SystemExit("--checkpoint-freq doit être positif")
     if args.internal_error_threshold < 0:
         raise SystemExit("--internal-error-threshold doit être >= 0")
+    if args.recoverable_error_window <= 0:
+        raise SystemExit("--recoverable-error-window doit être positif")
 
     args.model_out.mkdir(parents=True, exist_ok=True)
     args.tensorboard_log_dir.mkdir(parents=True, exist_ok=True)
 
     env = SubprocVecEnv([_make_env(i) for i in range(args.num_workers)])
-    model = MaskablePPO(
-        "MlpPolicy",
-        env,
-        n_steps=512,
-        batch_size=128,
-        gamma=0.997,
-        gae_lambda=0.95,
-        learning_rate=3e-4,
-        clip_range=0.2,
-        ent_coef=0.01,
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        n_epochs=10,
-        target_kl=0.03,
-        tensorboard_log=str(args.tensorboard_log_dir),
-        verbose=1,
-    )
+    resuming = args.resume_from is not None
+    if resuming:
+        if not args.resume_from.exists():
+            raise SystemExit(f"--resume-from introuvable : {args.resume_from}")
+        print(f"Reprise depuis le checkpoint : {args.resume_from}")
+        # Hyperparamètres restaurés depuis le .zip : le bloc MaskablePPO(...) neuf
+        # n'est PAS exécuté.
+        model = MaskablePPO.load(
+            str(args.resume_from),
+            env=env,
+            tensorboard_log=str(args.tensorboard_log_dir),
+        )
+    else:
+        model = MaskablePPO(
+            "MlpPolicy",
+            env,
+            n_steps=512,
+            batch_size=128,
+            gamma=0.997,
+            gae_lambda=0.95,
+            learning_rate=3e-4,
+            clip_range=0.2,
+            ent_coef=0.01,
+            vf_coef=0.5,
+            max_grad_norm=0.5,
+            n_epochs=10,
+            target_kl=0.03,
+            tensorboard_log=str(args.tensorboard_log_dir),
+            verbose=1,
+        )
 
     # `CheckpointCallback.save_freq` compte les appels callback (steps vectorises),
     # alors que `num_timesteps` avance de `num_workers` transitions agent.
@@ -151,8 +216,28 @@ def main() -> int:
     )
     failure_callback = FailureCountersCallback(
         internal_error_threshold=args.internal_error_threshold,
+        recoverable_error_window=args.recoverable_error_window,
+        recoverable_error_threshold=args.recoverable_error_threshold,
     )
     callbacks = CallbackList([failure_callback, checkpoint_callback])
+
+    # `--total-timesteps` est la cible CUMULÉE. En reprise, SB3 interprète
+    # l'argument de learn() comme des steps ADDITIONNELS (il fait lui-même
+    # total_timesteps += num_timesteps dans _setup_learn) : on calcule donc
+    # l'additionnel à viser et on garde le compteur via reset_num_timesteps=False.
+    if resuming:
+        additional = args.total_timesteps - model.num_timesteps
+        if additional <= 0:
+            raise SystemExit(
+                f"--total-timesteps ({args.total_timesteps}) <= steps déjà "
+                f"effectués ({model.num_timesteps}) : rien à entraîner."
+            )
+        print(
+            f"Reprise à num_timesteps={model.num_timesteps}, "
+            f"cible cumulée={args.total_timesteps}, steps additionnels={additional}."
+        )
+    else:
+        additional = args.total_timesteps
 
     final_model = args.model_out / "maskable_ppo_parallel_final"
     interrupted = False
@@ -165,8 +250,9 @@ def main() -> int:
             f"tensorboard={args.tensorboard_log_dir}, model_out={args.model_out}"
         )
         model.learn(
-            total_timesteps=args.total_timesteps,
+            total_timesteps=additional,
             callback=callbacks,
+            reset_num_timesteps=not resuming,
             progress_bar=False,
         )
     except KeyboardInterrupt:
@@ -185,6 +271,7 @@ def main() -> int:
         print(
             "Compteurs défaillances : "
             f"engine_internal_errors={failure_callback.engine_internal_errors}, "
+            f"engine_recoverable_errors={failure_callback.engine_recoverable_errors}, "
             f"runner_crashes={failure_callback.runner_crashes}, "
             f"runner_timeouts={failure_callback.runner_timeouts}"
         )

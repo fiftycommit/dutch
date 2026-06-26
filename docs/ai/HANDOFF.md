@@ -11,7 +11,7 @@ Agent ayant modifié ce fichier : Claude Code
 
 Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
 
-**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6 sur la VM** après recompilation. `rl/train_parallel.py` est ajouté et validé en smoke (K=4, checkpoints, TensorBoard, sauvegarde finale). Le premier run réel 13 h est lancé dans tmux (`dutch_rl_train`) avec `--total-timesteps=57600000`, FPS observé ≈1230-1240 steps agent/s, logs dans `rl/runs/`.
+**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6** après recompilation. Le premier run réel a tourné jusqu'à ~9M steps puis un worker a été tué par un crash `BAD_PHASE` (désync rare de `_recv()`). **Trois correctifs ont été appliqués** (erreurs récupérables dans `dutch_env.py`, réécriture binaire de `_recv()` dans `runner_process.py`, option `--resume-from` dans `train_parallel.py`), validés par **21 tests verts (15 Dart + 6 Python)**. Le run a été **repris** depuis le checkpoint 9M dans une nouvelle session tmux `dutch_rl_train2` ; cible 57,6M cumulés, ≈1221 fps, log `rl/runs/train_parallel_resume_20260626_070144.log`.
 
 ---
 
@@ -188,7 +188,6 @@ Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé a
 - **Hyperparamètres PPO v1** : `n_steps=512`, `batch_size=128`, `gamma=0.997`, `gae_lambda=0.95`, `learning_rate=3e-4`, `clip_range=0.2`, `ent_coef=0.01`, `vf_coef=0.5`, `max_grad_norm=0.5`, `n_epochs=10`, `target_kl=0.03`.
 
 ### Encore à décider / à faire
-- Volume (`--total-timesteps`) du premier run sérieux multi-heures.
 - Différenciation concrète des « agents » via le simplexe de poids (sélection, évaluation).
 - Baselines d'évaluation (vs bots existants, vs aléatoire).
 - Protocole de non-régression de la phase 1.
@@ -206,11 +205,11 @@ Phase 1 ML (à préserver, ne pas modifier) :
 Phase 2 RL (en cours) :
 - `tool/rl_env_runner.dart` — env RL headless (source de vérité des règles côté Dart).
 - `lib/services/game/bot/headless_threat_signal.dart` — ré-dérivation headless du signal de menace.
-- `rl/runner_process.py` — pilote subprocess NDJSON.
+- `rl/runner_process.py` — pilote subprocess NDJSON ; `_recv()` lit le fd en **binaire** (`os.read` + découpage manuel des lignes, buffer résiduel `self._buf`, `bufsize=0`) — plus de mélange `select`/`readline` texte (cause racine du désync `BAD_PHASE` éliminée).
 - `rl/encoding.py` — tables action/observation/masque.
-- `rl/dutch_env.py` — `gym.Env` mono-agent.
+- `rl/dutch_env.py` — `gym.Env` mono-agent ; `step()` traite toute erreur runner `fatal:false` comme récupérable (épisode tronqué, compteur `engine_recoverable_error_count`, log WARNING) et **lève** sur `fatal:true`.
 - `rl/train_ppo.py` — entraîneur smoke (plomberie).
-- `rl/train_parallel.py` — entraîneur PPO parallèle (`SubprocVecEnv`, checkpoints, TensorBoard, sauvegarde `finally`, surveillance erreurs).
+- `rl/train_parallel.py` — entraîneur PPO parallèle (`SubprocVecEnv`, checkpoints, TensorBoard, sauvegarde `finally`). Option `--resume-from` (`MaskablePPO.load` + `reset_num_timesteps=False` ; `--total-timesteps` = cible cumulée, additionnel calculé en interne). `FailureCountersCallback` : `--internal-error-threshold` + garde-fou de fréquence sur erreurs récupérables (`--recoverable-error-window` déf. 200000, `--recoverable-error-threshold` déf. 50, ≤0 pour désactiver).
 - `rl/test_roundtrip.py` — barrière de validation (6 checks).
 - `rl/pyproject.toml`, `rl/uv.lock` — dépendances RL uv (inclut TensorBoard pour SB3).
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
@@ -228,11 +227,25 @@ L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtri
 
 1. ✅ **Fait (VM, validé)** — fuite mémoire `_logBuffer` corrigée : `GameLoggerService.instance.setEnabled(false)` en tête du `main()` du runner, binaire recompilé sur la VM, `flutter test test/rl/` passé **15/15**, puis `rl/test_roundtrip.py` relancé après recompilation et passé **6/6**.
 2. (Optionnel) Slim torch en CPU-only sur la VM (récupère ~3 Go).
-3. ✅ **Fait (local/VM, validé)** — `DutchEnv.step()` gère désormais deux modes de défaillance sans casser `SubprocVecEnv` : process runner mort/timeout → épisode tronqué neutre ; erreur moteur `INTERNAL fatal:true` → log ERROR + épisode tronqué signalé.
-4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs (`engine_internal_error` seuil 8), sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
-5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu pour le premier run : ≈2547 FPS agent, RSS arbre ≈2.61 Go, stable sur 10k steps vectorisés.
-6. ✅ **En cours (VM)** — run réel 13 h lancé dans tmux (`dutch_rl_train`) : `--total-timesteps=57600000`, K=4, checkpoints tous les 500k timesteps agent, logs/checkpoints sous `rl/runs/` et `rl/models/` (gitignorés).
-7. **Prochaine action** — ne pas modifier le code pendant le run sauf incident. Attendre la fin du run (ou faire un check-in périodique), puis évaluer le modèle obtenu vs bots existants et vs aléatoire avant de concevoir les agents « moyen » et « facile ».
+3. ✅ **Fait (local, validé)** — `DutchEnv.step()` gère les défaillances sans casser `SubprocVecEnv` : runner mort/timeout → épisode tronqué neutre ; **toute erreur moteur `fatal:false`** (BAD_PHASE ou autre code) → épisode tronqué récupérable (compteur `engine_recoverable_error_count`, log WARNING) ; **`fatal:true` LÈVE** (y compris `INTERNAL` — on ne masque plus un état moteur corrompu). Cf. l'entrée de journal des trois correctifs.
+4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs, sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
+5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu : ≈1221 fps agent en croisière (updates PPO réels), RSS arbre ≈2.61 Go, stable.
+6. ⚠️ **Crash puis reprise** — le run initial (`dutch_rl_train`) a été tué à ~9M steps par un crash `BAD_PHASE` (worker tué, process principal bloqué ~103% CPU, 3/4 runners Dart orphelins). Cause + correctifs : cf. journal. Le run **tourne désormais** dans `dutch_rl_train2`, repris depuis `models/maskable_ppo_parallel_checkpoint_9000000_steps.zip`, cible 57,6M cumulés (~48,6M restants au lancement), ≈1221 fps, log `rl/runs/train_parallel_resume_20260626_070144.log`. **Ne PAS reprendre depuis `maskable_ppo_parallel_final.zip`** (écrit pendant l'agonie du crash, état non fiable).
+7. **Prochaine action** — ne pas modifier le code pendant le run sauf incident. Attendre la fin (ou check-in périodique), surveiller `failures/engine_recoverable_errors` dans TensorBoard, puis évaluer le modèle obtenu vs bots existants et vs aléatoire avant de concevoir les agents « moyen » et « facile ».
+
+**Commande de reprise (forme exacte — `--total-timesteps` = cible CUMULÉE) :**
+
+```bash
+cd /home/max/dutch/rl && uv run python train_parallel.py \
+  --resume-from models/maskable_ppo_parallel_checkpoint_9000000_steps.zip \
+  --num-workers=4 --total-timesteps=57600000 --checkpoint-freq=500000 \
+  --internal-error-threshold=8 \
+  --recoverable-error-window=200000 --recoverable-error-threshold=50 \
+  --tensorboard-log-dir=/home/max/dutch/rl/runs --model-out=/home/max/dutch/rl/models \
+  2>&1 | tee -a /home/max/dutch/rl/runs/train_parallel_resume_$(date +%Y%m%d_%H%M%S).log
+```
+
+`--total-timesteps` reste la cible cumulée : l'additionnel (`cible − num_timesteps` restauré) est calculé en interne et `learn()` est appelé avec `reset_num_timesteps=False`. Toujours reprendre depuis le **dernier checkpoint `*_steps.zip` valide**, jamais `*_final.zip`.
 
 Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
 
@@ -245,6 +258,30 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-26 ~07:01 UTC — Crash BAD_PHASE résolu (3 correctifs) + reprise du run
+
+**Symptôme :** pendant le run `dutch_rl_train` (~9M steps), un worker `SubprocVecEnv` a été tué par une `RuntimeError` non gérée (« BAD_PHASE épisode déjà terminé »). Le process principal est resté bloqué à ~103% CPU sans avancer, avec 3/4 runners Dart orphelins.
+
+**Cause racine :** désync rare d'un message dans `_recv()` (`runner_process.py`) — mélange de `select()` sur le fd brut et de `readline()` sur un flux texte bufferisé avec read-ahead : sous charge, une rafale de plusieurs lignes désynchronisait le flux. Côté Python, `dutch_env.py::step()` ne traitait comme récupérable que `code=="INTERNAL" && fatal:true` ; toute autre erreur (dont `BAD_PHASE`) tombait sur un `raise` générique qui tuait le worker.
+
+**Trois correctifs appliqués (validés par 21 tests verts : 15 Dart + 6 Python) :**
+1. `rl/dutch_env.py::step()` — toute erreur runner `fatal:false` est désormais récupérable (`terminated=False`, `truncated=True`, compteur `engine_recoverable_error_count` distinct, log WARNING). `fatal:true` **LÈVE** désormais, y compris `INTERNAL+fatal:true` — **changement** vs le comportement précédent qui tronquait : on ne masque plus un état moteur corrompu.
+2. `rl/runner_process.py::_recv()` — réécrit en lecture **binaire** (`os.read` + découpage manuel des lignes, buffer résiduel `self._buf`, `bufsize=0`). Plus de mélange `select`/`readline` texte ; une rafale multi-lignes est mise en buffer et rendue une ligne par appel. Cause racine du désync éliminée.
+3. `rl/train_parallel.py` — option `--resume-from` (`MaskablePPO.load(path, env=env)` + `model.learn(..., reset_num_timesteps=False)`). `--total-timesteps` reste la **cible cumulée** ; l'additionnel est calculé en interne. Vérifié dans le source SB3 installé : `stable_baselines3/common/base_class.py:416` fait `total_timesteps += self.num_timesteps` quand `reset_num_timesteps=False`, et `num_timesteps` n'est pas dans `_excluded_save_params` (donc restauré par `load`). Garde-fou de fréquence sur erreurs récupérables ajouté dans `FailureCountersCallback` (fenêtre glissante `deque`) : `--recoverable-error-window` (déf. 200000) et `--recoverable-error-threshold` (déf. 50, ≤0 pour désactiver).
+
+**Reprise du run :**
+- Nouvelle session tmux `dutch_rl_train2` (l'ancienne `dutch_rl_train` est morte avec le crash).
+- Reprise depuis `models/maskable_ppo_parallel_checkpoint_9000000_steps.zip` (PAS `maskable_ppo_parallel_final.zip`, écrit pendant l'agonie du crash → état non fiable).
+- `num_timesteps` restauré = 9 000 000 ; additionnel calculé = 48 600 000 ; cible cumulée 57 600 000.
+- Confirmation : `total_timesteps` démarre à ~9 018 432 (pas 0) → `reset_num_timesteps=False` OK. Les nouveaux checkpoints continuent la numérotation depuis ~9M (pas d'écrasement des `*_steps.zip` existants).
+- ≈1221 fps, log `rl/runs/train_parallel_resume_20260626_070144.log`.
+
+**Fichiers modifiés :** `rl/dutch_env.py`, `rl/runner_process.py`, `rl/train_parallel.py`, `docs/ai/HANDOFF.md`.
+
+**État actuel :** run en cours dans `dutch_rl_train2`. `pubspec.lock` reste modifié localement hors périmètre.
+
+**Prochaine action recommandée :** laisser tourner jusqu'à 57,6M (ou check-in périodique) ; ne reprendre, si besoin, que depuis le dernier `*_steps.zip` valide via la commande de reprise (section « Prochaine étape immédiate »). Puis évaluer le modèle vs bots existants / aléatoire.
 
 ### 2026-06-26 — Validation prod complète de la suppression ML legacy + découverte CI/CD
 

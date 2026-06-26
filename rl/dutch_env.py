@@ -56,6 +56,7 @@ class DutchEnv(gym.Env):
         # Instrumentation : doit rester rigoureusement à 0 avec un masquage correct.
         self.illegal_count = 0
         self.engine_internal_error_count = 0
+        self.engine_recoverable_error_count = 0
         self.step_count = 0
 
     # ── Poids de préférence (simplexe, Dirichlet(1,1)) ─────────────────────
@@ -101,31 +102,48 @@ class DutchEnv(gym.Env):
             return self._last_obs.copy(), 0.0, False, True, {"runner_timeout": True}
 
         if msg.get("type") == "error":
-            if msg.get("code") == "INTERNAL" and bool(msg.get("fatal")):
-                self.engine_internal_error_count += 1
-                _LOG.error(
-                    "runner INTERNAL error: code=%s message=%r seed=%s step_count=%s weights=%s",
-                    msg.get("code"),
-                    msg.get("message"),
+            code = msg.get("code")
+            message = msg.get("message")
+            fatal = bool(msg.get("fatal"))
+
+            if not fatal:
+                # ── Erreur RÉCUPÉRABLE : tout type=="error" non fatal ──
+                # (BAD_PHASE ou n'importe quel code, présent ou futur).
+                # On ne tue JAMAIS le worker : on tronque l'épisode.
+                self.engine_recoverable_error_count += 1
+                _LOG.warning(
+                    "runner recoverable error: code=%s message=%r seed=%s step_count=%s weights=%s",
+                    code,
+                    message,
                     self._seed_counter,
                     self.step_count,
                     self._w,
                 )
+                self._runner.close(quiet=True)
                 return (
                     self._last_obs.copy(),
                     0.0,
                     False,
                     True,
                     {
-                        "engine_internal_error": True,
-                        "engine_error_code": msg.get("code"),
-                        "engine_error_message": msg.get("message"),
-                        "engine_error_fatal": msg.get("fatal"),
+                        "engine_recoverable_error": True,
+                        "engine_error_code": code,
+                        "engine_error_message": message,
                     },
                 )
-            # Le wrapper ne propose JAMAIS d'action hors masque : une erreur ici
-            # signale un bug d'encodage, pas un cas normal -> on ne la masque pas.
-            raise RuntimeError(f"runner error: {msg.get('code')} {msg.get('message')}")
+
+            # ── Erreur FATALE (fatal: true) : vrai bug, on ne masque pas ──
+            self.engine_internal_error_count += 1
+            _LOG.error(
+                "runner FATAL error: code=%s message=%r seed=%s step_count=%s weights=%s",
+                code,
+                message,
+                self._seed_counter,
+                self.step_count,
+                self._w,
+            )
+            self._runner.close(quiet=True)
+            raise RuntimeError(f"runner fatal error: {code} {message}")
 
         rewards = msg.get("rewards", {"principal": msg.get("reward", 0.0), "destab": 0.0})
         reward = self._w[0] * float(rewards["principal"]) + self._w[1] * float(rewards["destab"])
