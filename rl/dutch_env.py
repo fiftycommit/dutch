@@ -36,12 +36,30 @@ class DutchEnv(gym.Env):
         max_turns: int = 500,
         seed_start: int = 0,
         timeout: float = 30.0,
+        fixed_weights: tuple[float, float] | None = None,
+        num_players: int | None = None,
+        opponents: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
         kwargs: dict[str, Any] = {"max_turns": max_turns, "timeout": timeout}
         if exe_path is not None:
             kwargs["exe_path"] = exe_path
         self._runner = RunnerProcess(**kwargs)
+
+        # ── Options d'ÉVAL (toutes None par défaut => comportement historique) ──
+        # Poids MORL fixés (sinon Dirichlet par épisode) ; composition forcée des
+        # joueurs (num_players / opponents) transmise au runner via reset.
+        self._fixed_weights = (
+            (float(fixed_weights[0]), float(fixed_weights[1]))
+            if fixed_weights is not None
+            else None
+        )
+        reset_options: dict[str, Any] = {}
+        if num_players is not None:
+            reset_options["num_players"] = int(num_players)
+        if opponents:
+            reset_options["opponents"] = dict(opponents)
+        self._reset_options: dict[str, Any] | None = reset_options or None
 
         self.observation_space = spaces.Box(
             low=-1.0, high=1.0, shape=(encoding.OBS_DIM,), dtype=np.float32
@@ -61,6 +79,8 @@ class DutchEnv(gym.Env):
 
     # ── Poids de préférence (simplexe, Dirichlet(1,1)) ─────────────────────
     def _sample_weights(self) -> tuple[float, float]:
+        if self._fixed_weights is not None:
+            return self._fixed_weights
         w = self.np_random.dirichlet([1.0, 1.0])
         return (float(w[0]), float(w[1]))
 
@@ -75,7 +95,7 @@ class DutchEnv(gym.Env):
         self._seed_counter += 1  # seed INCRÉMENTAL par épisode (reproductible)
         self._w = self._sample_weights()
 
-        msg = self._runner.reset(self._seed_counter)
+        msg = self._runner.reset(self._seed_counter, extra_options=self._reset_options)
         self._mask = encoding.build_mask_vector(msg)
         obs = encoding.encode_observation(msg, self._w)
         self._last_obs = obs

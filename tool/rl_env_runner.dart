@@ -74,6 +74,68 @@ const List<String> _kRanks = [
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
+// Config de joueurs forcée (ÉVAL) : parsing + validation des `options` du reset.
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Comportement adverse depuis une chaîne (`fast`/`aggressive`/`balanced`/`moi`).
+/// Retourne `null` si inconnu (BotBehavior n'a pas de tryParse, contrairement à
+/// BotSkillLevel).
+BotBehavior? _parseBotBehavior(String? s) {
+  final k = s?.trim().toLowerCase();
+  for (final b in BotBehavior.values) {
+    if (b.name == k) return b;
+  }
+  return null;
+}
+
+/// Config de joueurs validée, extraite des `options` du message reset.
+/// Tous les champs null => chemin par défaut (tirage aléatoire dans le runner).
+class EvalPlayerConfig {
+  const EvalPlayerConfig({this.numPlayers, this.behavior, this.skill});
+  final int? numPlayers;
+  final BotBehavior? behavior;
+  final BotSkillLevel? skill;
+}
+
+/// Parse + valide les `options` d'éval. Lève [FormatException] (message français)
+/// si une valeur FOURNIE est invalide ; un champ absent reste null (pas d'erreur).
+EvalPlayerConfig parseEvalPlayerConfig(Map<String, dynamic> options) {
+  int? n;
+  if (options.containsKey('num_players')) {
+    final v = options['num_players'];
+    if (v is! num || v != v.toInt() || v.toInt() < 2 || v.toInt() > 6) {
+      throw FormatException('num_players doit être un entier entre 2 et 6, reçu: $v');
+    }
+    n = v.toInt();
+  }
+  BotBehavior? beh;
+  BotSkillLevel? sk;
+  final opp = options['opponents'];
+  if (opp != null) {
+    if (opp is! Map) {
+      throw FormatException('opponents doit être un objet, reçu: $opp');
+    }
+    final skRaw = opp['skill'];
+    if (skRaw != null) {
+      sk = BotSkillLevel.tryParse(skRaw.toString());
+      if (sk == null) {
+        throw FormatException(
+            'skill inconnu: $skRaw (attendu bronze|silver|difficile)');
+      }
+    }
+    final behRaw = opp['behavior'];
+    if (behRaw != null) {
+      beh = _parseBotBehavior(behRaw.toString());
+      if (beh == null) {
+        throw FormatException(
+            'behavior inconnu: $behRaw (attendu fast|aggressive|balanced|moi)');
+      }
+    }
+  }
+  return EvalPlayerConfig(numPlayers: n, behavior: beh, skill: sk);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Environnement RL : un épisode = une manche Dutch'78.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -82,6 +144,9 @@ class RlEnv {
     required this.episodeId,
     this.maxTurns = 500,
     this.frozenBotMode = false,
+    this.forcedNumPlayers,
+    this.forcedOpponentBehavior,
+    this.forcedOpponentSkill,
   });
 
   final String episodeId;
@@ -89,6 +154,21 @@ class RlEnv {
 
   /// ⚠ Tests uniquement (parité générateur). Voir l'entête du fichier.
   final bool frozenBotMode;
+
+  // ── Paramètres d'ÉVAL (réservés au script d'évaluation, hors entraînement) ──
+  // Quand TOUS sont null (cas par défaut, y compris entraînement et test de
+  // parité #5), `_buildPlayers` emprunte un chemin byte-à-byte identique au
+  // générateur. Dès qu'au moins un est fourni, on bascule sur un chemin forcé
+  // déterministe (cf. _buildPlayers) qui n'est jamais emprunté par la parité.
+
+  /// Éval : force le nombre de joueurs (2..6) ; null => tirage aléatoire.
+  final int? forcedNumPlayers;
+
+  /// Éval : force le comportement des adversaires p1..pn ; null => aléatoire.
+  final BotBehavior? forcedOpponentBehavior;
+
+  /// Éval : force le niveau des adversaires p1..pn ; null => aléatoire.
+  final BotSkillLevel? forcedOpponentSkill;
 
   late GameState _gs;
   late List<Player> _players;
@@ -616,15 +696,53 @@ class RlEnv {
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   void _buildPlayers() {
-    // Copie EXACTE de buildBots() du générateur (même ordre de tirage RNG,
-    // condition sine qua non de la parité byte-à-byte du test #5).
     final rng = EngineRandom.instance;
-    final n = 2 + rng.nextInt(5); // {2,3,4,5,6} — aligné sur le vrai jeu (UI 2-6)
     final behaviors = BotBehavior.values;
     final skills = BotSkillLevel.values;
+
+    final bool defaultConfig = forcedNumPlayers == null &&
+        forcedOpponentBehavior == null &&
+        forcedOpponentSkill == null;
+
+    if (defaultConfig) {
+      // ════ CHEMIN PAR DÉFAUT — copie EXACTE de buildBots() du générateur. ════
+      // NE PAS MODIFIER : même ordre de tirage RNG, condition sine qua non de la
+      // parité byte-à-byte du test #5 (entraînement passe aussi par ici).
+      final n = 2 + rng.nextInt(5); // {2,3,4,5,6} — aligné sur le vrai jeu (UI 2-6)
+      _players = List<Player>.generate(n, (i) {
+        final behavior = behaviors[rng.nextInt(behaviors.length)];
+        final skill = skills[rng.nextInt(skills.length)];
+        return Player(
+          id: 'p$i',
+          name: '${behavior.name}_${skill.name}_$i',
+          isHuman: false,
+          botBehavior: behavior,
+          botSkillLevel: skill,
+          position: i,
+        );
+      });
+      return;
+    }
+
+    // ════ CHEMIN ÉVAL (forcé) — déterministe, AUCUN tirage RNG pour la compo. ════
+    // Conséquence assumée : le flux RNG diffère du chemin aléatoire au même seed ;
+    // ce chemin n'est JAMAIS emprunté par le test de parité #5 (qui ne fournit
+    // aucun paramètre forcé). La reproductibilité éval — même (seed, options) =>
+    // même résultat — reste garantie car tout est déterministe ici.
+    final n = forcedNumPlayers ?? (2 + rng.nextInt(5));
     _players = List<Player>.generate(n, (i) {
-      final behavior = behaviors[rng.nextInt(behaviors.length)];
-      final skill = skills[rng.nextInt(skills.length)];
+      final BotBehavior behavior;
+      final BotSkillLevel skill;
+      if (i == 0) {
+        // Siège RL : profil neutre fixe, sans effet (Python décide ; _playBotTurn
+        // n'est jamais appelé sur p0 hors frozenBotMode).
+        behavior = BotBehavior.balanced;
+        skill = BotSkillLevel.silver;
+      } else {
+        // Adversaires p1..pn : profil forcé, ou aléatoire si non spécifié.
+        behavior = forcedOpponentBehavior ?? behaviors[rng.nextInt(behaviors.length)];
+        skill = forcedOpponentSkill ?? skills[rng.nextInt(skills.length)];
+      }
       return Player(
         id: 'p$i',
         name: '${behavior.name}_${skill.name}_$i',
@@ -699,10 +817,27 @@ Future<void> main(List<String> args) async {
         case 'reset':
           final seed = (msg['seed'] as num).toInt();
           final options = (msg['options'] as Map?)?.cast<String, dynamic>() ?? const {};
+          // Options d'éval (num_players / opponents) : validées AVANT construction.
+          EvalPlayerConfig cfg;
+          try {
+            cfg = parseEvalPlayerConfig(options);
+          } on FormatException catch (e) {
+            await _emit({
+              'type': 'error',
+              'code': 'INVALID_OPTIONS',
+              'message': e.message,
+              'fatal': true,
+            });
+            env = null; // pas d'épisode : empêche un 'action' sur un env périmé
+            break;
+          }
           // frozenBotMode toujours false ici : réservé aux tests.
           env = RlEnv(
             episodeId: msg['episode_id']?.toString() ?? 'ep',
             maxTurns: (options['max_turns'] as num?)?.toInt() ?? maxTurns,
+            forcedNumPlayers: cfg.numPlayers,
+            forcedOpponentBehavior: cfg.behavior,
+            forcedOpponentSkill: cfg.skill,
           );
           await _emit(await env.reset(seed));
           break;

@@ -141,15 +141,29 @@ class RunnerProcess:
 
     # ── API haut niveau ────────────────────────────────────────────────────
 
-    def reset(self, seed: int, episode_id: str | None = None) -> dict[str, Any]:
-        """(Re)démarre un épisode. Relance le process s'il est mort."""
+    def reset(
+        self,
+        seed: int,
+        episode_id: str | None = None,
+        extra_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """(Re)démarre un épisode. Relance le process s'il est mort.
+
+        ``extra_options`` (optionnel) fusionne des champs supplémentaires dans
+        ``options`` du message reset (ex. ``num_players``, ``opponents``) — gérés
+        par l'extension d'éval du runner Dart. Absent => message identique à
+        l'historique (rétrocompatible).
+        """
         self._ensure_alive()
+        options: dict[str, Any] = {"max_turns": self.max_turns}
+        if extra_options:
+            options.update(extra_options)
         self._send(
             {
                 "type": "reset",
                 "seed": int(seed),
                 "episode_id": episode_id or f"ep{seed}",
-                "options": {"max_turns": self.max_turns},
+                "options": options,
             }
         )
         return self._recv()

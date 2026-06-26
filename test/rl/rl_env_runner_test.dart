@@ -16,8 +16,10 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/engine_random.dart';
+import 'package:dutch_game/models/game_settings.dart' show BotBehavior, BotSkillLevel;
 
-import '../../tool/rl_env_runner.dart' show RlEnv, RlMicroPhase;
+import '../../tool/rl_env_runner.dart'
+    show RlEnv, RlMicroPhase, EvalPlayerConfig, parseEvalPlayerConfig;
 import '../../tool/ml_dataset_generator.dart' show playOneGame, GeneratorConfig;
 
 // ── Politiques d'action de test ────────────────────────────────────────────
@@ -357,6 +359,108 @@ void main() {
 
       expect(covered, {'7', '10', 'V', 'JOKER'},
           reason: 'pouvoirs non tous couverts: $covered');
+    });
+  });
+
+  // 7 ─────────────────────────────────────────────────────────────────────────
+  group('7. Reset paramétré (éval)', () {
+    test('num_players forcé => env.players.length == valeur (2..6)', () async {
+      for (var n = 2; n <= 6; n++) {
+        final env = RlEnv(episodeId: 'n$n', forcedNumPlayers: n);
+        await env.reset(0);
+        expect(env.players.length, n, reason: 'num_players=$n non respecté');
+      }
+    });
+
+    test('opponents forcé => p1..pn profil forcé, p0 neutre (siège RL)', () async {
+      final env = RlEnv(
+        episodeId: 'opp',
+        forcedNumPlayers: 4,
+        forcedOpponentSkill: BotSkillLevel.difficile,
+        forcedOpponentBehavior: BotBehavior.aggressive,
+      );
+      await env.reset(7);
+      expect(env.players.length, 4);
+      // p0 = siège RL : profil neutre fixe, sans effet sur le jeu.
+      expect(env.players[0].id, 'p0');
+      expect(env.players[0].botBehavior, BotBehavior.balanced);
+      expect(env.players[0].botSkillLevel, BotSkillLevel.silver);
+      // p1..p3 : profil forcé.
+      for (var i = 1; i < env.players.length; i++) {
+        expect(env.players[i].botSkillLevel, BotSkillLevel.difficile,
+            reason: 'p$i skill non forcé');
+        expect(env.players[i].botBehavior, BotBehavior.aggressive,
+            reason: 'p$i behavior non forcé');
+      }
+    });
+
+    test(
+        'mode forcé reproductible : même seed+config => mêmes final_ranks + final_scores',
+        () async {
+      Future<Map<String, dynamic>> finalInfo(int seed) async {
+        final env = RlEnv(
+          episodeId: 'rep',
+          forcedNumPlayers: 5,
+          forcedOpponentSkill: BotSkillLevel.difficile,
+          forcedOpponentBehavior: BotBehavior.aggressive,
+        );
+        final log = await _drive(env, seed, _deterministicAction);
+        final terminal = log.last;
+        expect(terminal['done'], isTrue, reason: 'épisode non terminé');
+        return (terminal['info'] as Map).cast<String, dynamic>();
+      }
+
+      final a = await finalInfo(123);
+      final b = await finalInfo(123); // même seed + même config, 2e fois
+      expect(jsonEncode(b['final_ranks']), jsonEncode(a['final_ranks']),
+          reason: 'final_ranks non reproductibles');
+      expect(jsonEncode(b['final_scores']), jsonEncode(a['final_scores']),
+          reason: 'final_scores non reproductibles');
+    });
+
+    test('parseEvalPlayerConfig : options vides => tout null (chemin défaut)', () {
+      final cfg = parseEvalPlayerConfig(const {});
+      expect(cfg.numPlayers, isNull);
+      expect(cfg.behavior, isNull);
+      expect(cfg.skill, isNull);
+    });
+
+    test('parseEvalPlayerConfig : valeurs valides parsées', () {
+      final cfg = parseEvalPlayerConfig({
+        'num_players': 3,
+        'opponents': {'skill': 'difficile', 'behavior': 'moi'},
+      });
+      expect(cfg.numPlayers, 3);
+      expect(cfg.skill, BotSkillLevel.difficile);
+      expect(cfg.behavior, BotBehavior.moi);
+    });
+
+    test('parseEvalPlayerConfig : skill legacy (platine) => difficile', () {
+      final cfg = parseEvalPlayerConfig({
+        'opponents': {'skill': 'platine'},
+      });
+      expect(cfg.skill, BotSkillLevel.difficile);
+    });
+
+    test('parseEvalPlayerConfig : num_players hors borne / non entier => FormatException',
+        () {
+      expect(() => parseEvalPlayerConfig({'num_players': 7}), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 1}), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 0}), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 'deux'}),
+          throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 3.5}), throwsFormatException);
+    });
+
+    test('parseEvalPlayerConfig : skill / behavior inconnu => FormatException', () {
+      expect(() => parseEvalPlayerConfig({
+            'opponents': {'skill': 'wood'},
+          }), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({
+            'opponents': {'behavior': 'sneaky'},
+          }), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'opponents': 'silver'}),
+          throwsFormatException);
     });
   });
 }
