@@ -19,7 +19,7 @@ import 'package:dutch_game/services/game/engine_random.dart';
 import 'package:dutch_game/models/game_settings.dart' show BotBehavior, BotSkillLevel;
 
 import '../../tool/rl_env_runner.dart'
-    show RlEnv, RlMicroPhase, EvalPlayerConfig, parseEvalPlayerConfig;
+    show RlEnv, RlMicroPhase, parseEvalPlayerConfig;
 import '../../tool/ml_dataset_generator.dart' show playOneGame, GeneratorConfig;
 
 // ── Politiques d'action de test ────────────────────────────────────────────
