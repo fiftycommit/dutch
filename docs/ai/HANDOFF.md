@@ -246,6 +246,54 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 
 ## Journal des mises à jour
 
+### 2026-06-26 — Validation prod complète de la suppression ML legacy + découverte CI/CD
+
+#### Point 1 — Confirmation finale du déploiement de suppression ML legacy
+
+Le déploiement (commit `ec360e0`, puis `699006f` après amend du message) a été vérifié de bout en bout :
+
+Build & tests :
+- Build TypeScript : 0 erreur (Node 24.14.0).
+- Tests : 419/420. Le seul échec (`adaptiveDifficulty.test.js`) confirmé pré-existant et indépendant de nos changements, via double vérification : test croisé sur Node 24.18.0 et git stash sur l'ancien commit.
+
+Déploiement prod :
+- CI `deploy-server.yml` déclenché automatiquement au push sur `main`, complété en ~2m33s.
+- `GIT_SHA` en prod : `ec360e01`, instance `dutch-server-green` (port 3001), symlink `current` → `releases/ec360e0...`.
+- Ancienne instance `dutch-server-blue` proprement supprimée par le CI.
+- Logs de démarrage : **zéro trace ML** — `ℹ️ Nouveau réseau de neurones créé` et `ℹ️ Nouvelle Q-Table créée` ont disparu.
+
+Vérification visuelle par Max (dashboards admin) :
+- `bot-dashboard.html` : section "🧠 Statistiques Machine Learning" disparue, reste du dashboard intact.
+- `bot-stats.html` ("🤖 Bot Learning Dashboard") : aucune dépendance aux routes supprimées. Ce fichier appelle uniquement `/stats`, `/top-bots`, `/training-series` — toutes intactes.
+
+Routes legacy :
+- `/ml-stats`, `/predict-action`, `/genetic/*` répondent 410 Gone (confirmé indirectement : 401 sans secret admin valide prouve que le serveur répond et que le middleware d'auth s'exécute avant le stub 410).
+
+**Conclusion : suppression complètement validée en prod. Aucune régression détectée.**
+
+---
+
+#### Point 2 — Découverte structurelle : push sur main = déploiement automatique immédiat
+
+Le workflow `.github/workflows/deploy-server.yml` se déclenche sur **tout** push vers `main`, sans filtre `paths:`. Il n'existe pas de filtre limité à `dutch-server/` — **même un commit touchant uniquement `docs/` déclenche un cycle blue/green complet** (build Flutter web + build serveur + déploiement). Vérifié sur le trigger :
+
+```yaml
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+# (pas de paths: filter)
+```
+
+Implication pour tout futur agent ou session :
+- Il n'existe **pas** de fenêtre entre "push sur main" et "déploiement en prod réelle". Le cycle blue/green complet (build, healthcheck, bascule nginx, suppression ancienne instance) s'exécute en ~2-3 minutes, **sans étape de validation manuelle intermédiaire**.
+- La validation du commit/diff **est** en réalité la validation du déploiement — il n'y a pas de second gate.
+- Cela s'applique à **tout** push sur main, y compris des changements purement documentaires comme cette entrée de handoff.
+- La VM Azure RL (`rlDutch`) **n'est pas concernée** : elle ne dispose pas de déploiement continu et nécessite un `git pull` + recompilation manuels.
+
+**Règle à respecter impérativement pour toute future modification de `dutch-server/` :**
+Présenter le plan **et** le diff complet AVANT le push — pas seulement avant un hypothétique "déploiement" séparé qui n'existe pas comme étape distincte. Mentionner explicitement à l'utilisateur que `git push origin main` = mise en prod immédiate avant de pousser quoi que ce soit touchant `dutch-server/src/` ou `dutch-server/public/`.
+
 ### 2026-06-26 — Suppression des services ML legacy (QLearning / NeuralNetwork / GeneticAlgorithm)
 
 Changement :
