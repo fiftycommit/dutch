@@ -107,3 +107,6 @@ dutch-server/data/firebase-service-account.json
 # FVM Version Cache
 .fvm/
 .fvmrc
+
+# Artefact npm généré à la racine par erreur (le projet Node est dans dutch-server/)
+/package-lock.json
