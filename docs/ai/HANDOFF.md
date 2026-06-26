@@ -54,7 +54,7 @@ Phase 1 ML supervisée existante (à préserver) :
 - Ne pas réutiliser l'ancien module expérimental `qlearning` (cf. ci-dessous).
 
 Module expérimental à NE PAS utiliser :
-- `dutch-server/src/services/QLearningService.ts` (+ `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts`) — dormants, exclus de la compilation TS, entraînés sur des données purgées. Confirmés inutilisés en prod. Ne pas les réveiller ni s'en inspirer pour la phase 2.
+- `dutch-server/src/services/QLearningService.ts` (+ `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts`) — module expérimental historique. Vérification prod du 2026-06-26 : ils ne sont **pas** exclus de compilation et ne sont **pas** dormants au sens strict ; ils sont compilés dans `dist/` et chargés au démarrage via `BotLearningService`. Les données runtime d'apprentissage restent en revanche purgées/vides et aucune trace récente d'entraînement effectif n'a été trouvée. Ne pas les réveiller ni s'en inspirer pour la phase 2 RL.
 
 ---
 
@@ -216,7 +216,7 @@ Phase 2 RL (en cours) :
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
 
 À éviter :
-- `dutch-server/src/services/QLearningService.ts` et apparentés (dormants, exclus de compilation).
+- `dutch-server/src/services/QLearningService.ts` et apparentés : présents/chargés en prod mais sans données ni usage récent prouvé ; module expérimental à ne pas réutiliser pour la phase 2 RL.
 
 > Ne pas supposer que cette liste est exhaustive. Inspecter le repo réel avant toute modification.
 
@@ -245,6 +245,43 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-26 00:05 UTC — Correction du statut prod Q-learning / NeuralNetwork
+
+Changement :
+- Correction d'une affirmation inexacte du handoff : `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts` et `GeneticAlgorithmService.ts` étaient décrits comme « exclus de la compilation TS » et « confirmés inutilisés en prod ». Ces deux points précis sont faux pour le déploiement actuel.
+- La recommandation reste inchangée : ne pas réveiller ces modules et ne pas s'en inspirer pour la phase 2 RL.
+
+Vérification prod lecture seule :
+- Serveur inspecté : `root@164.92.234.245`.
+- Process actif : PM2 `dutch-server-green`.
+- Release actif : `/root/apps/dutch-server/releases/36dcb9a23d99b4e42ee9d6fd9c13f276ff7dd704`.
+- Commit/build déclarés par PM2 : `36dcb9a23d99b4e42ee9d6fd9c13f276ff7dd704`, build `2026-06-25T23:23:02Z`.
+- Fichiers compilés présents dans le `dist/` réellement déployé :
+  - `dist/services/QLearningService.js`
+  - `dist/services/NeuralNetworkService.js`
+  - `dist/services/GeneticAlgorithmService.js`
+  - `dist/services/BotLearningService.js`
+  - `dist/routes/botLearningRoutes.js`
+- Les logs PM2 récents du process actif contiennent `ℹ️ Nouveau réseau de neurones créé`, ce qui confirme que `NeuralNetworkService` est instancié au démarrage du serveur.
+
+État des données :
+- Le point « données purgées » reste exact pour les données d'apprentissage runtime : `qlearning/`, `neural/`, `genetic/`, `games/`, `profiles/`, `adaptive/`, `leaderboard/`, `clones/` et `tournaments/` sont vides hors `.gitkeep`.
+- Seul `personalities/` contient 8 fichiers JSON statiques (`the_*`), qui sont des profils de personnalité, pas des données d'apprentissage.
+- Aucune trace dans les 100 dernières lignes des logs PM2 du process actif d'un appel récent à `/api/bot-learning/record`, d'un `Q-Learning entraîné`, d'un `Réseau de neurones entraîné`, de `predict-action`, de `ml-stats` ou de `training-series`.
+
+Conclusion correcte :
+- Ces services sont chargés et vivants en mémoire au démarrage du serveur ; ce n'est donc pas du code mort exclu de compilation.
+- Ils n'ont pas de données d'entraînement actuelles ni de preuve d'usage récent, donc ils n'ont pas d'influence réelle observée sur le comportement des bots en production aujourd'hui.
+- Si les routes `/api/bot-learning/*` recevaient de nouvelles données valides, ce code pourrait recommencer à apprendre.
+
+État actuel :
+- Handoff corrigé sur ce point.
+- Aucun fichier applicatif modifié.
+- `pubspec.lock` reste une modification locale hors périmètre.
+
+Prochaine action recommandée :
+- Si une suppression est envisagée, analyser d'abord les imports, routes `/api/bot-learning/*`, clients Flutter/admin et logs PM2 sur une fenêtre plus large, puis retirer proprement les routes/instanciations avant de supprimer les services.
 
 ### 2026-06-26 01:20 — Lancement du run réel 13 h PPO parallèle
 
