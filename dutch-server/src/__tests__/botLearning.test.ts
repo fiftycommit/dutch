@@ -82,36 +82,6 @@ describe('BotLearningService', () => {
     });
   });
 
-  describe('getMLStats', () => {
-    it('returns stats for all ML services', () => {
-      const mlStats = service.getMLStats();
-      assert.ok('qLearning' in mlStats);
-      assert.ok('neuralNetwork' in mlStats);
-      assert.ok('genetic' in mlStats);
-      assert.ok('leaderboard' in mlStats);
-    });
-
-    it('qLearning stats have expected fields', () => {
-      const mlStats = service.getMLStats();
-      const qStats = mlStats.qLearning;
-      assert.ok('totalStates' in qStats);
-      assert.ok('totalActions' in qStats);
-      assert.ok('totalVisits' in qStats);
-      assert.ok('avgActionsPerState' in qStats);
-      assert.ok('avgVisitsPerState' in qStats);
-    });
-
-    it('neuralNetwork stats have expected fields', () => {
-      const mlStats = service.getMLStats();
-      const nnStats = mlStats.neuralNetwork;
-      assert.ok('architecture' in nnStats);
-      assert.ok('totalLayers' in nnStats);
-      assert.ok('totalWeights' in nnStats);
-      assert.ok('totalBiases' in nnStats);
-      assert.ok('totalParameters' in nnStats);
-    });
-  });
-
   describe('getTopBots', () => {
     it('returns an array', async () => {
       const topBots = await service.getTopBots();
@@ -195,42 +165,6 @@ describe('BotLearningService', () => {
       const params = await service.getBotParameters('unknown', 'unknown');
       assert.ok(params !== null);
       assert.strictEqual(typeof params!.aggressiveness, 'number');
-    });
-  });
-
-  describe('predictAction', () => {
-    it('returns a string action', () => {
-      const gameState = {
-        myScore: 15,
-        cardsInHand: 4,
-        turnPhase: 'playing',
-        opponentsAvgScore: 18,
-        deckCardsRemaining: 20,
-        calledDutch: false,
-        powerUsesCount: 1,
-        scoreAtDutch: 0,
-        estimatedRank: 2,
-        visibleOpponentCards: 8,
-        scoreVsLeader: -3,
-        estimatedTurnsLeft: 10,
-      };
-      const action = { turnNumber: 5, actionType: 'draw_from_deck' };
-
-      const result = service.predictAction(gameState, action);
-      assert.strictEqual(typeof result, 'string');
-      assert.ok(result.length > 0);
-    });
-
-    it('returns a valid action type', () => {
-      const validActions = [
-        'draw_from_deck', 'draw_from_discard', 'replace_card', 'call_dutch',
-        'use_power_peek', 'use_power_swap', 'use_power_steal', 'pass',
-      ];
-      const gameState = { myScore: 10, cardsInHand: 3, turnPhase: 'playing' };
-      const action = { turnNumber: 3, actionType: 'draw_from_deck' };
-
-      const result = service.predictAction(gameState, action);
-      assert.ok(validActions.includes(result), `Unexpected action: ${result}`);
     });
   });
 
@@ -320,11 +254,6 @@ describe('BotLearningService', () => {
     it('getTournamentService returns an object', () => {
       const tournament = service.getTournamentService();
       assert.ok(tournament !== null && tournament !== undefined);
-    });
-
-    it('getGeneticService returns an object', () => {
-      const genetic = service.getGeneticService();
-      assert.ok(genetic !== null && genetic !== undefined);
     });
 
     it('getAdaptiveService returns an object', () => {

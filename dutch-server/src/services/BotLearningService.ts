@@ -3,19 +3,13 @@ import * as path from 'node:path';
 import { sanitizeId } from '../utils/sanitize';
 import { BotGameRecord, BotProfile, BotStats } from '../models/BotLearning';
 import { BotSkillLevel, tryParseBotSkillLevel } from '../models/Player';
-import { QLearningService } from './QLearningService';
-import { NeuralNetworkService } from './NeuralNetworkService';
 import { TournamentService } from './TournamentService';
-import { GeneticAlgorithmService } from './GeneticAlgorithmService';
 import { AdaptiveDifficultyService } from './AdaptiveDifficultyService';
 import { LeaderboardService } from './LeaderboardService';
 
 export class BotLearningService {
   private dataDir: string;
-  private qLearning: QLearningService;
-  private neuralNet: NeuralNetworkService;
   private readonly tournament: TournamentService;
-  private readonly genetic: GeneticAlgorithmService;
   private readonly adaptive: AdaptiveDifficultyService;
   private readonly leaderboard: LeaderboardService;
   private paused: boolean = false;
@@ -26,10 +20,7 @@ export class BotLearningService {
   constructor() {
     this.dataDir = path.join(__dirname, '../../data/bot-learning');
     this.ensureDataDirectory();
-    this.qLearning = new QLearningService();
-    this.neuralNet = new NeuralNetworkService();
     this.tournament = new TournamentService();
-    this.genetic = new GeneticAlgorithmService();
     this.adaptive = new AdaptiveDifficultyService();
     this.leaderboard = new LeaderboardService();
   }
@@ -97,9 +88,6 @@ export class BotLearningService {
           // Traiter la partie
           delete record._pending;
           await this.updateBotProfile(record);
-          await this.qLearning.trainFromGame(record);
-          await this.neuralNet.trainFromGame(record);
-          this.qLearning.decayEpsilon();
 
           // Réécrire sans le flag _pending
           await fs.writeFile(filepath, JSON.stringify(record, null, 2));
@@ -155,9 +143,6 @@ export class BotLearningService {
       await fs.unlink(path.join(this.dataDir, 'neural', 'network.json'));
     } catch { /* file may not exist */ }
 
-    // Réinitialiser les services en mémoire
-    this.qLearning = new QLearningService();
-    this.neuralNet = new NeuralNetworkService();
     this.invalidateStatsCache();
 
     console.log(`🗑️ Reset complet : ${deletedProfiles} profils, ${deletedGames} parties supprimés`);
@@ -196,11 +181,6 @@ export class BotLearningService {
 
       // Mettre à jour le profil du bot
       await this.updateBotProfile(record);
-
-      // Entraîner les modèles ML
-      await this.qLearning.trainFromGame(record);
-      await this.neuralNet.trainFromGame(record);
-      this.qLearning.decayEpsilon();
 
       console.log(`✅ Partie bot enregistrée: ${filename}`);
     } catch (error) {
@@ -722,25 +702,6 @@ export class BotLearningService {
     }
   }
 
-  /**
-   * Obtient les statistiques des modèles ML
-   */
-  getMLStats() {
-    return {
-      qLearning: this.qLearning.getStats(),
-      neuralNetwork: this.neuralNet.getStats(),
-      genetic: this.genetic.getStats(),
-      leaderboard: this.leaderboard.getStats(),
-    };
-  }
-
-  /**
-   * Prédit la meilleure action avec le réseau de neurones
-   */
-  predictAction(gameState: any, action: any): string {
-    return this.neuralNet.predictBestAction(gameState, action);
-  }
-
   // ========== Phase 4: Services de Compétition ==========
 
   /**
@@ -748,13 +709,6 @@ export class BotLearningService {
    */
   getTournamentService() {
     return this.tournament;
-  }
-
-  /**
-   * Accès au service génétique
-   */
-  getGeneticService() {
-    return this.genetic;
   }
 
   /**
@@ -905,10 +859,4 @@ export class BotLearningService {
     });
   }
 
-  /**
-   * Sélectionne une action avec Q-Learning
-   */
-  selectQLearningAction(state: any, availableActions: any[]): any {
-    return this.qLearning.selectAction(state, availableActions);
-  }
 }

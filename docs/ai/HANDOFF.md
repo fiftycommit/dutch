@@ -1,7 +1,7 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-26 01:20 (CEST, 23:20 UTC)
-Agent ayant modifié ce fichier : Codex
+Dernière mise à jour : 2026-06-26 (Claude Code)
+Agent ayant modifié ce fichier : Claude Code
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
 
@@ -53,8 +53,8 @@ Phase 1 ML supervisée existante (à préserver) :
 - Ne pas écraser les modèles de `ml/models/`.
 - Ne pas réutiliser l'ancien module expérimental `qlearning` (cf. ci-dessous).
 
-Module expérimental à NE PAS utiliser :
-- `dutch-server/src/services/QLearningService.ts` (+ `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts`) — module expérimental historique. Vérification prod du 2026-06-26 : ils ne sont **pas** exclus de compilation et ne sont **pas** dormants au sens strict ; ils sont compilés dans `dist/` et chargés au démarrage via `BotLearningService`. Les données runtime d'apprentissage restent en revanche purgées/vides et aucune trace récente d'entraînement effectif n'a été trouvée. Ne pas les réveiller ni s'en inspirer pour la phase 2 RL.
+Module expérimental supprimé (2026-06-26) :
+- `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts` — **supprimés du repo** (commit faisant suite à vérification prod : 0 hit sur 2,5 mois de logs PM2 blue+green). Les 6 routes `/api/bot-learning/(ml-stats|predict-action|genetic/*)` renvoient désormais `410 Gone`. Les fichiers source ne sont plus présents ; ne pas les recréer ni s'en inspirer pour la phase 2 RL.
 
 ---
 
@@ -215,8 +215,8 @@ Phase 2 RL (en cours) :
 - `rl/pyproject.toml`, `rl/uv.lock` — dépendances RL uv (inclut TensorBoard pour SB3).
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
 
-À éviter :
-- `dutch-server/src/services/QLearningService.ts` et apparentés : présents/chargés en prod mais sans données ni usage récent prouvé ; module expérimental à ne pas réutiliser pour la phase 2 RL.
+Supprimés (ne plus référencer) :
+- `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts` — supprimés du repo le 2026-06-26 après confirmation 0 usage prod sur 2,5 mois. Les routes correspondantes répondent 410. Déploiement blue/green à faire séparément.
 
 > Ne pas supposer que cette liste est exhaustive. Inspecter le repo réel avant toute modification.
 
@@ -245,6 +245,35 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-26 — Suppression des services ML legacy (QLearning / NeuralNetwork / GeneticAlgorithm)
+
+Changement :
+Suppression complète de trois services ML expérimentaux qui étaient instanciés au démarrage du serveur (consommant de la mémoire, loggant `ℹ️ Nouveau réseau de neurones créé`) mais n'avaient aucun usage actif en prod — confirmé par 2,5 mois de logs PM2 (blue + green, 14 avril → 25 juin 2026, 0 hit sur les routes concernées).
+
+Étapes exécutées :
+1. **`BotLearningService.ts`** — suppression des 3 imports, 3 champs privés, 3 instanciations constructeur, appels `trainFromGame`/`decayEpsilon` dans `processPendingGames()`, `saveGameRecord()` et `resetAll()`. Suppression de 4 méthodes publiques devenues sans objet : `getMLStats()`, `predictAction()`, `getGeneticService()`, `selectQLearningAction()`.
+2. **`botLearningRoutes.ts`** — remplacement de 6 routes (`GET /ml-stats`, `POST /predict-action`, `POST /genetic/initialize`, `POST /genetic/evolve`, `GET /genetic/population`, `GET /genetic/best`) par des stubs `410 Gone`. Les 26+ autres routes restent intactes.
+3. **`bot-dashboard.html`** — suppression des CSS `.ml-stats`/`.ml-card`/`.ml-title`/`.ml-stat`, de la section HTML `🧠 Statistiques Machine Learning`, de la fonction JS `loadMLStats()` (50 lignes), et de son appel dans `Promise.all([...])`.
+4. **Tests** — suppression de 3 fichiers de test entiers (`qlearning.test.ts`, `neuralNetwork.test.ts`, `geneticAlgorithm.test.ts`) + retrait de 3 blocs `describe`/`it` dans `botLearning.test.ts` (`getMLStats`, `predictAction`, `getGeneticService`).
+5. **Suppression des sources** — `QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts` supprimés de `dutch-server/src/services/`.
+
+Fichiers modifiés / supprimés :
+- Modifiés : `dutch-server/src/services/BotLearningService.ts`, `dutch-server/src/routes/botLearningRoutes.ts`, `dutch-server/public/bot-dashboard.html`, `dutch-server/src/__tests__/botLearning.test.ts`.
+- Supprimés : `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts`, `dutch-server/src/__tests__/qlearning.test.ts`, `neuralNetwork.test.ts`, `geneticAlgorithm.test.ts`.
+
+Résultats build & tests :
+- **Build TypeScript** : 0 erreur (`npm run build`, Node 24.14.0).
+- **Tests** : 419/420 pass. Le seul échec (`dist/__tests__/adaptiveDifficulty.test.js`) est pré-existant : confirmé indépendant de ces changements par double vérification — (a) même échec reproductible sur le code d'avant via `git stash` + test, (b) même erreur V8 deserialization sur Node 24.18.0 sur l'ancien code. Aucun test de la suite actuelle n'est cassé par nos changements.
+- **Grep de vérification** : 0 référence résiduelle à `QLearning`, `NeuralNetwork` ou `GeneticAlgorithm` dans `dutch-server/src/`.
+
+État actuel :
+- Committé et pushé sur `origin/main`.
+- **Déploiement blue/green : EN ATTENTE** — décision séparée, à faire explicitement. Séquence prévue : déployer sur `dutch-server-blue` (instance inactive), valider le démarrage (absence de logs ML), vérifier les 410 sur les routes legacy, basculer le trafic de green vers blue.
+- `pubspec.lock` reste une modification locale non committée, hors périmètre.
+
+Prochaine action recommandée :
+- Valider le déploiement blue/green de manière explicite et séparée.
 
 ### 2026-06-26 00:05 UTC — Correction du statut prod Q-learning / NeuralNetwork
 

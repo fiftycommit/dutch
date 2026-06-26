@@ -101,33 +101,12 @@ router.get('/stats', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/bot-learning/ml-stats
- * Récupère les statistiques des modèles ML
- */
-router.get('/ml-stats', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const mlStats = botLearningService.getMLStats();
-    res.json(mlStats);
-  } catch (error) {
-    console.error('Erreur récupération stats ML:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+router.get('/ml-stats', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Machine learning stats supprimés.' });
 });
 
-/**
- * POST /api/bot-learning/predict-action
- * Prédit la meilleure action avec le réseau de neurones
- */
-router.post('/predict-action', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const { gameState, action } = req.body;
-    const prediction = botLearningService.predictAction(gameState, action);
-    res.json({ predictedAction: prediction });
-  } catch (error) {
-    console.error('Erreur prédiction action:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+router.post('/predict-action', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Prédiction d\'action supprimée.' });
 });
 
 /**
@@ -497,60 +476,20 @@ router.get('/tournaments', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
-/**
- * POST /api/bot-learning/genetic/initialize
- * Initialise la population génétique
- */
-router.post('/genetic/initialize', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const generation = await botLearningService.getGeneticService().initializePopulation();
-    res.json(generation);
-  } catch (error) {
-    console.error('Erreur initialisation génétique:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+router.post('/genetic/initialize', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Algorithme génétique supprimé.' });
 });
 
-/**
- * POST /api/bot-learning/genetic/evolve
- * Évolue vers la prochaine génération
- */
-router.post('/genetic/evolve', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const generation = await botLearningService.getGeneticService().evolveGeneration();
-    res.json(generation);
-  } catch (error: any) {
-    console.error('Erreur évolution génétique:', error);
-    res.status(500).json({ error: error.message || 'Erreur serveur' });
-  }
+router.post('/genetic/evolve', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Algorithme génétique supprimé.' });
 });
 
-/**
- * GET /api/bot-learning/genetic/population
- * Récupère la population actuelle
- */
-router.get('/genetic/population', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const population = botLearningService.getGeneticService().getPopulation();
-    res.json(population);
-  } catch (error) {
-    console.error('Erreur récupération population:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+router.get('/genetic/population', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Algorithme génétique supprimé.' });
 });
 
-/**
- * GET /api/bot-learning/genetic/best
- * Récupère le meilleur bot de la génération
- */
-router.get('/genetic/best', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const bestBot = botLearningService.getGeneticService().getBestBot();
-    res.json(bestBot || { message: 'Aucun bot disponible' });
-  } catch (error) {
-    console.error('Erreur récupération meilleur bot:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+router.get('/genetic/best', requireAdmin, (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Algorithme génétique supprimé.' });
 });
 
 /**
