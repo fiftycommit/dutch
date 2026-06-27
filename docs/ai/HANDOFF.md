@@ -1,6 +1,6 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-26 (Claude Code)
+Dernière mise à jour : 2026-06-27 (Claude Code)
 Agent ayant modifié ce fichier : Claude Code
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
@@ -178,9 +178,9 @@ Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé a
 ### Décidées et implémentées
 - **Intégration Dart ↔ Python : subprocess + NDJSON sur stdin/stdout.** Le runner Dart headless (`tool/rl_env_runner.dart`) est la source de vérité des règles ; Python pilote via messages JSON ligne par ligne (`reset` / `observation` / `action` / `error` / `close`).
 - **Le Dart est l'autorité du moteur** : aucune règle de jeu réimplémentée en Python.
-- **Observation** : `Box(148,)` taille fixe (agrégats adversaires, pas de slots bruts ; anti-fuite : n'expose que les croyances mentalMap/knownCards/spyMemory, jamais les vraies cartes non vues). MAX_HAND=13, MAX_OPP=5.
+- **Observation** : `Box(146,)` taille fixe (agrégats adversaires, pas de slots bruts ; anti-fuite : n'expose que les croyances mentalMap/knownCards/spyMemory, jamais les vraies cartes non vues). MAX_HAND=13, MAX_OPP=5. **Était `Box(148,)`** quand la reward MORL concaténait 2 poids à l'obs ; ces 2 poids ont été retirés le 2026-06-27 (cf. journal), d'où 148→146.
 - **Action** : `Discrete(165)` masquée (MaskablePPO). Blocs contigus : call_dutch=0, continue_draw=1, discard_drawn=2, skip_power=3, replace 4-16, power7_look 17-29, power10_spy 30-94, powerV_swap 95-159, powerJoker 160-164. La réaction (D) est **exclue** en v1.
-- **Reward multi-objectif (MORL)** : scalarisation préférence-conditionnée `w1·principal + w2·destab`, poids ~Dirichlet(1,1) par épisode, concaténés à l'observation. Objectif 1 = gagner vite (terminal, rang normalisé). Objectif 2 = déstabiliser un proxy-humain dynamique (signal dense ré-dérivé de `HumanThreatTracker`, règle de proxy stable : reward_destab=0 si le proxy change).
+- **Reward hiérarchique** (depuis 2026-06-27, remplace l'ancienne MORL — cf. journal) : `principal(rang normalisé) + win_bonus + DESTAB_SCALE·clip(destab, ±CAP_DESTAB)`. Terme dominant = victoire/rang ; `win_bonus = kBonusMax·min(1, gap/kGapSat)` si rang==1 (`kBonusMax=0.30`, `kGapSat=20.0`, Dart) récompense les victoires nettes ; le destab dense est un **signal d'appoint borné** (`DESTAB_SCALE=1/256≈0.0039`, `CAP_DESTAB=2.0`, Python), plus jamais le terme dominant. Le proxy de déstabilisation reste celui d'avant (leader courant via `BotThreatAnalyzer`, reward_destab=0 si le proxy change). **Ancienne MORL retirée** : scalarisation `w1·principal + w2·destab` à poids Dirichlet concaténés à l'obs — abandonnée car le destab non borné dominait la reward (~105% du retour) et l'agent ne gagnait/n'appelait jamais Dutch (reward hacking).
 - **Algo** : `sb3-contrib` MaskablePPO (PPO masqué).
 - **Nombre de joueurs** : 2 à 6 (aligné sur le vrai jeu / UI).
 - **Déterminisme** : RNG seedable côté Dart (`engine_random.dart`), seeds incrémentaux par épisode côté Python.
@@ -230,7 +230,7 @@ L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtri
 3. ✅ **Fait (local, validé)** — `DutchEnv.step()` gère les défaillances sans casser `SubprocVecEnv` : runner mort/timeout → épisode tronqué neutre ; **toute erreur moteur `fatal:false`** (BAD_PHASE ou autre code) → épisode tronqué récupérable (compteur `engine_recoverable_error_count`, log WARNING) ; **`fatal:true` LÈVE** (y compris `INTERNAL` — on ne masque plus un état moteur corrompu). Cf. l'entrée de journal des trois correctifs.
 4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs, sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
 5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu : ≈1221 fps agent en croisière (updates PPO réels), RSS arbre ≈2.61 Go, stable.
-6. ⚠️ **Crash puis reprise** — le run initial (`dutch_rl_train`) a été tué à ~9M steps par un crash `BAD_PHASE` (worker tué, process principal bloqué ~103% CPU, 3/4 runners Dart orphelins). Cause + correctifs : cf. journal. Le run **tourne désormais** dans `dutch_rl_train2`, repris depuis `models/maskable_ppo_parallel_checkpoint_9000000_steps.zip`, cible 57,6M cumulés (~48,6M restants au lancement), ≈1221 fps, log `rl/runs/train_parallel_resume_20260626_070144.log`. **Ne PAS reprendre depuis `maskable_ppo_parallel_final.zip`** (écrit pendant l'agonie du crash, état non fiable).
+6. ⚠️ **Crash puis reprise** — le run initial (`dutch_rl_train`) a été tué à ~9M steps par un crash `BAD_PHASE` (worker tué, process principal bloqué ~103% CPU, 3/4 runners Dart orphelins). Cause + correctifs : cf. journal. Le run **tourne toujours** dans `dutch_rl_train2` au check-in du 2026-06-26 09:12 UTC : pane tmux actif (`cmd=uv`), `total_timesteps=18 781 248`, ≈1246 fps, `engine_recoverable_errors=1`, `runner_crashes=0`, `runner_timeouts=0`. Reprise depuis `models/maskable_ppo_parallel_checkpoint_9000000_steps.zip`, cible 57,6M cumulés (~48,6M restants au lancement), log `rl/runs/train_parallel_resume_20260626_070144.log`. **Ne PAS reprendre depuis `maskable_ppo_parallel_final.zip`** (écrit pendant l'agonie du crash, état non fiable).
 7. **Prochaine action** — ne pas modifier le code pendant le run sauf incident. Attendre la fin (ou check-in périodique), surveiller `failures/engine_recoverable_errors` dans TensorBoard, puis évaluer le modèle obtenu vs bots existants et vs aléatoire avant de concevoir les agents « moyen » et « facile ».
 
 **Commande de reprise (forme exacte — `--total-timesteps` = cible CUMULÉE) :**
@@ -258,6 +258,85 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-27 — Restructure reward + run 30M + diagnostic éval v2 + plan PISTE 1
+
+**Contexte (chantier reward, fait avant ce diagnostic) :**
+- Reward MORL **retirée**, remplacée par une reward **hiérarchique** (cf. section décisions). Constantes : `kBonusMax=0.30`, `kGapSat=20.0` (Dart) ; `DESTAB_SCALE=1/256≈0.0039`, `CAP_DESTAB=2.0` (Python). Motif : le destab non borné dominait le retour (~105%), l'agent ne gagnait/n'appelait jamais Dutch (reward hacking).
+- **OBS_DIM 148 → 146** (suppression des 2 poids MORL concaténés à l'obs). Casse la compat avec l'ancien checkpoint : garde-fou explicite dans `evaluate_rl.py` (abort si `obs_dim` du modèle ≠ `encoding.OBS_DIM`) + `check_for_correct_spaces` SB3 au resume → échec **franc**, pas silencieux.
+- **Monitoring direct (PART B)** : `FailureCountersCallback` logge `eval/{rank_mean,win_rate,dutch_call_rate,dutch_success_rate,collapse_warn}` (fenêtres glissantes, par épisode/step) + garde-fou collapse en **WARNING seul** (jamais d'arrêt auto, décision validée : pas de référence fiable du comportement normal à 3M sous la nouvelle reward).
+- Validé avant run : `flutter analyze` propre, `test_roundtrip.py` 6/6 (obs=(146,)), parité #5 verte.
+
+**Run 30M (`dutch_rl_train3`) :**
+- Run à neuf (obligatoire vu OBS 148→146), 30M steps, ~1150 fps, ~7h. Terminé **sain** : 0 collapse, métriques en progression continue jusqu'au bout (win_rate ~0.256, dutch_success ~0.634, rank_mean ~2.72). Modèle final : `rl/models/maskable_ppo_parallel_final.zip` (écrasé proprement en fin de run réussi, pas pendant un crash).
+
+**Diagnostic éval v2 (`rl/report_v2.csv`, 15 000 parties = 15 conditions × 1000, 0 abandon, 2m43s) :**
+- **Bug « n'appelle jamais Dutch » RÉSOLU** : p0 appelle Dutch dans **50.9%** des parties, succès **65.5%** (≈ dutch_success d'entraînement 63.4% → éval cohérente avec l'entraînement, pas d'écart train/éval suspect).
+- **MAIS effondrement en conditions dures** : contre bots `difficile` en multijoueur, win% **sous le hasard** — difficile×3j **20.9%** (hasard 33%), ×4j **9.0%** (25%), ×5j **4.2%** (20%), ×6j **2.2%** (16.7%). Seul le heads-up difficile (2j, 53.7%) tient.
+- Par skill adverse : bronze **58.8%**, silver **26.0%**, difficile **18.0%**. Niveau global ≈ **« silver »**.
+- **Verdict : PAS prêt à remplacer le bot « difficile ».** Le remplacer l'affaiblirait en multijoueur (3+).
+- Cause suspectée : le mix d'entraînement (chemin défaut `_buildPlayers`, tirage **uniforme** skill×behavior×num_players) sous-expose l'agent aux conditions dures (difficile + 4-6 joueurs), justement là où il échoue. Indice corroborant : contre difficile les parties sont courtes (les bots ferment vite via Dutch avant que p0 ait le temps de jouer).
+
+**Plan retenu (PISTE 1, isolée — ne touche NI observation NI reward, toutes deux validées) :**
+- Quota strict : **70% des épisodes d'entraînement en `difficile × num_players∈{4,5,6}`**, 30% tirage uniforme classique. Implémentation **côté Python uniquement** (`DutchEnv.reset`, réutilise le levier `extra_options` déjà existant et testé → **zéro changement Dart**, chemin défaut/parité #5 intact). Ajout métrique séparée **`eval/win_rate_hard`** (rang==1 sur les seuls épisodes en condition dure) pour juger l'effet réel — le `win_rate` global baissera mécaniquement avec un mix plus dur. **Plan détaillé présenté, en attente de validation avant tout code.**
+
+Fichiers concernés (chantier reward, déjà sur disque, **non committés**) : `tool/rl_env_runner.dart`, `rl/dutch_env.py`, `rl/encoding.py`, `rl/train_parallel.py`, `rl/evaluate_rl.py`, `rl/test_roundtrip.py`, `rl/train_ppo.py`. Artefacts éval : `rl/report_v2.csv`, `rl/eval_run_v2.log`.
+
+État actuel : aucun entraînement en cours. Session `dutch_eval2` à fermer (éval terminée).
+
+Prochaine action recommandée : valider le plan PISTE 1, l'implémenter (Python only), relancer un run avec le quota et surveiller `eval/win_rate_hard` vs `eval/win_rate`.
+
+### 2026-06-26 09:18 UTC — Évaluation rapide checkpoint 19M
+
+Changement :
+- Évaluation indicative du checkpoint `rl/models/maskable_ppo_parallel_checkpoint_19000000_steps.zip` pendant que le run principal continue.
+- Aucun fichier source modifié.
+- Compilation d'un binaire d'éval séparé `/tmp/rl_env_runner_eval` pour ne pas écraser `tool/rl_env_runner` pendant l'entraînement.
+
+Pourquoi :
+- Les logs `train_parallel.py` ne journalisent pas directement `won` / `rank`; ils exposent surtout reward, longueur, KL et compteurs de défaillances. Il fallait donc utiliser `rl/evaluate_rl.py` pour savoir si le modèle gagne.
+
+Fichiers / commandes concernés :
+- Première tentative : `uv run python evaluate_rl.py models/maskable_ppo_parallel_checkpoint_19000000_steps.zip --games 5 ...` a abort car le binaire `tool/rl_env_runner` est trop ancien pour l'extension d'éval (`num_players=99` non rejeté).
+- Compilation sans toucher au binaire de training : `dart compile exe tool/rl_env_runner.dart -o /tmp/rl_env_runner_eval`.
+- Éval : `cd rl && uv run python evaluate_rl.py models/maskable_ppo_parallel_checkpoint_19000000_steps.zip --games 5 --exe /tmp/rl_env_runner_eval --out /tmp/dutch_eval_19m_g5.csv`.
+
+Résultat obtenu :
+- 225 parties évaluées (45 conditions × 5 parties), aucune partie abandonnée.
+- Résultat très bruité (5 parties/condition), mais mauvais à ce stade :
+  - macro win-rate `(1,0)` : **2,7 %** ;
+  - macro win-rate `(0.5,0.5)` : **2,7 %** ;
+  - macro win-rate `(0,1)` : **1,3 %**.
+- Les seules victoires observées sont contre `bronze`, surtout en 2 joueurs, plus une condition bronze 5 joueurs `(0,1)`.
+- L'agent n'appelle jamais Dutch dans cet échantillon (`dutch%=0.0%` partout), signe qu'il n'a pas encore appris la stratégie de fin de manche.
+
+État actuel :
+- L'entraînement principal `dutch_rl_train2` continue après l'éval : vérifié à `total_timesteps=19 223 616`, ≈1246 fps, `engine_recoverable_errors=1`, `runner_crashes=0`, `runner_timeouts=0`.
+
+Prochaine action recommandée :
+- Ne pas conclure définitivement sur le niveau final avant la fin du run. Refaire une évaluation plus robuste (au moins 100 parties/condition, idéalement 1000) sur le modèle final, puis comparer vs bots existants / aléatoire.
+
+### 2026-06-26 09:12 UTC — Check-in run RL repris
+
+Changement :
+- Vérification demandée de l'état du run RL repris.
+- Correction de contexte : l'agent est déjà exécuté sur la VM `rlDutch`; la tentative SSH précédente était inutile.
+- Aucun code modifié ; ce handoff est mis à jour avec l'état observé.
+
+Commandes / observations :
+- `hostname` renvoie `rlDutch`.
+- `tmux ls` montre `dutch_rl_train2` actif, et `tmux list-panes` indique `cmd=uv` pour `dutch_rl_train2:0.0`.
+- Lecture directe du pane `tmux capture-pane -t dutch_rl_train2:0.0`.
+- Dernier bloc observé : `total_timesteps=18 781 248`, `fps=1246`, `iterations=4776`.
+- Compteurs observés : `engine_internal_errors=0`, `engine_recoverable_errors=1`, `runner_crashes=0`, `runner_timeouts=0`.
+- Dernier checkpoint local observé : `rl/models/maskable_ppo_parallel_checkpoint_18500000_steps.zip` à `09:08:49` UTC.
+
+État actuel :
+- Le run RL est **toujours actif** au check-in 09:12 UTC.
+- Progression : ~18,8M / 57,6M steps cumulés.
+
+Prochaine action recommandée :
+- Continuer à laisser tourner sans modifier le code. Refaire un check périodique via `tmux capture-pane -t dutch_rl_train2:0.0 -p -S -80`, le log ou les checkpoints.
 
 ### 2026-06-26 ~07:01 UTC — Crash BAD_PHASE résolu (3 correctifs) + reprise du run
 
