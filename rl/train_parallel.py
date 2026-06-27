@@ -35,9 +35,12 @@ def _mask_fn(env: ActionMasker) -> np.ndarray:
     return env.action_masks()
 
 
-def _make_env(worker_idx: int):
+def _make_env(worker_idx: int, curriculum_hard_ratio: float = 0.0):
     def _init():
-        base = DutchEnv(seed_start=worker_idx * 100_000)
+        base = DutchEnv(
+            seed_start=worker_idx * 100_000,
+            curriculum_hard_ratio=curriculum_hard_ratio,
+        )
         return Monitor(ActionMasker(base, _mask_fn))
 
     return _init
@@ -45,6 +48,14 @@ def _make_env(worker_idx: int):
 
 class FailureCountersCallback(BaseCallback):
     """Surveille les erreurs envoyées via `info` sans tuer les workers."""
+
+    # Garde-fou « collapse » (WARNING seul, pas d'arrêt) : après ce warm-up, si
+    # l'agent ne gagne quasiment jamais ET n'appelle quasiment jamais Dutch, on
+    # alerte. Seuils volontairement très bas (le défaut observé était win~1.5%,
+    # dutch~0.003%). Pas d'arrêt : pas de référence fiable du comportement normal.
+    COLLAPSE_WARMUP_STEPS = 3_000_000
+    COLLAPSE_WIN_RATE = 0.01
+    COLLAPSE_DUTCH_RATE = 0.005
 
     def __init__(
         self,
@@ -66,12 +77,28 @@ class FailureCountersCallback(BaseCallback):
         # num_timesteps des erreurs récupérables récentes (fenêtre glissante)
         self._recoverable_window: deque[int] = deque()
         self._next_log_step = 0
+        # ── Métriques eval/* (fenêtres glissantes) ──────────────────────────
+        # Par épisode (lues sur l'info terminale, dones True) :
+        self._rank_window: deque[float] = deque(maxlen=2000)
+        self._won_window: deque[float] = deque(maxlen=2000)
+        # win-rate restreint aux épisodes « durs » du curriculum (PISTE 1) :
+        self._won_hard_window: deque[float] = deque(maxlen=2000)
+        # (called_dutch, won) par épisode -> dutch_success_rate :
+        self._dutch_episode_window: deque[tuple[bool, bool]] = deque(maxlen=2000)
+        # Par step (call_dutch légal ? choisi ?) -> dutch_call_rate :
+        self._dutch_legal_window: deque[bool] = deque(maxlen=200_000)
+        self._dutch_chosen_window: deque[bool] = deque(maxlen=200_000)
+        self._collapse_warned = False
 
     def _on_training_start(self) -> None:
         self._next_log_step = self.log_every_steps
 
     def _on_step(self) -> bool:
-        for info in self.locals.get("infos", []):
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones")
+        if dones is None:
+            dones = [False] * len(infos)
+        for info, done in zip(infos, dones):
             if info.get("engine_internal_error"):
                 self.engine_internal_errors += 1
             if info.get("engine_recoverable_error"):
@@ -81,6 +108,23 @@ class FailureCountersCallback(BaseCallback):
                 self.runner_crashes += 1
             if info.get("runner_timeout"):
                 self.runner_timeouts += 1
+
+            # ── Métriques eval/* ─────────────────────────────────────────────
+            # Par step : fréquence de choix de call_dutch parmi les steps où il
+            # était légal (clés absentes sur les steps d'erreur/troncature).
+            if "dutch_legal" in info:
+                self._dutch_legal_window.append(bool(info["dutch_legal"]))
+                self._dutch_chosen_window.append(bool(info["dutch_chosen"]))
+            # Par épisode : sur l'info terminale (auto-reset SB3 préserve les clés).
+            if done and "rank" in info:
+                self._rank_window.append(float(info["rank"]))
+                won = bool(info.get("won"))
+                self._won_window.append(1.0 if won else 0.0)
+                if info.get("hard"):
+                    self._won_hard_window.append(1.0 if won else 0.0)
+                self._dutch_episode_window.append(
+                    (bool(info.get("called_dutch")), won)
+                )
 
         if self.num_timesteps >= self._next_log_step:
             self.logger.record(
@@ -93,6 +137,7 @@ class FailureCountersCallback(BaseCallback):
             )
             self.logger.record("failures/runner_crashes", self.runner_crashes)
             self.logger.record("failures/runner_timeouts", self.runner_timeouts)
+            self._log_eval_metrics()
             while self._next_log_step <= self.num_timesteps:
                 self._next_log_step += self.log_every_steps
 
@@ -129,6 +174,59 @@ class FailureCountersCallback(BaseCallback):
                 return False
         return True
 
+    def _log_eval_metrics(self) -> None:
+        """Logge eval/* (rang, win-rate, fréquence et succès Dutch) + warning collapse.
+
+        Métriques MESURÉES (pas dérivées de la reward) : détectent un agent qui
+        maximise la reward sans jamais gagner ni appeler Dutch, dès quelques M de
+        steps. Le garde-fou collapse n'arrête JAMAIS le run (warning seul).
+        """
+        if self._rank_window:
+            self.logger.record("eval/rank_mean", float(np.mean(self._rank_window)))
+        win_rate = float(np.mean(self._won_window)) if self._won_window else float("nan")
+        if self._won_window:
+            self.logger.record("eval/win_rate", win_rate)
+        # win-rate sur les seules conditions dures (PISTE 1) : doit MONTER même si
+        # le win_rate global baisse mécaniquement avec un mix d'entraînement plus dur.
+        if self._won_hard_window:
+            self.logger.record(
+                "eval/win_rate_hard", float(np.mean(self._won_hard_window))
+            )
+
+        legal = sum(self._dutch_legal_window)
+        chosen = sum(self._dutch_chosen_window)
+        dutch_call_rate = (chosen / legal) if legal else float("nan")
+        if legal:
+            self.logger.record("eval/dutch_call_rate", dutch_call_rate)
+
+        called = [won for (c, won) in self._dutch_episode_window if c]
+        if called:
+            self.logger.record(
+                "eval/dutch_success_rate", sum(called) / len(called)
+            )
+
+        # ── Garde-fou collapse (WARNING seul) ───────────────────────────────
+        if (
+            self.num_timesteps >= self.COLLAPSE_WARMUP_STEPS
+            and self._won_window
+            and legal
+            and win_rate < self.COLLAPSE_WIN_RATE
+            and dutch_call_rate < self.COLLAPSE_DUTCH_RATE
+        ):
+            self.logger.record("eval/collapse_warn", 1.0)
+            if not self._collapse_warned:  # print sur le front montant (anti-spam)
+                self._collapse_warned = True
+                print(
+                    "⚠ COLLAPSE suspecté : l'agent ne gagne ni n'appelle Dutch "
+                    f"(win_rate={win_rate:.3%} < {self.COLLAPSE_WIN_RATE:.0%}, "
+                    f"dutch_call_rate={dutch_call_rate:.4%} < "
+                    f"{self.COLLAPSE_DUTCH_RATE:.1%}) à {self.num_timesteps} steps. "
+                    "Run NON arrêté — inspecter eval/* dans TensorBoard."
+                )
+        else:
+            self.logger.record("eval/collapse_warn", 0.0)
+            self._collapse_warned = False
+
 
 def _parse_args() -> argparse.Namespace:
     base = Path(__file__).resolve().parent
@@ -146,6 +244,14 @@ def _parse_args() -> argparse.Namespace:
         default=50,
         help="Max d'erreurs récupérables tolérées dans la fenêtre glissante "
         "avant arrêt propre ; <=0 pour désactiver le garde-fou.",
+    )
+    parser.add_argument(
+        "--curriculum-hard-ratio",
+        type=float,
+        default=0.0,
+        help="Fraction des épisodes forcés en difficile × {4,5,6 joueurs} "
+        "(PISTE 1) ; le reste en mix uniforme. 0.0 => curriculum désactivé "
+        "(comportement historique).",
     )
     parser.add_argument(
         "--resume-from",
@@ -168,11 +274,15 @@ def main() -> int:
         raise SystemExit("--internal-error-threshold doit être >= 0")
     if args.recoverable_error_window <= 0:
         raise SystemExit("--recoverable-error-window doit être positif")
+    if not 0.0 <= args.curriculum_hard_ratio <= 1.0:
+        raise SystemExit("--curriculum-hard-ratio doit être dans [0, 1]")
 
     args.model_out.mkdir(parents=True, exist_ok=True)
     args.tensorboard_log_dir.mkdir(parents=True, exist_ok=True)
 
-    env = SubprocVecEnv([_make_env(i) for i in range(args.num_workers)])
+    env = SubprocVecEnv(
+        [_make_env(i, args.curriculum_hard_ratio) for i in range(args.num_workers)]
+    )
     resuming = args.resume_from is not None
     if resuming:
         if not args.resume_from.exists():
