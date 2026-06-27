@@ -1,7 +1,7 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-27 (Claude Code)
-Agent ayant modifié ce fichier : Claude Code
+Dernière mise à jour : 2026-06-27 (Codex)
+Agent ayant modifié ce fichier : Codex
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
 
@@ -11,7 +11,9 @@ Agent ayant modifié ce fichier : Claude Code
 
 Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
 
-**État au 2026-06-26 :** l'infrastructure RL est en place et validée. La VM Azure `rlDutch` est accessible en SSH, l'environnement (Flutter/Dart + Python/uv + deps RL) est installé dessus, le runner Dart est compilé avec le fix logger et la barrière de validation `rl/test_roundtrip.py` passe **6/6** après recompilation. Le premier run réel a tourné jusqu'à ~9M steps puis un worker a été tué par un crash `BAD_PHASE` (désync rare de `_recv()`). **Trois correctifs ont été appliqués** (erreurs récupérables dans `dutch_env.py`, réécriture binaire de `_recv()` dans `runner_process.py`, option `--resume-from` dans `train_parallel.py`), validés par **21 tests verts (15 Dart + 6 Python)**. Le run a été **repris** depuis le checkpoint 9M dans une nouvelle session tmux `dutch_rl_train2` ; cible 57,6M cumulés, ≈1221 fps, log `rl/runs/train_parallel_resume_20260626_070144.log`.
+**État au 2026-06-27 :** l'infrastructure RL est en place et validée. Le run courant `dutch_rl_train4` est actif dans tmux (`cmd=uv`) avec curriculum hard 70% ; dernier check-in Codex lecture seule : ~32,1M timesteps, `eval/win_rate_hard` présent, `engine_internal_errors=0`. Pendant ce run, ne pas toucher/recompiler les fichiers qu'il utilise : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
+
+Une piste Self-Imitation Learning (SIL) a été ajoutée en fichiers Python isolés uniquement : buffer d'épisodes gagnants, callback de collecte, sous-classe `MaskablePPO` avec BC loss capée, script séparé `train_self_imitation.py`, tests courts. Un smoke runtime très court (1 worker, 1024 timesteps) a validé que `SelfImitationPPO + SelfImitationCallback + DutchEnv` tournent ensemble et sauvegardent un modèle final temporaire. Le log `train/bc_ratio_to_policy_loss` a été corrigé pour utiliser le ratio des moyennes agrégées plutôt qu'une moyenne de ratios par mini-batch. Aucun long training SIL n'a été lancé, aucun commit/push effectué.
 
 ---
 
@@ -210,9 +212,22 @@ Phase 2 RL (en cours) :
 - `rl/dutch_env.py` — `gym.Env` mono-agent ; `step()` traite toute erreur runner `fatal:false` comme récupérable (épisode tronqué, compteur `engine_recoverable_error_count`, log WARNING) et **lève** sur `fatal:true`.
 - `rl/train_ppo.py` — entraîneur smoke (plomberie).
 - `rl/train_parallel.py` — entraîneur PPO parallèle (`SubprocVecEnv`, checkpoints, TensorBoard, sauvegarde `finally`). Option `--resume-from` (`MaskablePPO.load` + `reset_num_timesteps=False` ; `--total-timesteps` = cible cumulée, additionnel calculé en interne). `FailureCountersCallback` : `--internal-error-threshold` + garde-fou de fréquence sur erreurs récupérables (`--recoverable-error-window` déf. 200000, `--recoverable-error-threshold` déf. 50, ≤0 pour désactiver).
+- `rl/self_imitation_buffer.py` — buffer SIL isolé d'épisodes gagnants, capacité en transitions, contexte v1 `{"hard": bool}`, sampling équilibré par contexte éligible.
+- `rl/self_imitation_callback.py` — callback SB3 isolé, reconstruit les épisodes par worker et stocke uniquement les épisodes terminaux avec `info["won"] is True`.
+- `rl/self_imitation_ppo.py` — sous-classe isolée de `MaskablePPO`, ajoute une behavior cloning loss légère et capée (`bc_coef` défaut 0.001, cap défaut 0.005).
+- `rl/train_self_imitation.py` — script séparé pour futurs runs SIL ; ne remplace pas `train_parallel.py`.
+- `rl/test_self_imitation.py` — tests Python courts SIL.
 - `rl/test_roundtrip.py` — barrière de validation (6 checks).
 - `rl/pyproject.toml`, `rl/uv.lock` — dépendances RL uv (inclut TensorBoard pour SB3).
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
+
+Fichiers protégés pendant le run tmux actif `dutch_rl_train4` :
+- `rl/train_parallel.py`
+- `rl/dutch_env.py`
+- `tool/rl_env_runner.dart`
+- `tool/rl_env_runner`
+
+Ne pas les modifier, reformater, déplacer, recompiler, ni arrêter le tmux du run en cours.
 
 Supprimés (ne plus référencer) :
 - `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts` — supprimés du repo le 2026-06-26 après confirmation 0 usage prod sur 2,5 mois. Les routes correspondantes répondent 410. Déploiement blue/green à faire séparément.
@@ -223,29 +238,14 @@ Supprimés (ne plus référencer) :
 
 ## Prochaine étape immédiate
 
-L'accès SSH et le setup de l'environnement sont **faits et validés** (roundtrip 6/6 sur la VM). La suite (phase 3 — entraînement parallélisé) :
+Le run actif est `dutch_rl_train4` dans tmux, lancé avec curriculum hard 70%. Dernier check-in lecture seule Codex : pane actif `cmd=uv`, progression ~32,1M timesteps, ≈1009 fps, `eval/win_rate_hard` loggé, `engine_internal_errors=0`, `engine_recoverable_errors=7`, `runner_crashes=0`, `runner_timeouts=0`.
 
-1. ✅ **Fait (VM, validé)** — fuite mémoire `_logBuffer` corrigée : `GameLoggerService.instance.setEnabled(false)` en tête du `main()` du runner, binaire recompilé sur la VM, `flutter test test/rl/` passé **15/15**, puis `rl/test_roundtrip.py` relancé après recompilation et passé **6/6**.
-2. (Optionnel) Slim torch en CPU-only sur la VM (récupère ~3 Go).
-3. ✅ **Fait (local, validé)** — `DutchEnv.step()` gère les défaillances sans casser `SubprocVecEnv` : runner mort/timeout → épisode tronqué neutre ; **toute erreur moteur `fatal:false`** (BAD_PHASE ou autre code) → épisode tronqué récupérable (compteur `engine_recoverable_error_count`, log WARNING) ; **`fatal:true` LÈVE** (y compris `INTERNAL` — on ne masque plus un état moteur corrompu). Cf. l'entrée de journal des trois correctifs.
-4. ✅ **Fait (VM, validé)** — `rl/train_parallel.py` ajouté : `SubprocVecEnv` K=4 par défaut, `CheckpointCallback`, TensorBoard, callback de surveillance erreurs, sauvegarde finale garantie en `finally`. Dépendance `tensorboard>=2.20.0` ajoutée via `uv add` + `rl/uv.lock`.
-5. ✅ **Fait (VM, mesuré)** — FPS/mémoire parallèle mesurés pour K=3/K=4 ; K=4 retenu : ≈1221 fps agent en croisière (updates PPO réels), RSS arbre ≈2.61 Go, stable.
-6. ⚠️ **Crash puis reprise** — le run initial (`dutch_rl_train`) a été tué à ~9M steps par un crash `BAD_PHASE` (worker tué, process principal bloqué ~103% CPU, 3/4 runners Dart orphelins). Cause + correctifs : cf. journal. Le run **tourne toujours** dans `dutch_rl_train2` au check-in du 2026-06-26 09:12 UTC : pane tmux actif (`cmd=uv`), `total_timesteps=18 781 248`, ≈1246 fps, `engine_recoverable_errors=1`, `runner_crashes=0`, `runner_timeouts=0`. Reprise depuis `models/maskable_ppo_parallel_checkpoint_9000000_steps.zip`, cible 57,6M cumulés (~48,6M restants au lancement), log `rl/runs/train_parallel_resume_20260626_070144.log`. **Ne PAS reprendre depuis `maskable_ppo_parallel_final.zip`** (écrit pendant l'agonie du crash, état non fiable).
-7. **Prochaine action** — ne pas modifier le code pendant le run sauf incident. Attendre la fin (ou check-in périodique), surveiller `failures/engine_recoverable_errors` dans TensorBoard, puis évaluer le modèle obtenu vs bots existants et vs aléatoire avant de concevoir les agents « moyen » et « facile ».
-
-**Commande de reprise (forme exacte — `--total-timesteps` = cible CUMULÉE) :**
-
-```bash
-cd /home/max/dutch/rl && uv run python train_parallel.py \
-  --resume-from models/maskable_ppo_parallel_checkpoint_9000000_steps.zip \
-  --num-workers=4 --total-timesteps=57600000 --checkpoint-freq=500000 \
-  --internal-error-threshold=8 \
-  --recoverable-error-window=200000 --recoverable-error-threshold=50 \
-  --tensorboard-log-dir=/home/max/dutch/rl/runs --model-out=/home/max/dutch/rl/models \
-  2>&1 | tee -a /home/max/dutch/rl/runs/train_parallel_resume_$(date +%Y%m%d_%H%M%S).log
-```
-
-`--total-timesteps` reste la cible cumulée : l'additionnel (`cible − num_timesteps` restauré) est calculé en interne et `learn()` est appelé avec `reset_num_timesteps=False`. Toujours reprendre depuis le **dernier checkpoint `*_steps.zip` valide**, jamais `*_final.zip`.
+Consignes immédiates :
+1. Ne pas modifier/recompiler les fichiers du run actif : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
+2. Ne pas stopper le tmux `dutch_rl_train4`.
+3. Laisser finir le run curriculum hard 70%, puis évaluer le modèle obtenu.
+4. La piste Self-Imitation Learning est prête en fichiers isolés, mais aucun long run SIL n'a été lancé. Pour un futur essai, utiliser `rl/train_self_imitation.py` dans un run séparé, après validation explicite.
+5. Toujours reprendre un entraînement principal depuis un checkpoint `*_steps.zip` valide, jamais depuis un `*_final.zip` produit pendant un crash.
 
 Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
 
@@ -258,6 +258,76 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-27 — Self-Imitation Learning isolé + check-in `dutch_rl_train4`
+
+Changement :
+- Ajout d'une première piste Self-Imitation Learning (SIL) pour MaskablePPO en fichiers isolés uniquement.
+- Aucun fichier utilisé par le run actif n'a été modifié : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner` sont restés intacts.
+- Aucun runner Dart recompilé, aucun tmux stoppé, aucun long training lancé, aucun commit/push effectué.
+
+Fichiers créés :
+- `rl/self_imitation_buffer.py` : buffer d'épisodes gagnants, capacité en transitions, purge FIFO par épisode, contexte v1 `{"hard": bool}`, sampling équilibré entre contextes éligibles, structure extensible pour futur `skill`/`num_players`.
+- `rl/self_imitation_callback.py` : callback SB3 qui reconstruit les épisodes par worker via les locals de `collect_rollouts`, stocke uniquement les terminaux avec `info["won"] is True`, ignore pertes/troncatures/crash/timeout/recoverable errors, loggue `sil/*`.
+- `rl/self_imitation_ppo.py` : sous-classe isolée de `MaskablePPO`, recopie locale de `train()` depuis sb3-contrib installé et ajout d'une BC loss légère `-log_prob(actions gagnantes).mean()`, `bc_coef=0.001`, contribution effective capée par défaut à `0.005`, buffer exclu des sauvegardes modèle.
+- `rl/train_self_imitation.py` : script séparé de futur run SIL (`SubprocVecEnv`, `ActionMasker`, `Monitor`, checkpoints, sauvegarde finale, flags SIL), sans remplacer `train_parallel.py`.
+- `rl/test_self_imitation.py` : tests Python courts.
+
+Commandes exécutées :
+- `tmux ls`, `tmux list-panes`, `tmux capture-pane -t dutch_rl_train4:0.0 -p -S -80` en lecture seule.
+- `cd rl && uv run python test_self_imitation.py`
+- `cd rl && uv run python -m py_compile self_imitation_buffer.py self_imitation_callback.py self_imitation_ppo.py train_self_imitation.py test_self_imitation.py`
+
+Résultat obtenu :
+- `test_self_imitation.py` : **6/6 vert**.
+- `py_compile` : OK.
+- Check-in run actif : `dutch_rl_train4` actif (`cmd=uv`), ~32,1M timesteps, ≈1009 fps, `eval/win_rate_hard=0.121`, `engine_internal_errors=0`, `engine_recoverable_errors=7`, `runner_crashes=0`, `runner_timeouts=0`.
+
+État actuel :
+- `dutch_rl_train4` continue de tourner.
+- SIL est implémenté mais non entraîné en long run.
+- Changements locaux non committés/non pushés.
+
+Prochaine action recommandée :
+- Laisser finir `dutch_rl_train4`.
+- Après validation explicite, lancer éventuellement un run séparé avec `rl/train_self_imitation.py` ; commencer par un smoke très court avant tout run long.
+
+### 2026-06-27 — Smoke runtime SIL 1024 steps
+
+Changement :
+- Validation runtime très courte de l'intégration `SelfImitationPPO + SelfImitationCallback + DutchEnv` via `rl/train_self_imitation.py`.
+- Aucun fichier protégé modifié/recompilé : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
+- `dutch_rl_train4` laissé actif, aucun commit/push.
+
+Commande exécutée :
+```bash
+cd rl && uv run python train_self_imitation.py \
+  --num-workers 1 \
+  --total-timesteps 1024 \
+  --checkpoint-freq 1000000 \
+  --tensorboard-log-dir tmp_sil_smoke_runs \
+  --model-out tmp_sil_smoke_models \
+  --curriculum-hard-ratio 0.0 \
+  --sil-buffer-size 1000 \
+  --sil-min-episodes-per-context 1 \
+  --sil-batch-size 16 \
+  --bc-coef 0.001 \
+  --bc-effective-loss-cap 0.005
+```
+
+Résultat :
+- Exit code 0.
+- Modèle final temporaire créé : `tmp_sil_smoke_models/maskable_ppo_sil_final.zip`.
+- TensorBoard temporaire créé : `tmp_sil_smoke_runs/MaskablePPO_1/events.out.tfevents...`.
+- Logs `train/bc_loss`, `train/bc_effective_loss` et `train/bc_ratio_to_policy_loss` produits pendant le smoke.
+- Correction monitoring validée après relance smoke : `train/bc_ratio_to_policy_loss=0.0687`, cohérent avec `bc_effective_loss=0.000944` et `policy_gradient_loss=-0.0137` (ratio des moyennes agrégées, plus de dénominateur mini-batch quasi nul).
+- Dossiers temporaires supprimés après vérification : `rl/tmp_sil_smoke_models`, `rl/tmp_sil_smoke_runs`.
+- Tests courts relancés ensuite : `uv run python test_self_imitation.py` **6/6 vert** ; `py_compile` ciblé OK.
+
+État actuel :
+- SIL validé en smoke runtime court seulement.
+- Aucun long training SIL lancé.
+- Changements locaux non committés/non pushés.
 
 ### 2026-06-27 — Restructure reward + run 30M + diagnostic éval v2 + plan PISTE 1
 
@@ -282,7 +352,7 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 
 Fichiers concernés (chantier reward, déjà sur disque, **non committés**) : `tool/rl_env_runner.dart`, `rl/dutch_env.py`, `rl/encoding.py`, `rl/train_parallel.py`, `rl/evaluate_rl.py`, `rl/test_roundtrip.py`, `rl/train_ppo.py`. Artefacts éval : `rl/report_v2.csv`, `rl/eval_run_v2.log`.
 
-État actuel : aucun entraînement en cours. Session `dutch_eval2` à fermer (éval terminée).
+État historique à ce moment-là : aucun entraînement en cours. Cette ligne est dépassée par l'entrée du 2026-06-27 ci-dessus : `dutch_rl_train4` est désormais actif.
 
 Prochaine action recommandée : valider le plan PISTE 1, l'implémenter (Python only), relancer un run avec le quota et surveiller `eval/win_rate_hard` vs `eval/win_rate`.
 
