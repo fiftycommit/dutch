@@ -1,8 +1,9 @@
 """Encodage observation→vecteur fixe et action_idx→message NDJSON.
 
 Côté observation : message Dart → vecteur ``float32`` de dimension fixe
-``OBS_DIM`` (148), agrégats pour les adversaires (pas de slots bruts), augmenté
-des poids de préférence (w1, w2).
+``OBS_DIM`` (146), agrégats pour les adversaires (pas de slots bruts).
+(Les poids de préférence MORL ont été retirés : la reward n'est plus scalarisée
+par un vecteur de poids — cf. dutch_env.py.)
 
 Côté action : ``Discrete(N_ACTIONS)`` (165) masqué, les 9 ``kind`` aplatis avec
 ``MAX_HAND=13`` et un ``powerV_swap`` factorisé en (own_index, target_seat) — le
@@ -20,8 +21,8 @@ MAX_HAND = 13
 MAX_OPP = 5
 RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "V", "D", "R"]
 
-# Dimension d'observation figée (36 global + 12 self-agg + 78 slots + 20 opp + 2 poids).
-OBS_DIM = 36 + 12 + (6 * MAX_HAND) + (4 * MAX_OPP) + 2  # = 148
+# Dimension d'observation figée (36 global + 12 self-agg + 78 slots + 20 opp).
+OBS_DIM = 36 + 12 + (6 * MAX_HAND) + (4 * MAX_OPP)  # = 146
 
 # ── Table d'indices d'action (blocs contigus) ──────────────────────────────
 _CALL_DUTCH = 0
@@ -139,8 +140,8 @@ def _f(x: Any, default: float = 0.0) -> float:
     return float(x) if x is not None else default
 
 
-def encode_observation(msg: dict[str, Any], weights: tuple[float, float]) -> np.ndarray:
-    """Encode l'observation. `weights`=(w1,w2) ajoutés en fin (préférence)."""
+def encode_observation(msg: dict[str, Any]) -> np.ndarray:
+    """Encode l'observation Dart en vecteur float32 de dimension OBS_DIM."""
     o = msg.get("obs", {})
     vec: list[float] = []
 
@@ -220,10 +221,6 @@ def encode_observation(msg: dict[str, Any], weights: tuple[float, float]) -> np.
             vec.append(min(_f(ago) / 20.0, 1.0) if ago is not None else 0.0)
         else:
             vec.extend([0.0] * 4)
-
-    # ── (2) Poids de préférence ────────────────────────────────────────────
-    vec.append(float(weights[0]))
-    vec.append(float(weights[1]))
 
     arr = np.asarray(vec, dtype=np.float32)
     assert arr.shape[0] == OBS_DIM, f"OBS_DIM={OBS_DIM} != {arr.shape[0]}"

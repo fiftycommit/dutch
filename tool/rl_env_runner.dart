@@ -74,6 +74,21 @@ const List<String> _kRanks = [
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
+// Reward terminale — bonus de victoire (« pari sportif »).
+// ════════════════════════════════════════════════════════════════════════════
+// Le bonus n'est versé QUE si le siège RL finit 1er (rank==1) et récompense
+// l'ampleur de la victoire (écart de score avec le 2e). Il reste strictement
+// borné pour ne JAMAIS dominer le signal rang : `principal` saute d'au moins
+// 2/(n-1) = 0.4 (cas le plus serré, n=6) entre gagner et finir 2e, donc avec
+// BONUS_MAX=0.30 < 0.40, gagner domine toujours, quel que soit l'écart.
+//   gap     = scores_triés_asc[1] - scores_triés_asc[0]  (>= 0 ; =0 si ex-aequo 1er)
+//   bonus   = kBonusMax * min(1.0, gap / kGapSat)
+// Calibrage kGapSat=20 : entre la moyenne (~11) et le p90 (~29) des écarts
+// observés (mesure réelle 360 parties). Une victoire écrasante sature à 0.30.
+const double kBonusMax = 0.30;
+const double kGapSat = 20.0;
+
+// ════════════════════════════════════════════════════════════════════════════
 // Config de joueurs forcée (ÉVAL) : parsing + validation des `options` du reset.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -637,8 +652,9 @@ class RlEnv {
       'done': false,
       // `reward` (scalaire historique) = composante principale (0 hors terminal).
       'reward': 0.0,
-      // Composantes MORL brutes, NON combinées (Python scalarise avec ses poids).
-      'rewards': {'principal': 0.0, 'destab': _curDestabReward},
+      // Composantes brutes, NON combinées (Python compose la reward finale).
+      // `win_bonus` n'existe qu'au terminal (cf. _finalize) ; 0 ici.
+      'rewards': {'principal': 0.0, 'destab': _curDestabReward, 'win_bonus': 0.0},
       // Debug du proxy dynamique (visible quand il change d'identité).
       'proxy_seat': _curProxyId,
       'proxy_threat': _curProxyThreat,
@@ -658,13 +674,27 @@ class RlEnv {
     final n = _players.length;
     final rank = _ranks[_rlSeat.id] ?? n;
     final principal = n <= 1 ? 0.0 : 1 - 2 * (rank - 1) / (n - 1);
+
+    // Bonus de victoire : seulement si 1er, proportionnel à l'écart de score
+    // avec le 2e (saturé). Sur un ex-aequo au rang 1, les deux meilleurs scores
+    // sont égaux => gap=0 => bonus=0 (pas de cas spécial à gérer).
+    double winBonus = 0.0;
+    if (rank == 1) {
+      final scores = [for (final p in _players) _gs.getFinalScore(p)]..sort();
+      final gap = scores.length >= 2 ? (scores[1] - scores[0]).toDouble() : 0.0;
+      winBonus = kBonusMax * min(1.0, gap / kGapSat);
+    }
     return {
       'type': 'observation',
       'episode_id': episodeId,
       'step': _step++,
       'done': true,
       'reward': principal,
-      'rewards': {'principal': principal, 'destab': _curDestabReward},
+      'rewards': {
+        'principal': principal,
+        'destab': _curDestabReward,
+        'win_bonus': winBonus,
+      },
       'proxy_seat': _curProxyId,
       'proxy_threat': _curProxyThreat,
       'info': {

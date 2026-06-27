@@ -23,8 +23,6 @@ import encoding
 from dutch_env import DutchEnv
 from runner_process import RunnerProcess, RunnerTimeout
 
-W = (0.5, 0.5)
-
 
 def _legal_indices(mask: np.ndarray) -> list[int]:
     return [int(i) for i in np.flatnonzero(mask)]
@@ -162,7 +160,7 @@ def check_fixed_shapes() -> tuple[bool, str]:
         for seed in range(60):
             msg = rp.reset(seed)
             seen.add(int(msg["obs"]["num_players"]))
-            obs_vec = encoding.encode_observation(msg, W)
+            obs_vec = encoding.encode_observation(msg)
             mask = encoding.build_mask_vector(msg)
             if obs_vec.shape != (encoding.OBS_DIM,):
                 return False, f"obs shape {obs_vec.shape} != ({encoding.OBS_DIM},)"

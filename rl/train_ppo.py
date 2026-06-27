@@ -5,9 +5,8 @@ vérifie que la boucle tourne sans crash, que le taux d'action illégale est
 rigoureusement 0 (masquage correct), que la reward est finie et variable, que les
 épisodes se terminent normalement, et qu'il y a une variété d'issues (won).
 
-Scalarisation préférence-conditionnée : la reward combinée w1*principal +
-w2*destab est faite dans DutchEnv ; le vecteur de poids est échantillonné par
-épisode et concaténé à l'observation.
+Reward hiérarchique (cf. DutchEnv) : principal(rang) + bonus victoire (terminal)
++ petit signal destab plafonné par step. Plus de poids MORL ni de Dirichlet.
 
 Usage :  python train_ppo.py [TOTAL_TIMESTEPS]
 """

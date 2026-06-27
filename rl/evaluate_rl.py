@@ -5,8 +5,10 @@ grille de conditions :
 
     skill adverse ∈ {bronze, silver, difficile}
   × num_players  ∈ {2, 3, 4, 5, 6}
-  × poids MORL   ∈ {(1,0) vitesse, (0.5,0.5) mixte, (0,1) déstabilisation}
-  = 45 conditions × ``--games`` parties.
+  = 15 conditions × ``--games`` parties.
+
+(La dimension MORL — poids (w1, w2) — a été retirée : la reward n'est plus
+scalarisée par un vecteur de préférence, cf. dutch_env.py.)
 
 Le comportement adverse est fixé (``OPPONENT_BEHAVIOR``) pour isoler la variable
 « skill ». Les bots adverses occupent p1..pn ; p0 est le siège piloté par l'agent.
@@ -48,7 +50,6 @@ from runner_process import RunnerCrashed, RunnerProcess, RunnerTimeout
 OPPONENT_BEHAVIOR = "balanced"  # comportement adverse fixe (modifiable ici)
 SKILLS = ["bronze", "silver", "difficile"]
 NUM_PLAYERS = [2, 3, 4, 5, 6]
-WEIGHTS: list[tuple[float, float]] = [(1.0, 0.0), (0.5, 0.5), (0.0, 1.0)]
 MAX_TURNS = 500            # aligné sur l'entraînement
 DRY_RUN_SAMPLE = 20        # parties chronométrées pour l'extrapolation
 SAFETY_STEPS = 10_000      # garde-fou anti-boucle infinie par partie
@@ -57,7 +58,7 @@ WILSON_Z = 1.96            # IC 95 %
 ABORT_KEYS = ("runner_crashed", "runner_timeout", "engine_recoverable_error")
 
 CSV_COLUMNS = [
-    "skill", "num_players", "w1", "w2", "seed",
+    "skill", "num_players", "seed",
     "aborted", "abort_reason",
     "won", "rank", "final_score_p0",
     "called_dutch", "dutch_caller", "dutch_success",
@@ -141,7 +142,6 @@ def assert_binary_up_to_date(exe_path: str | None, timeout: float) -> None:
 # ── Une partie complète, agent déterministe ─────────────────────────────────
 def play_one_game(
     env: DutchEnv, model: MaskablePPO, skill: str, num_players: int,
-    weights: tuple[float, float],
 ) -> dict[str, Any]:
     """Joue une partie jusqu'à terminaison ; renvoie une ligne de résultat."""
     obs, info = env.reset()
@@ -190,12 +190,9 @@ def play_one_game(
                 else:
                     terminal = info
 
-    w1, w2 = weights
     row: dict[str, Any] = {
         "skill": skill,
         "num_players": num_players,
-        "w1": w1,
-        "w2": w2,
         "seed": seed,
         "aborted": aborted,
         "abort_reason": abort_reason,
@@ -258,76 +255,56 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _wlabel(w: tuple[float, float]) -> str:
-    return f"({w[0]:g},{w[1]:g})"
-
-
 # ── Rapport console ──────────────────────────────────────────────────────────
 def print_report(
     all_rows: list[dict[str, Any]], aborted_total: int, games: int
 ) -> None:
-    print("\n" + "=" * 110)
-    print("RAPPORT D'ÉVALUATION — détail par condition (skill × num_players × poids)")
-    print("=" * 110)
+    print("\n" + "=" * 102)
+    print("RAPPORT D'ÉVALUATION — détail par condition (skill × num_players)")
+    print("=" * 102)
     header = (
-        f"{'skill':<10} {'n':>2} {'poids':>9} {'parties':>7} {'win%':>6} "
+        f"{'skill':<10} {'n':>2} {'parties':>7} {'win%':>6} "
         f"{'IC95':>13} {'rang':>5} {'score':>6} {'dutch%':>6} {'d.ok%':>6} "
         f"{'long':>5} {'jok':>4} {'swp':>4} {'spy':>4} {'destab':>7}"
     )
     print(header)
-    print("-" * 110)
+    print("-" * 102)
 
-    def rows_for(skill: str, n: int, w: tuple[float, float]) -> list[dict[str, Any]]:
+    def rows_for(skill: str, n: int) -> list[dict[str, Any]]:
         return [
             r for r in all_rows
-            if not r["aborted"] and r["skill"] == skill
-            and r["num_players"] == n and r["w1"] == w[0] and r["w2"] == w[1]
+            if not r["aborted"] and r["skill"] == skill and r["num_players"] == n
         ]
 
     for skill in SKILLS:
         for n in NUM_PLAYERS:
-            for w in WEIGHTS:
-                rows = rows_for(skill, n, w)
-                if not rows:
-                    continue
-                a = aggregate(rows)
-                ic = f"[{a['win_lo']:.3f},{a['win_hi']:.3f}]"
-                print(
-                    f"{skill:<10} {n:>2} {_wlabel(w):>9} {a['n']:>7} "
-                    f"{a['win_rate'] * 100:>5.1f}% {ic:>13} "
-                    f"{a['mean_rank']:>5.2f} {a['mean_score']:>6.1f} "
-                    f"{a['dutch_call_rate'] * 100:>5.1f}% {a['dutch_success_rate'] * 100:>5.1f}% "
-                    f"{a['mean_length']:>5.1f} {a['mean_joker']:>4.2f} "
-                    f"{a['mean_swap']:>4.2f} {a['mean_spy']:>4.2f} {a['mean_destab']:>7.3f}"
-                )
-        print("-" * 110)
+            rows = rows_for(skill, n)
+            if not rows:
+                continue
+            a = aggregate(rows)
+            ic = f"[{a['win_lo']:.3f},{a['win_hi']:.3f}]"
+            print(
+                f"{skill:<10} {n:>2} {a['n']:>7} "
+                f"{a['win_rate'] * 100:>5.1f}% {ic:>13} "
+                f"{a['mean_rank']:>5.2f} {a['mean_score']:>6.1f} "
+                f"{a['dutch_call_rate'] * 100:>5.1f}% {a['dutch_success_rate'] * 100:>5.1f}% "
+                f"{a['mean_length']:>5.1f} {a['mean_joker']:>4.2f} "
+                f"{a['mean_swap']:>4.2f} {a['mean_spy']:>4.2f} {a['mean_destab']:>7.3f}"
+            )
+        print("-" * 102)
 
-    # ── Focus comparatif sur les 3 poids (macro-moyenne sur skill × num_players) ──
-    print("\n" + "=" * 78)
-    print("FOCUS POIDS MORL — macro-moyenne sur les 15 conditions (skill × num_players)")
-    print("Objectif : (0.5,0.5) combine-t-il win-rate ÉLEVÉ ET déstabilisation ÉLEVÉE ?")
-    print("=" * 78)
-    print(f"{'poids':>9} {'win% macro':>11} {'destab macro':>13} {'perturb/partie':>15}")
-    print("-" * 78)
-    for w in WEIGHTS:
-        rows = [
-            r for r in all_rows
-            if not r["aborted"] and r["w1"] == w[0] and r["w2"] == w[1]
-        ]
-        if not rows:
-            continue
+    # ── Macro-moyenne globale (sur les 15 conditions skill × num_players) ──
+    rows = [r for r in all_rows if not r["aborted"]]
+    if rows:
+        print("\n" + "=" * 60)
+        print("MACRO-MOYENNE GLOBALE (15 conditions skill × num_players)")
+        print("=" * 60)
         win_macro = mean([1.0 if r["won"] else 0.0 for r in rows])
         destab_macro = mean([r["destab_sum"] for r in rows])
         perturb = mean([r["n_joker"] + r["n_swap"] + r["n_spy"] for r in rows])
-        print(
-            f"{_wlabel(w):>9} {win_macro * 100:>10.1f}% "
-            f"{destab_macro:>13.3f} {perturb:>15.3f}"
-        )
-    print("-" * 78)
-    print(
-        "Lecture : 'perturb/partie' = nb moyen d'actions Joker+Valet+10 de l'agent ; "
-        "'destab' = somme du signal de réduction de menace du leader."
-    )
+        print(f"  win% macro      : {win_macro * 100:.1f}%")
+        print(f"  destab macro    : {destab_macro:.3f}")
+        print(f"  perturb/partie  : {perturb:.3f}  (Joker+Valet+10)")
     if aborted_total:
         print(
             f"\n⚠ {aborted_total} partie(s) ABANDONNÉE(S) (crash/timeout/erreur récupérable) "
@@ -338,30 +315,29 @@ def print_report(
 
 
 # ── Exécution de la grille complète ──────────────────────────────────────────
-def make_env(skill: str, num_players: int, weights: tuple[float, float],
+def make_env(skill: str, num_players: int,
              seed_start: int, exe_path: str | None, timeout: float) -> DutchEnv:
     return DutchEnv(
         exe_path=exe_path,
         max_turns=MAX_TURNS,
         seed_start=seed_start,
         timeout=timeout,
-        fixed_weights=weights,
         num_players=num_players,
         opponents={"skill": skill, "behavior": OPPONENT_BEHAVIOR},
     )
 
 
 def run_condition(
-    model: MaskablePPO, skill: str, num_players: int, weights: tuple[float, float],
+    model: MaskablePPO, skill: str, num_players: int,
     games: int, seed_start: int, exe_path: str | None, timeout: float,
     writer: "csv.DictWriter[str] | None", sink: list[dict[str, Any]],
 ) -> int:
     """Joue `games` parties d'une condition. Renvoie le nb de parties abandonnées."""
-    env = make_env(skill, num_players, weights, seed_start, exe_path, timeout)
+    env = make_env(skill, num_players, seed_start, exe_path, timeout)
     aborted = 0
     try:
         for _ in range(games):
-            row = play_one_game(env, model, skill, num_players, weights)
+            row = play_one_game(env, model, skill, num_players)
             if row["aborted"]:
                 aborted += 1
             sink.append(row)
@@ -396,7 +372,7 @@ def main() -> int:
         raise SystemExit(f"Modèle introuvable : {model_path}")
 
     conditions = [
-        (skill, n, w) for skill in SKILLS for n in NUM_PLAYERS for w in WEIGHTS
+        (skill, n) for skill in SKILLS for n in NUM_PLAYERS
     ]
     total_games = len(conditions) * args.games
 
@@ -407,15 +383,26 @@ def main() -> int:
     print(f"[load] {model_path}")
     model = MaskablePPO.load(str(model_path), device="cpu")
 
+    # Garde-fou de compatibilité : l'obs a changé (148 -> 146, retrait des poids
+    # MORL). Un ancien checkpoint planterait sinon de façon obscure au 1er predict.
+    model_obs_dim = int(model.observation_space.shape[0])
+    if model_obs_dim != encoding.OBS_DIM:
+        raise SystemExit(
+            f"[ABORT] Checkpoint incompatible : obs_dim={model_obs_dim} mais "
+            f"l'environnement actuel attend OBS_DIM={encoding.OBS_DIM}.\n"
+            "        Ce modèle a été entraîné avec l'ancienne reward (poids MORL "
+            "dans l'observation). Réentraîner à neuf avec train_parallel.py."
+        )
+
     # 3) Dry-run : chronométrer un échantillon sur une condition médiane.
     if args.dry_run:
-        skill, n, w = ("silver", 4, (0.5, 0.5))
+        skill, n = ("silver", 4)
         sample = min(DRY_RUN_SAMPLE, args.games)
         print(f"\n[dry-run] chronométrage de {sample} parties sur "
-              f"({skill}, {n}j, {_wlabel(w)})…")
+              f"({skill}, {n}j)…")
         sink: list[dict[str, Any]] = []
         t0 = time.perf_counter()
-        run_condition(model, skill, n, w, sample, args.seed_base, args.exe,
+        run_condition(model, skill, n, sample, args.seed_base, args.exe,
                       args.timeout, writer=None, sink=sink)
         elapsed = time.perf_counter() - t0
         done = len(sink)
@@ -435,7 +422,7 @@ def main() -> int:
         print("ESTIMATION DU RUN COMPLET")
         print("=" * 60)
         print(f"  conditions          : {len(conditions)} "
-              f"(3 skill × 5 num_players × 3 poids)")
+              f"(3 skill × 5 num_players)")
         print(f"  parties/condition   : {args.games}")
         print(f"  parties TOTAL       : {total_games}")
         print(f"  temps/partie mesuré : {per_game * 1000:.0f} ms "
@@ -455,18 +442,17 @@ def main() -> int:
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
         writer.writeheader()
-        for idx, (skill, n, w) in enumerate(conditions):
+        for idx, (skill, n) in enumerate(conditions):
             seed_start = args.seed_base + idx * args.games
             aborted_total += run_condition(
-                model, skill, n, w, args.games, seed_start, args.exe,
+                model, skill, n, args.games, seed_start, args.exe,
                 args.timeout, writer, all_rows,
             )
             elapsed = time.perf_counter() - t0
             done = (idx + 1) * args.games
             eta = (elapsed / done) * (total_games - done) if done else 0.0
             print(f"  [{idx + 1:>2}/{len(conditions)}] {skill:<10} {n}j "
-                  f"{_wlabel(w):>9} — {done}/{total_games} parties "
-                  f"(ETA {fmt_duration(eta)})")
+                  f"— {done}/{total_games} parties (ETA {fmt_duration(eta)})")
 
     print_report(all_rows, aborted_total, args.games)
     print(f"\n[done] {total_games} parties en {fmt_duration(time.perf_counter() - t0)} "
