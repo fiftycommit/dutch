@@ -217,6 +217,7 @@ Phase 2 RL (en cours) :
 - `rl/self_imitation_ppo.py` — sous-classe isolée de `MaskablePPO`, ajoute une behavior cloning loss légère et capée (`bc_coef` défaut 0.001, cap défaut 0.005).
 - `rl/train_self_imitation.py` — script séparé pour futurs runs SIL ; ne remplace pas `train_parallel.py`.
 - `rl/test_self_imitation.py` — tests Python courts SIL.
+- `rl/evaluate_behavior.py` — évaluation comportementale V1 offline, isolée du training : lit uniquement observation/masques/infos terminales déjà disponibles côté Python, produit un CSV séparé et un résumé par `skill × num_players`, sans changer observation/reward/runner.
 - `rl/test_roundtrip.py` — barrière de validation (6 checks).
 - `rl/pyproject.toml`, `rl/uv.lock` — dépendances RL uv (inclut TensorBoard pour SB3).
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
@@ -258,6 +259,38 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-28 — Évaluation comportementale RL V1 offline
+
+Changement :
+- Ajout de `rl/evaluate_behavior.py`, script isolé d'évaluation comportementale offline pour diagnostiquer le comportement d'un checkpoint RL sans modifier le training.
+- Aucun changement observation/reward/runner.
+- Aucun fichier protégé modifié : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
+- Aucun push effectué.
+
+Métriques V1 disponibles :
+- Dutch legal decisions, appels Dutch de l'agent, Dutch call rate when legal.
+- Dutch success/bad call, marge Dutch au moment où l'agent appelle, score agent et meilleur score adverse au call.
+- Usage des pouvoirs (`7`, `10`, `V`, `JOKER`) et taux d'usage quand disponible.
+- Proxies explicites pour discard/replace (`*_proxy`), basés sur les informations connues/croyances de l'observation.
+- Trajectoire du score connu/estimé (`known_score_*`, `estimated_score_*`).
+
+Limites V1 :
+- Pas de vraies missed Dutch opportunities.
+- Pas de vraie marge Dutch à chaque décision.
+- Pas de vrai `swap_delta_real_score`.
+- Pas de vraie discard quality si la carte remplacée est inconnue.
+- Ces métriques nécessitent une future V2 avec diagnostics exposés par le runner Dart.
+
+Validation :
+- `cd rl && uv run python -m py_compile evaluate_behavior.py` : OK.
+- Smoke court OK sur checkpoint compatible `models/maskable_ppo_parallel_checkpoint_10000000_steps.zip` (`--games 1 --skills bronze --num-players 2`).
+- Le script détecte proprement les checkpoints incompatibles `obs_dim=148` et abort avec message explicite.
+
+État actuel :
+- `dutch_rl_train4` reste actif et intact.
+- `rl/evaluate_behavior.py` est prêt pour commit local après validation ; aucun CSV de smoke n'est conservé.
+- Aucun push effectué.
 
 ### 2026-06-27 — Self-Imitation Learning isolé + check-in `dutch_rl_train4`
 
