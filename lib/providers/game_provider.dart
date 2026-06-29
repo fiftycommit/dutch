@@ -14,8 +14,10 @@ import '../core/interfaces/i_stats_service.dart';
 import '../services/ui/stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
-import '../services/game/bot/hardcore_bot_config.dart';
+import '../services/game/bot/bot_config.dart';
 import '../services/game/bot/bot_dutch_strategy.dart';
+import '../services/game/bot/bot_personality.dart';
+import '../services/game/bot/bot_power_handler.dart';
 import '../services/game/bot/human_threat_tracker.dart';
 import '../services/learning/bot_learning_service.dart';
 import '../services/learning/ai_telemetry_service.dart';
@@ -681,7 +683,7 @@ class GameProvider with ChangeNotifier implements IGameController {
   }
 
   /// Résout les pouvoirs en attente suite à des matchs pendant la réaction.
-  /// Attribution aléatoire d'un numéro d'ordre, puis résolution séquentielle.
+  /// Les Valet/Joker sont séquencés en FIFO : premier posé, premier résolu.
   bool _showPowerLottery = false;
   bool get showPowerLottery => _showPowerLottery;
 
@@ -694,8 +696,8 @@ class GameProvider with ChangeNotifier implements IGameController {
     }
 
     // Séparer les pouvoirs passifs (7, 10) des pouvoirs actifs (Valet, Joker).
-    // Les passifs ne modifient pas l'état du jeu → pas besoin de tirage d'ordre,
-    // ils peuvent être résolus simultanément / en premier sans loterie.
+    // Les actifs modifient les mains : ils gardent l'ordre FIFO d'arrivée dans
+    // pendingMatchPowers pour éviter toute résolution simultanée.
     final passivePowers = pending
         .where((p) => p.card.value == '7' || p.card.value == '10')
         .toList();
@@ -711,39 +713,12 @@ class GameProvider with ChangeNotifier implements IGameController {
     }
     pending.addAll(passivePowers);
 
-    if (activePowers.isEmpty) {
-      // Que des pouvoirs passifs → résoudre directement, pas de loterie
-      _activateNextPendingPower();
-      return;
-    }
-
-    if (activePowers.length == 1) {
-      // Un seul pouvoir actif → pas besoin de loterie
-      activePowers[0].drawNumber = order;
-      pending.addAll(activePowers);
-      if (passivePowers.isEmpty) {
-        _activateNextPendingPower();
-      }
-      // Si on a déjà lancé les passifs, ils s'enchaîneront via _activateNextPendingPower
-      if (passivePowers.isNotEmpty) {
-        _activateNextPendingPower();
-      }
-      return;
-    }
-
-    // Plusieurs pouvoirs actifs → loterie pour l'ordre entre eux uniquement
-    final numbers = List.generate(activePowers.length, (i) => i + 1)..shuffle();
-    for (int i = 0; i < activePowers.length; i++) {
-      activePowers[i].drawNumber = order + numbers[i] - 1;
+    for (final p in activePowers) {
+      p.drawNumber = order++;
     }
     pending.addAll(activePowers);
-
-    // Trier par drawNumber
-    pending.sort((a, b) => (a.drawNumber ?? 0).compareTo(b.drawNumber ?? 0));
-
-    // Signaler à l'UI d'afficher le dialog de loterie (seulement pour les actifs)
-    _showPowerLottery = true;
-    notifyListeners();
+    _showPowerLottery = false;
+    _activateNextPendingPower();
   }
 
   /// Appelé par le dialog de loterie quand il se ferme
@@ -773,17 +748,15 @@ class GameProvider with ChangeNotifier implements IGameController {
     _gameState!.isWaitingForSpecialPower = true;
     _gameState!.specialCardToActivate = power.card;
     _gameState!.specialPowerPlayerId = power.playerId;
-    _gameState!.specialPowerStartTime =
-        DateTime.now().millisecondsSinceEpoch;
+    _gameState!.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
     _gameState!.turnStartTime = DateTime.now().millisecondsSinceEpoch;
     _gameState!.turnTimeoutMs = 60000;
 
     notifyListeners();
 
     // Si c'est un bot, auto-résoudre le pouvoir
-    final player = _gameState!.players
-        .where((p) => p.id == power.playerId)
-        .firstOrNull;
+    final player =
+        _gameState!.players.where((p) => p.id == power.playerId).firstOrNull;
     if (player != null && !player.isHuman) {
       _autoBotMatchPower(player, power);
     }
@@ -792,13 +765,42 @@ class GameProvider with ChangeNotifier implements IGameController {
   /// Auto-résout le pouvoir d'un bot (match power)
   Future<void> _autoBotMatchPower(Player bot, PendingMatchPower power) async {
     if (_gameState == null) return;
-    await Future.delayed(const Duration(milliseconds: 800));
     if (_gameState == null || _gameState!.phase != GamePhase.specialPower) {
       return;
     }
-    // Le bot skip le pouvoir pour simplifier (les bots utilisent rarement
-    // les pouvoirs de match de manière stratégique)
-    skipSpecialPower();
+
+    final savedCurrentPlayerIndex = _gameState!.currentPlayerIndex;
+    final botIndex = _gameState!.players.indexWhere((p) => p.id == bot.id);
+    if (botIndex < 0) {
+      skipSpecialPower();
+      return;
+    }
+
+    _gameState!.currentPlayerIndex = botIndex;
+    try {
+      final difficulty = BotConfig.getDifficulty(
+        bot,
+        _playerMMR,
+        hardcoreLevel: _hardcoreLevel,
+        playerSkillEstimate: _skillEstimator.estimatedSkill,
+      );
+      await BotPowerHandler.useBotSpecialPower(
+        _gameState!,
+        difficulty,
+        _currentContext,
+        personality: BotPersonality.fromBot(bot),
+        skipDelay: true,
+      );
+    } finally {
+      _gameState!.currentPlayerIndex = savedCurrentPlayerIndex;
+      _gameState!.specialPowerPlayerId = null;
+      _gameState!.phase = GamePhase.playing;
+      _gameState!.isWaitingForSpecialPower = false;
+      _gameState!.specialCardToActivate = null;
+    }
+
+    notifyListeners();
+    _activateNextPendingPower();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

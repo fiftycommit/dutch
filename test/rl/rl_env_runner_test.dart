@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/engine_random.dart';
 import 'package:dutch_game/models/game_settings.dart'
     show BotBehavior, BotSkillLevel;
+import 'package:dutch_game/models/game_state.dart' show GamePhase;
+import 'package:dutch_game/models/game_sub_states.dart' show PendingMatchPower;
 import 'package:dutch_game/models/playing_card.dart';
 
 import '../../tool/rl_env_runner.dart'
@@ -469,6 +471,186 @@ void main() {
       expect(obs['micro_phase'], 'reaction');
       expect(env.rlSeat.hand.length, 2);
       expect(env.gs.topDiscardCard?.value, '6');
+    });
+
+    test('pending 7 p0 : résolution via phase power existante', () async {
+      final env = RlEnv(episodeId: 'pending-p0-7', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '7'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '7');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.pendingMatchPowers.length, 1);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, '7');
+      expect(env.gs.specialPowerPlayerId, env.rlSeat.id);
+
+      obs = await env.step({
+        'kind': 'power7_look',
+        'params': {'index': 0}
+      });
+      expect(env.gs.pendingMatchPowers, isEmpty);
+      expect(env.rlSeat.mentalMap[0]?.id, env.rlSeat.hand[0].id);
+      expect(obs['type'], 'observation');
+    });
+
+    test('pending 10 p0 : résolution via phase power existante', () async {
+      final env = RlEnv(episodeId: 'pending-p0-10', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '10'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      final target = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      target.hand = [
+        PlayingCard.create('clubs', '4'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      target.knownCards =
+          List<bool>.filled(target.hand.length, false, growable: true);
+      target.mentalMap =
+          List<PlayingCard?>.filled(target.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '10');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.pendingMatchPowers.length, 1);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, '10');
+      expect(env.gs.specialPowerPlayerId, env.rlSeat.id);
+
+      obs = await env.step({
+        'kind': 'power10_spy',
+        'params': {'target_seat': target.id, 'index': 0}
+      });
+      expect(env.gs.pendingMatchPowers, isEmpty);
+      expect(obs['type'], 'observation');
+    });
+
+    test('pending Joker bot : utilise la logique pouvoir bot normale',
+        () async {
+      final env = RlEnv(
+        episodeId: 'pending-bot',
+        forcedNumPlayers: 2,
+        forcedOpponentSkill: BotSkillLevel.difficile,
+      );
+      var obs = await env.reset(12);
+      var guard = 0;
+      while (obs['micro_phase'] != 'dutchOrDraw' && guard++ < 50) {
+        obs = await env.step(_deterministicAction(obs));
+      }
+      expect(obs['micro_phase'], 'dutchOrDraw');
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('spades', '9'),
+      ]);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('clubs', 'JOKER'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
+      bot.resetUnknownCardHints();
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.pendingMatchPowers.length, 1);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(env.gs.pendingMatchPowers, isEmpty);
+      expect(env.gs.phase, isNot(GamePhase.specialPower));
+      expect(
+        env.gs.actionHistory.any((entry) =>
+            entry.contains(bot.name) &&
+            (entry.contains('JOKER') || entry.contains('utilisé son pouvoir'))),
+        isTrue,
+      );
+      expect(obs['type'], 'observation');
+    });
+
+    test('pending actifs p0 : Valet/Joker résolus en FIFO', () async {
+      final env = RlEnv(episodeId: 'pending-fifo', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '8'),
+      ]);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('clubs', '4'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '2');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'reaction');
+
+      env.gs.pendingMatchPowers
+        ..clear()
+        ..add(PendingMatchPower(
+          playerId: env.rlSeat.id,
+          playerName: env.rlSeat.name,
+          card: PlayingCard.create('hearts', 'JOKER'),
+        ))
+        ..add(PendingMatchPower(
+          playerId: env.rlSeat.id,
+          playerName: env.rlSeat.name,
+          card: PlayingCard.create('spades', 'V'),
+        ));
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, 'JOKER');
+      expect(env.gs.pendingMatchPowers.single.card.value, 'V');
+      expect(env.gs.pendingMatchPowers.single.drawNumber, 2);
+
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, 'V');
+      expect(env.gs.pendingMatchPowers, isEmpty);
     });
   });
 

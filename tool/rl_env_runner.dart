@@ -344,7 +344,12 @@ class RlEnv {
         return _completeRlTurnThenAdvance();
 
       case RlMicroPhase.power:
+        final wasMatchPower = _gs.specialPowerPlayerId != null;
         _applyPower(kind, params);
+        if (wasMatchPower) {
+          _gs.specialPowerPlayerId = null;
+          return _activateNextPendingPowerOrAdvance();
+        }
         return _completeRlTurnThenAdvance();
 
       case RlMicroPhase.reaction:
@@ -442,8 +447,6 @@ class RlEnv {
   /// reste de la fenêtre : même si le rang reste identique, p0 reçoit une
   /// nouvelle décision.
   ///
-  /// Limite volontaire de cette étape B : les pendingMatchPowers restent stockés
-  /// par GameLogic mais ne sont pas encore résolus dans le runner headless.
   Future<bool> _runBotReactionTick({required bool stopOnTopChange}) async {
     if (_gs.phase != GamePhase.reaction) {
       _gs.phase = GamePhase.reaction;
@@ -496,6 +499,93 @@ class RlEnv {
       return _observation();
     }
     if (_gs.phase == GamePhase.reaction) _gs.phase = GamePhase.playing;
+    if (_gs.pendingMatchPowers.isNotEmpty) {
+      return _processPendingMatchPowersAfterReaction();
+    }
+    if (_gs.deck.isEmpty && _gs.discardPile.length <= 1) return _finalize();
+    GameLogic.nextPlayer(_gs);
+    return _advanceToRlOrTerminal();
+  }
+
+  /// Réorganise puis résout la queue des pouvoirs issus de matchs, comme l'UI :
+  /// 7/10 d'abord, puis Valet/Joker en FIFO. Les pouvoirs bot passent par la
+  /// même logique que les pouvoirs défaussés normalement.
+  Future<Map<String, dynamic>> _processPendingMatchPowersAfterReaction() async {
+    _preparePendingMatchPowerQueue();
+    return _activateNextPendingPowerOrAdvance();
+  }
+
+  void _preparePendingMatchPowerQueue() {
+    final pending = _gs.pendingMatchPowers;
+    if (pending.isEmpty) return;
+
+    final passive = pending
+        .where((p) => p.card.value == '7' || p.card.value == '10')
+        .toList();
+    final active = pending
+        .where((p) => p.card.value != '7' && p.card.value != '10')
+        .toList();
+
+    pending.clear();
+    var order = 1;
+    for (final p in passive) {
+      p.drawNumber = order++;
+    }
+    pending.addAll(passive);
+
+    for (final p in active) {
+      p.drawNumber = order++;
+    }
+    pending.addAll(active);
+  }
+
+  Future<Map<String, dynamic>> _activateNextPendingPowerOrAdvance() async {
+    while (_gs.pendingMatchPowers.isNotEmpty) {
+      final power = _gs.pendingMatchPowers.removeAt(0);
+      final owner = _seatOrNull(power.playerId);
+      if (owner == null) continue;
+
+      _gs.phase = GamePhase.specialPower;
+      _gs.isWaitingForSpecialPower = true;
+      _gs.specialCardToActivate = power.card;
+      _gs.specialPowerPlayerId = power.playerId;
+      _gs.specialPowerStartTime = DateTime.now().millisecondsSinceEpoch;
+      _gs.turnStartTime = DateTime.now().millisecondsSinceEpoch;
+      _gs.turnTimeoutMs = 60000;
+
+      if (identical(owner, _rlSeat) && !frozenBotMode) {
+        _micro = RlMicroPhase.power;
+        return _observation();
+      }
+
+      final savedCurrentPlayerIndex = _gs.currentPlayerIndex;
+      final ownerIndex = _players.indexWhere((p) => p.id == owner.id);
+      if (ownerIndex >= 0) {
+        _gs.currentPlayerIndex = ownerIndex;
+        final diff = BotConfig.getDifficulty(owner, null);
+        final perso = BotPersonality.fromBot(owner);
+        try {
+          await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
+              personality: perso, skipDelay: true);
+        } finally {
+          _gs.currentPlayerIndex = savedCurrentPlayerIndex;
+          _gs.phase = GamePhase.playing;
+          _gs.isWaitingForSpecialPower = false;
+          _gs.specialCardToActivate = null;
+          _gs.specialPowerPlayerId = null;
+        }
+      } else {
+        _gs.phase = GamePhase.playing;
+        _gs.isWaitingForSpecialPower = false;
+        _gs.specialCardToActivate = null;
+        _gs.specialPowerPlayerId = null;
+      }
+    }
+
+    _gs.phase = GamePhase.playing;
+    _gs.isWaitingForSpecialPower = false;
+    _gs.specialCardToActivate = null;
+    _gs.specialPowerPlayerId = null;
     if (_gs.deck.isEmpty && _gs.discardPile.length <= 1) return _finalize();
     GameLogic.nextPlayer(_gs);
     return _advanceToRlOrTerminal();
@@ -515,31 +605,43 @@ class RlEnv {
   // ── Application des pouvoirs du siège RL (primitives publiques) ─────────────
 
   void _applyPower(String kind, Map<String, dynamic> params) {
-    switch (kind) {
-      case 'skip_power':
-        break;
-      case 'power7_look':
-        final i = params['index'] as int;
-        GameLogic.lookAtCard(_gs, _rlSeat, i);
-        // Connaissance légitime de sa propre carte (cf. _usePower7).
-        _rlSeat.updateMentalMap(i, _rlSeat.hand[i]);
-        break;
-      case 'power10_spy':
-        final t = _seat(params['target_seat'] as String);
-        final i = params['index'] as int;
-        GameLogic.lookAtCard(_gs, t, i);
-        // Mémoire d'espionnage légitime (cf. _usePower10).
-        _rlSeat.rememberSpiedCard(t.id, i, t.hand[i]);
-        break;
-      case 'powerV_swap':
-        final t = _seat(params['target_seat'] as String);
-        GameLogic.swapCards(_gs, _rlSeat, params['own_index'] as int, t,
-            params['target_index'] as int);
-        break;
-      case 'powerJoker':
-        final t = _seat(params['target_seat'] as String);
-        GameLogic.jokerEffect(_gs, t);
-        break;
+    final powerOwnerId = _gs.specialPowerPlayerId;
+    final savedCurrentPlayerIndex = _gs.currentPlayerIndex;
+    if (powerOwnerId != null) {
+      final ownerIndex = _players.indexWhere((p) => p.id == powerOwnerId);
+      if (ownerIndex >= 0) _gs.currentPlayerIndex = ownerIndex;
+    }
+    try {
+      switch (kind) {
+        case 'skip_power':
+          break;
+        case 'power7_look':
+          final i = params['index'] as int;
+          GameLogic.lookAtCard(_gs, _rlSeat, i);
+          // Connaissance légitime de sa propre carte (cf. _usePower7).
+          _rlSeat.updateMentalMap(i, _rlSeat.hand[i]);
+          break;
+        case 'power10_spy':
+          final t = _seat(params['target_seat'] as String);
+          final i = params['index'] as int;
+          GameLogic.lookAtCard(_gs, t, i);
+          // Mémoire d'espionnage légitime (cf. _usePower10).
+          _rlSeat.rememberSpiedCard(t.id, i, t.hand[i]);
+          break;
+        case 'powerV_swap':
+          final t = _seat(params['target_seat'] as String);
+          GameLogic.swapCards(_gs, _rlSeat, params['own_index'] as int, t,
+              params['target_index'] as int);
+          break;
+        case 'powerJoker':
+          final t = _seat(params['target_seat'] as String);
+          GameLogic.jokerEffect(_gs, t);
+          break;
+      }
+    } finally {
+      if (powerOwnerId != null) {
+        _gs.currentPlayerIndex = savedCurrentPlayerIndex;
+      }
     }
     _gs.phase = GamePhase.playing;
     _gs.isWaitingForSpecialPower = false;
