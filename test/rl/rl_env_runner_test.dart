@@ -16,7 +16,9 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/services/game/engine_random.dart';
-import 'package:dutch_game/models/game_settings.dart' show BotBehavior, BotSkillLevel;
+import 'package:dutch_game/models/game_settings.dart'
+    show BotBehavior, BotSkillLevel;
+import 'package:dutch_game/models/playing_card.dart';
 
 import '../../tool/rl_env_runner.dart'
     show RlEnv, RlMicroPhase, parseEvalPlayerConfig;
@@ -31,20 +33,38 @@ List<Map<String, dynamic>> _legalActions(Map<String, dynamic> obs) {
   final out = <Map<String, dynamic>>[];
 
   if (mp == 'dutchOrDraw') {
-    if (mask['call_dutch'] == true) out.add({'kind': 'call_dutch'});
-    if (mask['continue_draw'] == true) out.add({'kind': 'continue_draw'});
+    if (mask['call_dutch'] == true) {
+      out.add({'kind': 'call_dutch'});
+    }
+    if (mask['continue_draw'] == true) {
+      out.add({'kind': 'continue_draw'});
+    }
   } else if (mp == 'postDraw') {
-    if (mask['discard_drawn'] == true) out.add({'kind': 'discard_drawn'});
+    if (mask['discard_drawn'] == true) {
+      out.add({'kind': 'discard_drawn'});
+    }
     final rep = (mask['replace'] as List).cast<bool>();
     for (var i = 0; i < rep.length; i++) {
-      if (rep[i]) out.add({'kind': 'replace', 'params': {'index': i}});
+      if (rep[i]) {
+        out.add({
+          'kind': 'replace',
+          'params': {'index': i}
+        });
+      }
     }
   } else if (mp == 'power') {
-    if (mask['skip_power'] == true) out.add({'kind': 'skip_power'});
+    if (mask['skip_power'] == true) {
+      out.add({'kind': 'skip_power'});
+    }
     if (mask.containsKey('power7_look')) {
       final l = (mask['power7_look'] as List).cast<bool>();
       for (var i = 0; i < l.length; i++) {
-        if (l[i]) out.add({'kind': 'power7_look', 'params': {'index': i}});
+        if (l[i]) {
+          out.add({
+            'kind': 'power7_look',
+            'params': {'index': i}
+          });
+        }
       }
     }
     if (mask.containsKey('power10_spy')) {
@@ -52,7 +72,10 @@ List<Map<String, dynamic>> _legalActions(Map<String, dynamic> obs) {
         final l = (list as List).cast<bool>();
         for (var i = 0; i < l.length; i++) {
           if (l[i]) {
-            out.add({'kind': 'power10_spy', 'params': {'target_seat': seat, 'index': i}});
+            out.add({
+              'kind': 'power10_spy',
+              'params': {'target_seat': seat, 'index': i}
+            });
           }
         }
       });
@@ -68,7 +91,11 @@ List<Map<String, dynamic>> _legalActions(Map<String, dynamic> obs) {
             if (l[ti]) {
               out.add({
                 'kind': 'powerV_swap',
-                'params': {'own_index': oi, 'target_seat': seat, 'target_index': ti},
+                'params': {
+                  'own_index': oi,
+                  'target_seat': seat,
+                  'target_index': ti
+                },
               });
             }
           }
@@ -77,8 +104,26 @@ List<Map<String, dynamic>> _legalActions(Map<String, dynamic> obs) {
     }
     if (mask.containsKey('powerJoker')) {
       (mask['powerJoker'] as Map).forEach((seat, ok) {
-        if (ok == true) out.add({'kind': 'powerJoker', 'params': {'target_seat': seat}});
+        if (ok == true) {
+          out.add({
+            'kind': 'powerJoker',
+            'params': {'target_seat': seat}
+          });
+        }
       });
+    }
+  } else if (mp == 'reaction') {
+    if (mask['pass_tick'] == true || mask['no_match'] == true) {
+      out.add({'kind': 'pass_tick'});
+    }
+    final matches = (mask['match'] as List).cast<bool>();
+    for (var i = 0; i < matches.length; i++) {
+      if (matches[i]) {
+        out.add({
+          'kind': 'match',
+          'params': {'index': i}
+        });
+      }
     }
   }
   return out;
@@ -91,9 +136,19 @@ Map<String, dynamic> _deterministicAction(Map<String, dynamic> obs) {
       return {'kind': 'continue_draw'};
     case 'postDraw':
       return {'kind': 'discard_drawn'};
+    case 'reaction':
+      return {'kind': 'pass_tick'};
     default: // power
       return {'kind': 'skip_power'};
   }
+}
+
+void _setKnownHand(RlEnv env, List<PlayingCard> cards) {
+  final rl = env.rlSeat;
+  rl.hand = List<PlayingCard>.from(cards);
+  rl.knownCards = List<bool>.filled(cards.length, true, growable: true);
+  rl.mentalMap = List<PlayingCard?>.from(cards, growable: true);
+  rl.resetUnknownCardHints();
 }
 
 /// Pilote un épisode entier avec une policy et renvoie le journal d'observations.
@@ -116,7 +171,8 @@ Future<List<Map<String, dynamic>>> _drive(
 void main() {
   // 1 ─────────────────────────────────────────────────────────────────────────
   group('1. Déterminisme seed', () {
-    test('même seed + même policy => journaux d\'observations identiques', () async {
+    test('même seed + même policy => journaux d\'observations identiques',
+        () async {
       final a = await _drive(RlEnv(episodeId: 'a'), 7, _deterministicAction);
       final b = await _drive(RlEnv(episodeId: 'b'), 7, _deterministicAction);
       // On compare le contenu obs/mask/reward/done (l'episode_id diffère).
@@ -133,32 +189,39 @@ void main() {
       expect(fingerprint(a), fingerprint(b));
     });
 
-    test('construire l\'observation ne consomme aucun tirage EngineRandom', () async {
+    test('construire l\'observation ne consomme aucun tirage EngineRandom',
+        () async {
       final env = RlEnv(episodeId: 'rng');
       await env.reset(123);
       // Empreinte RNG avant/après plusieurs constructions d'observation implicites.
-      final before = List<int>.generate(5, (_) => EngineRandom.instance.nextInt(1 << 30));
+      final before =
+          List<int>.generate(5, (_) => EngineRandom.instance.nextInt(1 << 30));
       EngineRandom.seed(123);
       await env.reset(123);
       // Rejouer la même séquence d'actions (qui construit des observations) ne doit
       // pas décaler le flux : on re-seed et on retire les mêmes valeurs.
-      final after = List<int>.generate(5, (_) => EngineRandom.instance.nextInt(1 << 30));
+      final after =
+          List<int>.generate(5, (_) => EngineRandom.instance.nextInt(1 << 30));
       // before/after partent de seed 123 puis du même reset déterministe => identiques.
       expect(after, before);
     });
 
-    test('parité inter-épisodes même process (statique _platinumKillWindow)', () async {
+    test('parité inter-épisodes même process (statique _platinumKillWindow)',
+        () async {
       Future<String> frozenFinal(int seed) async {
         final env = RlEnv(episodeId: 'f', frozenBotMode: true);
         await env.reset(seed);
         return jsonEncode({
           'ranks': env.gs.getFinalRanksWithTies(),
-          'scores': {for (final p in env.players) p.id: env.gs.getFinalScore(p)},
+          'scores': {
+            for (final p in env.players) p.id: env.gs.getFinalScore(p)
+          },
         });
       }
 
       final first = await frozenFinal(55);
-      final again = await frozenFinal(55); // même seed, 2e fois dans le même process
+      final again =
+          await frozenFinal(55); // même seed, 2e fois dans le même process
       expect(again, first);
     });
   });
@@ -172,7 +235,10 @@ void main() {
       expect(env.micro, RlMicroPhase.dutchOrDraw);
 
       // replace est illégal en dutchOrDraw.
-      final err = await env.step({'kind': 'replace', 'params': {'index': 0}});
+      final err = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
       expect(err['type'], 'error');
       expect(err['code'], 'ILLEGAL_ACTION');
       expect(env.finished, isFalse);
@@ -192,19 +258,232 @@ void main() {
         if (obs['type'] == 'error') break;
       }
       if (obs['micro_phase'] != 'postDraw') return;
-      final err = await env.step({'kind': 'replace', 'params': {'index': 999}});
+      final err = await env.step({
+        'kind': 'replace',
+        'params': {'index': 999}
+      });
       expect(err['type'], 'error');
       expect(err['code'], 'ILLEGAL_ACTION');
     });
   });
 
+  // 2b ────────────────────────────────────────────────────────────────────────
+  group('2b. Réaction RL', () {
+    test('p0 entre en phase reaction et peut attendre un tick', () async {
+      final env = RlEnv(episodeId: 'react-pass-tick', forcedNumPlayers: 2);
+      var obs = await env.reset(11);
+      expect(obs['micro_phase'], 'dutchOrDraw');
+
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+      obs = await env.step({'kind': 'discard_drawn'});
+
+      expect(obs['type'], 'observation');
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.micro, RlMicroPhase.reaction);
+      final mask = obs['action_mask'] as Map<String, dynamic>;
+      expect(mask['pass_tick'], isTrue);
+      expect((mask['match'] as List).length, env.rlSeat.hand.length);
+
+      final handBefore = env.rlSeat.hand.map((c) => c.id).toList();
+      final after = await env.step({'kind': 'pass_tick'});
+      expect(after['type'], 'observation');
+      expect(after['step'] as int, greaterThan(obs['step'] as int));
+      expect(env.rlSeat.hand.map((c) => c.id).toList(), handBefore);
+    });
+
+    test('match correct retire une carte et reste en fenêtre de réaction',
+        () async {
+      final env = RlEnv(episodeId: 'react-match', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      final fiveA = PlayingCard.create('hearts', '5');
+      final fiveB = PlayingCard.create('spades', '5');
+      final nine = PlayingCard.create('clubs', '9');
+      _setKnownHand(env, [fiveA, fiveB, nine]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '2');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.rlSeat.hand.length, 3);
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['type'], 'observation');
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.rlSeat.hand.length, 2);
+      expect(env.gs.topDiscardCard?.value, '5');
+    });
+
+    test('chaîne simple : p0 peut matcher deux fois de suite', () async {
+      final env = RlEnv(episodeId: 'react-chain', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '5'),
+        PlayingCard.create('clubs', '5'),
+        PlayingCard.create('diamonds', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '2');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.rlSeat.hand.length, 4);
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.rlSeat.hand.length, 3);
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.rlSeat.hand.length, 2);
+    });
+
+    test('pass_tick réinvite p0 si un bot matche dans la même fenêtre',
+        () async {
+      final env = RlEnv(
+        episodeId: 'react-pass-reinvite',
+        forcedNumPlayers: 2,
+        forcedOpponentSkill: BotSkillLevel.difficile,
+      );
+      var obs = await env.reset(12);
+      var guard = 0;
+      while (obs['micro_phase'] != 'dutchOrDraw' && guard++ < 50) {
+        obs = await env.step(_deterministicAction(obs));
+      }
+      expect(obs['micro_phase'], 'dutchOrDraw');
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '5'),
+        PlayingCard.create('spades', '9'),
+      ]);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('clubs', '5'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
+      bot.resetUnknownCardHints();
+      env.gs.drawnCard = PlayingCard.create('diamonds', '2');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      final firstTopId = env.gs.topDiscardCard?.id;
+      expect(env.gs.topDiscardCard?.value, '5');
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['type'], 'observation');
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.gs.topDiscardCard?.id, isNot(firstTopId));
+      expect(bot.hand.length, 1);
+      final mask = obs['action_mask'] as Map<String, dynamic>;
+      expect(mask['pass_tick'], isTrue);
+      expect((mask['match'] as List)[1], isTrue);
+    });
+
+    test('faux match donne une pénalité et garde la main cohérente', () async {
+      final env = RlEnv(episodeId: 'react-false', forcedNumPlayers: 2);
+      var obs = await env.reset(12);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      _setKnownHand(env, [
+        PlayingCard.create('clubs', '8'),
+        PlayingCard.create('spades', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '5');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+      expect(env.rlSeat.hand.length, 2);
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0}
+      });
+      expect(obs['type'], 'observation');
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.rlSeat.hand.length, 3);
+      expect(env.rlSeat.knownCards.last, isFalse);
+    });
+
+    test('doublon minimal : replace puis match actif sur le même rang',
+        () async {
+      final env = RlEnv(episodeId: 'react-doublon', forcedNumPlayers: 2);
+      var obs = await env.reset(14);
+      obs = await env.step({'kind': 'continue_draw'});
+      expect(obs['micro_phase'], 'postDraw');
+
+      final sevenA = PlayingCard.create('hearts', '6');
+      final sevenB = PlayingCard.create('spades', '6');
+      final queen = PlayingCard.create('clubs', 'D');
+      _setKnownHand(env, [sevenA, sevenB, queen]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.rlSeat.hand.length, 3);
+      expect(env.gs.topDiscardCard?.value, '6');
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['type'], 'observation');
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.rlSeat.hand.length, 2);
+      expect(env.gs.topDiscardCard?.value, '6');
+    });
+  });
+
   // 3 ─────────────────────────────────────────────────────────────────────────
   group('3. Absence de leakage', () {
-    test('slots inconnus => believed null ; adversaires => public + spied seulement',
+    test(
+        'slots inconnus => believed null ; adversaires => public + spied seulement',
         () async {
       final rng = Random(2024);
       const allowedOppKeys = {
-        'seat', 'hand_size', 'memorized_indices', 'spied', 'last_targeted_ago',
+        'seat',
+        'hand_size',
+        'memorized_indices',
+        'spied',
+        'last_targeted_ago',
       };
       final tableSizesSeen = <int>{};
       for (var ep = 0; ep < 80; ep++) {
@@ -215,7 +494,8 @@ void main() {
         while (obs['done'] != true && safety++ < 5000) {
           final body = obs['obs'] as Map<String, dynamic>;
           // Self : slot inconnu => aucune valeur réelle exposée.
-          for (final slot in (body['slots'] as List).cast<Map<String, dynamic>>()) {
+          for (final slot
+              in (body['slots'] as List).cast<Map<String, dynamic>>()) {
             if (slot['known'] != true) {
               expect(slot['believed_value'], isNull,
                   reason: 'fuite : valeur exposée sur slot inconnu');
@@ -223,7 +503,8 @@ void main() {
             }
           }
           // Adversaires : pas de clé `hand`, uniquement public + spied.
-          for (final op in (body['opponents'] as List).cast<Map<String, dynamic>>()) {
+          for (final op
+              in (body['opponents'] as List).cast<Map<String, dynamic>>()) {
             expect(op.keys.toSet().difference(allowedOppKeys), isEmpty,
                 reason: 'fuite : clé adverse inattendue ${op.keys}');
           }
@@ -234,7 +515,8 @@ void main() {
       }
       // L'anti-leakage doit être vérifié AUSSI sur les grandes tables (5 et 6).
       expect(tableSizesSeen.containsAll({5, 6}), isTrue,
-          reason: 'tables 5 et 6 non couvertes par le test de leakage: $tableSizesSeen');
+          reason:
+              'tables 5 et 6 non couvertes par le test de leakage: $tableSizesSeen');
     });
   });
 
@@ -248,7 +530,8 @@ void main() {
         var safety = 0;
         while (obs['done'] != true && safety++ < 5000) {
           final legal = _legalActions(obs);
-          expect(legal, isNotEmpty, reason: 'masque vide en phase ${obs['micro_phase']}');
+          expect(legal, isNotEmpty,
+              reason: 'masque vide en phase ${obs['micro_phase']}');
           obs = await env.step(legal[rng.nextInt(legal.length)]);
           expect(obs['type'], 'observation');
         }
@@ -321,8 +604,8 @@ void main() {
             expect(rl.mentalMap[i]?.id, rl.hand[i].id);
             covered.add('7');
           } else if (val == '10') {
-            final target =
-                env.players.firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
+            final target = env.players
+                .firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
             final spiedId = target.hand[0].id;
             env.applyRlPowerForTest(
                 'power10_spy', {'target_seat': target.id, 'index': 0});
@@ -330,8 +613,8 @@ void main() {
             expect(rl.getSpiedCards(target.id)![0]?.id, spiedId);
             covered.add('10');
           } else if (val == 'V') {
-            final target =
-                env.players.firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
+            final target = env.players
+                .firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
             final received = target.hand[0].id; // carte que rlSeat reçoit
             final given = rl.hand[0].id; // carte que rlSeat cède
             env.applyRlPowerForTest('powerV_swap',
@@ -340,13 +623,15 @@ void main() {
             expect(target.hand[0].id, given);
             covered.add('V');
           } else if (val == 'JOKER') {
-            final target =
-                env.players.firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
-            final multisetBefore = target.hand.map((c) => c.value).toList()..sort();
+            final target = env.players
+                .firstWhere((p) => p.id != rl.id && p.hand.isNotEmpty);
+            final multisetBefore = target.hand.map((c) => c.value).toList()
+              ..sort();
             env.applyRlPowerForTest('powerJoker', {'target_seat': target.id});
             // La cible perd toute connaissance certaine ; multiset préservé.
             expect(target.knownCards.every((k) => k == false), isTrue);
-            final multisetAfter = target.hand.map((c) => c.value).toList()..sort();
+            final multisetAfter = target.hand.map((c) => c.value).toList()
+              ..sort();
             expect(multisetAfter, multisetBefore);
             covered.add('JOKER');
           } else {
@@ -372,7 +657,8 @@ void main() {
       }
     });
 
-    test('opponents forcé => p1..pn profil forcé, p0 neutre (siège RL)', () async {
+    test('opponents forcé => p1..pn profil forcé, p0 neutre (siège RL)',
+        () async {
       final env = RlEnv(
         episodeId: 'opp',
         forcedNumPlayers: 4,
@@ -418,7 +704,8 @@ void main() {
           reason: 'final_scores non reproductibles');
     });
 
-    test('parseEvalPlayerConfig : options vides => tout null (chemin défaut)', () {
+    test('parseEvalPlayerConfig : options vides => tout null (chemin défaut)',
+        () {
       final cfg = parseEvalPlayerConfig(const {});
       expect(cfg.numPlayers, isNull);
       expect(cfg.behavior, isNull);
@@ -442,23 +729,33 @@ void main() {
       expect(cfg.skill, BotSkillLevel.difficile);
     });
 
-    test('parseEvalPlayerConfig : num_players hors borne / non entier => FormatException',
+    test(
+        'parseEvalPlayerConfig : num_players hors borne / non entier => FormatException',
         () {
-      expect(() => parseEvalPlayerConfig({'num_players': 7}), throwsFormatException);
-      expect(() => parseEvalPlayerConfig({'num_players': 1}), throwsFormatException);
-      expect(() => parseEvalPlayerConfig({'num_players': 0}), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 7}),
+          throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 1}),
+          throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 0}),
+          throwsFormatException);
       expect(() => parseEvalPlayerConfig({'num_players': 'deux'}),
           throwsFormatException);
-      expect(() => parseEvalPlayerConfig({'num_players': 3.5}), throwsFormatException);
+      expect(() => parseEvalPlayerConfig({'num_players': 3.5}),
+          throwsFormatException);
     });
 
-    test('parseEvalPlayerConfig : skill / behavior inconnu => FormatException', () {
-      expect(() => parseEvalPlayerConfig({
-            'opponents': {'skill': 'wood'},
-          }), throwsFormatException);
-      expect(() => parseEvalPlayerConfig({
-            'opponents': {'behavior': 'sneaky'},
-          }), throwsFormatException);
+    test('parseEvalPlayerConfig : skill / behavior inconnu => FormatException',
+        () {
+      expect(
+          () => parseEvalPlayerConfig({
+                'opponents': {'skill': 'wood'},
+              }),
+          throwsFormatException);
+      expect(
+          () => parseEvalPlayerConfig({
+                'opponents': {'behavior': 'sneaky'},
+              }),
+          throwsFormatException);
       expect(() => parseEvalPlayerConfig({'opponents': 'silver'}),
           throwsFormatException);
     });

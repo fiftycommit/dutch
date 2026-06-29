@@ -51,9 +51,11 @@ def check_scripted_roundtrip() -> tuple[bool, str]:
             if msg.get("reward") != 0.0:
                 return False, f"reward!=0 hors terminal (={msg.get('reward')})"
             # action scriptée : avancer
-            kind = {"dutchOrDraw": "continue_draw", "postDraw": "discard_drawn"}.get(
-                micro, "skip_power"
-            )
+            kind = {
+                "dutchOrDraw": "continue_draw",
+                "postDraw": "discard_drawn",
+                "reaction": "pass_tick",
+            }.get(micro, "skip_power")
             msg = rp.step({"kind": kind})
             if msg.get("type") == "error":
                 return False, f"erreur inattendue: {msg.get('message')}"
@@ -74,9 +76,11 @@ def check_terminal_reward() -> tuple[bool, str]:
             steps = 0
             while not msg.get("done") and steps < 2000:
                 micro = msg["micro_phase"]
-                kind = {"dutchOrDraw": "continue_draw", "postDraw": "discard_drawn"}.get(
-                    micro, "skip_power"
-                )
+                kind = {
+                    "dutchOrDraw": "continue_draw",
+                    "postDraw": "discard_drawn",
+                    "reaction": "pass_tick",
+                }.get(micro, "skip_power")
                 msg = rp.step({"kind": kind})
                 steps += 1
             info = msg["info"]
@@ -102,9 +106,11 @@ def check_determinism() -> tuple[bool, str]:
         steps = 0
         while not msg.get("done") and steps < 2000:
             micro = msg["micro_phase"]
-            kind = {"dutchOrDraw": "continue_draw", "postDraw": "discard_drawn"}.get(
-                micro, "skip_power"
-            )
+            kind = {
+                "dutchOrDraw": "continue_draw",
+                "postDraw": "discard_drawn",
+                "reaction": "pass_tick",
+            }.get(micro, "skip_power")
             msg = rp.step({"kind": kind})
             if not msg.get("done"):
                 fps.append(json.dumps(msg["obs"], sort_keys=True))

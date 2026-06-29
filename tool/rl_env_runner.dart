@@ -13,10 +13,9 @@
 //         BotPowerHandler.useBotSpecialPower / BotCardStrategy.tryReactionMatch.
 //       Ces fonctions restent utilisées normalement pour les ADVERSAIRES
 //       (sparring-partners).
-//  - Décision D (réaction sur défausse adverse, hors-tour) : TOTALEMENT EXCLUE
-//    en v1. Le siège RL ne participe jamais à la phase de réaction en mode RL —
-//    ni en l'apprenant, ni via une policy gelée. Il rate donc systématiquement
-//    les matchs de réaction. Choix assumé (zéro stratégie codée à la main).
+//  - Décision D (réaction sur défausse) : exposée au siège RL via pass_tick /
+//    match(index). Aucun filtrage expert : tout slot présent est tentable, donc
+//    les faux matchs et pénalités restent apprenables.
 //  - Granularité du step : micro-décisions A (call_dutch / continue_draw),
 //    B (discard_drawn / replace), C (use power / skip_power). Tout via les
 //    primitives PUBLIQUES de GameLogic — aucune méthode privée de BotPowerHandler.
@@ -67,10 +66,22 @@ import 'package:dutch_game/services/game/bot/headless_threat_signal.dart';
 import 'package:dutch_game/services/logging/game_logger_service.dart';
 
 /// Micro-phase de décision du siège RL à l'intérieur d'un tour.
-enum RlMicroPhase { dutchOrDraw, postDraw, power }
+enum RlMicroPhase { dutchOrDraw, postDraw, power, reaction }
 
 const List<String> _kRanks = [
-  'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R',
+  'A',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  'V',
+  'D',
+  'R',
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -119,7 +130,8 @@ EvalPlayerConfig parseEvalPlayerConfig(Map<String, dynamic> options) {
   if (options.containsKey('num_players')) {
     final v = options['num_players'];
     if (v is! num || v != v.toInt() || v.toInt() < 2 || v.toInt() > 6) {
-      throw FormatException('num_players doit être un entier entre 2 et 6, reçu: $v');
+      throw FormatException(
+          'num_players doit être un entier entre 2 et 6, reçu: $v');
     }
     n = v.toInt();
   }
@@ -253,8 +265,8 @@ class RlEnv {
       _prevProxyThreat = 0.0;
       return;
     }
-    final threat =
-        HeadlessThreatSignal.scoreFor(_gs, proxy, BotDutchStrategy.discardTracker);
+    final threat = HeadlessThreatSignal.scoreFor(
+        _gs, proxy, BotDutchStrategy.discardTracker);
     double destab;
     if (proxy.id == _prevProxyId) {
       final d = _prevProxyThreat - threat;
@@ -268,6 +280,32 @@ class RlEnv {
     _curDestabReward = destab;
     _prevProxyId = proxy.id;
     _prevProxyThreat = threat;
+  }
+
+  Map<String, dynamic> _buildTrainingSignals() {
+    final active = _players.where((p) => !p.isSpectator).toList();
+    final selfScore = _gs.getFinalScore(_rlSeat);
+    final opponentScores = [
+      for (final p in active)
+        if (!identical(p, _rlSeat)) _gs.getFinalScore(p),
+    ];
+    final bestOpponentScore =
+        opponentScores.isEmpty ? null : opponentScores.reduce(min);
+    final margin =
+        bestOpponentScore == null ? null : bestOpponentScore - selfScore;
+    final numPlayersActive = active.length;
+    final fullTableRoundsCompleted =
+        numPlayersActive == 0 ? 0 : _gs.actionCount ~/ numPlayersActive;
+    final handSize = _rlSeat.hand.length;
+    final fullHandKnown = handSize > 0 && _rlSeat.knownCardCount >= handSize;
+
+    return {
+      'dutch_legal_now': _gs.dutchCallerId == null,
+      'dutch_would_win_now': margin == null ? false : margin >= 0,
+      'dutch_margin_now': margin,
+      'full_table_rounds_completed': fullTableRoundsCompleted,
+      'p0_full_hand_known': fullHandKnown,
+    };
   }
 
   Future<Map<String, dynamic>> step(Map<String, dynamic> msg) async {
@@ -308,6 +346,15 @@ class RlEnv {
       case RlMicroPhase.power:
         _applyPower(kind, params);
         return _completeRlTurnThenAdvance();
+
+      case RlMicroPhase.reaction:
+        if (kind == 'pass_tick' || kind == 'no_match') {
+          return _passReactionTickThenMaybeAdvance();
+        }
+        GameLogic.matchCard(_gs, _rlSeat, params['index'] as int);
+        // Rester dans la fenêtre : l'agent peut chaîner après un match réussi,
+        // ou observer la pénalité après un faux match avant de passer.
+        return _observation();
     }
   }
 
@@ -333,7 +380,8 @@ class RlEnv {
       _guard++;
       final broke = await _playBotTurn(cur);
       if (broke) break;
-      await _runReactionPhase();
+      final reactionObs = await _startReactionPhase();
+      if (reactionObs != null) return reactionObs;
       if (_gs.deck.isEmpty && _gs.discardPile.length <= 1) break;
       GameLogic.nextPlayer(_gs);
     }
@@ -374,29 +422,80 @@ class RlEnv {
     return false;
   }
 
-  /// Phase de réaction. Miroir de `_runReactionPhase` du générateur, à une
-  /// exception près : en mode RL, le siège RL est EXCLU (décision D exclue).
-  /// En frozenBotMode, il participe comme un bot (parité générateur).
-  Future<void> _runReactionPhase() async {
+  /// Démarre la phase de réaction. En mode RL, rend la main à Python pour que
+  /// p0 choisisse pass_tick/match(index). En frozenBotMode, conserve la parité
+  /// historique avec le générateur en jouant p0 comme un bot.
+  Future<Map<String, dynamic>?> _startReactionPhase() async {
     _gs.phase = GamePhase.reaction;
+    if (!frozenBotMode) {
+      _micro = RlMicroPhase.reaction;
+      return _observation();
+    }
+    await _runFullBotReactionPass();
+    return null;
+  }
+
+  /// Résout un tick de réaction bot.
+  ///
+  /// En mode RL, `stopOnTopChange=true` rend la main à p0 dès qu'un bot ajoute
+  /// une carte physique à la défausse. Cela évite que `pass_tick` exclue p0 du
+  /// reste de la fenêtre : même si le rang reste identique, p0 reçoit une
+  /// nouvelle décision.
+  ///
+  /// Limite volontaire de cette étape B : les pendingMatchPowers restent stockés
+  /// par GameLogic mais ne sont pas encore résolus dans le runner headless.
+  Future<bool> _runBotReactionTick({required bool stopOnTopChange}) async {
+    if (_gs.phase != GamePhase.reaction) {
+      _gs.phase = GamePhase.reaction;
+    }
     for (final p in _gs.players) {
       if (p.isHuman) continue;
-      // Le siège RL n'apprend ni n'hérite aucune réaction : on le saute en RL.
+      // En mode RL, p0 a déjà eu sa décision explicite via Python.
       if (!frozenBotMode && identical(p, _rlSeat)) continue;
       if (_gs.phase != GamePhase.reaction) break;
       final diff = BotConfig.getDifficulty(p, null);
       final phaseBot = BotConfig.getBotPhase(p, _gs);
       final perso = BotPersonality.fromBot(p);
+      final beforeDiscardSize = _gs.discardPile.length;
       await BotCardStrategy.tryReactionMatch(_gs, p, diff, phaseBot,
           personality: perso, skipDelay: true);
+      final physicalTopChanged = _gs.discardPile.length > beforeDiscardSize;
+      if (stopOnTopChange &&
+          physicalTopChanged &&
+          _gs.phase == GamePhase.reaction) {
+        return true;
+      }
     }
+    return false;
+  }
+
+  /// Résout un passage complet des bots et ferme la fenêtre.
+  Future<void> _runFullBotReactionPass() async {
+    await _runBotReactionTick(stopOnTopChange: false);
     if (_gs.phase == GamePhase.reaction) _gs.phase = GamePhase.playing;
   }
 
   /// Clôture le tour du siège RL (réaction adverses + passage au joueur suivant)
   /// puis rejoue les adversaires jusqu'à la prochaine décision RL ou la fin.
   Future<Map<String, dynamic>> _completeRlTurnThenAdvance() async {
-    await _runReactionPhase();
+    final reactionObs = await _startReactionPhase();
+    if (reactionObs != null) return reactionObs;
+    if (_gs.deck.isEmpty && _gs.discardPile.length <= 1) return _finalize();
+    GameLogic.nextPlayer(_gs);
+    return _advanceToRlOrTerminal();
+  }
+
+  /// Le siège RL attend un tick : les bots peuvent réagir. Si une nouvelle carte
+  /// physique arrive sur la défausse pendant la même fenêtre, p0 reçoit
+  /// immédiatement une nouvelle décision `reaction` au lieu d'être exclu jusqu'au
+  /// tour suivant.
+  Future<Map<String, dynamic>> _passReactionTickThenMaybeAdvance() async {
+    final physicalTopChanged = await _runBotReactionTick(stopOnTopChange: true);
+    if (physicalTopChanged && _gs.phase == GamePhase.reaction) {
+      _micro = RlMicroPhase.reaction;
+      return _observation();
+    }
+    if (_gs.phase == GamePhase.reaction) _gs.phase = GamePhase.playing;
     if (_gs.deck.isEmpty && _gs.discardPile.length <= 1) return _finalize();
     GameLogic.nextPlayer(_gs);
     return _advanceToRlOrTerminal();
@@ -408,7 +507,8 @@ class RlEnv {
   /// moteur immédiat d'un pouvoir avant que les adversaires ne rejouent.
   /// Précondition : micro-phase courante == power.
   void applyRlPowerForTest(String kind, Map<String, dynamic> params) {
-    assert(_micro == RlMicroPhase.power, 'applyRlPowerForTest hors phase power');
+    assert(
+        _micro == RlMicroPhase.power, 'applyRlPowerForTest hors phase power');
     _applyPower(kind, params);
   }
 
@@ -433,8 +533,8 @@ class RlEnv {
         break;
       case 'powerV_swap':
         final t = _seat(params['target_seat'] as String);
-        GameLogic.swapCards(
-            _gs, _rlSeat, params['own_index'] as int, t, params['target_index'] as int);
+        GameLogic.swapCards(_gs, _rlSeat, params['own_index'] as int, t,
+            params['target_index'] as int);
         break;
       case 'powerJoker':
         final t = _seat(params['target_seat'] as String);
@@ -497,6 +597,14 @@ class RlEnv {
           return t != null && !identical(t, _rlSeat) && t.hand.isNotEmpty;
         }
         return false;
+
+      case RlMicroPhase.reaction:
+        if (kind == 'pass_tick' || kind == 'no_match') return true;
+        if (kind == 'match') {
+          final i = params['index'];
+          return i is int && i >= 0 && i < _rlSeat.hand.length;
+        }
+        return false;
     }
   }
 
@@ -536,6 +644,13 @@ class RlEnv {
           };
         }
         return mask;
+      case RlMicroPhase.reaction:
+        return {
+          'pass_tick': true,
+          // Tous les slots présents sont tentables : l'agent doit apprendre le
+          // risque de faux match, pas être protégé par une heuristique.
+          'match': List<bool>.filled(_rlSeat.hand.length, true),
+        };
     }
   }
 
@@ -548,7 +663,8 @@ class RlEnv {
     final slots = <Map<String, dynamic>>[];
     for (var i = 0; i < bot.hand.length; i++) {
       final known = i < bot.knownCards.length && bot.knownCards[i];
-      final believed = (known && i < bot.mentalMap.length) ? bot.mentalMap[i] : null;
+      final believed =
+          (known && i < bot.mentalMap.length) ? bot.mentalMap[i] : null;
       final hintAction = bot.getUnknownCardHintAction(i);
       slots.add({
         'known': known,
@@ -572,7 +688,10 @@ class RlEnv {
             ? <String, dynamic>{}
             : {
                 for (final e in spied.entries)
-                  e.key.toString(): {'value': e.value.value, 'points': e.value.points},
+                  e.key.toString(): {
+                    'value': e.value.value,
+                    'points': e.value.points
+                  },
               },
         'last_targeted_ago': p.lastTargetedByPowerTurn < 0
             ? null
@@ -589,7 +708,8 @@ class RlEnv {
     final unknownIndices = BotMemoryManager.getUnknownIndices(bot);
     var expectedUnknownSum = 0.0;
     for (final i in unknownIndices) {
-      expectedUnknownSum += BotMemoryManager.getUnknownBeliefExpectedValue(_gs, bot, i);
+      expectedUnknownSum +=
+          BotMemoryManager.getUnknownBeliefExpectedValue(_gs, bot, i);
     }
     final doublons = BotMemoryManager.findDoublons(bot);
     final believedKnownScore = bot.getKnownScore();
@@ -615,7 +735,8 @@ class RlEnv {
       'top_discard_points': top?.points,
       'dutch_called': _gs.dutchCallerId != null,
       'dutch_caller_is_me': _gs.dutchCallerId == bot.id,
-      'expected_deck_card_value': BotMemoryManager.getExpectedDeckCardValue(_gs),
+      'expected_deck_card_value':
+          BotMemoryManager.getExpectedDeckCardValue(_gs),
       'discarded_ranks': BotMemoryManager.countDiscardedRanks(_gs),
       // carte piochée (visible par le joueur en B/C)
       'drawn_value': drawn?.value,
@@ -654,10 +775,16 @@ class RlEnv {
       'reward': 0.0,
       // Composantes brutes, NON combinées (Python compose la reward finale).
       // `win_bonus` n'existe qu'au terminal (cf. _finalize) ; 0 ici.
-      'rewards': {'principal': 0.0, 'destab': _curDestabReward, 'win_bonus': 0.0},
+      'rewards': {
+        'principal': 0.0,
+        'destab': _curDestabReward,
+        'win_bonus': 0.0
+      },
       // Debug du proxy dynamique (visible quand il change d'identité).
       'proxy_seat': _curProxyId,
       'proxy_threat': _curProxyThreat,
+      // Signaux reward-only : jamais encodés dans l'observation Python.
+      'training_signals': _buildTrainingSignals(),
       'micro_phase': _micro.name,
       'obs': _buildObservation(),
       'action_mask': _buildMask(),
@@ -738,7 +865,8 @@ class RlEnv {
       // ════ CHEMIN PAR DÉFAUT — copie EXACTE de buildBots() du générateur. ════
       // NE PAS MODIFIER : même ordre de tirage RNG, condition sine qua non de la
       // parité byte-à-byte du test #5 (entraînement passe aussi par ici).
-      final n = 2 + rng.nextInt(5); // {2,3,4,5,6} — aligné sur le vrai jeu (UI 2-6)
+      final n =
+          2 + rng.nextInt(5); // {2,3,4,5,6} — aligné sur le vrai jeu (UI 2-6)
       _players = List<Player>.generate(n, (i) {
         final behavior = behaviors[rng.nextInt(behaviors.length)];
         final skill = skills[rng.nextInt(skills.length)];
@@ -770,7 +898,8 @@ class RlEnv {
         skill = BotSkillLevel.silver;
       } else {
         // Adversaires p1..pn : profil forcé, ou aléatoire si non spécifié.
-        behavior = forcedOpponentBehavior ?? behaviors[rng.nextInt(behaviors.length)];
+        behavior =
+            forcedOpponentBehavior ?? behaviors[rng.nextInt(behaviors.length)];
         skill = forcedOpponentSkill ?? skills[rng.nextInt(skills.length)];
       }
       return Player(
@@ -787,7 +916,8 @@ class RlEnv {
   bool _isTerminal() =>
       _gs.phase == GamePhase.ended || _gs.phase == GamePhase.dutchCalled;
 
-  Iterable<Player> _opponents() => _players.where((p) => !identical(p, _rlSeat));
+  Iterable<Player> _opponents() =>
+      _players.where((p) => !identical(p, _rlSeat));
 
   Player _seat(String id) => _players.firstWhere((p) => p.id == id);
 
@@ -837,7 +967,12 @@ Future<void> main(List<String> args) async {
     try {
       msg = jsonDecode(trimmed) as Map<String, dynamic>;
     } catch (e) {
-      await _emit({'type': 'error', 'code': 'MALFORMED_JSON', 'message': '$e', 'fatal': false});
+      await _emit({
+        'type': 'error',
+        'code': 'MALFORMED_JSON',
+        'message': '$e',
+        'fatal': false
+      });
       continue;
     }
 
@@ -846,7 +981,8 @@ Future<void> main(List<String> args) async {
       switch (type) {
         case 'reset':
           final seed = (msg['seed'] as num).toInt();
-          final options = (msg['options'] as Map?)?.cast<String, dynamic>() ?? const {};
+          final options =
+              (msg['options'] as Map?)?.cast<String, dynamic>() ?? const {};
           // Options d'éval (num_players / opponents) : validées AVANT construction.
           EvalPlayerConfig cfg;
           try {
@@ -873,7 +1009,12 @@ Future<void> main(List<String> args) async {
           break;
         case 'action':
           if (env == null) {
-            await _emit({'type': 'error', 'code': 'BAD_PHASE', 'message': 'aucun épisode (reset requis)', 'fatal': false});
+            await _emit({
+              'type': 'error',
+              'code': 'BAD_PHASE',
+              'message': 'aucun épisode (reset requis)',
+              'fatal': false
+            });
             break;
           }
           await _emit(await env.step(msg));
@@ -881,11 +1022,21 @@ Future<void> main(List<String> args) async {
         case 'close':
           return;
         default:
-          await _emit({'type': 'error', 'code': 'BAD_PHASE', 'message': 'type inconnu: $type', 'fatal': false});
+          await _emit({
+            'type': 'error',
+            'code': 'BAD_PHASE',
+            'message': 'type inconnu: $type',
+            'fatal': false
+          });
       }
     } catch (e, st) {
       if (debug) stderr.writeln('INTERNAL: $e\n$st');
-      await _emit({'type': 'error', 'code': 'INTERNAL', 'message': '$e', 'fatal': true});
+      await _emit({
+        'type': 'error',
+        'code': 'INTERNAL',
+        'message': '$e',
+        'fatal': true
+      });
     }
   }
 }

@@ -5,9 +5,10 @@ Côté observation : message Dart → vecteur ``float32`` de dimension fixe
 (Les poids de préférence MORL ont été retirés : la reward n'est plus scalarisée
 par un vecteur de poids — cf. dutch_env.py.)
 
-Côté action : ``Discrete(N_ACTIONS)`` (165) masqué, les 9 ``kind`` aplatis avec
+Côté action : ``Discrete(N_ACTIONS)`` masqué, les ``kind`` aplatis avec
 ``MAX_HAND=13`` et un ``powerV_swap`` factorisé en (own_index, target_seat) — le
-``target_index`` est canonique = 0.
+``target_index`` est canonique = 0. Les actions de réaction sont ajoutées en fin
+de table pour préserver les indices historiques.
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ MAX_HAND = 13
 MAX_OPP = 5
 RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "V", "D", "R"]
 
-# Dimension d'observation figée (36 global + 12 self-agg + 78 slots + 20 opp).
-OBS_DIM = 36 + 12 + (6 * MAX_HAND) + (4 * MAX_OPP)  # = 146
+# Dimension d'observation figée (37 global + 12 self-agg + 78 slots + 20 opp).
+OBS_DIM = 37 + 12 + (6 * MAX_HAND) + (4 * MAX_OPP)  # = 147
 
 # ── Table d'indices d'action (blocs contigus) ──────────────────────────────
 _CALL_DUTCH = 0
@@ -34,9 +35,11 @@ _POWER7 = _REPLACE + MAX_HAND      # 17 .. 17+13
 _POWER10 = _POWER7 + MAX_HAND      # 30 .. 30+65   (opp*13 + i)
 _POWERV = _POWER10 + MAX_OPP * MAX_HAND  # 95 .. 95+65 (own*5 + opp)
 _POWERJOKER = _POWERV + MAX_HAND * MAX_OPP  # 160 .. 160+5
-N_ACTIONS = _POWERJOKER + MAX_OPP   # 165
+_PASS_TICK = _POWERJOKER + MAX_OPP  # 165
+_MATCH = _PASS_TICK + 1             # 166 .. 166+13
+N_ACTIONS = _MATCH + MAX_HAND      # 179
 
-MICRO_PHASES = ["dutchOrDraw", "postDraw", "power"]
+MICRO_PHASES = ["dutchOrDraw", "postDraw", "power", "reaction"]
 
 
 def _seat(opp_idx: int) -> str:
@@ -77,6 +80,10 @@ def action_to_message(idx: int) -> dict[str, Any]:
     if _POWERJOKER <= idx < _POWERJOKER + MAX_OPP:
         return {"kind": "powerJoker",
                 "params": {"target_seat": _seat(idx - _POWERJOKER)}}
+    if idx == _PASS_TICK:
+        return {"kind": "pass_tick"}
+    if _MATCH <= idx < _MATCH + MAX_HAND:
+        return {"kind": "match", "params": {"index": idx - _MATCH}}
     raise ValueError(f"index d'action hors borne: {idx}")
 
 
@@ -100,6 +107,13 @@ def build_mask_vector(msg: dict[str, Any]) -> np.ndarray:
         for i, ok in enumerate(dm.get("replace", [])):
             if i < MAX_HAND and ok:
                 mask[_REPLACE + i] = True
+        return mask
+
+    if micro == "reaction":
+        mask[_PASS_TICK] = bool(dm.get("pass_tick", dm.get("no_match", False)))
+        for i, ok in enumerate(dm.get("match", [])):
+            if i < MAX_HAND and ok:
+                mask[_MATCH + i] = True
         return mask
 
     # micro == "power"
@@ -163,7 +177,7 @@ def encode_observation(msg: dict[str, Any]) -> np.ndarray:
     vec.extend(onehot_n)
     # micro_phase one-hot
     micro = msg.get("micro_phase")
-    onehot_m = [0.0] * 3
+    onehot_m = [0.0] * len(MICRO_PHASES)
     if micro in MICRO_PHASES:
         onehot_m[MICRO_PHASES.index(micro)] = 1.0
     vec.extend(onehot_m)
