@@ -83,25 +83,53 @@ List<Map<String, dynamic>> _legalActions(Map<String, dynamic> obs) {
       });
     }
     if (mask.containsKey('powerV_swap')) {
-      final own = ((mask['powerV_swap'] as Map)['own'] as List).cast<bool>();
-      final targets = (mask['powerV_swap'] as Map)['targets'] as Map;
-      for (var oi = 0; oi < own.length; oi++) {
-        if (!own[oi]) continue;
-        targets.forEach((seat, list) {
-          final l = (list as List).cast<bool>();
-          for (var ti = 0; ti < l.length; ti++) {
-            if (l[ti]) {
-              out.add({
-                'kind': 'powerV_swap',
-                'params': {
-                  'own_index': oi,
-                  'target_seat': seat,
-                  'target_index': ti
-                },
-              });
-            }
+      final swapMask = mask['powerV_swap'] as Map;
+      if (swapMask.containsKey('players')) {
+        final players = swapMask['players'] as Map;
+        players.forEach((seatA, listA) {
+          final a = (listA as List).cast<bool>();
+          for (var slotA = 0; slotA < a.length; slotA++) {
+            if (!a[slotA]) continue;
+            players.forEach((seatB, listB) {
+              if (seatB == seatA) return;
+              final b = (listB as List).cast<bool>();
+              for (var slotB = 0; slotB < b.length; slotB++) {
+                if (b[slotB]) {
+                  out.add({
+                    'kind': 'powerV_swap',
+                    'params': {
+                      'player_a': seatA,
+                      'slot_a': slotA,
+                      'player_b': seatB,
+                      'slot_b': slotB,
+                    },
+                  });
+                }
+              }
+            });
           }
         });
+      } else {
+        final own = (swapMask['own'] as List).cast<bool>();
+        final targets = swapMask['targets'] as Map;
+        for (var oi = 0; oi < own.length; oi++) {
+          if (!own[oi]) continue;
+          targets.forEach((seat, list) {
+            final l = (list as List).cast<bool>();
+            for (var ti = 0; ti < l.length; ti++) {
+              if (l[ti]) {
+                out.add({
+                  'kind': 'powerV_swap',
+                  'params': {
+                    'own_index': oi,
+                    'target_seat': seat,
+                    'target_index': ti
+                  },
+                });
+              }
+            }
+          });
+        }
       }
     }
     if (mask.containsKey('powerJoker')) {
@@ -168,6 +196,20 @@ Future<List<Map<String, dynamic>>> _drive(
     log.add(obs);
   }
   return log;
+}
+
+Future<Map<String, dynamic>> _enterPostDraw(RlEnv env, int seed) async {
+  var obs = await env.reset(seed);
+  var guard = 0;
+  while (obs['done'] != true &&
+      obs['micro_phase'] != 'dutchOrDraw' &&
+      guard++ < 50) {
+    obs = await env.step(_deterministicAction(obs));
+  }
+  expect(obs['micro_phase'], 'dutchOrDraw');
+  obs = await env.step({'kind': 'continue_draw'});
+  expect(obs['micro_phase'], 'postDraw');
+  return obs;
 }
 
 void main() {
@@ -826,6 +868,250 @@ void main() {
 
       expect(covered, {'7', '10', 'V', 'JOKER'},
           reason: 'pouvoirs non tous couverts: $covered');
+    });
+  });
+
+  // 6b ────────────────────────────────────────────────────────────────────────
+  group('6b. Valet/Joker complets côté RL', () {
+    test('Valet normal : p0 peut échanger sa carte avec une carte adverse',
+        () async {
+      final env = RlEnv(episodeId: 'valet-self-opp', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 21);
+
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', 'A'),
+        PlayingCard.create('clubs', '2'),
+      ]);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      final mask = obs['action_mask'] as Map<String, dynamic>;
+      final players = (mask['powerV_swap'] as Map)['players'] as Map;
+      expect(players.keys, containsAll([env.rlSeat.id, bot.id]));
+
+      final given = env.rlSeat.hand[1].id;
+      final received = bot.hand[0].id;
+      obs = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 1,
+          'player_b': bot.id,
+          'slot_b': 0,
+        },
+      });
+
+      expect(obs['type'], 'observation');
+      expect(env.rlSeat.hand[1].id, received);
+      expect(bot.hand[0].id, given);
+    });
+
+    test('Valet normal : p0 peut cibler deux adversaires distincts', () async {
+      final env = RlEnv(episodeId: 'valet-opp-opp', forcedNumPlayers: 3);
+      var obs = await _enterPostDraw(env, 22);
+
+      final p1 = env.players[1];
+      final p2 = env.players[2];
+      p1.hand = [PlayingCard.create('clubs', '4')];
+      p2.hand = [PlayingCard.create('spades', '9')];
+      p1.knownCards = List<bool>.filled(p1.hand.length, false, growable: true);
+      p2.knownCards = List<bool>.filled(p2.hand.length, false, growable: true);
+      p1.mentalMap =
+          List<PlayingCard?>.filled(p1.hand.length, null, growable: true);
+      p2.mentalMap =
+          List<PlayingCard?>.filled(p2.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+
+      final p1Before = p1.hand[0].id;
+      final p2Before = p2.hand[0].id;
+      obs = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': p1.id,
+          'slot_a': 0,
+          'player_b': p2.id,
+          'slot_b': 0,
+        },
+      });
+
+      expect(obs['type'], 'observation');
+      expect(p1.hand[0].id, p2Before);
+      expect(p2.hand[0].id, p1Before);
+    });
+
+    test('Valet rejette les actions illégales', () async {
+      final env = RlEnv(episodeId: 'valet-illegal', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 23);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+
+      final outOfBounds = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 999,
+          'player_b': env.players[1].id,
+          'slot_b': 0,
+        },
+      });
+      expect(outOfBounds['type'], 'error');
+      expect(outOfBounds['code'], 'ILLEGAL_ACTION');
+
+      final samePlayer = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 0,
+          'player_b': env.rlSeat.id,
+          'slot_b': 1,
+        },
+      });
+      expect(samePlayer['type'], 'error');
+      expect(samePlayer['code'], 'ILLEGAL_ACTION');
+    });
+
+    test('Joker normal : p0 peut cibler un adversaire et soi-même', () async {
+      final env = RlEnv(episodeId: 'joker-normal', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 24);
+
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', 'A'),
+        PlayingCard.create('clubs', '2'),
+      ]);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      final mask = obs['action_mask'] as Map<String, dynamic>;
+      expect((mask['powerJoker'] as Map)[env.rlSeat.id], isTrue);
+      expect((mask['powerJoker'] as Map)[bot.id], isTrue);
+
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': bot.id},
+      });
+      expect(obs['type'], 'observation');
+      expect(bot.knownCards.every((known) => known == false), isTrue);
+
+      obs = await _enterPostDraw(env, 25);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '3'),
+        PlayingCard.create('clubs', '4'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': env.rlSeat.id},
+      });
+      expect(obs['type'], 'observation');
+      expect(env.rlSeat.knownCards.every((known) => known == false), isTrue);
+    });
+
+    test('Valet pending p0 : action complète résolue après la réaction',
+        () async {
+      final env = RlEnv(episodeId: 'valet-pending-p0', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 26);
+
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', 'V'),
+        PlayingCard.create('clubs', 'A'),
+      ]);
+      bot.hand = [PlayingCard.create('spades', 'R')];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0},
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.pendingMatchPowers.length, 1);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, 'V');
+
+      final rlBefore = env.rlSeat.hand[0].id;
+      final botBefore = bot.hand[0].id;
+      obs = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 0,
+          'player_b': bot.id,
+          'slot_b': 0,
+        },
+      });
+      expect(obs['type'], 'observation');
+      expect(env.gs.pendingMatchPowers, isEmpty);
+      expect(env.rlSeat.hand[0].id, botBefore);
+      expect(bot.hand[0].id, rlBefore);
+    });
+
+    test('Joker pending p0 : cible p0 autorisée et queue vidée', () async {
+      final env = RlEnv(episodeId: 'joker-pending-p0', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 27);
+
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', 'JOKER'),
+        PlayingCard.create('clubs', 'A'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({'kind': 'skip_power'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0},
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.pendingMatchPowers.length, 1);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      expect(obs['micro_phase'], 'power');
+      expect(env.pendingPowerValue, 'JOKER');
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': env.rlSeat.id},
+      });
+      expect(obs['type'], 'observation');
+      expect(env.gs.pendingMatchPowers, isEmpty);
+      expect(env.rlSeat.knownCards.every((known) => known == false), isTrue);
     });
   });
 

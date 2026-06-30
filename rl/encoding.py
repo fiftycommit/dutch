@@ -1,14 +1,13 @@
 """Encodage observation→vecteur fixe et action_idx→message NDJSON.
 
 Côté observation : message Dart → vecteur ``float32`` de dimension fixe
-``OBS_DIM`` (146), agrégats pour les adversaires (pas de slots bruts).
+``OBS_DIM`` (147), agrégats pour les adversaires (pas de slots bruts).
 (Les poids de préférence MORL ont été retirés : la reward n'est plus scalarisée
 par un vecteur de poids — cf. dutch_env.py.)
 
 Côté action : ``Discrete(N_ACTIONS)`` masqué, les ``kind`` aplatis avec
-``MAX_HAND=13`` et un ``powerV_swap`` factorisé en (own_index, target_seat) — le
-``target_index`` est canonique = 0. Les actions de réaction sont ajoutées en fin
-de table pour préserver les indices historiques.
+``MAX_HAND=13``. Le Valet encode l'échange complet
+``(player_a, slot_a, player_b, slot_b)`` sur les sièges ``p0``..``p5``.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ import numpy as np
 # ── Constantes de bornage ──────────────────────────────────────────────────
 MAX_HAND = 13
 MAX_OPP = 5
+MAX_PLAYERS = MAX_OPP + 1
 RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "V", "D", "R"]
 
 # Dimension d'observation figée (37 global + 12 self-agg + 78 slots + 20 opp).
@@ -33,11 +33,11 @@ _SKIP_POWER = 3
 _REPLACE = 4                       # 4 .. 4+13
 _POWER7 = _REPLACE + MAX_HAND      # 17 .. 17+13
 _POWER10 = _POWER7 + MAX_HAND      # 30 .. 30+65   (opp*13 + i)
-_POWERV = _POWER10 + MAX_OPP * MAX_HAND  # 95 .. 95+65 (own*5 + opp)
-_POWERJOKER = _POWERV + MAX_HAND * MAX_OPP  # 160 .. 160+5
-_PASS_TICK = _POWERJOKER + MAX_OPP  # 165
-_MATCH = _PASS_TICK + 1             # 166 .. 166+13
-N_ACTIONS = _MATCH + MAX_HAND      # 179
+_POWERV = _POWER10 + MAX_OPP * MAX_HAND  # 95 .. 95+6084
+_POWERJOKER = _POWERV + MAX_PLAYERS * MAX_HAND * MAX_PLAYERS * MAX_HAND
+_PASS_TICK = _POWERJOKER + MAX_PLAYERS
+_MATCH = _PASS_TICK + 1
+N_ACTIONS = _MATCH + MAX_HAND      # 6199
 
 MICRO_PHASES = ["dutchOrDraw", "postDraw", "power", "reaction"]
 
@@ -47,9 +47,19 @@ def _seat(opp_idx: int) -> str:
     return f"p{opp_idx + 1}"
 
 
+def _player_seat(player_idx: int) -> str:
+    """player_idx 0..5 -> siège 'p0'..'p5'."""
+    return f"p{player_idx}"
+
+
 def seat_to_opp(seat: str) -> int:
     """'p3' -> 2."""
     return int(seat[1:]) - 1
+
+
+def seat_to_player(seat: str) -> int:
+    """'p3' -> 3."""
+    return int(seat[1:])
 
 
 # ── action_idx -> message NDJSON ───────────────────────────────────────────
@@ -71,15 +81,23 @@ def action_to_message(idx: int) -> dict[str, Any]:
         opp, i = divmod(rel, MAX_HAND)
         return {"kind": "power10_spy",
                 "params": {"target_seat": _seat(opp), "index": i}}
-    if _POWERV <= idx < _POWERV + MAX_HAND * MAX_OPP:
+    if _POWERV <= idx < _POWERJOKER:
         rel = idx - _POWERV
-        own, opp = divmod(rel, MAX_OPP)
-        return {"kind": "powerV_swap",
-                "params": {"own_index": own, "target_seat": _seat(opp),
-                           "target_index": 0}}  # canonique
-    if _POWERJOKER <= idx < _POWERJOKER + MAX_OPP:
+        player_a, rem = divmod(rel, MAX_HAND * MAX_PLAYERS * MAX_HAND)
+        slot_a, rem = divmod(rem, MAX_PLAYERS * MAX_HAND)
+        player_b, slot_b = divmod(rem, MAX_HAND)
+        return {
+            "kind": "powerV_swap",
+            "params": {
+                "player_a": _player_seat(player_a),
+                "slot_a": slot_a,
+                "player_b": _player_seat(player_b),
+                "slot_b": slot_b,
+            },
+        }
+    if _POWERJOKER <= idx < _POWERJOKER + MAX_PLAYERS:
         return {"kind": "powerJoker",
-                "params": {"target_seat": _seat(idx - _POWERJOKER)}}
+                "params": {"target_seat": _player_seat(idx - _POWERJOKER)}}
     if idx == _PASS_TICK:
         return {"kind": "pass_tick"}
     if _MATCH <= idx < _MATCH + MAX_HAND:
@@ -87,7 +105,7 @@ def action_to_message(idx: int) -> dict[str, Any]:
     raise ValueError(f"index d'action hors borne: {idx}")
 
 
-# ── action_mask Dart -> vecteur booléen (165) ──────────────────────────────
+# ── action_mask Dart -> vecteur booléen (N_ACTIONS) ────────────────────────
 def build_mask_vector(msg: dict[str, Any]) -> np.ndarray:
     mask = np.zeros(N_ACTIONS, dtype=bool)
     if msg.get("done"):
@@ -131,21 +149,54 @@ def build_mask_vector(msg: dict[str, Any]) -> np.ndarray:
                 if i < MAX_HAND and ok:
                     mask[_POWER10 + opp * MAX_HAND + i] = True
     elif "powerV_swap" in dm:
-        own_arr = dm["powerV_swap"]["own"]
-        targets = dm["powerV_swap"]["targets"]
-        for own, own_ok in enumerate(own_arr):
-            if own >= MAX_HAND or not own_ok:
-                continue
-            for seat, t_arr in targets.items():
-                opp = seat_to_opp(seat)
-                # target_index canonique = 0 -> légal si la cible a >=1 carte.
-                if opp < MAX_OPP and len(t_arr) > 0 and t_arr[0]:
-                    mask[_POWERV + own * MAX_OPP + opp] = True
+        players = dm["powerV_swap"].get("players")
+        if players is not None:
+            for seat_a, arr_a in players.items():
+                player_a = seat_to_player(seat_a)
+                if player_a >= MAX_PLAYERS:
+                    continue
+                for slot_a, ok_a in enumerate(arr_a):
+                    if slot_a >= MAX_HAND or not ok_a:
+                        continue
+                    for seat_b, arr_b in players.items():
+                        player_b = seat_to_player(seat_b)
+                        if player_b >= MAX_PLAYERS or player_b == player_a:
+                            continue
+                        for slot_b, ok_b in enumerate(arr_b):
+                            if slot_b >= MAX_HAND or not ok_b:
+                                continue
+                            idx = (
+                                _POWERV
+                                + (
+                                    ((player_a * MAX_HAND + slot_a)
+                                     * MAX_PLAYERS + player_b)
+                                    * MAX_HAND
+                                    + slot_b
+                                )
+                            )
+                            mask[idx] = True
+        else:
+            own_arr = dm["powerV_swap"]["own"]
+            targets = dm["powerV_swap"]["targets"]
+            for own, own_ok in enumerate(own_arr):
+                if own >= MAX_HAND or not own_ok:
+                    continue
+                for seat, t_arr in targets.items():
+                    opp = seat_to_opp(seat)
+                    # Legacy : target_index canonique = 0.
+                    if opp < MAX_OPP and len(t_arr) > 0 and t_arr[0]:
+                        player_b = opp + 1
+                        idx = (
+                            _POWERV
+                            + (((0 * MAX_HAND + own) * MAX_PLAYERS + player_b)
+                               * MAX_HAND)
+                        )
+                        mask[idx] = True
     elif "powerJoker" in dm:
         for seat, ok in dm["powerJoker"].items():
-            opp = seat_to_opp(seat)
-            if opp < MAX_OPP and ok:
-                mask[_POWERJOKER + opp] = True
+            player = seat_to_player(seat)
+            if player < MAX_PLAYERS and ok:
+                mask[_POWERJOKER + player] = True
     return mask
 
 

@@ -629,9 +629,12 @@ class RlEnv {
           _rlSeat.rememberSpiedCard(t.id, i, t.hand[i]);
           break;
         case 'powerV_swap':
-          final t = _seat(params['target_seat'] as String);
-          GameLogic.swapCards(_gs, _rlSeat, params['own_index'] as int, t,
-              params['target_index'] as int);
+          final a = _seat((params['player_a'] ?? _rlSeat.id) as String);
+          final b =
+              _seat((params['player_b'] ?? params['target_seat']) as String);
+          final ia = (params['slot_a'] ?? params['own_index']) as int;
+          final ib = (params['slot_b'] ?? params['target_index']) as int;
+          GameLogic.swapCards(_gs, a, ia, b, ib);
           break;
         case 'powerJoker':
           final t = _seat(params['target_seat'] as String);
@@ -681,22 +684,23 @@ class RlEnv {
               i < t.hand.length;
         }
         if (val == 'V' && kind == 'powerV_swap') {
-          final t = _seatOrNull(params['target_seat']);
-          final oi = params['own_index'];
-          final ti = params['target_index'];
-          return t != null &&
-              !identical(t, _rlSeat) &&
-              oi is int &&
-              oi >= 0 &&
-              oi < _rlSeat.hand.length &&
-              ti is int &&
-              ti >= 0 &&
-              ti < t.hand.length;
+          final a = _seatOrNull(params['player_a'] ?? _rlSeat.id);
+          final b = _seatOrNull(params['player_b'] ?? params['target_seat']);
+          final ia = params['slot_a'] ?? params['own_index'];
+          final ib = params['slot_b'] ?? params['target_index'];
+          return a != null &&
+              b != null &&
+              !identical(a, b) &&
+              ia is int &&
+              ia >= 0 &&
+              ia < a.hand.length &&
+              ib is int &&
+              ib >= 0 &&
+              ib < b.hand.length;
         }
         if (val == 'JOKER' && kind == 'powerJoker') {
           final t = _seatOrNull(params['target_seat']);
-          // Joker-sur-soi interdit en v1.
-          return t != null && !identical(t, _rlSeat) && t.hand.isNotEmpty;
+          return t != null && t.hand.isNotEmpty;
         }
         return false;
 
@@ -734,15 +738,16 @@ class RlEnv {
           };
         } else if (val == 'V') {
           mask['powerV_swap'] = {
-            'own': List<bool>.filled(_rlSeat.hand.length, true),
-            'targets': {
-              for (final p in _opponents())
-                p.id: List<bool>.filled(p.hand.length, true),
+            'players': {
+              for (final p in _players)
+                if (!p.isSpectator && p.hand.isNotEmpty)
+                  p.id: List<bool>.filled(p.hand.length, true),
             },
           };
         } else if (val == 'JOKER') {
           mask['powerJoker'] = {
-            for (final p in _opponents()) p.id: p.hand.isNotEmpty,
+            for (final p in _players)
+              if (!p.isSpectator) p.id: p.hand.isNotEmpty,
           };
         }
         return mask;

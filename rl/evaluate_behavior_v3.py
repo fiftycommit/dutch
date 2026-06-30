@@ -283,9 +283,13 @@ def _power_availability(mask: np.ndarray) -> dict[str, bool]:
     swap = _mask_any(
         mask,
         encoding._POWERV,
-        encoding._POWERV + encoding.MAX_HAND * encoding.MAX_OPP,
+        encoding._POWERJOKER,
     )
-    joker = _mask_any(mask, encoding._POWERJOKER, encoding._POWERJOKER + encoding.MAX_OPP)
+    joker = _mask_any(
+        mask,
+        encoding._POWERJOKER,
+        encoding._POWERJOKER + encoding.MAX_PLAYERS,
+    )
     return {
         "look": look,
         "spy": spy,
@@ -1411,7 +1415,7 @@ def main() -> int:
         raise SystemExit("--games doit être positif")
     if args.max_steps_per_game <= 0:
         raise SystemExit("--max-steps-per-game doit être positif")
-    if encoding.OBS_DIM != 146:
+    if encoding.OBS_DIM != 147:
         raise SystemExit(f"OBS_DIM inattendu: {encoding.OBS_DIM}")
 
     model_path = Path(args.model)
