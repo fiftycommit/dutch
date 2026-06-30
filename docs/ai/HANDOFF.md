@@ -1,7 +1,7 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-27 (Codex)
-Agent ayant modifié ce fichier : Codex
+Dernière mise à jour : 2026-06-30 (Claude Code)
+Agent ayant modifié ce fichier : Claude Code
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
 
@@ -9,27 +9,32 @@ Agent ayant modifié ce fichier : Codex
 
 ## Résumé ultra-court
 
-Le projet Dutch'78 entre en phase 2 RL. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée. L'objectif actuel est de mettre en place une architecture PPO depuis zéro, avec intégration Dart ↔ Python, plusieurs agents différenciés par reward, et une VM Azure disponible pour les expérimentations.
+Le projet Dutch'78 reste en phase 2 RL. L'AgentInterface v2 (faits publics, mémoire privée légale, stabilité de slots, actions structurées `action_v2`) est en place, et **un cœur R2D2 v2 complet a maintenant été construit dessus**, en pile de fichiers `*_v2.py` isolés qui ne touchent ni PPO legacy ni le gameplay. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée.
 
-**État au 2026-06-27 :** l'infrastructure RL est en place et validée. Le run courant `dutch_rl_train4` est actif dans tmux (`cmd=uv`) avec curriculum hard 70% ; dernier check-in Codex lecture seule : ~32,1M timesteps, `eval/win_rate_hard` présent, `engine_internal_errors=0`. Pendant ce run, ne pas toucher/recompiler les fichiers qu'il utilise : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
+Deux jalons RL v2 récents (poussés sur `main`) :
+- `010751e feat(rl): complete v2 r2d2 core` : prioritized sequence replay, importance sampling, update priorities depuis TD-error, Double Q factorisé, n-step TD propre (source de vérité unique côté loss), burn-in complet documenté et verrouillé par test, learner et train CLI câblés.
+- `8d42d87 feat(rl): add v2 r2d2 schedules` : `LinearScheduleV2` + annealing `priority_beta` (PER) côté training et `epsilon` côté policy d'inférence/évaluation.
 
-Une piste Self-Imitation Learning (SIL) a été ajoutée en fichiers Python isolés uniquement : buffer d'épisodes gagnants, callback de collecte, sous-classe `MaskablePPO` avec BC loss capée, script séparé `train_self_imitation.py`, tests courts. Un smoke runtime très court (1 worker, 1024 timesteps) a validé que `SelfImitationPPO + SelfImitationCallback + DutchEnv` tournent ensemble et sauvegardent un modèle final temporaire. Le log `train/bc_ratio_to_policy_loss` a été corrigé pour utiliser le ratio des moyennes agrégées plutôt qu'une moyenne de ratios par mini-batch. Aucun long training SIL n'a été lancé, aucun commit/push effectué.
+État validé après ces commits : `py_compile` de toute la pile v2 OK ; tous les tests unitaires v2 verts ; `rl/test_roundtrip.py` **6/6** ; smokes courts e2e + schedule OK (artefacts auto-supprimés). Aucun entraînement long lancé. Détails complets dans le journal (entrée 2026-06-30 — Cœur R2D2 v2 + schedules).
+
+Avant ces deux jalons, deux commits avaient stabilisé l'interface :
+- `8fa49fa feat(rl): expose reaction window to RL agent` : p0 peut participer à la `reaction_window`.
+- `1c2c4fa feat(game): resolve pending match powers for bots` : `pendingMatchPowers` résolus côté runner headless ; Valet/Joker actifs séquencés en FIFO.
 
 ---
 
 ## Objectif actuel
 
-Mettre en place la phase 2 RL du projet Dutch'78.
+Le cœur R2D2 v2 est implémenté et testé sur l'AgentInterface v2. L'objectif immédiat est désormais un **premier vrai run contrôlé plus long** (collecte → train → evaluate vs random/bots), avec analyse des courbes hors repo, avant tout durcissement (stored recurrent state, acteurs distribués). La fidélité de l'interface continue en parallèle (Valet complet, event stream brut, mémoire adverse légale) mais ne bloque plus l'amorçage R2D2.
 
 Contraintes :
-- RL depuis zéro (le siège RL n'hérite d'aucune heuristique de bot ; il ne connaît que les règles du jeu).
-- PPO, pas Q-learning.
-- Plusieurs agents avec rewards différenciées (objectif multi-objectif : gagner vite + déstabiliser l'humain).
-- Architecture Dart ↔ Python décidée proprement (cf. section décisions).
+- RL depuis zéro : le siège RL n'hérite d'aucune heuristique de bot.
+- MaskablePPO feed-forward reste une baseline historique, pas une hypothèse à valider automatiquement.
+- Ne pas lancer de nouvel entraînement tant que l'interface agent n'est pas fidèle.
 - Préserver la phase 1 ML supervisée.
 - Inspecter le vrai code avant toute modification.
-- Ne pas inventer la structure du projet.
-- Planifier avant de coder (mode plan + gates STOP explicites).
+- Ne pas inventer de classes, méthodes, chemins ou signatures.
+- Ne pas mélanger les changements RL avec les fichiers hors scope déjà présents dans le worktree.
 
 ---
 
@@ -180,19 +185,27 @@ Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé a
 ### Décidées et implémentées
 - **Intégration Dart ↔ Python : subprocess + NDJSON sur stdin/stdout.** Le runner Dart headless (`tool/rl_env_runner.dart`) est la source de vérité des règles ; Python pilote via messages JSON ligne par ligne (`reset` / `observation` / `action` / `error` / `close`).
 - **Le Dart est l'autorité du moteur** : aucune règle de jeu réimplémentée en Python.
-- **Observation** : `Box(146,)` taille fixe (agrégats adversaires, pas de slots bruts ; anti-fuite : n'expose que les croyances mentalMap/knownCards/spyMemory, jamais les vraies cartes non vues). MAX_HAND=13, MAX_OPP=5. **Était `Box(148,)`** quand la reward MORL concaténait 2 poids à l'obs ; ces 2 poids ont été retirés le 2026-06-27 (cf. journal), d'où 148→146.
-- **Action** : `Discrete(165)` masquée (MaskablePPO). Blocs contigus : call_dutch=0, continue_draw=1, discard_drawn=2, skip_power=3, replace 4-16, power7_look 17-29, power10_spy 30-94, powerV_swap 95-159, powerJoker 160-164. La réaction (D) est **exclue** en v1.
+- **Observation actuelle RL** : `OBS_DIM=147`. Elle reste une observation de baseline PPO, pas encore un event stream pur AgentInterface v2.
+- **Action actuelle RL** : `N_ACTIONS=179` masqué. La micro-phase `reaction` existe maintenant : `pass_tick`, alias compatibilité `no_match`, et `match(slot)`. Tous les slots présents sont tentables, y compris pour faux match, sans filtrage expert.
+- **Reaction window RL** (`8fa49fa`) : p0 peut matcher pendant la défausse collective, subir la pénalité de faux match, matcher après son propre `replace`, réaliser un doublon naturellement, matcher plusieurs fois, et faire `pass_tick` puis être réinvité si un bot matche dans la même fenêtre.
+- **Pending match powers** (`1c2c4fa`) : après la reaction window, le runner headless résout `pendingMatchPowers`. Les `7/10` restent traités avant les pouvoirs actifs dans la queue pending actuelle. Les `Valet/Joker` actifs sont résolus en FIFO (plus de shuffle/loterie). Si le pouvoir appartient à p0, le runner expose la micro-phase `power` existante. Si le pouvoir appartient à un bot, le runner appelle `BotPowerHandler.useBotSpecialPower(..., skipDelay: true)` en mettant temporairement `currentPlayerIndex` sur le bot propriétaire puis en le restaurant. Côté UI, suppression du délai artificiel 800 ms et plus d'auto-skip des pending powers bot.
 - **Reward hiérarchique** (depuis 2026-06-27, remplace l'ancienne MORL — cf. journal) : `principal(rang normalisé) + win_bonus + DESTAB_SCALE·clip(destab, ±CAP_DESTAB)`. Terme dominant = victoire/rang ; `win_bonus = kBonusMax·min(1, gap/kGapSat)` si rang==1 (`kBonusMax=0.30`, `kGapSat=20.0`, Dart) récompense les victoires nettes ; le destab dense est un **signal d'appoint borné** (`DESTAB_SCALE=1/256≈0.0039`, `CAP_DESTAB=2.0`, Python), plus jamais le terme dominant. Le proxy de déstabilisation reste celui d'avant (leader courant via `BotThreatAnalyzer`, reward_destab=0 si le proxy change). **Ancienne MORL retirée** : scalarisation `w1·principal + w2·destab` à poids Dirichlet concaténés à l'obs — abandonnée car le destab non borné dominait la reward (~105% du retour) et l'agent ne gagnait/n'appelait jamais Dutch (reward hacking).
-- **Algo** : `sb3-contrib` MaskablePPO (PPO masqué).
+- **Algo historique** : `sb3-contrib` MaskablePPO (PPO masqué) reste la baseline existante, isolée du chantier R2D2 v2. La pile R2D2 v2 ne dépend pas de SB3 et ne modifie aucun fichier PPO.
+- **R2D2 v2 (cœur complet, pile `*_v2.py` isolée)** : recurrent Q-network GRU (`R2D2AgentV2`) à têtes Q factorisées + masquage par tête ; replay séquentiel episode-aware ; **burn-in complet** (état caché initial zéro par séquence, forward sur `burn_in + train`, loss sur `train_mask` seul, padding exclu, **pas de stored recurrent state** dans ce patch) ; n-step TD avec **source de vérité unique côté loss** (`dataset_v2.compute_n_step_returns` = helper offline) ; target network (hard sync + soft update dispo) ; **Double Q factorisé** sur les actions légales suivantes (online sélectionne, target évalue ; fallback action-type-head documenté et testé si actions légales next absentes) ; **prioritized sequence replay** (PER proportionnel par séquence, clé stable `(episode_id, start_step_index)`) ; **importance sampling weights** (`(N·P)^(-beta)`, normalisés max=1, jamais zéro) ; **update priorities depuis TD-error** (`eta·max|δ| + (1-eta)·mean|δ|` sur positions valides) ; learner câblé ; train CLI avec flags R2D2 ; checkpoint / infer / evaluate compatibles (format checkpoint inchangé, anciens checkpoints chargeables).
+- **Schedules d'annealing R2D2 v2** (`rl/schedules_v2.py`, `LinearScheduleV2`) : annealing `priority_beta` côté training (appliqué au `sample_sequences(beta=...)`, donc influe réellement sur les IS weights ; **exige `--prioritized-replay`**) et annealing `epsilon` côté policy d'inférence/évaluation (step global qui décale entre épisodes). Choix : l'epsilon schedule est branché **uniquement là où une policy choisit vraiment des actions** (`infer_r2d2_v2`, exposé via `evaluate`/`smoke`) ; **pas d'epsilon schedule dans `train_r2d2_v2`** dont le smoke rejoue un dataset statique sans sélection d'action (aurait été décoratif). Le builder refuse un triplet `start/end/steps` partiel (erreur claire, jamais de schedule à moitié câblé).
 - **Nombre de joueurs** : 2 à 6 (aligné sur le vrai jeu / UI).
 - **Déterminisme** : RNG seedable côté Dart (`engine_random.dart`), seeds incrémentaux par épisode côté Python.
 - **Entraînement parallèle** : `SubprocVecEnv` **K=4** retenu pour le premier run sérieux après mesures empiriques sur la VM. Mesures longues 10k steps vectorisés sans updates PPO : K=3 ≈2222 FPS agent, RSS arbre ≈2074→2078 MB ; K=4 ≈2547 FPS agent, RSS arbre ≈2610→2615 MB. Nombre de descendants observé = `2*K + 2` (workers Python + runners Dart + processus support Python forkserver/resource_tracker), stable. Mesure de croisière avec entraînement PPO réel : **≈1230 FPS agent** ; utiliser ce chiffre, pas 2547, pour dimensionner `--total-timesteps`.
 - **Hyperparamètres PPO v1** : `n_steps=512`, `batch_size=128`, `gamma=0.997`, `gae_lambda=0.95`, `learning_rate=3e-4`, `clip_range=0.2`, `ent_coef=0.01`, `vf_coef=0.5`, `max_grad_norm=0.5`, `n_epochs=10`, `target_kl=0.03`.
 
 ### Encore à décider / à faire
-- Différenciation concrète des « agents » via le simplexe de poids (sélection, évaluation).
-- Baselines d'évaluation (vs bots existants, vs aléatoire).
-- Protocole de non-régression de la phase 1.
+- Valet complet côté RL : vrai choix `player_a/slot_a/player_b/slot_b`, joueur courant inclus si légal, adversaire ↔ adversaire si règle officielle.
+- Joker complet côté RL : vérifier les cibles autorisées et la cohérence avec le vrai jeu.
+- Event stream brut : `discard_reason`, `replaced_slot`, `match_discard`, événements publics ordonnés.
+- Mémoire adverse légale structurée : cartes vues avec 10, âge de l'information, invalidations, stabilité temporelle des slots.
+- ~~Dataset séquentiel puis R2D2/DRQN seulement après interface fidèle.~~ **Fait** : la pile R2D2 v2 (dataset séquentiel + cœur R2D2 + schedules) est implémentée et testée (cf. « R2D2 v2 » ci-dessus et journal 2026-06-30). Reste : premier vrai run plus long, puis évaluation et éventuel reward shaping.
+- Stored recurrent state : non implémenté volontairement (burn-in complet retenu). Optimisation future possible si le burn-in devient coûteux.
+- Acteurs distribués : plus tard, après validation mono-process.
 
 ---
 
@@ -222,13 +235,25 @@ Phase 2 RL (en cours) :
 - `rl/pyproject.toml`, `rl/uv.lock` — dépendances RL uv (inclut TensorBoard pour SB3).
 - `test/rl/` — tests Dart de non-régression du runner (dont byte-parity avec le générateur).
 
-Fichiers protégés pendant le run tmux actif `dutch_rl_train4` :
-- `rl/train_parallel.py`
-- `rl/dutch_env.py`
-- `tool/rl_env_runner.dart`
-- `tool/rl_env_runner`
+Pile R2D2 v2 (cœur RL v2, fichiers `*_v2.py` isolés — chacun a son `test_*_v2.py` vert) :
+- `rl/encoding_v2.py` — encodeur AgentInterface v2 (faits publics, mémoire privée légale, event stream, stabilité slots, masques d'action factorisés). Séparé de `rl/encoding.py` (PPO legacy).
+- `rl/rollout_v2.py` — recorder de transitions `TransitionV2` + (de)sérialisation JSONL.
+- `rl/collect_rollouts_v2.py` — collecteur de rollouts réels via `RunnerProcess` (policy aléatoire légale).
+- `rl/replay_buffer_v2.py` — replay séquentiel episode-aware ; `SequenceBatchV2` ; **prioritized replay** (alpha/beta/epsilon), IS weights, `update_priorities`, mode uniforme inchangé.
+- `rl/dataset_v2.py` — loader JSONL → `ReplayBufferV2` ; `compute_n_step_returns` = helper offline d'analyse (pas la source de vérité d'entraînement).
+- `rl/model_r2d2_v2.py` — `R2D2AgentV2` (GRU + têtes Q factorisées + masquage) ; stratégie burn-in complet documentée.
+- `rl/loss_r2d2_v2.py` — TD loss n-step factorisée, Double Q, bootstrap sur actions légales next, IS weighting ; **source de vérité n-step**.
+- `rl/policy_r2d2_v2.py` — sélection d'action `action_v2` (greedy / epsilon-greedy) à partir des sorties factorisées.
+- `rl/infer_r2d2_v2.py` — boucle d'inférence step-par-step (état caché porté dans l'épisode) ; **epsilon schedule** branché ici.
+- `rl/learner_r2d2_v2.py` — learner (loss → backward → clip → optimizer), Double Q, IS weighting, calcul + écriture des priorités, hard/soft target sync.
+- `rl/train_r2d2_v2.py` — CLI d'entraînement borné depuis JSONL ; flags R2D2 (`--prioritized-replay`, `--double-q`, `--priority-alpha/beta/epsilon/eta`) et **schedule beta** (`--priority-beta-start/end/steps`) ; garde-fous (pas de long run sans `--allow-long-run`, pas de save sans `--allow-save`).
+- `rl/smoke_r2d2_v2.py` — smoke end-to-end (collect → train → checkpoint → infer), artefacts temporaires auto-supprimés ; flags epsilon schedule.
+- `rl/evaluate_r2d2_v2.py` — évaluation bornée random vs checkpoint, métriques enrichies (win-rate, rangs, scores p0, dutch calls, done reasons) ; flags epsilon schedule.
+- `rl/schedules_v2.py` — `LinearScheduleV2` (warmup, clamp, `value_at`) + `build_optional_schedule` (refuse les triplets partiels). Partagé par beta (train) et epsilon (infer/evaluate/smoke).
 
-Ne pas les modifier, reformater, déplacer, recompiler, ni arrêter le tmux du run en cours.
+État worktree local à ne pas mélanger avec les commits AgentInterface :
+- Hors cette mise à jour handoff, changements hors scope encore présents : `rl/dutch_env.py`, `rl/train_parallel.py`, scripts auxiliary et nombreux CSV/reports non suivis.
+- Ne pas inclure ces fichiers dans un commit lié à l'AgentInterface sauf demande explicite.
 
 Supprimés (ne plus référencer) :
 - `dutch-server/src/services/QLearningService.ts`, `NeuralNetworkService.ts`, `GeneticAlgorithmService.ts` — supprimés du repo le 2026-06-26 après confirmation 0 usage prod sur 2,5 mois. Les routes correspondantes répondent 410. Déploiement blue/green à faire séparément.
@@ -239,16 +264,35 @@ Supprimés (ne plus référencer) :
 
 ## Prochaine étape immédiate
 
-Le run actif est `dutch_rl_train4` dans tmux, lancé avec curriculum hard 70%. Dernier check-in lecture seule Codex : pane actif `cmd=uv`, progression ~32,1M timesteps, ≈1009 fps, `eval/win_rate_hard` loggé, `engine_internal_errors=0`, `engine_recoverable_errors=7`, `runner_crashes=0`, `runner_timeouts=0`.
+Le cœur R2D2 v2 et ses schedules sont en place. Le prochain pas logique est un **premier vrai run R2D2 v2 contrôlé plus long** pour valider l'apprentissage end-to-end avant tout durcissement.
 
-Consignes immédiates :
-1. Ne pas modifier/recompiler les fichiers du run actif : `rl/train_parallel.py`, `rl/dutch_env.py`, `tool/rl_env_runner.dart`, `tool/rl_env_runner`.
-2. Ne pas stopper le tmux `dutch_rl_train4`.
-3. Laisser finir le run curriculum hard 70%, puis évaluer le modèle obtenu.
-4. La piste Self-Imitation Learning est prête en fichiers isolés, mais aucun long run SIL n'a été lancé. Pour un futur essai, utiliser `rl/train_self_imitation.py` dans un run séparé, après validation explicite.
-5. Toujours reprendre un entraînement principal depuis un checkpoint `*_steps.zip` valide, jamais depuis un `*_final.zip` produit pendant un crash.
+Plan recommandé :
+1. **Collecter ~10k transitions** réelles via `rl/collect_rollouts_v2.py` (dataset JSONL, hors repo ou dossier ignoré).
+2. **Entraîner quelques milliers de steps** via `rl/train_r2d2_v2.py` avec `--prioritized-replay --double-q` (et éventuellement `--priority-beta-start/end/steps`), `--allow-long-run` au-delà du garde-fou.
+3. **Évaluer** via `rl/evaluate_r2d2_v2.py` vs policy aléatoire (`--compare-random`) puis, plus tard, vs bots existants.
+4. **Sauvegarder métriques/courbes hors repo** (ou dossier ignoré) ; analyser `loss` / reward / win-rate.
+5. **Ajuster le reward shaping** seulement si nécessaire, après lecture des courbes.
+6. **Stored recurrent state** plus tard, si le burn-in complet devient coûteux.
+7. **Acteurs distribués** plus tard, après validation mono-process.
 
-Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'est pas validé.
+Ne jamais committer dataset/checkpoint/report dans le repo. Ne pas lancer de run long sans validation explicite.
+
+En parallèle (fidélité d'interface, indépendant du run R2D2), divergences restantes à documenter avant un entraînement « définitif » :
+1. **Valet RL encore simplifié** : le runner RL ne permet pas encore le vrai choix complet `player_a/slot_a/player_b/slot_b`. Le Valet complet est le prochain chantier recommandé.
+2. **Joker RL encore simplifié** : vérifier plus tard les cibles autorisées et la cohérence avec le vrai jeu. Ne pas corriger en même temps que Valet.
+3. **Pas encore d'event stream brut** : `discard_reason` existe côté moteur/tracker mais n'est pas exposé au RL (`drawn_discard`, `exchange_discard`, `match_discard`). `replaced_slot` existe pour `exchange_discard` mais n'est pas exposé comme fait public au RL. Pas encore de mémoire adverse légale structurée.
+4. **Observation encore imparfaite pour AgentInterface v2 pure** : l'observation PPO contient encore des signaux dérivés/interprétatifs existants. À garder pour baseline, mais un futur belief-state/R2D2 devra utiliser des faits publics/event stream.
+5. **Gossip/alliance** : `BotGossipService` / alliance n'est pas actif dans le runner RL actuel. Ne pas l'ajouter maintenant.
+
+Roadmap courte (fidélité d'interface, en parallèle du run R2D2) :
+1. Valet complet (le runner RL expose déjà `player_a/slot_a/player_b/slot_b` côté AgentInterface v2 ; finaliser/valider la cohérence).
+2. Joker complet / cohérence cibles.
+3. Event stream brut : `discard_reason`, `replaced_slot`, `match_discard`, événements publics.
+4. Mémoire adverse légale : cartes vues avec 10, âge de l'info, slots changés, stabilité des slots.
+5. ~~Dataset séquentiel.~~ **Fait** (pile R2D2 v2).
+6. ~~R2D2/DRQN seulement après interface fidèle.~~ **Fait** : cœur R2D2 v2 + schedules construits et testés ; le premier vrai run plus long est la prochaine action (cf. ci-dessus).
+
+Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un plan court n'est pas validé.
 
 ---
 
@@ -259,6 +303,179 @@ Ne pas modifier le code applicatif hors périmètre RL tant qu'un plan court n'e
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-30 — Cœur R2D2 v2 complété + schedules beta/epsilon (Claude Code)
+
+Contexte :
+- L'AgentInterface v2 et sa pile d'amorçage (`encoding_v2`, rollout recorder/collector, replay buffer séquentiel, dataset loader JSONL, `R2D2AgentV2`, TD loss factorisée, policy `action_v2`, smokes inference/learner/training/e2e/evaluation, métriques d'évaluation enrichies) étaient déjà committées (`b8d88df` → `990dd9a`).
+- Deux jalons ont ensuite complété et durci le cœur R2D2 v2, sans toucher PPO legacy, le gameplay, `GameLogic`, le runner Dart, `rl/encoding.py`, `rl/dutch_env.py`, `rl/train_parallel.py`, ni les CSV/scripts auxiliaires.
+
+Commit `010751e feat(rl): complete v2 r2d2 core` :
+- **Prioritized sequence replay** : PER proportionnel par séquence dans `ReplayBufferV2`, clé stable `(episode_id, start_step_index)` (survit à l'éviction front), `prioritized/priority_alpha/beta/epsilon`, mode uniforme strictement inchangé (déterminisme préservé).
+- **Importance sampling weights** : `(N·P(i))^(-beta)`, normalisés pour `max==1`, jamais nuls ; `None` en mode uniforme (loss non pondérée).
+- **Update priorities depuis TD-error** : `update_priorities(sample_indices, priorities)`, priorité R2D2 `eta·max|δ| + (1-eta)·mean|δ|` sur positions valides (ni burn-in ni padding), réécrite dans le buffer.
+- **Double Q factorisé** : bootstrap sur les actions légales suivantes (`legal_actions_v2` propagé dans le batch) — online sélectionne l'action gloutonne, target l'évalue ; fallback action-type-head **explicite et testé** quand les actions légales next sont absentes (jamais d'action illégale fabriquée).
+- **n-step TD propre** : construit dans la loss à partir de la séquence (source de vérité unique) ; `dataset_v2.compute_n_step_returns` redocumenté comme helper offline et **plus appelé-puis-jeté** dans le loader (code mort retiré) ; test de cohérence croisée loss↔dataset.
+- **Burn-in complet documenté et verrouillé** : état caché initial zéro par séquence, forward sur `burn_in + train`, loss sur `train_mask` seul, padding exclu, **pas de stored recurrent state** ; test de continuité d'état caché (full pass == burn-in puis train avec état porté).
+- **Learner** : `double_q` + `priority_eta` en config ; IS weighting, écriture des priorités, métriques complètes (`weighted_loss`, `mean/max_td_error`, `mean_priority`, `mean_is_weight`, `double_q`, `prioritized`, `priority_eta`, …).
+- **Train CLI** : `--prioritized-replay`, `--double-q`, `--priority-alpha/beta/epsilon/eta` ; garde-fous long-run/no-save/no-runner/no-import-side-effect intacts ; checkpoint inchangé (vérifié chargeable). Compatibilité infer/evaluate/smoke/policy/model préservée (champs batch optionnels).
+- 11 fichiers (6 source + 5 tests) ; smoke court e2e : `collected=51 train_steps=5 infer_steps=20 loss=0.001110 artifacts=removed`.
+
+Commit `8d42d87 feat(rl): add v2 r2d2 schedules` :
+- **`rl/schedules_v2.py`** : `LinearScheduleV2` (`start_value`, `end_value`, `duration_steps`, `warmup_steps`, `clamp`, `value_at(step)`) + fonction pure + `build_optional_schedule` qui **refuse un triplet partiel** (erreur claire).
+- **Beta schedule (PER)** dans `train_r2d2_v2` : `--priority-beta-start/end/steps` ; beta annealé appliqué à `sample_sequences(beta=...)` → **influe réellement sur les IS weights** ; métriques `priority_beta_current` + `schedule_step` ; **exige `--prioritized-replay`** (sinon erreur, jamais décoratif).
+- **Epsilon schedule (policy)** dans `infer_r2d2_v2` : `--epsilon-start/end/steps` ; epsilon annealé sur un **step global** qui décale entre épisodes ; valeur enregistrée dans `info["inference_epsilon"]` ; exposé via `evaluate_r2d2_v2` et `smoke_r2d2_v2`. **Pas** ajouté à `train_r2d2_v2` (smoke = dataset statique sans sélection d'action → aurait été décoratif).
+- 11 fichiers (2 nouveaux : `schedules_v2.py`, `test_schedules_v2.py` ; 9 modifiés).
+
+Validation (les deux jalons) :
+- `py_compile` de toute la pile v2 OK ; `git diff --check` OK.
+- Tests unitaires v2 tous verts : `schedules`, `replay_buffer`, `dataset`, `model`, `loss`, `policy`, `infer`, `learner`, `train`, `evaluate`, `smoke`, `encoding`.
+- Barrière `rl/test_roundtrip.py` : **6/6**.
+- Smokes : e2e baseline OK (`artifacts=removed`) ; schedule epsilon (`--epsilon-start 1.0 --epsilon-end 0.1 --epsilon-steps 5`) OK ; schedule beta via train CLI (dataset en scratchpad hors repo) → beta annealé `0.2000 → 0.4667 → 0.7333 → 1.0000`, `checkpoint=None`.
+
+Garde-fous respectés :
+- Aucun entraînement long ; aucun dataset/checkpoint/report versionné committé (le dataset de test était dans le scratchpad hors repo) ; aucun fichier hors scope stagé/committé ; pas de version cheap / fallback dangereux / schedule décoratif.
+
+État / prochaine action recommandée :
+- Cœur R2D2 v2 prêt pour un **premier vrai run contrôlé plus long** (collecte ~10k transitions → quelques milliers de steps → evaluate vs random/bots → métriques hors repo → reward shaping si besoin). Stored recurrent state et acteurs distribués = plus tard.
+
+### 2026-06-30 — AgentInterface v2 : reaction window RL + pendingMatchPowers
+
+Contexte :
+- PPO/reward shaping/auxiliary heads sont en pause.
+- L'objectif immédiat est de rendre l'interface RL fidèle au vrai Dutch'78 avant de discuter R2D2/DRQN ou nouvel entraînement.
+
+Commits validés :
+- `8fa49fa feat(rl): expose reaction window to RL agent`
+- `1c2c4fa feat(game): resolve pending match powers for bots`
+
+Changement commit `8fa49fa` :
+- Ajout de la micro-phase `reaction` au siège RL p0.
+- Ajout de `pass_tick`; `no_match` reste accepté comme alias de compatibilité.
+- Ajout de `match(slot)`.
+- Faux match possible et pénalisé.
+- Tous les slots présents sont tentables, sans filtrage expert.
+- p0 peut matcher après son propre `replace`, ce qui rend la technique du doublon possible naturellement.
+- p0 peut matcher plusieurs fois dans une même fenêtre.
+- p0 peut `pass_tick` puis être réinvité si un bot match pendant la même fenêtre.
+- Dimensions actuelles : `OBS_DIM=147`, `N_ACTIONS=179`.
+
+Changement commit `1c2c4fa` :
+- Les `pendingMatchPowers` sont résolus côté runner headless après la reaction window.
+- Les `7/10` restent traités avant `Valet/Joker` dans la queue pending actuelle.
+- Les `Valet/Joker` actifs sont résolus en FIFO : plus de shuffle/loterie, premier posé = premier résolu.
+- Si le pouvoir pending appartient à p0, le runner expose la micro-phase `power` existante.
+- Si le pouvoir pending appartient à un bot, le bot utilise `BotPowerHandler.useBotSpecialPower(..., skipDelay: true)`.
+- Les bots ne skip plus automatiquement leurs pending powers.
+- Le délai artificiel 800 ms côté UI a été supprimé.
+- `currentPlayerIndex` est temporairement mis sur le bot propriétaire du pouvoir, puis restauré.
+- `GameLogic` n'a pas été modifié.
+
+Validation :
+- `dart analyze lib/providers/game_provider.dart tool/rl_env_runner.dart test/rl/rl_env_runner_test.dart` : OK.
+- `flutter test test/rl/rl_env_runner_test.dart` : OK.
+- `python3 -m py_compile rl/encoding.py rl/evaluate_behavior_v3.py rl/test_roundtrip.py` : OK.
+- `dart compile exe tool/rl_env_runner.dart -o tool/rl_env_runner` : OK.
+- `cd rl && uv run python test_roundtrip.py` : OK.
+- Aucun entraînement lancé.
+- Aucun push effectué.
+
+État / divergences restantes :
+- Valet RL encore simplifié : pas encore de vrai choix complet `player_a/slot_a/player_b/slot_b`.
+- Joker RL encore simplifié : cibles et cohérence avec le vrai jeu à vérifier plus tard.
+- Pas encore d'event stream brut : `discard_reason`, `replaced_slot`, `match_discard` et événements publics ne sont pas exposés proprement au RL.
+- Pas encore de mémoire adverse légale structurée : cartes vues avec 10, âge de l'info, invalidations et stabilité des slots restent à concevoir.
+- L'observation PPO contient encore des signaux dérivés/interprétatifs ; à garder pour baseline, mais pas comme interface finale belief-state/R2D2.
+- `BotGossipService` / alliance n'est pas actif dans le runner RL actuel.
+- Hors cette mise à jour handoff, worktree hors scope encore présent : `rl/dutch_env.py`, `rl/train_parallel.py`, scripts auxiliary, CSV/reports et autres modifications non liées à ces deux commits. Ne pas les mélanger avec le chantier AgentInterface.
+
+Prochaine action recommandée :
+- Implémenter le Valet complet côté RL, avec tests contrôlés, avant Joker complet, event stream, mémoire adverse légale, dataset séquentiel et R2D2/DRQN.
+
+### 2026-06-29 — Étape B auxiliary heads : PPO isolé + smoke
+
+Contexte :
+- Étape A validée : les labels auxiliaires sont disponibles et suffisamment fréquents pour tester une première loss faible (`dutch_label_coverage≈0.61`, `dutch_would_win_pos_rate≈0.21` sur mini-run).
+- Objectif : créer une piste isolée, sans changer l'observation ni le training principal, pour tester deux têtes auxiliaires BCE.
+
+Changement :
+- Ajout de `rl/auxiliary_ppo.py` :
+  - `AuxiliaryRolloutBuffer` sous-classe `MaskableRolloutBuffer` et stocke les labels auxiliaires synchronisés transition par transition.
+  - `AuxiliaryMaskableActorCriticPolicy` ajoute deux têtes : `aux_full_hand_known` et `aux_dutch_would_win_now_when_legal`.
+  - `AuxiliaryMaskablePPO` ajoute une loss auxiliaire BCE faible, masquée par `aux_dutch_label_valid` pour le label Dutch.
+- Ajout de `rl/train_auxiliary.py`, script de smoke/training court séparé de `train_parallel.py`.
+
+Garanties :
+- Pas de modification d'observation (`OBS_DIM=146`), aucun label dans `obs`.
+- Pas de modification d'action mask.
+- Pas de modification de `tool/rl_env_runner` binaire ni de `tool/rl_env_runner_behavior.dart`.
+- Expériences auxiliary à lancer avec `--anti-missed-dutch-coef 0.0` pour ne pas mélanger avec la pénalité reward-only.
+
+Validation :
+- `python3 -m py_compile rl/auxiliary_ppo.py rl/train_auxiliary.py rl/dutch_env.py rl/train_parallel.py` : OK.
+- `OBS_DIM=146` confirmé.
+- Test import/shape : `AuxiliaryMaskablePPO` créé, logits auxiliaires shapes `(1,)`, observation `(146,)`.
+- Mini-run 1024 steps avec `--anti-missed-dutch-coef 0.0 --aux-coef 0.001` : OK, losses auxiliaires loggées, pas de NaN visible, erreurs runner `0`, pénalité count/total `0`.
+- Sauvegarde/chargement du modèle `/tmp/dutch_auxiliary_heads_smoke_models/auxiliary_maskable_ppo_final.zip` : OK ; prédiction masquée légale.
+- Smoke `evaluate_behavior_v3.py` sur le checkpoint auxiliaire et `/tmp/rl_env_runner_behavior` : OK.
+
+Prochaine action recommandée :
+- Après validation explicite seulement : run court 5M ou 10M avec `rl/train_auxiliary.py`, sorties séparées, `--anti-missed-dutch-coef 0.0`, puis comparaison V3+ contre le checkpoint 90M et le 100M.
+
+### 2026-06-29 — Étape A auxiliary heads : collecte/logging sans loss
+
+Contexte :
+- Le run court 10M avec pénalité reward-only anti-missed-Dutch n'a pas corrigé le Dutch timing : sous-appel Dutch persistant, missed real wins toujours très élevés.
+- Décision : ne pas continuer à tuner les pénalités au hasard ; préparer une piste auxiliary heads, mais commencer par vérifier les labels sans modifier PPO.
+
+Changement :
+- `rl/dutch_env.py` ajoute `info["aux_labels"]` sur chaque step, calculé depuis les `training_signals` pré-action : `aux_full_hand_known`, `aux_dutch_label_valid`, `aux_dutch_would_win_now_when_legal`, `aux_full_table_rounds_completed`, `aux_late_game_bucket`.
+- `rl/train_parallel.py` loggue ces labels via le callback existant : `aux/full_hand_known_rate`, `aux/dutch_label_coverage`, `aux/dutch_would_win_pos_rate`, `aux/late_game_rate`.
+- Ajout de `--log-every-steps` pour rendre les métriques visibles dans les mini-runs.
+
+Garanties :
+- Pas de policy custom, pas de `AuxiliaryMaskablePPO`, pas d'auxiliary loss.
+- Pas de changement d'observation (`OBS_DIM=146`), pas de changement d'action mask, pas de changement de reward hors pénalité existante déjà désactivable.
+- `tool/rl_env_runner.dart` et `tool/rl_env_runner_behavior.dart` restent compatibles ; le binaire principal `tool/rl_env_runner` n'a pas été remplacé.
+
+Validation :
+- `python3 -m py_compile rl/dutch_env.py rl/train_parallel.py` : OK.
+- `dart analyze tool/rl_env_runner.dart` : OK.
+- `OBS_DIM=146` confirmé.
+- Mini-run PPO 1024 steps avec `--anti-missed-dutch-coef 0.0` : OK, logs `aux/*` présents, pénalité count/total à 0.
+- Smoke `evaluate_behavior_v3.py` sur `/tmp/rl_env_runner_behavior` : OK.
+
+Prochaine action recommandée :
+- Si les distributions de labels sont jugées suffisantes, implémenter ensuite une classe isolée `AuxiliaryMaskablePPO` minimale avec une seule tête binaire faible (`dutch_would_win_now_when_legal`) et garder `--anti-missed-dutch-coef 0.0` pendant l'expérience.
+
+### 2026-06-29 — Pénalité reward-only anti-missed-Dutch
+
+Contexte :
+- Run 100M terminé proprement, puis sweep V3+ des checkpoints 37M/37.5M/50M/60M/70M/80M/90M/100M.
+- Conclusion expérimentale : meilleures décisions locales possibles sur swap/draw, mais Dutch timing toujours mauvais (`missed real wins` très élevé, missed late persistants, known-full late encore ratés).
+
+Changement :
+- `tool/rl_env_runner.dart` émet un champ top-level `training_signals` sur les observations non terminales : `dutch_would_win_now`, `dutch_margin_now`, `full_table_rounds_completed`, `p0_full_hand_known`, `dutch_legal_now`.
+- `rl/dutch_env.py` consomme le signal pré-action pour appliquer une petite pénalité si l'agent n'appelle pas Dutch alors que la situation est tardive, gagnante, connue et avec marge positive.
+- `rl/train_parallel.py` expose `--anti-missed-dutch-coef` (défaut `0.08`, `0.0` désactive), `--anti-missed-dutch-min-rounds` (défaut `2`) et `--anti-missed-dutch-require-full-known/--no-...` (défaut full-known requis), plus logs TensorBoard `reward/anti_missed_dutch_penalty_{count,total,mean}`.
+- L'observation reste inchangée (`OBS_DIM=146`) ; les diagnostics V3+ restent eval-only dans `tool/rl_env_runner_behavior.dart`.
+
+Validation :
+- `python3 -m py_compile rl/dutch_env.py rl/train_parallel.py` : OK.
+- `dart analyze tool/rl_env_runner.dart` : OK.
+- Compilation test uniquement vers `/tmp/rl_env_runner_anti_missed_dutch` : OK.
+- Smoke direct runner : `training_signals` présent hors `obs`.
+- Test unitaire manuel de pénalité : marge 10, coef 0.08 => pénalité 0.04.
+- Mini-run PPO 2048 steps sur `/tmp/rl_env_runner_anti_missed_dutch` : OK, `illegal_count=0`, erreurs runner `0`, pénalité déclenchée 1 fois (`0.036`).
+- Smoke `evaluate_behavior_v3.py` sur `/tmp/rl_env_runner_behavior` : OK.
+- `uv run python test_roundtrip.py` sur le binaire principal existant : 6/6 OK.
+
+État actuel :
+- Source modifiée, mais `tool/rl_env_runner` n'a pas été remplacé.
+- Aucun checkpoint existant modifié, aucun CSV supprimé, aucun push effectué.
+
+Prochaine action recommandée :
+- Compiler explicitement `tool/rl_env_runner` seulement au moment de lancer un run court anti-missed-Dutch, puis entraîner 10M/20M et comparer V3+ contre 37.5M/90M/100M.
 
 ### 2026-06-28 — Évaluation comportementale RL V1 offline
 
