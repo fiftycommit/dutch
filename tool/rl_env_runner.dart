@@ -53,6 +53,7 @@ import 'dart:math';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/game_state.dart';
 import 'package:dutch_game/models/player.dart';
+import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/services/game/engine_random.dart';
 import 'package:dutch_game/services/game/game_logic.dart';
 import 'package:dutch_game/services/game/bot/bot_config.dart';
@@ -217,6 +218,7 @@ class RlEnv {
   String? _curProxyId; // proxy du step courant (debug obs)
   double _curProxyThreat = 0.0; // menace du proxy au step courant (debug obs)
   double _curDestabReward = 0.0; // reward_destab du step courant
+  final List<Map<String, dynamic>> _recentEvents = <Map<String, dynamic>>[];
 
   // Accès lecture pour les tests de non-régression.
   GameState get gs => _gs;
@@ -247,6 +249,7 @@ class RlEnv {
     _curProxyId = null;
     _curProxyThreat = 0.0;
     _curDestabReward = 0.0;
+    _recentEvents.clear();
     return _advanceToRlOrTerminal();
   }
 
@@ -333,9 +336,31 @@ class RlEnv {
 
       case RlMicroPhase.postDraw:
         if (kind == 'discard_drawn') {
+          final card = _gs.drawnCard;
+          final actor = _gs.currentPlayer;
           GameLogic.discardDrawnCard(_gs);
+          if (card != null) {
+            _recordDiscardEvent(
+              actor: actor,
+              card: card,
+              discardReason: 'drawn_discard',
+            );
+          }
         } else {
-          GameLogic.replaceCard(_gs, params['index'] as int);
+          final index = params['index'] as int;
+          final actor = _gs.currentPlayer;
+          final discarded = index >= 0 && index < actor.hand.length
+              ? actor.hand[index]
+              : null;
+          GameLogic.replaceCard(_gs, index);
+          if (discarded != null) {
+            _recordDiscardEvent(
+              actor: actor,
+              card: discarded,
+              discardReason: 'exchange_discard',
+              replacedSlot: index,
+            );
+          }
         }
         if (_gs.phase == GamePhase.specialPower) {
           _micro = RlMicroPhase.power;
@@ -356,7 +381,7 @@ class RlEnv {
         if (kind == 'pass_tick' || kind == 'no_match') {
           return _passReactionTickThenMaybeAdvance();
         }
-        GameLogic.matchCard(_gs, _rlSeat, params['index'] as int);
+        _applyMatchAndRecord(_rlSeat, params['index'] as int);
         // Rester dans la fenêtre : l'agent peut chaîner après un match réussi,
         // ou observer la pénalité après un faux match avant de passer.
         return _observation();
@@ -414,8 +439,11 @@ class RlEnv {
       return true;
     }
 
+    final drawn = _gs.drawnCard;
+    final handBefore = List<PlayingCard>.from(bot.hand);
     await BotCardStrategy.decideCardAction(_gs, bot, diff, phaseBot,
         personality: perso);
+    _recordBotPostDrawEvent(bot, drawn, handBefore);
 
     if (_gs.phase == GamePhase.specialPower) {
       await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
@@ -460,9 +488,15 @@ class RlEnv {
       final phaseBot = BotConfig.getBotPhase(p, _gs);
       final perso = BotPersonality.fromBot(p);
       final beforeDiscardSize = _gs.discardPile.length;
+      final beforeHand = List<PlayingCard>.from(p.hand);
       await BotCardStrategy.tryReactionMatch(_gs, p, diff, phaseBot,
           personality: perso, skipDelay: true);
       final physicalTopChanged = _gs.discardPile.length > beforeDiscardSize;
+      _recordReactionMatchEvent(
+        actor: p,
+        handBefore: beforeHand,
+        discardSizeBefore: beforeDiscardSize,
+      );
       if (stopOnTopChange &&
           physicalTopChanged &&
           _gs.phase == GamePhase.reaction) {
@@ -600,6 +634,28 @@ class RlEnv {
     assert(
         _micro == RlMicroPhase.power, 'applyRlPowerForTest hors phase power');
     _applyPower(kind, params);
+  }
+
+  void _applyMatchAndRecord(Player actor, int slot) {
+    final handBefore = List<PlayingCard>.from(actor.hand);
+    final success = GameLogic.matchCard(_gs, actor, slot);
+    if (success) {
+      final card =
+          slot >= 0 && slot < handBefore.length ? handBefore[slot] : null;
+      if (card != null) {
+        _recordDiscardEvent(
+          actor: actor,
+          card: card,
+          discardReason: 'match_discard',
+          slot: slot,
+        );
+      }
+      return;
+    }
+
+    if (actor.hand.length > handBefore.length) {
+      _recordMatchFailureEvent(actor: actor, slot: slot);
+    }
   }
 
   // ── Application des pouvoirs du siège RL (primitives publiques) ─────────────
@@ -893,6 +949,7 @@ class RlEnv {
       'proxy_threat': _curProxyThreat,
       // Signaux reward-only : jamais encodés dans l'observation Python.
       'training_signals': _buildTrainingSignals(),
+      'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'micro_phase': _micro.name,
       'obs': _buildObservation(),
       'action_mask': _buildMask(),
@@ -932,6 +989,7 @@ class RlEnv {
       },
       'proxy_seat': _curProxyId,
       'proxy_threat': _curProxyThreat,
+      'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'info': {
         'final_ranks': _ranks,
         'final_scores': {
@@ -959,6 +1017,108 @@ class RlEnv {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  void _recordBotPostDrawEvent(
+    Player actor,
+    PlayingCard? drawn,
+    List<PlayingCard> handBefore,
+  ) {
+    if (drawn == null) return;
+    final top = _gs.topDiscardCard;
+    if (top == null) return;
+
+    if (_gs.drawnCard == null && top.id == drawn.id) {
+      _recordDiscardEvent(
+        actor: actor,
+        card: top,
+        discardReason: 'drawn_discard',
+      );
+      return;
+    }
+
+    final replacedSlot = actor.hand.indexWhere((card) => card.id == drawn.id);
+    if (replacedSlot < 0 || replacedSlot >= handBefore.length) return;
+    _recordDiscardEvent(
+      actor: actor,
+      card: handBefore[replacedSlot],
+      discardReason: 'exchange_discard',
+      replacedSlot: replacedSlot,
+    );
+  }
+
+  void _recordReactionMatchEvent({
+    required Player actor,
+    required List<PlayingCard> handBefore,
+    required int discardSizeBefore,
+  }) {
+    if (_gs.discardPile.length > discardSizeBefore) {
+      final slot = _removedSlot(handBefore, actor.hand);
+      _recordDiscardEvent(
+        actor: actor,
+        card: _gs.discardPile.last,
+        discardReason: 'match_discard',
+        slot: slot,
+      );
+      return;
+    }
+
+    if (actor.hand.length > handBefore.length) {
+      _recordMatchFailureEvent(actor: actor);
+    }
+  }
+
+  int? _removedSlot(List<PlayingCard> before, List<PlayingCard> after) {
+    final afterIds = after.map((card) => card.id).toList(growable: true);
+    for (var i = 0; i < before.length; i++) {
+      final idx = afterIds.indexOf(before[i].id);
+      if (idx < 0) return i;
+      afterIds.removeAt(idx);
+    }
+    return null;
+  }
+
+  void _recordDiscardEvent({
+    required Player actor,
+    required PlayingCard card,
+    required String discardReason,
+    int? slot,
+    int? replacedSlot,
+  }) {
+    _recordPublicEvent({
+      'event_type': 'discard_visible',
+      'actor': actor.id,
+      'card_visible': true,
+      'card_value': card.value,
+      'card_match_value': card.matchValue,
+      'card_points': card.points,
+      'slot': slot,
+      'discard_reason': discardReason,
+      'replaced_slot': replacedSlot,
+    });
+  }
+
+  void _recordMatchFailureEvent({required Player actor, int? slot}) {
+    _recordPublicEvent({
+      'event_type': 'match_failure_penalty',
+      'actor': actor.id,
+      'slot': slot,
+      'penalty_card_count': 1,
+    });
+  }
+
+  void _recordPublicEvent(Map<String, dynamic> event) {
+    final full = <String, dynamic>{
+      'step': _step,
+      'turn_count': _gs.turnCount,
+      'action_count': _gs.actionCount,
+      'phase': _gs.phase.toString().split('.').last,
+      ...event,
+    };
+    _recentEvents.add(full);
+    if (_recentEvents.length > 32) {
+      _recentEvents.removeRange(0, _recentEvents.length - 32);
+    }
+  }
 
   void _buildPlayers() {
     final rng = EngineRandom.instance;

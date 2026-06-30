@@ -212,6 +212,18 @@ Future<Map<String, dynamic>> _enterPostDraw(RlEnv env, int seed) async {
   return obs;
 }
 
+List<Map<String, dynamic>> _recentEvents(Map<String, dynamic> obs) =>
+    (obs['recent_events'] as List? ?? const [])
+        .cast<Map>()
+        .map((event) => event.cast<String, dynamic>())
+        .toList();
+
+Map<String, dynamic> _lastEvent(
+  Map<String, dynamic> obs,
+  bool Function(Map<String, dynamic>) test,
+) =>
+    _recentEvents(obs).lastWhere(test);
+
 void main() {
   // 1 ─────────────────────────────────────────────────────────────────────────
   group('1. Déterminisme seed', () {
@@ -482,6 +494,128 @@ void main() {
       expect(obs['micro_phase'], 'reaction');
       expect(env.rlSeat.hand.length, 3);
       expect(env.rlSeat.knownCards.last, isFalse);
+    });
+
+    test('recent_events expose drawn_discard sans replaced_slot', () async {
+      final env = RlEnv(episodeId: 'event-drawn', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 31);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '4');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      final event = _lastEvent(
+        obs,
+        (e) =>
+            e['event_type'] == 'discard_visible' &&
+            e['discard_reason'] == 'drawn_discard',
+      );
+
+      expect(event['actor'], env.rlSeat.id);
+      expect(event['card_visible'], isTrue);
+      expect(event['card_value'], '4');
+      expect(event['card_match_value'], '4');
+      expect(event['card_points'], 4);
+      expect(event['replaced_slot'], isNull);
+      expect(event.keys, isNot(contains('kept_card')));
+      expect(event.keys, isNot(contains('new_card')));
+      expect(event.keys, isNot(contains('opponent_hand')));
+      expect(event.keys, isNot(contains('true_score')));
+    });
+
+    test('recent_events expose exchange_discard avec replaced_slot', () async {
+      final env = RlEnv(episodeId: 'event-exchange', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 32);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '3'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 1}
+      });
+      final event = _lastEvent(
+        obs,
+        (e) =>
+            e['event_type'] == 'discard_visible' &&
+            e['discard_reason'] == 'exchange_discard',
+      );
+
+      expect(event['actor'], env.rlSeat.id);
+      expect(event['replaced_slot'], 1);
+      expect(event['card_visible'], isTrue);
+      expect(event['card_value'], '9');
+      expect(event['card_match_value'], '9');
+      expect(event['card_points'], 9);
+      expect(event.keys, isNot(contains('drawn_card')));
+      expect(event.keys, isNot(contains('kept_card')));
+      expect(event.keys, isNot(contains('new_card')));
+      expect(event.keys, isNot(contains('opponent_hand')));
+      expect(event.keys, isNot(contains('true_score')));
+    });
+
+    test('recent_events expose match_discard', () async {
+      final env = RlEnv(episodeId: 'event-match', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 33);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('clubs', '5'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      final event = _lastEvent(
+        obs,
+        (e) =>
+            e['event_type'] == 'discard_visible' &&
+            e['discard_reason'] == 'match_discard',
+      );
+
+      expect(event['actor'], env.rlSeat.id);
+      expect(event['slot'], 1);
+      expect(event['card_visible'], isTrue);
+      expect(event['card_value'], '5');
+      expect(event['card_match_value'], '5');
+      expect(event['card_points'], 5);
+    });
+
+    test('recent_events expose match_failure_penalty sans carte pénalité',
+        () async {
+      final env = RlEnv(episodeId: 'event-false-match', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 34);
+      _setKnownHand(env, [
+        PlayingCard.create('clubs', '8'),
+        PlayingCard.create('spades', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '5');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'reaction');
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0}
+      });
+      final event = _lastEvent(
+        obs,
+        (e) => e['event_type'] == 'match_failure_penalty',
+      );
+
+      expect(event['actor'], env.rlSeat.id);
+      expect(event['slot'], 0);
+      expect(event['penalty_card_count'], 1);
+      expect(event.keys, isNot(contains('penalty_card')));
+      expect(event.keys, isNot(contains('card_value')));
+      expect(event.keys, isNot(contains('opponent_hand')));
+      expect(event.keys, isNot(contains('true_score')));
     });
 
     test('doublon minimal : replace puis match actif sur le même rang',
