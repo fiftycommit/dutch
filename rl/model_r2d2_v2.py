@@ -1,7 +1,14 @@
-"""PyTorch recurrent Q-network skeleton for AgentInterface v2 batches.
+"""PyTorch recurrent Q-network for AgentInterface v2 batches (R2D2 core).
 
-This module defines model plumbing only. It does not implement a learner,
-target network, prioritized replay, or any training loop.
+This module defines the model and masking only; the learner, target network,
+prioritized replay and training loop live elsewhere.
+
+Burn-in strategy (*burn-in complet*, no stored recurrent state): the recurrent
+core consumes the whole ``total_len = burn_in + seq_len`` window from a zero
+initial hidden state. The burn-in positions warm up the hidden state but are
+excluded from the loss via ``train_mask`` (see ``loss_r2d2_v2``). The hidden
+state is never reset mid-sequence. Stored recurrent state is a deliberate future
+optimization and is intentionally not implemented here.
 """
 
 from __future__ import annotations
@@ -83,10 +90,12 @@ def batch_to_tensors(
 
 
 class R2D2AgentV2(nn.Module):
-    """Small recurrent Q-network consuming ``SequenceBatchV2``.
+    """Recurrent Q-network consuming ``SequenceBatchV2``.
 
-    The GRU consumes burn-in steps normally. Later loss code should use
-    ``train_mask`` and ``padding_mask`` from the returned output.
+    The GRU consumes the burn-in steps to warm its hidden state from a zero
+    initial state, then the train steps, in a single causal pass without any
+    mid-sequence reset (burn-in-complete strategy). Loss code restricts learning
+    to ``train_mask & ~padding_mask`` positions.
     """
 
     def __init__(

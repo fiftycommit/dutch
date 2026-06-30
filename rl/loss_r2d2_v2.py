@@ -1,9 +1,23 @@
-"""Minimal TD loss plumbing for AgentInterface v2 recurrent Q models.
+"""TD loss for AgentInterface v2 recurrent Q models (R2D2 core).
 
-This module intentionally contains no learner loop, optimizer step, target
-network management, or training script. It only verifies that a v2 sequence
-batch, the recurrent model outputs, played actions, rewards, dones, and masks
-can be aligned into a finite TD loss.
+This module owns the *single source of truth* for n-step TD targets used in
+training: targets are built from the sampled sequence inside
+:func:`compute_td_loss_v2`. ``dataset_v2.compute_n_step_returns`` is an offline
+analysis helper only and is never used to feed the learner.
+
+It contains no learner loop, optimizer step, or target-network management. It
+aligns a v2 sequence batch, the recurrent model outputs, played actions,
+rewards, dones and masks into a finite TD loss, with:
+- factorized greedy bootstrap over the *legal next actions* (single or
+  Double-Q), falling back to the action-type head only when per-position legal
+  actions are unavailable;
+- optional importance-sampling (PER) weighting per sequence;
+- burn-in / padding exclusion through ``valid_mask = train_mask & ~padding``.
+
+Burn-in convention (*burn-in complet*, no stored recurrent state): the model
+warms its hidden state from a zero state across the burn-in positions; the loss
+only scores ``train_mask`` positions. See ``replay_buffer_v2`` and
+``model_r2d2_v2``.
 """
 
 from __future__ import annotations
@@ -27,6 +41,7 @@ class LossOutputV2:
     target_q: torch.Tensor
     td_target: torch.Tensor
     valid_mask: torch.Tensor
+    elementwise: torch.Tensor
     metrics: dict[str, float]
 
 
@@ -81,20 +96,33 @@ def compute_td_loss_v2(
     gamma: float = 0.99,
     n_step: int = 1,
     double_q: bool = False,
+    is_weights: Any | None = None,
 ) -> LossOutputV2:
-    """Compute a minimal n-step TD Huber loss for a v2 sequence batch.
+    """Compute an n-step TD Huber loss for a v2 sequence batch.
 
     Convention:
     - ``valid_mask = train_mask & ~padding_mask``.
     - burn-in steps are excluded through ``train_mask``.
     - padded positions are excluded.
-    - ``done`` cuts bootstrap.
+    - ``done`` cuts bootstrap (n-step targets never bootstrap past a terminal
+      transition inside the window).
     - n-step targets are built inside the sampled sequence and never cross
       padding. Sequence construction already prevents episode crossing.
 
-    The bootstrap action currently uses the action-type head only. That keeps
-    the loss deterministic while the full factorized greedy action selector is
-    still a future learner concern.
+    Bootstrap:
+    - when ``batch.legal_actions_v2`` is available, the bootstrap value at each
+      state is taken over the *legal next actions* using the factorized
+      Q-heads. With ``double_q=True`` the online network selects the greedy
+      legal action and the target network evaluates it; otherwise the target
+      network maxes over legal actions.
+    - when ``batch.legal_actions_v2`` is ``None`` (e.g. synthetic batches), the
+      loss falls back to the action-type head only. This fallback is explicit
+      and tested; it never fabricates an illegal action.
+
+    ``is_weights`` is an optional per-sequence importance-sampling weight vector
+    (shape ``[batch]``). When provided, the loss is the weighted mean of the
+    per-sequence mean TD losses; otherwise it is the plain mean over valid
+    positions.
     """
 
     if gamma < 0.0:
@@ -105,43 +133,25 @@ def compute_td_loss_v2(
     online_output = online_model(batch, apply_masks=True)
     with torch.no_grad():
         target_output = target_model(batch, apply_masks=True)
-        if double_q:
-            online_next_output = online_model(batch, apply_masks=True)
-        else:
-            online_next_output = None
+        online_next_output = online_model(batch, apply_masks=True) if double_q else None
 
     q_taken = select_action_q_from_output(
         online_output,
         batch.actions_v2,
         batch.legacy_action_ids,
     )
-    rewards = torch.as_tensor(
-        batch.rewards,
-        dtype=q_taken.dtype,
-        device=q_taken.device,
-    )
-    dones = torch.as_tensor(
-        batch.dones,
-        dtype=torch.bool,
-        device=q_taken.device,
-    )
-    train_mask = torch.as_tensor(
-        batch.train_mask,
-        dtype=torch.bool,
-        device=q_taken.device,
-    )
-    padding_mask = torch.as_tensor(
-        batch.padding_mask,
-        dtype=torch.bool,
-        device=q_taken.device,
-    )
+    rewards = torch.as_tensor(batch.rewards, dtype=q_taken.dtype, device=q_taken.device)
+    dones = torch.as_tensor(batch.dones, dtype=torch.bool, device=q_taken.device)
+    train_mask = torch.as_tensor(batch.train_mask, dtype=torch.bool, device=q_taken.device)
+    padding_mask = torch.as_tensor(batch.padding_mask, dtype=torch.bool, device=q_taken.device)
     valid_mask = train_mask & ~padding_mask
     if not bool(valid_mask.any()):
         raise ValueError("TD loss has no valid train positions")
 
-    target_q = _bootstrap_action_type_q(
+    target_q = _bootstrap_q(
         target_output,
-        online_output=online_next_output,
+        online_next_output=online_next_output,
+        batch=batch,
         double_q=double_q,
     )
     td_target = _build_n_step_targets(
@@ -155,7 +165,14 @@ def compute_td_loss_v2(
 
     td_error = q_taken - td_target
     elementwise = F.smooth_l1_loss(q_taken, td_target, reduction="none")
-    loss = elementwise[valid_mask].mean()
+
+    loss, mean_is_weight, weighted = _reduce_loss(
+        elementwise,
+        valid_mask=valid_mask,
+        is_weights=is_weights,
+        device=q_taken.device,
+        dtype=q_taken.dtype,
+    )
 
     valid_td = td_error[valid_mask]
     metrics = {
@@ -164,9 +181,12 @@ def compute_td_loss_v2(
         "mean_q_taken": float(q_taken[valid_mask].detach().cpu().mean().item()),
         "mean_td_target": float(td_target[valid_mask].detach().cpu().mean().item()),
         "mean_abs_td_error": float(valid_td.detach().cpu().abs().mean().item()),
+        "max_abs_td_error": float(valid_td.detach().cpu().abs().max().item()),
+        "mean_is_weight": float(mean_is_weight),
         "gamma": float(gamma),
         "n_step": float(n_step),
         "double_q": 1.0 if double_q else 0.0,
+        "weighted": 1.0 if weighted else 0.0,
     }
 
     return LossOutputV2(
@@ -176,8 +196,40 @@ def compute_td_loss_v2(
         target_q=target_q,
         td_target=td_target,
         valid_mask=valid_mask,
+        elementwise=elementwise,
         metrics=metrics,
     )
+
+
+def _reduce_loss(
+    elementwise: torch.Tensor,
+    *,
+    valid_mask: torch.Tensor,
+    is_weights: Any | None,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[torch.Tensor, float, bool]:
+    """Reduce per-position TD losses to a scalar, optionally IS-weighted."""
+
+    if is_weights is None:
+        loss = elementwise[valid_mask].mean()
+        return loss, 1.0, False
+
+    weights = torch.as_tensor(is_weights, dtype=dtype, device=device)
+    batch_size = elementwise.shape[0]
+    if weights.ndim != 1 or weights.shape[0] != batch_size:
+        raise ValueError(
+            f"is_weights must have shape [{batch_size}], got {tuple(weights.shape)}"
+        )
+    valid = valid_mask.to(dtype)
+    valid_counts = valid.sum(dim=1).clamp(min=1.0)
+    seq_loss = (elementwise * valid).sum(dim=1) / valid_counts
+    rows = valid_mask.any(dim=1)
+    if not bool(rows.any()):
+        raise ValueError("TD loss has no valid sequences to weight")
+    loss = (weights * seq_loss)[rows].mean()
+    mean_is_weight = float(weights[rows].detach().cpu().mean().item())
+    return loss, mean_is_weight, True
 
 
 def _select_one_action_q(
@@ -251,6 +303,74 @@ def _index(action: dict[str, Any], *keys: str) -> int:
                 raise ValueError(f"{key} must be >= 0 in action_v2: {action!r}")
             return int(value)
     raise ValueError(f"missing one of {keys} in action_v2: {action!r}")
+
+
+def _bootstrap_q(
+    target_output: model_r2d2_v2.R2D2OutputV2,
+    *,
+    online_next_output: model_r2d2_v2.R2D2OutputV2 | None,
+    batch: SequenceBatchV2,
+    double_q: bool,
+) -> torch.Tensor:
+    """Per-position bootstrap value V(s) used by the n-step target.
+
+    Uses the factorized greedy action over legal next actions when available,
+    otherwise the action-type-head fallback.
+    """
+
+    if batch.legal_actions_v2 is None:
+        return _bootstrap_action_type_q(
+            target_output,
+            online_output=online_next_output,
+            double_q=double_q,
+        )
+    return _bootstrap_factorized_q(
+        target_output,
+        online_next_output=online_next_output,
+        batch=batch,
+        double_q=double_q,
+    )
+
+
+def _bootstrap_factorized_q(
+    target_output: model_r2d2_v2.R2D2OutputV2,
+    *,
+    online_next_output: model_r2d2_v2.R2D2OutputV2 | None,
+    batch: SequenceBatchV2,
+    double_q: bool,
+) -> torch.Tensor:
+    if double_q and online_next_output is None:
+        raise ValueError("double_q=True requires online_next_output")
+
+    batch_size, total_len, _ = target_output.action_type_q.shape
+    bootstrap = torch.zeros(
+        (batch_size, total_len),
+        dtype=target_output.action_type_q.dtype,
+        device=target_output.action_type_q.device,
+    )
+    legal_actions = batch.legal_actions_v2
+    for b in range(batch_size):
+        for t in range(total_len):
+            if bool(batch.padding_mask[b][t]):
+                continue
+            legal = legal_actions[b][t]
+            if not legal:
+                raise ValueError(
+                    f"position (batch={b}, t={t}) is non-padding but has no legal "
+                    "action_v2 for the bootstrap"
+                )
+            if double_q:
+                online_scores = torch.stack(
+                    [_select_one_action_q(online_next_output, action, b, t) for action in legal]
+                )
+                best = int(torch.argmax(online_scores).item())
+                bootstrap[b, t] = _select_one_action_q(target_output, legal[best], b, t)
+            else:
+                target_scores = torch.stack(
+                    [_select_one_action_q(target_output, action, b, t) for action in legal]
+                )
+                bootstrap[b, t] = torch.max(target_scores)
+    return bootstrap
 
 
 def _bootstrap_action_type_q(

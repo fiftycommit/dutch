@@ -1,8 +1,14 @@
 """Dataset helpers for AgentInterface v2 JSONL rollouts.
 
 The loader is intentionally separate from PPO and training code. It rebuilds
-``TransitionV2`` objects from readable JSONL and can compute n-step targets for
-future DRQN/R2D2 learners.
+``TransitionV2`` objects from readable JSONL and loads them into a
+``ReplayBufferV2`` for sequence sampling.
+
+Single source of truth for n-step TD: training n-step targets are built in
+``loss_r2d2_v2`` from each sampled sequence. ``compute_n_step_returns`` below is
+an *offline analysis helper* (diagnostics, tests, dataset inspection); it is not
+used by ``load_replay_buffer_from_jsonl`` and never feeds the learner. Keeping a
+single live path avoids two ambiguous n-step computations.
 """
 
 from __future__ import annotations
@@ -117,12 +123,31 @@ def load_replay_buffer_from_jsonl(
     *,
     n_step: int | None = None,
     gamma: float = 0.99,
+    prioritized: bool = False,
+    priority_alpha: float = 0.6,
+    priority_beta: float = 0.4,
+    priority_epsilon: float = 1.0e-6,
 ) -> ReplayBufferV2:
-    transitions = load_transitions_jsonl(path)
-    if n_step is not None:
-        compute_n_step_returns(transitions, n_step=n_step, gamma=gamma)
+    """Load a JSONL rollout file into a ``ReplayBufferV2``.
 
-    buffer = ReplayBufferV2()
+    ``n_step`` and ``gamma`` describe the horizon the learner/loss will use and
+    are validated here for caller convenience; they do *not* mutate the buffer,
+    which stores raw single-step transitions. The single source of truth for
+    n-step TD targets is ``loss_r2d2_v2`` (computed per sampled sequence).
+    """
+
+    if n_step is not None and n_step <= 0:
+        raise ValueError("n_step must be positive")
+    if gamma < 0.0:
+        raise ValueError("gamma must be >= 0")
+
+    transitions = load_transitions_jsonl(path)
+    buffer = ReplayBufferV2(
+        prioritized=prioritized,
+        priority_alpha=priority_alpha,
+        priority_beta=priority_beta,
+        priority_epsilon=priority_epsilon,
+    )
     for episode in _group_by_episode(transitions).values():
         buffer.add_episode(episode)
     return buffer

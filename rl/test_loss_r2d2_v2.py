@@ -6,11 +6,13 @@ Run from rl/:
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import numpy as np
 import torch
 
+import dataset_v2
 import encoding_v2
 import loss_r2d2_v2
 import model_r2d2_v2
@@ -400,6 +402,133 @@ def test_compatible_with_replay_buffer_batch() -> None:
         raise AssertionError("loss is not finite on ReplayBufferV2 batch")
 
 
+def _two_action_legal(total_len: int) -> list[list[list[dict[str, Any]]]]:
+    actions = [{"action_type": "pass_tick"}, {"action_type": "draw"}]
+    return [[list(actions) for _ in range(total_len)]]
+
+
+def test_double_q_selects_online_and_evaluates_target() -> None:
+    # Online prefers "draw" (5 > 1); target values "draw" at 0 and "pass" at 10.
+    # Single-Q bootstraps target's max over legal actions -> 10.
+    # Double-Q bootstraps target at the online-greedy action ("draw") -> 0.
+    batch = _empty_batch(
+        actions_v2=[[{"action_type": "pass_tick"}, {"action_type": "pass_tick"}]],
+        rewards=[[0.0, 0.0]],
+        dones=[[False, False]],
+        train_mask=[[True, False]],
+    )
+    batch = dataclasses.replace(batch, legal_actions_v2=_two_action_legal(2))
+    online = FixedModel(action_value=1.0, max_value=5.0)
+    target = FixedModel(action_value=10.0, max_value=0.0)
+
+    single = loss_r2d2_v2.compute_td_loss_v2(
+        online, target, batch, gamma=1.0, n_step=1, double_q=False
+    )
+    double = loss_r2d2_v2.compute_td_loss_v2(
+        online, target, batch, gamma=1.0, n_step=1, double_q=True
+    )
+    if float(single.td_target[0, 0]) != 10.0:
+        raise AssertionError(f"single-Q bootstrap wrong: {single.td_target[0, 0]}")
+    if float(double.td_target[0, 0]) != 0.0:
+        raise AssertionError(f"double-Q bootstrap wrong: {double.td_target[0, 0]}")
+
+
+def test_factorized_bootstrap_uses_match_slot_head() -> None:
+    # A single legal "match" action whose factorized target value is 2 + 5 = 7.
+    legal = [[[{"action_type": "match", "slot": 3}], [{"action_type": "match", "slot": 3}]]]
+    batch = _empty_batch(
+        actions_v2=[[{"action_type": "match", "slot": 3}, {"action_type": "match", "slot": 3}]],
+        rewards=[[0.0, 0.0]],
+        dones=[[False, False]],
+        train_mask=[[True, False]],
+    )
+    batch = dataclasses.replace(batch, legal_actions_v2=legal)
+
+    class MatchModel:
+        def __call__(self, b: Any, *, apply_masks: bool = True) -> model_r2d2_v2.R2D2OutputV2:
+            del apply_masks
+            out = _fake_output(1, 2)
+            out.action_type_q[:, :, encoding_v2.ACTION_TYPES.index("match")] = 2.0
+            out.match_slot_q[:, :, 3] = 5.0
+            return out
+
+    result = loss_r2d2_v2.compute_td_loss_v2(
+        MatchModel(), MatchModel(), batch, gamma=1.0, n_step=1, double_q=False
+    )
+    if float(result.td_target[0, 0]) != 7.0:
+        raise AssertionError(f"factorized match bootstrap wrong: {result.td_target[0, 0]}")
+
+
+def test_n_step_done_cuts_bootstrap() -> None:
+    batch = _empty_batch(
+        actions_v2=[[{"action_type": "pass_tick"}] * 4],
+        rewards=[[1.0, 1.0, 1.0, 1.0]],
+        dones=[[False, False, True, False]],
+        train_mask=[[True, False, False, False]],
+    )
+    result = loss_r2d2_v2.compute_td_loss_v2(
+        FixedModel(action_value=0.0),
+        FixedModel(action_value=0.0, max_value=10.0),
+        batch,
+        gamma=1.0,
+        n_step=3,
+    )
+    # Reward accumulates r0+r1+r2 (=3) and the done at t=2 cuts the bootstrap.
+    if float(result.td_target[0, 0]) != 3.0:
+        raise AssertionError(f"n_step_done did not cut bootstrap: {result.td_target[0, 0]}")
+
+
+def test_is_weights_scale_loss() -> None:
+    batch = _empty_batch(
+        actions_v2=[[{"action_type": "pass_tick"}, {"action_type": "pass_tick"}]],
+        rewards=[[1.0, 0.0]],
+        dones=[[False, True]],
+        train_mask=[[True, True]],
+    )
+    unweighted = loss_r2d2_v2.compute_td_loss_v2(
+        FixedModel(action_value=0.5), FixedModel(action_value=0.0, max_value=2.0), batch, gamma=0.5
+    )
+    weighted = loss_r2d2_v2.compute_td_loss_v2(
+        FixedModel(action_value=0.5),
+        FixedModel(action_value=0.0, max_value=2.0),
+        batch,
+        gamma=0.5,
+        is_weights=np.asarray([0.25], dtype=np.float32),
+    )
+    expected = 0.25 * float(unweighted.loss)
+    if abs(float(weighted.loss) - expected) > 1e-6:
+        raise AssertionError(
+            f"is_weights did not scale the loss: {weighted.loss} != {expected}"
+        )
+    if weighted.elementwise.shape != (1, 2):
+        raise AssertionError("elementwise loss tensor missing or wrong shape")
+
+
+def test_n_step_target_matches_dataset_helper() -> None:
+    # With a zero-valued bootstrap, the loss n-step target must equal the
+    # offline dataset n-step return (single source of truth cross-check).
+    transitions = [_transition("ep", step) for step in range(4)]
+    n_steps = dataset_v2.compute_n_step_returns(transitions, n_step=3, gamma=0.5)
+    rewards = [[float(step) for step in range(4)]]
+    batch = _empty_batch(
+        actions_v2=[[{"action_type": "pass_tick"}] * 4],
+        rewards=rewards,
+        dones=[[False, False, False, False]],
+        train_mask=[[True, False, False, False]],
+    )
+    result = loss_r2d2_v2.compute_td_loss_v2(
+        FixedModel(action_value=0.0),
+        FixedModel(action_value=0.0, max_value=0.0),
+        batch,
+        gamma=0.5,
+        n_step=3,
+    )
+    if abs(float(result.td_target[0, 0]) - n_steps[0].n_step_return) > 1e-6:
+        raise AssertionError(
+            f"loss n-step {result.td_target[0, 0]} != dataset {n_steps[0].n_step_return}"
+        )
+
+
 def test_loss_output_does_not_expose_raw_observation() -> None:
     batch = _empty_batch(
         actions_v2=[[{"action_type": "pass_tick"}]],
@@ -430,6 +559,11 @@ def main() -> int:
         test_n_step_target_inside_sequence,
         test_valid_mask_and_no_nan,
         test_compatible_with_replay_buffer_batch,
+        test_double_q_selects_online_and_evaluates_target,
+        test_factorized_bootstrap_uses_match_slot_head,
+        test_n_step_done_cuts_bootstrap,
+        test_is_weights_scale_loss,
+        test_n_step_target_matches_dataset_helper,
         test_loss_output_does_not_expose_raw_observation,
     ]
     print("=== test_loss_r2d2_v2 ===")

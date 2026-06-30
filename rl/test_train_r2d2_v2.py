@@ -274,6 +274,103 @@ def test_replay_buffer_too_small_errors() -> None:
             raise AssertionError("tiny replay buffer did not raise")
 
 
+def test_parser_prioritized_and_double_q_flags() -> None:
+    args = train_r2d2_v2.build_arg_parser().parse_args(
+        [
+            "--dataset",
+            "sample.jsonl",
+            "--prioritized-replay",
+            "--double-q",
+            "--priority-alpha",
+            "0.7",
+            "--priority-beta",
+            "0.5",
+            "--priority-epsilon",
+            "1e-5",
+            "--priority-eta",
+            "0.8",
+        ]
+    )
+    config = train_r2d2_v2.config_from_args(args)
+    if not config.prioritized_replay or not config.double_q:
+        raise AssertionError("prioritized/double-q flags not parsed")
+    if config.priority_alpha != 0.7 or config.priority_beta != 0.5:
+        raise AssertionError("priority alpha/beta not parsed")
+    if config.priority_epsilon != 1e-5 or config.priority_eta != 0.8:
+        raise AssertionError("priority epsilon/eta not parsed")
+
+
+def test_run_minimal_prioritized_training() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.jsonl"
+        _write_dataset(path, count=6)
+        result = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=path,
+                steps=2,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                prioritized_replay=True,
+                seed=7,
+            )
+        )
+    if result.final_metrics.get("prioritized") != 1.0:
+        raise AssertionError("prioritized training did not report prioritized=1.0")
+    if not torch.isfinite(torch.tensor(result.final_metrics["loss"])):
+        raise AssertionError("prioritized loss not finite")
+
+
+def test_run_minimal_double_q_training() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.jsonl"
+        _write_dataset(path, count=6)
+        result = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=path,
+                steps=2,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=2,
+                double_q=True,
+                seed=7,
+            )
+        )
+    if result.final_metrics.get("double_q") != 1.0:
+        raise AssertionError("double-q training did not report double_q=1.0")
+    if not torch.isfinite(torch.tensor(result.final_metrics["loss"])):
+        raise AssertionError("double-q loss not finite")
+
+
+def test_run_prioritized_double_q_checkpoint_loadable() -> None:
+    import model_r2d2_v2
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        checkpoint = Path(tmp) / "checkpoint.pt"
+        _write_dataset(dataset, count=6)
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset,
+                steps=2,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=2,
+                prioritized_replay=True,
+                double_q=True,
+                save_checkpoint=checkpoint,
+                no_save=False,
+                seed=3,
+            )
+        )
+        payload = torch.load(checkpoint, map_location="cpu")
+        model = model_r2d2_v2.R2D2AgentV2()
+        model.load_state_dict(payload["online_model"])
+
+
 def test_import_has_no_training_side_effect() -> None:
     if not hasattr(train_r2d2_v2, "main"):
         raise AssertionError("train module missing guarded main")
@@ -298,6 +395,10 @@ def main() -> int:
         test_saves_checkpoint_if_requested,
         test_no_save_by_default,
         test_replay_buffer_too_small_errors,
+        test_parser_prioritized_and_double_q_flags,
+        test_run_minimal_prioritized_training,
+        test_run_minimal_double_q_training,
+        test_run_prioritized_double_q_checkpoint_loadable,
         test_import_has_no_training_side_effect,
         test_no_runner_dependency_or_raw_field_use,
     ]

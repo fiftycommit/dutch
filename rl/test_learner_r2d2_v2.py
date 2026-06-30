@@ -6,8 +6,10 @@ Run from rl/:
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
+import numpy as np
 import torch
 
 import encoding_v2
@@ -127,6 +129,18 @@ def _batch() -> replay_buffer_v2.SequenceBatchV2:
         ]
     )
     return buffer.sample_sequences(batch_size=1, seq_len=2, burn_in=1, seed=0)
+
+
+def _prioritized_buffer() -> replay_buffer_v2.ReplayBufferV2:
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True)
+    buffer.add_episode(
+        [
+            _transition("ep-a", 0),
+            _transition("ep-a", 1),
+            _transition("ep-a", 2, done=True),
+        ]
+    )
+    return buffer
 
 
 def _model() -> model_r2d2_v2.R2D2AgentV2:
@@ -270,6 +284,82 @@ def test_learner_does_not_read_raw_observation_fields() -> None:
         raise AssertionError("learner leaked raw observation fields")
 
 
+def _prioritized_learner(*, double_q: bool = False) -> learner_r2d2_v2.R2D2LearnerV2:
+    return learner_r2d2_v2.R2D2LearnerV2(
+        online_model=_model(),
+        config=learner_r2d2_v2.LearnerConfigV2(
+            learning_rate=1.0e-3,
+            gamma=0.9,
+            n_step=1,
+            grad_clip_norm=1.0,
+            target_update_interval=100,
+            double_q=double_q,
+            priority_eta=0.8,
+        ),
+    )
+
+
+def test_prioritized_train_step_updates_buffer_priorities() -> None:
+    buffer = _prioritized_buffer()
+    batch = buffer.sample_sequences(batch_size=2, seq_len=2, burn_in=1, seed=0)
+    if batch.is_weights is None or batch.sample_indices is None:
+        raise AssertionError("prioritized batch missing PER fields")
+    learner = _prioritized_learner()
+    metrics = learner.train_step(batch, replay_buffer=buffer)
+    if metrics["prioritized"] != 1.0:
+        raise AssertionError("prioritized metric should be 1.0")
+    if not buffer._priorities:
+        raise AssertionError("buffer priorities were not updated from TD error")
+    for value in buffer._priorities.values():
+        if not np.isfinite(value) or value <= 0.0:
+            raise AssertionError(f"stored priority is not positive-finite: {value}")
+
+
+def test_is_weights_scale_learner_loss() -> None:
+    buffer = _prioritized_buffer()
+    batch = buffer.sample_sequences(batch_size=2, seq_len=2, burn_in=1, seed=0)
+    ones = dataclasses.replace(batch, is_weights=np.ones_like(batch.is_weights))
+    halved = dataclasses.replace(batch, is_weights=0.5 * np.ones_like(batch.is_weights))
+
+    m_full = _prioritized_learner().train_step(ones)
+    m_half = _prioritized_learner().train_step(halved)
+    if abs(m_half["loss"] - 0.5 * m_full["loss"]) > 1e-6:
+        raise AssertionError(
+            f"IS weights did not scale learner loss: {m_half['loss']} vs {m_full['loss']}"
+        )
+
+
+def test_double_q_and_priority_eta_metrics_present() -> None:
+    buffer = _prioritized_buffer()
+    batch = buffer.sample_sequences(batch_size=2, seq_len=2, burn_in=1, seed=1)
+    learner = _prioritized_learner(double_q=True)
+    metrics = learner.train_step(batch, replay_buffer=buffer)
+    expected = [
+        "loss",
+        "weighted_loss",
+        "mean_td_error",
+        "max_td_error",
+        "mean_priority",
+        "mean_is_weight",
+        "grad_norm",
+        "valid_steps",
+        "target_synced",
+        "learner_step",
+        "double_q",
+        "prioritized",
+        "priority_eta",
+    ]
+    for key in expected:
+        if key not in metrics:
+            raise AssertionError(f"missing metric {key}")
+        if not torch.isfinite(torch.tensor(metrics[key])):
+            raise AssertionError(f"metric {key} not finite: {metrics[key]}")
+    if metrics["double_q"] != 1.0:
+        raise AssertionError("double_q metric should be 1.0 when enabled")
+    if metrics["priority_eta"] != 0.8:
+        raise AssertionError("priority_eta metric should reflect config")
+
+
 def main() -> int:
     tests = [
         test_create_learner_without_crash,
@@ -282,6 +372,9 @@ def main() -> int:
         test_no_nan_in_loss_or_gradients,
         test_soft_update_target_smoke,
         test_learner_does_not_read_raw_observation_fields,
+        test_prioritized_train_step_updates_buffer_priorities,
+        test_is_weights_scale_learner_loss,
+        test_double_q_and_priority_eta_metrics_present,
     ]
     print("=== test_learner_r2d2_v2 ===")
     for test in tests:

@@ -35,6 +35,12 @@ class TrainConfigV2:
     n_step: int = 3
     learning_rate: float = 1.0e-4
     target_update_interval: int = 10
+    double_q: bool = False
+    prioritized_replay: bool = False
+    priority_alpha: float = 0.6
+    priority_beta: float = 0.4
+    priority_epsilon: float = 1.0e-6
+    priority_eta: float = 0.9
     seed: int = 0
     device: str = "cpu"
     save_checkpoint: Path | None = None
@@ -60,6 +66,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--learning-rate", type=float, default=1.0e-4)
     parser.add_argument("--target-update-interval", type=int, default=10)
+    parser.add_argument("--double-q", action="store_true")
+    parser.add_argument("--prioritized-replay", action="store_true")
+    parser.add_argument("--priority-alpha", type=float, default=0.6)
+    parser.add_argument("--priority-beta", type=float, default=0.4)
+    parser.add_argument("--priority-epsilon", type=float, default=1.0e-6)
+    parser.add_argument("--priority-eta", type=float, default=0.9)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--save-checkpoint", type=str, default=None)
@@ -81,6 +93,12 @@ def config_from_args(args: argparse.Namespace) -> TrainConfigV2:
         n_step=int(args.n_step),
         learning_rate=float(args.learning_rate),
         target_update_interval=int(args.target_update_interval),
+        double_q=bool(args.double_q),
+        prioritized_replay=bool(args.prioritized_replay),
+        priority_alpha=float(args.priority_alpha),
+        priority_beta=float(args.priority_beta),
+        priority_epsilon=float(args.priority_epsilon),
+        priority_eta=float(args.priority_eta),
         seed=int(args.seed),
         device=str(args.device),
         save_checkpoint=save_checkpoint,
@@ -97,6 +115,10 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
         config.dataset,
         n_step=config.n_step,
         gamma=config.gamma,
+        prioritized=config.prioritized_replay,
+        priority_alpha=config.priority_alpha,
+        priority_beta=config.priority_beta,
+        priority_epsilon=config.priority_epsilon,
     )
     _validate_replay_size(replay, config.batch_size)
 
@@ -110,6 +132,8 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
             n_step=config.n_step,
             learning_rate=config.learning_rate,
             target_update_interval=config.target_update_interval,
+            double_q=config.double_q,
+            priority_eta=config.priority_eta,
             device=config.device,
         ),
     )
@@ -122,7 +146,7 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
             burn_in=config.burn_in,
             seed=config.seed + step,
         )
-        final_metrics = learner.train_step(batch)
+        final_metrics = learner.train_step(batch, replay_buffer=replay)
         print(
             "train_r2d2_v2 "
             f"step={step + 1}/{config.steps} "
@@ -178,6 +202,14 @@ def _validate_config(config: TrainConfigV2) -> None:
         raise ValueError("learning_rate must be positive")
     if config.target_update_interval <= 0:
         raise ValueError("target_update_interval must be positive")
+    if config.priority_alpha < 0.0:
+        raise ValueError("priority_alpha must be >= 0")
+    if config.priority_beta < 0.0:
+        raise ValueError("priority_beta must be >= 0")
+    if config.priority_epsilon <= 0.0:
+        raise ValueError("priority_epsilon must be positive")
+    if not 0.0 <= config.priority_eta <= 1.0:
+        raise ValueError("priority_eta must be between 0 and 1")
 
 
 def _validate_replay_size(replay: Any, batch_size: int) -> None:

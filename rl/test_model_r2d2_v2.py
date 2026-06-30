@@ -251,6 +251,48 @@ def test_padding_positions_masked() -> None:
         raise AssertionError("padding positions were not masked")
 
 
+def _slice_time(
+    tensors: model_r2d2_v2.BatchTensorsV2,
+    start: int,
+    stop: int,
+) -> model_r2d2_v2.BatchTensorsV2:
+    sl = slice(start, stop)
+    return model_r2d2_v2.BatchTensorsV2(
+        public_features=tensors.public_features[:, sl],
+        private_memory_features=tensors.private_memory_features[:, sl],
+        event_features=tensors.event_features[:, sl],
+        slot_stability_features=tensors.slot_stability_features[:, sl],
+        action_type_mask=tensors.action_type_mask[:, sl],
+        argument_masks={name: mask[:, sl] for name, mask in tensors.argument_masks.items()},
+        legacy_action_mask=(
+            None if tensors.legacy_action_mask is None else tensors.legacy_action_mask[:, sl]
+        ),
+        burn_in_mask=tensors.burn_in_mask[:, sl],
+        train_mask=tensors.train_mask[:, sl],
+        padding_mask=tensors.padding_mask[:, sl],
+    )
+
+
+def test_burn_in_complete_hidden_state_continuity() -> None:
+    # Burn-in-complete strategy: feeding [burn_in | train] in one pass must equal
+    # feeding burn-in first, then the train chunk with the carried hidden state.
+    # This locks "hidden state initialised by burn-in, never reset mid-sequence".
+    batch = _batch(batch_size=2, seq_len=2, burn_in=1)
+    burn_in = int(batch.metadata["burn_in"])
+    model = _model()
+    tensors = model_r2d2_v2.batch_to_tensors(batch)
+
+    full = model(tensors, apply_masks=False)
+    warm = model(_slice_time(tensors, 0, burn_in), apply_masks=False)
+    cont = model(
+        _slice_time(tensors, burn_in, tensors.public_features.shape[1]),
+        hidden_state=warm.hidden_state,
+        apply_masks=False,
+    )
+    if not torch.allclose(cont.action_type_q, full.action_type_q[:, burn_in:], atol=1e-5):
+        raise AssertionError("hidden state was reset or burn-in did not warm the state")
+
+
 def test_batch_to_tensors_and_no_raw_input() -> None:
     batch = _batch(batch_size=1)
     tensors = model_r2d2_v2.batch_to_tensors(batch)
@@ -271,6 +313,7 @@ def main() -> int:
         test_argument_masks_applied,
         test_apply_masks_false_keeps_finite_values,
         test_padding_positions_masked,
+        test_burn_in_complete_hidden_state_continuity,
         test_batch_to_tensors_and_no_raw_input,
     ]
     print("=== test_model_r2d2_v2 ===")

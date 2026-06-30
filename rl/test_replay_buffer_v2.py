@@ -267,6 +267,90 @@ def test_stats_and_clear() -> None:
         raise AssertionError("clear did not empty buffer")
 
 
+def test_uniform_batch_has_no_is_weights() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2()
+    buffer.add_episode(_episode("ep", 4))
+    batch = buffer.sample_sequences(batch_size=2, seq_len=2, burn_in=1, seed=0)
+    if batch.is_weights is not None:
+        raise AssertionError("uniform sampling should not produce is_weights")
+    if batch.sample_indices is None or len(batch.sample_indices) != 2:
+        raise AssertionError("sample_indices should be present even in uniform mode")
+    if batch.legal_actions_v2 is None:
+        raise AssertionError("legal_actions_v2 should be populated from transitions")
+
+
+def test_prioritized_is_weights_present_and_finite() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True)
+    buffer.add_episode(_episode("ep", 5))
+    batch = buffer.sample_sequences(batch_size=4, seq_len=2, burn_in=1, seed=0)
+    if batch.is_weights is None or batch.is_weights.shape != (4,):
+        raise AssertionError(f"bad is_weights shape: {batch.is_weights}")
+    import numpy as np
+
+    if not np.all(np.isfinite(batch.is_weights)):
+        raise AssertionError("is_weights contains non-finite values")
+    if np.any(batch.is_weights <= 0.0):
+        raise AssertionError("is_weights must be strictly positive")
+    if abs(float(batch.is_weights.max()) - 1.0) > 1e-6:
+        raise AssertionError("is_weights should be normalized so max == 1")
+
+
+def test_prioritized_sampling_favors_high_priority() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2(
+        prioritized=True,
+        priority_alpha=1.0,
+        priority_beta=0.0,
+    )
+    buffer.add_episode([_transition("hi", 0, done=True)])
+    buffer.add_episode([_transition("lo", 0, done=True)])
+    buffer.update_priorities([("hi", 0), ("lo", 0)], [100.0, 0.0])
+    counts = {"hi": 0, "lo": 0}
+    for seed in range(40):
+        batch = buffer.sample_sequences(batch_size=8, seq_len=1, burn_in=0, seed=seed)
+        for key in batch.sample_indices:
+            counts[key[0]] += 1
+    if counts["hi"] <= counts["lo"]:
+        raise AssertionError(f"prioritized sampling did not favor high priority: {counts}")
+
+
+def test_update_priorities_floors_and_validates() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True, priority_epsilon=1e-4)
+    buffer.add_episode([_transition("ep", 0, done=True)])
+    buffer.update_priorities([("ep", 0)], [0.0])
+    if buffer._priorities[("ep", 0)] <= 0.0:
+        raise AssertionError("priority was not floored above zero")
+    # Sampling still works with a floored (non-zero) priority.
+    buffer.sample_sequences(batch_size=1, seq_len=1, burn_in=0, seed=0)
+    try:
+        buffer.update_priorities([("ep", 0)], [1.0, 2.0])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("length mismatch was not rejected")
+
+
+def test_prioritized_preserves_masks_and_no_episode_crossing() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True)
+    buffer.add_episode(_episode("ep-a", 2))
+    buffer.add_episode(_episode("ep-b", 2))
+    batch = buffer.sample_sequences(batch_size=20, seq_len=3, burn_in=1, seed=3)
+    if batch.burn_in_mask.shape != batch.train_mask.shape != batch.padding_mask.shape:
+        raise AssertionError("mask shapes diverged under prioritized sampling")
+    for row in batch.episode_ids:
+        seen = {episode_id for episode_id in row if episode_id is not None}
+        if len(seen) > 1:
+            raise AssertionError(f"prioritized sequence crossed episodes: {row}")
+
+
+def test_capacity_eviction_cleans_priorities() -> None:
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True, capacity=2)
+    buffer.add_episode(_episode("ep-a", 2))
+    buffer.update_priorities([("ep-a", 0)], [5.0])
+    buffer.add_episode(_episode("ep-b", 2))  # evicts ep-a transitions
+    if any(key[0] == "ep-a" for key in buffer._priorities):
+        raise AssertionError("evicted episode priorities were not cleaned up")
+
+
 def main() -> int:
     tests = [
         test_add_transition_increases_size,
@@ -280,6 +364,12 @@ def main() -> int:
         test_feature_shapes_match_encoding_v2,
         test_anti_leak_rejects_forbidden_keys,
         test_stats_and_clear,
+        test_uniform_batch_has_no_is_weights,
+        test_prioritized_is_weights_present_and_finite,
+        test_prioritized_sampling_favors_high_priority,
+        test_update_priorities_floors_and_validates,
+        test_prioritized_preserves_masks_and_no_episode_crossing,
+        test_capacity_eviction_cleans_priorities,
     ]
     print("=== test_replay_buffer_v2 ===")
     for test in tests:
