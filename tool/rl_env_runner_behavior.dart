@@ -387,8 +387,6 @@ class RlEnv {
     return count;
   }
 
-  int _p0UnknownSlotCount() => _rlSeat.hand.length - _p0ValidKnownSlotCount();
-
   int? _bestSwapTargetIndex(PlayingCard? drawn) {
     if (drawn == null || _rlSeat.hand.isEmpty) return null;
     var bestIndex = 0;
