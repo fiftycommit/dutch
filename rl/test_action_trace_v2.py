@@ -113,6 +113,7 @@ def _record(level: str, *, top_k: int | None = None) -> dict[str, Any]:
         legal_action_v2=legal,
         obs_raw=obs,
         reward=0.0,
+        reward_components={"principal": 0.0, "total": 0.0},
         done=False,
         episode_id="ep",
         step_index=3,
@@ -165,6 +166,8 @@ def test_selected_record_fields() -> None:
         raise AssertionError(f"greedy selected wrong: {rec['selected_action_v2']}")
     if rec["legal_action_count"] != 4:
         raise AssertionError("legal_action_count wrong")
+    if rec["reward_components"] != {"principal": 0.0, "total": 0.0}:
+        raise AssertionError(f"reward components missing: {rec['reward_components']}")
 
 
 def test_legal_scores_lists_all_actions() -> None:

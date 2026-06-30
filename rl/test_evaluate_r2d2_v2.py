@@ -24,6 +24,7 @@ class FakeTransition:
     action_v2: dict[str, Any] | None = None
     obs_raw: dict[str, Any] = field(default_factory=dict)
     info: dict[str, Any] = field(default_factory=dict)
+    reward_components: dict[str, float] | None = None
 
 
 @dataclass
@@ -62,12 +63,14 @@ def _records(prefix: str, reward: float = 1.0) -> list[FakeRecord]:
                     action_v2={"action_type": "call_dutch"} if prefix == "model" else None,
                     obs_raw={"recent_events": [{"event_type": "dutch_call"}]},
                     info={},
+                    reward_components={"principal": reward, "total": reward},
                 ),
                 FakeTransition(
                     reward=reward + 1.0,
                     action_v2={"action_type": "pass_tick"},
                     obs_raw={},
                     info={},
+                    reward_components={"principal": reward + 1.0, "total": reward + 1.0},
                 ),
             ],
             completed=True,
@@ -247,6 +250,8 @@ def test_metrics_aggregate_steps_rewards_and_missing_wins() -> None:
         raise AssertionError(f"episode metrics wrong: {metrics}")
     if metrics.total_steps != 2 or metrics.total_reward != 5.0:
         raise AssertionError(f"step/reward metrics wrong: {metrics}")
+    if metrics.total_reward_components != {"principal": 5.0, "total": 5.0}:
+        raise AssertionError(f"reward component metrics wrong: {metrics.total_reward_components}")
     if metrics.dutch_calls != 2:
         raise AssertionError(f"dutch call count wrong: {metrics.dutch_calls}")
     if metrics.wins is not None:

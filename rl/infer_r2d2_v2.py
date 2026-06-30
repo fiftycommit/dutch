@@ -22,6 +22,7 @@ import collect_rollouts_v2
 import encoding_v2
 import model_r2d2_v2
 import policy_r2d2_v2
+import reward_v2
 from runner_process import RunnerProcess
 import rollout_v2
 import schedules_v2
@@ -153,7 +154,11 @@ def infer_episode_v2(
             )
 
         done = bool(next_obs.get("done"))
-        reward = _reward_from_message(next_obs)
+        reward_components = reward_v2.parse_reward_components_v2(
+            next_obs,
+            action_v2=dict(selected.action_v2),
+        )
+        reward = reward_components.total
 
         if trace_enabled:
             record = action_trace_v2.build_action_trace_record(
@@ -163,6 +168,7 @@ def infer_episode_v2(
                 legal_action_v2=obs.get("legal_action_v2") or {},
                 obs_raw=obs,
                 reward=reward,
+                reward_components=reward_components.to_dict(),
                 done=done,
                 episode_id=episode_id,
                 step_index=step_index,
@@ -192,6 +198,7 @@ def infer_episode_v2(
                 },
                 episode_id=episode_id,
                 step_index=step_index,
+                reward_components=reward_components.to_dict(),
             )
         )
 
@@ -355,11 +362,11 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _reward_from_message(msg: dict[str, Any]) -> float:
-    rewards = msg.get("rewards")
-    if isinstance(rewards, dict):
-        return float(rewards.get("principal", msg.get("reward", 0.0)))
-    return float(msg.get("reward", 0.0))
+def _reward_from_message(
+    msg: dict[str, Any],
+    action_v2: dict[str, Any] | None = None,
+) -> float:
+    return reward_v2.reward_from_message_v2(msg, action_v2=action_v2)
 
 
 if __name__ == "__main__":

@@ -140,6 +140,7 @@ def build_action_trace_record(
     legal_action_v2: dict[str, Any],
     obs_raw: dict[str, Any],
     reward: float,
+    reward_components: dict[str, float] | None = None,
     done: bool,
     episode_id: str,
     step_index: int,
@@ -167,6 +168,11 @@ def build_action_trace_record(
         "selected_score": float(selected.score),
         "selected_is_random": bool(selected.is_random),
         "reward": float(reward),
+        "reward_components": (
+            None
+            if reward_components is None
+            else {key: float(value) for key, value in reward_components.items()}
+        ),
         "done": bool(done),
         "phase": _phase(obs_raw),
         "micro_phase": _micro_phase(obs_raw),

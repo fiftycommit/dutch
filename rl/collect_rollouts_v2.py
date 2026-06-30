@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import encoding_v2
+import reward_v2
 from runner_process import RunnerProcess
 import rollout_v2
 from rollout_v2 import TransitionV2
@@ -85,6 +86,11 @@ def collect_episode_v2(
             )
 
         done = bool(next_obs.get("done"))
+        action_v2 = _copy_action_v2(action_entry.get("action_v2"))
+        reward_components = reward_v2.parse_reward_components_v2(
+            next_obs,
+            action_v2=action_v2,
+        )
         next_encoded = (
             None if done else encoding_v2.encode_observation_v2(next_obs)
         )
@@ -92,15 +98,16 @@ def collect_episode_v2(
             TransitionV2(
                 obs_raw=obs,
                 obs_encoded_v2=encoded,
-                action_v2=_copy_action_v2(action_entry.get("action_v2")),
+                action_v2=action_v2,
                 legacy_action_id=_legacy_action_id(action_entry),
-                reward=_reward_from_message(next_obs),
+                reward=reward_components.total,
                 done=done,
                 next_obs_raw=next_obs,
                 next_obs_encoded_v2=next_encoded,
                 info=dict(next_obs.get("info") or {}),
                 episode_id=episode_id,
                 step_index=step_index,
+                reward_components=reward_components.to_dict(),
             )
         )
 
@@ -225,11 +232,11 @@ def _assert_action_entry_is_legal(
     raise ValueError(f"action not present in legal_action_v2.actions: {action_entry!r}")
 
 
-def _reward_from_message(msg: dict[str, Any]) -> float:
-    rewards = msg.get("rewards")
-    if isinstance(rewards, dict):
-        return float(rewards.get("principal", msg.get("reward", 0.0)))
-    return float(msg.get("reward", 0.0))
+def _reward_from_message(
+    msg: dict[str, Any],
+    action_v2: dict[str, Any] | None = None,
+) -> float:
+    return reward_v2.reward_from_message_v2(msg, action_v2=action_v2)
 
 
 def _copy_action_v2(value: Any) -> dict[str, Any] | None:

@@ -195,6 +195,7 @@ def _transition_from_payload(
         info=info,
         episode_id=str(payload["episode_id"]),
         step_index=int(payload["step_index"]),
+        reward_components=_reward_components(payload.get("reward_components")),
     )
 
 
@@ -237,6 +238,14 @@ def _legacy_action_id(value: Any) -> int | None:
     if not isinstance(value, int):
         raise ValueError("legacy_action_id must be an integer or null")
     return int(value)
+
+
+def _reward_components(value: Any) -> dict[str, float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("reward_components must be an object or null")
+    return {str(key): float(raw) for key, raw in value.items()}
 
 
 def _assert_no_forbidden_keys(

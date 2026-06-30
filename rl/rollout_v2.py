@@ -16,6 +16,7 @@ from typing import Any, Callable, Protocol
 
 import encoding_v2
 from encoding_v2 import EncodedObservationV2
+import reward_v2
 
 
 ActionPolicyV2 = Callable[[dict[str, Any], random.Random], dict[str, Any]]
@@ -47,6 +48,7 @@ class TransitionV2:
     info: dict[str, Any]
     episode_id: str
     step_index: int
+    reward_components: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -133,7 +135,11 @@ def record_episode_v2(
             )
 
         done = bool(next_obs.get("done"))
-        reward = _reward_from_message(next_obs)
+        reward_components = reward_v2.parse_reward_components_v2(
+            next_obs,
+            action_v2=_copy_action_v2(action_entry.get("action_v2")),
+        )
+        reward = reward_components.total
         next_encoded = (
             None if done else encoding_v2.encode_observation_v2(next_obs)
         )
@@ -151,6 +157,7 @@ def record_episode_v2(
                 info=dict(next_obs.get("info") or {}),
                 episode_id=episode_key,
                 step_index=step_index,
+                reward_components=reward_components.to_dict(),
             )
         )
 
@@ -224,14 +231,15 @@ def transition_to_jsonable(transition: TransitionV2) -> dict[str, Any]:
         "done": transition.done,
         "next_obs_raw": transition.next_obs_raw,
         "info": transition.info,
+        "reward_components": transition.reward_components,
     }
 
 
-def _reward_from_message(msg: dict[str, Any]) -> float:
-    rewards = msg.get("rewards")
-    if isinstance(rewards, dict):
-        return float(rewards.get("principal", msg.get("reward", 0.0)))
-    return float(msg.get("reward", 0.0))
+def _reward_from_message(
+    msg: dict[str, Any],
+    action_v2: dict[str, Any] | None = None,
+) -> float:
+    return reward_v2.reward_from_message_v2(msg, action_v2=action_v2)
 
 
 def _copy_action_v2(value: Any) -> dict[str, Any] | None:

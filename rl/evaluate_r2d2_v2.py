@@ -59,6 +59,8 @@ class PolicyMetricsV2:
     average_episode_length: float
     total_reward: float
     average_reward: float
+    total_reward_components: dict[str, float]
+    average_reward_components: dict[str, float]
     dutch_calls: int
     successful_dutch_calls: int | None
     failed_dutch_calls: int | None
@@ -236,6 +238,7 @@ def metrics_from_records(records: list[Any]) -> PolicyMetricsV2:
     ]
     total_steps = len(transitions)
     total_reward = sum(float(getattr(transition, "reward", 0.0)) for transition in transitions)
+    total_reward_components = _sum_reward_components(transitions)
     terminal_infos = _terminal_infos(records)
     wins = _extract_wins(terminal_infos)
     losses = _extract_losses(terminal_infos)
@@ -251,6 +254,11 @@ def metrics_from_records(records: list[Any]) -> PolicyMetricsV2:
         average_steps=(float(total_steps) / episodes if episodes else 0.0),
         total_reward=float(total_reward),
         average_reward=(float(total_reward) / episodes if episodes else 0.0),
+        total_reward_components=total_reward_components,
+        average_reward_components={
+            key: (value / episodes if episodes else 0.0)
+            for key, value in total_reward_components.items()
+        },
         dutch_calls=_count_dutch_calls(transitions),
         successful_dutch_calls=successful_dutch,
         failed_dutch_calls=failed_dutch,
@@ -340,6 +348,18 @@ def _count_dutch_calls(transitions: list[Any]) -> int:
             if isinstance(event, dict) and event.get("event_type") == "dutch_call":
                 count += 1
     return count
+
+
+def _sum_reward_components(transitions: list[Any]) -> dict[str, float]:
+    totals: dict[str, float] = {}
+    for transition in transitions:
+        components = getattr(transition, "reward_components", None)
+        if not isinstance(components, dict):
+            continue
+        for key, value in components.items():
+            if isinstance(value, (int, float)):
+                totals[str(key)] = totals.get(str(key), 0.0) + float(value)
+    return totals
 
 
 def _terminal_infos(records: list[Any]) -> list[dict[str, Any]]:
@@ -483,6 +503,8 @@ def _crash_metrics(episodes: int) -> PolicyMetricsV2:
         average_episode_length=0.0,
         total_reward=0.0,
         average_reward=0.0,
+        total_reward_components={},
+        average_reward_components={},
         dutch_calls=0,
         successful_dutch_calls=None,
         failed_dutch_calls=None,

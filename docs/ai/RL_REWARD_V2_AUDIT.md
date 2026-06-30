@@ -4,26 +4,73 @@ Audit date: 2026-06-30 (Codex)
 Scope: current reward emitted by the v2 Dart runner and the reward actually
 stored/optimized by the R2D2 v2 Python stack.
 
-This is an audit only. No reward/gameplay code was changed.
+Patch status: implemented in `fix(rl): scalarize v2 rewards` after this audit.
+Gameplay code was not changed.
 
 ## Summary
 
-- The current v2 reward is **not healthy for retrain**.
-- Can we train now? **No.**
-- Main reason: the only reward actually stored in `TransitionV2.reward` is
-  `rewards.principal`. Therefore R2D2 currently learns almost exclusively from
-  sparse terminal rank. The Dart `destab` and `win_bonus` components are emitted
-  but ignored by `rollout_v2`, `collect_rollouts_v2`, and `infer_r2d2_v2`.
-- H2 is confirmed, and is broader than first phrased: false matches have no
-  immediate RL penalty, successful matches have no immediate RL signal, and even
-  the documented terminal `win_bonus` is not consumed by the v2 training path.
+- The pre-patch v2 reward was **not healthy for retrain**.
+- Can we train now? **After the patch tests pass, collection/retrain can resume
+  from scratch; do not use the old checkpoint.**
+- Pre-patch cause: the only reward stored in `TransitionV2.reward` was
+  `rewards.principal`. R2D2 therefore learned almost exclusively from sparse
+  terminal rank. Dart `destab` and `win_bonus` were emitted but ignored by
+  `rollout_v2`, `collect_rollouts_v2`, and `infer_r2d2_v2`.
+- H2 was confirmed and patched: false matches now receive an immediate scalar
+  reward penalty via `rl/reward_v2.py`.
 - The terminal rank reward does use the real final ranking function, so a failed
   Dutch caller is ranked last by the game model. That part is mechanically
   faithful, but the reward does not make the Dutch decision explicit enough.
-- Recommendation: patch reward composition/tests before any collection or
-  training, then retrain **from scratch**. Do not fine-tune the old checkpoint.
+- Recommendation: collect new data only after this patch; retrain **from
+  scratch**. Do not fine-tune the old checkpoint.
 
-## Current reward map
+## Implemented Patch
+
+Shared scalarization lives in `rl/reward_v2.py` and is used by:
+
+- `rl/rollout_v2.py`
+- `rl/collect_rollouts_v2.py`
+- `rl/infer_r2d2_v2.py`
+- `rl/dataset_v2.py` (JSONL roundtrip for components)
+- `rl/evaluate_r2d2_v2.py` (reward total + component metrics)
+- `rl/action_trace_v2.py` (optional reward components in traces)
+
+Exact formula:
+
+```text
+reward_total =
+  principal
+  + win_bonus
+  + clip(destab_raw, -2.0, 2.0) / 256.0
+  + false_match_penalty
+  + successful_match
+```
+
+Constants:
+
+| Constant | Value | Reason |
+|---|---:|---|
+| `FALSE_MATCH_PENALTY_REWARD` | `-0.05` | Visible immediate cost for match-spam, smaller than terminal rank/win signal. |
+| `SUCCESSFUL_MATCH_REWARD` | `0.0` | Good match is a means, not the objective; avoids match-count reward hacking. |
+| `DESTAB_SCALE` | `1/256` | Matches the historical bounded dense helper scale. |
+| `DESTAB_CAP` | `2.0` | Keeps dense shaping small (`<= 0.0078125` per decision). |
+
+False-match shaping is applied only when:
+
+- selected `action_v2.action_type == "match"`;
+- the emitted runner observation contains a current-step public event
+  `event_type == "match_failure_penalty"`;
+- `actor == "p0"`.
+
+`recent_events` is a rolling buffer, so `reward_v2` filters on
+`event["step"] == msg["step"]` to avoid reapplying old penalties. Bot false
+matches during `pass_tick` are not charged to p0.
+
+`TransitionV2.reward` now stores `reward_total`. `TransitionV2.reward_components`
+stores the scalar components for debugging, JSONL roundtrip, evaluation and
+trace reporting.
+
+## Pre-Patch Reward Map
 
 | Event / condition | Current reward | Source file/line | Intended effect | Risk |
 |---|---:|---|---|---|
@@ -181,11 +228,10 @@ Implementation shape:
 
 ## Recommendation
 
-- Patch reward now, but in a **separate code commit** after this audit.
-- Do not collect new data or train before the patch and tests.
+- Reward patch implemented. Do not collect new data or train unless the patch
+  tests are green in the target environment.
 - Retrain from scratch after patch. Do not fine-tune
   `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt`.
-- First reward patch should be conservative: consume terminal `win_bonus`, add
-  an explicit false-match penalty, keep successful-match reward at zero or tiny,
-  and add composition tests. Delay any `destab` reactivation until the core
-  win/rank/Dutch/false-match behavior is stable in traces.
+- The implemented patch is conservative: it consumes terminal `win_bonus`, adds
+  an explicit false-match penalty, keeps successful-match reward at zero, clips
+  and scales `destab`, and adds composition tests.

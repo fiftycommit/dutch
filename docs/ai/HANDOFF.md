@@ -13,7 +13,7 @@ Le projet Dutch'78 reste en phase 2 RL. L'AgentInterface v2 (faits publics, mém
 
 Le cœur R2D2 v2 (PER, IS weights, update priorities, Double Q factorisé, n-step, burn-in complet), les schedules beta/epsilon, l'export de métriques d'entraînement, et un logger + analyseur de traces action-level sont en place et testés (commits `010751e`, `8d42d87`, `de7d21f`, `786a791`, `738b153`).
 
-> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT POUR L'INSTANT.** Deux raisons : (1) le runner avait des BLOCKERs de fidélité (corrigés, cf. ci-dessous) ; (2) le reward v2 ne pénalise pas assez les faux matchs (**H2** de l'audit), ce qui pousse l'agent au match-spam — à revoir AVANT tout retrain. Audit reward actuel : `docs/ai/RL_REWARD_V2_AUDIT.md` (`2026-06-30`, Codex). Constat important : Dart émet `principal` + `destab` + `win_bonus`, mais la pile R2D2 v2 Python stocke/optimise actuellement seulement `principal`.
+> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT SUR L'ANCIEN CHECKPOINT.** Le runner avait des BLOCKERs de fidélité (corrigés) et l'ancien reward v2 ne pénalisait pas les faux matchs (**H2**, corrigé par `fix(rl): scalarize v2 rewards`). Audit/patch reward : `docs/ai/RL_REWARD_V2_AUDIT.md` (`2026-06-30`, Codex). Le reward R2D2 v2 est maintenant scalarisé côté Python via `rl/reward_v2.py` : `principal + win_bonus + clip(destab, ±2)/256 + false_match_penalty + successful_match(0)`.
 
 > ⚠️ **L'ancien checkpoint `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt` a été entraîné sur le runner pré-fix et NE DOIT PAS servir de point de départ sérieux** (ni base de fine-tune). Il a appris une policy dégénérée match-heavy et finit même PIRE que random au score final post-fix. Retrain depuis zéro recommandé.
 
@@ -29,8 +29,8 @@ Avant tout cela, deux commits avaient stabilisé l'interface : `8fa49fa` (reacti
 
 ## Objectif actuel
 
-Le cœur R2D2 v2 et le runner corrigé sont en place. **Avant tout nouveau training**, la prochaine étape est de **patcher le reward shaping v2 après audit H2** : faux match, match réussi, Dutch, score final/rang — l'agent fait du match-spam faute de signal pénalisant les faux matchs coûteux. L'audit `docs/ai/RL_REWARD_V2_AUDIT.md` confirme aussi que `win_bonus` et `destab` sont émis par Dart mais ignorés par les extracteurs R2D2 v2 (`rollout_v2`, `collect_rollouts_v2`, `infer_r2d2_v2`), qui ne gardent que `rewards.principal`. Séquence recommandée :
-1. Patch reward v2 conservateur + tests (faux match pénalisé, `win_bonus` consommé ou explicitement désactivé, scalarisation unique côté Python).
+Le cœur R2D2 v2, le runner corrigé et le patch reward v2 sont en place. **Avant tout nouveau training**, relancer les tests de garde-fou puis collecter des données neuves sur le runner corrigé avec le reward scalarisé. Séquence recommandée :
+1. Revalider `test_reward_v2.py`, les tests v2 ciblés et `test_roundtrip.py`.
 2. Collecte neuve sur le runner corrigé (idéalement epsilon-greedy, pas pure random).
 3. **Retrain depuis zéro** (ne pas fine-tune l'ancien checkpoint, biaisé par le runner pré-fix).
 4. Évaluation + traces post-train.
@@ -318,20 +318,19 @@ Supprimés (ne plus référencer) :
 
 ## Prochaine étape immédiate
 
-Le cœur R2D2 v2 et ses schedules sont en place, et le runner est stable après le
-fix de fidélité. Le prochain pas logique n'est plus un run : c'est un **patch
-reward v2 testé** à partir de `docs/ai/RL_REWARD_V2_AUDIT.md`.
+Le cœur R2D2 v2, ses schedules, le runner stable et le reward scalarisé sont en
+place. Le prochain pas logique est une **collecte neuve contrôlée** puis un
+retrain from scratch, après revalidation locale des tests.
 
 Plan recommandé :
-1. Ajouter une scalarisation reward unique côté Python v2, partagée par
-   `rollout_v2`, `collect_rollouts_v2`, `infer_r2d2_v2` et les traces.
-2. Ajouter/émettre une pénalité immédiate de faux match, assez visible pour
-   éviter match-spam mais inférieure au signal terminal victoire/défaite.
-3. Décider explicitement si `win_bonus` est consommé (recommandé) ou retiré de la
-   documentation, puis tester ce choix.
-4. Garder le bon match à `0` ou à un bonus minuscule : c'est un moyen, pas le but.
-5. Ajouter les tests Dart/Python listés dans `docs/ai/RL_REWARD_V2_AUDIT.md`.
-6. Ensuite seulement : collecte neuve, retrain from scratch, évaluation + traces.
+1. Relancer les garde-fous Python v2 (`test_reward_v2.py`, rollout/dataset/eval/
+   infer/trace/analyse, `test_roundtrip.py`) dans l'environnement cible.
+2. Collecter des transitions neuves sur le runner corrigé avec le reward v2
+   scalarisé (idéalement policy epsilon-greedy, dataset hors repo).
+3. Entraîner R2D2 v2 depuis zéro avec `--prioritized-replay --double-q`.
+4. Évaluer vs random/bots, inspecter traces action-level, vérifier en particulier
+   faux matchs, `call_dutch`, rang final et score p0.
+5. Ne jamais fine-tune l'ancien checkpoint pré-fix.
 
 Ne jamais committer dataset/checkpoint/report dans le repo. Ne pas lancer de run long sans validation explicite.
 
@@ -361,6 +360,47 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-30 — Patch reward v2 scalarisé (Codex)
+
+Contexte :
+- Audit `docs/ai/RL_REWARD_V2_AUDIT.md` : R2D2 v2 optimisait seulement
+  `rewards.principal`; `win_bonus`/`destab` étaient ignorés, et faux match avait
+  reward immédiate `0.0`.
+- Objectif : patch reward sans training, sans collecte, sans changement gameplay.
+
+Changement :
+- Ajout de `rl/reward_v2.py` : scalarisation unique
+  `principal + win_bonus + clip(destab_raw, ±2)/256 + false_match_penalty + successful_match`.
+- Constantes : `FALSE_MATCH_PENALTY_REWARD=-0.05`,
+  `SUCCESSFUL_MATCH_REWARD=0.0`, `DESTAB_SCALE=1/256`, `DESTAB_CAP=2.0`.
+- `rollout_v2`, `collect_rollouts_v2`, `infer_r2d2_v2` utilisent désormais cette
+  scalarisation commune. `TransitionV2.reward` stocke `reward_total`.
+- `TransitionV2.reward_components` est sérialisé en JSONL et rechargé par
+  `dataset_v2` pour audit/debug.
+- `evaluate_r2d2_v2` agrège `total_reward_components` et
+  `average_reward_components`.
+- `action_trace_v2` peut écrire `reward_components`; anti-leak scan conservé.
+- Ajout de `rl/test_reward_v2.py` couvrant parsing, scalarisation, faux match,
+  bon match à zéro, terminal/Dutch, roundtrip JSONL, éval et anti-fuite.
+
+Validation :
+- `python3 -m py_compile` ciblé OK.
+- `uv run python test_reward_v2.py` OK.
+- `uv run python test_rollout_v2.py` OK.
+- `uv run python test_collect_rollouts_v2.py` OK.
+- `uv run python test_dataset_v2.py` OK.
+- `uv run python test_evaluate_r2d2_v2.py` OK.
+- `uv run python test_infer_r2d2_v2.py` OK.
+- `uv run python test_action_trace_v2.py` OK.
+- `uv run python test_analyze_action_trace_v2.py` OK.
+- `uv run python test_roundtrip.py` OK (6/6).
+- `git diff --check` OK.
+
+État :
+- Aucun training, aucune collecte persistée, aucun dataset/checkpoint/trace/log/report.
+- Prochaine action : collecte neuve puis retrain from scratch, jamais fine-tune de
+  l'ancien checkpoint pré-fix.
 
 ### 2026-06-30 — Audit reward v2 H2 (Codex)
 
