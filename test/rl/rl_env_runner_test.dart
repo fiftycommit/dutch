@@ -195,6 +195,33 @@ void _setKnownHand(RlEnv env, List<PlayingCard> cards) {
   rl.resetUnknownCardHints();
 }
 
+/// Amène p0 dans une fenêtre de réaction. `preReplaceHand` est la main de p0
+/// AVANT le replace ; le slot 0 est défaussé et devient le top de la défausse.
+/// La carte piochée (`drawnValue`, non-pouvoir) prend le slot 0 après replace.
+/// Retourne l'observation en micro-phase 'reaction'.
+Future<Map<String, dynamic>> _enterP0Reaction(
+  RlEnv env,
+  int seed,
+  List<PlayingCard> preReplaceHand, {
+  String drawnValue = '2',
+}) async {
+  var obs = await env.reset(seed);
+  var guard = 0;
+  while (obs['micro_phase'] != 'dutchOrDraw' &&
+      obs['done'] != true &&
+      guard++ < 80) {
+    obs = await env.step(_deterministicAction(obs));
+  }
+  obs = await env.step({'kind': 'continue_draw'});
+  _setKnownHand(env, preReplaceHand);
+  env.gs.drawnCard = PlayingCard.create('diamonds', drawnValue);
+  obs = await env.step({
+    'kind': 'replace',
+    'params': {'index': 0}
+  });
+  return obs;
+}
+
 /// Pilote un épisode entier avec une policy et renvoie le journal d'observations.
 Future<List<Map<String, dynamic>>> _drive(
   RlEnv env,
@@ -1597,6 +1624,181 @@ void main() {
       expect(obs['micro_phase'], 'power');
       expect(env.pendingPowerValue, 'V');
       expect(env.gs.pendingMatchPowers, isEmpty);
+    });
+  });
+
+  // 2c ────────────────────────────────────────────────────────────────────────
+  group('2c. Fidélité deck vide + bornage réaction', () {
+    test('faux match deck vide recyclable applique la pénalité (jamais no-op)',
+        () async {
+      final env = RlEnv(episodeId: 'deck-empty-recycle', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'), // slot0 -> défaussé -> top '5'
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.topDiscardCard?.value, '5');
+
+      // Deck vide mais défausse recyclable (>1) : insérer au fond pour garder
+      // le top '5'.
+      env.gs.deck.clear();
+      env.gs.discardPile.insert(0, PlayingCard.create('clubs', '3'));
+      env.gs.discardPile.insert(0, PlayingCard.create('clubs', '4'));
+      final handBefore = env.rlSeat.hand.length;
+
+      // slot1 = '9' != top '5' => faux match => pénalité après recycle défausse.
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['type'], 'observation');
+      expect(obs['done'], isNot(true)); // deck vide seul ne termine pas
+      expect(env.rlSeat.hand.length, handBefore + 1); // pénalité réellement appliquée
+      expect(env.gs.topDiscardCard?.value, '5');
+    });
+
+    test('faux match deck vide NON recyclable termine la manche (done=true)',
+        () async {
+      final env = RlEnv(episodeId: 'deck-empty-end', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+
+      // Deck vide ET défausse non recyclable (<=1) : le moteur termine la manche
+      // (GameLogic._refillDeck -> endGame). Pas de no-op.
+      env.gs.deck.clear();
+      while (env.gs.discardPile.length > 1) {
+        env.gs.discardPile.removeAt(0);
+      }
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['done'], isTrue);
+    });
+
+    test('match réussi ne recycle pas le deck (aucune pioche)', () async {
+      final env = RlEnv(episodeId: 'success-no-recycle', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 42, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '5'), // slot1 -> '5' matche le top '5'
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      final deckBefore = env.gs.deck.length;
+      final handBefore = env.rlSeat.hand.length;
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(env.gs.deck.length, deckBefore); // pas de pioche => pas de recycle
+      expect(env.rlSeat.hand.length, handBefore - 1); // carte retirée
+    });
+
+    test('faux match deck plein applique toujours la pénalité (régression)',
+        () async {
+      final env = RlEnv(episodeId: 'false-deck-full', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.gs.deck.isNotEmpty, isTrue);
+      final deckBefore = env.gs.deck.length;
+      final handBefore = env.rlSeat.hand.length;
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(env.rlSeat.hand.length, handBefore + 1); // pénalité
+      expect(env.gs.deck.length, deckBefore - 1); // une carte piochée
+    });
+
+    test('match illégal en état terminal (phase ended) => rejeté', () async {
+      final env = RlEnv(episodeId: 'no-match-when-ended', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+
+      env.gs.phase = GamePhase.ended; // force l'état terminal
+      final err = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(err['type'], 'error');
+      expect(err['code'], 'ILLEGAL_ACTION');
+    });
+
+    test('fenêtre de réaction bornée : le spam de faux match ferme la fenêtre',
+        () async {
+      final env = RlEnv(episodeId: 'reaction-bounded', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '9'), // restera un faux match (top '5')
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+
+      // Deck volumineux : aucune fin de manche avant l'épuisement du budget.
+      env.gs.deck.clear();
+      env.gs.deck.addAll(List.generate(60, (_) => PlayingCard.create('clubs', '3')));
+
+      // Spam de faux match (slot1='9' != top '5'). Le budget de réaction borne
+      // chaque fenêtre : reactionTicks ne doit JAMAIS dépasser le plafond (la
+      // fenêtre se ferme et se réamorce avant). S'il n'était pas borné,
+      // reactionTicks grimperait jusqu'à 40 (un par match).
+      var maxTicksSeen = 0;
+      for (var i = 0; i < 40; i++) {
+        obs = await env.step({
+          'kind': 'match',
+          'params': {'index': 1}
+        });
+        if (obs['done'] == true) break;
+        maxTicksSeen = max(maxTicksSeen, env.reactionTicks);
+      }
+      expect(maxTicksSeen, lessThanOrEqualTo(env.maxHeadlessReactionTicks),
+          reason: 'la fenêtre de réaction a dépassé son budget (boucle)');
+      expect(maxTicksSeen, greaterThan(0));
+    });
+
+    test('régression boucle : policy match-en-boucle termine l\'épisode',
+        () async {
+      final env = RlEnv(episodeId: 'no-infinite-loop', forcedNumPlayers: 6);
+      var obs = await env.reset(0);
+      var steps = 0;
+      while (obs['done'] != true && steps < 3000) {
+        final mp = obs['micro_phase'];
+        Map<String, dynamic> action;
+        if (mp == 'reaction') {
+          action = {
+            'kind': 'match',
+            'params': {'index': 0}
+          };
+        } else if (mp == 'dutchOrDraw') {
+          action = {'kind': 'continue_draw'};
+        } else if (mp == 'postDraw') {
+          action = {'kind': 'discard_drawn'};
+        } else if (mp == 'power') {
+          action = {'kind': 'skip_power'};
+        } else {
+          action = {'kind': 'pass_tick'};
+        }
+        obs = await env.step(action);
+        steps++;
+      }
+      expect(obs['done'], isTrue,
+          reason: 'la policy match-en-boucle ne doit plus boucler à l\'infini');
+      expect(steps, lessThan(3000));
     });
   });
 

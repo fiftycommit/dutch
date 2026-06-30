@@ -142,6 +142,19 @@ const double kBonusMax = 0.30;
 const double kGapSat = 20.0;
 
 // ════════════════════════════════════════════════════════════════════════════
+// Borne logique de la fenêtre de réaction (équivalent headless du timer ~3s).
+// ════════════════════════════════════════════════════════════════════════════
+// Le vrai jeu ferme la fenêtre de réaction sur un timer mural fixe (~3000 ms,
+// `reaction_timer_manager.dart`), indépendamment du nombre de matchs. Le runner
+// headless n'attend pas de temps réel : il borne la fenêtre par un budget
+// déterministe de décisions de réaction de p0. La valeur est volontairement
+// généreuse — une suite de matchs LÉGITIMES est de toute façon bornée par la
+// taille de la main (<= 13), donc ce plafond ne se déclenche QUE sur du spam non
+// progressif (faux matchs en boucle, ré-invitations bot répétées), jamais sur du
+// jeu normal. Le budget se réinitialise à chaque nouvelle fenêtre (`_startReactionPhase`).
+const int _kMaxHeadlessReactionTicks = 16;
+
+// ════════════════════════════════════════════════════════════════════════════
 // Config de joueurs forcée (ÉVAL) : parsing + validation des `options` du reset.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -248,6 +261,9 @@ class RlEnv {
   bool _finished = false;
   RlMicroPhase _micro = RlMicroPhase.dutchOrDraw;
   Map<String, int> _ranks = const {};
+  // Décisions de réaction de p0 consommées dans la fenêtre courante (borne
+  // logique du timer réel ; remis à zéro à l'ouverture de chaque fenêtre).
+  int _reactionTicks = 0;
 
   // ── Signal de déstabilisation (Piste 5), proxy STABLE inter-step ───────────
   // Le proxy = leader courant (BotThreatAnalyzer). On ne compare la menace que
@@ -275,6 +291,8 @@ class RlEnv {
   RlMicroPhase get micro => _micro;
   bool get finished => _finished;
   String? get pendingPowerValue => _gs.specialCardToActivate?.value;
+  int get reactionTicks => _reactionTicks;
+  int get maxHeadlessReactionTicks => _kMaxHeadlessReactionTicks;
 
   // ── Cycle de vie ───────────────────────────────────────────────────────────
 
@@ -292,6 +310,7 @@ class RlEnv {
     _step = 0;
     _finished = false;
     _ranks = const {};
+    _reactionTicks = 0;
     _prevProxyId = null;
     _prevProxyThreat = 0.0;
     _curProxyId = null;
@@ -442,6 +461,17 @@ class RlEnv {
           return _passReactionTickThenMaybeAdvance();
         }
         _applyMatchAndRecord(_rlSeat, params['index'] as int);
+        // FIDÉLITÉ : un match qui épuise la pioche sans défausse recyclable
+        // termine la manche côté moteur (GameLogic.matchCard -> applyPenalty ->
+        // _refillDeck -> endGame). On propage alors `done=true` au lieu de
+        // ré-ouvrir une fenêtre de réaction non progressive.
+        if (_isTerminal()) return _finalize();
+        // Borne logique du timer de réaction : sans cela, un agent qui matche
+        // sans cesse garderait la fenêtre ouverte indéfiniment.
+        _reactionTicks++;
+        if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
+          return _closeReactionWindowAndAdvance();
+        }
         // Rester dans la fenêtre : l'agent peut chaîner après un match réussi,
         // ou observer la pénalité après un faux match avant de passer.
         return _observation();
@@ -524,6 +554,9 @@ class RlEnv {
   /// historique avec le générateur en jouant p0 comme un bot.
   Future<Map<String, dynamic>?> _startReactionPhase() async {
     _gs.phase = GamePhase.reaction;
+    // Nouvelle fenêtre : on réamorce le budget de réaction (équivalent du
+    // redémarrage du timer ~3s côté vrai jeu).
+    _reactionTicks = 0;
     if (!frozenBotMode) {
       _micro = RlMicroPhase.reaction;
       return _observation();
@@ -593,10 +626,25 @@ class RlEnv {
   Future<Map<String, dynamic>> _passReactionTickThenMaybeAdvance() async {
     final physicalTopChanged = await _runBotReactionTick(stopOnTopChange: true);
     if (physicalTopChanged && _gs.phase == GamePhase.reaction) {
+      // Un bot a réagi : p0 est ré-invité, mais la ré-invitation consomme le
+      // budget de fenêtre (sinon des bots qui matchent en boucle la garderaient
+      // ouverte indéfiniment).
+      _reactionTicks++;
+      if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
+        return _closeReactionWindowAndAdvance();
+      }
       _micro = RlMicroPhase.reaction;
       return _observation();
     }
+    return _closeReactionWindowAndAdvance();
+  }
+
+  /// Ferme la fenêtre de réaction et avance : résout les pouvoirs pending, puis
+  /// finalise si une vraie condition de fin est atteinte, sinon passe au joueur
+  /// suivant. Point unique de fermeture (pass_tick, budget épuisé).
+  Future<Map<String, dynamic>> _closeReactionWindowAndAdvance() async {
     if (_gs.phase == GamePhase.reaction) _gs.phase = GamePhase.playing;
+    if (_isTerminal()) return _finalize();
     if (_gs.pendingMatchPowers.isNotEmpty) {
       return _processPendingMatchPowersAfterReaction();
     }
@@ -839,6 +887,8 @@ class RlEnv {
       case RlMicroPhase.reaction:
         if (kind == 'pass_tick' || kind == 'no_match') return true;
         if (kind == 'match') {
+          // Pas de match en état terminal (action non progressive).
+          if (_isTerminal()) return false;
           final i = params['index'];
           return i is int && i >= 0 && i < _rlSeat.hand.length;
         }
@@ -885,6 +935,11 @@ class RlEnv {
         }
         return mask;
       case RlMicroPhase.reaction:
+        // En état terminal (manche finie), on ne propose JAMAIS de match : il
+        // serait non progressif. Seul `pass_tick` (fermeture) reste offert.
+        if (_isTerminal()) {
+          return {'pass_tick': true};
+        }
         return {
           'pass_tick': true,
           // Tous les slots présents sont tentables : l'agent doit apprendre le
