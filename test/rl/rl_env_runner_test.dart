@@ -26,6 +26,20 @@ import '../../tool/rl_env_runner.dart'
     show RlEnv, RlMicroPhase, parseEvalPlayerConfig;
 import '../../tool/ml_dataset_generator.dart' show playOneGame, GeneratorConfig;
 
+const int _testMaxHand = 13;
+const int _testMaxPlayers = 6;
+const int _testCallDutchAction = 0;
+const int _testContinueDrawAction = 1;
+const int _testDiscardDrawnAction = 2;
+const int _testReplaceAction = 4;
+const int _testPower7Action = _testReplaceAction + _testMaxHand;
+const int _testPower10Action = _testPower7Action + _testMaxHand;
+const int _testPowerVAction = _testPower10Action + 5 * _testMaxHand;
+const int _testPowerJokerAction = _testPowerVAction +
+    _testMaxPlayers * _testMaxHand * _testMaxPlayers * _testMaxHand;
+const int _testPassTickAction = _testPowerJokerAction + _testMaxPlayers;
+const int _testMatchAction = _testPassTickAction + 1;
+
 // ── Politiques d'action de test ────────────────────────────────────────────
 
 /// Énumère toutes les actions légales depuis une observation (selon son masque).
@@ -212,6 +226,18 @@ Future<Map<String, dynamic>> _enterPostDraw(RlEnv env, int seed) async {
   return obs;
 }
 
+Future<Map<String, dynamic>> _enterDutchOrDraw(RlEnv env, int seed) async {
+  var obs = await env.reset(seed);
+  var guard = 0;
+  while (obs['done'] != true &&
+      obs['micro_phase'] != 'dutchOrDraw' &&
+      guard++ < 50) {
+    obs = await env.step(_deterministicAction(obs));
+  }
+  expect(obs['micro_phase'], 'dutchOrDraw');
+  return obs;
+}
+
 List<Map<String, dynamic>> _recentEvents(Map<String, dynamic> obs) =>
     (obs['recent_events'] as List? ?? const [])
         .cast<Map>()
@@ -316,6 +342,56 @@ void _expectNoLegalPrivateMemoryLeak(dynamic value) {
   } else if (value is List) {
     for (final child in value) {
       _expectNoLegalPrivateMemoryLeak(child);
+    }
+  }
+}
+
+Map<String, dynamic> _legalActionV2(Map<String, dynamic> obs) =>
+    (obs['legal_action_v2'] as Map).cast<String, dynamic>();
+
+List<Map<String, dynamic>> _legalActionV2Actions(Map<String, dynamic> obs) =>
+    (_legalActionV2(obs)['actions'] as List)
+        .cast<Map>()
+        .map((action) => action.cast<String, dynamic>())
+        .toList();
+
+Map<String, dynamic> _findActionV2(
+  Map<String, dynamic> obs,
+  bool Function(Map<String, dynamic> actionV2) test,
+) =>
+    _legalActionV2Actions(obs).firstWhere((entry) {
+      final actionV2 = (entry['action_v2'] as Map).cast<String, dynamic>();
+      return test(actionV2);
+    });
+
+int _jackActionId(int playerA, int slotA, int playerB, int slotB) =>
+    _testPowerVAction +
+    (((playerA * _testMaxHand + slotA) * _testMaxPlayers + playerB) *
+            _testMaxHand +
+        slotB);
+
+void _expectNoLegalActionV2Leak(dynamic value) {
+  const forbidden = {
+    'card_value',
+    'card_points',
+    'opponent_hand',
+    'true_score',
+    'deck',
+    'kept_card',
+    'drawn_card',
+    'swapped_card',
+    'new_order',
+  };
+  if (value is Map) {
+    for (final key in value.keys) {
+      expect(forbidden, isNot(contains(key)));
+    }
+    for (final child in value.values) {
+      _expectNoLegalActionV2Leak(child);
+    }
+  } else if (value is List) {
+    for (final child in value) {
+      _expectNoLegalActionV2Leak(child);
     }
   }
 }
@@ -1120,6 +1196,196 @@ void main() {
       expect(jsonEncode(obs['legal_private_memory']),
           isNot(contains('new_order')));
       _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_action_v2 : présent et mappe draw/call_dutch', () async {
+      final env = RlEnv(episodeId: 'action-v2-base', forcedNumPlayers: 2);
+      var obs = await _enterDutchOrDraw(env, 48);
+      expect(obs['legal_action_v2'], isA<Map>());
+
+      final callDutch = _findActionV2(
+        obs,
+        (action) => action['action_type'] == 'call_dutch',
+      );
+      final draw = _findActionV2(
+        obs,
+        (action) => action['action_type'] == 'draw',
+      );
+
+      expect(callDutch['legacy_action_id'], _testCallDutchAction);
+      expect(draw['legacy_action_id'], _testContinueDrawAction);
+      expect((_legalActionV2(obs)['available_action_types'] as List),
+          contains('draw'));
+
+      obs = await env.step({
+        'action_v2': {'action_type': 'draw'}
+      });
+      expect(obs['micro_phase'], 'postDraw');
+      _expectNoLegalActionV2Leak(obs['legal_action_v2']);
+    });
+
+    test('legal_action_v2 : post_draw_replace mappe vers action legacy',
+        () async {
+      final env = RlEnv(episodeId: 'action-v2-replace', forcedNumPlayers: 2);
+      final obs = await _enterPostDraw(env, 49);
+
+      final discard = _findActionV2(
+        obs,
+        (action) => action['action_type'] == 'post_draw_discard',
+      );
+      final replace = _findActionV2(
+        obs,
+        (action) =>
+            action['action_type'] == 'post_draw_replace' && action['slot'] == 1,
+      );
+
+      expect(discard['legacy_action_id'], _testDiscardDrawnAction);
+      expect(replace['legacy_action_id'], _testReplaceAction + 1);
+      _expectNoLegalActionV2Leak(obs['legal_action_v2']);
+    });
+
+    test('legal_action_v2 : pass_tick et match mapppent en réaction', () async {
+      final env = RlEnv(episodeId: 'action-v2-reaction', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 50);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('clubs', '5'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+
+      final passTick = _findActionV2(
+        obs,
+        (action) => action['action_type'] == 'pass_tick',
+      );
+      final match = _findActionV2(
+        obs,
+        (action) => action['action_type'] == 'match' && action['slot'] == 1,
+      );
+
+      expect(passTick['legacy_action_id'], _testPassTickAction);
+      expect(match['legacy_action_id'], _testMatchAction + 1);
+
+      obs = await env.step({
+        'action_v2': {'action_type': 'match', 'slot': 1}
+      });
+      expect(obs['type'], 'observation');
+      expect(env.rlSeat.hand.length, 1);
+    });
+
+    test('legal_action_v2 : Joker adversaire légal, self absent/rejeté',
+        () async {
+      final env = RlEnv(episodeId: 'action-v2-joker', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 51);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [PlayingCard.create('spades', 'R')];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      final joker = _findActionV2(
+        obs,
+        (action) =>
+            action['action_type'] == 'joker' &&
+            action['target_player'] == bot.position,
+      );
+      expect(joker['legacy_action_id'], _testPowerJokerAction + bot.position);
+      expect(
+        _legalActionV2Actions(obs).any((entry) {
+          final action = (entry['action_v2'] as Map).cast<String, dynamic>();
+          return action['action_type'] == 'joker' &&
+              action['target_player'] == env.rlSeat.position;
+        }),
+        isFalse,
+      );
+
+      final self = await env.step({
+        'action_v2': {
+          'action_type': 'joker',
+          'target_player': env.rlSeat.position
+        }
+      });
+      expect(self['type'], 'error');
+      expect(self['code'], 'ILLEGAL_ACTION');
+    });
+
+    test('legal_action_v2 : Valet complet mappe, adversaire↔adversaire légal',
+        () async {
+      final env = RlEnv(episodeId: 'action-v2-jack', forcedNumPlayers: 3);
+      var obs = await _enterPostDraw(env, 52);
+      final p1 = env.players[1];
+      final p2 = env.players[2];
+      p1.hand = [PlayingCard.create('clubs', '4')];
+      p2.hand = [PlayingCard.create('spades', '9')];
+      p1.knownCards = List<bool>.filled(p1.hand.length, false, growable: true);
+      p2.knownCards = List<bool>.filled(p2.hand.length, false, growable: true);
+      p1.mentalMap =
+          List<PlayingCard?>.filled(p1.hand.length, null, growable: true);
+      p2.mentalMap =
+          List<PlayingCard?>.filled(p2.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      final jack = _findActionV2(
+        obs,
+        (action) =>
+            action['action_type'] == 'jack_swap' &&
+            action['player_a'] == 1 &&
+            action['slot_a'] == 0 &&
+            action['player_b'] == 2 &&
+            action['slot_b'] == 0,
+      );
+      expect(jack['legacy_action_id'], _jackActionId(1, 0, 2, 0));
+      expect(
+        _legalActionV2Actions(obs).any((entry) {
+          final action = (entry['action_v2'] as Map).cast<String, dynamic>();
+          return action['action_type'] == 'jack_swap' &&
+              action['player_a'] == action['player_b'];
+        }),
+        isFalse,
+      );
+
+      final p1Before = p1.hand[0].id;
+      final p2Before = p2.hand[0].id;
+      obs = await env.step({
+        'action_v2': {
+          'action_type': 'jack_swap',
+          'player_a': 1,
+          'slot_a': 0,
+          'player_b': 2,
+          'slot_b': 0,
+        }
+      });
+      expect(obs['type'], 'observation');
+      expect(p1.hand[0].id, p2Before);
+      expect(p2.hand[0].id, p1Before);
+    });
+
+    test('legal_action_v2 : action illégale rejetée proprement', () async {
+      final env = RlEnv(episodeId: 'action-v2-illegal', forcedNumPlayers: 2);
+      var obs = await _enterDutchOrDraw(env, 53);
+      final badPhase = await env.step({
+        'action_v2': {'action_type': 'match', 'slot': 0}
+      });
+      expect(badPhase['type'], 'error');
+      expect(badPhase['code'], 'ILLEGAL_ACTION');
+
+      obs = await env.step({
+        'action_v2': {'action_type': 'draw'}
+      });
+      expect(obs['micro_phase'], 'postDraw');
+      final outOfBounds = await env.step({
+        'action_v2': {'action_type': 'post_draw_replace', 'slot': 999}
+      });
+      expect(outOfBounds['type'], 'error');
+      expect(outOfBounds['code'], 'ILLEGAL_ACTION');
     });
 
     test('doublon minimal : replace puis match actif sur le même rang',

@@ -109,6 +109,23 @@ const List<String> _kRanks = [
   'R',
 ];
 
+const int _kMaxHand = 13;
+const int _kMaxOpponents = 5;
+const int _kMaxPlayers = _kMaxOpponents + 1;
+
+const int _kCallDutchAction = 0;
+const int _kContinueDrawAction = 1;
+const int _kDiscardDrawnAction = 2;
+const int _kSkipPowerAction = 3;
+const int _kReplaceAction = 4;
+const int _kPower7Action = _kReplaceAction + _kMaxHand;
+const int _kPower10Action = _kPower7Action + _kMaxHand;
+const int _kPowerVAction = _kPower10Action + _kMaxOpponents * _kMaxHand;
+const int _kPowerJokerAction =
+    _kPowerVAction + _kMaxPlayers * _kMaxHand * _kMaxPlayers * _kMaxHand;
+const int _kPassTickAction = _kPowerJokerAction + _kMaxPlayers;
+const int _kMatchAction = _kPassTickAction + 1;
+
 // ════════════════════════════════════════════════════════════════════════════
 // Reward terminale — bonus de victoire (« pari sportif »).
 // ════════════════════════════════════════════════════════════════════════════
@@ -349,8 +366,14 @@ class RlEnv {
     if (_finished) {
       return _error('épisode déjà terminé', code: 'BAD_PHASE', fatal: false);
     }
-    final kind = msg['kind'];
-    final params = (msg['params'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final normalized = _normalizeActionMessage(msg);
+    if (normalized == null) {
+      return _error('action_v2/action_id invalide: $msg',
+          code: 'ILLEGAL_ACTION', fatal: false);
+    }
+    final kind = normalized['kind'];
+    final params =
+        (normalized['params'] as Map?)?.cast<String, dynamic>() ?? const {};
     if (kind is! String || !_legal(kind, params)) {
       return _error('action illégale en phase ${_micro.name}: $kind $params',
           code: 'ILLEGAL_ACTION', fatal: false);
@@ -983,6 +1006,7 @@ class RlEnv {
 
   Map<String, dynamic> _observation() {
     _updateDestabSignal();
+    final actionMask = _buildMask();
     return {
       'type': 'observation',
       'episode_id': episodeId,
@@ -1005,9 +1029,10 @@ class RlEnv {
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'slot_stability': _buildSlotStability(),
       'legal_private_memory': _buildLegalPrivateMemory(),
+      'legal_action_v2': _buildLegalActionV2(actionMask),
       'micro_phase': _micro.name,
       'obs': _buildObservation(),
-      'action_mask': _buildMask(),
+      'action_mask': actionMask,
     };
   }
 
@@ -1047,6 +1072,7 @@ class RlEnv {
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'slot_stability': _buildSlotStability(),
       'legal_private_memory': _buildLegalPrivateMemory(),
+      'legal_action_v2': _buildLegalActionV2(const {}),
       'info': {
         'final_ranks': _ranks,
         'final_scores': {
@@ -1515,6 +1541,413 @@ class RlEnv {
       'slot': slot,
       'penalty_card_count': 1,
     });
+  }
+
+  Map<String, dynamic>? _normalizeActionMessage(Map<String, dynamic> msg) {
+    final actionV2 = msg['action_v2'];
+    if (actionV2 != null) {
+      if (actionV2 is! Map) return null;
+      return _messageFromActionV2(actionV2.cast<String, dynamic>());
+    }
+
+    final actionId = msg['action_id'] ?? msg['action'];
+    if (actionId != null) {
+      if (actionId is! num) return null;
+      return _messageFromLegacyActionId(actionId.toInt());
+    }
+
+    return msg;
+  }
+
+  Map<String, dynamic>? _messageFromActionV2(Map<String, dynamic> action) {
+    final type = action['action_type'];
+    if (type is! String) return null;
+
+    switch (type) {
+      case 'call_dutch':
+        return {'kind': 'call_dutch'};
+      case 'draw':
+        return {'kind': 'continue_draw'};
+      case 'post_draw_discard':
+        return {'kind': 'discard_drawn'};
+      case 'post_draw_replace':
+        final slot = action['slot'] ?? action['own_slot'];
+        if (slot is! int) return null;
+        return {
+          'kind': 'replace',
+          'params': {'index': slot},
+        };
+      case 'skip_power':
+        return {'kind': 'skip_power'};
+      case 'power_7_look':
+        final slot = action['slot'] ?? action['own_slot'];
+        if (slot is! int) return null;
+        return {
+          'kind': 'power7_look',
+          'params': {'index': slot},
+        };
+      case 'power_10_spy':
+        final target = _seatIdFromV2(action['target_player']);
+        final slot = action['target_slot'] ?? action['slot'];
+        if (target == null || slot is! int) return null;
+        return {
+          'kind': 'power10_spy',
+          'params': {'target_seat': target, 'index': slot},
+        };
+      case 'jack_swap':
+        final playerA = _seatIdFromV2(action['player_a']);
+        final playerB = _seatIdFromV2(action['player_b']);
+        final slotA = action['slot_a'];
+        final slotB = action['slot_b'];
+        if (playerA == null ||
+            playerB == null ||
+            slotA is! int ||
+            slotB is! int) {
+          return null;
+        }
+        return {
+          'kind': 'powerV_swap',
+          'params': {
+            'player_a': playerA,
+            'slot_a': slotA,
+            'player_b': playerB,
+            'slot_b': slotB,
+          },
+        };
+      case 'joker':
+        final target = _seatIdFromV2(action['target_player']);
+        if (target == null) return null;
+        return {
+          'kind': 'powerJoker',
+          'params': {'target_seat': target},
+        };
+      case 'pass_tick':
+        return {'kind': 'pass_tick'};
+      case 'match':
+        final slot = action['slot'] ?? action['match_slot'];
+        if (slot is! int) return null;
+        return {
+          'kind': 'match',
+          'params': {'index': slot},
+        };
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _messageFromLegacyActionId(int idx) {
+    if (idx == _kCallDutchAction) return {'kind': 'call_dutch'};
+    if (idx == _kContinueDrawAction) return {'kind': 'continue_draw'};
+    if (idx == _kDiscardDrawnAction) return {'kind': 'discard_drawn'};
+    if (idx == _kSkipPowerAction) return {'kind': 'skip_power'};
+    if (_kReplaceAction <= idx && idx < _kReplaceAction + _kMaxHand) {
+      return {
+        'kind': 'replace',
+        'params': {'index': idx - _kReplaceAction},
+      };
+    }
+    if (_kPower7Action <= idx && idx < _kPower7Action + _kMaxHand) {
+      return {
+        'kind': 'power7_look',
+        'params': {'index': idx - _kPower7Action},
+      };
+    }
+    if (_kPower10Action <= idx &&
+        idx < _kPower10Action + _kMaxOpponents * _kMaxHand) {
+      final rel = idx - _kPower10Action;
+      final opp = rel ~/ _kMaxHand;
+      final slot = rel % _kMaxHand;
+      return {
+        'kind': 'power10_spy',
+        'params': {'target_seat': 'p${opp + 1}', 'index': slot},
+      };
+    }
+    if (_kPowerVAction <= idx && idx < _kPowerJokerAction) {
+      var rel = idx - _kPowerVAction;
+      final playerA = rel ~/ (_kMaxHand * _kMaxPlayers * _kMaxHand);
+      rel %= _kMaxHand * _kMaxPlayers * _kMaxHand;
+      final slotA = rel ~/ (_kMaxPlayers * _kMaxHand);
+      rel %= _kMaxPlayers * _kMaxHand;
+      final playerB = rel ~/ _kMaxHand;
+      final slotB = rel % _kMaxHand;
+      return {
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': 'p$playerA',
+          'slot_a': slotA,
+          'player_b': 'p$playerB',
+          'slot_b': slotB,
+        },
+      };
+    }
+    if (_kPowerJokerAction <= idx && idx < _kPowerJokerAction + _kMaxPlayers) {
+      return {
+        'kind': 'powerJoker',
+        'params': {'target_seat': 'p${idx - _kPowerJokerAction}'},
+      };
+    }
+    if (idx == _kPassTickAction) return {'kind': 'pass_tick'};
+    if (_kMatchAction <= idx && idx < _kMatchAction + _kMaxHand) {
+      return {
+        'kind': 'match',
+        'params': {'index': idx - _kMatchAction},
+      };
+    }
+    return null;
+  }
+
+  int? _legacyActionIdForMessage(String kind, Map<String, dynamic> params) {
+    switch (kind) {
+      case 'call_dutch':
+        return _kCallDutchAction;
+      case 'continue_draw':
+        return _kContinueDrawAction;
+      case 'discard_drawn':
+        return _kDiscardDrawnAction;
+      case 'skip_power':
+        return _kSkipPowerAction;
+      case 'replace':
+        final i = params['index'];
+        return i is int && i >= 0 && i < _kMaxHand ? _kReplaceAction + i : null;
+      case 'power7_look':
+        final i = params['index'];
+        return i is int && i >= 0 && i < _kMaxHand ? _kPower7Action + i : null;
+      case 'power10_spy':
+        final player = _playerIndexFromSeat(params['target_seat']);
+        final i = params['index'];
+        if (player == null ||
+            player <= 0 ||
+            player > _kMaxOpponents ||
+            i is! int ||
+            i < 0 ||
+            i >= _kMaxHand) {
+          return null;
+        }
+        return _kPower10Action + (player - 1) * _kMaxHand + i;
+      case 'powerV_swap':
+        final playerA = _playerIndexFromSeat(params['player_a']);
+        final playerB = _playerIndexFromSeat(params['player_b']);
+        final slotA = params['slot_a'];
+        final slotB = params['slot_b'];
+        if (playerA == null ||
+            playerB == null ||
+            playerA < 0 ||
+            playerA >= _kMaxPlayers ||
+            playerB < 0 ||
+            playerB >= _kMaxPlayers ||
+            slotA is! int ||
+            slotA < 0 ||
+            slotA >= _kMaxHand ||
+            slotB is! int ||
+            slotB < 0 ||
+            slotB >= _kMaxHand) {
+          return null;
+        }
+        return _kPowerVAction +
+            (((playerA * _kMaxHand + slotA) * _kMaxPlayers + playerB) *
+                    _kMaxHand +
+                slotB);
+      case 'powerJoker':
+        final player = _playerIndexFromSeat(params['target_seat']);
+        return player != null && player >= 0 && player < _kMaxPlayers
+            ? _kPowerJokerAction + player
+            : null;
+      case 'pass_tick':
+        return _kPassTickAction;
+      case 'match':
+        final i = params['index'];
+        return i is int && i >= 0 && i < _kMaxHand ? _kMatchAction + i : null;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _buildLegalActionV2(Map<String, dynamic> mask) {
+    final actions = <Map<String, dynamic>>[];
+    final actionTypeMask = <String, bool>{};
+
+    void add(String kind, Map<String, dynamic> params) {
+      if (!_legal(kind, params)) return;
+      final id = _legacyActionIdForMessage(kind, params);
+      if (id == null) return;
+      final actionV2 = _actionV2FromMessage(kind, params);
+      final type = actionV2['action_type'] as String;
+      actionTypeMask[type] = true;
+      actions.add({
+        'action_v2': actionV2,
+        'legacy_action_id': id,
+        'legacy_kind': kind,
+      });
+    }
+
+    if (_micro == RlMicroPhase.dutchOrDraw) {
+      if (mask['call_dutch'] == true) add('call_dutch', const {});
+      if (mask['continue_draw'] == true) add('continue_draw', const {});
+    } else if (_micro == RlMicroPhase.postDraw) {
+      if (mask['discard_drawn'] == true) add('discard_drawn', const {});
+      for (var i = 0; i < (mask['replace'] as List? ?? const []).length; i++) {
+        if ((mask['replace'] as List)[i] == true) {
+          add('replace', {'index': i});
+        }
+      }
+    } else if (_micro == RlMicroPhase.reaction) {
+      if (mask['pass_tick'] == true || mask['no_match'] == true) {
+        add('pass_tick', const {});
+      }
+      final matches = mask['match'] as List? ?? const [];
+      for (var i = 0; i < matches.length; i++) {
+        if (matches[i] == true) add('match', {'index': i});
+      }
+    } else if (_micro == RlMicroPhase.power) {
+      if (mask['skip_power'] == true) add('skip_power', const {});
+      final p7 = mask['power7_look'] as List?;
+      if (p7 != null) {
+        for (var i = 0; i < p7.length; i++) {
+          if (p7[i] == true) add('power7_look', {'index': i});
+        }
+      }
+      final p10 = mask['power10_spy'] as Map?;
+      if (p10 != null) {
+        for (final entry in p10.entries) {
+          final arr = entry.value as List;
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i] == true) {
+              add('power10_spy', {'target_seat': entry.key, 'index': i});
+            }
+          }
+        }
+      }
+      final joker = mask['powerJoker'] as Map?;
+      if (joker != null) {
+        for (final entry in joker.entries) {
+          if (entry.value == true) {
+            add('powerJoker', {'target_seat': entry.key});
+          }
+        }
+      }
+      final swap = mask['powerV_swap'] as Map?;
+      final players = swap?['players'] as Map?;
+      if (players != null) {
+        for (final a in players.entries) {
+          final arrA = a.value as List;
+          for (var slotA = 0; slotA < arrA.length; slotA++) {
+            if (arrA[slotA] != true) continue;
+            for (final b in players.entries) {
+              if (b.key == a.key) continue;
+              final arrB = b.value as List;
+              for (var slotB = 0; slotB < arrB.length; slotB++) {
+                if (arrB[slotB] == true) {
+                  add('powerV_swap', {
+                    'player_a': a.key,
+                    'slot_a': slotA,
+                    'player_b': b.key,
+                    'slot_b': slotB,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      'available_action_types': actionTypeMask.keys.toList()..sort(),
+      'masks': _buildActionV2Masks(mask, actionTypeMask),
+      'actions': actions,
+      'legacy_action_ids': {
+        for (final action in actions)
+          _actionV2Key(action['action_v2'] as Map<String, dynamic>):
+              action['legacy_action_id'],
+      },
+    };
+  }
+
+  Map<String, dynamic> _buildActionV2Masks(
+    Map<String, dynamic> legacyMask,
+    Map<String, bool> actionTypeMask,
+  ) {
+    return {
+      'action_type': Map<String, bool>.from(actionTypeMask),
+      'own_slot': legacyMask['replace'] ?? legacyMask['power7_look'],
+      'match_slot': legacyMask['match'],
+      'target_player': {
+        for (final p in _players)
+          p.position.toString(): actionTypeMask['joker'] == true ||
+                  actionTypeMask['power_10_spy'] == true
+              ? _targetPlayerLegalInCurrentMask(legacyMask, p.id)
+              : null,
+      }..removeWhere((_, value) => value == null),
+      'target_slot': legacyMask['power10_spy'],
+      'jack_swap': legacyMask['powerV_swap'],
+    };
+  }
+
+  bool _targetPlayerLegalInCurrentMask(Map<String, dynamic> mask, String id) {
+    final joker = mask['powerJoker'] as Map?;
+    if (joker != null && joker[id] == true) return true;
+    final spy = mask['power10_spy'] as Map?;
+    if (spy != null && spy.containsKey(id)) return true;
+    return false;
+  }
+
+  Map<String, dynamic> _actionV2FromMessage(
+    String kind,
+    Map<String, dynamic> params,
+  ) {
+    switch (kind) {
+      case 'call_dutch':
+        return {'action_type': 'call_dutch'};
+      case 'continue_draw':
+        return {'action_type': 'draw'};
+      case 'discard_drawn':
+        return {'action_type': 'post_draw_discard'};
+      case 'replace':
+        return {'action_type': 'post_draw_replace', 'slot': params['index']};
+      case 'skip_power':
+        return {'action_type': 'skip_power'};
+      case 'power7_look':
+        return {'action_type': 'power_7_look', 'slot': params['index']};
+      case 'power10_spy':
+        return {
+          'action_type': 'power_10_spy',
+          'target_player': _playerIndexFromSeat(params['target_seat']),
+          'target_slot': params['index'],
+        };
+      case 'powerV_swap':
+        return {
+          'action_type': 'jack_swap',
+          'player_a': _playerIndexFromSeat(params['player_a']),
+          'slot_a': params['slot_a'],
+          'player_b': _playerIndexFromSeat(params['player_b']),
+          'slot_b': params['slot_b'],
+        };
+      case 'powerJoker':
+        return {
+          'action_type': 'joker',
+          'target_player': _playerIndexFromSeat(params['target_seat']),
+        };
+      case 'pass_tick':
+        return {'action_type': 'pass_tick'};
+      case 'match':
+        return {'action_type': 'match', 'slot': params['index']};
+    }
+    return {'action_type': kind};
+  }
+
+  String _actionV2Key(Map<String, dynamic> action) {
+    final keys = action.keys.toList()..sort();
+    return keys.map((key) => '$key=${action[key]}').join('|');
+  }
+
+  String? _seatIdFromV2(Object? value) {
+    if (value is int && value >= 0 && value < _kMaxPlayers) return 'p$value';
+    if (value is String && RegExp(r'^p[0-5]$').hasMatch(value)) return value;
+    return null;
+  }
+
+  int? _playerIndexFromSeat(Object? value) {
+    if (value is! String) return null;
+    final match = RegExp(r'^p([0-5])$').firstMatch(value);
+    return match == null ? null : int.parse(match.group(1)!);
   }
 
   void _recordPublicEvent(Map<String, dynamic> event) {
