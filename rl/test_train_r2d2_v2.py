@@ -496,6 +496,89 @@ def test_checkpoint_config_includes_beta_schedule() -> None:
         raise AssertionError("checkpoint config did not persist schedule value")
 
 
+def test_metrics_out_writes_jsonl_per_step() -> None:
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        metrics = Path(tmp) / "metrics.jsonl"
+        _write_dataset(dataset, count=6)
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset,
+                steps=3,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                prioritized_replay=True,
+                double_q=True,
+                priority_beta_start=0.4,
+                priority_beta_end=1.0,
+                priority_beta_steps=3,
+                metrics_out=metrics,
+                seed=5,
+            )
+        )
+        if not metrics.exists():
+            raise AssertionError("metrics-out did not write a file")
+        lines = metrics.read_text(encoding="utf-8").strip().splitlines()
+    if len(lines) != 3:
+        raise AssertionError(f"expected one metrics line per step, got {len(lines)}")
+    rows = [json.loads(line) for line in lines]
+    required = [
+        "step",
+        "loss",
+        "grad_norm",
+        "mean_td_error",
+        "max_td_error",
+        "mean_priority",
+        "mean_is_weight",
+        "priority_beta_current",
+        "schedule_step",
+        "prioritized",
+        "double_q",
+    ]
+    for row in rows:
+        for key in required:
+            if key not in row:
+                raise AssertionError(f"metrics line missing key {key}: {row}")
+    if rows[0]["step"] != 0 or rows[-1]["step"] != 2:
+        raise AssertionError("metrics step indices wrong")
+    # Beta really anneals across the written rows (start 0.4 -> end 1.0).
+    if rows[0]["priority_beta_current"] >= rows[-1]["priority_beta_current"]:
+        raise AssertionError("beta did not increase across metrics rows")
+
+
+def test_checkpoint_with_metrics_out_loads_weights_only() -> None:
+    # Regression guard: a checkpoint saved while --metrics-out is set must stay
+    # loadable under torch.load(weights_only=True) (no pickled pathlib.Path in
+    # the serialized config), which is how evaluate_r2d2_v2 loads checkpoints.
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        checkpoint = Path(tmp) / "checkpoint.pt"
+        metrics = Path(tmp) / "metrics.jsonl"
+        _write_dataset(dataset, count=6)
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset,
+                steps=1,
+                batch_size=1,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                save_checkpoint=checkpoint,
+                no_save=False,
+                metrics_out=metrics,
+            )
+        )
+        payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    if not isinstance(payload["config"]["metrics_out"], str):
+        raise AssertionError("metrics_out was not stringified in checkpoint config")
+    if "online_model" not in payload:
+        raise AssertionError("checkpoint missing online_model under weights_only load")
+
+
 def test_import_has_no_training_side_effect() -> None:
     if not hasattr(train_r2d2_v2, "main"):
         raise AssertionError("train module missing guarded main")
@@ -529,6 +612,8 @@ def main() -> int:
         test_beta_schedule_anneals_and_reports_current_beta,
         test_constant_beta_reported_without_schedule,
         test_checkpoint_config_includes_beta_schedule,
+        test_metrics_out_writes_jsonl_per_step,
+        test_checkpoint_with_metrics_out_loads_weights_only,
         test_import_has_no_training_side_effect,
         test_no_runner_dependency_or_raw_field_use,
     ]

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import json
 from pathlib import Path
 import random
 from typing import Any
@@ -53,6 +54,10 @@ class TrainConfigV2:
     save_checkpoint: Path | None = None
     no_save: bool = True
     allow_long_run: bool = False
+    # Optional per-step metrics export (JSONL, one line per train step). This is
+    # diagnostics only: it is independent from the checkpoint save guard and is
+    # written wherever the caller points it (intended: a run dir outside the repo).
+    metrics_out: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +93,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-save", action="store_true", default=True)
     parser.add_argument("--allow-save", action="store_true")
     parser.add_argument("--allow-long-run", action="store_true")
+    parser.add_argument("--metrics-out", type=str, default=None)
     return parser
 
 
@@ -123,6 +129,7 @@ def config_from_args(args: argparse.Namespace) -> TrainConfigV2:
         save_checkpoint=save_checkpoint,
         no_save=not bool(args.allow_save),
         allow_long_run=bool(args.allow_long_run),
+        metrics_out=Path(args.metrics_out) if args.metrics_out else None,
     )
 
 
@@ -170,32 +177,44 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
         ),
     )
 
+    metrics_file = None
+    if config.metrics_out is not None:
+        config.metrics_out.parent.mkdir(parents=True, exist_ok=True)
+        metrics_file = config.metrics_out.open("w", encoding="utf-8")
+
     final_metrics: dict[str, float] = {}
-    for step in range(config.steps):
-        beta_current = (
-            config.priority_beta
-            if beta_schedule is None
-            else beta_schedule.value_at(step)
-        )
-        batch = replay.sample_sequences(
-            batch_size=config.batch_size,
-            seq_len=config.seq_len,
-            burn_in=config.burn_in,
-            seed=config.seed + step,
-            beta=beta_current,
-        )
-        final_metrics = learner.train_step(batch, replay_buffer=replay)
-        # The annealed beta is applied at sample time above and therefore really
-        # shapes the importance weights consumed by this train_step.
-        final_metrics["priority_beta_current"] = float(beta_current)
-        final_metrics["schedule_step"] = float(step)
-        print(
-            "train_r2d2_v2 "
-            f"step={step + 1}/{config.steps} "
-            f"loss={final_metrics['loss']:.6f} "
-            f"valid_steps={final_metrics['valid_steps']:.0f} "
-            f"beta={beta_current:.4f}"
-        )
+    try:
+        for step in range(config.steps):
+            beta_current = (
+                config.priority_beta
+                if beta_schedule is None
+                else beta_schedule.value_at(step)
+            )
+            batch = replay.sample_sequences(
+                batch_size=config.batch_size,
+                seq_len=config.seq_len,
+                burn_in=config.burn_in,
+                seed=config.seed + step,
+                beta=beta_current,
+            )
+            final_metrics = learner.train_step(batch, replay_buffer=replay)
+            # The annealed beta is applied at sample time above and therefore
+            # really shapes the importance weights consumed by this train_step.
+            final_metrics["priority_beta_current"] = float(beta_current)
+            final_metrics["schedule_step"] = float(step)
+            if metrics_file is not None:
+                metrics_file.write(json.dumps({"step": step, **final_metrics}) + "\n")
+                metrics_file.flush()
+            print(
+                "train_r2d2_v2 "
+                f"step={step + 1}/{config.steps} "
+                f"loss={final_metrics['loss']:.6f} "
+                f"valid_steps={final_metrics['valid_steps']:.0f} "
+                f"beta={beta_current:.4f}"
+            )
+    finally:
+        if metrics_file is not None:
+            metrics_file.close()
 
     checkpoint_path = None
     if config.save_checkpoint is not None and not config.no_save:
@@ -284,9 +303,14 @@ def _save_checkpoint(
             "optimizer": learner.optimizer.state_dict(),
             "config": {
                 **asdict(config),
+                # Stringify every Path field so the checkpoint stays loadable
+                # under torch.load(weights_only=True) (no pickled PosixPath).
                 "dataset": str(config.dataset),
                 "save_checkpoint": (
                     None if config.save_checkpoint is None else str(config.save_checkpoint)
+                ),
+                "metrics_out": (
+                    None if config.metrics_out is None else str(config.metrics_out)
                 ),
             },
             "learner_state": {
