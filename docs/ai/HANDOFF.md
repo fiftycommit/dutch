@@ -13,7 +13,7 @@ Le projet Dutch'78 reste en phase 2 RL. L'AgentInterface v2 (faits publics, mém
 
 Le cœur R2D2 v2 (PER, IS weights, update priorities, Double Q factorisé, n-step, burn-in complet), les schedules beta/epsilon, l'export de métriques d'entraînement, et un logger + analyseur de traces action-level sont en place et testés (commits `010751e`, `8d42d87`, `de7d21f`, `786a791`, `738b153`).
 
-> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT POUR L'INSTANT.** Deux raisons : (1) le runner avait des BLOCKERs de fidélité (corrigés, cf. ci-dessous) ; (2) le reward v2 ne pénalise pas assez les faux matchs (**H2** de l'audit), ce qui pousse l'agent au match-spam — à revoir AVANT tout retrain.
+> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT POUR L'INSTANT.** Deux raisons : (1) le runner avait des BLOCKERs de fidélité (corrigés, cf. ci-dessous) ; (2) le reward v2 ne pénalise pas assez les faux matchs (**H2** de l'audit), ce qui pousse l'agent au match-spam — à revoir AVANT tout retrain. Audit reward actuel : `docs/ai/RL_REWARD_V2_AUDIT.md` (`2026-06-30`, Codex). Constat important : Dart émet `principal` + `destab` + `win_bonus`, mais la pile R2D2 v2 Python stocke/optimise actuellement seulement `principal`.
 
 > ⚠️ **L'ancien checkpoint `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt` a été entraîné sur le runner pré-fix et NE DOIT PAS servir de point de départ sérieux** (ni base de fine-tune). Il a appris une policy dégénérée match-heavy et finit même PIRE que random au score final post-fix. Retrain depuis zéro recommandé.
 
@@ -29,8 +29,8 @@ Avant tout cela, deux commits avaient stabilisé l'interface : `8fa49fa` (reacti
 
 ## Objectif actuel
 
-Le cœur R2D2 v2 et le runner corrigé sont en place. **Avant tout nouveau training**, la prochaine étape est de **revoir le reward shaping v2 (H2 de l'audit)** : faux match, match réussi, Dutch, score final/rang — l'agent fait du match-spam faute de signal pénalisant les faux matchs coûteux. Séquence recommandée :
-1. Audit/rework du reward v2 (faux match / match réussi / Dutch / score-rang).
+Le cœur R2D2 v2 et le runner corrigé sont en place. **Avant tout nouveau training**, la prochaine étape est de **patcher le reward shaping v2 après audit H2** : faux match, match réussi, Dutch, score final/rang — l'agent fait du match-spam faute de signal pénalisant les faux matchs coûteux. L'audit `docs/ai/RL_REWARD_V2_AUDIT.md` confirme aussi que `win_bonus` et `destab` sont émis par Dart mais ignorés par les extracteurs R2D2 v2 (`rollout_v2`, `collect_rollouts_v2`, `infer_r2d2_v2`), qui ne gardent que `rewards.principal`. Séquence recommandée :
+1. Patch reward v2 conservateur + tests (faux match pénalisé, `win_bonus` consommé ou explicitement désactivé, scalarisation unique côté Python).
 2. Collecte neuve sur le runner corrigé (idéalement epsilon-greedy, pas pure random).
 3. **Retrain depuis zéro** (ne pas fine-tune l'ancien checkpoint, biaisé par le runner pré-fix).
 4. Évaluation + traces post-train.
@@ -318,16 +318,20 @@ Supprimés (ne plus référencer) :
 
 ## Prochaine étape immédiate
 
-Le cœur R2D2 v2 et ses schedules sont en place. Le prochain pas logique est un **premier vrai run R2D2 v2 contrôlé plus long** pour valider l'apprentissage end-to-end avant tout durcissement.
+Le cœur R2D2 v2 et ses schedules sont en place, et le runner est stable après le
+fix de fidélité. Le prochain pas logique n'est plus un run : c'est un **patch
+reward v2 testé** à partir de `docs/ai/RL_REWARD_V2_AUDIT.md`.
 
 Plan recommandé :
-1. **Collecter ~10k transitions** réelles via `rl/collect_rollouts_v2.py` (dataset JSONL, hors repo ou dossier ignoré).
-2. **Entraîner quelques milliers de steps** via `rl/train_r2d2_v2.py` avec `--prioritized-replay --double-q` (et éventuellement `--priority-beta-start/end/steps`), `--allow-long-run` au-delà du garde-fou.
-3. **Évaluer** via `rl/evaluate_r2d2_v2.py` vs policy aléatoire (`--compare-random`) puis, plus tard, vs bots existants.
-4. **Sauvegarder métriques/courbes hors repo** (ou dossier ignoré) ; analyser `loss` / reward / win-rate.
-5. **Ajuster le reward shaping** seulement si nécessaire, après lecture des courbes.
-6. **Stored recurrent state** plus tard, si le burn-in complet devient coûteux.
-7. **Acteurs distribués** plus tard, après validation mono-process.
+1. Ajouter une scalarisation reward unique côté Python v2, partagée par
+   `rollout_v2`, `collect_rollouts_v2`, `infer_r2d2_v2` et les traces.
+2. Ajouter/émettre une pénalité immédiate de faux match, assez visible pour
+   éviter match-spam mais inférieure au signal terminal victoire/défaite.
+3. Décider explicitement si `win_bonus` est consommé (recommandé) ou retiré de la
+   documentation, puis tester ce choix.
+4. Garder le bon match à `0` ou à un bonus minuscule : c'est un moyen, pas le but.
+5. Ajouter les tests Dart/Python listés dans `docs/ai/RL_REWARD_V2_AUDIT.md`.
+6. Ensuite seulement : collecte neuve, retrain from scratch, évaluation + traces.
 
 Ne jamais committer dataset/checkpoint/report dans le repo. Ne pas lancer de run long sans validation explicite.
 
@@ -357,6 +361,35 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-30 — Audit reward v2 H2 (Codex)
+
+Contexte :
+- Le runner v2 est stable après le fix timer réaction/recyclage, mais aucun
+  retrain ne doit être lancé tant que le reward H2 n'est pas revu.
+- Objectif de cette passe : audit documentaire seulement, sans modifier le code
+  reward ni lancer collecte/training.
+
+Changement :
+- Ajout de `docs/ai/RL_REWARD_V2_AUDIT.md`.
+- Mise à jour du présent handoff : la prochaine étape immédiate devient un patch
+  reward v2 testé, pas un run R2D2.
+
+Constats principaux :
+- La reward Dart terminale `principal` est rank-normalized et utilise
+  `GameState.getFinalRanksWithTies()`, donc le Dutch raté est bien dernier actif
+  côté moteur.
+- Dart émet aussi `win_bonus` et `destab`, mais les extracteurs R2D2 v2 Python
+  (`rl/rollout_v2.py`, `rl/collect_rollouts_v2.py`, `rl/infer_r2d2_v2.py`) ne
+  stockent que `rewards.principal` dans `TransitionV2.reward`.
+- Faux match, bon match, draw/replace/discard/powers/pass_tick ont actuellement
+  `0.0` de reward immédiate optimisée. H2 est confirmé : faux match n'a pas de
+  malus RL immédiat visible, seulement un coût futur sparse via le score/rang.
+
+Résultat :
+- **Ne pas entraîner maintenant.**
+- Prochaine action recommandée : patch reward v2 conservateur + tests
+  Dart/Python, puis collecte neuve et retrain from scratch.
 
 ### 2026-06-30 — Audit fidélité runner + fix timer réaction/recyclage + éval post-fix (Claude Code)
 
