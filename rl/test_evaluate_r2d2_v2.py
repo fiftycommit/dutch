@@ -101,6 +101,52 @@ def test_parser_cli_works() -> None:
         raise AssertionError("parser missed comparison/output flags")
 
 
+def test_parser_epsilon_schedule_flags() -> None:
+    args = evaluate_r2d2_v2.build_arg_parser().parse_args(
+        [
+            "--checkpoint",
+            "model.pt",
+            "--epsilon-start",
+            "1.0",
+            "--epsilon-end",
+            "0.1",
+            "--epsilon-steps",
+            "200",
+        ]
+    )
+    config = evaluate_r2d2_v2.config_from_args(args)
+    if config.epsilon_start != 1.0 or config.epsilon_end != 0.1 or config.epsilon_steps != 200:
+        raise AssertionError("epsilon schedule flags not parsed in evaluate")
+
+
+def test_epsilon_schedule_passed_to_infer() -> None:
+    captured: dict[str, Any] = {}
+
+    def infer_fn(*args: Any, **kwargs: Any) -> list[FakeRecord]:
+        del args
+        captured["epsilon_schedule"] = kwargs.get("epsilon_schedule")
+        return _records("model")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = Path(tmp) / "model.pt"
+        _checkpoint(checkpoint)
+        evaluate_r2d2_v2.run_evaluation_v2(
+            evaluate_r2d2_v2.EvalConfigV2(
+                checkpoint=checkpoint,
+                episodes=1,
+                max_steps=5,
+                epsilon_start=1.0,
+                epsilon_end=0.0,
+                epsilon_steps=10,
+            ),
+            runner_factory=FakeRunner,
+            infer_fn=infer_fn,
+        )
+    schedule = captured.get("epsilon_schedule")
+    if schedule is None or schedule.duration_steps != 10:
+        raise AssertionError("evaluate did not pass the epsilon schedule to infer")
+
+
 def test_refuses_missing_checkpoint() -> None:
     config = evaluate_r2d2_v2.EvalConfigV2(
         checkpoint=Path("/tmp/missing-r2d2-v2-checkpoint.pt")
@@ -343,6 +389,8 @@ def test_checkpoint_loader_requires_online_model() -> None:
 
 if __name__ == "__main__":
     test_parser_cli_works()
+    test_parser_epsilon_schedule_flags()
+    test_epsilon_schedule_passed_to_infer()
     test_refuses_missing_checkpoint()
     test_refuses_long_runs_without_allow_long_run()
     test_metrics_aggregate_steps_rewards_and_missing_wins()

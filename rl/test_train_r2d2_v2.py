@@ -371,6 +371,131 @@ def test_run_prioritized_double_q_checkpoint_loadable() -> None:
         model.load_state_dict(payload["online_model"])
 
 
+def test_parser_beta_schedule_flags() -> None:
+    args = train_r2d2_v2.build_arg_parser().parse_args(
+        [
+            "--dataset",
+            "sample.jsonl",
+            "--prioritized-replay",
+            "--priority-beta-start",
+            "0.2",
+            "--priority-beta-end",
+            "0.9",
+            "--priority-beta-steps",
+            "100",
+        ]
+    )
+    config = train_r2d2_v2.config_from_args(args)
+    if config.priority_beta_start != 0.2 or config.priority_beta_end != 0.9:
+        raise AssertionError("beta schedule start/end not parsed")
+    if config.priority_beta_steps != 100:
+        raise AssertionError("beta schedule steps not parsed")
+
+
+def test_beta_schedule_requires_prioritized_replay() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.jsonl"
+        _write_dataset(path, count=6)
+        config = train_r2d2_v2.TrainConfigV2(
+            dataset=path,
+            steps=1,
+            batch_size=2,
+            seq_len=2,
+            burn_in=1,
+            n_step=1,
+            prioritized_replay=False,
+            priority_beta_start=0.0,
+            priority_beta_end=1.0,
+            priority_beta_steps=2,
+        )
+        try:
+            train_r2d2_v2.run_training_smoke(config)
+        except ValueError as exc:
+            if "prioritized-replay" not in str(exc):
+                raise AssertionError(f"unexpected error: {exc}") from exc
+        else:
+            raise AssertionError("beta schedule without prioritized did not raise")
+
+
+def test_beta_schedule_anneals_and_reports_current_beta() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.jsonl"
+        _write_dataset(path, count=6)
+        result = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=path,
+                steps=2,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                prioritized_replay=True,
+                priority_beta_start=0.0,
+                priority_beta_end=1.0,
+                priority_beta_steps=1,
+                seed=7,
+            )
+        )
+    # Last step is index 1; duration 1 means beta has reached the end value.
+    if abs(result.final_metrics["priority_beta_current"] - 1.0) > 1e-9:
+        raise AssertionError(
+            f"beta did not reach beta_end: {result.final_metrics.get('priority_beta_current')}"
+        )
+    if result.final_metrics.get("schedule_step") != 1.0:
+        raise AssertionError("schedule_step metric missing or wrong")
+
+
+def test_constant_beta_reported_without_schedule() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.jsonl"
+        _write_dataset(path, count=6)
+        result = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=path,
+                steps=1,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                prioritized_replay=True,
+                priority_beta=0.37,
+                seed=7,
+            )
+        )
+    if abs(result.final_metrics["priority_beta_current"] - 0.37) > 1e-9:
+        raise AssertionError("constant beta not reported as priority_beta_current")
+
+
+def test_checkpoint_config_includes_beta_schedule() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        checkpoint = Path(tmp) / "checkpoint.pt"
+        _write_dataset(dataset, count=6)
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset,
+                steps=1,
+                batch_size=2,
+                seq_len=2,
+                burn_in=1,
+                n_step=1,
+                prioritized_replay=True,
+                priority_beta_start=0.2,
+                priority_beta_end=0.9,
+                priority_beta_steps=5,
+                save_checkpoint=checkpoint,
+                no_save=False,
+                seed=3,
+            )
+        )
+        payload = torch.load(checkpoint, map_location="cpu")
+    for key in ["priority_beta_start", "priority_beta_end", "priority_beta_steps"]:
+        if key not in payload["config"]:
+            raise AssertionError(f"checkpoint config missing {key}")
+    if payload["config"]["priority_beta_steps"] != 5:
+        raise AssertionError("checkpoint config did not persist schedule value")
+
+
 def test_import_has_no_training_side_effect() -> None:
     if not hasattr(train_r2d2_v2, "main"):
         raise AssertionError("train module missing guarded main")
@@ -399,6 +524,11 @@ def main() -> int:
         test_run_minimal_prioritized_training,
         test_run_minimal_double_q_training,
         test_run_prioritized_double_q_checkpoint_loadable,
+        test_parser_beta_schedule_flags,
+        test_beta_schedule_requires_prioritized_replay,
+        test_beta_schedule_anneals_and_reports_current_beta,
+        test_constant_beta_reported_without_schedule,
+        test_checkpoint_config_includes_beta_schedule,
         test_import_has_no_training_side_effect,
         test_no_runner_dependency_or_raw_field_use,
     ]

@@ -23,6 +23,7 @@ import model_r2d2_v2
 import policy_r2d2_v2
 from runner_process import RunnerProcess
 import rollout_v2
+import schedules_v2
 from rollout_v2 import TransitionV2
 from replay_buffer_v2 import SequenceBatchV2
 
@@ -96,10 +97,14 @@ def infer_episode_v2(
     rng: random.Random,
     max_steps: int,
     extra_options: dict[str, Any] | None = None,
+    epsilon_schedule: schedules_v2.LinearScheduleV2 | None = None,
+    global_step_offset: int = 0,
     verbose: bool = False,
 ) -> InferenceEpisodeV2:
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
+    if global_step_offset < 0:
+        raise ValueError("global_step_offset must be >= 0")
 
     obs = runner.reset(seed, episode_id=episode_id, extra_options=extra_options)
     transitions: list[TransitionV2] = []
@@ -117,12 +122,19 @@ def infer_episode_v2(
             output = model(batch, hidden_state=hidden_state, apply_masks=True)
         hidden_state = output.hidden_state.detach()
 
+        # Epsilon is annealed on the *global* policy-decision step so it keeps
+        # decaying across episode boundaries (the caller advances the offset).
+        current_epsilon = (
+            epsilon
+            if epsilon_schedule is None
+            else epsilon_schedule.value_at(global_step_offset + step_index)
+        )
         selected = policy_r2d2_v2.select_action_from_batch_output(
             output,
             batch_index=0,
             time_index=0,
             legal_action_v2=obs.get("legal_action_v2") or {},
-            epsilon=epsilon,
+            epsilon=current_epsilon,
             rng=rng,
         )
         next_obs = runner.step(policy_r2d2_v2.action_message_for_runner_v2(selected))
@@ -150,6 +162,7 @@ def infer_episode_v2(
                     **dict(next_obs.get("info") or {}),
                     "inference_score": selected.score,
                     "inference_is_random": selected.is_random,
+                    "inference_epsilon": float(current_epsilon),
                 },
                 episode_id=episode_id,
                 step_index=step_index,
@@ -182,6 +195,7 @@ def infer_rollouts_v2(
     seed: int,
     max_steps: int,
     epsilon: float,
+    epsilon_schedule: schedules_v2.LinearScheduleV2 | None = None,
     save_transitions: str | Path | None = None,
     save: bool = False,
     players: int | None = None,
@@ -193,6 +207,7 @@ def infer_rollouts_v2(
     extra_options = {"num_players": int(players)} if players is not None else None
     records: list[InferenceEpisodeV2] = []
     all_transitions: list[TransitionV2] = []
+    global_step = 0
 
     for index in range(episodes):
         episode_seed = seed + index
@@ -206,10 +221,13 @@ def infer_rollouts_v2(
             rng=rng,
             max_steps=max_steps,
             extra_options=extra_options,
+            epsilon_schedule=epsilon_schedule,
+            global_step_offset=global_step,
             verbose=verbose,
         )
         records.append(record)
         all_transitions.extend(record.transitions)
+        global_step += len(record.transitions)
 
     if save and save_transitions is not None:
         target = Path(save_transitions)
@@ -227,6 +245,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epsilon", type=float, default=0.0)
+    parser.add_argument("--epsilon-start", type=float, default=None)
+    parser.add_argument("--epsilon-end", type=float, default=None)
+    parser.add_argument("--epsilon-steps", type=int, default=None)
     parser.add_argument("--players", type=int, default=6)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--save-transitions", type=str, default=None)
@@ -241,6 +262,15 @@ def main(argv: list[str] | None = None) -> int:
     model.eval()
     save = bool(args.save_transitions) and not args.no_save
 
+    epsilon_schedule = schedules_v2.build_optional_schedule(
+        args.epsilon_start,
+        args.epsilon_end,
+        args.epsilon_steps,
+        name="epsilon",
+        minimum=0.0,
+        maximum=1.0,
+    )
+
     with RunnerProcess(max_turns=max(args.max_steps, 1)) as runner:
         records = infer_rollouts_v2(
             runner,
@@ -249,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             max_steps=args.max_steps,
             epsilon=args.epsilon,
+            epsilon_schedule=epsilon_schedule,
             save_transitions=args.save_transitions,
             save=save,
             players=args.players,
@@ -257,10 +288,18 @@ def main(argv: list[str] | None = None) -> int:
 
     transitions = sum(len(record.transitions) for record in records)
     completed = sum(1 for record in records if record.completed)
+    epsilon_desc = (
+        f"epsilon={args.epsilon}"
+        if epsilon_schedule is None
+        else (
+            f"epsilon_schedule={epsilon_schedule.start_value}->{epsilon_schedule.end_value}"
+            f"@{epsilon_schedule.duration_steps}"
+        )
+    )
     print(
         "infer_r2d2_v2: "
         f"episodes={len(records)} completed={completed} transitions={transitions} "
-        f"epsilon={args.epsilon} saved={save}"
+        f"{epsilon_desc} saved={save}"
     )
     return 0
 

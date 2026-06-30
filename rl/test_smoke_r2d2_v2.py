@@ -107,6 +107,48 @@ def test_parser_cli_works() -> None:
         raise AssertionError(f"bad parser config: {config}")
 
 
+def test_parser_epsilon_schedule_flags() -> None:
+    args = smoke_r2d2_v2.build_arg_parser().parse_args(
+        [
+            "--epsilon-start",
+            "1.0",
+            "--epsilon-end",
+            "0.1",
+            "--epsilon-steps",
+            "5",
+        ]
+    )
+    config = smoke_r2d2_v2.config_from_args(args)
+    if config.epsilon_start != 1.0 or config.epsilon_end != 0.1 or config.epsilon_steps != 5:
+        raise AssertionError(f"epsilon schedule flags not parsed: {config}")
+
+
+def test_epsilon_schedule_passed_to_infer() -> None:
+    captured: dict[str, Any] = {}
+
+    fns = MockFns()
+    real_infer = fns.infer
+
+    def infer_capture(*args: Any, **kwargs: Any) -> list[Record]:
+        captured["epsilon_schedule"] = kwargs.get("epsilon_schedule")
+        return real_infer(*args, **kwargs)
+
+    smoke_r2d2_v2.run_smoke_v2(
+        smoke_r2d2_v2.SmokeConfigV2(
+            epsilon_start=1.0,
+            epsilon_end=0.1,
+            epsilon_steps=5,
+        ),
+        runner_factory=fns.runner_factory,
+        collect_fn=fns.collect,
+        train_fn=fns.train,
+        infer_fn=infer_capture,
+    )
+    schedule = captured.get("epsilon_schedule")
+    if schedule is None or schedule.duration_steps != 5:
+        raise AssertionError("smoke did not pass the epsilon schedule to infer")
+
+
 def test_limits_refuse_long_runs() -> None:
     for config in [
         smoke_r2d2_v2.SmokeConfigV2(
@@ -253,6 +295,8 @@ def test_no_repo_artifacts_created_by_mock_smoke() -> None:
 def main() -> int:
     tests = [
         test_parser_cli_works,
+        test_parser_epsilon_schedule_flags,
+        test_epsilon_schedule_passed_to_infer,
         test_limits_refuse_long_runs,
         test_tempdir_used_and_removed_by_default,
         test_keep_artifacts_requires_and_uses_output_dir,

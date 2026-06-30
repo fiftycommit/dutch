@@ -16,6 +16,7 @@ import torch
 import encoding_v2
 import infer_r2d2_v2
 import model_r2d2_v2
+import schedules_v2
 
 
 def _obs(step: int, *, done: bool = False) -> dict[str, Any]:
@@ -259,6 +260,84 @@ def test_epsilon_one_remains_legal() -> None:
         raise AssertionError(f"epsilon action was not legal: {selected_action}")
 
 
+def test_epsilon_schedule_anneals_per_step() -> None:
+    schedule = schedules_v2.LinearScheduleV2(start_value=1.0, end_value=0.0, duration_steps=2)
+    record = infer_r2d2_v2.infer_episode_v2(
+        MockRunner(terminal_step=3),
+        RecordingModel(),
+        seed=0,
+        episode_id="ep-sched",
+        epsilon=0.0,
+        rng=random.Random(0),
+        max_steps=5,
+        epsilon_schedule=schedule,
+    )
+    eps = [transition.info["inference_epsilon"] for transition in record.transitions]
+    expected = [1.0, 0.5, 0.0]
+    if any(abs(a - b) > 1e-9 for a, b in zip(eps, expected)):
+        raise AssertionError(f"epsilon schedule did not anneal per step: {eps}")
+
+
+def test_epsilon_schedule_global_step_across_episodes() -> None:
+    schedule = schedules_v2.LinearScheduleV2(start_value=1.0, end_value=0.0, duration_steps=3)
+    records = infer_r2d2_v2.infer_rollouts_v2(
+        MockRunner(terminal_step=2),
+        RecordingModel(),
+        episodes=2,
+        seed=0,
+        max_steps=5,
+        epsilon=0.0,
+        epsilon_schedule=schedule,
+    )
+    eps = [
+        transition.info["inference_epsilon"]
+        for record in records
+        for transition in record.transitions
+    ]
+    # Two episodes of two steps each -> global steps 0,1,2,3.
+    expected = [1.0, 1.0 - 1.0 / 3.0, 1.0 - 2.0 / 3.0, 0.0]
+    if any(abs(a - b) > 1e-9 for a, b in zip(eps, expected)):
+        raise AssertionError(f"epsilon global step did not span episodes: {eps}")
+
+
+def test_epsilon_schedule_deterministic_with_seed() -> None:
+    schedule = schedules_v2.LinearScheduleV2(start_value=1.0, end_value=0.2, duration_steps=3)
+
+    def run() -> list[dict[str, Any]]:
+        record = infer_r2d2_v2.infer_episode_v2(
+            MockRunner(terminal_step=3),
+            RecordingModel(),
+            seed=0,
+            episode_id="ep-det",
+            epsilon=0.0,
+            rng=random.Random(123),
+            max_steps=5,
+            epsilon_schedule=schedule,
+        )
+        return [transition.action_v2 for transition in record.transitions]
+
+    if run() != run():
+        raise AssertionError("epsilon schedule run was not deterministic for a fixed seed")
+
+
+def test_epsilon_zero_is_greedy_under_schedule() -> None:
+    # Schedule pinned at 0 -> greedy; RecordingModel ranks pass_tick above match.
+    schedule = schedules_v2.LinearScheduleV2(start_value=0.0, end_value=0.0, duration_steps=2)
+    record = infer_r2d2_v2.infer_episode_v2(
+        MockRunner(terminal_step=2),
+        RecordingModel(),
+        seed=0,
+        episode_id="ep-greedy",
+        epsilon=0.5,
+        rng=random.Random(0),
+        max_steps=5,
+        epsilon_schedule=schedule,
+    )
+    for transition in record.transitions:
+        if transition.action_v2 != {"action_type": "pass_tick"}:
+            raise AssertionError("epsilon=0 schedule did not stay greedy")
+
+
 def test_no_save_without_save_flag() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "should_not_exist.jsonl"
@@ -338,6 +417,10 @@ def main() -> int:
         test_hidden_state_is_propagated,
         test_hidden_state_resets_between_episodes,
         test_epsilon_one_remains_legal,
+        test_epsilon_schedule_anneals_per_step,
+        test_epsilon_schedule_global_step_across_episodes,
+        test_epsilon_schedule_deterministic_with_seed,
+        test_epsilon_zero_is_greedy_under_schedule,
         test_no_save_without_save_flag,
         test_optional_save_jsonl,
         test_collects_multiple_transitions_with_mock_runner,

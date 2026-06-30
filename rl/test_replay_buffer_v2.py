@@ -351,6 +351,32 @@ def test_capacity_eviction_cleans_priorities() -> None:
         raise AssertionError("evicted episode priorities were not cleaned up")
 
 
+def test_beta_override_changes_is_weights() -> None:
+    import numpy as np
+
+    buffer = replay_buffer_v2.ReplayBufferV2(prioritized=True, priority_alpha=1.0)
+    buffer.add_episode([_transition("hi", 0, done=True)])
+    buffer.add_episode([_transition("lo", 0, done=True)])
+    # Moderate ratio (4:1) + large batch so the sampled batch reliably contains
+    # both priority levels, making beta's effect on IS weights observable.
+    buffer.update_priorities([("hi", 0), ("lo", 0)], [4.0, 1.0])
+
+    # Same seed -> identical sampled indices; only beta differs.
+    b0 = buffer.sample_sequences(batch_size=30, seq_len=1, burn_in=0, seed=1, beta=0.0)
+    b1 = buffer.sample_sequences(batch_size=30, seq_len=1, burn_in=0, seed=1, beta=1.0)
+    if b0.sample_indices != b1.sample_indices:
+        raise AssertionError("beta should not change which sequences are sampled")
+    if {key[0] for key in b1.sample_indices} != {"hi", "lo"}:
+        raise AssertionError("test setup expected a mix of both priority levels")
+    if not np.allclose(b0.is_weights, 1.0):
+        raise AssertionError("beta=0 should give uniform IS weights of 1")
+    # beta>0 must produce non-uniform IS weights and really differ from beta=0.
+    if len(np.unique(np.round(b1.is_weights, 6))) < 2:
+        raise AssertionError("beta>0 did not produce non-uniform IS weights")
+    if np.allclose(b0.is_weights, b1.is_weights):
+        raise AssertionError("beta change did not affect IS weights")
+
+
 def main() -> int:
     tests = [
         test_add_transition_increases_size,
@@ -370,6 +396,7 @@ def main() -> int:
         test_update_priorities_floors_and_validates,
         test_prioritized_preserves_masks_and_no_episode_crossing,
         test_capacity_eviction_cleans_priorities,
+        test_beta_override_changes_is_weights,
     ]
     print("=== test_replay_buffer_v2 ===")
     for test in tests:

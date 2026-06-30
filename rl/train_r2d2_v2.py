@@ -19,6 +19,7 @@ import torch
 import dataset_v2
 import learner_r2d2_v2
 import model_r2d2_v2
+import schedules_v2
 
 
 MAX_SAFE_STEPS = 1000
@@ -41,6 +42,12 @@ class TrainConfigV2:
     priority_beta: float = 0.4
     priority_epsilon: float = 1.0e-6
     priority_eta: float = 0.9
+    # Optional linear annealing for priority_beta. When the three are set the
+    # schedule overrides the constant priority_beta at sample time. Requires
+    # prioritized_replay (otherwise beta would not influence anything).
+    priority_beta_start: float | None = None
+    priority_beta_end: float | None = None
+    priority_beta_steps: int | None = None
     seed: int = 0
     device: str = "cpu"
     save_checkpoint: Path | None = None
@@ -72,6 +79,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--priority-beta", type=float, default=0.4)
     parser.add_argument("--priority-epsilon", type=float, default=1.0e-6)
     parser.add_argument("--priority-eta", type=float, default=0.9)
+    parser.add_argument("--priority-beta-start", type=float, default=None)
+    parser.add_argument("--priority-beta-end", type=float, default=None)
+    parser.add_argument("--priority-beta-steps", type=int, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--save-checkpoint", type=str, default=None)
@@ -99,6 +109,15 @@ def config_from_args(args: argparse.Namespace) -> TrainConfigV2:
         priority_beta=float(args.priority_beta),
         priority_epsilon=float(args.priority_epsilon),
         priority_eta=float(args.priority_eta),
+        priority_beta_start=(
+            None if args.priority_beta_start is None else float(args.priority_beta_start)
+        ),
+        priority_beta_end=(
+            None if args.priority_beta_end is None else float(args.priority_beta_end)
+        ),
+        priority_beta_steps=(
+            None if args.priority_beta_steps is None else int(args.priority_beta_steps)
+        ),
         seed=int(args.seed),
         device=str(args.device),
         save_checkpoint=save_checkpoint,
@@ -122,6 +141,19 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
     )
     _validate_replay_size(replay, config.batch_size)
 
+    beta_schedule = schedules_v2.build_optional_schedule(
+        config.priority_beta_start,
+        config.priority_beta_end,
+        config.priority_beta_steps,
+        name="priority-beta",
+        minimum=0.0,
+    )
+    if beta_schedule is not None and not config.prioritized_replay:
+        raise ValueError(
+            "priority-beta schedule requires --prioritized-replay (beta only "
+            "affects prioritized importance weights)"
+        )
+
     online_model = model_r2d2_v2.R2D2AgentV2()
     target_model = model_r2d2_v2.R2D2AgentV2()
     learner = learner_r2d2_v2.R2D2LearnerV2(
@@ -140,18 +172,29 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
 
     final_metrics: dict[str, float] = {}
     for step in range(config.steps):
+        beta_current = (
+            config.priority_beta
+            if beta_schedule is None
+            else beta_schedule.value_at(step)
+        )
         batch = replay.sample_sequences(
             batch_size=config.batch_size,
             seq_len=config.seq_len,
             burn_in=config.burn_in,
             seed=config.seed + step,
+            beta=beta_current,
         )
         final_metrics = learner.train_step(batch, replay_buffer=replay)
+        # The annealed beta is applied at sample time above and therefore really
+        # shapes the importance weights consumed by this train_step.
+        final_metrics["priority_beta_current"] = float(beta_current)
+        final_metrics["schedule_step"] = float(step)
         print(
             "train_r2d2_v2 "
             f"step={step + 1}/{config.steps} "
             f"loss={final_metrics['loss']:.6f} "
-            f"valid_steps={final_metrics['valid_steps']:.0f}"
+            f"valid_steps={final_metrics['valid_steps']:.0f} "
+            f"beta={beta_current:.4f}"
         )
 
     checkpoint_path = None

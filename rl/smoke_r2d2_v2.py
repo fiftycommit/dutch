@@ -23,6 +23,7 @@ import collect_rollouts_v2
 import infer_r2d2_v2
 import model_r2d2_v2
 from runner_process import RunnerProcess
+import schedules_v2
 import train_r2d2_v2
 
 
@@ -43,6 +44,9 @@ class SmokeConfigV2:
     seed: int = 0
     players: int = 6
     epsilon: float = 0.0
+    epsilon_start: float | None = None
+    epsilon_end: float | None = None
+    epsilon_steps: int | None = None
     keep_artifacts: bool = False
     device: str = "cpu"
     verbose: bool = False
@@ -81,6 +85,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--players", type=int, default=6)
     parser.add_argument("--epsilon", type=float, default=0.0)
+    parser.add_argument("--epsilon-start", type=float, default=None)
+    parser.add_argument("--epsilon-end", type=float, default=None)
+    parser.add_argument("--epsilon-steps", type=int, default=None)
     parser.add_argument("--keep-artifacts", action="store_true")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--verbose", action="store_true")
@@ -101,6 +108,9 @@ def config_from_args(args: argparse.Namespace) -> SmokeConfigV2:
         seed=int(args.seed),
         players=int(args.players),
         epsilon=float(args.epsilon),
+        epsilon_start=(None if args.epsilon_start is None else float(args.epsilon_start)),
+        epsilon_end=(None if args.epsilon_end is None else float(args.epsilon_end)),
+        epsilon_steps=(None if args.epsilon_steps is None else int(args.epsilon_steps)),
         keep_artifacts=bool(args.keep_artifacts),
         device=str(args.device),
         verbose=bool(args.verbose),
@@ -117,6 +127,14 @@ def run_smoke_v2(
     infer_fn: InferFn = infer_r2d2_v2.infer_rollouts_v2,
 ) -> SmokeSummaryV2:
     _validate_config(config)
+    epsilon_schedule = schedules_v2.build_optional_schedule(
+        config.epsilon_start,
+        config.epsilon_end,
+        config.epsilon_steps,
+        name="epsilon",
+        minimum=0.0,
+        maximum=1.0,
+    )
     runner_factory = runner_factory or (lambda max_turns: RunnerProcess(max_turns=max_turns))
 
     with _artifact_dir(config) as artifact_dir:
@@ -168,6 +186,7 @@ def run_smoke_v2(
                 seed=config.seed,
                 max_steps=config.infer_max_steps,
                 epsilon=config.epsilon,
+                epsilon_schedule=epsilon_schedule,
                 players=config.players,
                 verbose=config.verbose,
             )

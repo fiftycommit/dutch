@@ -19,6 +19,7 @@ import collect_rollouts_v2
 import infer_r2d2_v2
 import model_r2d2_v2
 from runner_process import RunnerProcess
+import schedules_v2
 
 
 MAX_SAFE_EPISODES = 100
@@ -33,6 +34,9 @@ class EvalConfigV2:
     players: int = 6
     seed: int = 0
     epsilon: float = 0.0
+    epsilon_start: float | None = None
+    epsilon_end: float | None = None
+    epsilon_steps: int | None = None
     compare_random: bool = False
     device: str = "cpu"
     output_json: Path | None = None
@@ -87,6 +91,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--players", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epsilon", type=float, default=0.0)
+    parser.add_argument("--epsilon-start", type=float, default=None)
+    parser.add_argument("--epsilon-end", type=float, default=None)
+    parser.add_argument("--epsilon-steps", type=int, default=None)
     parser.add_argument("--compare-random", action="store_true")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--output-json", type=str, default=None)
@@ -103,6 +110,9 @@ def config_from_args(args: argparse.Namespace) -> EvalConfigV2:
         players=int(args.players),
         seed=int(args.seed),
         epsilon=float(args.epsilon),
+        epsilon_start=(None if args.epsilon_start is None else float(args.epsilon_start)),
+        epsilon_end=(None if args.epsilon_end is None else float(args.epsilon_end)),
+        epsilon_steps=(None if args.epsilon_steps is None else int(args.epsilon_steps)),
         compare_random=bool(args.compare_random),
         device=str(args.device),
         output_json=Path(args.output_json) if args.output_json else None,
@@ -122,6 +132,15 @@ def run_evaluation_v2(
     runner_factory = runner_factory or (lambda max_turns: RunnerProcess(max_turns=max_turns))
     model = load_checkpoint_model_v2(config.checkpoint, device=config.device)
 
+    epsilon_schedule = schedules_v2.build_optional_schedule(
+        config.epsilon_start,
+        config.epsilon_end,
+        config.epsilon_steps,
+        name="epsilon",
+        minimum=0.0,
+        maximum=1.0,
+    )
+
     try:
         with runner_factory(max(config.max_steps, 1)) as runner:
             model_records = infer_fn(
@@ -131,6 +150,7 @@ def run_evaluation_v2(
                 seed=config.seed,
                 max_steps=config.max_steps,
                 epsilon=config.epsilon,
+                epsilon_schedule=epsilon_schedule,
                 players=config.players,
                 verbose=False,
             )
