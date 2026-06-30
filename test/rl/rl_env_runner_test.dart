@@ -273,6 +273,53 @@ void _expectNoSlotStabilityLeak(dynamic value) {
   }
 }
 
+Map<String, dynamic> _legalPrivateMemory(Map<String, dynamic> obs) =>
+    (obs['legal_private_memory'] as Map).cast<String, dynamic>();
+
+List<Map<String, dynamic>> _ownMemorySlots(Map<String, dynamic> obs) =>
+    (((_legalPrivateMemory(obs)['own_hand'] as Map)['slots'] as List)
+        .cast<Map>()
+        .map((slot) => slot.cast<String, dynamic>())
+        .toList());
+
+Map<String, dynamic> _ownMemorySlot(Map<String, dynamic> obs, int slot) =>
+    _ownMemorySlots(obs).firstWhere((entry) => entry['slot'] == slot);
+
+Map<String, dynamic> _opponentMemory(
+  Map<String, dynamic> obs,
+  String playerId,
+) =>
+    (_legalPrivateMemory(obs)['opponents'] as List)
+        .cast<Map>()
+        .map((opponent) => opponent.cast<String, dynamic>())
+        .firstWhere((opponent) => opponent['player_id'] == playerId);
+
+void _expectNoLegalPrivateMemoryLeak(dynamic value) {
+  const forbidden = {
+    'opponent_hand',
+    'true_score',
+    'deck',
+    'full_hands',
+    'kept_card',
+    'drawn_card',
+    'swapped_card',
+    'new_order',
+    'debug_labels',
+  };
+  if (value is Map) {
+    for (final key in value.keys) {
+      expect(forbidden, isNot(contains(key)));
+    }
+    for (final child in value.values) {
+      _expectNoLegalPrivateMemoryLeak(child);
+    }
+  } else if (value is List) {
+    for (final child in value) {
+      _expectNoLegalPrivateMemoryLeak(child);
+    }
+  }
+}
+
 void main() {
   // 1 ─────────────────────────────────────────────────────────────────────────
   group('1. Déterminisme seed', () {
@@ -865,6 +912,214 @@ void main() {
       expect((obs['obs'] as Map)['turn_count'], greaterThan(changedTurn));
       expect(_slotStabilityFor(obs, env.rlSeat.id, 1)['changed_this_turn'],
           isFalse);
+    });
+
+    test('legal_private_memory : slot connu expose mentalMap, pas hand brut',
+        () async {
+      final env = RlEnv(episodeId: 'memory-own-known', forcedNumPlayers: 2);
+      var obs = await env.reset(41);
+      env.rlSeat.hand = [
+        PlayingCard.create('hearts', 'A'),
+        PlayingCard.create('clubs', '9'),
+      ];
+      env.rlSeat.knownCards = [true, false];
+      env.rlSeat.mentalMap = [
+        PlayingCard.create('spades', '7'),
+        null,
+      ];
+
+      obs = await env.step({'kind': 'continue_draw'});
+      final slot = _ownMemorySlot(obs, 0);
+
+      expect(slot['known'], isTrue);
+      expect(slot['valid'], isTrue);
+      expect(slot['confidence'], 1.0);
+      expect(slot['believed_value'], '7');
+      expect(slot['believed_match_value'], '7');
+      expect(slot['believed_points'], 7);
+      expect(slot['source'], 'mental_map');
+      expect(slot['believed_value'], isNot('A'));
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_private_memory : slot inconnu ne révèle pas hand[slot]',
+        () async {
+      final env = RlEnv(episodeId: 'memory-own-unknown', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 42);
+      env.rlSeat.hand = [
+        PlayingCard.create('hearts', 'R'),
+        PlayingCard.create('clubs', '9'),
+      ];
+      env.rlSeat.knownCards = [false, true];
+      env.rlSeat.mentalMap = [
+        null,
+        PlayingCard.create('clubs', '9'),
+      ];
+      env.gs.drawnCard = PlayingCard.create('diamonds', '4');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      final slot = _ownMemorySlot(obs, 0);
+
+      expect(slot['known'], isFalse);
+      expect(slot['valid'], isFalse);
+      expect(slot['confidence'], 0.0);
+      expect(slot['believed_value'], isNull);
+      expect(slot['believed_match_value'], isNull);
+      expect(slot['believed_points'], isNull);
+      expect(slot['source'], isNull);
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_private_memory : spyMemory expose uniquement le slot espionné',
+        () async {
+      final env = RlEnv(episodeId: 'memory-spy', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 43);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('hearts', '4'),
+        PlayingCard.create('spades', 'D'),
+        PlayingCard.create('clubs', '2'),
+      ];
+      env.rlSeat.rememberSpiedCard(bot.id, 1, bot.hand[1]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '4');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      final opponent = _opponentMemory(obs, bot.id);
+      final spiedSlots = (opponent['spied_slots'] as List).cast<Map>();
+
+      expect(spiedSlots.length, 1);
+      final spied = spiedSlots.single.cast<String, dynamic>();
+      expect(spied['slot'], 1);
+      expect(spied['known'], isTrue);
+      expect(spied['believed_value'], 'D');
+      expect(spied['believed_match_value'], 'D');
+      expect(spied['believed_points'], 12);
+      expect(spied['source'], 'spy_memory');
+      expect(spiedSlots.map((slot) => slot['slot']), isNot(contains(0)));
+      expect(spiedSlots.map((slot) => slot['slot']), isNot(contains(2)));
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test(
+        'legal_private_memory : exchange propre reflète la carte piochée connue',
+        () async {
+      final env = RlEnv(episodeId: 'memory-exchange', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 44);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '3'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 1}
+      });
+      final slot = _ownMemorySlot(obs, 1);
+
+      expect(slot['known'], isTrue);
+      expect(slot['believed_value'], 'A');
+      expect(slot['believed_points'], 1);
+      expect(slot['source'], 'mental_map');
+      expect(slot.keys, isNot(contains('kept_card')));
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_private_memory : match supprime le slot et shift la mémoire',
+        () async {
+      final env = RlEnv(episodeId: 'memory-match-shift', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 45);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('clubs', '5'),
+        PlayingCard.create('spades', 'D'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+
+      final slots = _ownMemorySlots(obs);
+      expect(slots.length, 2);
+      expect(_ownMemorySlot(obs, 1)['known'], isTrue);
+      expect(_ownMemorySlot(obs, 1)['believed_value'], 'D');
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_private_memory : Valet ne révèle pas les cartes échangées',
+        () async {
+      final env = RlEnv(episodeId: 'memory-valet', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 46);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      env.rlSeat.hand = [
+        PlayingCard.create('hearts', 'A'),
+        PlayingCard.create('clubs', '2'),
+      ];
+      env.rlSeat.knownCards = [true, false];
+      env.rlSeat.mentalMap = [
+        PlayingCard.create('hearts', 'A'),
+        null,
+      ];
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      obs = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 1,
+          'player_b': bot.id,
+          'slot_b': 0,
+        },
+      });
+
+      final opponent = _opponentMemory(obs, bot.id);
+      expect(opponent['spied_slots'], isEmpty);
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
+    });
+
+    test('legal_private_memory : Joker ne révèle pas le nouvel ordre',
+        () async {
+      final env = RlEnv(episodeId: 'memory-joker', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 47);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+        PlayingCard.create('clubs', '4'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.rlSeat.rememberSpiedCard(bot.id, 1, bot.hand[1]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': bot.id},
+      });
+
+      final opponent = _opponentMemory(obs, bot.id);
+      expect(opponent['spied_slots'], isEmpty);
+      expect(jsonEncode(obs['legal_private_memory']),
+          isNot(contains('new_order')));
+      _expectNoLegalPrivateMemoryLeak(obs['legal_private_memory']);
     });
 
     test('doublon minimal : replace puis match actif sur le même rang',

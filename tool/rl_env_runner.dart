@@ -81,6 +81,18 @@ class _SlotStabilityEntry {
   String lastChangedReason;
 }
 
+class _MemoryMeta {
+  _MemoryMeta({
+    required this.observedTurn,
+    required this.observedAction,
+    required this.source,
+  });
+
+  int observedTurn;
+  int observedAction;
+  String source;
+}
+
 const List<String> _kRanks = [
   'A',
   '2',
@@ -235,6 +247,9 @@ class RlEnv {
       <String, List<_SlotStabilityEntry>>{};
   final List<Map<String, dynamic>> _recentSlotChanges =
       <Map<String, dynamic>>[];
+  final Map<int, _MemoryMeta> _ownMemoryMeta = <int, _MemoryMeta>{};
+  final Map<String, Map<int, _MemoryMeta>> _spyMemoryMeta =
+      <String, Map<int, _MemoryMeta>>{};
 
   // Accès lecture pour les tests de non-régression.
   GameState get gs => _gs;
@@ -268,6 +283,7 @@ class RlEnv {
     _recentEvents.clear();
     _recentSlotChanges.clear();
     _initializeSlotStability();
+    _initializePrivateMemoryMeta();
     return _advanceToRlOrTerminal();
   }
 
@@ -373,6 +389,8 @@ class RlEnv {
           GameLogic.replaceCard(_gs, index);
           if (discarded != null) {
             _markSlotChanged(actor, index, 'exchange');
+            _markOwnMemoryKnown(index, 'mental_map');
+            _syncPrivateMemoryMeta();
             _recordDiscardEvent(
               actor: actor,
               card: discarded,
@@ -470,6 +488,7 @@ class RlEnv {
       await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
           personality: perso, skipDelay: true);
       _recordPowerHandDiffChanges(beforePowerHands, powerValue);
+      _syncPrivateMemoryMeta();
       _gs.phase = GamePhase.playing;
       _gs.isWaitingForSpecialPower = false;
       _gs.specialCardToActivate = null;
@@ -625,6 +644,7 @@ class RlEnv {
           await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
               personality: perso, skipDelay: true);
           _recordPowerHandDiffChanges(beforePowerHands, power.card.value);
+          _syncPrivateMemoryMeta();
         } finally {
           _gs.currentPlayerIndex = savedCurrentPlayerIndex;
           _gs.phase = GamePhase.playing;
@@ -702,6 +722,7 @@ class RlEnv {
           GameLogic.lookAtCard(_gs, _rlSeat, i);
           // Connaissance légitime de sa propre carte (cf. _usePower7).
           _rlSeat.updateMentalMap(i, _rlSeat.hand[i]);
+          _markOwnMemoryKnown(i, 'mental_map');
           break;
         case 'power10_spy':
           final t = _seat(params['target_seat'] as String);
@@ -709,6 +730,7 @@ class RlEnv {
           GameLogic.lookAtCard(_gs, t, i);
           // Mémoire d'espionnage légitime (cf. _usePower10).
           _rlSeat.rememberSpiedCard(t.id, i, t.hand[i]);
+          _markSpyMemoryKnown(t.id, i, 'spy_memory');
           break;
         case 'powerV_swap':
           final a = _seat((params['player_a'] ?? _rlSeat.id) as String);
@@ -719,11 +741,13 @@ class RlEnv {
           GameLogic.swapCards(_gs, a, ia, b, ib);
           _markSlotChanged(a, ia, 'jack_swap');
           _markSlotChanged(b, ib, 'jack_swap');
+          _syncPrivateMemoryMeta();
           break;
         case 'powerJoker':
           final t = _seat(params['target_seat'] as String);
           GameLogic.jokerEffect(_gs, t);
           _markAllSlotsChanged(t, 'joker_shuffle');
+          _syncPrivateMemoryMeta();
           break;
       }
     } finally {
@@ -980,6 +1004,7 @@ class RlEnv {
       'training_signals': _buildTrainingSignals(),
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'slot_stability': _buildSlotStability(),
+      'legal_private_memory': _buildLegalPrivateMemory(),
       'micro_phase': _micro.name,
       'obs': _buildObservation(),
       'action_mask': _buildMask(),
@@ -1021,6 +1046,7 @@ class RlEnv {
       'proxy_threat': _curProxyThreat,
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
       'slot_stability': _buildSlotStability(),
+      'legal_private_memory': _buildLegalPrivateMemory(),
       'info': {
         'final_ranks': _ranks,
         'final_scores': {
@@ -1070,6 +1096,7 @@ class RlEnv {
     final replacedSlot = actor.hand.indexWhere((card) => card.id == drawn.id);
     if (replacedSlot < 0 || replacedSlot >= handBefore.length) return;
     _markSlotChanged(actor, replacedSlot, 'exchange');
+    _syncPrivateMemoryMeta();
     _recordDiscardEvent(
       actor: actor,
       card: handBefore[replacedSlot],
@@ -1088,6 +1115,7 @@ class RlEnv {
       if (slot != null) {
         _markMatchRemoval(actor, slot, handBefore.length);
       }
+      _syncPrivateMemoryMeta();
       _recordDiscardEvent(
         actor: actor,
         card: _gs.discardPile.last,
@@ -1099,6 +1127,7 @@ class RlEnv {
 
     if (actor.hand.length > handBefore.length) {
       _markPenaltyAdded(actor, handBefore.length);
+      _syncPrivateMemoryMeta();
       _recordMatchFailureEvent(actor: actor);
     }
   }
@@ -1143,6 +1172,12 @@ class RlEnv {
       ..lastChangedAction = _gs.actionCount
       ..lastChangedReason = reason;
     _recordSlotChange(player, slot, reason);
+
+    if (identical(player, _rlSeat)) {
+      _ownMemoryMeta.remove(slot);
+      return;
+    }
+    _spyMemoryMeta[player.id]?.remove(slot);
   }
 
   void _markAllSlotsChanged(Player player, String reason) {
@@ -1165,11 +1200,44 @@ class RlEnv {
 
     _recordSlotChange(player, removedSlot, 'match_removed');
     entries.removeAt(removedSlot);
+    if (identical(player, _rlSeat)) {
+      _removeOwnMemorySlot(removedSlot);
+    } else {
+      _removeSpyMemorySlot(player.id, removedSlot);
+    }
     while (entries.length > player.hand.length) {
       entries.removeLast();
     }
     while (entries.length < player.hand.length) {
       entries.add(_newSlotEntry('initial'));
+    }
+  }
+
+  void _removeOwnMemorySlot(int removedSlot) {
+    final shifted = <int, _MemoryMeta>{};
+    for (final entry in _ownMemoryMeta.entries) {
+      if (entry.key == removedSlot) continue;
+      shifted[entry.key > removedSlot ? entry.key - 1 : entry.key] =
+          entry.value;
+    }
+    _ownMemoryMeta
+      ..clear()
+      ..addAll(shifted);
+  }
+
+  void _removeSpyMemorySlot(String playerId, int removedSlot) {
+    final meta = _spyMemoryMeta[playerId];
+    if (meta == null) return;
+    final shifted = <int, _MemoryMeta>{};
+    for (final entry in meta.entries) {
+      if (entry.key == removedSlot) continue;
+      shifted[entry.key > removedSlot ? entry.key - 1 : entry.key] =
+          entry.value;
+    }
+    if (shifted.isEmpty) {
+      _spyMemoryMeta.remove(playerId);
+    } else {
+      _spyMemoryMeta[playerId] = shifted;
     }
   }
 
@@ -1263,6 +1331,150 @@ class RlEnv {
           },
       ],
       'recent_changes': List<Map<String, dynamic>>.from(_recentSlotChanges),
+    };
+  }
+
+  void _initializePrivateMemoryMeta() {
+    _ownMemoryMeta.clear();
+    _spyMemoryMeta.clear();
+    _syncPrivateMemoryMeta();
+  }
+
+  _MemoryMeta _newMemoryMeta(String source) => _MemoryMeta(
+        observedTurn: _gs.turnCount,
+        observedAction: _gs.actionCount,
+        source: source,
+      );
+
+  void _markOwnMemoryKnown(int slot, String source) {
+    if (slot < 0 || slot >= _rlSeat.hand.length) return;
+    _ownMemoryMeta[slot] = _newMemoryMeta(source);
+  }
+
+  void _markSpyMemoryKnown(String playerId, int slot, String source) {
+    if (slot < 0) return;
+    _spyMemoryMeta.putIfAbsent(playerId, () => <int, _MemoryMeta>{})[slot] =
+        _newMemoryMeta(source);
+  }
+
+  void _syncPrivateMemoryMeta() {
+    for (final slot in List<int>.from(_ownMemoryMeta.keys)) {
+      final known = slot >= 0 &&
+          slot < _rlSeat.hand.length &&
+          slot < _rlSeat.knownCards.length &&
+          _rlSeat.knownCards[slot] &&
+          slot < _rlSeat.mentalMap.length &&
+          _rlSeat.mentalMap[slot] != null;
+      if (!known) _ownMemoryMeta.remove(slot);
+    }
+
+    for (var i = 0; i < _rlSeat.hand.length; i++) {
+      final known = i < _rlSeat.knownCards.length &&
+          _rlSeat.knownCards[i] &&
+          i < _rlSeat.mentalMap.length &&
+          _rlSeat.mentalMap[i] != null;
+      if (known) {
+        _ownMemoryMeta.putIfAbsent(i, () => _newMemoryMeta('mental_map'));
+      }
+    }
+
+    final validOpponentIds = _players.map((p) => p.id).toSet();
+    for (final playerId in List<String>.from(_spyMemoryMeta.keys)) {
+      final current = _rlSeat.spyMemory[playerId];
+      if (current == null ||
+          current.isEmpty ||
+          !validOpponentIds.contains(playerId)) {
+        _spyMemoryMeta.remove(playerId);
+        continue;
+      }
+      final meta = _spyMemoryMeta[playerId]!;
+      for (final slot in List<int>.from(meta.keys)) {
+        if (!current.containsKey(slot)) meta.remove(slot);
+      }
+    }
+
+    for (final entry in _rlSeat.spyMemory.entries) {
+      final player = _seatOrNull(entry.key);
+      if (player == null || identical(player, _rlSeat)) continue;
+      final meta = _spyMemoryMeta.putIfAbsent(entry.key, () => {});
+      for (final slot in entry.value.keys) {
+        if (slot >= 0 && slot < player.hand.length) {
+          meta.putIfAbsent(slot, () => _newMemoryMeta('spy_memory'));
+        }
+      }
+    }
+  }
+
+  Map<String, dynamic> _buildLegalPrivateMemory() {
+    _syncPrivateMemoryMeta();
+    return {
+      'own_hand': {
+        'slots': [
+          for (var i = 0; i < _rlSeat.hand.length; i++)
+            _buildOwnHandMemorySlot(i),
+        ],
+      },
+      'opponents': [
+        for (final p in _opponents()) _buildOpponentMemory(p),
+      ],
+    };
+  }
+
+  Map<String, dynamic> _buildOwnHandMemorySlot(int slot) {
+    final known = slot < _rlSeat.knownCards.length &&
+        _rlSeat.knownCards[slot] &&
+        slot < _rlSeat.mentalMap.length &&
+        _rlSeat.mentalMap[slot] != null;
+    final believed = known ? _rlSeat.mentalMap[slot] : null;
+    final meta = _ownMemoryMeta[slot];
+    return {
+      'slot': slot,
+      'known': known,
+      'believed_value': believed?.value,
+      'believed_match_value': believed?.matchValue,
+      'believed_points': believed?.points,
+      'valid': known,
+      'confidence': known ? 1.0 : 0.0,
+      'age_actions':
+          meta == null ? null : _gs.actionCount - meta.observedAction,
+      'age_turns': meta == null ? null : _gs.turnCount - meta.observedTurn,
+      'source': known ? (meta?.source ?? 'mental_map') : null,
+    };
+  }
+
+  Map<String, dynamic> _buildOpponentMemory(Player opponent) {
+    final spied = _rlSeat.getSpiedCards(opponent.id) ?? const {};
+    final meta = _spyMemoryMeta[opponent.id] ?? const <int, _MemoryMeta>{};
+    final slots = spied.keys
+        .where((slot) => slot >= 0 && slot < opponent.hand.length)
+        .toList()
+      ..sort();
+    return {
+      'seat': opponent.position,
+      'player_id': opponent.id,
+      'spied_slots': [
+        for (final slot in slots)
+          () {
+            final card = spied[slot]!;
+            final slotMeta = meta[slot];
+            return {
+              'slot': slot,
+              'known': true,
+              'believed_value': card.value,
+              'believed_match_value': card.matchValue,
+              'believed_points': card.points,
+              'valid': true,
+              'confidence': 1.0,
+              'age_actions': slotMeta == null
+                  ? null
+                  : _gs.actionCount - slotMeta.observedAction,
+              'age_turns': slotMeta == null
+                  ? null
+                  : _gs.turnCount - slotMeta.observedTurn,
+              'source': slotMeta?.source ?? 'spy_memory',
+            };
+          }(),
+      ],
     };
   }
 
