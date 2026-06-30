@@ -224,6 +224,55 @@ Map<String, dynamic> _lastEvent(
 ) =>
     _recentEvents(obs).lastWhere(test);
 
+Map<String, dynamic> _slotStability(Map<String, dynamic> obs) =>
+    (obs['slot_stability'] as Map).cast<String, dynamic>();
+
+Map<String, dynamic> _slotStabilityFor(
+  Map<String, dynamic> obs,
+  String playerId,
+  int slot,
+) {
+  final players = (_slotStability(obs)['players'] as List).cast<Map>();
+  final player = players
+      .map((p) => p.cast<String, dynamic>())
+      .firstWhere((p) => p['player_id'] == playerId);
+  final slots = (player['slots'] as List).cast<Map>();
+  return slots
+      .map((s) => s.cast<String, dynamic>())
+      .firstWhere((s) => s['slot'] == slot);
+}
+
+List<Map<String, dynamic>> _recentSlotChanges(Map<String, dynamic> obs) =>
+    (_slotStability(obs)['recent_changes'] as List? ?? const [])
+        .cast<Map>()
+        .map((change) => change.cast<String, dynamic>())
+        .toList();
+
+void _expectNoSlotStabilityLeak(dynamic value) {
+  const forbidden = {
+    'card_value',
+    'card_points',
+    'hand',
+    'true_score',
+    'kept_card',
+    'drawn_card',
+    'swapped_card',
+    'deck',
+  };
+  if (value is Map) {
+    for (final key in value.keys) {
+      expect(forbidden, isNot(contains(key)));
+    }
+    for (final child in value.values) {
+      _expectNoSlotStabilityLeak(child);
+    }
+  } else if (value is List) {
+    for (final child in value) {
+      _expectNoSlotStabilityLeak(child);
+    }
+  }
+}
+
 void main() {
   // 1 ─────────────────────────────────────────────────────────────────────────
   group('1. Déterminisme seed', () {
@@ -616,6 +665,206 @@ void main() {
       expect(event.keys, isNot(contains('card_value')));
       expect(event.keys, isNot(contains('opponent_hand')));
       expect(event.keys, isNot(contains('true_score')));
+    });
+
+    test('slot_stability : exchange marque le slot remplacé', () async {
+      final env = RlEnv(episodeId: 'stability-exchange', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 35);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '3'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 1}
+      });
+      final slot = _slotStabilityFor(obs, env.rlSeat.id, 1);
+
+      expect(slot['last_changed_reason'], 'exchange');
+      expect(slot['turns_since_changed'], 0);
+      expect(slot['actions_since_changed'], 0);
+      expect(slot['changed_this_turn'], isTrue);
+      _expectNoSlotStabilityLeak(obs['slot_stability']);
+    });
+
+    test('slot_stability : match supprime le slot et shift les métadonnées',
+        () async {
+      final env = RlEnv(episodeId: 'stability-match', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 36);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('clubs', '5'),
+        PlayingCard.create('spades', 'D'),
+        PlayingCard.create('diamonds', 'R'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      final beforeShiftedMeta = _slotStabilityFor(obs, env.rlSeat.id, 2);
+      final beforeTailMeta = _slotStabilityFor(obs, env.rlSeat.id, 3);
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+
+      final slots = (((_slotStability(obs)['players'] as List)
+              .cast<Map>()
+              .map((p) => p.cast<String, dynamic>())
+              .firstWhere((p) => p['player_id'] == env.rlSeat.id)['slots'])
+          as List);
+      final shiftedSlot = _slotStabilityFor(obs, env.rlSeat.id, 1);
+      final tailSlot = _slotStabilityFor(obs, env.rlSeat.id, 2);
+      final changes = _recentSlotChanges(obs).where((change) =>
+          change['player_id'] == env.rlSeat.id &&
+          change['reason'] == 'match_removed');
+
+      expect(slots.length, 3);
+      expect(shiftedSlot['last_changed_reason'],
+          beforeShiftedMeta['last_changed_reason']);
+      expect(shiftedSlot['last_changed_turn'],
+          beforeShiftedMeta['last_changed_turn']);
+      expect(shiftedSlot['last_changed_action'],
+          beforeShiftedMeta['last_changed_action']);
+      expect(tailSlot['last_changed_reason'],
+          beforeTailMeta['last_changed_reason']);
+      expect(
+          tailSlot['last_changed_turn'], beforeTailMeta['last_changed_turn']);
+      expect(tailSlot['last_changed_action'],
+          beforeTailMeta['last_changed_action']);
+      expect(changes.map((change) => change['slot']), contains(1));
+      _expectNoSlotStabilityLeak(obs['slot_stability']);
+    });
+
+    test('slot_stability : faux match marque le nouveau slot pénalité',
+        () async {
+      final env = RlEnv(episodeId: 'stability-penalty', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 37);
+      _setKnownHand(env, [
+        PlayingCard.create('clubs', '8'),
+        PlayingCard.create('spades', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', '5');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 0}
+      });
+
+      final penaltySlot = _slotStabilityFor(obs, env.rlSeat.id, 2);
+      expect(penaltySlot['last_changed_reason'], 'penalty');
+      expect(penaltySlot['changed_this_turn'], isTrue);
+      _expectNoSlotStabilityLeak(obs['slot_stability']);
+    });
+
+    test('slot_stability : Valet marque les deux slots échangés', () async {
+      final env = RlEnv(episodeId: 'stability-valet', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 38);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', 'A'),
+        PlayingCard.create('clubs', '2'),
+      ]);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'V');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({
+        'kind': 'powerV_swap',
+        'params': {
+          'player_a': env.rlSeat.id,
+          'slot_a': 1,
+          'player_b': bot.id,
+          'slot_b': 0,
+        },
+      });
+
+      expect(_slotStabilityFor(obs, env.rlSeat.id, 1)['last_changed_reason'],
+          'jack_swap');
+      expect(_slotStabilityFor(obs, bot.id, 0)['last_changed_reason'],
+          'jack_swap');
+      _expectNoSlotStabilityLeak(obs['slot_stability']);
+    });
+
+    test('slot_stability : Joker invalide tous les slots de la cible',
+        () async {
+      final env = RlEnv(episodeId: 'stability-joker', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 39);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+        PlayingCard.create('clubs', '4'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
+
+      obs = await env.step({'kind': 'discard_drawn'});
+      expect(obs['micro_phase'], 'power');
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': bot.id},
+      });
+
+      for (var i = 0; i < bot.hand.length; i++) {
+        expect(_slotStabilityFor(obs, bot.id, i)['last_changed_reason'],
+            'joker_shuffle');
+      }
+      _expectNoSlotStabilityLeak(obs['slot_stability']);
+    });
+
+    test('slot_stability : changed_this_turn se réinitialise au tour suivant',
+        () async {
+      final env = RlEnv(episodeId: 'stability-turn-reset', forcedNumPlayers: 2);
+      var obs = await _enterPostDraw(env, 40);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('spades', '2'),
+        PlayingCard.create('clubs', '3'),
+      ];
+      bot.knownCards =
+          List<bool>.filled(bot.hand.length, false, growable: true);
+      bot.mentalMap =
+          List<PlayingCard?>.filled(bot.hand.length, null, growable: true);
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '3'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      env.gs.drawnCard = PlayingCard.create('diamonds', 'A');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 1}
+      });
+      final changedTurn =
+          _slotStabilityFor(obs, env.rlSeat.id, 1)['last_changed_turn'] as int;
+      expect(_slotStabilityFor(obs, env.rlSeat.id, 1)['changed_this_turn'],
+          isTrue);
+
+      var guard = 0;
+      while (obs['done'] != true &&
+          (obs['obs'] as Map)['turn_count'] <= changedTurn &&
+          guard++ < 20) {
+        obs = await env.step({'kind': 'pass_tick'});
+      }
+
+      expect((obs['obs'] as Map)['turn_count'], greaterThan(changedTurn));
+      expect(_slotStabilityFor(obs, env.rlSeat.id, 1)['changed_this_turn'],
+          isFalse);
     });
 
     test('doublon minimal : replace puis match actif sur le même rang',

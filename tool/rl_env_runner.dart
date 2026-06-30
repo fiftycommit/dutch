@@ -69,6 +69,18 @@ import 'package:dutch_game/services/logging/game_logger_service.dart';
 /// Micro-phase de décision du siège RL à l'intérieur d'un tour.
 enum RlMicroPhase { dutchOrDraw, postDraw, power, reaction }
 
+class _SlotStabilityEntry {
+  _SlotStabilityEntry({
+    required this.lastChangedTurn,
+    required this.lastChangedAction,
+    required this.lastChangedReason,
+  });
+
+  int lastChangedTurn;
+  int lastChangedAction;
+  String lastChangedReason;
+}
+
 const List<String> _kRanks = [
   'A',
   '2',
@@ -219,6 +231,10 @@ class RlEnv {
   double _curProxyThreat = 0.0; // menace du proxy au step courant (debug obs)
   double _curDestabReward = 0.0; // reward_destab du step courant
   final List<Map<String, dynamic>> _recentEvents = <Map<String, dynamic>>[];
+  final Map<String, List<_SlotStabilityEntry>> _slotStability =
+      <String, List<_SlotStabilityEntry>>{};
+  final List<Map<String, dynamic>> _recentSlotChanges =
+      <Map<String, dynamic>>[];
 
   // Accès lecture pour les tests de non-régression.
   GameState get gs => _gs;
@@ -250,6 +266,8 @@ class RlEnv {
     _curProxyThreat = 0.0;
     _curDestabReward = 0.0;
     _recentEvents.clear();
+    _recentSlotChanges.clear();
+    _initializeSlotStability();
     return _advanceToRlOrTerminal();
   }
 
@@ -354,6 +372,7 @@ class RlEnv {
               : null;
           GameLogic.replaceCard(_gs, index);
           if (discarded != null) {
+            _markSlotChanged(actor, index, 'exchange');
             _recordDiscardEvent(
               actor: actor,
               card: discarded,
@@ -446,8 +465,11 @@ class RlEnv {
     _recordBotPostDrawEvent(bot, drawn, handBefore);
 
     if (_gs.phase == GamePhase.specialPower) {
+      final powerValue = _gs.specialCardToActivate?.value;
+      final beforePowerHands = _snapshotHandIds();
       await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
           personality: perso, skipDelay: true);
+      _recordPowerHandDiffChanges(beforePowerHands, powerValue);
       _gs.phase = GamePhase.playing;
       _gs.isWaitingForSpecialPower = false;
       _gs.specialCardToActivate = null;
@@ -598,9 +620,11 @@ class RlEnv {
         _gs.currentPlayerIndex = ownerIndex;
         final diff = BotConfig.getDifficulty(owner, null);
         final perso = BotPersonality.fromBot(owner);
+        final beforePowerHands = _snapshotHandIds();
         try {
           await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
               personality: perso, skipDelay: true);
+          _recordPowerHandDiffChanges(beforePowerHands, power.card.value);
         } finally {
           _gs.currentPlayerIndex = savedCurrentPlayerIndex;
           _gs.phase = GamePhase.playing;
@@ -640,6 +664,7 @@ class RlEnv {
     final handBefore = List<PlayingCard>.from(actor.hand);
     final success = GameLogic.matchCard(_gs, actor, slot);
     if (success) {
+      _markMatchRemoval(actor, slot, handBefore.length);
       final card =
           slot >= 0 && slot < handBefore.length ? handBefore[slot] : null;
       if (card != null) {
@@ -654,6 +679,7 @@ class RlEnv {
     }
 
     if (actor.hand.length > handBefore.length) {
+      _markPenaltyAdded(actor, handBefore.length);
       _recordMatchFailureEvent(actor: actor, slot: slot);
     }
   }
@@ -691,10 +717,13 @@ class RlEnv {
           final ia = (params['slot_a'] ?? params['own_index']) as int;
           final ib = (params['slot_b'] ?? params['target_index']) as int;
           GameLogic.swapCards(_gs, a, ia, b, ib);
+          _markSlotChanged(a, ia, 'jack_swap');
+          _markSlotChanged(b, ib, 'jack_swap');
           break;
         case 'powerJoker':
           final t = _seat(params['target_seat'] as String);
           GameLogic.jokerEffect(_gs, t);
+          _markAllSlotsChanged(t, 'joker_shuffle');
           break;
       }
     } finally {
@@ -950,6 +979,7 @@ class RlEnv {
       // Signaux reward-only : jamais encodés dans l'observation Python.
       'training_signals': _buildTrainingSignals(),
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
+      'slot_stability': _buildSlotStability(),
       'micro_phase': _micro.name,
       'obs': _buildObservation(),
       'action_mask': _buildMask(),
@@ -990,6 +1020,7 @@ class RlEnv {
       'proxy_seat': _curProxyId,
       'proxy_threat': _curProxyThreat,
       'recent_events': List<Map<String, dynamic>>.from(_recentEvents),
+      'slot_stability': _buildSlotStability(),
       'info': {
         'final_ranks': _ranks,
         'final_scores': {
@@ -1038,6 +1069,7 @@ class RlEnv {
 
     final replacedSlot = actor.hand.indexWhere((card) => card.id == drawn.id);
     if (replacedSlot < 0 || replacedSlot >= handBefore.length) return;
+    _markSlotChanged(actor, replacedSlot, 'exchange');
     _recordDiscardEvent(
       actor: actor,
       card: handBefore[replacedSlot],
@@ -1053,6 +1085,9 @@ class RlEnv {
   }) {
     if (_gs.discardPile.length > discardSizeBefore) {
       final slot = _removedSlot(handBefore, actor.hand);
+      if (slot != null) {
+        _markMatchRemoval(actor, slot, handBefore.length);
+      }
       _recordDiscardEvent(
         actor: actor,
         card: _gs.discardPile.last,
@@ -1063,8 +1098,172 @@ class RlEnv {
     }
 
     if (actor.hand.length > handBefore.length) {
+      _markPenaltyAdded(actor, handBefore.length);
       _recordMatchFailureEvent(actor: actor);
     }
+  }
+
+  void _initializeSlotStability() {
+    _slotStability
+      ..clear()
+      ..addEntries(_players.map((p) {
+        return MapEntry(
+          p.id,
+          List<_SlotStabilityEntry>.generate(
+            p.hand.length,
+            (_) => _newSlotEntry('initial'),
+            growable: true,
+          ),
+        );
+      }));
+  }
+
+  _SlotStabilityEntry _newSlotEntry(String reason) => _SlotStabilityEntry(
+        lastChangedTurn: _gs.turnCount,
+        lastChangedAction: _gs.actionCount,
+        lastChangedReason: reason,
+      );
+
+  List<_SlotStabilityEntry> _stabilityFor(Player player) {
+    final entries = _slotStability.putIfAbsent(player.id, () => []);
+    while (entries.length < player.hand.length) {
+      entries.add(_newSlotEntry('initial'));
+    }
+    if (entries.length > player.hand.length) {
+      entries.removeRange(player.hand.length, entries.length);
+    }
+    return entries;
+  }
+
+  void _markSlotChanged(Player player, int slot, String reason) {
+    if (slot < 0 || slot >= player.hand.length) return;
+    final entries = _stabilityFor(player);
+    entries[slot]
+      ..lastChangedTurn = _gs.turnCount
+      ..lastChangedAction = _gs.actionCount
+      ..lastChangedReason = reason;
+    _recordSlotChange(player, slot, reason);
+  }
+
+  void _markAllSlotsChanged(Player player, String reason) {
+    final entries = _stabilityFor(player);
+    for (var i = 0; i < player.hand.length; i++) {
+      entries[i]
+        ..lastChangedTurn = _gs.turnCount
+        ..lastChangedAction = _gs.actionCount
+        ..lastChangedReason = reason;
+      _recordSlotChange(player, i, reason);
+    }
+  }
+
+  void _markMatchRemoval(Player player, int removedSlot, int beforeLength) {
+    if (removedSlot < 0 || removedSlot >= beforeLength) return;
+    final entries = _slotStability.putIfAbsent(player.id, () => []);
+    while (entries.length < beforeLength) {
+      entries.add(_newSlotEntry('initial'));
+    }
+
+    _recordSlotChange(player, removedSlot, 'match_removed');
+    entries.removeAt(removedSlot);
+    while (entries.length > player.hand.length) {
+      entries.removeLast();
+    }
+    while (entries.length < player.hand.length) {
+      entries.add(_newSlotEntry('initial'));
+    }
+  }
+
+  void _markPenaltyAdded(Player player, int beforeLength) {
+    final entries = _slotStability.putIfAbsent(player.id, () => []);
+    while (entries.length < beforeLength) {
+      entries.add(_newSlotEntry('initial'));
+    }
+    while (entries.length < player.hand.length) {
+      final slot = entries.length;
+      entries.add(_newSlotEntry('penalty'));
+      _recordSlotChange(player, slot, 'penalty');
+    }
+    if (entries.length > player.hand.length) {
+      entries.removeRange(player.hand.length, entries.length);
+    }
+  }
+
+  Map<String, List<String>> _snapshotHandIds() => {
+        for (final p in _players) p.id: p.hand.map((card) => card.id).toList(),
+      };
+
+  void _recordPowerHandDiffChanges(
+    Map<String, List<String>> before,
+    String? powerValue,
+  ) {
+    final reason = powerValue == 'JOKER'
+        ? 'joker_shuffle'
+        : powerValue == 'V'
+            ? 'jack_swap'
+            : null;
+    if (reason == null) return;
+
+    for (final player in _players) {
+      final beforeIds = before[player.id] ?? const <String>[];
+      final afterIds = player.hand.map((card) => card.id).toList();
+      final maxLen = max(beforeIds.length, afterIds.length);
+      for (var i = 0; i < maxLen; i++) {
+        final beforeId = i < beforeIds.length ? beforeIds[i] : null;
+        final afterId = i < afterIds.length ? afterIds[i] : null;
+        if (beforeId != afterId) {
+          if (i < player.hand.length) {
+            _markSlotChanged(player, i, reason);
+          } else {
+            _recordSlotChange(player, i, reason);
+          }
+        }
+      }
+    }
+  }
+
+  void _recordSlotChange(Player player, int slot, String reason) {
+    _recentSlotChanges.add({
+      'turn_count': _gs.turnCount,
+      'action_count': _gs.actionCount,
+      'player_id': player.id,
+      'seat': player.position,
+      'slot': slot,
+      'reason': reason,
+    });
+    if (_recentSlotChanges.length > 32) {
+      _recentSlotChanges.removeRange(0, _recentSlotChanges.length - 32);
+    }
+  }
+
+  Map<String, dynamic> _buildSlotStability() {
+    return {
+      'players': [
+        for (final p in _players)
+          {
+            'seat': p.position,
+            'player_id': p.id,
+            'slots': [
+              for (var i = 0; i < p.hand.length; i++)
+                () {
+                  final entries = _stabilityFor(p);
+                  final entry = entries[i];
+                  return {
+                    'slot': i,
+                    'turns_since_changed':
+                        max(0, _gs.turnCount - entry.lastChangedTurn),
+                    'actions_since_changed':
+                        max(0, _gs.actionCount - entry.lastChangedAction),
+                    'changed_this_turn': entry.lastChangedTurn == _gs.turnCount,
+                    'last_changed_turn': entry.lastChangedTurn,
+                    'last_changed_action': entry.lastChangedAction,
+                    'last_changed_reason': entry.lastChangedReason,
+                  };
+                }(),
+            ],
+          },
+      ],
+      'recent_changes': List<Map<String, dynamic>>.from(_recentSlotChanges),
+    };
   }
 
   int? _removedSlot(List<PlayingCard> before, List<PlayingCard> after) {
