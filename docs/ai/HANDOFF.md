@@ -11,21 +11,31 @@ Agent ayant modifié ce fichier : Claude Code
 
 Le projet Dutch'78 reste en phase 2 RL. L'AgentInterface v2 (faits publics, mémoire privée légale, stabilité de slots, actions structurées `action_v2`) est en place, et **un cœur R2D2 v2 complet a maintenant été construit dessus**, en pile de fichiers `*_v2.py` isolés qui ne touchent ni PPO legacy ni le gameplay. La phase 1 ML supervisée est terminée/frozen et ne doit pas être cassée.
 
-Deux jalons RL v2 récents (poussés sur `main`) :
-- `010751e feat(rl): complete v2 r2d2 core` : prioritized sequence replay, importance sampling, update priorities depuis TD-error, Double Q factorisé, n-step TD propre (source de vérité unique côté loss), burn-in complet documenté et verrouillé par test, learner et train CLI câblés.
-- `8d42d87 feat(rl): add v2 r2d2 schedules` : `LinearScheduleV2` + annealing `priority_beta` (PER) côté training et `epsilon` côté policy d'inférence/évaluation.
+Le cœur R2D2 v2 (PER, IS weights, update priorities, Double Q factorisé, n-step, burn-in complet), les schedules beta/epsilon, l'export de métriques d'entraînement, et un logger + analyseur de traces action-level sont en place et testés (commits `010751e`, `8d42d87`, `de7d21f`, `786a791`, `738b153`).
 
-État validé après ces commits : `py_compile` de toute la pile v2 OK ; tous les tests unitaires v2 verts ; `rl/test_roundtrip.py` **6/6** ; smokes courts e2e + schedule OK (artefacts auto-supprimés). Aucun entraînement long lancé. Détails complets dans le journal (entrée 2026-06-30 — Cœur R2D2 v2 + schedules).
+> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT POUR L'INSTANT.** Deux raisons : (1) le runner avait des BLOCKERs de fidélité (corrigés, cf. ci-dessous) ; (2) le reward v2 ne pénalise pas assez les faux matchs (**H2** de l'audit), ce qui pousse l'agent au match-spam — à revoir AVANT tout retrain.
 
-Avant ces deux jalons, deux commits avaient stabilisé l'interface :
-- `8fa49fa feat(rl): expose reaction window to RL agent` : p0 peut participer à la `reaction_window`.
-- `1c2c4fa feat(game): resolve pending match powers for bots` : `pendingMatchPowers` résolus côté runner headless ; Valet/Joker actifs séquencés en FIFO.
+> ⚠️ **L'ancien checkpoint `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt` a été entraîné sur le runner pré-fix et NE DOIT PAS servir de point de départ sérieux** (ni base de fine-tune). Il a appris une policy dégénérée match-heavy et finit même PIRE que random au score final post-fix. Retrain depuis zéro recommandé.
+
+> ⚠️ **La fidélité du runner passe avant le scaling RL.** Toute divergence de gameplay doit être auditée et corrigée avant d'entraîner.
+
+**Chronologie récente (audit + fix runner)** :
+- `c9f9ad8 docs(rl): audit v2 runner fidelity` : audit complet (`docs/ai/RL_RUNNER_FIDELITY_AUDIT.md`). 3 BLOCKERs trouvés : réaction pilotée par `pass_tick` au lieu du timer réel → boucles `match` ; `phase=ended` continuait avec `done=false` ; faux match `deck=0` devenait un no-op ; `legal_action_v2` proposait `match` en `ended`/no-op.
+- `9682d7b fix(rl): simulate reaction timer and recycle discard` : runner corrigé (cf. section « Fidélité du runner »). Évaluation contrôlée post-fix faite (sans training) : épisodes terminants, `reached_max_steps` 27/30 → **0/30**, plus de boucle (`match_chain_max` 100 → **30** = timer 3s simulé), 0 action illégale, 0 crash. **Le runner est maintenant stable pour un retrain ; le reward H2 reste à traiter d'abord.**
+
+Avant tout cela, deux commits avaient stabilisé l'interface : `8fa49fa` (reaction window exposée à p0) et `1c2c4fa` (pendingMatchPowers résolus, Valet/Joker FIFO).
 
 ---
 
 ## Objectif actuel
 
-Le cœur R2D2 v2 est implémenté et testé sur l'AgentInterface v2. L'objectif immédiat est désormais un **premier vrai run contrôlé plus long** (collecte → train → evaluate vs random/bots), avec analyse des courbes hors repo, avant tout durcissement (stored recurrent state, acteurs distribués). La fidélité de l'interface continue en parallèle (Valet complet, event stream brut, mémoire adverse légale) mais ne bloque plus l'amorçage R2D2.
+Le cœur R2D2 v2 et le runner corrigé sont en place. **Avant tout nouveau training**, la prochaine étape est de **revoir le reward shaping v2 (H2 de l'audit)** : faux match, match réussi, Dutch, score final/rang — l'agent fait du match-spam faute de signal pénalisant les faux matchs coûteux. Séquence recommandée :
+1. Audit/rework du reward v2 (faux match / match réussi / Dutch / score-rang).
+2. Collecte neuve sur le runner corrigé (idéalement epsilon-greedy, pas pure random).
+3. **Retrain depuis zéro** (ne pas fine-tune l'ancien checkpoint, biaisé par le runner pré-fix).
+4. Évaluation + traces post-train.
+
+Ne pas relancer de training tant que le reward H2 n'a pas été revu.
 
 Contraintes :
 - RL depuis zéro : le siège RL n'hérite d'aucune heuristique de bot.
@@ -35,6 +45,50 @@ Contraintes :
 - Inspecter le vrai code avant toute modification.
 - Ne pas inventer de classes, méthodes, chemins ou signatures.
 - Ne pas mélanger les changements RL avec les fichiers hors scope déjà présents dans le worktree.
+
+---
+
+## Fidélité du runner RL v2 (audit + fix)
+
+> **Principe : la fidélité du runner passe avant le scaling RL.** Toute divergence entre le vrai Dutch'78 et le runner headless doit être auditée et corrigée avant d'entraîner. Audit complet : `docs/ai/RL_RUNNER_FIDELITY_AUDIT.md`.
+
+### BLOCKERs trouvés (audit `c9f9ad8`) — désormais corrigés
+- Réaction pilotée par `pass_tick` au lieu du timer réel → un agent greedy qui matche toujours bouclait à l'infini.
+- `phase=ended` pouvait continuer avec `done=false` (épisode jamais terminé).
+- Faux match avec `deck=0` devenait un no-op répétable.
+- `legal_action_v2` proposait encore `match` en `ended`/no-op.
+
+### Fix appliqué (`9682d7b`, fichiers `tool/rl_env_runner.dart` + `test/rl/rl_env_runner_test.dart`)
+- **Timer GLOBAL de réaction simulé** (équivalent headless du timer mural ~3s) : `_kReactionTimerMs = 3000`, `_kHeadlessReactionTickMs = 100`, `_kMaxHeadlessReactionTicks = 30`.
+- **Aucune action ne réinitialise le timer** : ni un match réussi, ni un faux match, ni un `pass_tick`, ni un changement de top discard. Chaque décision de réaction consomme **un tick** ; l'expiration du budget ferme la fenêtre (même si p0 ne joue jamais `pass_tick`). Budget réamorcé uniquement à l'ouverture d'une nouvelle fenêtre.
+- **Deck vide → recyclage** (réutilise `GameLogic._refillDeck`) : remélange toute la défausse **sauf la top discard** quand une pioche est nécessaire ; la top reste matchable ; le deck vide seul ne termine pas la manche.
+- **Faux match → pénalité réelle** (via refill si besoin), top inchangée, carte reste en main, timer continue ; jamais de no-op.
+- `phase=ended` ⇒ `done=true` côté RL ; `legal_action_v2` ne propose plus `match` en `ended`/terminal.
+- Tests : `flutter test test/rl/rl_env_runner_test.dart` **67/67** (dont parité byte-à-byte #5 intacte) ; `dart analyze` runner OK ; Python v2 (`test_action_trace_v2`, `test_analyze_action_trace_v2`, `test_infer_r2d2_v2`, `test_evaluate_r2d2_v2`) verts ; `test_roundtrip` **6/6** ; `git diff --check` OK. Binaire `tool/rl_env_runner` recompilé (gitignored, non committé).
+
+### Évaluation contrôlée post-fix (sans training, ancien checkpoint)
+Checkpoint évalué : `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt` (entraîné AVANT le fix). 30 épisodes, 6 joueurs, greedy ε=0, `compare-random`.
+
+| métrique | modèle (greedy) | random |
+|---|---|---|
+| completed | 30/30 | 30/30 |
+| average_steps | 38.9 | 31.4 |
+| reached_max_steps | **0** | 0 |
+| average_reward | −0.987 | −1.0 |
+| dutch_calls | 0 | 5 (0 réussis) |
+| wins / win_rate | 0 / 0.0 | 0 / 0.0 |
+| average_final_rank | 5.97 | 6.0 |
+| average_final_score_p0 | 208.6 | 187.0 |
+| illegal_action_errors | 0 | 0 |
+
+Trace (5 ép., 238 décisions) : selected `match 143, pass_tick 72, draw 9, post_draw_replace 9, jack_swap 2, joker 1, power_7 1, power_10 1` ; phase `reaction 215, playing 18, specialPower 5, ended 0` ; `done_true 5/5` ; `match_chain_max 30` (= timer simulé) ; `call_dutch` légal 9× / choisi 0× ; **0 clé interdite**, **0 `phase=ended` `done=false`**, **0 `match` offert en `ended`**.
+
+**Comparaison avant/après fix (modèle greedy)** : `average_steps` 457.8 → **38.9** ; `reached_max_steps` 27/30 → **0/30** ; `phase=ended done=false` nombreux → **0** ; `match_chain_max` ~100/∞ → **30**. Épisodes désormais terminants, aucune boucle.
+
+### Conclusions
+- Le runner est **stable pour un retrain**.
+- L'ancien checkpoint est **trop biaisé** (policy match-spam apprise sur le runner bogué ; pire que random au score final). **Ne pas le fine-tune comme base sérieuse.**
+- Avant retrain : traiter **H2** (reward v2 ne pénalise pas assez les faux matchs → match-spam).
 
 ---
 
@@ -303,6 +357,23 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-30 — Audit fidélité runner + fix timer réaction/recyclage + éval post-fix (Claude Code)
+
+Contexte : le premier run contrôlé (collecte 9370 transitions, train 3000 steps) et son éval ont révélé que le modèle greedy ne terminait presque jamais les parties (`average_steps≈457.8`, `reached_max_steps=27/30`, `dutch_calls=0`). Le logger + analyseur de traces action-level (`786a791`, `738b153`) ont localisé la cause : boucle `match` en `reaction`/`ended`.
+
+Étapes :
+- **Logger/analyseur de traces** (`786a791 feat(rl): add v2 action trace logging`, `738b153 feat(rl): add v2 action trace analysis`) : `rl/action_trace_v2.py` (+test), `rl/analyze_action_trace_v2.py` (+test) ; niveaux `none/selected/legal_scores/full`, gzip, scan anti-fuite, scores identiques à la policy.
+- **Audit fidélité** (`c9f9ad8 docs(rl): audit v2 runner fidelity`) : `docs/ai/RL_RUNNER_FIDELITY_AUDIT.md`. 3 BLOCKERs (réaction `pass_tick` au lieu du timer ; `phase=ended` `done=false` ; faux match `deck=0` no-op ; `legal_action_v2` proposant `match` en `ended`).
+- **Fix runner** (`72a442b` puis `9682d7b fix(rl): simulate reaction timer and recycle discard`) : timer global 3s simulé (3000/100 = 30 ticks), aucune action ne reset le timer, chaque décision consomme un tick, recyclage défausse (sauf top) à la pioche, faux match toujours pénalisé, `phase=ended ⇒ done=true`, plus de `match` en terminal. `tool/rl_env_runner.dart` + `test/rl/rl_env_runner_test.dart` (groupes 2c + 2d). 67/67 Dart (parité #5 OK), Python v2 + `test_roundtrip` 6/6, binaire recompilé (gitignored).
+- **Éval contrôlée post-fix** (sans training) : épisodes terminants (30/30), `reached_max_steps` 27/30 → **0/30**, `match_chain_max` ~100 → **30**, `phase=ended done=false` → **0**, 0 illégal, 0 crash. Détails et tableaux dans la section « Fidélité du runner RL v2 » ci-dessus.
+
+Décisions :
+- Runner **stable pour retrain**.
+- **Ancien checkpoint à jeter comme base** (biaisé par le runner pré-fix ; policy match-spam ; pire que random au score final).
+- **Ne pas relancer de training** tant que le reward **H2** (faux matchs sous-pénalisés) n'a pas été revu.
+
+Prochaine action recommandée : audit/rework reward v2 → collecte neuve (epsilon-greedy) sur runner corrigé → retrain from scratch → éval + traces.
 
 ### 2026-06-30 — Cœur R2D2 v2 complété + schedules beta/epsilon (Claude Code)
 
