@@ -46,10 +46,22 @@ class PolicyMetricsV2:
     completed_episodes: int
     total_steps: int
     average_steps: float
+    average_episode_length: float
     total_reward: float
     average_reward: float
     dutch_calls: int
+    successful_dutch_calls: int | None
+    failed_dutch_calls: int | None
     wins: int | None
+    losses: int | None
+    draws: int | None
+    win_rate: float | None
+    final_ranks: list[int] | None
+    average_final_rank: float | None
+    final_scores_p0: list[float] | None
+    average_final_score_p0: float | None
+    episode_done_reasons: dict[str, int]
+    reached_max_steps: int
     illegal_action_errors: int
     completed_without_crash: bool
 
@@ -175,16 +187,40 @@ def metrics_from_records(records: list[Any]) -> PolicyMetricsV2:
     ]
     total_steps = len(transitions)
     total_reward = sum(float(getattr(transition, "reward", 0.0)) for transition in transitions)
-    wins = _extract_wins(transitions)
+    terminal_infos = _terminal_infos(records)
+    wins = _extract_wins(terminal_infos)
+    losses = _extract_losses(terminal_infos)
+    final_ranks = _extract_final_ranks(terminal_infos)
+    final_scores = _extract_final_scores_p0(terminal_infos)
+    successful_dutch, failed_dutch = _extract_dutch_results(terminal_infos)
+    completed_with_results = None if wins is None else max(wins + (losses or 0), 0)
     return PolicyMetricsV2(
         episodes=episodes,
         completed_episodes=completed,
         total_steps=total_steps,
+        average_episode_length=(float(total_steps) / episodes if episodes else 0.0),
         average_steps=(float(total_steps) / episodes if episodes else 0.0),
         total_reward=float(total_reward),
         average_reward=(float(total_reward) / episodes if episodes else 0.0),
         dutch_calls=_count_dutch_calls(transitions),
+        successful_dutch_calls=successful_dutch,
+        failed_dutch_calls=failed_dutch,
         wins=wins,
+        losses=losses,
+        draws=_extract_draws(terminal_infos),
+        win_rate=(
+            None
+            if wins is None or not completed_with_results
+            else float(wins) / float(completed_with_results)
+        ),
+        final_ranks=final_ranks,
+        average_final_rank=_average(final_ranks),
+        final_scores_p0=final_scores,
+        average_final_score_p0=_average(final_scores),
+        episode_done_reasons=_episode_done_reasons(records),
+        reached_max_steps=sum(
+            1 for record in records if bool(getattr(record, "truncated_by_max_steps", False))
+        ),
         illegal_action_errors=0,
         completed_without_crash=True,
     )
@@ -197,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
         "evaluate_r2d2_v2: "
         f"model_steps={summary.model.total_steps} "
         f"model_reward={summary.model.total_reward:.3f} "
+        f"model_wins={summary.model.wins} "
+        f"model_win_rate={summary.model.win_rate} "
+        f"model_avg_final_score={summary.model.average_final_score_p0} "
         f"random_steps={None if summary.random is None else summary.random.total_steps} "
+        f"random_wins={None if summary.random is None else summary.random.wins} "
         f"saved={summary.output_json is not None and not args.no_save}"
     )
     return 0
@@ -253,16 +293,136 @@ def _count_dutch_calls(transitions: list[Any]) -> int:
     return count
 
 
-def _extract_wins(transitions: list[Any]) -> int | None:
+def _terminal_infos(records: list[Any]) -> list[dict[str, Any]]:
+    infos: list[dict[str, Any]] = []
+    for record in records:
+        transitions = list(getattr(record, "transitions", []))
+        if not transitions:
+            continue
+        info = getattr(transitions[-1], "info", {}) or {}
+        if isinstance(info, dict):
+            infos.append(info)
+    return infos
+
+
+def _extract_wins(infos: list[dict[str, Any]]) -> int | None:
     values: list[bool] = []
-    for transition in transitions:
-        info = getattr(transition, "info", {}) or {}
+    for info in infos:
         for key in ["won", "win", "is_winner"]:
             if key in info and isinstance(info[key], bool):
                 values.append(bool(info[key]))
+                break
+        else:
+            rank = _rank_from_info(info)
+            if rank is not None:
+                values.append(rank == 1)
     if not values:
         return None
     return sum(1 for value in values if value)
+
+
+def _extract_losses(infos: list[dict[str, Any]]) -> int | None:
+    values: list[bool] = []
+    for info in infos:
+        won = _won_from_info(info)
+        if won is not None:
+            values.append(not won)
+            continue
+        rank = _rank_from_info(info)
+        if rank is not None:
+            values.append(rank != 1)
+    if not values:
+        return None
+    return sum(1 for value in values if value)
+
+
+def _extract_draws(infos: list[dict[str, Any]]) -> int | None:
+    values: list[bool] = []
+    for info in infos:
+        rank = _rank_from_info(info)
+        ranks = info.get("final_ranks")
+        if rank is None or not isinstance(ranks, dict):
+            continue
+        values.append(sum(1 for value in ranks.values() if value == rank) > 1)
+    if not values:
+        return None
+    return sum(1 for value in values if value)
+
+
+def _extract_final_ranks(infos: list[dict[str, Any]]) -> list[int] | None:
+    values = [rank for info in infos if (rank := _rank_from_info(info)) is not None]
+    return values or None
+
+
+def _extract_final_scores_p0(infos: list[dict[str, Any]]) -> list[float] | None:
+    values: list[float] = []
+    for info in infos:
+        scores = info.get("final_scores")
+        if isinstance(scores, dict):
+            raw = scores.get("p0") if "p0" in scores else scores.get("principal")
+            if isinstance(raw, (int, float)):
+                values.append(float(raw))
+    return values or None
+
+
+def _extract_dutch_results(
+    infos: list[dict[str, Any]],
+) -> tuple[int | None, int | None]:
+    values: list[bool] = []
+    for info in infos:
+        called = info.get("called_dutch")
+        if not isinstance(called, bool) or not called:
+            continue
+        won = _won_from_info(info)
+        if won is not None:
+            values.append(won)
+    if not values:
+        return None, None
+    return (
+        sum(1 for value in values if value),
+        sum(1 for value in values if not value),
+    )
+
+
+def _episode_done_reasons(records: list[Any]) -> dict[str, int]:
+    reasons: dict[str, int] = {}
+    for record in records:
+        transitions = list(getattr(record, "transitions", []))
+        info = getattr(transitions[-1], "info", {}) if transitions else {}
+        reason = None
+        if isinstance(info, dict):
+            raw = info.get("done_reason") or info.get("episode_done_reason")
+            if isinstance(raw, str) and raw:
+                reason = raw
+        if reason is None:
+            reason = (
+                "max_steps"
+                if bool(getattr(record, "truncated_by_max_steps", False))
+                else "completed"
+                if bool(getattr(record, "completed", False))
+                else "unknown"
+            )
+        reasons[reason] = reasons.get(reason, 0) + 1
+    return reasons
+
+
+def _won_from_info(info: dict[str, Any]) -> bool | None:
+    for key in ["won", "win", "is_winner"]:
+        value = info.get(key)
+        if isinstance(value, bool):
+            return value
+    return None
+
+
+def _rank_from_info(info: dict[str, Any]) -> int | None:
+    value = info.get("rank") or info.get("final_rank")
+    return int(value) if isinstance(value, int) else None
+
+
+def _average(values: list[int] | list[float] | None) -> float | None:
+    if not values:
+        return None
+    return float(sum(values)) / float(len(values))
 
 
 def _crash_metrics(episodes: int) -> PolicyMetricsV2:
@@ -271,10 +431,22 @@ def _crash_metrics(episodes: int) -> PolicyMetricsV2:
         completed_episodes=0,
         total_steps=0,
         average_steps=0.0,
+        average_episode_length=0.0,
         total_reward=0.0,
         average_reward=0.0,
         dutch_calls=0,
+        successful_dutch_calls=None,
+        failed_dutch_calls=None,
         wins=None,
+        losses=None,
+        draws=None,
+        win_rate=None,
+        final_ranks=None,
+        average_final_rank=None,
+        final_scores_p0=None,
+        average_final_score_p0=None,
+        episode_done_reasons={"crash": 1},
+        reached_max_steps=0,
         illegal_action_errors=1,
         completed_without_crash=False,
     )

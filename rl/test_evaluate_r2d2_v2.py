@@ -30,6 +30,7 @@ class FakeTransition:
 class FakeRecord:
     transitions: list[FakeTransition]
     completed: bool = True
+    truncated_by_max_steps: bool = False
 
 
 class FakeRunner:
@@ -143,6 +144,91 @@ def test_metrics_aggregate_steps_rewards_and_missing_wins() -> None:
         raise AssertionError(f"dutch call count wrong: {metrics.dutch_calls}")
     if metrics.wins is not None:
         raise AssertionError("wins should stay null when not exposed")
+    if metrics.final_scores_p0 is not None:
+        raise AssertionError("final score should stay null when not exposed")
+    if metrics.successful_dutch_calls is not None or metrics.failed_dutch_calls is not None:
+        raise AssertionError("dutch result split should stay null when not exposed")
+
+
+def test_metrics_aggregate_terminal_results_when_exposed() -> None:
+    records = [
+        FakeRecord(
+            transitions=[
+                FakeTransition(
+                    reward=1.0,
+                    action_v2={"action_type": "call_dutch"},
+                    info={
+                        "won": True,
+                        "rank": 1,
+                        "called_dutch": True,
+                        "final_scores": {"p0": 12, "p1": 20},
+                        "final_ranks": {"p0": 1, "p1": 2},
+                        "done_reason": "round_end",
+                    },
+                )
+            ],
+            completed=True,
+        ),
+        FakeRecord(
+            transitions=[
+                FakeTransition(
+                    reward=-1.0,
+                    info={
+                        "won": False,
+                        "rank": 3,
+                        "called_dutch": True,
+                        "final_scores": {"p0": 44, "p1": 10},
+                        "final_ranks": {"p0": 3, "p1": 1},
+                    },
+                )
+            ],
+            completed=True,
+        ),
+    ]
+    metrics = evaluate_r2d2_v2.metrics_from_records(records)
+    if metrics.wins != 1 or metrics.losses != 1:
+        raise AssertionError(f"win/loss aggregation wrong: {metrics}")
+    if metrics.win_rate != 0.5:
+        raise AssertionError(f"win rate wrong: {metrics.win_rate}")
+    if metrics.final_ranks != [1, 3] or metrics.average_final_rank != 2.0:
+        raise AssertionError(f"rank aggregation wrong: {metrics}")
+    if metrics.final_scores_p0 != [12.0, 44.0] or metrics.average_final_score_p0 != 28.0:
+        raise AssertionError(f"score aggregation wrong: {metrics}")
+    if metrics.successful_dutch_calls != 1 or metrics.failed_dutch_calls != 1:
+        raise AssertionError(f"dutch result split wrong: {metrics}")
+    if metrics.episode_done_reasons != {"round_end": 1, "completed": 1}:
+        raise AssertionError(f"done reasons wrong: {metrics.episode_done_reasons}")
+
+
+def test_metrics_detect_draws_when_final_ranks_tie() -> None:
+    records = [
+        FakeRecord(
+            transitions=[
+                FakeTransition(
+                    reward=1.0,
+                    info={
+                        "rank": 1,
+                        "final_ranks": {"p0": 1, "p1": 1, "p2": 3},
+                    },
+                )
+            ],
+            completed=True,
+        )
+    ]
+    metrics = evaluate_r2d2_v2.metrics_from_records(records)
+    if metrics.draws != 1:
+        raise AssertionError(f"draw count wrong: {metrics.draws}")
+
+
+def test_reached_max_steps_is_counted_from_record_flag() -> None:
+    records = [
+        FakeRecord(transitions=[FakeTransition(reward=0.0)], completed=False, truncated_by_max_steps=True)
+    ]
+    metrics = evaluate_r2d2_v2.metrics_from_records(records)
+    if metrics.reached_max_steps != 1:
+        raise AssertionError(f"max step count wrong: {metrics.reached_max_steps}")
+    if metrics.episode_done_reasons != {"max_steps": 1}:
+        raise AssertionError(f"done reason wrong: {metrics.episode_done_reasons}")
 
 
 def test_run_evaluation_calls_model_and_random_pipelines() -> None:
@@ -210,7 +296,12 @@ def test_output_json_only_when_requested_and_not_no_save() -> None:
         if not summary_path.exists():
             raise AssertionError("summary file was not written")
         data = summary_path.read_text(encoding="utf-8")
-        if '"model"' not in data or '"random"' not in data:
+        if (
+            '"model"' not in data
+            or '"random"' not in data
+            or '"average_final_score_p0"' not in data
+            or '"episode_done_reasons"' not in data
+        ):
             raise AssertionError(f"summary content incomplete: {data}")
 
 
@@ -255,6 +346,9 @@ if __name__ == "__main__":
     test_refuses_missing_checkpoint()
     test_refuses_long_runs_without_allow_long_run()
     test_metrics_aggregate_steps_rewards_and_missing_wins()
+    test_metrics_aggregate_terminal_results_when_exposed()
+    test_metrics_detect_draws_when_final_ranks_tie()
+    test_reached_max_steps_is_counted_from_record_flag()
     test_run_evaluation_calls_model_and_random_pipelines()
     test_output_json_only_when_requested_and_not_no_save()
     test_random_policy_helper_chooses_only_legal_actions()
