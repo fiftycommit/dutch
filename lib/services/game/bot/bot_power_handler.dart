@@ -1753,12 +1753,8 @@ class BotPowerHandler {
     Player? target =
         _chooseJokerTarget(gs, bot, difficulty, personality: personality);
 
-    // Silver+ : jamais s'attaquer soi-même. Si aucune cible valide → skip.
-    // Bronze : fallback sur soi-même autorisé (conséquence de la règle
-    // "Bronze ne cible jamais l'humain" en 1v1, design volontaire).
     if (target == null) {
-      if (!_isBronzeDifficulty(difficulty)) return false;
-      target = bot;
+      return false;
     }
 
     GameLogic.jokerEffect(gs, target);

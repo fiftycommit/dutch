@@ -700,7 +700,7 @@ class RlEnv {
         }
         if (val == 'JOKER' && kind == 'powerJoker') {
           final t = _seatOrNull(params['target_seat']);
-          return t != null && t.hand.isNotEmpty;
+          return t != null && !identical(t, _rlSeat) && t.hand.isNotEmpty;
         }
         return false;
 
@@ -747,7 +747,8 @@ class RlEnv {
         } else if (val == 'JOKER') {
           mask['powerJoker'] = {
             for (final p in _players)
-              if (!p.isSpectator) p.id: p.hand.isNotEmpty,
+              if (!p.isSpectator && !identical(p, _rlSeat))
+                p.id: p.hand.isNotEmpty,
           };
         }
         return mask;

@@ -985,7 +985,8 @@ void main() {
       expect(samePlayer['code'], 'ILLEGAL_ACTION');
     });
 
-    test('Joker normal : p0 peut cibler un adversaire et soi-même', () async {
+    test('Joker normal : p0 peut cibler un adversaire mais pas soi-même',
+        () async {
       final env = RlEnv(episodeId: 'joker-normal', forcedNumPlayers: 2);
       var obs = await _enterPostDraw(env, 24);
 
@@ -1005,8 +1006,15 @@ void main() {
       obs = await env.step({'kind': 'discard_drawn'});
       expect(obs['micro_phase'], 'power');
       final mask = obs['action_mask'] as Map<String, dynamic>;
-      expect((mask['powerJoker'] as Map)[env.rlSeat.id], isTrue);
+      expect((mask['powerJoker'] as Map).containsKey(env.rlSeat.id), isFalse);
       expect((mask['powerJoker'] as Map)[bot.id], isTrue);
+
+      final selfTarget = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': env.rlSeat.id},
+      });
+      expect(selfTarget['type'], 'error');
+      expect(selfTarget['code'], 'ILLEGAL_ACTION');
 
       obs = await env.step({
         'kind': 'powerJoker',
@@ -1014,22 +1022,6 @@ void main() {
       });
       expect(obs['type'], 'observation');
       expect(bot.knownCards.every((known) => known == false), isTrue);
-
-      obs = await _enterPostDraw(env, 25);
-      _setKnownHand(env, [
-        PlayingCard.create('hearts', '3'),
-        PlayingCard.create('clubs', '4'),
-      ]);
-      env.gs.drawnCard = PlayingCard.create('diamonds', 'JOKER');
-
-      obs = await env.step({'kind': 'discard_drawn'});
-      expect(obs['micro_phase'], 'power');
-      obs = await env.step({
-        'kind': 'powerJoker',
-        'params': {'target_seat': env.rlSeat.id},
-      });
-      expect(obs['type'], 'observation');
-      expect(env.rlSeat.knownCards.every((known) => known == false), isTrue);
     });
 
     test('Valet pending p0 : action complète résolue après la réaction',
@@ -1081,10 +1073,17 @@ void main() {
       expect(bot.hand[0].id, rlBefore);
     });
 
-    test('Joker pending p0 : cible p0 autorisée et queue vidée', () async {
+    test('Joker pending p0 : self rejeté, adversaire autorisé', () async {
       final env = RlEnv(episodeId: 'joker-pending-p0', forcedNumPlayers: 2);
       var obs = await _enterPostDraw(env, 27);
 
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('spades', 'R'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
       _setKnownHand(env, [
         PlayingCard.create('hearts', 'JOKER'),
         PlayingCard.create('clubs', 'A'),
@@ -1105,13 +1104,19 @@ void main() {
       obs = await env.step({'kind': 'pass_tick'});
       expect(obs['micro_phase'], 'power');
       expect(env.pendingPowerValue, 'JOKER');
-      obs = await env.step({
+      final selfTarget = await env.step({
         'kind': 'powerJoker',
         'params': {'target_seat': env.rlSeat.id},
       });
+      expect(selfTarget['type'], 'error');
+      expect(selfTarget['code'], 'ILLEGAL_ACTION');
+
+      obs = await env.step({
+        'kind': 'powerJoker',
+        'params': {'target_seat': bot.id},
+      });
       expect(obs['type'], 'observation');
       expect(env.gs.pendingMatchPowers, isEmpty);
-      expect(env.rlSeat.knownCards.every((known) => known == false), isTrue);
     });
   });
 

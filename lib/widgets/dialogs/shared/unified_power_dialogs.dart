@@ -596,7 +596,9 @@ class UnifiedPowerDialogs {
           color: Colors.red,
           title: "🃏 JOKER : CHAOS",
           subtitle: "Choisissez un joueur pour mélanger sa main",
-          players: config.allPlayers,
+          players: config.allPlayers
+              .where((p) => p.id != config.localPlayer.id)
+              .toList(),
           onSelectPlayer: (player, index) {
             config.onPlayerTargeted
                 ?.call({config.gameState.players.indexOf(player)});
