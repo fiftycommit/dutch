@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 import torch
 
+import action_trace_v2
 import collect_rollouts_v2
 import infer_r2d2_v2
 import model_r2d2_v2
@@ -42,6 +43,11 @@ class EvalConfigV2:
     output_json: Path | None = None
     no_save: bool = False
     allow_long_run: bool = False
+    # Action-level trace (model policy only by design; random has no Q model).
+    trace_actions: str = "none"
+    action_trace_out: Path | None = None
+    action_trace_gzip: bool = False
+    action_trace_top_k: int | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-json", type=str, default=None)
     parser.add_argument("--no-save", action="store_true")
     parser.add_argument("--allow-long-run", action="store_true")
+    parser.add_argument(
+        "--trace-actions",
+        choices=list(action_trace_v2.TRACE_LEVELS),
+        default="none",
+    )
+    parser.add_argument("--action-trace-out", type=str, default=None)
+    parser.add_argument("--action-trace-gzip", action="store_true")
+    parser.add_argument("--action-trace-top-k", type=int, default=None)
     return parser
 
 
@@ -118,6 +132,10 @@ def config_from_args(args: argparse.Namespace) -> EvalConfigV2:
         output_json=Path(args.output_json) if args.output_json else None,
         no_save=bool(args.no_save),
         allow_long_run=bool(args.allow_long_run),
+        trace_actions=args.trace_actions,
+        action_trace_out=Path(args.action_trace_out) if args.action_trace_out else None,
+        action_trace_gzip=bool(args.action_trace_gzip),
+        action_trace_top_k=args.action_trace_top_k,
     )
 
 
@@ -140,20 +158,31 @@ def run_evaluation_v2(
         minimum=0.0,
         maximum=1.0,
     )
+    # Only the model policy is traced: the random baseline has no Q model, so a
+    # legal-score trace would be meaningless. The writer wraps the model infer.
+    trace_config = action_trace_v2.ActionTraceConfigV2(
+        level=config.trace_actions,
+        out_path=config.action_trace_out,
+        gzip=config.action_trace_gzip,
+        top_k=config.action_trace_top_k,
+    )
 
     try:
-        with runner_factory(max(config.max_steps, 1)) as runner:
-            model_records = infer_fn(
-                runner,
-                model,
-                episodes=config.episodes,
-                seed=config.seed,
-                max_steps=config.max_steps,
-                epsilon=config.epsilon,
-                epsilon_schedule=epsilon_schedule,
-                players=config.players,
-                verbose=False,
-            )
+        with action_trace_v2.maybe_open_writer(trace_config) as trace_writer:
+            with runner_factory(max(config.max_steps, 1)) as runner:
+                model_records = infer_fn(
+                    runner,
+                    model,
+                    episodes=config.episodes,
+                    seed=config.seed,
+                    max_steps=config.max_steps,
+                    epsilon=config.epsilon,
+                    epsilon_schedule=epsilon_schedule,
+                    trace_writer=trace_writer,
+                    trace_config=trace_config,
+                    players=config.players,
+                    verbose=False,
+                )
         model_metrics = metrics_from_records(model_records)
     except Exception:
         model_metrics = _crash_metrics(config.episodes)

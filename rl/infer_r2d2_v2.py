@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import torch
 
+import action_trace_v2
 import collect_rollouts_v2
 import encoding_v2
 import model_r2d2_v2
@@ -99,12 +100,19 @@ def infer_episode_v2(
     extra_options: dict[str, Any] | None = None,
     epsilon_schedule: schedules_v2.LinearScheduleV2 | None = None,
     global_step_offset: int = 0,
+    trace_writer: action_trace_v2.ActionTraceWriterV2 | None = None,
+    trace_config: action_trace_v2.ActionTraceConfigV2 | None = None,
     verbose: bool = False,
 ) -> InferenceEpisodeV2:
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
     if global_step_offset < 0:
         raise ValueError("global_step_offset must be >= 0")
+    trace_enabled = (
+        trace_writer is not None
+        and trace_config is not None
+        and trace_config.enabled
+    )
 
     obs = runner.reset(seed, episode_id=episode_id, extra_options=extra_options)
     transitions: list[TransitionV2] = []
@@ -145,6 +153,24 @@ def infer_episode_v2(
             )
 
         done = bool(next_obs.get("done"))
+        reward = _reward_from_message(next_obs)
+
+        if trace_enabled:
+            record = action_trace_v2.build_action_trace_record(
+                trace_config,
+                output=output,
+                selected=selected,
+                legal_action_v2=obs.get("legal_action_v2") or {},
+                obs_raw=obs,
+                reward=reward,
+                done=done,
+                episode_id=episode_id,
+                step_index=step_index,
+                global_step=global_step_offset + step_index,
+                epsilon=current_epsilon,
+            )
+            trace_writer.write(record)
+
         next_encoded = (
             None if done else encoding_v2.encode_observation_v2(next_obs)
         )
@@ -154,7 +180,7 @@ def infer_episode_v2(
                 obs_encoded_v2=encoded,
                 action_v2=dict(selected.action_v2),
                 legacy_action_id=selected.legacy_action_id,
-                reward=_reward_from_message(next_obs),
+                reward=reward,
                 done=done,
                 next_obs_raw=next_obs,
                 next_obs_encoded_v2=next_encoded,
@@ -196,6 +222,8 @@ def infer_rollouts_v2(
     max_steps: int,
     epsilon: float,
     epsilon_schedule: schedules_v2.LinearScheduleV2 | None = None,
+    trace_writer: action_trace_v2.ActionTraceWriterV2 | None = None,
+    trace_config: action_trace_v2.ActionTraceConfigV2 | None = None,
     save_transitions: str | Path | None = None,
     save: bool = False,
     players: int | None = None,
@@ -223,6 +251,8 @@ def infer_rollouts_v2(
             extra_options=extra_options,
             epsilon_schedule=epsilon_schedule,
             global_step_offset=global_step,
+            trace_writer=trace_writer,
+            trace_config=trace_config,
             verbose=verbose,
         )
         records.append(record)
@@ -252,7 +282,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--save-transitions", type=str, default=None)
     parser.add_argument("--no-save", action="store_true")
+    parser.add_argument(
+        "--trace-actions",
+        choices=list(action_trace_v2.TRACE_LEVELS),
+        default="none",
+    )
+    parser.add_argument("--action-trace-out", type=str, default=None)
+    parser.add_argument("--action-trace-gzip", action="store_true")
+    parser.add_argument("--action-trace-top-k", type=int, default=None)
     return parser
+
+
+def trace_config_from_args(args: argparse.Namespace) -> action_trace_v2.ActionTraceConfigV2:
+    return action_trace_v2.ActionTraceConfigV2(
+        level=args.trace_actions,
+        out_path=Path(args.action_trace_out) if args.action_trace_out else None,
+        gzip=bool(args.action_trace_gzip),
+        top_k=args.action_trace_top_k,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,21 +317,25 @@ def main(argv: list[str] | None = None) -> int:
         minimum=0.0,
         maximum=1.0,
     )
+    trace_config = trace_config_from_args(args)
 
-    with RunnerProcess(max_turns=max(args.max_steps, 1)) as runner:
-        records = infer_rollouts_v2(
-            runner,
-            model,
-            episodes=args.episodes,
-            seed=args.seed,
-            max_steps=args.max_steps,
-            epsilon=args.epsilon,
-            epsilon_schedule=epsilon_schedule,
-            save_transitions=args.save_transitions,
-            save=save,
-            players=args.players,
-            verbose=args.verbose,
-        )
+    with action_trace_v2.maybe_open_writer(trace_config) as trace_writer:
+        with RunnerProcess(max_turns=max(args.max_steps, 1)) as runner:
+            records = infer_rollouts_v2(
+                runner,
+                model,
+                episodes=args.episodes,
+                seed=args.seed,
+                max_steps=args.max_steps,
+                epsilon=args.epsilon,
+                epsilon_schedule=epsilon_schedule,
+                trace_writer=trace_writer,
+                trace_config=trace_config,
+                save_transitions=args.save_transitions,
+                save=save,
+                players=args.players,
+                verbose=args.verbose,
+            )
 
     transitions = sum(len(record.transitions) for record in records)
     completed = sum(1 for record in records if record.completed)

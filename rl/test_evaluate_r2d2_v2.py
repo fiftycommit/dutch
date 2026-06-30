@@ -147,6 +147,67 @@ def test_epsilon_schedule_passed_to_infer() -> None:
         raise AssertionError("evaluate did not pass the epsilon schedule to infer")
 
 
+def test_trace_flags_passed_to_model_infer_only() -> None:
+    model_kwargs: dict[str, Any] = {}
+    collect_kwargs: dict[str, Any] = {}
+
+    def infer_fn(*args: Any, **kwargs: Any) -> list[FakeRecord]:
+        del args
+        model_kwargs.update(kwargs)
+        return _records("model")
+
+    def collect_fn(*args: Any, **kwargs: Any) -> list[FakeRecord]:
+        del args
+        collect_kwargs.update(kwargs)
+        return _records("random")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = Path(tmp) / "model.pt"
+        trace = Path(tmp) / "trace.jsonl"
+        _checkpoint(checkpoint)
+        evaluate_r2d2_v2.run_evaluation_v2(
+            evaluate_r2d2_v2.EvalConfigV2(
+                checkpoint=checkpoint,
+                episodes=1,
+                max_steps=5,
+                compare_random=True,
+                trace_actions="legal_scores",
+                action_trace_out=trace,
+            ),
+            runner_factory=FakeRunner,
+            infer_fn=infer_fn,
+            collect_fn=collect_fn,
+        )
+    # Model infer receives a real writer + config at the requested level.
+    if model_kwargs.get("trace_writer") is None:
+        raise AssertionError("model infer did not receive a trace writer")
+    if model_kwargs.get("trace_config") is None or model_kwargs["trace_config"].level != "legal_scores":
+        raise AssertionError("model infer did not receive the trace config")
+    # The random baseline (collect_fn) is never traced.
+    if "trace_writer" in collect_kwargs or "trace_config" in collect_kwargs:
+        raise AssertionError("random baseline must not receive trace args")
+
+
+def test_trace_disabled_passes_no_writer() -> None:
+    captured: dict[str, Any] = {}
+
+    def infer_fn(*args: Any, **kwargs: Any) -> list[FakeRecord]:
+        del args
+        captured.update(kwargs)
+        return _records("model")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = Path(tmp) / "model.pt"
+        _checkpoint(checkpoint)
+        evaluate_r2d2_v2.run_evaluation_v2(
+            evaluate_r2d2_v2.EvalConfigV2(checkpoint=checkpoint, episodes=1, max_steps=5),
+            runner_factory=FakeRunner,
+            infer_fn=infer_fn,
+        )
+    if captured.get("trace_writer") is not None:
+        raise AssertionError("trace writer should be None when tracing is disabled")
+
+
 def test_refuses_missing_checkpoint() -> None:
     config = evaluate_r2d2_v2.EvalConfigV2(
         checkpoint=Path("/tmp/missing-r2d2-v2-checkpoint.pt")
@@ -391,6 +452,8 @@ if __name__ == "__main__":
     test_parser_cli_works()
     test_parser_epsilon_schedule_flags()
     test_epsilon_schedule_passed_to_infer()
+    test_trace_flags_passed_to_model_infer_only()
+    test_trace_disabled_passes_no_writer()
     test_refuses_missing_checkpoint()
     test_refuses_long_runs_without_allow_long_run()
     test_metrics_aggregate_steps_rewards_and_missing_wins()

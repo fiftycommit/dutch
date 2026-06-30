@@ -27,6 +27,55 @@ class SelectedActionV2:
     metadata: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ScoredActionV2:
+    legal_index: int
+    action_v2: dict[str, Any]
+    legacy_action_id: int | None
+    legacy_kind: Any
+    score: float
+
+
+def score_legal_actions_v2(
+    output: model_r2d2_v2.R2D2OutputV2,
+    legal_action_v2: dict[str, Any],
+    *,
+    batch_index: int = 0,
+    time_index: int = 0,
+) -> list[ScoredActionV2]:
+    """Score every ``legal_action_v2.actions`` entry with the factorized Q.
+
+    This is the single canonical scorer reused by the greedy selection and by
+    the action-trace logger, so trace scores are identical to the scores the
+    policy actually uses (same ``score_legal_action_v2`` per entry, same model
+    output). It preserves the original ``legal_index`` ordering.
+    """
+
+    entries = _legal_entries(legal_action_v2)
+    scored: list[ScoredActionV2] = []
+    for index, entry in enumerate(entries):
+        action = _entry_action(entry)
+        score = score_legal_action_v2(
+            output,
+            action,
+            batch_index=batch_index,
+            time_index=time_index,
+        )
+        legacy_id = entry.get("legacy_action_id")
+        if legacy_id is not None and not isinstance(legacy_id, int):
+            raise ValueError(f"legacy_action_id must be int or null: {entry!r}")
+        scored.append(
+            ScoredActionV2(
+                legal_index=index,
+                action_v2=action,
+                legacy_action_id=None if legacy_id is None else int(legacy_id),
+                legacy_kind=entry.get("legacy_kind"),
+                score=score,
+            )
+        )
+    return scored
+
+
 def score_legal_action_v2(
     output: model_r2d2_v2.R2D2OutputV2,
     action_v2: dict[str, Any],

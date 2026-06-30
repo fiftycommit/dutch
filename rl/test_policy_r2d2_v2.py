@@ -338,6 +338,29 @@ def test_compatible_with_real_model_output() -> None:
         raise AssertionError("real model selection returned action outside legal list")
 
 
+def test_score_legal_actions_v2_matches_greedy_and_per_action() -> None:
+    output = _fake_output()
+    _set_action_type(output, "draw", 1.0)
+    _set_action_type(output, "call_dutch", 3.0)
+    _set_action_type(output, "pass_tick", 2.0)
+    legal = _legal(
+        _entry({"action_type": "draw"}, 10),
+        _entry({"action_type": "call_dutch"}, 11),
+        _entry({"action_type": "pass_tick"}, 12),
+    )
+    scored = policy_r2d2_v2.score_legal_actions_v2(output, legal)
+    if [s.legal_index for s in scored] != [0, 1, 2]:
+        raise AssertionError("score_legal_actions_v2 did not preserve legal_index order")
+    for s in scored:
+        per_action = policy_r2d2_v2.score_legal_action_v2(output, s.action_v2)
+        if abs(s.score - per_action) != 0.0:
+            raise AssertionError("score_legal_actions_v2 diverged from score_legal_action_v2")
+    best = max(scored, key=lambda s: s.score)
+    greedy = policy_r2d2_v2.select_greedy_action_v2(output, legal)
+    if best.action_v2 != greedy.action_v2 or abs(best.score - greedy.score) != 0.0:
+        raise AssertionError("max of score_legal_actions_v2 != greedy selection")
+
+
 def test_policy_output_does_not_expose_raw_observation() -> None:
     selected = policy_r2d2_v2.select_greedy_action_v2(
         _fake_output(),
@@ -364,6 +387,7 @@ def main() -> int:
         test_legacy_action_id_is_preserved,
         test_action_message_uses_action_v2_only,
         test_compatible_with_real_model_output,
+        test_score_legal_actions_v2_matches_greedy_and_per_action,
         test_policy_output_does_not_expose_raw_observation,
     ]
     print("=== test_policy_r2d2_v2 ===")
