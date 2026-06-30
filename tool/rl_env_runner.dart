@@ -142,17 +142,27 @@ const double kBonusMax = 0.30;
 const double kGapSat = 20.0;
 
 // ════════════════════════════════════════════════════════════════════════════
-// Borne logique de la fenêtre de réaction (équivalent headless du timer ~3s).
+// Timer GLOBAL de réaction — équivalent headless du timer mural ~3s.
 // ════════════════════════════════════════════════════════════════════════════
-// Le vrai jeu ferme la fenêtre de réaction sur un timer mural fixe (~3000 ms,
-// `reaction_timer_manager.dart`), indépendamment du nombre de matchs. Le runner
-// headless n'attend pas de temps réel : il borne la fenêtre par un budget
-// déterministe de décisions de réaction de p0. La valeur est volontairement
-// généreuse — une suite de matchs LÉGITIMES est de toute façon bornée par la
-// taille de la main (<= 13), donc ce plafond ne se déclenche QUE sur du spam non
-// progressif (faux matchs en boucle, ré-invitations bot répétées), jamais sur du
-// jeu normal. Le budget se réinitialise à chaque nouvelle fenêtre (`_startReactionPhase`).
-const int _kMaxHeadlessReactionTicks = 16;
+// Le vrai jeu (`reaction_timer_manager.dart`) ouvre UNE fenêtre de réaction
+// partagée par tous les joueurs, fermée par un timer mural fixe de ~3000 ms,
+// indépendamment des matchs joués. Le runner headless n'attend pas de temps
+// réel : il modélise ce timer par un budget logique déterministe de « ticks ».
+//
+// Sémantique fidèle (cf. règles Dutch'78) :
+//   - le budget est GLOBAL à la fenêtre, jamais par joueur ;
+//   - AUCUNE action ne le réinitialise : ni un match réussi, ni un faux match,
+//     ni un changement de top discard ne relancent le timer ;
+//   - CHAQUE décision de réaction de p0 consomme un tick (match, faux match,
+//     pass_tick = « je n'ai pas réagi pendant ce laps de temps ») ;
+//   - l'expiration du budget ferme la fenêtre, même si p0 ne joue jamais
+//     pass_tick (pass_tick n'est PAS le seul moyen d'avancer) ;
+//   - le budget est réamorcé uniquement à l'OUVERTURE d'une nouvelle fenêtre
+//     (`_startReactionPhase`), c.-à-d. après le tour d'un joueur.
+const int _kReactionTimerMs = 3000;
+const int _kHeadlessReactionTickMs = 100; // granularité logique du timer
+const int _kMaxHeadlessReactionTicks =
+    _kReactionTimerMs ~/ _kHeadlessReactionTickMs; // = 30 ticks par fenêtre
 
 // ════════════════════════════════════════════════════════════════════════════
 // Config de joueurs forcée (ÉVAL) : parsing + validation des `options` du reset.
@@ -466,14 +476,17 @@ class RlEnv {
         // _refillDeck -> endGame). On propage alors `done=true` au lieu de
         // ré-ouvrir une fenêtre de réaction non progressive.
         if (_isTerminal()) return _finalize();
-        // Borne logique du timer de réaction : sans cela, un agent qui matche
-        // sans cesse garderait la fenêtre ouverte indéfiniment.
+        // Le match (réussi OU faux) consomme un tick du timer global SANS le
+        // réamorcer. Sans ce budget, un agent qui matche sans cesse garderait la
+        // fenêtre ouverte indéfiniment ; avec lui, la fenêtre finit toujours par
+        // se fermer même si p0 ne joue jamais pass_tick.
         _reactionTicks++;
         if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
           return _closeReactionWindowAndAdvance();
         }
-        // Rester dans la fenêtre : l'agent peut chaîner après un match réussi,
-        // ou observer la pénalité après un faux match avant de passer.
+        // Rester dans la même fenêtre : l'agent peut chaîner après un match
+        // réussi (nouvelle top discard, timer NON relancé), ou observer la
+        // pénalité après un faux match avant de passer.
         return _observation();
     }
   }
@@ -624,18 +637,22 @@ class RlEnv {
   /// immédiatement une nouvelle décision `reaction` au lieu d'être exclu jusqu'au
   /// tour suivant.
   Future<Map<String, dynamic>> _passReactionTickThenMaybeAdvance() async {
+    // pass_tick = « je ne réagis pas pendant ce laps de temps » : il consomme un
+    // tick du timer GLOBAL, qu'un bot réagisse ou non. Le timer n'est jamais
+    // réamorcé ; il finit toujours par fermer la fenêtre.
+    _reactionTicks++;
+    if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
+      return _closeReactionWindowAndAdvance();
+    }
     final physicalTopChanged = await _runBotReactionTick(stopOnTopChange: true);
     if (physicalTopChanged && _gs.phase == GamePhase.reaction) {
-      // Un bot a réagi : p0 est ré-invité, mais la ré-invitation consomme le
-      // budget de fenêtre (sinon des bots qui matchent en boucle la garderaient
-      // ouverte indéfiniment).
-      _reactionTicks++;
-      if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
-        return _closeReactionWindowAndAdvance();
-      }
+      // Un bot a réagi : nouvelle top discard => p0 est ré-invité dans la MÊME
+      // fenêtre (budget NON réamorcé, le timer global continue de courir).
       _micro = RlMicroPhase.reaction;
       return _observation();
     }
+    // Plus aucune réaction possible (bots déterministes) => on ferme, équivalent
+    // à l'expiration du timer sans nouvel évènement.
     return _closeReactionWindowAndAdvance();
   }
 

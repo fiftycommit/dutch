@@ -1802,6 +1802,134 @@ void main() {
     });
   });
 
+  // 2d ────────────────────────────────────────────────────────────────────────
+  group('2d. Timer global de réaction (jamais réinitialisé)', () {
+    test('faux match consomme un tick sans réinitialiser le timer', () async {
+      final env = RlEnv(episodeId: 'timer-false-match', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'), // -> top '5'
+        PlayingCard.create('spades', '9'), // faux match (9 != 5)
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.reactionTicks, 0); // budget neuf à l'ouverture de la fenêtre
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.reactionTicks, 1); // un tick consommé
+      expect(env.gs.topDiscardCard?.value, '5'); // top inchangée par faux match
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(env.reactionTicks, 2); // accumule : jamais réinitialisé
+    });
+
+    test('match réussi consomme un tick sans relancer le timer (top change)',
+        () async {
+      final env = RlEnv(episodeId: 'timer-success-match', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 42, [
+        PlayingCard.create('hearts', '5'), // -> top '5'
+        PlayingCard.create('spades', '5'), // match
+        PlayingCard.create('clubs', '5'), // match
+        PlayingCard.create('diamonds', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.reactionTicks, 0);
+      final handBefore = env.rlSeat.hand.length;
+      final firstTopId = env.gs.topDiscardCard?.id;
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      expect(env.reactionTicks, 1); // un tick consommé
+      expect(env.rlSeat.hand.length, handBefore - 1); // carte retirée
+      expect(env.gs.topDiscardCard?.id, isNot(firstTopId)); // top a changé
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      // Top discard a changé deux fois, pourtant le budget continue de courir.
+      expect(env.reactionTicks, 2);
+      expect(env.gs.topDiscardCard?.value, '5');
+    });
+
+    test('pass_tick consomme un tick du timer global', () async {
+      final env = RlEnv(
+        episodeId: 'timer-pass-tick',
+        forcedNumPlayers: 2,
+        forcedOpponentSkill: BotSkillLevel.difficile,
+      );
+      var obs = await env.reset(12);
+      var guard = 0;
+      while (obs['micro_phase'] != 'dutchOrDraw' && guard++ < 50) {
+        obs = await env.step(_deterministicAction(obs));
+      }
+      obs = await env.step({'kind': 'continue_draw'});
+      _setKnownHand(env, [
+        PlayingCard.create('hearts', '5'),
+        PlayingCard.create('spades', '5'),
+        PlayingCard.create('spades', '9'),
+      ]);
+      final bot = env.players.firstWhere((p) => p.id != env.rlSeat.id);
+      bot.hand = [
+        PlayingCard.create('clubs', '5'),
+        PlayingCard.create('diamonds', 'D'),
+      ];
+      bot.knownCards = List<bool>.filled(bot.hand.length, true, growable: true);
+      bot.mentalMap = List<PlayingCard?>.from(bot.hand, growable: true);
+      bot.resetUnknownCardHints();
+      env.gs.drawnCard = PlayingCard.create('diamonds', '2');
+
+      obs = await env.step({
+        'kind': 'replace',
+        'params': {'index': 0}
+      });
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.reactionTicks, 0);
+
+      obs = await env.step({'kind': 'pass_tick'});
+      // Le bot matche -> p0 ré-invité dans la MÊME fenêtre : le pass_tick a
+      // bien consommé un tick (budget non réamorcé).
+      expect(obs['micro_phase'], 'reaction');
+      expect(env.reactionTicks, 1);
+    });
+
+    test('recycle deck vide préserve la top discard hors mélange', () async {
+      final env = RlEnv(episodeId: 'recycle-keeps-top', forcedNumPlayers: 2);
+      var obs = await _enterP0Reaction(env, 41, [
+        PlayingCard.create('hearts', '5'), // -> top '5'
+        PlayingCard.create('spades', '9'),
+        PlayingCard.create('clubs', '9'),
+      ]);
+      expect(obs['micro_phase'], 'reaction');
+      final topId = env.gs.topDiscardCard?.id;
+
+      // Deck vide + défausse recyclable (>1) ; insérer au fond pour garder le top.
+      env.gs.deck.clear();
+      env.gs.discardPile.insert(0, PlayingCard.create('clubs', '3'));
+      env.gs.discardPile.insert(0, PlayingCard.create('clubs', '4'));
+      final handBefore = env.rlSeat.hand.length;
+
+      obs = await env.step({
+        'kind': 'match',
+        'params': {'index': 1}
+      });
+      // La top discard est restée hors du mélange et reste disponible.
+      expect(env.gs.topDiscardCard?.id, topId);
+      expect(env.gs.topDiscardCard?.value, '5');
+      // Pénalité réellement appliquée après refill (jamais no-op).
+      expect(env.rlSeat.hand.length, handBefore + 1);
+      expect(obs['done'], isNot(true)); // deck vide recyclable ne termine pas
+    });
+  });
+
   // 3 ─────────────────────────────────────────────────────────────────────────
   group('3. Absence de leakage', () {
     test(
