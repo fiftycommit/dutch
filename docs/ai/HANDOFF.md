@@ -1,7 +1,7 @@
 # Dutch RL — AI Handoff
 
-Dernière mise à jour : 2026-06-30 (Claude Code)
-Agent ayant modifié ce fichier : Claude Code
+Dernière mise à jour : 2026-06-30 (Codex)
+Agent ayant modifié ce fichier : Codex
 
 > Ce fichier est la **source de vérité de continuité** entre Claude Code, Codex et tout autre agent IA travaillant sur la phase 2 RL de Dutch'78. Il doit rester exact et utilisable même si une session est interrompue brutalement.
 
@@ -13,15 +13,17 @@ Le projet Dutch'78 reste en phase 2 RL. L'AgentInterface v2 (faits publics, mém
 
 Le cœur R2D2 v2 (PER, IS weights, update priorities, Double Q factorisé, n-step, burn-in complet), les schedules beta/epsilon, l'export de métriques d'entraînement, et un logger + analyseur de traces action-level sont en place et testés (commits `010751e`, `8d42d87`, `de7d21f`, `786a791`, `738b153`).
 
-> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT SUR L'ANCIEN CHECKPOINT.** Le runner avait des BLOCKERs de fidélité (corrigés) et l'ancien reward v2 ne pénalisait pas les faux matchs (**H2**, corrigé par `fix(rl): scalarize v2 rewards`). Audit/patch reward : `docs/ai/RL_REWARD_V2_AUDIT.md` (`2026-06-30`, Codex). Le reward R2D2 v2 est maintenant scalarisé côté Python via `rl/reward_v2.py` : `principal + win_bonus + clip(destab, ±2)/256 + false_match_penalty + successful_match(0)`.
+> ⚠️ **NE PAS RELANCER D'ENTRAÎNEMENT SUR L'ANCIEN CHECKPOINT.** Le runner avait des BLOCKERs de fidélité (corrigés) et l'ancien reward v2 ne pénalisait pas les faux matchs (**H2**, corrigé par `fix(rl): scalarize v2 rewards`). Audit/patch reward : `docs/ai/RL_REWARD_V2_AUDIT.md` (`2026-06-30`, Codex). Le reward R2D2 v2 est maintenant scalarisé côté Python via `rl/reward_v2.py` avec bonus positifs **adossés à la victoire** et pénalités indépendantes : `WIN_REWARD` seulement si `p0` gagne, `successful_match`/`destab` accumulés comme potentiel payé uniquement au terminal gagnant, faux match `-0.05` immédiat, Dutch raté `-0.25` terminal si identifiable, perte terminale positive `0.0`.
 
 > ⚠️ **L'ancien checkpoint `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt` a été entraîné sur le runner pré-fix et NE DOIT PAS servir de point de départ sérieux** (ni base de fine-tune). Il a appris une policy dégénérée match-heavy et finit même PIRE que random au score final post-fix. Retrain depuis zéro recommandé.
 
 > ⚠️ **La fidélité du runner passe avant le scaling RL.** Toute divergence de gameplay doit être auditée et corrigée avant d'entraîner.
 
-**Chronologie récente (audit + fix runner)** :
+**Chronologie récente (audit + fix runner + reward)** :
 - `c9f9ad8 docs(rl): audit v2 runner fidelity` : audit complet (`docs/ai/RL_RUNNER_FIDELITY_AUDIT.md`). 3 BLOCKERs trouvés : réaction pilotée par `pass_tick` au lieu du timer réel → boucles `match` ; `phase=ended` continuait avec `done=false` ; faux match `deck=0` devenait un no-op ; `legal_action_v2` proposait `match` en `ended`/no-op.
 - `9682d7b fix(rl): simulate reaction timer and recycle discard` : runner corrigé (cf. section « Fidélité du runner »). Évaluation contrôlée post-fix faite (sans training) : épisodes terminants, `reached_max_steps` 27/30 → **0/30**, plus de boucle (`match_chain_max` 100 → **30** = timer 3s simulé), 0 action illégale, 0 crash. **Le runner est maintenant stable pour un retrain ; le reward H2 reste à traiter d'abord.**
+- `5c8b96c fix(rl): scalarize v2 rewards` : H2 corrigé techniquement (`TransitionV2.reward=reward_total`, faux match p0 `-0.05`, `win_bonus`/`destab` consommés).
+- Patch follow-up Codex : design reward corrigé selon règle propriétaire : bonus positifs win-gated, pénalités indépendantes, perte terminale positive `0.0`, Dutch raté pénalisé si identifiable.
 
 Avant tout cela, deux commits avaient stabilisé l'interface : `8fa49fa` (reaction window exposée à p0) et `1c2c4fa` (pendingMatchPowers résolus, Valet/Joker FIFO).
 
@@ -29,13 +31,13 @@ Avant tout cela, deux commits avaient stabilisé l'interface : `8fa49fa` (reacti
 
 ## Objectif actuel
 
-Le cœur R2D2 v2, le runner corrigé et le patch reward v2 sont en place. **Avant tout nouveau training**, relancer les tests de garde-fou puis collecter des données neuves sur le runner corrigé avec le reward scalarisé. Séquence recommandée :
+Le cœur R2D2 v2, le runner corrigé et le reward v2 win-gated sont en place. **Avant tout nouveau training**, revalider les tests de garde-fou sur l'environnement cible, puis lancer une collecte neuve sur le runner corrigé avec cette reward. Séquence recommandée :
 1. Revalider `test_reward_v2.py`, les tests v2 ciblés et `test_roundtrip.py`.
 2. Collecte neuve sur le runner corrigé (idéalement epsilon-greedy, pas pure random).
 3. **Retrain depuis zéro** (ne pas fine-tune l'ancien checkpoint, biaisé par le runner pré-fix).
 4. Évaluation + traces post-train.
 
-Ne pas relancer de training tant que le reward H2 n'a pas été revu.
+Ne pas relancer de training si la reward diverge de la règle “gagner la manche ; bonus positifs payés seulement sur victoire ; pénalités toujours payées”.
 
 Contraintes :
 - RL depuis zéro : le siège RL n'hérite d'aucune heuristique de bot.
@@ -243,7 +245,7 @@ Validation passée sur la VM (`rl/test_roundtrip.py`) : **6/6 vert** (relancé a
 - **Action actuelle RL** : `N_ACTIONS=179` masqué. La micro-phase `reaction` existe maintenant : `pass_tick`, alias compatibilité `no_match`, et `match(slot)`. Tous les slots présents sont tentables, y compris pour faux match, sans filtrage expert.
 - **Reaction window RL** (`8fa49fa`) : p0 peut matcher pendant la défausse collective, subir la pénalité de faux match, matcher après son propre `replace`, réaliser un doublon naturellement, matcher plusieurs fois, et faire `pass_tick` puis être réinvité si un bot matche dans la même fenêtre.
 - **Pending match powers** (`1c2c4fa`) : après la reaction window, le runner headless résout `pendingMatchPowers`. Les `7/10` restent traités avant les pouvoirs actifs dans la queue pending actuelle. Les `Valet/Joker` actifs sont résolus en FIFO (plus de shuffle/loterie). Si le pouvoir appartient à p0, le runner expose la micro-phase `power` existante. Si le pouvoir appartient à un bot, le runner appelle `BotPowerHandler.useBotSpecialPower(..., skipDelay: true)` en mettant temporairement `currentPlayerIndex` sur le bot propriétaire puis en le restaurant. Côté UI, suppression du délai artificiel 800 ms et plus d'auto-skip des pending powers bot.
-- **Reward hiérarchique** (depuis 2026-06-27, remplace l'ancienne MORL — cf. journal) : `principal(rang normalisé) + win_bonus + DESTAB_SCALE·clip(destab, ±CAP_DESTAB)`. Terme dominant = victoire/rang ; `win_bonus = kBonusMax·min(1, gap/kGapSat)` si rang==1 (`kBonusMax=0.30`, `kGapSat=20.0`, Dart) récompense les victoires nettes ; le destab dense est un **signal d'appoint borné** (`DESTAB_SCALE=1/256≈0.0039`, `CAP_DESTAB=2.0`, Python), plus jamais le terme dominant. Le proxy de déstabilisation reste celui d'avant (leader courant via `BotThreatAnalyzer`, reward_destab=0 si le proxy change). **Ancienne MORL retirée** : scalarisation `w1·principal + w2·destab` à poids Dirichlet concaténés à l'obs — abandonnée car le destab non borné dominait la reward (~105% du retour) et l'agent ne gagnait/n'appelait jamais Dutch (reward hacking).
+- **Reward v2 win-gated** (patch Codex 2026-06-30, après `5c8b96c`) : objectif optimisé = gagner la manche. `principal` Dart reste stocké comme diagnostic, mais n'est plus additionné directement au total optimisé. Formule effective : pénalités immédiates indépendantes (`FALSE_MATCH_PENALTY_REWARD=-0.05`) + terminal gagnant (`WIN_REWARD=1.0`, `win_bonus` Dart si victoire) + paiement au terminal gagnant des bonus positifs accumulés (`SUCCESSFUL_MATCH_BONUS_POTENTIAL=0.02`, `max(0, clip(destab, 0, 2))/256`). Perte terminale positive = `0.0`; les bonus positifs ne paient pas si `p0` perd ; Dutch raté identifiable ajoute `FAILED_DUTCH_PENALTY_REWARD=-0.25`. La finalisation d'épisode vit dans `rollout_v2.finalize_episode_rewards_v2` et est utilisée par rollout/collecte/inférence ; les traces d'inférence sont écrites après finalisation pour ne pas reporter une reward terminale provisoire.
 - **Algo historique** : `sb3-contrib` MaskablePPO (PPO masqué) reste la baseline existante, isolée du chantier R2D2 v2. La pile R2D2 v2 ne dépend pas de SB3 et ne modifie aucun fichier PPO.
 - **R2D2 v2 (cœur complet, pile `*_v2.py` isolée)** : recurrent Q-network GRU (`R2D2AgentV2`) à têtes Q factorisées + masquage par tête ; replay séquentiel episode-aware ; **burn-in complet** (état caché initial zéro par séquence, forward sur `burn_in + train`, loss sur `train_mask` seul, padding exclu, **pas de stored recurrent state** dans ce patch) ; n-step TD avec **source de vérité unique côté loss** (`dataset_v2.compute_n_step_returns` = helper offline) ; target network (hard sync + soft update dispo) ; **Double Q factorisé** sur les actions légales suivantes (online sélectionne, target évalue ; fallback action-type-head documenté et testé si actions légales next absentes) ; **prioritized sequence replay** (PER proportionnel par séquence, clé stable `(episode_id, start_step_index)`) ; **importance sampling weights** (`(N·P)^(-beta)`, normalisés max=1, jamais zéro) ; **update priorities depuis TD-error** (`eta·max|δ| + (1-eta)·mean|δ|` sur positions valides) ; learner câblé ; train CLI avec flags R2D2 ; checkpoint / infer / evaluate compatibles (format checkpoint inchangé, anciens checkpoints chargeables).
 - **Schedules d'annealing R2D2 v2** (`rl/schedules_v2.py`, `LinearScheduleV2`) : annealing `priority_beta` côté training (appliqué au `sample_sequences(beta=...)`, donc influe réellement sur les IS weights ; **exige `--prioritized-replay`**) et annealing `epsilon` côté policy d'inférence/évaluation (step global qui décale entre épisodes). Choix : l'epsilon schedule est branché **uniquement là où une policy choisit vraiment des actions** (`infer_r2d2_v2`, exposé via `evaluate`/`smoke`) ; **pas d'epsilon schedule dans `train_r2d2_v2`** dont le smoke rejoue un dataset statique sans sélection d'action (aurait été décoratif). Le builder refuse un triplet `start/end/steps` partiel (erreur claire, jamais de schedule à moitié câblé).
@@ -360,6 +362,51 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 ---
 
 ## Journal des mises à jour
+
+### 2026-06-30 — Rework reward v2 win-gated (Codex)
+
+Contexte :
+- Le patch `5c8b96c` avait corrigé H2 techniquement, mais payait encore les
+  bonus positifs directement (`win_bonus`/`destab`/bons matchs potentiels) sans
+  les adosser explicitement à la victoire.
+- Règle propriétaire confirmée : les bonus positifs intermédiaires ne paient que
+  si `p0` gagne ; les pénalités restent indépendantes et immédiates ; perdre
+  donne `0.0` terminal positif plus les pénalités accumulées.
+
+Changement :
+- `rl/reward_v2.py` distingue maintenant `immediate_penalty`,
+  `positive_bonus_potential`, `terminal_win_reward`, `terminal_loss_reward`,
+  `terminal_win_bonus`, `terminal_failed_dutch_penalty`, `paid_positive_bonus`
+  et `total`.
+- Constantes : `WIN_REWARD=1.0`, `TERMINAL_LOSS_REWARD=0.0`,
+  `FALSE_MATCH_PENALTY_REWARD=-0.05`,
+  `SUCCESSFUL_MATCH_BONUS_POTENTIAL=0.02`,
+  `FAILED_DUTCH_PENALTY_REWARD=-0.25`, `DESTAB_CAP=2.0`,
+  `DESTAB_SCALE=1/256`.
+- `rollout_v2.finalize_episode_rewards_v2` paie les bonus positifs accumulés
+  uniquement sur la transition terminale gagnante. Si l'épisode est perdu ou
+  tronqué, les potentiels ne sont pas payés.
+- `collect_rollouts_v2` et `infer_r2d2_v2` utilisent cette finalisation commune.
+  Les traces d'inférence sont désormais écrites après finalisation pour reporter
+  le même `reward_total` que `TransitionV2.reward`.
+- `docs/ai/RL_REWARD_V2_AUDIT.md` documente la formule finale.
+
+Validation :
+- `python3 -m py_compile rl/reward_v2.py rl/rollout_v2.py rl/collect_rollouts_v2.py rl/infer_r2d2_v2.py rl/test_reward_v2.py` OK.
+- `uv run python test_reward_v2.py` OK.
+- `uv run python test_rollout_v2.py` OK.
+- `uv run python test_dataset_v2.py` OK.
+- `uv run python test_collect_rollouts_v2.py` OK.
+- `uv run python test_evaluate_r2d2_v2.py` OK.
+- `uv run python test_infer_r2d2_v2.py` OK.
+- `uv run python test_action_trace_v2.py` OK.
+- `uv run python test_analyze_action_trace_v2.py` OK.
+- `uv run python test_roundtrip.py` OK (6/6).
+
+État :
+- Aucun training, aucune collecte persistée, aucun dataset/checkpoint/trace/log/report.
+- Prochaine action : après commit/push et revalidation sur cible, collecte neuve
+  puis retrain from scratch. Ne jamais fine-tune l'ancien checkpoint pré-fix.
 
 ### 2026-06-30 — Patch reward v2 scalarisé (Codex)
 

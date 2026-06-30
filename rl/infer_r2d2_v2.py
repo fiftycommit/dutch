@@ -117,6 +117,7 @@ def infer_episode_v2(
 
     obs = runner.reset(seed, episode_id=episode_id, extra_options=extra_options)
     transitions: list[TransitionV2] = []
+    trace_records: list[dict[str, Any]] = []
     completed = bool(obs.get("done"))
     hidden_state: torch.Tensor | None = None
 
@@ -175,7 +176,7 @@ def infer_episode_v2(
                 global_step=global_step_offset + step_index,
                 epsilon=current_epsilon,
             )
-            trace_writer.write(record)
+            trace_records.append(record)
 
         next_encoded = (
             None if done else encoding_v2.encode_observation_v2(next_obs)
@@ -210,6 +211,23 @@ def infer_episode_v2(
 
         obs = next_obs
         completed = done
+
+    transitions = rollout_v2.finalize_episode_rewards_v2(transitions)
+    if trace_enabled:
+        assert trace_writer is not None
+        for index, record in enumerate(trace_records):
+            if index < len(transitions):
+                transition = transitions[index]
+                record["reward"] = float(transition.reward)
+                record["reward_components"] = (
+                    None
+                    if transition.reward_components is None
+                    else {
+                        key: float(value)
+                        for key, value in transition.reward_components.items()
+                    }
+                )
+            trace_writer.write(record)
 
     return InferenceEpisodeV2(
         episode_id=episode_id,

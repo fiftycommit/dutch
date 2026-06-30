@@ -4,20 +4,24 @@ Audit date: 2026-06-30 (Codex)
 Scope: current reward emitted by the v2 Dart runner and the reward actually
 stored/optimized by the R2D2 v2 Python stack.
 
-Patch status: implemented in `fix(rl): scalarize v2 rewards` after this audit.
-Gameplay code was not changed.
+Patch status: updated after `fix(rl): scalarize v2 rewards` by the follow-up
+reward rework. Positive intermediate bonuses are now win-gated; penalties are
+independent and immediate. Gameplay code was not changed.
 
 ## Summary
 
 - The pre-patch v2 reward was **not healthy for retrain**.
-- Can we train now? **After the patch tests pass, collection/retrain can resume
-  from scratch; do not use the old checkpoint.**
+- Can we train now? **Only after the win-gated reward patch tests pass,
+  collection/retrain can resume from scratch; do not use the old checkpoint.**
 - Pre-patch cause: the only reward stored in `TransitionV2.reward` was
   `rewards.principal`. R2D2 therefore learned almost exclusively from sparse
   terminal rank. Dart `destab` and `win_bonus` were emitted but ignored by
   `rollout_v2`, `collect_rollouts_v2`, and `infer_r2d2_v2`.
-- H2 was confirmed and patched: false matches now receive an immediate scalar
-  reward penalty via `rl/reward_v2.py`.
+- H2 was confirmed and patched: false matches receive an immediate scalar reward
+  penalty via `rl/reward_v2.py`.
+- Follow-up design correction: positive intermediate signals no longer pay on
+  losing episodes. They accumulate as `positive_bonus_potential` and are paid on
+  the terminal transition only if `p0` wins.
 - The terminal rank reward does use the real final ranking function, so a failed
   Dutch caller is ranked last by the game model. That part is mechanically
   faithful, but the reward does not make the Dutch decision explicit enough.
@@ -38,22 +42,36 @@ Shared scalarization lives in `rl/reward_v2.py` and is used by:
 Exact formula:
 
 ```text
-reward_total =
-  principal
-  + win_bonus
-  + clip(destab_raw, -2.0, 2.0) / 256.0
-  + false_match_penalty
-  + successful_match
+per-step immediate total =
+  immediate_penalty
+  + terminal_win_reward
+  + terminal_loss_reward
+  + terminal_win_bonus
+  + terminal_failed_dutch_penalty
+  + paid_positive_bonus
+
+positive_bonus_potential =
+  successful_match_bonus_potential
+  + max(0, clip(destab_raw, 0.0, 2.0)) / 256.0
+
+episode finalization:
+  if terminal p0 win:
+    terminal paid_positive_bonus = sum(positive_bonus_potential over episode)
+  else:
+    terminal paid_positive_bonus = 0.0
 ```
 
 Constants:
 
 | Constant | Value | Reason |
 |---|---:|---|
-| `FALSE_MATCH_PENALTY_REWARD` | `-0.05` | Visible immediate cost for match-spam, smaller than terminal rank/win signal. |
-| `SUCCESSFUL_MATCH_REWARD` | `0.0` | Good match is a means, not the objective; avoids match-count reward hacking. |
-| `DESTAB_SCALE` | `1/256` | Matches the historical bounded dense helper scale. |
-| `DESTAB_CAP` | `2.0` | Keeps dense shaping small (`<= 0.0078125` per decision). |
+| `WIN_REWARD` | `1.0` | Main objective: winning the round. |
+| `TERMINAL_LOSS_REWARD` | `0.0` | Losing has no positive terminal reward; penalties still count. |
+| `FALSE_MATCH_PENALTY_REWARD` | `-0.05` | Visible immediate cost for match-spam, smaller than the win objective. |
+| `SUCCESSFUL_MATCH_BONUS_POTENTIAL` | `0.02` | Recognizes a useful match, but pays only if the episode is won. |
+| `FAILED_DUTCH_PENALTY_REWARD` | `-0.25` | Explicit terminal cost for a failed Dutch call when identifiable. |
+| `DESTAB_SCALE` | `1/256` | Keeps dense helper potential tiny and non-dominant. |
+| `DESTAB_CAP` | `2.0` | Caps dense potential at `<= 0.0078125` per decision. |
 
 False-match shaping is applied only when:
 
@@ -66,9 +84,22 @@ False-match shaping is applied only when:
 `event["step"] == msg["step"]` to avoid reapplying old penalties. Bot false
 matches during `pass_tick` are not charged to p0.
 
-`TransitionV2.reward` now stores `reward_total`. `TransitionV2.reward_components`
-stores the scalar components for debugging, JSONL roundtrip, evaluation and
-trace reporting.
+Successful matches are detected from the current-step public
+`discard_visible/match_discard` event for `p0`. They add
+`SUCCESSFUL_MATCH_BONUS_POTENTIAL` to the episode accumulator but do not change
+the current step reward unless the episode later ends in a `p0` win.
+
+`win_bonus` from Dart is consumed only on terminal wins. `destab` is treated as a
+positive bonus potential, not direct step reward. `principal` remains stored for
+diagnostics/backward audit, but it is not added directly to the optimized total:
+the optimized terminal objective is `WIN_REWARD` on win and `0.0` on loss,
+with independent penalties preserved.
+
+`TransitionV2.reward` stores the finalized `reward_total`. On a winning episode,
+`rollout_v2.finalize_episode_rewards_v2` adds the accumulated positive potential
+to the terminal transition. On a losing/truncated episode, the potential is not
+paid. `TransitionV2.reward_components` stores the components for JSONL
+roundtrip, evaluation and trace reporting.
 
 ## Pre-Patch Reward Map
 
@@ -165,71 +196,62 @@ trace reporting.
 2. `destab` can be useful later, but should remain optional, clipped, and
    demonstrably unable to dominate terminal rank.
 
-## Proposed Reward Design
+## Final Reward Design
 
-Design goal: terminal outcome dominates; small intermediate terms only improve
-credit assignment and prevent known degenerate behavior.
+Design goal: **win the round**. Positive intermediate signals are only useful if
+they contribute to a won episode; penalties are mistakes and always count.
 
-Recommended scalar composition in one shared Python helper, used by
-`rollout_v2`, `collect_rollouts_v2`, and `infer_r2d2_v2`:
+Rules:
 
-```text
-reward =
-  principal
-  + win_bonus
-  + false_match_penalty
-  + optional_success_match_reward
-  + optional_small_step_cost
-  + optional_clipped_destab
-```
+- Winning terminal: `WIN_REWARD + terminal_win_bonus + paid_positive_bonus`.
+- Losing terminal: `0.0` positive terminal reward.
+- Positive intermediate events (`successful_match`, clipped positive `destab`)
+  accumulate as potential and pay only on terminal wins.
+- Independent penalties (`false_match_penalty`, failed Dutch when identifiable)
+  are applied immediately/terminally regardless of final outcome.
+- `principal` remains a raw diagnostic component; it is not optimized directly
+  because rank-based negative loss reward conflicts with the confirmed rule
+  “lose = 0 terminal + independent penalties”.
 
-Concrete first pass:
+Concrete design:
 
-| Component | Suggested value | Rationale |
-|---|---:|---|
-| Terminal principal | current rank-normalized `[-1,+1]` | Keep winning/rank as dominant objective. |
-| Terminal win bonus | keep `0.0..0.30`, actually consume it | Rewards clear wins without beating rank gap. |
-| Failed Dutch | no separate mandatory component if rank-last is tested; optional `-0.25` only if under-penalized | Rank already gives strong penalty. Avoid double-counting unless traces show bad calls. |
-| Successful Dutch | no separate mandatory component if rank 1 + win bonus is consumed; optional `+0.10` for call credit | Avoid making Dutch a magic action independent of outcome. |
-| False match | `-0.05` to `-0.10` immediate | Visible enough over a 30-tick window, but smaller than terminal win/loss. |
-| Successful match | `0.00` to `+0.01` immediate, or none initially | Match is a means, not the objective. If used, keep tiny. |
-| Step/pass cost | `0.00` initially; maybe `-0.001` later | Avoid adding a duration objective until needed. |
-| Destab | initially disabled for R2D2 retrain, or clipped/scaled with tests | Previous reward hacking risk; rank/win should first stand alone. |
+| Component | Value | When paid | Rationale |
+|---|---:|---|---|
+| `WIN_REWARD` | `+1.0` | Terminal win | Dominant objective. |
+| `terminal_win_bonus` | Dart `win_bonus`, `0.0..0.30` | Terminal win only | Clear wins matter, but only after actual victory. |
+| `SUCCESSFUL_MATCH_BONUS_POTENTIAL` | `+0.02` | Accumulated; paid only on win | Recognizes useful matches without allowing losing match-farming. |
+| `destab_bonus_potential` | `max(0, clip(destab, 0, 2))/256` | Accumulated; paid only on win | Tiny helper signal, cannot dominate victory. |
+| `TERMINAL_LOSS_REWARD` | `0.0` | Terminal loss | Losing receives no positive terminal signal. |
+| `FALSE_MATCH_PENALTY_REWARD` | `-0.05` | Immediate | Visible anti-match-spam cost, no terminal double-count. |
+| `FAILED_DUTCH_PENALTY_REWARD` | `-0.25` | Terminal failed Dutch when identifiable | Bad Dutch stops the round and ranks the caller last. |
 
 Implementation shape:
 
-- Add explicit reward event components in runner output, or derive from
-  `recent_events` in Python. Prefer runner output for unambiguous ownership:
-  `false_match_penalty`, `match_success_bonus`, `dutch_outcome_bonus`.
-- Store both scalar `reward` and raw `reward_components` in `TransitionV2` or
-  `info` for trace/debugging.
-- Use exactly one helper for scalarization so collection, inference/eval, traces,
-  and tests cannot diverge.
-- Keep all components out of the policy observation.
+- `reward_v2.parse_reward_components_v2` derives immediate penalties and
+  positive bonus potential from public/current-step runner data.
+- `rollout_v2.finalize_episode_rewards_v2` is the only episode-level finalizer.
+  It pays accumulated potential on the terminal transition only if `p0` won.
+- `rollout_v2`, `collect_rollouts_v2`, and `infer_r2d2_v2` all use the same
+  finalization path. Inference traces are buffered until episode finalization so
+  terminal trace reward matches `TransitionV2.reward`.
+- Components stay out of the policy observation and contain no hidden game info.
 
-## Tests to Add
+## Tests Added
 
-- Dart runner test: false match emits a reward component and still applies one
-  penalty card; top discard unchanged; timer continues.
-- Dart runner test: successful match emits no reward or only the tiny configured
-  reward; card leaves hand; top discard changes; timer does not reset.
-- Dart runner test: successful Dutch terminal reward is rank 1 principal plus
-  consumed/visible win bonus.
-- Dart runner test: failed Dutch terminal rank is last active and terminal
-  principal reflects that rank.
-- Python unit test: reward extraction composes `principal + win_bonus + selected
-  intermediate components` and is shared by rollout/collector/infer.
-- Python replay/loss test: composed rewards survive JSONL load and appear in
-  `SequenceBatchV2.rewards`.
-- Action trace test: false-match decisions have non-zero negative reward and
-  successful-match rewards remain bounded.
-- Evaluation test: `average_reward` matches the same composed scalar, while
-  rank/win metrics remain separate.
+- Python reward unit tests cover false-match penalties on wins/losses,
+  successful-match potential paid only on wins, multiple-match accumulation,
+  no losing match farming, zero terminal loss reward, negative losing episodes
+  with penalties, wins below `WIN_REWARD` after penalties, failed Dutch penalty,
+  no terminal double-count, JSONL roundtrip, dataset loader preservation,
+  evaluation reward metrics, import side-effect safety, and anti-leak component
+  names.
+- Existing rollout, collector, inference, evaluation, trace/analyze and
+  roundtrip tests were rerun after the patch.
 
 ## Recommendation
 
-- Reward patch implemented. Do not collect new data or train unless the patch
-  tests are green in the target environment.
+- Win-gated reward patch implemented. Do not collect new data or train unless
+  the patch tests are green in the target environment.
 - Retrain from scratch after patch. Do not fine-tune
   `/tmp/dutch_r2d2_v2_first_run_20260630_192728/checkpoint.pt`.
 - The implemented patch is conservative: it consumes terminal `win_bonus`, adds

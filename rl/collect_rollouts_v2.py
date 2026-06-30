@@ -114,6 +114,7 @@ def collect_episode_v2(
         obs = next_obs
         completed = done
 
+    transitions = rollout_v2.finalize_episode_rewards_v2(transitions)
     return EpisodeRecordV2(
         episode_id=episode_id,
         seed=seed,

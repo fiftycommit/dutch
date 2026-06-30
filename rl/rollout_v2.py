@@ -8,7 +8,7 @@ legacy ``OBS_DIM`` vector.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import random
 from pathlib import Path
@@ -167,7 +167,45 @@ def record_episode_v2(
     else:
         raise RuntimeError(f"episode {episode_key} exceeded max_steps={max_steps}")
 
-    return transitions
+    return finalize_episode_rewards_v2(transitions)
+
+
+def finalize_episode_rewards_v2(transitions: list[TransitionV2]) -> list[TransitionV2]:
+    """Pay positive reward potential on the terminal transition only after wins."""
+
+    if not transitions:
+        return []
+
+    terminal_index = None
+    for index in range(len(transitions) - 1, -1, -1):
+        if transitions[index].done:
+            terminal_index = index
+            break
+    if terminal_index is None:
+        return list(transitions)
+
+    terminal = transitions[terminal_index]
+    won = reward_v2.is_terminal_win_v2(terminal.info, terminal.next_obs_raw)
+    paid_bonus = 0.0
+    if won:
+        paid_bonus = sum(
+            reward_v2.positive_bonus_potential_from_components_v2(
+                item.reward_components
+            )
+            for item in transitions[: terminal_index + 1]
+        )
+
+    terminal_components = reward_v2.apply_paid_positive_bonus_v2(
+        terminal.reward_components,
+        paid_bonus,
+    )
+    finalized = list(transitions)
+    finalized[terminal_index] = replace(
+        terminal,
+        reward=terminal_components["total"],
+        reward_components=terminal_components,
+    )
+    return finalized
 
 
 def build_sequences(
