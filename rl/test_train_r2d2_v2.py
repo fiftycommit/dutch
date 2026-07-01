@@ -594,6 +594,120 @@ def test_no_runner_dependency_or_raw_field_use() -> None:
         raise AssertionError("training smoke should not expose raw policy fields")
 
 
+def _fresh_learner() -> Any:
+    return train_r2d2_v2.learner_r2d2_v2.R2D2LearnerV2(
+        online_model=train_r2d2_v2.model_r2d2_v2.R2D2AgentV2(),
+        target_model=train_r2d2_v2.model_r2d2_v2.R2D2AgentV2(),
+        config=train_r2d2_v2.learner_r2d2_v2.LearnerConfigV2(
+            gamma=0.99,
+            n_step=1,
+            learning_rate=1.0e-4,
+            target_update_interval=10,
+            double_q=False,
+            priority_eta=0.9,
+            device="cpu",
+        ),
+    )
+
+
+def _make_checkpoint(tmp: Path) -> Path:
+    dataset = tmp / "data.jsonl"
+    checkpoint = tmp / "checkpoint.pt"
+    _write_dataset(dataset, count=4)
+    train_r2d2_v2.run_training_smoke(
+        train_r2d2_v2.TrainConfigV2(
+            dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+            n_step=1, save_checkpoint=checkpoint, no_save=False,
+        )
+    )
+    return checkpoint
+
+
+def test_from_scratch_default_resume_none() -> None:
+    # Sans --resume-from, resume_from est None et le from-scratch marche.
+    args = train_r2d2_v2.build_arg_parser().parse_args(["--dataset", "x.jsonl"])
+    if train_r2d2_v2.config_from_args(args).resume_from is not None:
+        raise AssertionError("resume_from should default to None")
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        _write_dataset(dataset, count=4)
+        res = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+                n_step=1,
+            )
+        )
+        if res.steps != 1:
+            raise AssertionError("from-scratch training regressed")
+
+
+def test_resume_restores_weights_optimizer_step() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = _make_checkpoint(Path(tmp))
+        saved = torch.load(checkpoint, map_location="cpu")
+        learner = _fresh_learner()
+        train_r2d2_v2._resume_from_checkpoint(learner, checkpoint, "cpu")
+        # Poids en ligne identiques au checkpoint.
+        online = learner.online_model.state_dict()
+        for k, v in saved["online_model"].items():
+            if not torch.equal(online[k], v):
+                raise AssertionError(f"online weight {k} not restored")
+        # Optimizer momentum restauré (Adam a un state non vide après 1 step).
+        if not learner.optimizer.state_dict()["state"]:
+            raise AssertionError("optimizer state not restored")
+        # learner_step restauré.
+        if learner.state.step != saved["learner_state"]["step"]:
+            raise AssertionError("learner step not restored")
+
+
+def test_resume_end_to_end_run() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = _make_checkpoint(Path(tmp))
+        dataset = Path(tmp) / "data.jsonl"  # créé par _make_checkpoint
+        res = train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+                n_step=1, resume_from=checkpoint,
+            )
+        )
+        if res.steps != 1:
+            raise AssertionError("resume end-to-end run failed")
+
+
+def test_resume_missing_checkpoint_raises() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        _write_dataset(dataset, count=4)
+        try:
+            train_r2d2_v2.run_training_smoke(
+                train_r2d2_v2.TrainConfigV2(
+                    dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+                    n_step=1, resume_from=Path(tmp) / "nope.pt",
+                )
+            )
+        except FileNotFoundError:
+            return
+        raise AssertionError("missing resume checkpoint did not raise")
+
+
+def test_resume_invalid_checkpoint_raises() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        dataset = Path(tmp) / "data.jsonl"
+        _write_dataset(dataset, count=4)
+        bad = Path(tmp) / "bad.pt"
+        bad.write_text("not a torch checkpoint")
+        try:
+            train_r2d2_v2.run_training_smoke(
+                train_r2d2_v2.TrainConfigV2(
+                    dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+                    n_step=1, resume_from=bad,
+                )
+            )
+        except ValueError:
+            return
+        raise AssertionError("invalid resume checkpoint did not raise ValueError")
+
+
 def main() -> int:
     tests = [
         test_parser_cli_works,
@@ -616,6 +730,11 @@ def main() -> int:
         test_checkpoint_with_metrics_out_loads_weights_only,
         test_import_has_no_training_side_effect,
         test_no_runner_dependency_or_raw_field_use,
+        test_from_scratch_default_resume_none,
+        test_resume_restores_weights_optimizer_step,
+        test_resume_end_to_end_run,
+        test_resume_missing_checkpoint_raises,
+        test_resume_invalid_checkpoint_raises,
     ]
     print("=== test_train_r2d2_v2 ===")
     for test in tests:

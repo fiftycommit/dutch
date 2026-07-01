@@ -365,6 +365,38 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Validation dataset curriculum + probe throughput + `--resume-from` (Claude Code)
+
+**Dataset curriculum validé** (10 000 ép / 398 539 transitions, `/tmp/curriculum/`,
+6 fichiers p1/p2/p3 × {6p,2p}). Sanity check complet (streaming) : `dataset_v2`
+charge le format (échantillons + plein p1_silver2p=30795 exact) ; **max_hand=5**
+(<13), 0 illegal, 0 missing action, **max_false_run=3** (boucle éliminée),
+false_m=45/398k, succ_m=21373 ; win% par phase **P1 90% → P2 60% → P3 29%**
+(gradient net) ; tous les types présents ; tempo-self-match=0 ; chaînes de bons
+matchs jusqu'à 3 ; faux-match→autre-tentative sur 11 ép. **Dataset sain.**
+
+**Probe throughput** (p1_silver2p, 30 steps, CPU) : load **43,9 s** (3,18 GB) ;
+RAM pic **3,83 GB** (~130 KB/transition) ; **~3,6 steps/s** (mono-cœur, 4 cœurs non
+exploités) ; loss 0,163→0,111 ; grad_norm 0,24, **aucun NaN** ; checkpoint 7 MB +
+metrics OK ; `evaluate_r2d2_v2` recharge et joue. Estim. : 500 steps ~3 min, 3k
+~14 min. **RAM 15 Go : OK pour 2p et p1_bronze6p, risqué p2_silver6p (~11 Go), OOM
+p3_diff6p (~16 Go) et concaténé 398k (~40 Go).** → le loader tout-en-RAM ne passe
+pas sur les gros 6p.
+
+**Ajout `--resume-from` à `train_r2d2_v2.py`** (pour curriculum séquentiel B) :
+charge un checkpoint (`weights_only=True`), restaure online+target+optimizer (si
+présent, sinon optimizer frais + notice) + `learner_step` ; `--save-checkpoint`
+inchangé ; from-scratch inchangé ; erreurs claires (checkpoint manquant →
+FileNotFoundError, invalide → ValueError). Aucune reward/dataset change. Tests
+(`test_train_r2d2_v2.py`) : from-scratch, resume restaure poids/optimizer/step,
+end-to-end, erreurs manquant/invalide — **tous verts** ; resume réel confirmé
+(reprend loss 0,12, pas de reset).
+
+Reste à faire avant le curriculum complet : régler la **RAM des 6p** (chantier
+suivant : `--max-transitions` cap simple, ou loader streaming/minibatch-disque).
+Ensuite curriculum séquentiel B : `train ... --dataset p1 --save-checkpoint c1` →
+`--dataset p2 --resume-from c1 --save-checkpoint c2` → `--dataset p3 --resume-from c2`.
+
 ### 2026-07-01 — Fix boucle faux-match bot_auto (crash main>13) (Claude Code)
 
 Diagnostic (crash « main p0 > 13 » observé en collecte curriculum, ex. seed=354

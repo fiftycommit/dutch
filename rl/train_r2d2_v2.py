@@ -58,6 +58,10 @@ class TrainConfigV2:
     # diagnostics only: it is independent from the checkpoint save guard and is
     # written wherever the caller points it (intended: a run dir outside the repo).
     metrics_out: Path | None = None
+    # Optional resume: load network (+ optimizer if present) from an existing
+    # checkpoint before training. None => train from scratch (unchanged). Used for
+    # sequential curriculum (P1 -> P2 -> P3). Does not touch reward or dataset.
+    resume_from: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-save", action="store_true")
     parser.add_argument("--allow-long-run", action="store_true")
     parser.add_argument("--metrics-out", type=str, default=None)
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help="resume network (+ optimizer if present) from this checkpoint "
+        "before training (sequential curriculum). Omit = train from scratch.",
+    )
     return parser
 
 
@@ -130,6 +141,7 @@ def config_from_args(args: argparse.Namespace) -> TrainConfigV2:
         no_save=not bool(args.allow_save),
         allow_long_run=bool(args.allow_long_run),
         metrics_out=Path(args.metrics_out) if args.metrics_out else None,
+        resume_from=Path(args.resume_from) if args.resume_from else None,
     )
 
 
@@ -176,6 +188,9 @@ def run_training_smoke(config: TrainConfigV2) -> TrainResultV2:
             device=config.device,
         ),
     )
+
+    if config.resume_from is not None:
+        _resume_from_checkpoint(learner, config.resume_from, config.device)
 
     metrics_file = None
     if config.metrics_out is not None:
@@ -244,6 +259,15 @@ def _validate_config(config: TrainConfigV2) -> None:
         raise FileNotFoundError(f"dataset does not exist: {config.dataset}")
     if not config.dataset.is_file():
         raise ValueError(f"dataset is not a file: {config.dataset}")
+    if config.resume_from is not None:
+        if not config.resume_from.exists():
+            raise FileNotFoundError(
+                f"resume checkpoint does not exist: {config.resume_from}"
+            )
+        if not config.resume_from.is_file():
+            raise ValueError(
+                f"resume checkpoint is not a file: {config.resume_from}"
+            )
     if config.steps <= 0:
         raise ValueError("steps must be positive")
     if config.steps > MAX_SAFE_STEPS and not config.allow_long_run:
@@ -288,6 +312,57 @@ def _seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def _resume_from_checkpoint(
+    learner: learner_r2d2_v2.R2D2LearnerV2,
+    path: Path,
+    device: str,
+) -> None:
+    """Load network (+ optimizer/step if present) from an existing checkpoint.
+
+    Restores the online and target networks. The optimizer state is restored only
+    if the checkpoint contains it (checkpoints written by ``_save_checkpoint`` do);
+    otherwise a fresh optimizer is kept and a clear notice is printed. Raises a
+    clear error if the checkpoint is unreadable or missing the network weights.
+    Reward and dataset are untouched.
+    """
+
+    try:
+        ckpt = torch.load(path, map_location=device, weights_only=True)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(
+            f"invalid resume checkpoint {path}: cannot torch.load ({exc})"
+        ) from exc
+    if not isinstance(ckpt, dict) or "online_model" not in ckpt:
+        raise ValueError(
+            f"invalid resume checkpoint {path}: missing 'online_model' state_dict"
+        )
+
+    learner.online_model.load_state_dict(ckpt["online_model"])
+    if "target_model" in ckpt:
+        learner.target_model.load_state_dict(ckpt["target_model"])
+    else:
+        # No target snapshot: mirror the online weights (standard init).
+        learner.target_model.load_state_dict(learner.online_model.state_dict())
+    learner.target_model.eval()
+
+    if "optimizer" in ckpt:
+        learner.optimizer.load_state_dict(ckpt["optimizer"])
+        opt_note = "optimizer restored"
+    else:
+        opt_note = "optimizer NOT in checkpoint -> fresh optimizer"
+
+    resumed_step = 0
+    learner_state = ckpt.get("learner_state")
+    if isinstance(learner_state, dict) and isinstance(learner_state.get("step"), int):
+        learner.state.step = int(learner_state["step"])
+        resumed_step = learner.state.step
+
+    print(
+        f"train_r2d2_v2 resumed from {path}: networks restored, {opt_note}, "
+        f"learner_step={resumed_step}"
+    )
 
 
 def _save_checkpoint(
