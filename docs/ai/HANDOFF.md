@@ -444,12 +444,25 @@ Stats fines de dimensionnement (150 ép./config, p0 difficile) :
   (cap `MAX_SLOTS=13`) → fail-hard. Phase faible = **6p uniquement** ; le 2p est
   réservé aux phases silver/hard (stables). Limitation encodage à garder en tête.
 
-Plan curriculum retenu (volumes exacts à confirmer avant collecte) :
-- Phase 1 (amorçage, wins riches) : diff vs **bronze 6p** (+ diff vs **silver 2p**).
-- Phase 2 (transition) : diff vs **silver 6p** + diff vs **silver 2p**.
-- Phase 3 (cible) : **full hard** 6p + 2p.
-Pondérer les volumes par le taux d'utile (6p ~30%, 2p ~55%) pour viser un nombre
-cible de transitions **utiles** par phase. NE PAS inclure 2p-vs-bronze.
+Plan curriculum retenu — **premier vrai run ~10k épisodes** (utilisateur, 2026-07-01) :
+
+| phase | config | épisodes | ~utile |
+|---|---|---|---|
+| 1 amorçage | diff vs bronze **6p** | 1500 | ~22.5k |
+| 1 amorçage | diff vs silver **2p** | 1000 | ~18k |
+| 2 transition | diff vs silver **6p** | 1500 | ~22.5k |
+| 2 transition | diff vs silver **2p** | 1000 | ~18k |
+| 3 cible | diff vs diff **6p** | 3000 | ~33k |
+| 3 cible | diff vs diff **2p** | 2000 | ~28k |
+| **total** | | **10000** | **~142k utiles / ~400k tr** |
+
+NE PAS inclure 2p-vs-bronze (crash main>13). Datasets **hors repo** (`/tmp` ou
+volume dédié), un JSONL par (phase, config), rien de committé. Commandes type :
+`uv run python collect_rollouts_v2.py --policy existing_bot --bot-difficulty
+difficile --opponent-bot-difficulty bronze --players 6 --episodes 1500 --seed 0
+--max-steps 400 --out /tmp/curriculum/p1_bronze6p.jsonl` (idem par ligne du tableau ;
+`vs diff` = sans `--opponent-bot-difficulty`). Puis train R2D2 v2 from scratch par
+phase (ou dataset concaténé), `--prioritized-replay --double-q`, éval/traces.
 
 Limitation documentée : **silver en p0** (homogène) non capturable (retry confus =
 2 matchs atomiques → fail-hard, pas d'approximation). N'affecte ni hard ni les
