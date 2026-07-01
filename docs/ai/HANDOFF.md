@@ -365,6 +365,38 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Audit bots existants comme behavior policy RL v2 (Claude Code, AUDIT lecture seule)
+
+Contexte : après `safe_heuristic` (baseline minimale de collecte), auditer si les
+**vrais bots** peuvent servir de behavior policy plus forte pour la collecte R2D2
+v2 **sans hidden leak**, avant tout dataset plus grand / training.
+
+Résultat (aucun code d'intégration, aucun changement fonctionnel) :
+- Document ajouté : `docs/ai/RL_EXISTING_BOTS_POLICY_AUDIT.md` (11 sections).
+- **Les bots sont techniquement fair** : draw/replace/discard, match réaction,
+  Dutch et sélection de cible des pouvoirs ne lisent que la **croyance propre**
+  (`mentalMap`/`knownCards`/`getKnownScore`), la **mémoire d'espionnage légale**
+  (`spyMemory`/`getSpiedCards`), des **compteurs/observations publics**
+  (`hand.length`, `deck.length`, discardTracker, `memorizedCardIndices`) et le RNG.
+  Seul accès à une carte adverse réelle : `bot_power_handler.dart:529`, **après**
+  `lookAtCard` (exécution d'un spy légal → `spyMemory`). `BotSimulator` = code mort
+  (import self-only). Garde-fou déjà présent : `BotFairPlayAudit` (assert) prouve la
+  cécité de la décision Dutch aux cartes cachées.
+- **Blocage d'intégration** : les bots **mutent directement le GameState** et
+  **n'émettent pas d'`action_v2`**. Le runner les exécute déjà en headless
+  (`_playBotTurn`, `context:null`) et peut même jouer p0 via `frozenBotMode`
+  (réservé tests parité #5), mais la sortie n'est pas une action_v2 journalisable.
+- **Recommandation : Option C** — bots propres et headless, adapter **uniquement la
+  couche d'action** (capturer le coup bot → sérialiser en `action_v2` légal dans
+  `tool/rl_env_runner.dart`), stratégie inchangée ; + touche d'Option B (vue
+  masquée + étendre `BotFairPlayAudit`) en défense en profondeur. Pas A (sortie
+  diffère), pas D (aucun leak avéré).
+
+Prochaine étape : chantier séparé « brancher bots en `--policy existing_bot` »
+(plan court validé, parité #5 intacte, anti-leak, smoke 50 ép. sous /tmp). Gain
+attendu vs safe_heuristic : Valet/Joker complets, Dutch mieux timé, plus de
+diversité, meilleur signal de victoire.
+
 ### 2026-07-01 — Behavior policy safe_heuristic pour collecte propre (Claude Code)
 
 Contexte :
