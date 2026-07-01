@@ -423,10 +423,15 @@ p0 difficile **domine** les faibles (96% vs bronze 2p, 92% vs bronze 6p, 88% vs
 silver 2p). Le 20% en full-difficile 6p est **normal** (table homogène ≈ 1/6). Donc
 les 20% du smoke full-hard 6p ne sont pas un signe de faiblesse.
 
-Recommandation collecte RL (à valider avec l'utilisateur avant la grosse collecte) :
-options ouvertes = full hard, **p0 hard vs adversaires plus faibles** (beaucoup plus
-de wins → utile pour un curriculum), difficulté mixte, tailles de table variées, ou
-curriculum progressif. Décision non prise (à discuter).
+**DÉCISION collecte RL (utilisateur, 2026-07-01) : CURRICULUM faibles → forts.**
+Commencer la collecte existing_bot avec **p0 difficile vs adversaires bronze/silver**
+(beaucoup de wins, 88–96% → signal victoire riche pour amorcer le RL), puis durcir
+progressivement vers **full hard** (p0 diff vs diff). Utiliser les flags
+`--policy existing_bot --bot-difficulty difficile --opponent-bot-difficulty
+{bronze|silver|difficile}` (+ `--players`), dataset **hors repo** (`/tmp` ou volume
+dédié). Ne pas committer dataset/checkpoint. Puis train R2D2 v2 from scratch
+(`--prioritized-replay --double-q`) → éval/traces (surveiller la frontière
+self-match). Reward inchangée (`RL_REWARD_V2_LEX_DECISION.md`).
 
 Limitation documentée : **silver en p0** (homogène) non capturable (retry confus =
 2 matchs atomiques → fail-hard, pas d'approximation). N'affecte ni hard ni les
