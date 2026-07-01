@@ -365,6 +365,40 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Audit alignement runner headless vs bots actuels (Claude Code, AUDIT lecture seule)
+
+Contexte : avant `--policy existing_bot`, vérifier que `tool/rl_env_runner.dart::
+_playBotTurn` joue avec la **logique bot actuelle** et pas une ancienne
+approximation forkée.
+
+Résultat (aucun changement fonctionnel) :
+- Document ajouté : `docs/ai/RL_HEADLESS_BOT_ALIGNMENT_AUDIT.md` (10 sections).
+- **Le headless appelle les services de stratégie ACTUELS** (`BotCardStrategy.
+  decideCardAction`, `BotDutchStrategy.shouldCallDutch`, `BotPowerHandler.
+  useBotSpecialPower`, `BotCardStrategy.tryReactionMatch`) — **aucun fork de
+  stratégie**. Il ré-orchestre le squelette de tour en **miroir byte-exact du
+  générateur** (`playOneGame`, « miroir headless de `BotAI.playBotTurn` »), verrouillé
+  par la parité #5 (100 seeds).
+- **Seule divergence comportementale vs le vrai jeu : gossip/alliance omis.**
+  Speeches = UI (sans effet décision) ; alliance → `bot_power_handler.dart:1817`
+  (`allianceTargetFor`) devient inerte (aucune alliance formée). Les alliances ne se
+  forment que contre un **leader humain** → impact pratiquement **nul** en collecte
+  bot-vs-bot sans humain. Reste : logging/délais/asserts omis (aucun effet logique) ;
+  `applyMemoryDecay` sur p0 non appliqué **en mode RL** (intentionnel, siège RL).
+- **`context:null` sûr** : aucune garde logique par context dans `bot_power_handler` ;
+  context ne sert qu'aux notifications (`if target.isHuman`, stub headless no-op).
+- **`frozenBotMode` ne change pas la stratégie** : fait seulement jouer p0 comme un
+  vrai bot pour la parité #5 ; forcé `false` sur le chemin Python.
+- **Recommandation : Option A** (headless = logique bot actuelle → intégration
+  `existing_bot` possible par capture/traduction `action_v2`), **avec réserve
+  documentée** : trancher le sort de gossip/alliance et, idéalement, ajouter un test
+  de non-régression `playOneGame` vs `BotAI.playBotTurn` (aucun test ne le couvre
+  aujourd'hui — la parité est contre le générateur, pas contre le chemin normal).
+
+Prochaine étape : (1) micro-test d'orchestration `playOneGame` vs `BotAI.playBotTurn`
+optionnel ; (2) décider gossip/alliance ; (3) chantier `existing_bot` (Option C de
+l'audit bots).
+
 ### 2026-07-01 — Audit bots existants comme behavior policy RL v2 (Claude Code, AUDIT lecture seule)
 
 Contexte : après `safe_heuristic` (baseline minimale de collecte), auditer si les
