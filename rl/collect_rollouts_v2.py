@@ -175,6 +175,7 @@ def collect_rollouts_v2(
     policy: ActionPolicyLike = choose_legal_action_v2,
     bot_auto: bool = False,
     bot_difficulty: str | None = None,
+    opponent_bot_difficulty: str | None = None,
 ) -> list[EpisodeRecordV2]:
     if episodes <= 0:
         raise ValueError("episodes must be positive")
@@ -184,9 +185,13 @@ def collect_rollouts_v2(
     if players is not None:
         extra_options["num_players"] = int(players)
     if bot_auto:
-        # existing_bot : p0 joué par le VRAI bot, tous les joueurs forcés hard.
+        # existing_bot : p0 joué par le VRAI bot (bot_difficulty, défaut hard).
+        # opponent_bot_difficulty (optionnel) => benchmark hétérogène ; absent =>
+        # adversaires au même niveau que p0 (table homogène).
         extra_options["p0_policy"] = "existing_bot"
         extra_options["bot_difficulty"] = bot_difficulty or "hard"
+        if opponent_bot_difficulty is not None:
+            extra_options["opponent_bot_difficulty"] = opponent_bot_difficulty
     extra_options_or_none = extra_options or None
     records: list[EpisodeRecordV2] = []
     all_transitions: list[TransitionV2] = []
@@ -250,7 +255,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--bot-difficulty",
         choices=["bronze", "silver", "difficile", "hard"],
         default=None,
-        help="existing_bot bot difficulty (default: hard/difficile).",
+        help="existing_bot p0 difficulty (default: hard/difficile).",
+    )
+    parser.add_argument(
+        "--opponent-bot-difficulty",
+        choices=["bronze", "silver", "difficile", "hard", "mixed"],
+        default=None,
+        help="existing_bot opponents difficulty (default: same as p0). "
+        "Use for heterogeneous benchmarks (p0 strong vs weaker opponents).",
     )
     parser.add_argument("--verbose", action="store_true")
     return parser
@@ -275,6 +287,7 @@ def main(argv: list[str] | None = None) -> int:
             policy=policy,
             bot_auto=bot_auto,
             bot_difficulty=args.bot_difficulty,
+            opponent_bot_difficulty=args.opponent_bot_difficulty,
         )
 
     transitions = sum(len(record.transitions) for record in records)

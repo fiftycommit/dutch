@@ -365,6 +365,75 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Benchmark difficulté + capture exacte du slot de match (Claude Code)
+
+Objectif : (1) pouvoir distinguer la difficulté de p0 et des adversaires pour
+benchmarker si les bots difficiles **dominent** vraiment les plus faibles ; (2)
+capturer le slot de match **exactement** (pas de reconstruction/best-effort),
+y compris les faux matchs des bots faibles.
+
+Changement :
+- **Flag difficulté hétérogène** : `tool/rl_env_runner.dart` ajoute
+  `forcedOpponentSkillOverride` + `opponentsMixed` ; option reset
+  `opponent_bot_difficulty` (`parseExistingBotOpponent`) ; `_buildPlayers` :
+  p0 garde `forceAllSkill`, adversaires = override > forceAllSkill > … (ou
+  aléatoire si `mixed`). `collect_rollouts_v2.py` : `--opponent-bot-difficulty
+  {bronze,silver,difficile,hard,mixed}` (défaut = même niveau que p0, table
+  homogène). Mode homogène `--bot-difficulty` inchangé.
+- **Capture EXACTE du slot de match** (décision utilisateur « option 4 ») :
+  `BotCardStrategy.tryReactionMatch` (+ `_trySilverReactionMatch`) expose un
+  callback OPTIONNEL `onMatchAttempt(index)` invoqué avec le slot **réellement
+  tenté** juste avant `GameLogic.matchCard` (réussi OU faux). Défaut null →
+  **comportement de jeu normal strictement inchangé** (aucun appelant de prod ne
+  le fournit ; 115 tests bot/parité/alignement verts). Le runner `_botAutoStep`
+  réaction lit ce slot (plus de reconstruction) ; multi-tentatives atomiques
+  (retry silver confus) → **fail hard** (pas de best-effort).
+- **Fix spy reconstruction** : bronze/silver « confondent » parfois l'info
+  espionnée en écrivant `spyMemory[self]` ; la reconstruction 10 exclut désormais
+  soi-même (restaure hard `power_10_spy`=19/50ép., corrige un crash bronze). La
+  dépendance `lastSpiedCard` (non fiable pour les spies bot) a été retirée.
+- Tests : `rl_env_existing_bot_test.dart` (14 : hétérogène p0-fort/adversaires
+  faibles, mixed, homogène, capture bronze faux/bons matchs slot exact, parsing) ;
+  `test_existing_bot_v2.py` (8 : + flag opponent, extra_options).
+
+Validation : `dart analyze` OK ; `flutter test` parité #5 + alignement (100
+seeds) + existing_bot + bot_card_strategy + bot_ai **82+115 verts** ; Python
+existing_bot/collect/safe/reward/rollout/dataset/roundtrip verts ; hard 50ép.
+toujours **0 faux match**, spy=19. (⚠ `test/rl/headless_threat_signal_test.dart`
+échoue mais **pré-existant** — vérifié sur le HEAD commité `8b79bb5`, indépendant
+de ce chantier.)
+
+**Benchmark difficulté (50 ép./config, /tmp, aucun artefact) :**
+
+| config | win% | rank | score | dutch S/F | faux matchs |
+|---|---|---|---|---|---|
+| homog difficile 2p | 48 | 1.52 | 7.6 | 22/3 | 0 |
+| homog difficile 6p | 20 | 3.04 | 4.4 | 10/0 | 0 |
+| homog bronze 2p | 84 | 1.12 | 8.4 | 42/5 | 12 |
+| homog bronze 6p | 28 | 3.14 | 17.3 | 12/5 | 49 |
+| **p0 diff vs bronze 2p** | **96** | 1.04 | 4.8 | 48/0 | 0 |
+| **p0 diff vs silver 2p** | **88** | 1.12 | 3.7 | 44/1 | 0 |
+| **p0 diff vs bronze 6p** | **92** | 1.12 | 2.7 | 39/0 | 0 |
+| **p0 diff vs silver 6p** | **38** | 2.26 | 5.5 | 19/0 | 0 |
+| **p0 diff vs mixed 6p** | **26** | 2.52 | 6.5 | 13/0 | 0 |
+| homog silver 2p/6p | fail-hard (retry silver confus = 2 tentatives atomiques) | | | | |
+
+**Conclusion : les bots difficiles sont réellement forts, pas seulement propres.**
+p0 difficile **domine** les faibles (96% vs bronze 2p, 92% vs bronze 6p, 88% vs
+silver 2p). Le 20% en full-difficile 6p est **normal** (table homogène ≈ 1/6). Donc
+les 20% du smoke full-hard 6p ne sont pas un signe de faiblesse.
+
+Recommandation collecte RL (à valider avec l'utilisateur avant la grosse collecte) :
+options ouvertes = full hard, **p0 hard vs adversaires plus faibles** (beaucoup plus
+de wins → utile pour un curriculum), difficulté mixte, tailles de table variées, ou
+curriculum progressif. Décision non prise (à discuter).
+
+Limitation documentée : **silver en p0** (homogène) non capturable (retry confus =
+2 matchs atomiques → fail-hard, pas d'approximation). N'affecte ni hard ni les
+configs hétérogènes (p0 toujours difficile). Capture exacte du spy pour bots faibles
+reste imparfaite (confusion mémoire → skip_power) ; un callback `onSpy` serait le
+pendant exact du `onMatchAttempt` si besoin plus tard.
+
 ### 2026-07-01 — existing_bot : behavior policy RL v2 (bots difficiles, capture-par-exécution) (Claude Code)
 
 Objectif : collecter des trajectoires des **vrais bots difficiles** comme behavior

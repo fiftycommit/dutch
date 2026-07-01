@@ -256,6 +256,22 @@ BotSkillLevel? parseExistingBotSkill(Map<String, dynamic> options) {
   return skill;
 }
 
+/// Parse `opponent_bot_difficulty` (benchmark hétérogène). Retourne le niveau
+/// forcé des ADVERSAIRES et un drapeau `mixed` (niveaux aléatoires). Absent =>
+/// (null, false) : les adversaires héritent du niveau de p0 (table homogène).
+/// Lève [FormatException] si la valeur fournie est invalide.
+(BotSkillLevel?, bool) parseExistingBotOpponent(Map<String, dynamic> options) {
+  final raw = options['opponent_bot_difficulty'];
+  if (raw == null) return (null, false);
+  if (raw.toString() == 'mixed') return (null, true);
+  final sk = BotSkillLevel.tryParse(raw.toString());
+  if (sk == null) {
+    throw FormatException('opponent_bot_difficulty inconnu: $raw '
+        '(attendu bronze|silver|difficile|hard|mixed)');
+  }
+  return (sk, false);
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Environnement RL : un épisode = une manche Dutch'78.
 // ════════════════════════════════════════════════════════════════════════════
@@ -269,6 +285,8 @@ class RlEnv {
     this.forcedOpponentBehavior,
     this.forcedOpponentSkill,
     this.forceAllSkill,
+    this.forcedOpponentSkillOverride,
+    this.opponentsMixed = false,
   });
 
   final String episodeId;
@@ -297,6 +315,16 @@ class RlEnv {
   /// adversaires jouent tous à ce niveau. Réservé au runner RL (jamais le chemin
   /// par défaut / parité #5 : dès qu'il est fourni, `defaultConfig` est faux).
   final BotSkillLevel? forceAllSkill;
+
+  /// Benchmark hétérogène : niveau des ADVERSAIRES (p1..pn) quand il diffère de
+  /// p0. null => les adversaires héritent de `forceAllSkill` (table homogène).
+  /// Prime sur `forceAllSkill` pour les adversaires uniquement (p0 garde
+  /// `forceAllSkill`). Réservé au runner RL / collecte.
+  final BotSkillLevel? forcedOpponentSkillOverride;
+
+  /// Benchmark hétérogène : adversaires à niveau ALÉATOIRE (bronze/silver/
+  /// difficile) quand true. p0 garde `forceAllSkill`.
+  final bool opponentsMixed;
 
   late GameState _gs;
   late List<Player> _players;
@@ -709,24 +737,18 @@ class RlEnv {
         {
           final beforeDiscard = _gs.discardPile.length;
           final handBefore = List<PlayingCard>.from(bot.hand);
+          // Capture EXPLICITE du slot réellement tenté (réussi OU faux) via le
+          // callback — aucune reconstruction, aucun best-effort.
+          final attempts = <int>[];
           await BotCardStrategy.tryReactionMatch(_gs, bot, diff, phaseBot,
-              personality: perso, skipDelay: true);
-          final acted = _gs.discardPile.length != beforeDiscard ||
-              bot.hand.length != handBefore.length;
-          if (!acted) {
+              personality: perso, skipDelay: true, onMatchAttempt: attempts.add);
+          if (attempts.isEmpty) {
             kind = 'pass_tick';
             params = const {};
             advance = _passReactionTickThenMaybeAdvance;
-          } else {
-            final rec = _reconstructReactionMatch(bot, handBefore);
-            if (rec == null) {
-              return _error(
-                  'bot_auto: match de réaction non mappable (faux match ?)',
-                  code: 'ILLEGAL_ACTION',
-                  fatal: true);
-            }
-            kind = rec.$1;
-            params = rec.$2;
+          } else if (attempts.length == 1) {
+            kind = 'match';
+            params = {'index': attempts.first};
             _recordReactionMatchEvent(
               actor: bot,
               handBefore: handBefore,
@@ -742,6 +764,14 @@ class RlEnv {
                 advance = () async => _observation();
               }
             }
+          } else {
+            // Multi-tentatives atomiques (retry silver confus) : non décomposable
+            // en une seule action_v2 sans approximation => fail hard.
+            return _error(
+                'bot_auto: réaction multi-tentatives non décomposable '
+                '(${attempts.length})',
+                code: 'ILLEGAL_ACTION',
+                fatal: true);
           }
         }
         break;
@@ -785,19 +815,6 @@ class RlEnv {
     return ('discard_drawn', <String, dynamic>{});
   }
 
-  (String, Map<String, dynamic>)? _reconstructReactionMatch(
-    Player bot,
-    List<PlayingCard> handBefore,
-  ) {
-    // Faux match (pénalité ajoutée) : le slot tenté n'est pas reconstructible.
-    // Les bots difficiles ne matchent que du connu (jamais de faux match), donc
-    // ce cas ne devrait pas se produire ; fail hard s'il survient.
-    if (bot.hand.length > handBefore.length) return null;
-    final slot = _removedSlot(handBefore, bot.hand);
-    if (slot == null) return null;
-    return ('match', <String, dynamic>{'index': slot});
-  }
-
   (String, Map<String, dynamic>)? _reconstructPower(
     Player bot,
     String? powerValue,
@@ -816,8 +833,13 @@ class RlEnv {
         }
         return ('skip_power', <String, dynamic>{});
       case '10':
+        // Nouvelle entrée d'espionnage sur un ADVERSAIRE. On exclut une entrée
+        // sur soi-même : bronze/silver peuvent « confondre » l'info espionnée
+        // avec une carte propre (spyMemory[self]) — ce n'est pas une cible de
+        // spy légale. Si la confusion a effacé la vraie cible => skip_power.
         final after = _spySnapshot(bot);
         for (final tgt in after.keys) {
+          if (tgt == bot.id) continue;
           final before = spyBefore[tgt] ?? const <int>{};
           for (final slot in after[tgt]!) {
             if (!before.contains(slot)) {
@@ -2355,7 +2377,9 @@ class RlEnv {
     final bool defaultConfig = forcedNumPlayers == null &&
         forcedOpponentBehavior == null &&
         forcedOpponentSkill == null &&
-        forceAllSkill == null;
+        forceAllSkill == null &&
+        forcedOpponentSkillOverride == null &&
+        !opponentsMixed;
 
     if (defaultConfig) {
       // ════ CHEMIN PAR DÉFAUT — copie EXACTE de buildBots() du générateur. ════
@@ -2396,12 +2420,17 @@ class RlEnv {
         skill = forceAllSkill ?? BotSkillLevel.silver;
       } else {
         // Adversaires p1..pn : profil forcé, ou aléatoire si non spécifié.
-        // `forceAllSkill` (collecte hard) l'emporte pour homogénéiser la table.
+        // Priorité niveau : override adversaire (benchmark hétérogène) >
+        // `forceAllSkill` (table homogène) > `forcedOpponentSkill` (éval) >
+        // aléatoire. `opponentsMixed` => aléatoire (p0 garde son niveau).
         behavior =
             forcedOpponentBehavior ?? behaviors[rng.nextInt(behaviors.length)];
-        skill = forceAllSkill ??
-            forcedOpponentSkill ??
-            skills[rng.nextInt(skills.length)];
+        skill = opponentsMixed
+            ? skills[rng.nextInt(skills.length)]
+            : (forcedOpponentSkillOverride ??
+                forceAllSkill ??
+                forcedOpponentSkill ??
+                skills[rng.nextInt(skills.length)]);
       }
       return Player(
         id: 'p$i',
@@ -2498,10 +2527,13 @@ Future<void> main(List<String> args) async {
             env = null; // pas d'épisode : empêche un 'action' sur un env périmé
             break;
           }
-          // Collecte `existing_bot` : force le niveau de TOUS les joueurs.
+          // Collecte `existing_bot` : niveau de p0 + niveau des adversaires.
           BotSkillLevel? forceAllSkill;
+          BotSkillLevel? oppOverride;
+          bool oppMixed;
           try {
             forceAllSkill = parseExistingBotSkill(options);
+            (oppOverride, oppMixed) = parseExistingBotOpponent(options);
           } on FormatException catch (e) {
             await _emit({
               'type': 'error',
@@ -2520,6 +2552,8 @@ Future<void> main(List<String> args) async {
             forcedOpponentBehavior: cfg.behavior,
             forcedOpponentSkill: cfg.skill,
             forceAllSkill: forceAllSkill,
+            forcedOpponentSkillOverride: oppOverride,
+            opponentsMixed: oppMixed,
           );
           await _emit(await env.reset(seed));
           break;

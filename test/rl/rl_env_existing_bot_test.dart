@@ -9,7 +9,7 @@ import 'package:dutch_game/models/game_settings.dart' show BotSkillLevel;
 import 'package:dutch_game/services/game/engine_random.dart';
 
 import '../../tool/rl_env_runner.dart'
-    show RlEnv, parseExistingBotSkill;
+    show RlEnv, parseExistingBotSkill, parseExistingBotOpponent;
 
 Set<String> _legalKeys(Map<String, dynamic> obs) {
   final actions =
@@ -40,6 +40,72 @@ void main() {
               reason: 'seed $s joueur ${p.id} devrait être difficile');
         }
       }
+    });
+  });
+
+  group('existing_bot : benchmark hétérogène (p0 fort vs adversaires faibles)', () {
+    test('forcedOpponentSkillOverride => p0 difficile, adversaires bronze',
+        () async {
+      for (var s = 0; s < 15; s++) {
+        final env = RlEnv(
+          episodeId: 'het$s',
+          forcedNumPlayers: 6,
+          forceAllSkill: BotSkillLevel.difficile,
+          forcedOpponentSkillOverride: BotSkillLevel.bronze,
+        );
+        await env.reset(s);
+        expect(env.players[0].botSkillLevel, BotSkillLevel.difficile,
+            reason: 'seed $s : p0 doit rester difficile');
+        for (final p in env.players.skip(1)) {
+          expect(p.botSkillLevel, BotSkillLevel.bronze,
+              reason: 'seed $s : adversaire ${p.id} doit être bronze');
+        }
+      }
+    });
+
+    test('opponentsMixed => p0 difficile, adversaires variés', () async {
+      final oppSkills = <BotSkillLevel>{};
+      for (var s = 0; s < 30; s++) {
+        final env = RlEnv(
+          episodeId: 'mix$s',
+          forcedNumPlayers: 6,
+          forceAllSkill: BotSkillLevel.difficile,
+          opponentsMixed: true,
+        );
+        await env.reset(s);
+        expect(env.players[0].botSkillLevel, BotSkillLevel.difficile);
+        for (final p in env.players.skip(1)) {
+          oppSkills.add(p.botSkillLevel!);
+        }
+      }
+      // Sur 30 seeds, plusieurs niveaux adverses doivent apparaître.
+      expect(oppSkills.length, greaterThan(1),
+          reason: 'mixed devrait produire des niveaux adverses variés');
+    });
+
+    test('homogène (forceAllSkill seul) : adversaires = p0', () async {
+      final env = RlEnv(
+        episodeId: 'homo',
+        forcedNumPlayers: 6,
+        forceAllSkill: BotSkillLevel.silver,
+      );
+      await env.reset(0);
+      for (final p in env.players) {
+        expect(p.botSkillLevel, BotSkillLevel.silver);
+      }
+    });
+
+    test('parseExistingBotOpponent', () {
+      expect(parseExistingBotOpponent(const {}), (null, false));
+      expect(parseExistingBotOpponent({'opponent_bot_difficulty': 'bronze'}),
+          (BotSkillLevel.bronze, false));
+      expect(parseExistingBotOpponent({'opponent_bot_difficulty': 'hard'}),
+          (BotSkillLevel.difficile, false));
+      expect(parseExistingBotOpponent({'opponent_bot_difficulty': 'mixed'}),
+          (null, true));
+      expect(
+          () => parseExistingBotOpponent({'opponent_bot_difficulty': 'xyz'}),
+          throwsA(isA<FormatException>()));
     });
   });
 
@@ -74,6 +140,46 @@ void main() {
           'match', 'pass_tick']) {
         expect(seenTypes.contains(t), isTrue, reason: 'type $t jamais capturé');
       }
+    });
+  });
+
+  group('existing_bot : capture exacte du slot de match (bots faibles)', () {
+    test('bronze p0 : faux/bons matchs capturés, slot légal, pas de crash',
+        () async {
+      var matchActions = 0;
+      var falseMatches = 0;
+      for (var s = 0; s < 25; s++) {
+        final env =
+            RlEnv(episodeId: 'br$s', forceAllSkill: BotSkillLevel.bronze);
+        var obs = await env.reset(s);
+        var guard = 0;
+        while (obs['done'] != true && guard++ < 3000) {
+          final legalBefore = _legalKeys(obs);
+          final next = await env.step({'kind': 'bot_auto'});
+          expect(next['type'], isNot('error'),
+              reason: 'seed $s : ${next['message']}');
+          final applied = next['applied_action_v2'] as Map;
+          expect(legalBefore.contains(_key(applied)), isTrue,
+              reason: 'seed $s : slot capturé hors légal: $applied');
+          if (applied['action_type'] == 'match') {
+            matchActions++;
+            expect(applied['slot'], isA<int>());
+            // Faux match : un évènement match_failure_penalty apparaît pour p0.
+            final events = (next['recent_events'] as List?) ?? const [];
+            if (events.any((e) =>
+                (e as Map)['event_type'] == 'match_failure_penalty' &&
+                e['actor'] == env.rlSeat.id)) {
+              falseMatches++;
+            }
+          }
+          obs = next;
+        }
+        expect(obs['done'], true);
+      }
+      // Bronze produit des matchs, dont des faux (capturés sans best-effort).
+      expect(matchActions, greaterThan(0), reason: 'aucun match bronze capturé');
+      expect(falseMatches, greaterThan(0),
+          reason: 'bronze devrait produire des faux matchs capturés');
     });
   });
 

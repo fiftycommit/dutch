@@ -105,6 +105,11 @@ def test_cli_exposes_existing_bot() -> None:
     hard = parser.parse_args(["--policy", "existing_bot", "--bot-difficulty", "hard"])
     if hard.bot_difficulty != "hard":
         raise AssertionError("bot_difficulty hard not accepted")
+    het = parser.parse_args(
+        ["--policy", "existing_bot", "--opponent-bot-difficulty", "bronze"]
+    )
+    if het.opponent_bot_difficulty != "bronze":
+        raise AssertionError("opponent-bot-difficulty not accepted")
 
 
 def test_random_and_safe_unchanged() -> None:
@@ -189,6 +194,34 @@ def test_extra_options_explicit_difficulty() -> None:
         raise AssertionError(f"explicit difficulty not forwarded: {opts}")
 
 
+def test_extra_options_opponent_difficulty() -> None:
+    runner = BotAutoMockRunner()
+    collect_rollouts_v2.collect_rollouts_v2(
+        runner,
+        episodes=1,
+        seed=0,
+        max_steps=10,
+        players=6,
+        bot_auto=True,
+        opponent_bot_difficulty="bronze",
+    )
+    opts = runner.reset_calls[0]["extra_options"]
+    if opts.get("bot_difficulty") != "hard":
+        raise AssertionError(f"p0 should stay hard: {opts}")
+    if opts.get("opponent_bot_difficulty") != "bronze":
+        raise AssertionError(f"opponent difficulty not forwarded: {opts}")
+
+
+def test_no_opponent_key_when_homogeneous() -> None:
+    runner = BotAutoMockRunner()
+    collect_rollouts_v2.collect_rollouts_v2(
+        runner, episodes=1, seed=0, max_steps=10, bot_auto=True
+    )
+    opts = runner.reset_calls[0]["extra_options"]
+    if "opponent_bot_difficulty" in opts:
+        raise AssertionError(f"homogeneous must not set opponent key: {opts}")
+
+
 def main() -> int:
     tests = [
         test_cli_exposes_existing_bot,
@@ -197,6 +230,8 @@ def main() -> int:
         test_bot_auto_rejects_illegal_applied_action,
         test_extra_options_force_hard,
         test_extra_options_explicit_difficulty,
+        test_extra_options_opponent_difficulty,
+        test_no_opponent_key_when_homogeneous,
     ]
     print("=== test_existing_bot_v2 ===")
     for test in tests:

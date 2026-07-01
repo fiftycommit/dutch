@@ -1428,7 +1428,12 @@ class BotCardStrategy {
     BotGamePhase phase, {
     BotPersonality? personality,
     bool skipDelay = false,
+    void Function(int attemptedIndex)? onMatchAttempt,
   }) async {
+    // `onMatchAttempt` : instrumentation RL OPTIONNELLE (défaut null). Invoquée
+    // avec le slot RÉELLEMENT tenté juste avant `GameLogic.matchCard`, que le
+    // match soit réussi ou faux. N'altère ni la décision, ni la logique de match,
+    // ni le comportement normal (aucun appelant de prod ne la fournit).
     if (gameState.phase != GamePhase.reaction) return false;
     if (bot.isHuman) return false;
     if (gameState.discardPile.isEmpty) return false;
@@ -1448,7 +1453,7 @@ class BotCardStrategy {
 
     if (decisionProfile.tier == _CardTier.silver) {
       return _trySilverReactionMatch(gameState, bot, difficulty, hasKnownMatch,
-          skipDelay: skipDelay);
+          skipDelay: skipDelay, onMatchAttempt: onMatchAttempt);
     }
 
     // Bronze en blackout: il tente parfois un match totalement au hasard.
@@ -1459,6 +1464,7 @@ class BotCardStrategy {
         if (!skipDelay) {
           await Future.delayed(const Duration(milliseconds: 120));
         }
+        onMatchAttempt?.call(randomIndex);
         return GameLogic.matchCard(gameState, bot, randomIndex);
       }
     }
@@ -1495,6 +1501,7 @@ class BotCardStrategy {
             }
 
             // GameLogic.matchCard() gère déjà la suppression dans mentalMap
+            onMatchAttempt?.call(i);
             return GameLogic.matchCard(gameState, bot, i);
           }
         }
@@ -1514,6 +1521,7 @@ class BotCardStrategy {
     BotDifficulty difficulty,
     bool hasKnownMatch, {
     bool skipDelay = false,
+    void Function(int attemptedIndex)? onMatchAttempt,
   }) async {
     if (!hasKnownMatch) return false;
 
@@ -1549,6 +1557,7 @@ class BotCardStrategy {
       await Future.delayed(Duration(milliseconds: reactionDelay));
     }
 
+    onMatchAttempt?.call(firstAttemptIndex);
     final firstSuccess = GameLogic.matchCard(gameState, bot, firstAttemptIndex);
     if (firstSuccess) return true;
     if (retryIndex == null) return false;
@@ -1557,6 +1566,7 @@ class BotCardStrategy {
     if (!skipDelay) {
       await Future.delayed(const Duration(milliseconds: 120));
     }
+    onMatchAttempt?.call(retryIndex);
     return GameLogic.matchCard(gameState, bot, retryIndex);
   }
 
