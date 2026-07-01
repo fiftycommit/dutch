@@ -140,12 +140,26 @@ Il ne désactive aucune action, ne fige pas l'aléatoire autrement que par le re
 
 ## 8. Tests manquants
 
-- **Aucun test n'assert que l'orchestration headless == `BotAI.playBotTurn`** : la
-  parité est contre le **générateur**, pas contre le chemin de jeu normal. Un drift
-  entre `playOneGame` et `BotAI.playBotTurn` (ex. gossip/alliance, ordre des hooks)
-  **ne serait pas détecté**.
-- Pas de test sur l'impact **gossip/alliance** en headless (divergence connue).
+- ~~Aucun test n'assert que l'orchestration headless == `BotAI.playBotTurn`~~ →
+  **AJOUTÉ** : `test/rl/headless_bot_orchestration_alignment_test.dart` compare
+  `playOneGame` (générateur, byte-parity runner via #5) vs une partie complète
+  pilotée par `BotAI.playBotTurn` (chemin de jeu normal) sur **100 seeds** :
+  rangs / scores / dutchCaller **identiques**. Ferme la boucle
+  « runner == générateur == BotAI ». **Vert.** Délais neutralisés par `fakeAsync`
+  (aucun RNG), logger désactivé, gossip reset.
 - Pas de test « bot-en-p0 via existing_bot » (n'existe pas encore).
+
+### Décision gossip/alliance (actée)
+
+`BotGossipService` (speeches + alliances) est **ignoré volontairement** en collecte
+RL : (1) les speeches sont de l'UI pure (aucun effet décision) ; (2) l'alliance ne
+se forme que contre un **leader humain** dangereux, or la collecte RL est
+bot-vs-bot (pas d'humain) → aucune alliance ne se formerait même dans le vrai jeu ;
+(3) `bot_power_handler.dart:1817` (`allianceTargetFor`) reste donc inerte. Le test
+d'alignement le confirme (100 seeds identiques sans humain). Dans le test, gossip
+est de plus `reset()` et n'utilise qu'un `Random` privé (pas `EngineRandom`), donc
+sans effet sur le déterminisme. Si un jour un siège **humain** est simulé en
+collecte, réévaluer (activer gossip côté headless ou le neutraliser explicitement).
 
 ## 9. Recommandation
 

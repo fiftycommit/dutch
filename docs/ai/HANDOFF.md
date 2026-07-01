@@ -365,6 +365,39 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Test d'alignement orchestration headless vs bot normal (Claude Code)
+
+Contexte : le test #5 prouve « runner == générateur ». Il manquait la preuve
+« générateur == `BotAI.playBotTurn` (chemin de jeu normal) » pour verrouiller que
+le headless reste aligné avec la vraie logique bot, pas seulement avec le générateur.
+
+Changement (test seulement, aucune source fonctionnelle touchée) :
+- Ajout `test/rl/headless_bot_orchestration_alignment_test.dart` : compare
+  `playOneGame` vs une partie complète pilotée par `BotAI.playBotTurn` sur **100
+  seeds** (rangs / scores / dutchCaller). Délais `Future.delayed` neutralisés par
+  `fakeAsync` (aucun `EngineRandom`), `GameLoggerService` désactivé, `BotGossipService`
+  reset. **Vert (100/100).**
+- `pubspec.yaml` : ajout `fake_async: ^1.3.0` en dev_dependencies (déjà épinglé
+  transitivement dans `pubspec.lock`).
+
+Preuve de comparabilité (vérifiée par lecture code) : `shouldCallDutch` ne consomme
+pas `EngineRandom` (audit fair-play RNG-neutre) ; `getThinkingTime` = arithmétique
+pure ; `skipDelay` ne gate qu'un délai ; gossip `_rng` privé + aucune alliance sans
+humain. → séquence RNG et décisions identiques.
+
+Résultat : **alignement headless ↔ bot normal verrouillé** (« runner == générateur
+== BotAI »). **Décision gossip/alliance actée** : ignoré volontairement en collecte
+RL bot-vs-bot (inerte sans humain) ; à réévaluer si un siège humain est simulé.
+
+Validation : `flutter test test/rl/headless_bot_orchestration_alignment_test.dart`
+100/100 ; `flutter test test/rl/rl_env_runner_test.dart` **67/67** (parité #5
+intacte) ; `flutter analyze` du nouveau test **0 issue** ; `git diff --check` OK.
+
+État : l'intégration `existing_bot` est désormais **safe à envisager** (headless
+fidèle à la logique bot actuelle). Prochain chantier = Option C (couche d'action
+`action_v2` dans le runner, `--policy existing_bot`), cf.
+`docs/ai/RL_EXISTING_BOTS_POLICY_AUDIT.md`.
+
 ### 2026-07-01 — Audit alignement runner headless vs bots actuels (Claude Code, AUDIT lecture seule)
 
 Contexte : avant `--policy existing_bot`, vérifier que `tool/rl_env_runner.dart::
