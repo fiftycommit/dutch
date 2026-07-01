@@ -11,11 +11,11 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 
-FALSE_MATCH_PENALTY_REWARD = -0.05
-SUCCESSFUL_MATCH_BONUS_POTENTIAL = 0.02
+FALSE_MATCH_PENALTY_REWARD = -0.7
+SUCCESSFUL_MATCH_REWARD = 0.5
 WIN_REWARD = 1.0
 TERMINAL_LOSS_REWARD = 0.0
-FAILED_DUTCH_PENALTY_REWARD = -0.25
+FAILED_DUTCH_PENALTY_REWARD = -1.0
 DESTAB_SCALE = 1.0 / 256.0
 DESTAB_CAP = 2.0
 RL_SEAT_ID = "p0"
@@ -27,9 +27,10 @@ class RewardComponentsV2:
     win_bonus: float = 0.0
     destab_raw: float = 0.0
     destab_bonus_potential: float = 0.0
-    successful_match_bonus_potential: float = 0.0
     positive_bonus_potential: float = 0.0
     paid_positive_bonus: float = 0.0
+    successful_match_reward: float = 0.0
+    immediate_reward: float = 0.0
     false_match_penalty: float = 0.0
     immediate_penalty: float = 0.0
     terminal_win_reward: float = 0.0
@@ -61,21 +62,21 @@ def parse_reward_components_v2(
     win_bonus = _float_or_zero(rewards.get("win_bonus", 0.0))
     destab_raw = _float_or_zero(rewards.get("destab", 0.0))
     destab_bonus_potential = _destab_bonus_potential(destab_raw)
-    successful_match_bonus_potential = _successful_match_bonus_potential(
+    successful_match_reward = _successful_match_reward(
         msg,
         action_v2,
         rl_seat_id,
     )
-    positive_bonus_potential = (
-        destab_bonus_potential + successful_match_bonus_potential
-    )
+    positive_bonus_potential = destab_bonus_potential
     false_match_penalty = _false_match_penalty(msg, action_v2, rl_seat_id)
+    immediate_reward = successful_match_reward
     immediate_penalty = false_match_penalty
     terminal_win_reward = _terminal_win_reward(msg)
     terminal_loss_reward = _terminal_loss_reward(msg)
     terminal_win_bonus = _terminal_win_bonus(msg, win_bonus)
     terminal_failed_dutch_penalty = _terminal_failed_dutch_penalty(msg, action_v2)
     total = scalarize_reward_v2(
+        immediate_reward=immediate_reward,
         immediate_penalty=immediate_penalty,
         terminal_win_reward=terminal_win_reward,
         terminal_loss_reward=terminal_loss_reward,
@@ -87,9 +88,10 @@ def parse_reward_components_v2(
         win_bonus=win_bonus,
         destab_raw=destab_raw,
         destab_bonus_potential=destab_bonus_potential,
-        successful_match_bonus_potential=successful_match_bonus_potential,
         positive_bonus_potential=positive_bonus_potential,
         paid_positive_bonus=0.0,
+        successful_match_reward=successful_match_reward,
+        immediate_reward=immediate_reward,
         false_match_penalty=false_match_penalty,
         immediate_penalty=immediate_penalty,
         terminal_win_reward=terminal_win_reward,
@@ -107,6 +109,7 @@ def scalarize_reward_v2(
     destab: float = 0.0,
     false_match_penalty: float = 0.0,
     successful_match: float = 0.0,
+    immediate_reward: float = 0.0,
     immediate_penalty: float = 0.0,
     terminal_win_reward: float = 0.0,
     terminal_loss_reward: float = 0.0,
@@ -114,11 +117,17 @@ def scalarize_reward_v2(
     terminal_failed_dutch_penalty: float = 0.0,
     paid_positive_bonus: float = 0.0,
 ) -> float:
-    """Return the scalar reward optimized by R2D2 v2."""
+    """Return the scalar reward optimized by R2D2 v2.
 
-    del principal, win_bonus, destab, false_match_penalty, successful_match
+    ``successful_match`` is kept as a compatibility alias for direct match
+    reward callers. The rollout path uses ``immediate_reward``.
+    """
+
+    del principal, win_bonus, destab, false_match_penalty
     return float(
-        immediate_penalty
+        immediate_reward
+        + successful_match
+        + immediate_penalty
         + terminal_win_reward
         + terminal_loss_reward
         + terminal_win_bonus
@@ -149,6 +158,7 @@ def apply_paid_positive_bonus_v2(
     out = _float_components(components)
     out["paid_positive_bonus"] = float(paid_positive_bonus)
     out["total"] = scalarize_reward_v2(
+        immediate_reward=out.get("immediate_reward", 0.0),
         immediate_penalty=out.get("immediate_penalty", 0.0),
         terminal_win_reward=out.get("terminal_win_reward", 0.0),
         terminal_loss_reward=out.get("terminal_loss_reward", 0.0),
@@ -203,13 +213,13 @@ def _false_match_penalty(
     return 0.0
 
 
-def _successful_match_bonus_potential(
+def _successful_match_reward(
     msg: dict[str, Any],
     action_v2: dict[str, Any] | None,
     rl_seat_id: str,
 ) -> float:
     if (
-        SUCCESSFUL_MATCH_BONUS_POTENTIAL == 0.0
+        SUCCESSFUL_MATCH_REWARD == 0.0
         or not _selected_action_type(action_v2, "match")
     ):
         return 0.0
@@ -219,7 +229,7 @@ def _successful_match_bonus_potential(
         actor=rl_seat_id,
         discard_reason="match_discard",
     ):
-        return SUCCESSFUL_MATCH_BONUS_POTENTIAL
+        return SUCCESSFUL_MATCH_REWARD
     return 0.0
 
 
