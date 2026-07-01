@@ -432,6 +432,19 @@ stratégique). **Assez sain pour un premier training from-scratch** ; pour un vr
 run, collecter davantage d'épisodes (dataset hors repo) et éventuellement mixer
 safe/existing_bot pour la diversité d'exploration.
 
+Décisions actées : **existing_bot hard = behavior policy principale** pour la
+prochaine collecte RL v2 ; `safe_heuristic` reste une baseline minimale utile ;
+**random ne doit plus servir de prof principal** pour Dutch.
+
+⚠ **Réserve à surveiller au training** : le **tempo-self-match atomique** dans
+`decideCardAction` (discard puis match d'un doublon, dans le même appel) est
+capturé comme une seule transition `post_draw_discard` ; le self-match est visible
+dans `next_obs`/`recent_events` mais **n'est pas** une transition p0 séparée.
+Acceptable pour l'instant, MAIS **à inspecter dans les traces action-level** : si le
+modèle apprend mal les self-matchs après discard (ex. discard sans enchaîner le
+match du doublon), envisager de décomposer proprement cette primitive composée
+(nécessiterait d'exposer la décision sans l'exécution atomique).
+
 Prochaine étape : dataset existing_bot/mixte plus grand (hors repo) → train R2D2 v2
 from scratch (`--prioritized-replay --double-q`) → éval/traces. Ne pas fine-tune
 l'ancien checkpoint. Reward inchangée (cf. `RL_REWARD_V2_LEX_DECISION.md`).
