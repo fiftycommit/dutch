@@ -11,13 +11,17 @@ import argparse
 from dataclasses import dataclass
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import encoding_v2
 import reward_v2
+import safe_heuristic_v2
 from runner_process import RunnerProcess
 import rollout_v2
 from rollout_v2 import TransitionV2
+
+
+ActionPolicyLike = Callable[[dict[str, Any], random.Random], dict[str, Any]]
 
 
 REQUIRED_V2_BLOCKS = [
@@ -55,6 +59,24 @@ def choose_legal_action_v2(
     return rollout_v2.random_legal_policy_v2(obs_raw, rng)
 
 
+def safe_heuristic_action_v2(
+    obs_raw: dict[str, Any],
+    rng: random.Random,
+) -> dict[str, Any]:
+    """Choose a cautious legal action via the safe heuristic behavior policy."""
+
+    validate_observation_v2(obs_raw)
+    return safe_heuristic_v2.safe_heuristic_policy_v2(obs_raw, rng)
+
+
+# Behavior policies available for collection. ``random`` is the default and its
+# behavior is intentionally unchanged.
+POLICIES: dict[str, ActionPolicyLike] = {
+    "random": choose_legal_action_v2,
+    "safe_heuristic": safe_heuristic_action_v2,
+}
+
+
 def collect_episode_v2(
     runner: rollout_v2.RunnerLike,
     *,
@@ -63,6 +85,7 @@ def collect_episode_v2(
     rng: random.Random,
     max_steps: int,
     extra_options: dict[str, Any] | None = None,
+    policy: ActionPolicyLike = choose_legal_action_v2,
 ) -> EpisodeRecordV2:
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
@@ -77,7 +100,7 @@ def collect_episode_v2(
 
         validate_observation_v2(obs)
         encoded = encoding_v2.encode_observation_v2(obs)
-        action_entry = choose_legal_action_v2(obs, rng)
+        action_entry = policy(obs, rng)
         next_obs = runner.step(rollout_v2.action_message_for_runner(action_entry))
 
         if next_obs.get("type") == "error":
@@ -134,6 +157,7 @@ def collect_rollouts_v2(
     save: bool = False,
     players: int | None = None,
     verbose: bool = False,
+    policy: ActionPolicyLike = choose_legal_action_v2,
 ) -> list[EpisodeRecordV2]:
     if episodes <= 0:
         raise ValueError("episodes must be positive")
@@ -152,6 +176,7 @@ def collect_rollouts_v2(
             rng=rng,
             max_steps=max_steps,
             extra_options=extra_options,
+            policy=policy,
         )
         records.append(record)
         all_transitions.extend(record.transitions)
@@ -189,6 +214,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=str, default=None)
     parser.add_argument("--no-save", action="store_true")
     parser.add_argument("--players", type=int, default=None)
+    parser.add_argument(
+        "--policy",
+        choices=sorted(POLICIES),
+        default="random",
+        help="behavior policy for collection (default: random, unchanged)",
+    )
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -196,6 +227,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     save = bool(args.out) and not args.no_save
+    policy = POLICIES[args.policy]
     with RunnerProcess(max_turns=max(args.max_steps, 1)) as runner:
         records = collect_rollouts_v2(
             runner,
@@ -206,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
             save=save,
             players=args.players,
             verbose=args.verbose,
+            policy=policy,
         )
 
     transitions = sum(len(record.transitions) for record in records)

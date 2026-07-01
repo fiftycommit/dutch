@@ -295,7 +295,8 @@ Phase 2 RL (en cours) :
 Pile R2D2 v2 (cœur RL v2, fichiers `*_v2.py` isolés — chacun a son `test_*_v2.py` vert) :
 - `rl/encoding_v2.py` — encodeur AgentInterface v2 (faits publics, mémoire privée légale, event stream, stabilité slots, masques d'action factorisés). Séparé de `rl/encoding.py` (PPO legacy).
 - `rl/rollout_v2.py` — recorder de transitions `TransitionV2` + (de)sérialisation JSONL.
-- `rl/collect_rollouts_v2.py` — collecteur de rollouts réels via `RunnerProcess` (policy aléatoire légale).
+- `rl/collect_rollouts_v2.py` — collecteur de rollouts réels via `RunnerProcess`. Flag `--policy {random,safe_heuristic}` (défaut `random`, strictement inchangé). `random` reste le prof toxique historique ; `safe_heuristic` est la behavior policy de collecte propre.
+- `rl/safe_heuristic_v2.py` — behavior policy prudente **de collecte uniquement** (pas le bot final, ne copie aucun bot existant) : match seulement sur certitude (`known&valid&confidence>=1.0` + `believed_match_value==top`), sinon `pass_tick` ; `call_dutch` seulement si `unknown_count==0` et `believed_known_score<=8`, sinon `draw` ; `post_draw_replace` du slot connu de plus haut `believed_points` si `drawn_points` améliore, sinon `post_draw_discard` ; utilise `power_7_look`/`power_10_spy` (info), skip `jack_swap`/`joker`. 100% `legal_action_v2`, aucun accès aux `FORBIDDEN_POLICY_KEYS`. `test_safe_heuristic_v2.py` (21 tests).
 - `rl/replay_buffer_v2.py` — replay séquentiel episode-aware ; `SequenceBatchV2` ; **prioritized replay** (alpha/beta/epsilon), IS weights, `update_priorities`, mode uniforme inchangé.
 - `rl/dataset_v2.py` — loader JSONL → `ReplayBufferV2` ; `compute_n_step_returns` = helper offline d'analyse (pas la source de vérité d'entraînement).
 - `rl/model_r2d2_v2.py` — `R2D2AgentV2` (GRU + têtes Q factorisées + masquage) ; stratégie burn-in complet documentée.
@@ -363,6 +364,101 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 ---
 
 ## Journal des mises à jour
+
+### 2026-07-01 — Behavior policy safe_heuristic pour collecte propre (Claude Code)
+
+Contexte :
+- **Le random légal est un prof toxique pour Dutch'78** : le jeu dépend de
+  mémoire/certitude/timing, donc une policy uniforme légale produit surtout des
+  faux matchs, des Dutch ratés et des trajectoires catastrophiques. Le learner
+  off-policy en conclut « continuer à jouer est pire qu'un Dutch suicide ».
+  Preuve : run random direct-reward = 6094 faux matchs / 200 bons, modèle greedy
+  Dutch suicide 30/30. → On arrête d'entraîner sur un prof random.
+
+Changement (aucun training, aucune reward touchée, aucun bot existant intégré) :
+- Ajout `rl/safe_heuristic_v2.py` : behavior policy **prudente, minimale, de
+  collecte seulement** (baseline, PAS la stratégie finale). Règles validées :
+  match sur certitude uniquement, sinon `pass_tick` ; Dutch seulement main
+  pleinement connue et `believed_known_score<=8`, sinon `draw` ; post-draw
+  replace du plus haut slot connu si `drawn_points` améliore, sinon discard ;
+  info powers 7/10 utilisés, Valet/Joker skip. 100% `legal_action_v2`, zéro
+  lecture de clé cachée (`FORBIDDEN_POLICY_KEYS`).
+- Ajout `rl/test_safe_heuristic_v2.py` (21 tests, tout vert).
+- `rl/collect_rollouts_v2.py` : flag `--policy {random,safe_heuristic}` (défaut
+  `random`, comportement random strictement inchangé ; policy threadée dans
+  `collect_episode_v2`/`collect_rollouts_v2`).
+
+Validation :
+- `py_compile` OK ; `test_safe_heuristic_v2` 21/21 ; regressions vertes :
+  `test_collect_rollouts_v2`, `test_reward_v2`, `test_rollout_v2`,
+  `test_dataset_v2`, `test_action_trace_v2`, `test_analyze_action_trace_v2`,
+  `test_roundtrip` (6/6) ; `git diff --check` OK.
+
+Smoke 50 épisodes, 6 joueurs, `--max-steps 300`, dataset sous `/tmp` (non
+committé), AUCUN training :
+
+| métrique | safe_heuristic (50 ép.) | random direct-reward (250 ép.) |
+|---|---|---|
+| transitions | 2492 | 7331 |
+| completed | 50/50 | 250/250 |
+| reached_max_steps | 0 | 0 |
+| false_match_count | **0** (0.0/ép.) | 6094 (24.4/ép.) |
+| successful_match | 75 (1.5/ép.) | 200 (0.8/ép.) |
+| dutch_calls p0 | 4 | 73 |
+| successful / failed Dutch | 3 / 1 | 6 / 67 |
+| wins p0 | 3/50 (6%) | 6/250 (2.4%) |
+| avg final rank | **3.92** | 5.88 |
+| avg final score p0 | **15.12** | 173.52 |
+| reward_total mean/transition | **+0.016** | −0.5765 |
+
+Actions : `pass_tick 1874, draw 230, post_draw_discard 185, match 75 (tous
+réussis), post_draw_replace 45, skip_power 30, power_7_look 28, power_10_spy 21,
+call_dutch 4`. Aucune action illégale, aucun crash, aucun `ended done=false`.
+
+Constat : **faux matchs éliminés (0)**, **Dutch suicide quasi disparu** (4 appels,
+3 réussis), épisodes terminants, score/rang p0 très nettement meilleurs, reward
+moyenne positive. Le prof est sain.
+
+Réserve pour le training : dataset **petit** (50 ép., 3 victoires seulement) → le
+signal victoire/Dutch reste rare. Assez sain pour un **petit** smoke train
+from-scratch, mais pour un vrai run : collecter plus d'épisodes et envisager un
+**dataset mixte** (safe + un peu d'exploration) pour diversifier les issues
+Dutch/victoire. **Ne pas** copier les vrais bots ici : un audit séparé des bots
+(behavior policy plus forte sans hidden leak) est prévu **après** ce chantier.
+
+Prochaine étape recommandée : collecter un dataset safe/mixed plus grand (hors
+repo), puis train R2D2 v2 **from scratch** (`--prioritized-replay --double-q`),
+éval + traces. Ne pas fine-tune l'ancien checkpoint pré-fix. Ne pas rouvrir la
+reward avant d'avoir observé le comportement sur dataset propre (cf.
+`docs/ai/RL_REWARD_V2_LEX_DECISION.md`).
+
+### 2026-07-01 — Étude reward lexicographique/contrainte (Claude Code, PAS de code)
+
+Contexte :
+- Demande : étudier un éventuel rework de la reward v2 vers une forme
+  lexicographique / contrainte (objectif principal dominant + missions
+  secondaires subordonnées), sans coder aveuglément un +100/−100.
+
+Résultat (aucun changement de code, aucune reward modifiée) :
+- Document de décision ajouté : `docs/ai/RL_REWARD_V2_LEX_DECISION.md`.
+- Diagnostic clé : la dégénérescence « Dutch suicide précoce » du run
+  `/tmp/dutch_r2d2_v2_direct_reward_run_20260701_003748/` est un **artefact de
+  dataset off-policy** (collecte random légal empoisonnée par les faux matchs
+  aléatoires), **pas** un problème de forme/échelle de reward. Rescaler en ±100
+  ne corrige rien et déstabilise TD (PER échantillonne par |TD|).
+- Défaut réel *dans* la reward : secondaires immédiats additifs **non bornés** →
+  une victoire avec ≥2 faux matchs peut être notée sous une défaite propre
+  (viole « aucune défaite ne bat une victoire »). Petit, localisé, patchable.
+- **Recommandation : ne PAS toucher la reward maintenant.** Ordre : (A)
+  safe_heuristic collection d'abord → (retrain+éval) → (B) seulement si une
+  inversion de dominance persiste, capper `Σ secondaires ∈ (−0.49, +0.49)` à la
+  finalisation (primaire ±1 inchangé, garantit win ≥ +0.51 > +0.49 ≥ loss).
+- Rejeté : lexicographique ±100/−100 naïf. Reporté : potential-based shaping et
+  auxiliary heads (densification propre, non prioritaire).
+
+Prochaine action recommandée :
+- Revenir au chantier safe_heuristic collection (smoke 50 ép. sous /tmp), retrain
+  puis éval ; ne rouvrir la reward qu'après comportement observé sur dataset propre.
 
 ### 2026-07-01 — Reward v2 direct match outcomes + failed Dutch fort (Codex)
 
