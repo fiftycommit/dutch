@@ -365,6 +365,77 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — existing_bot : behavior policy RL v2 (bots difficiles, capture-par-exécution) (Claude Code)
+
+Objectif : collecter des trajectoires des **vrais bots difficiles** comme behavior
+policy R2D2 v2, sans copier leur stratégie ni fuite cachée. Architecture Option 1
+validée : capture-par-exécution + `bot_auto` + `applied_action_v2`.
+
+Changement :
+- `tool/rl_env_runner.dart` :
+  - `RlEnv.forceAllSkill` : force le niveau de TOUS les joueurs (p0 inclus) ;
+    `_buildPlayers` met p0 ET les adversaires à ce niveau (chemin défaut / parité
+    #5 **intact** : n'est emprunté que si `forceAllSkill != null`).
+  - Options reset `p0_policy: "existing_bot"` + `bot_difficulty` (`parseExistingBotSkill`) ;
+    défaut existing_bot = **`difficile`** (`BotSkillLevel.difficile` → `BotDifficulty.difficult`,
+    profil le plus fort).
+  - Action `{"kind":"bot_auto"}` → `_botAutoStep` : sur la micro-phase courante de
+    p0, le **vrai bot** décide/exécute via ses stratégies actuelles
+    (`shouldCallDutch` / `decideCardAction` / `useBotSpecialPower` /
+    `tryReactionMatch`), puis le runner **reconstruit par diff d'état**
+    l'`action_v2` réellement appliquée (draw/discard/replace via drawnCard+hand ;
+    7 via knownCards ; 10 via spyMemory ; V/Joker via diff d'ordre des mains ;
+    match via discard/hand). Le bot **mute une seule fois** ; l'action n'est
+    **jamais réappliquée**. `applied_action_v2` est **validé légal** contre le
+    `legal_action_v2` d'avant l'action (fail hard sinon, vigilance 5).
+  - **Frontière de décomposition documentée** : un `decideCardAction` qui enchaîne
+    atomiquement discard + tempo-self-match n'expose que sa primitive post-draw
+    (`post_draw_discard`) ; le self-match apparaît dans `next_obs`/`recent_events`,
+    pas comme transition p0 séparée.
+- `rl/collect_rollouts_v2.py` : `--policy existing_bot` + `--bot-difficulty`
+  (défaut hard) ; boucle `bot_auto` (Python envoie `{"kind":"bot_auto"}`, lit
+  `applied_action_v2`, revalide légal côté Python). `random` et `safe_heuristic`
+  **strictement inchangés** (existing_bot n'est pas dans `POLICIES`).
+- Tests : `test/rl/rl_env_existing_bot_test.dart` (9 : tous difficiles, bot_auto
+  complet + applied légal, parsing options, déterminisme) ;
+  `rl/test_existing_bot_v2.py` (6 : CLI, plomberie bot_auto, applied illégal
+  rejeté, random/safe intacts, options hard forcées).
+
+Validation : `dart analyze` OK ; `flutter test rl_env_runner_test + rl_env_existing_bot_test
++ headless_bot_orchestration_alignment_test` **77/77** (parité #5 intacte) ;
+Python `test_existing_bot_v2` 6/6, régression `safe_heuristic/collect/reward/rollout/
+dataset/roundtrip` verte ; dataset JSONL lu par `dataset_v2.load_replay_buffer_from_jsonl` ;
+0 clé interdite dans obs_raw.
+
+Smoke 50 épisodes, 6 joueurs (tous **difficiles**), sous `/tmp` (non committé), aucun
+training :
+
+| métrique | existing_bot (hard) | safe_heuristic | random |
+|---|---|---|---|
+| transitions | 2119 | 2492 | 7331 |
+| completed | 50/50 | 50/50 | 250/250 |
+| false_match_count | **0** | 0 | 6094 |
+| successful_match /ép | **2.66** | 1.5 | 0.8 |
+| dutch (succ/failed) | **10 / 0** | 3 / 1 | 6 / 67 |
+| wins p0 | **20%** | 6% | 2.4% |
+| avg final rank | **3.04** | 3.92 | 5.88 |
+| avg final score p0 | **4.42** | 15.12 | 173.5 |
+| reward mean/tr | **+0.036** | +0.016 | −0.58 |
+
+Actions capturées : `pass_tick, draw, match, post_draw_replace, post_draw_discard,
+skip_power, jack_swap, power_10_spy, power_7_look, call_dutch, joker` (tous les
+types, y compris Valet/Joker complets). Aucun fail-hard, aucune action illégale.
+
+Constat : behavior policy **nettement plus forte et propre** que safe_heuristic
+(0 faux match, Dutch 10/10 réussis, rang/score p0 bien meilleurs, plus de diversité
+stratégique). **Assez sain pour un premier training from-scratch** ; pour un vrai
+run, collecter davantage d'épisodes (dataset hors repo) et éventuellement mixer
+safe/existing_bot pour la diversité d'exploration.
+
+Prochaine étape : dataset existing_bot/mixte plus grand (hors repo) → train R2D2 v2
+from scratch (`--prioritized-replay --double-q`) → éval/traces. Ne pas fine-tune
+l'ancien checkpoint. Reward inchangée (cf. `RL_REWARD_V2_LEX_DECISION.md`).
+
 ### 2026-07-01 — Test d'alignement orchestration headless vs bot normal (Claude Code)
 
 Contexte : le test #5 prouve « runner == générateur ». Il manquait la preuve

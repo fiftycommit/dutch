@@ -86,6 +86,7 @@ def collect_episode_v2(
     max_steps: int,
     extra_options: dict[str, Any] | None = None,
     policy: ActionPolicyLike = choose_legal_action_v2,
+    bot_auto: bool = False,
 ) -> EpisodeRecordV2:
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
@@ -100,8 +101,17 @@ def collect_episode_v2(
 
         validate_observation_v2(obs)
         encoded = encoding_v2.encode_observation_v2(obs)
-        action_entry = policy(obs, rng)
-        next_obs = runner.step(rollout_v2.action_message_for_runner(action_entry))
+
+        if bot_auto:
+            # existing_bot : le VRAI bot décide/exécute côté Dart ; on lit
+            # l'action réellement appliquée. Aucun choix côté Python.
+            next_obs = runner.step({"kind": "bot_auto"})
+            action_entry = None
+        else:
+            action_entry = policy(obs, rng)
+            next_obs = runner.step(
+                rollout_v2.action_message_for_runner(action_entry)
+            )
 
         if next_obs.get("type") == "error":
             raise RuntimeError(
@@ -109,7 +119,12 @@ def collect_episode_v2(
             )
 
         done = bool(next_obs.get("done"))
-        action_v2 = _copy_action_v2(action_entry.get("action_v2"))
+        if bot_auto:
+            action_v2 = _applied_action_v2_from_bot(obs, next_obs)
+            legacy_action_id = None
+        else:
+            action_v2 = _copy_action_v2(action_entry.get("action_v2"))
+            legacy_action_id = _legacy_action_id(action_entry)
         reward_components = reward_v2.parse_reward_components_v2(
             next_obs,
             action_v2=action_v2,
@@ -122,7 +137,7 @@ def collect_episode_v2(
                 obs_raw=obs,
                 obs_encoded_v2=encoded,
                 action_v2=action_v2,
-                legacy_action_id=_legacy_action_id(action_entry),
+                legacy_action_id=legacy_action_id,
                 reward=reward_components.total,
                 done=done,
                 next_obs_raw=next_obs,
@@ -158,12 +173,21 @@ def collect_rollouts_v2(
     players: int | None = None,
     verbose: bool = False,
     policy: ActionPolicyLike = choose_legal_action_v2,
+    bot_auto: bool = False,
+    bot_difficulty: str | None = None,
 ) -> list[EpisodeRecordV2]:
     if episodes <= 0:
         raise ValueError("episodes must be positive")
 
     rng = random.Random(seed)
-    extra_options = {"num_players": int(players)} if players is not None else None
+    extra_options: dict[str, Any] = {}
+    if players is not None:
+        extra_options["num_players"] = int(players)
+    if bot_auto:
+        # existing_bot : p0 joué par le VRAI bot, tous les joueurs forcés hard.
+        extra_options["p0_policy"] = "existing_bot"
+        extra_options["bot_difficulty"] = bot_difficulty or "hard"
+    extra_options_or_none = extra_options or None
     records: list[EpisodeRecordV2] = []
     all_transitions: list[TransitionV2] = []
     for index in range(episodes):
@@ -175,8 +199,9 @@ def collect_rollouts_v2(
             episode_id=episode_id,
             rng=rng,
             max_steps=max_steps,
-            extra_options=extra_options,
+            extra_options=extra_options_or_none,
             policy=policy,
+            bot_auto=bot_auto,
         )
         records.append(record)
         all_transitions.extend(record.transitions)
@@ -216,9 +241,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--players", type=int, default=None)
     parser.add_argument(
         "--policy",
-        choices=sorted(POLICIES),
+        choices=sorted(POLICIES) + ["existing_bot"],
         default="random",
-        help="behavior policy for collection (default: random, unchanged)",
+        help="behavior policy for collection (default: random, unchanged). "
+        "existing_bot = real bots via runner bot_auto (hard by default).",
+    )
+    parser.add_argument(
+        "--bot-difficulty",
+        choices=["bronze", "silver", "difficile", "hard"],
+        default=None,
+        help="existing_bot bot difficulty (default: hard/difficile).",
     )
     parser.add_argument("--verbose", action="store_true")
     return parser
@@ -227,7 +259,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     save = bool(args.out) and not args.no_save
-    policy = POLICIES[args.policy]
+    bot_auto = args.policy == "existing_bot"
+    # existing_bot is runner-driven (bot_auto); random/safe_heuristic unchanged.
+    policy = choose_legal_action_v2 if bot_auto else POLICIES[args.policy]
     with RunnerProcess(max_turns=max(args.max_steps, 1)) as runner:
         records = collect_rollouts_v2(
             runner,
@@ -239,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             players=args.players,
             verbose=args.verbose,
             policy=policy,
+            bot_auto=bot_auto,
+            bot_difficulty=args.bot_difficulty,
         )
 
     transitions = sum(len(record.transitions) for record in records)
@@ -271,6 +307,30 @@ def _reward_from_message(
     action_v2: dict[str, Any] | None = None,
 ) -> float:
     return reward_v2.reward_from_message_v2(msg, action_v2=action_v2)
+
+
+def _applied_action_v2_from_bot(
+    obs_before: dict[str, Any],
+    next_obs: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the bot-executed ``applied_action_v2`` and assert it was legal.
+
+    The runner already validates the reconstructed action against the pre-action
+    legal set; this is a defense-in-depth check on the Python side (vigilance 1).
+    """
+
+    applied = next_obs.get("applied_action_v2")
+    if not isinstance(applied, dict):
+        raise RuntimeError(
+            "existing_bot: applied_action_v2 missing/invalid in runner response"
+        )
+    legal = ((obs_before.get("legal_action_v2") or {}).get("actions") or [])
+    for entry in legal:
+        if entry.get("action_v2") == applied:
+            return dict(applied)
+    raise RuntimeError(
+        f"existing_bot: applied_action_v2 not in obs_before legal set: {applied!r}"
+    )
 
 
 def _copy_action_v2(value: Any) -> dict[str, Any] | None:

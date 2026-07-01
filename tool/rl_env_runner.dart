@@ -227,6 +227,35 @@ EvalPlayerConfig parseEvalPlayerConfig(Map<String, dynamic> options) {
   return EvalPlayerConfig(numPlayers: n, behavior: beh, skill: sk);
 }
 
+/// Parse les options de collecte `existing_bot`. Retourne le niveau à forcer sur
+/// TOUS les joueurs (p0 inclus), ou null si le mode n'est pas demandé.
+///
+/// - `p0_policy: "existing_bot"` => p0 joué par le bot via `bot_auto` ; niveau par
+///   défaut `difficile` (hard) sauf `bot_difficulty` explicite.
+/// - `bot_difficulty: "hard"|"difficile"|"silver"|"bronze"` => niveau forcé.
+/// Lève [FormatException] si une valeur fournie est invalide.
+BotSkillLevel? parseExistingBotSkill(Map<String, dynamic> options) {
+  BotSkillLevel? skill;
+  final diffRaw = options['bot_difficulty'];
+  if (diffRaw != null) {
+    skill = BotSkillLevel.tryParse(diffRaw.toString());
+    if (skill == null) {
+      throw FormatException(
+          'bot_difficulty inconnu: $diffRaw (attendu bronze|silver|difficile|hard)');
+    }
+  }
+  final policy = options['p0_policy'];
+  if (policy != null) {
+    if (policy.toString() != 'existing_bot') {
+      throw FormatException(
+          "p0_policy inconnu: $policy (attendu 'existing_bot')");
+    }
+    // existing_bot : défaut hard (difficile) si aucune difficulté explicite.
+    skill ??= BotSkillLevel.difficile;
+  }
+  return skill;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Environnement RL : un épisode = une manche Dutch'78.
 // ════════════════════════════════════════════════════════════════════════════
@@ -239,6 +268,7 @@ class RlEnv {
     this.forcedNumPlayers,
     this.forcedOpponentBehavior,
     this.forcedOpponentSkill,
+    this.forceAllSkill,
   });
 
   final String episodeId;
@@ -261,6 +291,12 @@ class RlEnv {
 
   /// Éval : force le niveau des adversaires p1..pn ; null => aléatoire.
   final BotSkillLevel? forcedOpponentSkill;
+
+  /// Collecte `existing_bot` : force le niveau de TOUS les joueurs (p0 inclus).
+  /// null => inactif. Quand défini (typiquement `difficile`), p0 et les
+  /// adversaires jouent tous à ce niveau. Réservé au runner RL (jamais le chemin
+  /// par défaut / parité #5 : dès qu'il est fourni, `defaultConfig` est faux).
+  final BotSkillLevel? forceAllSkill;
 
   late GameState _gs;
   late List<Player> _players;
@@ -394,6 +430,10 @@ class RlEnv {
   Future<Map<String, dynamic>> step(Map<String, dynamic> msg) async {
     if (_finished) {
       return _error('épisode déjà terminé', code: 'BAD_PHASE', fatal: false);
+    }
+    // Collecte `existing_bot` : Python délègue la décision de p0 au VRAI bot.
+    if (msg['kind'] == 'bot_auto') {
+      return _botAutoStep();
     }
     final normalized = _normalizeActionMessage(msg);
     if (normalized == null) {
@@ -560,6 +600,277 @@ class RlEnv {
       _gs.specialCardToActivate = null;
     }
     return false;
+  }
+
+  // ── Collecte existing_bot (capture-par-exécution) ──────────────────────────
+  //
+  // Sur la micro-phase courante du siège RL, on laisse le VRAI bot décider ET
+  // exécuter via ses stratégies actuelles (aucune copie de logique, aucune
+  // stratégie modifiée), puis on RECONSTRUIT par diff d'état l'`action_v2`
+  // réellement appliquée. L'action n'est JAMAIS réappliquée (le bot mute une
+  // seule fois). On valide que l'action reconstruite appartient bien à
+  // `legal_action_v2.actions` de l'observation courante (fail hard sinon).
+  //
+  // Frontière de décomposition documentée : un `decideCardAction` qui enchaîne
+  // atomiquement discard + tempo-self-match n'expose que sa primitive post-draw
+  // (discard/replace) comme action ; le self-match éventuel apparaît dans
+  // `next_obs`/`recent_events`, pas comme transition p0 séparée.
+  Future<Map<String, dynamic>> _botAutoStep() async {
+    if (forceAllSkill == null) {
+      return _error('bot_auto requiert le mode existing_bot (p0_policy)',
+          code: 'BAD_PHASE', fatal: false);
+    }
+    final legalKeys = _currentLegalActionKeys();
+    final bot = _rlSeat;
+    final diff = BotConfig.getDifficulty(bot, null);
+    final phaseBot = BotConfig.getBotPhase(bot, _gs);
+    final perso = BotPersonality.fromBot(bot);
+
+    String kind;
+    Map<String, dynamic> params;
+    Future<Map<String, dynamic>> Function() advance;
+
+    switch (_micro) {
+      case RlMicroPhase.dutchOrDraw:
+        if (BotDutchStrategy.shouldCallDutch(_gs, bot, diff, phaseBot,
+            personality: perso)) {
+          kind = 'call_dutch';
+          params = const {};
+          GameLogic.callDutch(_gs);
+          advance = () async => _finalize();
+        } else {
+          kind = 'continue_draw';
+          params = const {};
+          GameLogic.drawCard(_gs);
+          if (_isTerminal()) {
+            advance = () async => _finalize();
+          } else {
+            _micro = RlMicroPhase.postDraw;
+            advance = () async => _observation();
+          }
+        }
+        break;
+
+      case RlMicroPhase.postDraw:
+        {
+          final drawn = _gs.drawnCard;
+          final handBefore = List<PlayingCard>.from(bot.hand);
+          await BotCardStrategy.decideCardAction(_gs, bot, diff, phaseBot,
+              personality: perso);
+          final rec = _reconstructPostDraw(bot, drawn, handBefore);
+          if (rec == null) {
+            return _error('bot_auto: post-draw non mappable en action_v2',
+                code: 'ILLEGAL_ACTION', fatal: true);
+          }
+          kind = rec.$1;
+          params = rec.$2;
+          _recordBotPostDrawEvent(bot, drawn, handBefore);
+          if (_gs.phase == GamePhase.specialPower) {
+            _micro = RlMicroPhase.power;
+            advance = () async => _observation();
+          } else {
+            advance = _completeRlTurnThenAdvance;
+          }
+        }
+        break;
+
+      case RlMicroPhase.power:
+        {
+          final wasMatchPower = _gs.specialPowerPlayerId != null;
+          final powerValue = _gs.specialCardToActivate?.value;
+          final knownBefore = List<bool>.from(bot.knownCards);
+          final spyBefore = _spySnapshot(bot);
+          final handsBefore = _snapshotHandIds();
+          await BotPowerHandler.useBotSpecialPower(_gs, diff, null,
+              personality: perso, skipDelay: true);
+          final rec = _reconstructPower(
+              bot, powerValue, knownBefore, spyBefore, handsBefore);
+          if (rec == null) {
+            return _error('bot_auto: pouvoir non mappable ($powerValue)',
+                code: 'ILLEGAL_ACTION', fatal: true);
+          }
+          kind = rec.$1;
+          params = rec.$2;
+          _recordPowerHandDiffChanges(handsBefore, powerValue);
+          _syncPrivateMemoryMeta();
+          if (wasMatchPower) {
+            _gs.specialPowerPlayerId = null;
+            advance = _activateNextPendingPowerOrAdvance;
+          } else {
+            _gs.phase = GamePhase.playing;
+            _gs.isWaitingForSpecialPower = false;
+            _gs.specialCardToActivate = null;
+            advance = _completeRlTurnThenAdvance;
+          }
+        }
+        break;
+
+      case RlMicroPhase.reaction:
+        {
+          final beforeDiscard = _gs.discardPile.length;
+          final handBefore = List<PlayingCard>.from(bot.hand);
+          await BotCardStrategy.tryReactionMatch(_gs, bot, diff, phaseBot,
+              personality: perso, skipDelay: true);
+          final acted = _gs.discardPile.length != beforeDiscard ||
+              bot.hand.length != handBefore.length;
+          if (!acted) {
+            kind = 'pass_tick';
+            params = const {};
+            advance = _passReactionTickThenMaybeAdvance;
+          } else {
+            final rec = _reconstructReactionMatch(bot, handBefore);
+            if (rec == null) {
+              return _error(
+                  'bot_auto: match de réaction non mappable (faux match ?)',
+                  code: 'ILLEGAL_ACTION',
+                  fatal: true);
+            }
+            kind = rec.$1;
+            params = rec.$2;
+            _recordReactionMatchEvent(
+              actor: bot,
+              handBefore: handBefore,
+              discardSizeBefore: beforeDiscard,
+            );
+            if (_isTerminal()) {
+              advance = () async => _finalize();
+            } else {
+              _reactionTicks++;
+              if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
+                advance = _closeReactionWindowAndAdvance;
+              } else {
+                advance = () async => _observation();
+              }
+            }
+          }
+        }
+        break;
+    }
+
+    final appliedV2 = _actionV2FromMessage(kind, params);
+    if (!legalKeys.contains(_actionV2Key(appliedV2))) {
+      return _error('bot_auto: action reconstruite illégale: $appliedV2',
+          code: 'ILLEGAL_ACTION', fatal: true);
+    }
+    final out = await advance();
+    out['applied_action_v2'] = appliedV2;
+    return out;
+  }
+
+  Set<String> _currentLegalActionKeys() {
+    final legal = _buildLegalActionV2(_buildMask());
+    final actions = (legal['actions'] as List).cast<Map<String, dynamic>>();
+    return {
+      for (final a in actions)
+        _actionV2Key(a['action_v2'] as Map<String, dynamic>),
+    };
+  }
+
+  Map<String, Set<int>> _spySnapshot(Player bot) => {
+        for (final e in bot.spyMemory.entries) e.key: e.value.keys.toSet(),
+      };
+
+  (String, Map<String, dynamic>)? _reconstructPostDraw(
+    Player bot,
+    PlayingCard? drawn,
+    List<PlayingCard> handBefore,
+  ) {
+    if (drawn == null) return null;
+    // La carte piochée est-elle entrée en main (replace) ? Sinon elle a été
+    // défaussée (discard_drawn), y compris quand `decideCardAction` enchaîne
+    // atomiquement discard + tempo-self-match (le match apparaît alors dans
+    // next_obs, pas comme transition séparée — frontière documentée).
+    final slot = bot.hand.indexWhere((c) => c.id == drawn.id);
+    if (slot >= 0) return ('replace', <String, dynamic>{'index': slot});
+    return ('discard_drawn', <String, dynamic>{});
+  }
+
+  (String, Map<String, dynamic>)? _reconstructReactionMatch(
+    Player bot,
+    List<PlayingCard> handBefore,
+  ) {
+    // Faux match (pénalité ajoutée) : le slot tenté n'est pas reconstructible.
+    // Les bots difficiles ne matchent que du connu (jamais de faux match), donc
+    // ce cas ne devrait pas se produire ; fail hard s'il survient.
+    if (bot.hand.length > handBefore.length) return null;
+    final slot = _removedSlot(handBefore, bot.hand);
+    if (slot == null) return null;
+    return ('match', <String, dynamic>{'index': slot});
+  }
+
+  (String, Map<String, dynamic>)? _reconstructPower(
+    Player bot,
+    String? powerValue,
+    List<bool> knownBefore,
+    Map<String, Set<int>> spyBefore,
+    Map<String, List<String>> handsBefore,
+  ) {
+    switch (powerValue) {
+      case '7':
+        for (var i = 0;
+            i < bot.knownCards.length && i < knownBefore.length;
+            i++) {
+          if (bot.knownCards[i] && !knownBefore[i]) {
+            return ('power7_look', <String, dynamic>{'index': i});
+          }
+        }
+        return ('skip_power', <String, dynamic>{});
+      case '10':
+        final after = _spySnapshot(bot);
+        for (final tgt in after.keys) {
+          final before = spyBefore[tgt] ?? const <int>{};
+          for (final slot in after[tgt]!) {
+            if (!before.contains(slot)) {
+              return (
+                'power10_spy',
+                <String, dynamic>{'target_seat': tgt, 'index': slot}
+              );
+            }
+          }
+        }
+        return ('skip_power', <String, dynamic>{});
+      case 'V':
+        final changed = <(String, int)>[];
+        for (final p in _players) {
+          final before = handsBefore[p.id] ?? const <String>[];
+          for (var i = 0; i < p.hand.length; i++) {
+            final b = i < before.length ? before[i] : null;
+            if (p.hand[i].id != b) changed.add((p.id, i));
+          }
+        }
+        if (changed.isEmpty) return ('skip_power', <String, dynamic>{});
+        if (changed.length == 2 && changed[0].$1 != changed[1].$1) {
+          return (
+            'powerV_swap',
+            <String, dynamic>{
+              'player_a': changed[0].$1,
+              'slot_a': changed[0].$2,
+              'player_b': changed[1].$1,
+              'slot_b': changed[1].$2,
+            }
+          );
+        }
+        return null; // ambigu -> fail hard
+      case 'JOKER':
+        for (final p in _players) {
+          if (identical(p, bot)) continue;
+          final before = handsBefore[p.id] ?? const <String>[];
+          final after = p.hand.map((c) => c.id).toList();
+          if (!_listEqIds(before, after)) {
+            return ('powerJoker', <String, dynamic>{'target_seat': p.id});
+          }
+        }
+        return ('skip_power', <String, dynamic>{});
+    }
+    return ('skip_power', <String, dynamic>{});
+  }
+
+  bool _listEqIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// Démarre la phase de réaction. En mode RL, rend la main à Python pour que
@@ -2043,7 +2354,8 @@ class RlEnv {
 
     final bool defaultConfig = forcedNumPlayers == null &&
         forcedOpponentBehavior == null &&
-        forcedOpponentSkill == null;
+        forcedOpponentSkill == null &&
+        forceAllSkill == null;
 
     if (defaultConfig) {
       // ════ CHEMIN PAR DÉFAUT — copie EXACTE de buildBots() du générateur. ════
@@ -2076,15 +2388,20 @@ class RlEnv {
       final BotBehavior behavior;
       final BotSkillLevel skill;
       if (i == 0) {
-        // Siège RL : profil neutre fixe, sans effet (Python décide ; _playBotTurn
-        // n'est jamais appelé sur p0 hors frozenBotMode).
+        // Siège RL : profil neutre fixe, sans effet quand Python décide
+        // (`_playBotTurn` n'est jamais appelé sur p0 hors frozenBotMode). En
+        // collecte `existing_bot` (`forceAllSkill` défini), p0 est joué par le
+        // bot via `bot_auto` : on lui applique donc le MÊME niveau forcé.
         behavior = BotBehavior.balanced;
-        skill = BotSkillLevel.silver;
+        skill = forceAllSkill ?? BotSkillLevel.silver;
       } else {
         // Adversaires p1..pn : profil forcé, ou aléatoire si non spécifié.
+        // `forceAllSkill` (collecte hard) l'emporte pour homogénéiser la table.
         behavior =
             forcedOpponentBehavior ?? behaviors[rng.nextInt(behaviors.length)];
-        skill = forcedOpponentSkill ?? skills[rng.nextInt(skills.length)];
+        skill = forceAllSkill ??
+            forcedOpponentSkill ??
+            skills[rng.nextInt(skills.length)];
       }
       return Player(
         id: 'p$i',
@@ -2181,6 +2498,20 @@ Future<void> main(List<String> args) async {
             env = null; // pas d'épisode : empêche un 'action' sur un env périmé
             break;
           }
+          // Collecte `existing_bot` : force le niveau de TOUS les joueurs.
+          BotSkillLevel? forceAllSkill;
+          try {
+            forceAllSkill = parseExistingBotSkill(options);
+          } on FormatException catch (e) {
+            await _emit({
+              'type': 'error',
+              'code': 'INVALID_OPTIONS',
+              'message': e.message,
+              'fatal': true,
+            });
+            env = null;
+            break;
+          }
           // frozenBotMode toujours false ici : réservé aux tests.
           env = RlEnv(
             episodeId: msg['episode_id']?.toString() ?? 'ep',
@@ -2188,6 +2519,7 @@ Future<void> main(List<String> args) async {
             forcedNumPlayers: cfg.numPlayers,
             forcedOpponentBehavior: cfg.behavior,
             forcedOpponentSkill: cfg.skill,
+            forceAllSkill: forceAllSkill,
           );
           await _emit(await env.reset(seed));
           break;
