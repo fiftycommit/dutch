@@ -376,17 +376,12 @@ def _save_checkpoint(
             "online_model": learner.online_model.state_dict(),
             "target_model": learner.target_model.state_dict(),
             "optimizer": learner.optimizer.state_dict(),
+            # Stringify EVERY Path field (dataset, save_checkpoint, metrics_out,
+            # resume_from, …) so the checkpoint stays loadable under
+            # torch.load(weights_only=True) — a pickled PosixPath is rejected.
             "config": {
-                **asdict(config),
-                # Stringify every Path field so the checkpoint stays loadable
-                # under torch.load(weights_only=True) (no pickled PosixPath).
-                "dataset": str(config.dataset),
-                "save_checkpoint": (
-                    None if config.save_checkpoint is None else str(config.save_checkpoint)
-                ),
-                "metrics_out": (
-                    None if config.metrics_out is None else str(config.metrics_out)
-                ),
+                k: (str(v) if isinstance(v, Path) else v)
+                for k, v in asdict(config).items()
             },
             "learner_state": {
                 "step": learner.state.step,

@@ -674,6 +674,37 @@ def test_resume_end_to_end_run() -> None:
             raise AssertionError("resume end-to-end run failed")
 
 
+def test_resume_chain_checkpoint_stays_weights_only_loadable() -> None:
+    # Régression : un checkpoint SAUVÉ PAR UN RUN RESUMÉ (config.resume_from défini)
+    # doit rester chargeable sous weights_only=True (pas de PosixPath picklé).
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpd = Path(tmp)
+        dataset = tmpd / "data.jsonl"
+        _write_dataset(dataset, count=4)
+        c0 = tmpd / "c0.pt"
+        c1 = tmpd / "c1.pt"
+        common = dict(steps=1, batch_size=1, seq_len=2, burn_in=1, n_step=1,
+                      no_save=False)
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(dataset=dataset, save_checkpoint=c0, **common)
+        )
+        # Run resumé qui SAUVE c1 (sa config contient resume_from=c0).
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset, save_checkpoint=c1, resume_from=c0, **common
+            )
+        )
+        # c1 doit se recharger (chaîne resume) — échouait avant le fix.
+        train_r2d2_v2.run_training_smoke(
+            train_r2d2_v2.TrainConfigV2(
+                dataset=dataset, steps=1, batch_size=1, seq_len=2, burn_in=1,
+                n_step=1, resume_from=c1,
+            )
+        )
+        # Et weights_only=True explicite ne doit pas lever.
+        torch.load(c1, map_location="cpu", weights_only=True)
+
+
 def test_resume_missing_checkpoint_raises() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         dataset = Path(tmp) / "data.jsonl"
@@ -733,6 +764,7 @@ def main() -> int:
         test_from_scratch_default_resume_none,
         test_resume_restores_weights_optimizer_step,
         test_resume_end_to_end_run,
+        test_resume_chain_checkpoint_stays_weights_only_loadable,
         test_resume_missing_checkpoint_raises,
         test_resume_invalid_checkpoint_raises,
     ]
