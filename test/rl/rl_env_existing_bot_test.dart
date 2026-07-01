@@ -143,6 +143,37 @@ void main() {
     });
   });
 
+  group('existing_bot : faux match ne boucle pas (anti-explosion main)', () {
+    test('silver2p : main p0 bornée, faux matchs = 1 pénalité, pas de crash',
+        () async {
+      // Repro historique : seed=354 explosait la main de p0 à 32 cartes via ~30
+      // faux matchs en boucle dans une seule fenêtre. Doit rester borné.
+      for (final seed in [354, 250, 251, 400, 480]) {
+        final env = RlEnv(
+          episodeId: 's$seed',
+          forcedNumPlayers: 2,
+          forceAllSkill: BotSkillLevel.difficile,
+          forcedOpponentSkillOverride: BotSkillLevel.silver,
+        );
+        var obs = await env.reset(seed);
+        var guard = 0;
+        var maxHand = 0;
+        while (obs['done'] != true && guard++ < 4000) {
+          final next = await env.step({'kind': 'bot_auto'});
+          expect(next['type'], isNot('error'),
+              reason: 'seed $seed : ${next['message']}');
+          maxHand =
+              maxHand > env.rlSeat.hand.length ? maxHand : env.rlSeat.hand.length;
+          obs = next;
+        }
+        expect(obs['done'], true, reason: 'seed $seed non terminé');
+        // Un bot difficile ne doit jamais approcher le cap d'encodage (13).
+        expect(maxHand, lessThan(13),
+            reason: 'seed $seed : main p0 a explosé ($maxHand) => boucle faux match');
+      }
+    });
+  });
+
   group('existing_bot : capture exacte du slot de match (bots faibles)', () {
     test('bronze p0 : faux/bons matchs capturés, slot légal, pas de crash',
         () async {

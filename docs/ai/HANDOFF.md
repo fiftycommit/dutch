@@ -365,6 +365,45 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Fix boucle faux-match bot_auto (crash main>13) (Claude Code)
+
+Diagnostic (crash « main p0 > 13 » observé en collecte curriculum, ex. seed=354
+silver2p) : **bug d'interaction runner/bot_auto en réaction**, pas un problème de
+règles/encodage. Dans `_botAutoStep` (réaction), après un match de p0 le runner
+**ré-invitait p0** tant que `_reactionTicks < 30` (pour permettre à un agent RL de
+chaîner). Mais p0-en-bot est déterministe : `GameLogic.matchCard` **ne met PAS à
+jour la croyance** (`mentalMap`/`knownCards`) sur un faux match (branche
+`applyPenalty` + `return false`, `game_logic.dart:309`). Contexte inchangé (même
+top, même croyance) → `tryReactionMatch` re-décide **le même** faux match slot →
+30 pénalités dans une seule fenêtre → main 2→32 → crash (slot > cap `MAX_SLOTS=13`).
+Timeline dumpée sous /tmp. Cross-check : le générateur/`playOneGame`
+(`_runReactionPhase`, un seul appel par bot/fenêtre) ne peut pas le reproduire
+(confirmé par parité #5 + alignement, 100 seeds sans crash) → état impossible en
+vrai jeu.
+
+Fix (uniquement `_botAutoStep`, aucune stratégie/reward/clamp) :
+- **Match RÉUSSI** (carte retirée) → l'état change → ré-invite p0 (chaîne
+  légitime, ex. doublon / deux rois rouges).
+- **FAUX match** → pas de ré-invitation automatique dans le contexte identique
+  (qui bouclerait). La fenêtre CONTINUE (timer non reset, adversaires réagissent)
+  et p0 n'est re-sollicité que si le **top change** (= vraie nouvelle intention
+  possible). Aucune carte choisie à sa place, aucune troncature, la pénalité du
+  faux match légitime reste ×1. (Autoriser plusieurs tentatives DISTINCTES sur un
+  même top nécessitera une logique bot explicite de MAJ de croyance
+  post-faux-match — chantier futur.)
+- Le chemin agent RL (`step()`), random et safe_heuristic sont **inchangés**.
+
+Validation : seed 354 main **32→4**, faux matchs **30→3** (1 pénalité chacun) ;
+seeds qui crashaient (bronze6p 1000-1119, silver2p) → **0 crash** ; chaîne de bons
+matchs p0 (doublon) toujours possible (≥2 consécutifs capturés) ; test
+`rl_env_existing_bot_test` anti-explosion ajouté ; régression Dart (parité #5,
+alignement 100 seeds, bot_card_strategy, bot_ai) + Python verte. Reste séparé :
+homog **silver-p0** fail-hard sur le retry-confus silver (2 tentatives atomiques)
+— hors curriculum (p0 toujours difficile).
+
+Conséquence : une **re-collecte** obtiendrait maintenant les 10k ép **sans perte**
+(la cause des 1250 ép manquants est corrigée).
+
 ### 2026-07-01 — Benchmark difficulté + capture exacte du slot de match (Claude Code)
 
 Objectif : (1) pouvoir distinguer la difficulté de p0 et des adversaires pour

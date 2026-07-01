@@ -747,6 +747,8 @@ class RlEnv {
             params = const {};
             advance = _passReactionTickThenMaybeAdvance;
           } else if (attempts.length == 1) {
+            // Réussi = une carte quitte la main ; faux = pénalité ajoutée.
+            final succeeded = bot.hand.length < handBefore.length;
             kind = 'match';
             params = {'index': attempts.first};
             _recordReactionMatchEvent(
@@ -756,13 +758,38 @@ class RlEnv {
             );
             if (_isTerminal()) {
               advance = () async => _finalize();
-            } else {
+            } else if (succeeded) {
+              // Match RÉUSSI : l'état change réellement (carte retirée, nouveau
+              // top) => p0 peut enchaîner un autre bon match (ex. deux rois
+              // rouges). Ré-invitation légitime dans la même fenêtre.
               _reactionTicks++;
               if (_reactionTicks >= _kMaxHeadlessReactionTicks) {
                 advance = _closeReactionWindowAndAdvance;
               } else {
                 advance = () async => _observation();
               }
+            } else {
+              // FAUX match. Retenter après un faux match EST légal en soi, mais
+              // seulement si c'est une VRAIE nouvelle intention de carte. Or le
+              // bot difficile actuel ne met PAS à jour sa croyance après un faux
+              // match : dans un contexte INCHANGÉ (même top, même croyance), sa
+              // « nouvelle tentative » serait mécaniquement IDENTIQUE (même slot)
+              // — ré-invoquer `tryReactionMatch` en boucle = bug protocole (30
+              // pénalités), pas une décision volontaire répétée.
+              //
+              // Donc : on NE ré-invite PAS p0 dans le même contexte (ce qui
+              // bouclerait), mais la fenêtre CONTINUE (timer non reset) : les
+              // adversaires réagissent, et p0 est re-sollicité dès que le top
+              // change réellement (= contexte distinct => vraie nouvelle
+              // intention possible, ex. matcher une autre carte sur un nouveau
+              // top). On ne choisit jamais de carte à sa place, on ne tronque
+              // rien, on ne modifie pas la stratégie. La pénalité du faux match
+              // légitime reste (×1).
+              //
+              // (Autoriser plusieurs tentatives DISTINCTES sur un même top
+              // nécessitera une logique bot explicite de mise à jour de croyance
+              // post-faux-match — chantier futur, pas ici.)
+              advance = _passReactionTickThenMaybeAdvance;
             }
           } else {
             // Multi-tentatives atomiques (retry silver confus) : non décomposable
