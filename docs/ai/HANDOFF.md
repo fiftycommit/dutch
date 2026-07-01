@@ -365,6 +365,40 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-01 — Chantier RAM training : sharding par épisodes (Option A) (Claude Code)
+
+Objectif : entraîner le curriculum complet sans OOM (loader `train_r2d2_v2`
+tout-en-RAM ; p3_diff6p ~16 Go, concat ~40 Go). **Option retenue : A — shards par
+épisodes + `--resume-from`** (simple, peu risqué, compatible trainer actuel,
+respecte le curriculum). B (streaming/minibatch disque) reste le vrai objectif
+long terme ; C (sous-échantillonnage) = smoke seulement ; D (concat RAM) refusé.
+
+Ajout `rl/shard_dataset_v2.py` (utilitaire fichier pur, streaming) :
+- split un JSONL v2 en shards **épisode-complets** (jamais couper un épisode) ;
+- `--max-transitions` par shard (défaut 45000 ≈ ~5,9 Go RAM au chargement) ;
+- concat des shards = source **exacte** (ligne à ligne, vérifié) ; conservation
+  transitions/épisodes **assertée** ; **manifest JSON** (ép, transitions,
+  reward_sum, action_counts, source, par shard + total, `sum_check_ok`).
+- Tests `test_shard_dataset_v2.py` (8, verts) : pas de coupe d'épisode, sommes
+  conservées, concat==source, manifest correct, gros épisode seul dans son shard,
+  input manquant/invalide → erreur claire.
+
+Dry-run sous `/tmp/curriculum_shards/` (max 45k tr/shard) — sommes OK, ≤45k :
+- p1_bronze6p (71820) → 2 shards ; p2_silver6p (86430) → 2 ; p3_diff6p (126790)
+  → 3 ; p3_diff2p (51909) → 2. Les 2p 30k (p1_silver2p, p2_silver2p) restent
+  non shardés (~4 Go, OK). Toute unité d'entraînement ≤45k tr → ≤~6 Go RAM.
+
+Curriculum séquentiel par shards (11 unités, ordre faibles→forts) :
+P1: p1_bronze6p_shard_001/002 + p1_silver2p → P2: p2_silver6p_shard_001/002 +
+p2_silver2p → P3: p3_diff6p_shard_001/002/003 + p3_diff2p_shard_001/002. From
+scratch sur la 1re, `--resume-from` entre chaque, checkpoints intermédiaires sous
+`/tmp/r2d2_curriculum/`.
+
+Limite acceptée (1er curriculum) : le **replay buffer est reset par shard** (pas de
+replay cross-shard) → fenêtre glissante, pas du full-dataset replay. Un vrai
+**streaming replay (Option B)** reste nécessaire plus tard pour un run sérieux.
+**Aucun training long lancé** (validation d'abord).
+
 ### 2026-07-01 — Validation dataset curriculum + probe throughput + `--resume-from` (Claude Code)
 
 **Dataset curriculum validé** (10 000 ép / 398 539 transitions, `/tmp/curriculum/`,
