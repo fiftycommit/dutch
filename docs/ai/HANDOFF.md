@@ -423,15 +423,33 @@ p0 difficile **domine** les faibles (96% vs bronze 2p, 92% vs bronze 6p, 88% vs
 silver 2p). Le 20% en full-difficile 6p est **normal** (table homogène ≈ 1/6). Donc
 les 20% du smoke full-hard 6p ne sont pas un signe de faiblesse.
 
-**DÉCISION collecte RL (utilisateur, 2026-07-01) : CURRICULUM faibles → forts.**
-Commencer la collecte existing_bot avec **p0 difficile vs adversaires bronze/silver**
-(beaucoup de wins, 88–96% → signal victoire riche pour amorcer le RL), puis durcir
-progressivement vers **full hard** (p0 diff vs diff). Utiliser les flags
-`--policy existing_bot --bot-difficulty difficile --opponent-bot-difficulty
-{bronze|silver|difficile}` (+ `--players`), dataset **hors repo** (`/tmp` ou volume
-dédié). Ne pas committer dataset/checkpoint. Puis train R2D2 v2 from scratch
-(`--prioritized-replay --double-q`) → éval/traces (surveiller la frontière
-self-match). Reward inchangée (`RL_REWARD_V2_LEX_DECISION.md`).
+**DÉCISION collecte RL (utilisateur, 2026-07-01) : CURRICULUM faibles → forts,
+composition MIX 2p+6p.** Flags `--policy existing_bot --bot-difficulty difficile
+--opponent-bot-difficulty {bronze|silver|difficile} --players {2|6}`, dataset **hors
+repo** (`/tmp` ou volume dédié), rien de committé. Puis train R2D2 v2 from scratch
+(`--prioritized-replay --double-q`) → éval/traces. Reward inchangée
+(`RL_REWARD_V2_LEX_DECISION.md`).
+
+Stats fines de dimensionnement (150 ép./config, p0 difficile) :
+- **Efficacité dataset** : 6p ≈ **30% transitions utiles** (70% pass_tick, 5
+  adversaires) ; 2p ≈ **55% utiles**. → 2p ~2× plus efficace en signal décisif ;
+  6p apporte la diversité de table. D'où le **mix**.
+- Longueur : 6p ~30 tours / 43-59 transitions ; 2p ~11-14 tours / 25-33.
+- Win/Dutch : vs bronze 6p 93% (114/150 Dutch réussis), vs silver 2p 89%
+  (133/150) ; full hard 19% (6p) / 50% (2p). Dutch toujours main pleinement connue,
+  succès ~98-99%.
+- Pouvoirs bien couverts partout ; tempo-self-match ≈ 0 (frontière rarement
+  déclenchée) ; faux matchs p0 diff ≈ 0 sauf vs silver (mentalMap vieillie).
+- **EXCLUSION : 2p-vs-bronze** — parties dégénérées → main p0 > 13 cartes
+  (cap `MAX_SLOTS=13`) → fail-hard. Phase faible = **6p uniquement** ; le 2p est
+  réservé aux phases silver/hard (stables). Limitation encodage à garder en tête.
+
+Plan curriculum retenu (volumes exacts à confirmer avant collecte) :
+- Phase 1 (amorçage, wins riches) : diff vs **bronze 6p** (+ diff vs **silver 2p**).
+- Phase 2 (transition) : diff vs **silver 6p** + diff vs **silver 2p**.
+- Phase 3 (cible) : **full hard** 6p + 2p.
+Pondérer les volumes par le taux d'utile (6p ~30%, 2p ~55%) pour viser un nombre
+cible de transitions **utiles** par phase. NE PAS inclure 2p-vs-bronze.
 
 Limitation documentée : **silver en p0** (homogène) non capturable (retry confus =
 2 matchs atomiques → fail-hard, pas d'approximation). N'affecte ni hard ni les
