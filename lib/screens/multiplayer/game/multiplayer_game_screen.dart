@@ -23,6 +23,7 @@ import 'package:dutch_game/widgets/multiplayer/game_overlays.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
+import 'package:dutch_game/utils/rebuild_probe.dart';
 import 'package:dutch_game/services/platform/wake_lock_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
@@ -440,6 +441,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         selector: (_, gameProvider) =>
             _MultiplayerGameScreenModel.from(gameProvider),
         builder: (context, model, child) {
+          RebuildProbe.bump('screen_body');
           final gameProvider = context.read<MultiplayerGameProvider>();
           final gameState = model.gameState;
 
