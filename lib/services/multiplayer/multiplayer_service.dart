@@ -16,6 +16,8 @@ export 'saved_rooms_repository.dart' show SavedRoom;
 /// MultiplayerService refactoré - Orchestrateur (~350 lignes au lieu de 1136)
 /// Principe GRASP: Controller - Coordonne les sous-modules
 class MultiplayerService {
+  static const Duration _roomAckTimeout = Duration(seconds: 6);
+
   final SocketConnectionHandler _connectionHandler = SocketConnectionHandler();
   final SavedRoomsRepository _roomsRepository = SavedRoomsRepository();
   late final GameActionsEmitter _actionsEmitter;
@@ -195,6 +197,7 @@ class MultiplayerService {
     if (!isConnected) await connect();
 
     final completer = Completer<String?>();
+    var isSettled = false;
     final clientId = await _connectionHandler.ensureClientId();
     _connectionHandler.lastPlayerName = playerName;
 
@@ -205,6 +208,8 @@ class MultiplayerService {
       'playerName': playerName,
       'clientId': clientId,
     }, ack: (response) {
+      if (isSettled) return;
+      isSettled = true;
       if (response == null) {
         completer.completeError('Pas de réponse du serveur');
         return;
@@ -218,7 +223,18 @@ class MultiplayerService {
       }
     });
 
-    return completer.future;
+    return completer.future.timeout(
+      _roomAckTimeout,
+      onTimeout: () {
+        isSettled = true;
+        final error = TimeoutException(
+          'Timeout ACK room:create',
+          _roomAckTimeout,
+        );
+        ErrorReportingService().reportNetwork(error, endpoint: 'room:create');
+        throw error;
+      },
+    );
   }
 
   Future<List<Map<String, dynamic>>?> getPublicRooms() async {
@@ -255,6 +271,7 @@ class MultiplayerService {
     if (!isConnected) await connect();
 
     final completer = Completer<Map<String, dynamic>?>();
+    var isSettled = false;
     final clientId = await _connectionHandler.ensureClientId();
     _connectionHandler.lastPlayerName = playerName;
 
@@ -263,6 +280,8 @@ class MultiplayerService {
       'playerName': playerName,
       'clientId': clientId,
     }, ack: (response) {
+      if (isSettled) return;
+      isSettled = true;
       if (response == null) {
         completer.completeError('Pas de réponse du serveur');
         return;
@@ -276,7 +295,18 @@ class MultiplayerService {
       }
     });
 
-    return completer.future;
+    return completer.future.timeout(
+      _roomAckTimeout,
+      onTimeout: () {
+        isSettled = true;
+        final error = TimeoutException(
+          'Timeout ACK room:join',
+          _roomAckTimeout,
+        );
+        ErrorReportingService().reportNetwork(error, endpoint: 'room:join');
+        throw error;
+      },
+    );
   }
 
   void leaveRoom() {
