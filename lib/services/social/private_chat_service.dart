@@ -23,8 +23,8 @@ class ChatMessage {
   final List<double>? waveform; // amplitudes normalisées 0-1
   final DateTime timestamp;
   final DocumentSnapshot? snapshot; // pour la pagination
-  final List<String> deletedFor;   // UIDs pour qui le message est caché
-  final bool deletedForAll;         // supprimé pour tout le monde
+  final List<String> deletedFor; // UIDs pour qui le message est caché
+  final bool deletedForAll; // supprimé pour tout le monde
 
   const ChatMessage({
     required this.id,
@@ -40,7 +40,8 @@ class ChatMessage {
     this.deletedForAll = false,
   });
 
-  factory ChatMessage.fromDoc(DocumentSnapshot doc, {required String decryptedText}) {
+  factory ChatMessage.fromDoc(DocumentSnapshot doc,
+      {required String decryptedText}) {
     final data = doc.data() as Map<String, dynamic>;
     final typeStr = data['type'] as String? ?? 'text';
     final type = typeStr == 'image'
@@ -84,8 +85,8 @@ class ChatMeta {
 }
 
 class PrivateChatService {
-  final FirebaseFirestore _db;
-  final FirebaseStorage _storage;
+  final FirebaseFirestore? _injectedDb;
+  final FirebaseStorage? _injectedStorage;
   final ChatCryptoService _crypto;
   final http.Client _httpClient;
 
@@ -97,10 +98,13 @@ class PrivateChatService {
     FirebaseStorage? storage,
     ChatCryptoService? crypto,
     http.Client? httpClient,
-  })  : _db = db ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance,
+  })  : _injectedDb = db,
+        _injectedStorage = storage,
         _crypto = crypto ?? ChatCryptoService(),
         _httpClient = httpClient ?? http.Client();
+
+  FirebaseFirestore get _db => _injectedDb ?? FirebaseFirestore.instance;
+  FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
 
   /// Identifiant déterministe : toujours le plus petit userId en premier.
   static String chatId(String myId, String friendId) {
@@ -253,8 +257,7 @@ class PrivateChatService {
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
     await ref.putData(
-        Uint8List.fromList(bytes),
-        SettableMetadata(contentType: 'image/jpeg'));
+        Uint8List.fromList(bytes), SettableMetadata(contentType: 'image/jpeg'));
     final url = await ref.getDownloadURL();
     await _messages(cId).add({
       'senderId': senderId,
@@ -355,7 +358,8 @@ class PrivateChatService {
       await _httpClient.post(
         Uri.parse('$_baseUrl/api/chats/$chatId/notify'),
         headers: await SecureApiHeaders.json(bearerToken: token),
-        body: '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
+        body:
+            '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
       );
     } catch (_) {
       // Silencieux — la notification n'est pas critique
