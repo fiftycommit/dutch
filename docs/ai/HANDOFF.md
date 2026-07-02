@@ -365,6 +365,92 @@ Ne pas modifier le code applicatif hors périmètre AgentInterface tant qu'un pl
 
 ## Journal des mises à jour
 
+### 2026-07-02 — 1er curriculum R2D2 v2 terminé + éval + PLAN chantiers faux-match/POMDP (Claude Code)
+
+**Run** : curriculum séquentiel par shards (11 unités, 1000 steps/unité, ~55 min,
+`/tmp/r2d2_curriculum/`, script `run_curriculum.sh` hors repo). **Mécaniquement
+réussi** : 11/11 unités, `--resume-from` chaîné OK, sharding RAM-safe OK, checkpoints
+c00→c10, metrics m00→m10, **0 OOM, 0 NaN**, loss basses/décroissantes, grad_norm
+stable. (Un bug de sérialisation resume — PosixPath non stringifié — a crashé la 1re
+tentative à l'unité 2 ; corrigé `d375637`.)
+
+**Éval `c10.pt`** (30 ép, 6p, vs random) : **mauvaise** — 0 win (comme random),
+score 211 vs 187, reward −20 vs −18, **~881 faux matchs (modèle) vs ~783 (random)**.
+Positif : **plus de Dutch suicide** (2 appels vs l'ancien modèle random-trained 30/30).
+La trace `--action-trace-out` n'a pas produit de fichier (à revoir).
+
+**Diagnostic (3 causes probables, à confirmer demain)** :
+1. **Boucle de réaction côté AGENT non corrigée** : le fix `bot_auto` (`_botAutoStep`)
+   ne couvre PAS le chemin agent RL eval/infer (`step()` réaction). Une policy qui
+   choisit `match` est ré-invitée jusqu'à 30×/fenêtre → **modèle ET random spamment
+   ~29 faux matchs/ép** → l'éval est noyée par cet artefact.
+2. **Distribution shift / dataset trop propre** : existing_bot ne produit que **45
+   faux matchs sur ~398k transitions** → l'agent ne voit quasi jamais « match risqué
+   → pénalité » → il **surévalue `match`**. Problème classique d'imitation d'expert
+   propre évalué sur ses propres erreurs (type DAgger).
+3. **POMDP** : vérifier si l'obs/historique suffit pour apprendre la certitude
+   (croyance périmée après Valet/Joker adverse, etc.).
+
+**NE PAS conclure « R2D2 nul ».** C'est un problème de boucle-éval + distribution.
+
+--- PLAN DEMAIN (chantiers, dans l'ordre) ---
+
+**Chantier 1 — corriger la boucle réaction éval/infer AGENT.** Fichiers : `evaluate_r2d2_v2.py`,
+`infer_r2d2_v2.py`, `rollout_v2.py`, `collect_rollouts_v2.py`, `tool/rl_env_runner.dart`
+(chemin `step()` action agent, PAS `_botAutoStep`). Question centrale : pourquoi une
+policy agent choisissant `match` peut être ré-invitée jusqu'à 30× sans nouveau
+contexte. **Règles gameplay à respecter** : matchs multiples légitimes OK, chaînes de
+bons matchs OK, doublon OK, self-match après discard/replace OK, retry après faux
+match OK **si vraie nouvelle intention** (pas boucle auto identique), timer continue
+(aucun reset). **Règle pratique** : ne pas interdire tous les matchs multiples ; bloquer
+seulement la répétition automatique de la MÊME décision sans nouveau contexte.
+À investiguer : (1) obs reçue après false_match ; (2) le slot tenté reste-t-il légal
+immédiatement ? ; (3-4) `recent_events` encode-t-il clairement false_match avec
+slot/rank comme feedback ? ; (5) la pénalité change la main mais laisse la croyance
+inchangée ? ; (6) `legal_action_v2` re-propose-t-il match sur le même slot ? ; (7)
+pass_tick assez représenté/valorisé ? ; (8) greedy force-t-il la répétition car
+Q(match) reste max ? Tests : reproduire la boucle avec c10/random ; prouver qu'après
+false_match l'obs contient un signal explicite d'échec ; empêcher la boucle runner
+SANS casser doublons/chaînes/retry-réel/self-match. ⚠ Rendre le false_match **visible
+dans l'obs** est sain (un humain sait qu'il vient de rater) — mais **jamais** d'info
+cachée (opponent_hand/deck_order/true cards) ; pas de clamp/truncate silencieux.
+
+**Chantier 2 — couverture données faux-match.** Options à comparer AVANT code :
+A. mix weak bots avec faux matchs réels capturés exactement ; B. exploration
+contrôlée des réactions (parfois match incertain, false_match légal, pas random
+toxique global) ; C. petit dataset « negative reaction examples » (obs où match
+légal mais faux → action match → reward négative → obs post-pénalité) ; D. auxiliary
+head supervisé `safe_match_probability` ; E. reward seulement si nécessaire (false
+match plus visible, éviter reward hacking) ; F. **DAgger-like** (éval du modèle →
+collecter les états où il veut matcher → labelliser pass/match par oracle légal →
+agréger). Reco initiale : d'abord fixer la boucle/obs éval (Chantier 1), puis
+**dataset anti-faux-match ciblé** (pas random global), puis training court/fine-tune
+depuis c10 pour voir si false_match baisse ; si oui, relancer un curriculum plus long.
+
+**Chantier 3 — POMDP / belief state.** L'obs actuelle donne-t-elle assez pour
+apprendre la certitude (confidence/slot, known/unknown, believed_match_value,
+top_discard_value, recent_events false/success, spyMemory, memory_confidence, slot
+stability, discard history) ? Questions : historique assez long pour croyance périmée
+après Valet/Joker adverse ? `seq_len=8`/`burn_in=4` trop court pour Dutch'78 ?
+augmenter ? features de croyance explicites vs tout confier à la GRU ? action-masker
+`match` selon confidence dans l'env, ou laisser apprendre ? distinguer « match légal
+physiquement » vs « match sûr selon croyance » ? Ne pas : interdire par règle des
+matchs risqués légaux, donner les vraies cartes, clamp silencieux, revenir au random.
+
+**Chantier 4 — stratégie training après fix.** (1) ré-évaluer c10 pour voir si le
+spam était surtout un artefact runner ; (2) si false_match reste massif : dataset
+anti-faux-match ciblé → fine-tune c10 ou from-scratch court ; (3) tester greedy /
+epsilon faible / action-masking soft-hard si justifié ; (4) comparer c10-avant-fix /
+c10-après-fix-éval / fine-tuné anti-faux-match / random / safe_heuristic / existing_bot.
+
+**Concepts à (re)lire si besoin** : POMDP + recurrent RL/DRQN (belief approx via GRU) ;
+R2D2 (replay récurrent, burn-in, hidden-state staleness) ; DAgger (distribution shift
+imitation) ; potential-based shaping (n'altère pas l'optimum). Reward inchangée pour
+l'instant (`RL_REWARD_V2_LEX_DECISION.md`).
+
+**Artefacts** : checkpoints/metrics/datasets/logs/eval tous sous `/tmp` — rien de
+committé. Dirty files hors scope intacts.
+
 ### 2026-07-01 — Chantier RAM training : sharding par épisodes (Option A) (Claude Code)
 
 Objectif : entraîner le curriculum complet sans OOM (loader `train_r2d2_v2`
