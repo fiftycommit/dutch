@@ -743,7 +743,9 @@ class _MultiplayerProfileSpaceScreenState
 
   @override
   Widget build(BuildContext context) {
-    final themed = Theme.of(context);
+    final themed = Theme.of(context).copyWith(
+      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+    );
 
     return Theme(
       data: themed,

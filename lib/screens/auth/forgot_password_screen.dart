@@ -101,7 +101,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         noMotion ? Duration.zero : const Duration(milliseconds: 180);
 
     final layout = _AuthLayout.from(media);
-    final themed = Theme.of(context);
+    final themed = Theme.of(context).copyWith(
+      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+    );
 
     return Theme(
       data: themed,

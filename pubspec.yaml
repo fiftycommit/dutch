@@ -113,3 +113,13 @@ flutter:
         - asset: assets/fonts/Roboto-BoldItalic.ttf
           weight: 700
           style: italic
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+        - asset: assets/fonts/Inter-Italic.ttf
+          style: italic
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat.ttf
+        - asset: assets/fonts/Montserrat-Italic.ttf
+          style: italic

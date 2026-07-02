@@ -445,7 +445,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     ),
                   ),
                   content: SizedBox(
-                    width: (MediaQuery.of(dialogContext).size.width - 48).clamp(0.0, 440.0),
+                    width: (MediaQuery.of(dialogContext).size.width - 48)
+                        .clamp(0.0, 440.0),
                     child: SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -806,7 +807,9 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
         !isLarge && media.orientation == Orientation.landscape && width >= 700;
     final compactHeader = width < 980;
 
-    final themed = Theme.of(context);
+    final themed = Theme.of(context).copyWith(
+      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+    );
 
     return Theme(
       data: themed,

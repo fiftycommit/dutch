@@ -489,7 +489,9 @@ class _LoginScreenState extends State<LoginScreen>
     final colors = _AuthColors.of(context);
 
     return Theme(
-      data: Theme.of(context),
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Montserrat'),
+      ),
       child: Scaffold(
         backgroundColor: colors.bg,
         resizeToAvoidBottomInset: true,
