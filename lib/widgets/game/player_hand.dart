@@ -264,6 +264,9 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
               children: List.generate(
                 count,
                 (index) => Positioned(
+                  key: ValueKey(
+                    'hand-card-${widget.player.id}-$index-${widget.player.hand[index].id}',
+                  ),
                   left: index * overlap,
                   child: _buildCard(context, index, overlap),
                 ),
