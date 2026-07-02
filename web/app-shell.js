@@ -200,7 +200,9 @@
       navigator.serviceWorker.register(
         '/firebase-messaging-sw.js',
         { scope: '/firebase-cloud-messaging-push-scope' }
-      );
+      ).catch(function () {
+        // Push notifications are optional and must never block the app shell.
+      });
     });
   }
 }());

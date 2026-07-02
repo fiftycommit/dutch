@@ -100,6 +100,7 @@ Future<bool> _bootstrapFirebaseForStartup(
 ) async {
   final canReachBackend = await NetworkProbeService.canReachBackend(
     timeout: _startupNetworkProbeTimeout,
+    useOptimisticGrace: false,
   ).timeout(
     _startupNetworkProbeTimeout + const Duration(milliseconds: 250),
     onTimeout: () => false,
@@ -107,7 +108,7 @@ Future<bool> _bootstrapFirebaseForStartup(
 
   if (!canReachBackend) {
     if (kDebugMode) {
-      debugPrint('⚠️ Démarrage offline: Firebase différé.');
+      debugPrint('⚠️ Réseau externe indisponible: Firebase différé.');
     }
     return false;
   }

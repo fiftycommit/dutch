@@ -21,6 +21,7 @@ class NetworkProbeService {
   /// Stratégie: GET /health avec timeout court (ACK + timeout).
   static Future<bool> canReachBackend({
     Duration timeout = const Duration(milliseconds: 700),
+    bool useOptimisticGrace = true,
   }) async {
     final now = DateTime.now();
     final lastAt = _lastCheckAt;
@@ -32,7 +33,9 @@ class NetworkProbeService {
       return cached;
     }
 
-    final hasNetworkPath = await connectivity_probe.hasNetworkInterface();
+    final hasNetworkPath = await connectivity_probe
+        .hasNetworkInterface()
+        .timeout(timeout, onTimeout: () => false);
     if (!hasNetworkPath) {
       _lastCheckAt = now;
       _lastResult = false;
@@ -48,7 +51,8 @@ class NetworkProbeService {
       reachable = false;
     }
 
-    if (!reachable &&
+    if (useOptimisticGrace &&
+        !reachable &&
         _lastSuccessAt != null &&
         now.difference(_lastSuccessAt!) <= _optimisticGraceAfterSuccess) {
       // Évite les faux "offline" sur des fluctuations réseau courtes.
