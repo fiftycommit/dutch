@@ -403,9 +403,22 @@ class _ChatPageState extends State<ChatPage> {
     _typingDebounce?.cancel();
     _chatService.updateTyping(_chatId, _myUserId, false);
     _isTyping = false;
-    await _chatService.sendMessage(
-        _chatId, _myUserId, text, widget.friendUserId);
-    _scrollToBottom();
+    try {
+      await _chatService.sendMessage(
+          _chatId, _myUserId, text, widget.friendUserId);
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      _controller.text = text;
+      _controller.selection = TextSelection.collapsed(offset: text.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Message non envoyé : chiffrement indisponible.',
+          ),
+        ),
+      );
+    }
   }
 
   void _scrollToBottom() {

@@ -15,6 +15,8 @@ import '../network/secure_api_headers.dart';
 class ChatCryptoService {
   static const _baseUrl = SocketConnectionHandler.serverUrl;
   static const _storage = FlutterSecureStorage();
+  static const Duration _keyTokenTimeout = Duration(seconds: 2);
+  static const Duration _keyRequestTimeout = Duration(seconds: 5);
 
   final _algorithm = AesGcm.with256bits();
 
@@ -36,13 +38,18 @@ class ChatCryptoService {
   }
 
   Future<String> _fetchKeyFromServer(String friendId) async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final token = await FirebaseAuth.instance.currentUser
+        ?.getIdToken()
+        .timeout(_keyTokenTimeout);
     if (token == null) throw Exception('Non authentifié');
 
-    final response = await http.get(
-      Uri.parse('$_baseUrl/api/chats/$friendId/key'),
-      headers: await SecureApiHeaders.json(bearerToken: token),
-    );
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/api/chats/$friendId/key'),
+          headers: await SecureApiHeaders.json(bearerToken: token)
+              .timeout(_keyTokenTimeout),
+        )
+        .timeout(_keyRequestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception('Erreur récupération clé: ${response.statusCode}');
@@ -66,22 +73,23 @@ class ChatCryptoService {
     final combined = Uint8List(
         12 + secretBox.cipherText.length + secretBox.mac.bytes.length);
     combined.setRange(0, 12, iv);
-    combined.setRange(12, 12 + secretBox.cipherText.length, secretBox.cipherText);
+    combined.setRange(
+        12, 12 + secretBox.cipherText.length, secretBox.cipherText);
     combined.setRange(
         12 + secretBox.cipherText.length, combined.length, secretBox.mac.bytes);
     return base64Encode(combined);
   }
 
   /// Déchiffre un base64 chiffré → texte clair.
-  /// Retourne null si la donnée n'est pas chiffrée (anciens messages en clair).
+  /// Retourne null si la donnée est invalide ou impossible à déchiffrer.
   Future<String?> decrypt(SecretKey key, String cipherBase64) async {
     Uint8List combined;
     try {
       combined = base64Decode(cipherBase64);
     } catch (_) {
-      return null; // pas du base64 → message en clair (legacy)
+      return null;
     }
-    if (combined.length < 28) return null; // trop court pour être valide
+    if (combined.length < 28) return null;
 
     final iv = combined.sublist(0, 12);
     final mac = Mac(combined.sublist(combined.length - 16));
@@ -92,7 +100,7 @@ class ChatCryptoService {
       final plainBytes = await _algorithm.decrypt(secretBox, secretKey: key);
       return utf8.decode(plainBytes);
     } catch (_) {
-      return null; // déchiffrement échoué → message en clair (legacy)
+      return null;
     }
   }
 

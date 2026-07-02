@@ -92,6 +92,8 @@ class PrivateChatService {
 
   static const _baseUrl = SocketConnectionHandler.serverUrl;
   static const _pageSize = 15;
+  static const _encryptedMessageUnavailable = 'Message chiffré indisponible';
+  static const Duration _notificationTimeout = Duration(seconds: 5);
 
   PrivateChatService({
     FirebaseFirestore? db,
@@ -213,10 +215,16 @@ class PrivateChatService {
     final results = <ChatMessage>[];
     for (final doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
+      final type = data['type'] as String? ?? 'text';
       final raw = data['text'] as String? ?? '';
-      String decrypted = raw;
-      if (key != null && raw.isNotEmpty) {
-        decrypted = await _crypto.decrypt(key, raw) ?? raw;
+      String decrypted = '';
+      if (type == 'text' && raw.isNotEmpty) {
+        if (key == null) {
+          decrypted = _encryptedMessageUnavailable;
+        } else {
+          decrypted =
+              await _crypto.decrypt(key, raw) ?? _encryptedMessageUnavailable;
+        }
       }
       results.add(ChatMessage.fromDoc(doc, decryptedText: decrypted));
     }
@@ -228,13 +236,8 @@ class PrivateChatService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    String payload = trimmed;
-    try {
-      final key = await _crypto.getChatKey(cId, friendId);
-      payload = await _crypto.encrypt(key, trimmed);
-    } catch (_) {
-      // En cas d'erreur crypto, on envoie en clair plutôt que de bloquer
-    }
+    final key = await _crypto.getChatKey(cId, friendId);
+    final payload = await _crypto.encrypt(key, trimmed);
 
     await _messages(cId).add({
       'senderId': senderId,
@@ -355,12 +358,14 @@ class PrivateChatService {
       final token = await user.getIdToken();
       final senderName = user.displayName ?? 'Quelqu\'un';
 
-      await _httpClient.post(
-        Uri.parse('$_baseUrl/api/chats/$chatId/notify'),
-        headers: await SecureApiHeaders.json(bearerToken: token),
-        body:
-            '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
-      );
+      await _httpClient
+          .post(
+            Uri.parse('$_baseUrl/api/chats/$chatId/notify'),
+            headers: await SecureApiHeaders.json(bearerToken: token),
+            body:
+                '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
+          )
+          .timeout(_notificationTimeout);
     } catch (_) {
       // Silencieux — la notification n'est pas critique
     }
