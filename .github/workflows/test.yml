@@ -23,3 +23,6 @@ jobs:
 
       - name: Analyze code
         run: flutter analyze --no-fatal-infos
+
+      - name: Test PWA service worker generator
+        run: node --test 'scripts/__tests__/**/*.test.mjs'
