@@ -83,5 +83,11 @@ _flutter.loader.load({
       renderer: "canvaskit",
     });
     await appRunner.runApp();
+    if (typeof window.flutterReady === "function") {
+      window.flutterReady();
+    }
+    if (typeof window.hideSplash === "function") {
+      window.hideSplash();
+    }
   },
 });

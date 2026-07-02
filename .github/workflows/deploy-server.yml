@@ -30,6 +30,7 @@ jobs:
             --release \
             --base-href / \
             --tree-shake-icons \
+            --no-web-resources-cdn \
             ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"} \
             ${FIREBASE_APP_CHECK_WEB_SITE_KEY:+--dart-define=FIREBASE_APP_CHECK_WEB_SITE_KEY="$FIREBASE_APP_CHECK_WEB_SITE_KEY"}
           node scripts/generate-pwa-service-worker.mjs build/web
