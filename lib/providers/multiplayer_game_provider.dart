@@ -1210,17 +1210,22 @@ class MultiplayerGameProvider
       notifyListeners(); // Afficher immédiatement
     }
 
-    unawaited(_confirmDrawCard());
+    _trackActionAck('Pioche', _multiplayerService.drawCard());
   }
 
-  Future<void> _confirmDrawCard() async {
-    final success = await _multiplayerService.drawCard();
+  void _trackActionAck(String actionLabel, Future<bool> actionResult) {
+    unawaited(_handleActionAck(actionLabel, actionResult));
+  }
+
+  Future<void> _handleActionAck(
+      String actionLabel, Future<bool> actionResult) async {
+    final success = await actionResult;
     if (_isDisposed) return;
     if (success) return;
 
     _hapticService.error();
     _notificationManager.setError(
-      'Pioche non confirmée par le serveur. Resynchronisation en cours.',
+      '$actionLabel non confirmé par le serveur. Resynchronisation en cours.',
     );
     _multiplayerService.requestFullState();
   }
@@ -1229,7 +1234,10 @@ class MultiplayerGameProvider
   void replaceCard(int cardIndex) {
     if (_gameState != null) {
       _hapticService.cardTap();
-      _multiplayerService.replaceCard(cardIndex);
+      _trackActionAck(
+        'Remplacement',
+        _multiplayerService.replaceCard(cardIndex),
+      );
     }
   }
 
@@ -1237,7 +1245,7 @@ class MultiplayerGameProvider
   void discardDrawnCard() {
     if (_gameState != null) {
       _hapticService.cardTap();
-      _multiplayerService.discardDrawnCard();
+      _trackActionAck('Défausse', _multiplayerService.discardDrawnCard());
     }
   }
 
@@ -1245,7 +1253,7 @@ class MultiplayerGameProvider
   void callDutch() {
     if (_gameState != null) {
       _hapticService.importantAction();
-      _multiplayerService.callDutch();
+      _trackActionAck('Dutch', _multiplayerService.callDutch());
     }
   }
 
@@ -1268,7 +1276,7 @@ class MultiplayerGameProvider
     final willSucceed = topDiscard != null && playerCard.matches(topDiscard);
 
     // Envoyer au serveur (source de vérité)
-    _multiplayerService.attemptMatch(cardIndex);
+    _trackActionAck('Match', _multiplayerService.attemptMatch(cardIndex));
 
     // Feedback visuel local immédiat
     if (!willSucceed) {
@@ -1287,7 +1295,8 @@ class MultiplayerGameProvider
   @override
   void skipSpecialPower() => _executeWithProcessingLock(() {
         _hapticService.buttonTap();
-        _multiplayerService.skipSpecialPower();
+        _trackActionAck(
+            'Pouvoir ignoré', _multiplayerService.skipSpecialPower());
       });
 
   @override
@@ -1315,23 +1324,35 @@ class MultiplayerGameProvider
 
   void usePower7LookOwnCard(int cardIndex) => _executeWithProcessingLock(() {
         _hapticService.cardTap();
-        _multiplayerService.usePower7LookOwnCard(cardIndex);
+        _trackActionAck(
+          'Pouvoir 7',
+          _multiplayerService.usePower7LookOwnCard(cardIndex),
+        );
       });
   void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
       _executeWithProcessingLock(() {
         _hapticService.cardTap();
-        _multiplayerService.usePower10SpyOpponent(
-            targetPlayerIndex, targetCardIndex);
+        _trackActionAck(
+          'Pouvoir 10',
+          _multiplayerService.usePower10SpyOpponent(
+              targetPlayerIndex, targetCardIndex),
+        );
       });
   void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
       _executeWithProcessingLock(() {
         _hapticService.importantAction();
-        _multiplayerService.usePowerValetSwap(p1, c1, p2, c2);
+        _trackActionAck(
+          'Pouvoir Valet',
+          _multiplayerService.usePowerValetSwap(p1, c1, p2, c2),
+        );
       });
   void usePowerJokerShuffle(int targetPlayerIndex) =>
       _executeWithProcessingLock(() {
         _hapticService.importantAction();
-        _multiplayerService.usePowerJokerShuffle(targetPlayerIndex);
+        _trackActionAck(
+          'Pouvoir Joker',
+          _multiplayerService.usePowerJokerShuffle(targetPlayerIndex),
+        );
       });
 
   void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>

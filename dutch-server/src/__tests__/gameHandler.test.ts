@@ -205,11 +205,19 @@ describe('gameHandler', () => {
 
       const oldCard = room.gameState!.players[playerIndex].hand[0];
 
-      await mockSocket.triggerEvent('game:replace_card', { roomCode, cardIndex: 0 });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:replace_card',
+        { roomCode, cardIndex: 0, actionId: 'replace-1' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // Drawn card should now be in hand
       assert.strictEqual(room.gameState!.drawnCard, null);
+      assert.deepStrictEqual(ackPayload, { actionId: 'replace-1', ok: true });
     });
 
     it('rejects replace without drawn card', async () => {
@@ -231,11 +239,19 @@ describe('gameHandler', () => {
 
       const discardSizeBefore = room.gameState!.discardPile.length;
 
-      await mockSocket.triggerEvent('game:discard_card', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:discard_card',
+        { roomCode, actionId: 'discard-1' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       assert.strictEqual(room.gameState!.drawnCard, null);
       assert.strictEqual(room.gameState!.discardPile.length, discardSizeBefore + 1);
+      assert.deepStrictEqual(ackPayload, { actionId: 'discard-1', ok: true });
     });
 
     it('triggers reaction phase for non-special card', async () => {
@@ -255,10 +271,18 @@ describe('gameHandler', () => {
     it('allows player to call Dutch', async () => {
       const room = roomManager.getRoom(roomCode)!;
 
-      await mockSocket.triggerEvent('game:call_dutch', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:call_dutch',
+        { roomCode, actionId: 'dutch-1' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       assert.strictEqual(room.gameState!.dutchCallerId, 'player-1');
+      assert.deepStrictEqual(ackPayload, { actionId: 'dutch-1', ok: true });
     });
 
     it('rejects Dutch from spectator', async () => {
@@ -283,11 +307,19 @@ describe('gameHandler', () => {
 
       const handSizeBefore = player.hand.length;
 
-      await mockSocket.triggerEvent('game:attempt_match', { roomCode, cardIndex: 0 });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:attempt_match',
+        { roomCode, cardIndex: 0, actionId: 'match-1' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // If match successful, hand size decreases
       assert.ok(player.hand.length <= handSizeBefore);
+      assert.deepStrictEqual(ackPayload, { actionId: 'match-1', ok: true });
     });
 
     it('rejects match outside reaction phase', async () => {
@@ -308,14 +340,23 @@ describe('gameHandler', () => {
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('hearts', '7');
 
-      await mockSocket.triggerEvent('game:use_special_power', {
-        roomCode,
-        cardIndex: 0,
-      });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:use_special_power',
+        {
+          roomCode,
+          cardIndex: 0,
+          actionId: 'power-7',
+        },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // Power should be used
       assert.strictEqual(room.gameState!.isWaitingForSpecialPower, false);
+      assert.deepStrictEqual(ackPayload, { actionId: 'power-7', ok: true });
     });
 
     it('handles card 10 special power', async () => {
@@ -379,11 +420,22 @@ describe('gameHandler', () => {
       room.gameState!.isWaitingForSpecialPower = true;
       room.gameState!.specialCardToActivate = createCard('hearts', '7');
 
-      await mockSocket.triggerEvent('game:skip_special_power', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:skip_special_power',
+        { roomCode, actionId: 'skip-power-1' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
       assert.strictEqual(room.gameState!.isWaitingForSpecialPower, false);
       assert.strictEqual(room.gameState!.phase, GamePhase.reaction);
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'skip-power-1',
+        ok: true,
+      });
     });
   });
 

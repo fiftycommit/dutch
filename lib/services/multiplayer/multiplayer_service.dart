@@ -457,21 +457,24 @@ class MultiplayerService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Future<bool> drawCard() => _actionsEmitter.drawCard();
-  void replaceCard(int cardIndex) => _actionsEmitter.replaceCard(cardIndex);
-  void discardDrawnCard() => _actionsEmitter.discardDrawnCard();
-  void callDutch() => _actionsEmitter.callDutch();
-  void attemptMatch(int cardIndex) => _actionsEmitter.attemptMatch(cardIndex);
-  void usePower7LookOwnCard(int cardIndex) =>
+  Future<bool> replaceCard(int cardIndex) =>
+      _actionsEmitter.replaceCard(cardIndex);
+  Future<bool> discardDrawnCard() => _actionsEmitter.discardDrawnCard();
+  Future<bool> callDutch() => _actionsEmitter.callDutch();
+  Future<bool> attemptMatch(int cardIndex) =>
+      _actionsEmitter.attemptMatch(cardIndex);
+  Future<bool> usePower7LookOwnCard(int cardIndex) =>
       _actionsEmitter.usePower7LookOwnCard(cardIndex);
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
+  Future<bool> usePower10SpyOpponent(
+          int targetPlayerIndex, int targetCardIndex) =>
       _actionsEmitter.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex);
-  void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
+  Future<bool> usePowerValetSwap(int p1, int c1, int p2, int c2) =>
       _actionsEmitter.usePowerValetSwap(p1, c1, p2, c2);
   void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>
       _actionsEmitter.sendSpecialPowerTargetSelection(p1, c1, p2, c2);
-  void usePowerJokerShuffle(int targetPlayerIndex) =>
+  Future<bool> usePowerJokerShuffle(int targetPlayerIndex) =>
       _actionsEmitter.usePowerJokerShuffle(targetPlayerIndex);
-  void skipSpecialPower() => _actionsEmitter.skipSpecialPower();
+  Future<bool> skipSpecialPower() => _actionsEmitter.skipSpecialPower();
   void setReady(bool ready) => _actionsEmitter.setReady(ready);
   void sendChatMessage(String message) =>
       _actionsEmitter.sendChatMessage(message);

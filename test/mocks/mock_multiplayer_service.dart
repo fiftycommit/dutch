@@ -156,28 +156,33 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  void replaceCard(int cardIndex) {
+  Future<bool> replaceCard(int cardIndex) async {
     replaceCardCount++;
+    return true;
   }
 
   @override
-  void discardDrawnCard() {
+  Future<bool> discardDrawnCard() async {
     discardDrawnCardCount++;
+    return true;
   }
 
   @override
-  void callDutch() {
+  Future<bool> callDutch() async {
     callDutchCount++;
+    return true;
   }
 
   @override
-  void attemptMatch(int cardIndex) {
+  Future<bool> attemptMatch(int cardIndex) async {
     attemptMatchCount++;
+    return true;
   }
 
   @override
-  void skipSpecialPower() {
+  Future<bool> skipSpecialPower() async {
     skipSpecialPowerCount++;
+    return true;
   }
 
   @override

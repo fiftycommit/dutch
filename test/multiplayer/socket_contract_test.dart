@@ -18,85 +18,82 @@ void main() {
       );
     });
 
+    void expectAckPayload(String event, Map<String, dynamic> expectedFields) {
+      expect(mockSocket.lastEventWithAck, event);
+      expect(mockSocket.lastPayloadWithAck,
+          containsPair('roomCode', testRoomCode));
+      for (final entry in expectedFields.entries) {
+        expect(mockSocket.lastPayloadWithAck,
+            containsPair(entry.key, entry.value));
+      }
+      expect(mockSocket.lastPayloadWithAck!['actionId'], isA<String>());
+      expect(
+        mockSocket.lastPayloadWithAck!['actionId'] as String,
+        startsWith('${event.replaceAll(':', '_')}-'),
+      );
+    }
+
     group('Game Actions', () {
       test('drawCard émet payload avec ACK et actionId', () async {
         final success = await emitter.drawCard();
 
         expect(success, isTrue);
-        expect(mockSocket.lastEventWithAck, 'game:draw_card');
-        expect(mockSocket.lastPayloadWithAck,
-            containsPair('roomCode', testRoomCode));
-        expect(mockSocket.lastPayloadWithAck!['actionId'], isA<String>());
-        expect(
-          mockSocket.lastPayloadWithAck!['actionId'] as String,
-          startsWith('game_draw_card-'),
-        );
+        expectAckPayload('game:draw_card', const {});
       });
 
-      test('replaceCard émet payload avec cardIndex', () {
-        emitter.replaceCard(2);
+      test('replaceCard émet payload avec ACK et cardIndex', () async {
+        final success = await emitter.replaceCard(2);
 
-        expect(mockSocket.lastEvent, 'game:replace_card');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
-          'cardIndex': 2,
-        });
+        expect(success, isTrue);
+        expectAckPayload('game:replace_card', const {'cardIndex': 2});
       });
 
-      test('discardDrawnCard émet payload exact', () {
-        emitter.discardDrawnCard();
+      test('discardDrawnCard émet payload avec ACK', () async {
+        final success = await emitter.discardDrawnCard();
 
-        expect(mockSocket.lastEvent, 'game:discard_card');
-        expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
+        expect(success, isTrue);
+        expectAckPayload('game:discard_card', const {});
       });
 
-      test('callDutch émet payload exact', () {
-        emitter.callDutch();
+      test('callDutch émet payload avec ACK', () async {
+        final success = await emitter.callDutch();
 
-        expect(mockSocket.lastEvent, 'game:call_dutch');
-        expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
+        expect(success, isTrue);
+        expectAckPayload('game:call_dutch', const {});
       });
 
-      test('attemptMatch émet payload avec cardIndex', () {
-        emitter.attemptMatch(1);
+      test('attemptMatch émet payload avec ACK et cardIndex', () async {
+        final success = await emitter.attemptMatch(1);
 
-        expect(mockSocket.lastEvent, 'game:attempt_match');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
-          'cardIndex': 1,
-        });
+        expect(success, isTrue);
+        expectAckPayload('game:attempt_match', const {'cardIndex': 1});
       });
     });
 
     group('Special Powers', () {
-      test('power7 émet payload avec cardIndex seulement', () {
-        emitter.usePower7LookOwnCard(0);
+      test('power7 émet payload avec ACK et cardIndex seulement', () async {
+        final success = await emitter.usePower7LookOwnCard(0);
 
-        expect(mockSocket.lastEvent, 'game:use_special_power');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
-          'cardIndex': 0,
-        });
+        expect(success, isTrue);
+        expectAckPayload('game:use_special_power', const {'cardIndex': 0});
       });
 
       test('power10 émet payload avec targetPlayerIndex et targetCardIndex',
-          () {
-        emitter.usePower10SpyOpponent(1, 2);
+          () async {
+        final success = await emitter.usePower10SpyOpponent(1, 2);
 
-        expect(mockSocket.lastEvent, 'game:use_special_power');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
+        expect(success, isTrue);
+        expectAckPayload('game:use_special_power', const {
           'targetPlayerIndex': 1,
           'targetCardIndex': 2,
         });
       });
 
-      test('powerValet émet payload avec 4 indices', () {
-        emitter.usePowerValetSwap(0, 1, 2, 3);
+      test('powerValet émet payload avec ACK et 4 indices', () async {
+        final success = await emitter.usePowerValetSwap(0, 1, 2, 3);
 
-        expect(mockSocket.lastEvent, 'game:use_special_power');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
+        expect(success, isTrue);
+        expectAckPayload('game:use_special_power', const {
           'player1Index': 0,
           'card1Index': 1,
           'player2Index': 2,
@@ -104,21 +101,19 @@ void main() {
         });
       });
 
-      test('powerJoker émet payload avec targetPlayerIndex', () {
-        emitter.usePowerJokerShuffle(1);
+      test('powerJoker émet payload avec ACK et targetPlayerIndex', () async {
+        final success = await emitter.usePowerJokerShuffle(1);
 
-        expect(mockSocket.lastEvent, 'game:use_special_power');
-        expect(mockSocket.lastPayload, {
-          'roomCode': testRoomCode,
-          'targetPlayerIndex': 1,
-        });
+        expect(success, isTrue);
+        expectAckPayload(
+            'game:use_special_power', const {'targetPlayerIndex': 1});
       });
 
-      test('skipSpecialPower émet payload exact', () {
-        emitter.skipSpecialPower();
+      test('skipSpecialPower émet payload avec ACK', () async {
+        final success = await emitter.skipSpecialPower();
 
-        expect(mockSocket.lastEvent, 'game:skip_special_power');
-        expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
+        expect(success, isTrue);
+        expectAckPayload('game:skip_special_power', const {});
       });
     });
 
@@ -164,7 +159,7 @@ void main() {
       test('cardIndex négatif est transmis tel quel', () {
         emitter.replaceCard(-1);
 
-        expect(mockSocket.lastPayload!['cardIndex'], -1);
+        expect(mockSocket.lastPayloadWithAck!['cardIndex'], -1);
       });
     });
   });

@@ -100,65 +100,61 @@ class GameActionsEmitter {
     return _safeEmitWithAck('game:draw_card', const {});
   }
 
-  void replaceCard(int cardIndex) {
+  Future<bool> replaceCard(int cardIndex) {
     if (kDebugMode) debugPrint('🔄 Remplace carte $cardIndex');
-    _safeEmit('game:replace_card', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:replace_card', {
       'cardIndex': cardIndex,
     });
   }
 
-  void discardDrawnCard() {
+  Future<bool> discardDrawnCard() {
     if (kDebugMode) debugPrint('🗑️ Rejette la carte piochée');
-    _safeEmit('game:discard_card', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:discard_card', const {});
   }
 
-  void callDutch() {
+  Future<bool> callDutch() {
     if (kDebugMode) debugPrint('📢 DUTCH !');
-    _safeEmit('game:call_dutch', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:call_dutch', const {});
   }
 
-  void attemptMatch(int cardIndex) {
+  Future<bool> attemptMatch(int cardIndex) {
     if (kDebugMode) debugPrint('🎯 Tente de matcher carte $cardIndex');
-    _safeEmit('game:attempt_match', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:attempt_match', {
       'cardIndex': cardIndex,
     });
   }
 
   /// Carte 7 : Regarder sa propre carte
-  void usePower7LookOwnCard(int cardIndex) {
+  Future<bool> usePower7LookOwnCard(int cardIndex) {
     if (kDebugMode) {
       debugPrint('👁️ Pouvoir 7 : Regarde sa carte #${cardIndex + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'cardIndex': cardIndex,
     });
   }
 
   /// Carte 10 : Espionner une carte adversaire
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) {
+  Future<bool> usePower10SpyOpponent(
+      int targetPlayerIndex, int targetCardIndex) {
     if (kDebugMode) {
       debugPrint(
           '🔍 Pouvoir 10 : Espionne joueur $targetPlayerIndex carte #${targetCardIndex + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'targetPlayerIndex': targetPlayerIndex,
       'targetCardIndex': targetCardIndex,
     });
   }
 
   /// Carte V (Valet) : Échange universel entre 2 joueurs
-  void usePowerValetSwap(
+  Future<bool> usePowerValetSwap(
       int player1Index, int card1Index, int player2Index, int card2Index) {
     if (kDebugMode) {
       debugPrint(
           '🔄 Pouvoir Valet : Échange joueur $player1Index carte #${card1Index + 1} ↔ joueur $player2Index carte #${card2Index + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'player1Index': player1Index,
       'card1Index': card1Index,
       'player2Index': player2Index,
@@ -167,12 +163,11 @@ class GameActionsEmitter {
   }
 
   /// JOKER : Mélanger la main d'un joueur (y compris soi-même)
-  void usePowerJokerShuffle(int targetPlayerIndex) {
+  Future<bool> usePowerJokerShuffle(int targetPlayerIndex) {
     if (kDebugMode) {
       debugPrint('🃏 Pouvoir Joker : Mélange joueur $targetPlayerIndex');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'targetPlayerIndex': targetPlayerIndex,
     });
   }
@@ -194,9 +189,9 @@ class GameActionsEmitter {
     });
   }
 
-  void skipSpecialPower() {
+  Future<bool> skipSpecialPower() {
     if (kDebugMode) debugPrint('⏭️ Ignore le pouvoir spécial');
-    _safeEmit('game:skip_special_power', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:skip_special_power', const {});
   }
 
   void setReady(bool ready) {

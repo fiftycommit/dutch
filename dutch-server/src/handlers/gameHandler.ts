@@ -5,15 +5,21 @@ import { GamePhase, getCurrentPlayer } from '../models/GameState';
 import { Player } from '../models/Player';
 import { SecurityService } from '../services/SecurityService';
 
+type ActionAck = (payload: Record<string, unknown>) => void;
+
+function createActionReply(data: any, ack?: ActionAck): ActionAck {
+  const actionId = data?.actionId;
+  let ackSent = false;
+  return (payload: Record<string, unknown>) => {
+    if (ackSent || typeof ack !== 'function') return;
+    ackSent = true;
+    ack({ actionId, ...payload });
+  };
+}
+
 export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('game:draw_card', async (data, ack?: (payload: Record<string, unknown>) => void) => {
-    const actionId = data?.actionId;
-    let ackSent = false;
-    const reply = (payload: Record<string, unknown>) => {
-      if (ackSent || typeof ack !== 'function') return;
-      ackSent = true;
-      ack({ actionId, ...payload });
-    };
+    const reply = createActionReply(data, ack);
 
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) {
@@ -48,20 +54,35 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  socket.on('game:replace_card', async (data) => {
+  socket.on('game:replace_card', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
         const currentPlayer = getCurrentPlayer(room.gameState);
-        if (currentPlayer.id !== socket.id) return;
-        if (currentPlayer.isSpectator) return;
+        if (currentPlayer.id !== socket.id) {
+          reply({ ok: false, error: 'not_current_player' });
+          return;
+        }
+        if (currentPlayer.isSpectator) {
+          reply({ ok: false, error: 'spectator' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
         GameLogic.replaceCard(room.gameState, data.cardIndex);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        reply({ ok: true });
 
         if (room.gameState.phase === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
@@ -86,19 +107,24 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       });
     } catch (error) {
       console.error('Error replace_card:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
-  socket.on('game:discard_card', async (data) => {
+  socket.on('game:discard_card', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
       console.log(`[DISCARD] Received from ${socket.id}, roomCode=${data.roomCode}`);
       if (!await SecurityService.checkEventRateLimit(socket.id)) {
         console.log(`[DISCARD] BLOCKED: Rate limited for ${socket.id}`);
+        reply({ ok: false, error: 'rate_limited' });
         return;
       }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
         if (!room?.gameState) {
           console.log('[DISCARD] BLOCKED: Room not found or no gameState');
+          reply({ ok: false, error: 'room_not_ready' });
           return;
         }
 
@@ -106,10 +132,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         console.log(`[DISCARD] currentPlayer.id=${currentPlayer.id}, socket.id=${socket.id}`);
         if (currentPlayer.id !== socket.id) {
           console.log('[DISCARD] BLOCKED: Not current player\'s turn');
+          reply({ ok: false, error: 'not_current_player' });
           return;
         }
         if (currentPlayer.isSpectator) {
           console.log('[DISCARD] BLOCKED: Player is spectator');
+          reply({ ok: false, error: 'spectator' });
           return;
         }
 
@@ -120,6 +148,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         console.log(`[DISCARD] After: phase=${room.gameState.phase}, isWaitingForSpecialPower=${room.gameState.isWaitingForSpecialPower}`);
 
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        reply({ ok: true });
 
         if (room.gameState.phase === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
@@ -147,19 +176,31 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       });
     } catch (error) {
       console.error('Error discard_card:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
-  socket.on('game:call_dutch', async (data) => {
+  socket.on('game:call_dutch', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
         const player = room.gameState.players.find(
           (p: Player) => p.id === socket.id
         );
-        if (!player || player.isSpectator) return;
+        if (!player || player.isSpectator) {
+          reply({ ok: false, error: player ? 'spectator' : 'player_not_found' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
@@ -167,6 +208,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
           message: `${player.name} appelle DUTCH !`,
         });
+        reply({ ok: true });
 
         if (room.gameState.phase === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
@@ -174,34 +216,52 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       });
     } catch (error) {
       console.error('Error call_dutch:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
-  socket.on('game:attempt_match', async (data) => {
+  socket.on('game:attempt_match', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       // Rate limit spécifique pour éviter le spam de matchs (500ms entre chaque)
       if (!await SecurityService.checkMatchRateLimit(socket.id)) {
         console.log(`[MATCH] Rate limited for ${socket.id} - too many match attempts`);
+        reply({ ok: false, error: 'match_rate_limited' });
         return;
       }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
-        if (room.gameState.phase !== GamePhase.reaction) return;
+        if (room.gameState.phase !== GamePhase.reaction) {
+          reply({ ok: false, error: 'invalid_phase' });
+          return;
+        }
 
         const player = room.gameState.players.find(
           (p: Player) => p.id === socket.id
         );
-        if (!player || player.isSpectator) return;
+        if (!player || player.isSpectator) {
+          reply({ ok: false, error: player ? 'spectator' : 'player_not_found' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
         GameLogic.attemptMatch(room.gameState, player.id, data.cardIndex);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        reply({ ok: true });
       });
     } catch (error) {
       console.error('Error attempt_match:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
@@ -230,23 +290,40 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  socket.on('game:use_special_power', async (data) => {
+  socket.on('game:use_special_power', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
         const isMatchPower = room.gameState.specialPowerPlayerId != null;
         const authorizedPlayerId = isMatchPower
           ? room.gameState.specialPowerPlayerId
           : getCurrentPlayer(room.gameState).id;
-        if (authorizedPlayerId !== socket.id) return;
+        if (authorizedPlayerId !== socket.id) {
+          reply({ ok: false, error: 'not_authorized' });
+          return;
+        }
 
         const currentPlayer = room.gameState.players.find(p => p.id === socket.id);
-        if (!currentPlayer || currentPlayer.isSpectator) return;
+        if (!currentPlayer || currentPlayer.isSpectator) {
+          reply({ ok: false, error: currentPlayer ? 'spectator' : 'player_not_found' });
+          return;
+        }
 
         const specialCard = room.gameState.specialCardToActivate;
-        if (!specialCard) return;
+        if (!specialCard) {
+          reply({ ok: false, error: 'no_special_power' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
@@ -316,6 +393,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
             powerType: specialCard.value,
           },
         });
+        reply({ ok: true });
 
         if (room.gameState.phase === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
@@ -342,28 +420,44 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       });
     } catch (error) {
       console.error('Error use_special_power:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
-  socket.on('game:skip_special_power', async (data) => {
+  socket.on('game:skip_special_power', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
         const isMatchPower = room.gameState.specialPowerPlayerId != null;
         const authorizedPlayerId = isMatchPower
           ? room.gameState.specialPowerPlayerId
           : getCurrentPlayer(room.gameState).id;
-        if (authorizedPlayerId !== socket.id) return;
+        if (authorizedPlayerId !== socket.id) {
+          reply({ ok: false, error: 'not_authorized' });
+          return;
+        }
 
         const player = room.gameState.players.find(p => p.id === socket.id);
-        if (!player || player.isSpectator) return;
+        if (!player || player.isSpectator) {
+          reply({ ok: false, error: player ? 'spectator' : 'player_not_found' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
         GameLogic.skipSpecialPower(room.gameState);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        reply({ ok: true });
 
         if (room.gameState.phase === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
@@ -390,6 +484,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
       });
     } catch (error) {
       console.error('Error skip_special_power:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 
