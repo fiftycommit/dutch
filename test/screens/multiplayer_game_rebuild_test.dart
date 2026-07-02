@@ -227,4 +227,23 @@ void main() {
     // alors que presenceCheckDeadlineMs ne concerne que l'overlay de présence.
     expect(RebuildProbe.countFor('screen_body'), 5);
   });
+
+  testWidgets(
+      'la barre de boutons ne rebuild PAS sur un tick de présence (isolée)',
+      (tester) async {
+    final provider = await pumpScreen(tester);
+
+    RebuildProbe.reset();
+    for (var i = 0; i < 5; i++) {
+      provider.tickPresence();
+      await tester.pump();
+    }
+
+    // Le corps monolithe rebuild encore (découpage des autres zones à suivre),
+    // mais la barre de boutons, isolée derrière un Selector constant, ne se
+    // reconstruit plus du tout.
+    expect(RebuildProbe.countFor('screen_body'), 5);
+    expect(RebuildProbe.countFor('buttons'), 0,
+        reason: 'les boutons ne dépendent d\'aucun champ provider');
+  });
 }

@@ -433,6 +433,41 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     _connectionErrorDialogShown = false;
   }
 
+  /// Barre de boutons (émotes / pause / quitter). Aucune dépendance au provider :
+  /// passée en `child` du Selector du corps, elle n'est construite qu'une fois.
+  Widget _buildTopRightButtons(BuildContext context) {
+    RebuildProbe.bump('buttons');
+    final gp = context.read<MultiplayerGameProvider>();
+    return Positioned(
+      top: 10,
+      right: 10,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.emoji_emotions,
+                color: Colors.amber, size: 32),
+            onPressed: () {
+              setState(() {
+                _showEmoteOverlay = true;
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.pause_circle_filled,
+                color: AppColors.textDisabled, size: 32),
+            onPressed: () => gp.pauseGame(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.exit_to_app,
+                color: AppColors.textDisabled, size: 32),
+            onPressed: () => _showQuitConfirmation(context, gp),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -440,6 +475,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       child: Selector<MultiplayerGameProvider, _MultiplayerGameScreenModel>(
         selector: (_, gameProvider) =>
             _MultiplayerGameScreenModel.from(gameProvider),
+        // Zone sans dépendance provider : construite une seule fois puis passée
+        // inchangée à chaque rebuild du corps.
+        child: _buildTopRightButtons(context),
         builder: (context, model, child) {
           RebuildProbe.bump('screen_body');
           final gameProvider = context.read<MultiplayerGameProvider>();
@@ -612,37 +650,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     if (model.specialPowerNotification)
                       GameOverlays.specialPowerBanner(model.specialPowerByName),
 
-                    // Boutons en haut à droite
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Bouton Émotes
-                          IconButton(
-                            icon: const Icon(Icons.emoji_emotions,
-                                color: Colors.amber, size: 32),
-                            onPressed: () {
-                              setState(() {
-                                _showEmoteOverlay = true;
-                              });
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.pause_circle_filled,
-                                color: AppColors.textDisabled, size: 32),
-                            onPressed: () => gameProvider.pauseGame(),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.exit_to_app,
-                                color: AppColors.textDisabled, size: 32),
-                            onPressed: () =>
-                                _showQuitConfirmation(context, gameProvider),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // Boutons en haut à droite. Ils ne lisent AUCUN champ du
+                    // provider : passés en `child` du Selector (construits une
+                    // fois), ils ne se reconstruisent plus quand le corps
+                    // rebuild sur une notification (tick de présence, gameState…).
+                    if (child != null) child,
 
                     // Indicateur de reconnexion silencieuse
                     if (model.isSilentReconnecting)
