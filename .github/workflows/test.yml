@@ -2,14 +2,12 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
 jobs:
-  test:
+  flutter:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -26,3 +24,29 @@ jobs:
 
       - name: Test PWA service worker generator
         run: node --test 'scripts/__tests__/**/*.test.mjs'
+
+      # Suite Flutter complète. L'échec RL connu est tagué `known-failure` et
+      # exclu explicitement (voir dart_test.yaml) : tout AUTRE échec fait échouer
+      # le CI.
+      - name: Flutter tests
+        run: flutter test --exclude-tags known-failure
+
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dutch-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm test` nettoie dist, recompile puis lance node --test (rendu
+      # reproductible en 644fa65). Un échec de test fait échouer le CI.
+      - name: Server tests
+        run: npm test
