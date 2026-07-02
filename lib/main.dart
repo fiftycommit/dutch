@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'core/service_locator.dart';
 import 'core/firebase_app_check_bootstrap.dart';
@@ -52,6 +53,7 @@ void main() {
   // IMPORTANT : ensureInitialized() et runApp() doivent être dans la même zone
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    GoogleFonts.config.allowRuntimeFetching = false;
 
     // Capturer les erreurs Flutter (widget build, layout, etc.)
     FlutterError.onError = (details) {
@@ -162,6 +164,7 @@ ThemeData _buildLightTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
+      fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
       colorScheme: const ColorScheme.light(
         primary: Color(0xFF007AFF),
         secondary: Color(0xFF34C759),
@@ -190,6 +193,7 @@ ThemeData _buildDarkTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
+      fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF0A84FF),
         secondary: Color(0xFF30D158),
@@ -223,6 +227,7 @@ ThemeData _buildGreenTheme() => ThemeData(
       scaffoldBackgroundColor:
           kIsWeb ? Colors.transparent : AppColors.gradientBottom,
       fontFamily: 'Roboto',
+      fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF4CAF50),
         secondary: Color(0xFF66BB6A),

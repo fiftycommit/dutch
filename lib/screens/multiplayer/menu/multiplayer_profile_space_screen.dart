@@ -8,7 +8,6 @@ import 'package:dutch_game/services/social/social_hub_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:dutch_game/utils/ui_constants.dart';
 import 'package:dutch_game/core/service_locator.dart';
 import 'package:dutch_game/core/interfaces/i_haptic_service.dart';
@@ -744,9 +743,7 @@ class _MultiplayerProfileSpaceScreenState
 
   @override
   Widget build(BuildContext context) {
-    final themed = Theme.of(context).copyWith(
-      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
-    );
+    final themed = Theme.of(context);
 
     return Theme(
       data: themed,

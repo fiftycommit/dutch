@@ -17,7 +17,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 class MultiplayerMenuScreen extends StatefulWidget {
@@ -807,9 +806,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
         !isLarge && media.orientation == Orientation.landscape && width >= 700;
     final compactHeader = width < 980;
 
-    final themed = Theme.of(context).copyWith(
-      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
-    );
+    final themed = Theme.of(context);
 
     return Theme(
       data: themed,
