@@ -5,11 +5,14 @@ import 'package:dutch_game/widgets/dialogs/emote_overlay.dart';
 /// UI Regression Tests - Hardened test suite for critical UI fixes
 /// These tests use semantic Keys and verify visual/functional behavior
 ///
-/// NOTE: la couverture code salon / boutons hôte-invité du lobby a été déplacée
-/// vers `test/screens/multiplayer_lobby_screen_real_test.dart`, qui monte le VRAI
-/// `MultiplayerLobbyScreen` au lieu de réimplémenter ses widgets ici (les copies
-/// locales ne pouvaient pas détecter une régression de l'écran réel — la clé
-/// `public_badge` qu'elles testaient n'existe d'ailleurs pas dans le code réel).
+/// NOTE: les groupes qui réimplémentaient des widgets en local ont été déplacés
+/// vers des tests montant les VRAIS écrans (une copie locale ne peut pas détecter
+/// une régression de l'écran réel) :
+///  - code salon / boutons hôte-invité du lobby →
+///    `test/screens/multiplayer_lobby_screen_real_test.dart` (la clé
+///    `public_badge` qu'ils testaient n'existe même pas dans le code réel) ;
+///  - alignement du badge Dutch →
+///    `test/screens/dutch_reveal_screen_real_test.dart`.
 
 void main() {
   group('3. EmoteOverlay - No Overflow Detection', () {
@@ -78,121 +81,6 @@ void main() {
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
-    });
-  });
-
-  group('4. Dutch Reveal - Card Y-Position Alignment', () {
-    testWidgets('all player columns have same Y-position for cards', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Player 1 - Dutch caller (has visible badge)
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text('Player 1'),
-                      Container(
-                        key: const Key('player1_badge'),
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Colors.amber,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('DUTCH', style: TextStyle(fontSize: 8)),
-                      ),
-                      Container(
-                        key: const Key('player1_cards'),
-                        height: 100,
-                        color: Colors.grey,
-                        child: const Text('Cards'),
-                      ),
-                    ],
-                  ),
-                ),
-                // Player 2 - Not Dutch (has invisible placeholder)
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text('Player 2'),
-                      Container(
-                        key: const Key('player2_badge'),
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent, // Placeholder
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('DUTCH',
-                            style: TextStyle(fontSize: 8, color: Colors.transparent)),
-                      ),
-                      Container(
-                        key: const Key('player2_cards'),
-                        height: 100,
-                        color: Colors.grey,
-                        child: const Text('Cards'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      // Get positions of card containers
-      final player1Cards = tester.getTopLeft(find.byKey(const Key('player1_cards')));
-      final player2Cards = tester.getTopLeft(find.byKey(const Key('player2_cards')));
-
-      // Y positions should be identical (cards are aligned)
-      expect(player1Cards.dy, player2Cards.dy,
-          reason: 'Card containers should have same Y position for alignment');
-    });
-
-    testWidgets('badges have same dimensions for alignment', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Row(
-              children: [
-                // Visible badge
-                Container(
-                  key: const Key('visible_badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.amber,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text('DUTCH', style: TextStyle(fontSize: 8)),
-                ),
-                const SizedBox(width: 20),
-                // Invisible placeholder
-                Container(
-                  key: const Key('invisible_badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text('DUTCH',
-                      style: TextStyle(fontSize: 8, color: Colors.transparent)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      final visibleSize = tester.getSize(find.byKey(const Key('visible_badge')));
-      final invisibleSize = tester.getSize(find.byKey(const Key('invisible_badge')));
-
-      // Both badges should have identical dimensions
-      expect(visibleSize.width, invisibleSize.width,
-          reason: 'Badge widths should match for alignment');
-      expect(visibleSize.height, invisibleSize.height,
-          reason: 'Badge heights should match for alignment');
     });
   });
 

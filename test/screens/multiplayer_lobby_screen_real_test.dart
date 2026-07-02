@@ -172,6 +172,8 @@ void main() {
     expect(find.byKey(const Key('host_ready_button')), findsOneWidget);
     expect(find.byKey(const Key('host_start_button')), findsOneWidget);
     expect(find.byKey(const Key('guest_ready_button')), findsNothing);
+    // L'hôte a accès aux paramètres du salon (dont la config des bots).
+    expect(find.text('Paramètres'), findsOneWidget);
   });
 
   testWidgets('invité : le VRAI écran affiche uniquement le bouton Prêt',
@@ -182,6 +184,8 @@ void main() {
 
     expect(find.byKey(const Key('guest_ready_button')), findsOneWidget);
     expect(find.byKey(const Key('host_start_button')), findsNothing);
+    // Libellé réel du bouton invité non-prêt.
+    expect(find.text('Passer pret'), findsOneWidget);
   });
 
   testWidgets('salon privé : le VRAI écran affiche la carte code salon',
