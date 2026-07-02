@@ -75,6 +75,7 @@ function handleServiceWorkerUpdates() {
 _flutter.loader.load({
   serviceWorkerSettings: {
     serviceWorkerVersion: flutterServiceWorkerVersion,
+    serviceWorkerUrl: "dutch_service_worker.js?v=" + flutterServiceWorkerVersion,
   },
   onEntrypointLoaded: async function (engineInitializer) {
     handleServiceWorkerUpdates();
