@@ -41,6 +41,7 @@ class MultiplayerGameProvider
     implements IGameController {
   final MultiplayerService _multiplayerService;
   final IHapticService _hapticService;
+  bool _isDisposed = false;
 
   // Event Stream for UI feedback
   final StreamController<GameEvent> _eventController =
@@ -1209,7 +1210,19 @@ class MultiplayerGameProvider
       notifyListeners(); // Afficher immédiatement
     }
 
-    _multiplayerService.drawCard();
+    unawaited(_confirmDrawCard());
+  }
+
+  Future<void> _confirmDrawCard() async {
+    final success = await _multiplayerService.drawCard();
+    if (_isDisposed) return;
+    if (success) return;
+
+    _hapticService.error();
+    _notificationManager.setError(
+      'Pioche non confirmée par le serveur. Resynchronisation en cours.',
+    );
+    _multiplayerService.requestFullState();
   }
 
   @override
@@ -1263,6 +1276,7 @@ class MultiplayerGameProvider
       shakingCardIndices.add(cardIndex);
       notifyListeners();
       await Future.delayed(const Duration(milliseconds: 500));
+      if (_isDisposed) return;
       shakingCardIndices.remove(cardIndex);
       notifyListeners();
     } else {
@@ -1515,6 +1529,8 @@ class MultiplayerGameProvider
 
   @override
   void dispose() {
+    _isDisposed = true;
+
     // Nettoyer tous les callbacks pour éviter les leaks
     _multiplayerService.onGameStateUpdate = null;
     _multiplayerService.onPreloadedDeckCardUpdate = null;

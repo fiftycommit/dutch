@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 /// Émetteur d'actions de jeu vers le serveur
 /// Principe GRASP: Information Expert - Sait comment envoyer les actions de jeu
 class GameActionsEmitter {
+  static const Duration _actionAckTimeout = Duration(seconds: 5);
+
   final io.Socket? Function() _getSocket;
   final String? Function() _getRoomCode;
+  int _actionSequence = 0;
 
   GameActionsEmitter({
     required io.Socket? Function() getSocket,
@@ -15,6 +20,12 @@ class GameActionsEmitter {
 
   io.Socket? get _socket => _getSocket();
   String? get _roomCode => _getRoomCode();
+
+  String _nextActionId(String event) {
+    _actionSequence += 1;
+    final sanitizedEvent = event.replaceAll(':', '_');
+    return '$sanitizedEvent-${DateTime.now().microsecondsSinceEpoch}-$_actionSequence';
+  }
 
   /// Émet un événement de manière sécurisée
   /// Retourne true si l'émission a été faite, false sinon
@@ -34,9 +45,59 @@ class GameActionsEmitter {
     return true;
   }
 
-  void drawCard() {
+  Future<bool> _safeEmitWithAck(String event, Map<String, dynamic> data) {
+    final socket = _socket;
+    final roomCode = _roomCode;
+    if (socket == null || !socket.connected) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Socket non connecté, action $event ignorée');
+      }
+      return Future.value(false);
+    }
+    if (roomCode == null) {
+      if (kDebugMode) debugPrint('⚠️ Pas de roomCode, action $event ignorée');
+      return Future.value(false);
+    }
+
+    final completer = Completer<bool>();
+    Timer? timeout;
+
+    void complete(bool value) {
+      if (completer.isCompleted) return;
+      timeout?.cancel();
+      completer.complete(value);
+    }
+
+    final actionId = _nextActionId(event);
+    final payload = <String, dynamic>{
+      ...data,
+      'roomCode': roomCode,
+      'actionId': actionId,
+    };
+
+    timeout = Timer(_actionAckTimeout, () {
+      if (kDebugMode) {
+        debugPrint('⏱️ ACK $event expiré actionId=$actionId');
+      }
+      complete(false);
+    });
+
+    socket.emitWithAck(event, payload, ack: (response) {
+      final success = response is Map
+          ? response['success'] == true || response['ok'] == true
+          : response == true;
+      if (!success && kDebugMode) {
+        debugPrint('⚠️ Action $event refusée: $response');
+      }
+      complete(success);
+    });
+
+    return completer.future;
+  }
+
+  Future<bool> drawCard() {
     if (kDebugMode) debugPrint('🃏 Pioche une carte');
-    _safeEmit('game:draw_card', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:draw_card', const {});
   }
 
   void replaceCard(int cardIndex) {

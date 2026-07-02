@@ -31,9 +31,9 @@ void main() {
         );
       });
 
-      test('drawCard does not crash with null socket', () {
+      test('drawCard does not crash with null socket', () async {
         // Should not throw
-        emitter.drawCard();
+        expect(await emitter.drawCard(), isFalse);
       });
 
       test('replaceCard does not crash with null socket', () {
@@ -100,9 +100,9 @@ void main() {
         );
       });
 
-      test('all actions work with null roomCode', () {
+      test('all actions work with null roomCode', () async {
         // None of these should throw
-        emitter.drawCard();
+        expect(await emitter.drawCard(), isFalse);
         emitter.replaceCard(0);
         emitter.discardDrawnCard();
         emitter.callDutch();
@@ -125,17 +125,17 @@ void main() {
         );
       });
 
-      test('can call multiple actions in sequence', () {
-        emitter.drawCard();
+      test('can call multiple actions in sequence', () async {
+        expect(await emitter.drawCard(), isFalse);
         emitter.replaceCard(0);
         emitter.callDutch();
         // No exception = pass
       });
 
-      test('can call same action multiple times', () {
-        emitter.drawCard();
-        emitter.drawCard();
-        emitter.drawCard();
+      test('can call same action multiple times', () async {
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.drawCard(), isFalse);
       });
     });
   });

@@ -6,23 +6,45 @@ import { Player } from '../models/Player';
 import { SecurityService } from '../services/SecurityService';
 
 export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
-  socket.on('game:draw_card', async (data) => {
+  socket.on('game:draw_card', async (data, ack?: (payload: Record<string, unknown>) => void) => {
+    const actionId = data?.actionId;
+    let ackSent = false;
+    const reply = (payload: Record<string, unknown>) => {
+      if (ackSent || typeof ack !== 'function') return;
+      ackSent = true;
+      ack({ actionId, ...payload });
+    };
+
     try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
+      if (!await SecurityService.checkEventRateLimit(socket.id)) {
+        reply({ ok: false, error: 'rate_limited' });
+        return;
+      }
       await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
 
         const currentPlayer = getCurrentPlayer(room.gameState);
-        if (currentPlayer.id !== socket.id) return;
-        if (currentPlayer.isSpectator) return;
+        if (currentPlayer.id !== socket.id) {
+          reply({ ok: false, error: 'not_current_player' });
+          return;
+        }
+        if (currentPlayer.isSpectator) {
+          reply({ ok: false, error: 'spectator' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
         GameLogic.drawCard(room.gameState);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
+        reply({ ok: true });
       });
     } catch (error) {
       console.error('Error draw_card:', error);
+      reply({ ok: false, error: 'internal_error' });
     }
   });
 

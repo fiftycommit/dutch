@@ -456,7 +456,7 @@ class MultiplayerService {
   // ACTIONS DE JEU (délégation)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void drawCard() => _actionsEmitter.drawCard();
+  Future<bool> drawCard() => _actionsEmitter.drawCard();
   void replaceCard(int cardIndex) => _actionsEmitter.replaceCard(cardIndex);
   void discardDrawnCard() => _actionsEmitter.discardDrawnCard();
   void callDutch() => _actionsEmitter.callDutch();

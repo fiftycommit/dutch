@@ -150,8 +150,9 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  void drawCard() {
+  Future<bool> drawCard() async {
     drawCardCount++;
+    return true;
   }
 
   @override

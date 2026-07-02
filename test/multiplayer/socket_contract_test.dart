@@ -19,11 +19,18 @@ void main() {
     });
 
     group('Game Actions', () {
-      test('drawCard émet payload exact', () {
-        emitter.drawCard();
+      test('drawCard émet payload avec ACK et actionId', () async {
+        final success = await emitter.drawCard();
 
-        expect(mockSocket.lastEvent, 'game:draw_card');
-        expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
+        expect(success, isTrue);
+        expect(mockSocket.lastEventWithAck, 'game:draw_card');
+        expect(mockSocket.lastPayloadWithAck,
+            containsPair('roomCode', testRoomCode));
+        expect(mockSocket.lastPayloadWithAck!['actionId'], isA<String>());
+        expect(
+          mockSocket.lastPayloadWithAck!['actionId'] as String,
+          startsWith('game_draw_card-'),
+        );
       });
 
       test('replaceCard émet payload avec cardIndex', () {
@@ -145,13 +152,13 @@ void main() {
         expect(mockSocket.lastEventWithAck, isNull);
       });
 
-      test('émission sans socket ne crash pas', () {
+      test('émission sans socket ne crash pas', () async {
         final emitterNoSocket = GameActionsEmitter(
           getSocket: () => null,
           getRoomCode: () => testRoomCode,
         );
 
-        expect(() => emitterNoSocket.drawCard(), returnsNormally);
+        expect(await emitterNoSocket.drawCard(), isFalse);
       });
 
       test('cardIndex négatif est transmis tel quel', () {
@@ -181,7 +188,7 @@ class MockSocket implements io.Socket {
       {Function? ack, bool binary = false}) {
     lastEventWithAck = event;
     lastPayloadWithAck = data as Map<String, dynamic>?;
-    ack?.call(null);
+    ack?.call({'ok': true, 'actionId': lastPayloadWithAck?['actionId']});
   }
 
   // Le getter connected doit être implémenté explicitement car il retourne un bool

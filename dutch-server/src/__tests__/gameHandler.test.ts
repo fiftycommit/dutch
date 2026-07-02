@@ -120,7 +120,10 @@ describe('gameHandler', () => {
 
       const deckSizeBefore = room.gameState!.deck.length;
 
-      await mockSocket.triggerEvent('game:draw_card', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent('game:draw_card', { roomCode, actionId: 'draw-1' }, (payload: any) => {
+        ackPayload = payload;
+      });
 
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -129,6 +132,7 @@ describe('gameHandler', () => {
         room.gameState!.drawnCard !== null ||
         room.gameState!.deck.length < deckSizeBefore
       );
+      assert.deepStrictEqual(ackPayload, { actionId: 'draw-1', ok: true });
     });
 
     it('rejects draw from non-current player', async () => {
@@ -138,11 +142,19 @@ describe('gameHandler', () => {
 
       const deckSizeBefore = room.gameState!.deck.length;
 
-      await mockSocket.triggerEvent('game:draw_card', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent('game:draw_card', { roomCode, actionId: 'draw-2' }, (payload: any) => {
+        ackPayload = payload;
+      });
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // Deck should not change because it's not player-1's turn
       assert.strictEqual(room.gameState!.deck.length, deckSizeBefore);
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'draw-2',
+        ok: false,
+        error: 'not_current_player',
+      });
     });
 
     it('rejects draw from spectator', async () => {
@@ -152,16 +164,35 @@ describe('gameHandler', () => {
 
       const deckSizeBefore = room.gameState!.deck.length;
 
-      await mockSocket.triggerEvent('game:draw_card', { roomCode });
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent('game:draw_card', { roomCode, actionId: 'draw-3' }, (payload: any) => {
+        ackPayload = payload;
+      });
       await new Promise(resolve => setTimeout(resolve, 50));
 
       assert.strictEqual(room.gameState!.deck.length, deckSizeBefore);
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'draw-3',
+        ok: false,
+        error: 'spectator',
+      });
     });
 
     it('handles invalid room code', async () => {
-      await mockSocket.triggerEvent('game:draw_card', { roomCode: 'INVALID' });
-      // Should not throw
-      assert.ok(true);
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:draw_card',
+        { roomCode: 'INVALID', actionId: 'draw-4' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'draw-4',
+        ok: false,
+        error: 'room_not_ready',
+      });
     });
   });
 
