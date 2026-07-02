@@ -11,7 +11,6 @@ class MockMultiplayerService extends MultiplayerService {
   int drawCardCount = 0;
   int replaceCardCount = 0;
   int discardDrawnCardCount = 0;
-  int takeFromDiscardCount = 0;
   int callDutchCount = 0;
   int attemptMatchCount = 0;
   int skipSpecialPowerCount = 0;
@@ -166,11 +165,6 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  void takeFromDiscard() {
-    takeFromDiscardCount++;
-  }
-
-  @override
   void callDutch() {
     callDutchCount++;
   }
@@ -199,7 +193,6 @@ class MockMultiplayerService extends MultiplayerService {
     drawCardCount = 0;
     replaceCardCount = 0;
     discardDrawnCardCount = 0;
-    takeFromDiscardCount = 0;
     callDutchCount = 0;
     attemptMatchCount = 0;
     skipSpecialPowerCount = 0;

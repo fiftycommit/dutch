@@ -22,7 +22,6 @@ class GameTableCallbacks {
   final VoidCallback onDrawCard;
   final VoidCallback onDiscardDrawnCard;
   final VoidCallback onCallDutch;
-  final VoidCallback? onTakeFromDiscard;
   final ValueChanged<int> onCardTap;
   final void Function(int opponentIndex, int cardIndex)? onOpponentCardTap;
   final VoidCallback onShowDiscardPile;
@@ -31,7 +30,6 @@ class GameTableCallbacks {
     required this.onDrawCard,
     required this.onDiscardDrawnCard,
     required this.onCallDutch,
-    this.onTakeFromDiscard,
     required this.onCardTap,
     this.onOpponentCardTap,
     required this.onShowDiscardPile,
@@ -44,12 +42,9 @@ class GameTableCallbacks {
     required BuildContext context,
     required IGameController controller,
     void Function(int opponentIndex, int cardIndex)? onOpponentCardTap,
-    bool supportsTakeFromDiscard = true,
   }) {
     return GameTableCallbacks(
       onDrawCard: controller.drawCard,
-      onTakeFromDiscard:
-          supportsTakeFromDiscard ? controller.takeFromDiscard : null,
       onDiscardDrawnCard: controller.discardDrawnCard,
       onCallDutch: controller.callDutch,
       onCardTap: controller.handleCardTap,
@@ -1479,7 +1474,6 @@ class _GameTableContentState extends State<_GameTableContent>
                             availableWidth: baseCenterWidth,
                             onShowDiscard: callbacks.onShowDiscardPile,
                             onDrawCard: callbacks.onDrawCard,
-                            onTakeFromDiscard: callbacks.onTakeFromDiscard,
                             reactionTimeTotalMs: mpConfig.reactionTimeTotalMs,
                             enableHaptics: true,
                             showDeckAndDiscard: showCenterDeck,
@@ -1534,12 +1528,6 @@ class _GameTableContentState extends State<_GameTableContent>
                   width: sideAccessoryWidth,
                   child: SideDiscardWidget(
                     gameState: gs,
-                    canTakeDiscard: callbacks.onTakeFromDiscard != null &&
-                        _isMyTurn &&
-                        !_hasDrawn &&
-                        gs.phase == GamePhase.playing &&
-                        gs.discardPile.isNotEmpty,
-                    onTakeFromDiscard: callbacks.onTakeFromDiscard,
                     onShowDiscardPile: callbacks.onShowDiscardPile,
                     discardCard: ((gs.phase == GamePhase.playing ||
                                 gs.phase == GamePhase.specialPower)

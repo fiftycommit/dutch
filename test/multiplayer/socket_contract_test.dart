@@ -43,13 +43,6 @@ void main() {
         expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
       });
 
-      test('takeFromDiscard émet payload exact', () {
-        emitter.takeFromDiscard();
-
-        expect(mockSocket.lastEvent, 'game:take_from_discard');
-        expect(mockSocket.lastPayload, {'roomCode': testRoomCode});
-      });
-
       test('callDutch émet payload exact', () {
         emitter.callDutch();
 
@@ -79,7 +72,8 @@ void main() {
         });
       });
 
-      test('power10 émet payload avec targetPlayerIndex et targetCardIndex', () {
+      test('power10 émet payload avec targetPlayerIndex et targetCardIndex',
+          () {
         emitter.usePower10SpyOpponent(1, 2);
 
         expect(mockSocket.lastEvent, 'game:use_special_power');
@@ -183,7 +177,8 @@ class MockSocket implements io.Socket {
   }
 
   @override
-  void emitWithAck(String event, dynamic data, {Function? ack, bool binary = false}) {
+  void emitWithAck(String event, dynamic data,
+      {Function? ack, bool binary = false}) {
     lastEventWithAck = event;
     lastPayloadWithAck = data as Map<String, dynamic>?;
     ack?.call(null);

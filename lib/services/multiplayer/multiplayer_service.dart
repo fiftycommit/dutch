@@ -429,7 +429,6 @@ class MultiplayerService {
   void drawCard() => _actionsEmitter.drawCard();
   void replaceCard(int cardIndex) => _actionsEmitter.replaceCard(cardIndex);
   void discardDrawnCard() => _actionsEmitter.discardDrawnCard();
-  void takeFromDiscard() => _actionsEmitter.takeFromDiscard();
   void callDutch() => _actionsEmitter.callDutch();
   void attemptMatch(int cardIndex) => _actionsEmitter.attemptMatch(cardIndex);
   void usePower7LookOwnCard(int cardIndex) =>

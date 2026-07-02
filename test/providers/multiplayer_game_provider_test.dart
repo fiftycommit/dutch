@@ -144,11 +144,6 @@ void main() {
       expect(mockService.discardDrawnCardCount, 1);
     });
 
-    test('takeFromDiscard calls service', () {
-      provider.takeFromDiscard();
-      expect(mockService.takeFromDiscardCount, 1);
-    });
-
     test('callDutch calls service', () {
       provider.callDutch();
       expect(mockService.callDutchCount, 1);

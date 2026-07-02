@@ -57,11 +57,6 @@ class ActionHistoryMessages {
   static String penalty(String playerName) =>
       "$playerName a pris une carte de pénalité.";
 
-  // ─── Prendre de la défausse ──────────────────────────────────────────
-
-  static String takeFromDiscard(String playerName, PlayingCard card) =>
-      "$playerName a pris ${card.displayName} de la défausse.";
-
   // ─── Pouvoirs spéciaux ───────────────────────────────────────────────
 
   static String powerLookOwn(String playerName, int cardIndex) =>

@@ -131,7 +131,6 @@ class _GameScreenState extends State<GameScreen>
                   callbacks: GameTableCallbacks.fromController(
                     context: context,
                     controller: gameProvider,
-                    supportsTakeFromDiscard: false, // Solo mode
                   ),
                   onSpecialPowerAnimationComplete: (cardId) {
                     if (!mounted) return;
@@ -226,9 +225,7 @@ class _GameScreenState extends State<GameScreen>
 
   Widget _buildPowerLotteryOverlay(GameProvider gp, GameState gs) {
     // Générer un ID unique pour cette loterie (éviter de ré-afficher)
-    final lotteryId = gs.pendingMatchPowers
-        .map((p) => p.playerId)
-        .join('_');
+    final lotteryId = gs.pendingMatchPowers.map((p) => p.playerId).join('_');
     if (_lotteryDialogShownId != lotteryId) {
       _lotteryDialogShownId = lotteryId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -335,7 +332,9 @@ class _GameScreenState extends State<GameScreen>
         : null;
     final callerName = caller == null
         ? 'DUTCH'
-        : caller.isHuman ? 'VOUS AVEZ' : '${caller.name.toUpperCase()} A';
+        : caller.isHuman
+            ? 'VOUS AVEZ'
+            : '${caller.name.toUpperCase()} A';
 
     return Container(
       color: Colors.amber.withValues(alpha: 0.9),

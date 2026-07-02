@@ -220,22 +220,6 @@ describe('gameHandler', () => {
     });
   });
 
-  describe('game:take_from_discard', () => {
-    it('takes card from discard pile', async () => {
-      const room = roomManager.getRoom(roomCode)!;
-      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
-      room.gameState!.discardPile.push(createCard('spades', '6'));
-
-      const discardSizeBefore = room.gameState!.discardPile.length;
-
-      await mockSocket.triggerEvent('game:take_from_discard', { roomCode });
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      assert.strictEqual(room.gameState!.discardPile.length, discardSizeBefore - 1);
-      assert.ok(room.gameState!.drawnCard);
-    });
-  });
-
   describe('game:call_dutch', () => {
     it('allows player to call Dutch', async () => {
       const room = roomManager.getRoom(roomCode)!;

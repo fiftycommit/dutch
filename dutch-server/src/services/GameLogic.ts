@@ -289,14 +289,6 @@ export class GameLogic {
 
   // Méthodes supplémentaires pour le serveur multijoueur
 
-  static takeFromDiscard(gameState: GameState): void {
-    if (gameState.discardPile.length === 0) return;
-
-    const card = gameState.discardPile.pop()!;
-    gameState.drawnCard = card;
-    addToHistory(gameState, HistoryFormatter.formatTakeFromDiscard(getCurrentPlayer(gameState).name));
-  }
-
   static attemptMatch(gameState: GameState, playerId: string, cardIndex: number): boolean {
     const player = gameState.players.find(p => p.id === playerId);
     if (!player) return false;

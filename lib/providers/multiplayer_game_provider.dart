@@ -787,8 +787,7 @@ class MultiplayerGameProvider
     //  - userId Firebase éventuellement présent dans la payload
     final myUid = _myAuthUid;
     final playerUserId = player['userId'] as String?;
-    bool isMe =
-        player['id'] == playerId || player['clientId'] == this.clientId;
+    bool isMe = player['id'] == playerId || player['clientId'] == this.clientId;
     if (!isMe && myUid != null && playerUserId == myUid) {
       isMe = true;
     }
@@ -1226,14 +1225,6 @@ class MultiplayerGameProvider
     if (_gameState != null) {
       _hapticService.cardTap();
       _multiplayerService.discardDrawnCard();
-    }
-  }
-
-  @override
-  void takeFromDiscard() {
-    if (_gameState != null) {
-      _hapticService.cardTap();
-      _multiplayerService.takeFromDiscard();
     }
   }
 

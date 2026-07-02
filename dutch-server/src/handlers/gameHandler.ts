@@ -128,28 +128,6 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
     }
   });
 
-  socket.on('game:take_from_discard', async (data) => {
-    try {
-      if (!await SecurityService.checkEventRateLimit(socket.id)) return;
-      await roomManager.withRoomMutation(data.roomCode, async (room) => {
-        if (!room?.gameState) return;
-
-        const currentPlayer = getCurrentPlayer(room.gameState);
-        if (currentPlayer.id !== socket.id) return;
-        if (currentPlayer.isSpectator) return;
-
-        roomManager.recordPlayerAction(data.roomCode, socket.id);
-
-        GameLogic.takeFromDiscard(room.gameState);
-        roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
-
-        await roomManager.checkAndPlayBotTurn(data.roomCode, { lockAlreadyHeld: true });
-      });
-    } catch (error) {
-      console.error('Error take_from_discard:', error);
-    }
-  });
-
   socket.on('game:call_dutch', async (data) => {
     try {
       if (!await SecurityService.checkEventRateLimit(socket.id)) return;

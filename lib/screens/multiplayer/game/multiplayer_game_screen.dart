@@ -512,8 +512,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                           gameProvider.usePower10SpyOpponent(
                               opponentIndex, cardIndex);
                         },
-                        supportsTakeFromDiscard:
-                            true, // Multiplayer allows taking from discard
                       ),
                       onSpecialPowerAnimationComplete: (cardId) {
                         if (!mounted) return;
@@ -791,10 +789,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     return Container(color: Colors.black54);
   }
 
-  Widget _buildPowerLotteryOverlay(
-      MultiplayerGameProvider gp, GameState gs) {
-    final lotteryId =
-        gs.pendingMatchPowers.map((p) => p.playerId).join('_');
+  Widget _buildPowerLotteryOverlay(MultiplayerGameProvider gp, GameState gs) {
+    final lotteryId = gs.pendingMatchPowers.map((p) => p.playerId).join('_');
     if (_lotteryDialogShownId != lotteryId) {
       _lotteryDialogShownId = lotteryId;
       WidgetsBinding.instance.addPostFrameCallback((_) {

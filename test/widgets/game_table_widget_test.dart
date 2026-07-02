@@ -24,19 +24,6 @@ void main() {
       expect(callbacks.onShowDiscardPile, isNotNull);
     });
 
-    test('onTakeFromDiscard is optional', () {
-      final callbacks = GameTableCallbacks(
-        onDrawCard: () {},
-        onDiscardDrawnCard: () {},
-        onCallDutch: () {},
-        onCardTap: (index) {},
-        onShowDiscardPile: () {},
-        onTakeFromDiscard: null,
-      );
-
-      expect(callbacks.onTakeFromDiscard, isNull);
-    });
-
     test('onOpponentCardTap is optional', () {
       final callbacks = GameTableCallbacks(
         onDrawCard: () {},
@@ -112,7 +99,7 @@ void main() {
   group('GameTableWidget Configuration', () {
     test('can create test game state', () {
       final gs = _createTestGameState();
-      
+
       expect(gs.players.length, 2);
       expect(gs.players[0].isHuman, true);
       expect(gs.players[1].isHuman, false);
@@ -122,7 +109,7 @@ void main() {
 
     test('can create game state with multiple players', () {
       final gs = _createTestGameState(playerCount: 4);
-      
+
       expect(gs.players.length, 4);
       expect(gs.players[0].isHuman, true);
       expect(gs.players[1].isHuman, false);
@@ -132,14 +119,14 @@ void main() {
 
     test('game state has proper phase', () {
       final gs = _createTestGameState();
-      
+
       expect(gs.phase, GamePhase.playing);
       expect(gs.currentPlayerIndex, 0);
     });
 
     test('players have hands initialized', () {
       final gs = _createTestGameState();
-      
+
       for (var player in gs.players) {
         expect(player.hand.length, 4);
         expect(player.knownCards.length, 4);
@@ -173,7 +160,7 @@ void main() {
         ),
       );
       await tester.pump();
-      
+
       expect(find.byType(GameTableWidget), findsOneWidget);
     });
 
@@ -279,7 +266,7 @@ void main() {
         ),
       );
       await tester.pump();
-      
+
       expect(find.byType(CardWidget), findsOneWidget);
     });
 
@@ -293,7 +280,7 @@ void main() {
         ),
       );
       await tester.pump();
-      
+
       expect(find.byType(CardWidget), findsOneWidget);
     });
 
@@ -307,13 +294,13 @@ void main() {
         ),
       );
       await tester.pump();
-      
+
       expect(find.byType(CardWidget), findsOneWidget);
     });
 
     testWidgets('onTap callback works', (tester) async {
       int tapCount = 0;
-      
+
       await tester.pumpTestApp(
         CardWidget(
           card: PlayingCard.create('hearts', 'A'),
@@ -324,10 +311,10 @@ void main() {
         ),
       );
       await tester.pump();
-      
+
       await tester.tap(find.byType(CardWidget));
       await tester.pump();
-      
+
       expect(tapCount, 1);
     });
 
@@ -342,7 +329,7 @@ void main() {
           ),
         );
         await tester.pump();
-        
+
         expect(find.byType(CardWidget), findsOneWidget);
       }
     });
@@ -351,11 +338,12 @@ void main() {
 
 GameState _createTestGameState({int playerCount = 2}) {
   final players = <Player>[];
-  
+
   players.add(Player(id: 'human', name: 'Human', isHuman: true, position: 0));
-  
+
   for (int i = 1; i < playerCount; i++) {
-    players.add(Player(id: 'bot_$i', name: 'Bot $i', isHuman: false, position: i));
+    players
+        .add(Player(id: 'bot_$i', name: 'Bot $i', isHuman: false, position: i));
   }
 
   for (var player in players) {

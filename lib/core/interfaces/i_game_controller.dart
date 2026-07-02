@@ -49,9 +49,6 @@ abstract class IGameController implements Listenable {
   /// Pioche une carte du deck
   void drawCard();
 
-  /// Prend la carte du dessus de la défausse
-  void takeFromDiscard();
-
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTIONS DE JEU - Phase de remplacement/défausse
   // ═══════════════════════════════════════════════════════════════════════════

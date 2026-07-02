@@ -52,11 +52,6 @@ class GameActionsEmitter {
     _safeEmit('game:discard_card', {'roomCode': _roomCode});
   }
 
-  void takeFromDiscard() {
-    if (kDebugMode) debugPrint('♻️ Prend de la défausse');
-    _safeEmit('game:take_from_discard', {'roomCode': _roomCode});
-  }
-
   void callDutch() {
     if (kDebugMode) debugPrint('📢 DUTCH !');
     _safeEmit('game:call_dutch', {'roomCode': _roomCode});

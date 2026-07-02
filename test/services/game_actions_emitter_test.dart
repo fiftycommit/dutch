@@ -45,10 +45,6 @@ void main() {
         emitter.discardDrawnCard();
       });
 
-      test('takeFromDiscard does not crash with null socket', () {
-        emitter.takeFromDiscard();
-      });
-
       test('callDutch does not crash with null socket', () {
         emitter.callDutch();
       });
@@ -109,7 +105,6 @@ void main() {
         emitter.drawCard();
         emitter.replaceCard(0);
         emitter.discardDrawnCard();
-        emitter.takeFromDiscard();
         emitter.callDutch();
         emitter.attemptMatch(0);
         emitter.usePower7LookOwnCard(0);
