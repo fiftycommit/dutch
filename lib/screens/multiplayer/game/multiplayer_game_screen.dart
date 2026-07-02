@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, listEquals, mapEquals, setEquals;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -395,23 +396,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     maybeNavigateToEnd(gameState: gameState, routeLocation: routeLocation);
   }
 
-  Map<String, bool> _buildConnectionMap(MultiplayerGameProvider gp) {
-    final map = <String, bool>{};
-    for (final player in gp.gameState?.players ?? []) {
-      final presence = gp.presenceById[player.id];
-      map[player.id] = presence == null || presence['connected'] == true;
-    }
-    return map;
-  }
-
-  Map<String, bool> _buildAfkMap(MultiplayerGameProvider gp, GameState gs) {
-    final map = <String, bool>{};
-    for (final player in gs.players) {
-      map[player.id] = gp.isPlayerAfk(player.id);
-    }
-    return map;
-  }
-
   bool _connectionErrorDialogShown = false;
 
   Future<void> _showConnectionErrorDialog(
@@ -450,12 +434,14 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Consume MultiplayerGameProvider
     return PopScope(
       canPop: false,
-      child: Consumer<MultiplayerGameProvider>(
-        builder: (context, gameProvider, child) {
-          final gameState = gameProvider.gameState;
+      child: Selector<MultiplayerGameProvider, _MultiplayerGameScreenModel>(
+        selector: (_, gameProvider) =>
+            _MultiplayerGameScreenModel.from(gameProvider),
+        builder: (context, model, child) {
+          final gameProvider = context.read<MultiplayerGameProvider>();
+          final gameState = model.gameState;
 
           if (gameState == null) {
             return const Scaffold(
@@ -467,13 +453,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           }
 
           // Early returns pour états bloquants (dialogs déclenchés par le listener)
-          if (gameProvider.roomClosedByHost && _hostClosedDialogShown) {
+          if (model.roomClosedByHost && _hostClosedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
-          if (gameProvider.wasKicked && _kickedDialogShown) {
+          if (model.wasKicked && _kickedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
-          if (gameProvider.wasBanned && _bannedDialogShown) {
+          if (model.wasBanned && _bannedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
 
@@ -491,18 +477,17 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
               }
             },
             child: GamePauseScope(
-              isPaused: gameProvider.isPaused,
+              isPaused: model.isPaused,
               child: Scaffold(
                 backgroundColor: AppColors.gradientBottom,
                 body: Stack(
                   children: [
                     GameTableWidget(
                       gameState: gameState,
-                      isProcessing: gameProvider.isProcessing,
-                      shakingCardIndices:
-                          gameProvider.shakingCardIndices.toList(),
-                      isSpectator: !gameState.players.any((p) =>
-                          p.id == gameProvider.playerId && !p.isSpectator),
+                      isProcessing: model.isProcessing,
+                      shakingCardIndices: model.shakingCardIndices,
+                      isSpectator: !gameState.players
+                          .any((p) => p.id == model.playerId && !p.isSpectator),
                       callbacks: GameTableCallbacks.fromController(
                         context: context,
                         controller: gameProvider,
@@ -521,19 +506,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         });
                       },
                       multiplayerConfig: MultiplayerConfig(
-                        playerId: gameProvider.playerId,
-                        playerConnections: _buildConnectionMap(gameProvider),
-                        playerAfkStatus: _buildAfkMap(gameProvider, gameState),
+                        playerId: model.playerId,
+                        playerConnections: model.playerConnections,
+                        playerAfkStatus: model.playerAfkStatus,
                         turnStartTime: gameState.turnStartTime != null
                             ? gameState.turnStartTime! -
-                                gameProvider.serverTimeOffsetMs
+                                model.serverTimeOffsetMs
                             : null,
                         turnDuration: gameState.turnTimeoutMs,
-                        reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
-                        powerTargetPlayerIds: gameProvider.powerTargetPlayerIds,
+                        reactionTimeTotalMs: model.currentReactionTimeMs,
+                        powerTargetPlayerIds: model.powerTargetPlayerIds,
                       ),
-                      isPaused: gameProvider
-                          .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency
+                      isPaused: model.isPaused,
                     ),
 
                     // Room Code and Tournament Info Overlay
@@ -568,14 +552,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                                   gameState.gameMode == GameMode.tournament
                                       ? tournamentStageLabel(
                                           gameState.tournamentRound,
-                                          totalRounds: gameProvider
-                                              .tournamentTotalRounds,
+                                          totalRounds:
+                                              model.tournamentTotalRounds,
                                         )
                                       // Masquer le code pour les parties publiques
-                                      : (gameProvider.roomSettings?.isPublic ==
-                                              true
+                                      : (model.isPublicRoom == true
                                           ? "Partie publique"
-                                          : "Room: ${gameProvider.roomCode ?? '?'}"),
+                                          : "Room: ${model.roomCode ?? '?'}"),
                                   style: const TextStyle(
                                     color: Colors.amber,
                                     fontWeight: FontWeight.bold,
@@ -586,7 +569,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                             if (gameState.gameMode == GameMode.tournament) ...[
                               const SizedBox(height: 2),
                               Text(
-                                "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
+                                "Manches restantes : ${(model.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
                                 style: const TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 11,
@@ -608,7 +591,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     if (gameState.phase == GamePhase.specialPower)
                       _buildSpecialPowerOverlay(gameProvider, gameState),
 
-                    if (gameProvider.isProcessing)
+                    if (model.isProcessing)
                       const Positioned(
                         top: 20,
                         right: 60,
@@ -620,14 +603,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       ),
 
                     // Notification: joueur a quitté
-                    if (gameProvider.playerLeftNotification)
-                      GameOverlays.playerLeftBanner(
-                          gameProvider.lastPlayerLeftName),
+                    if (model.playerLeftNotification)
+                      GameOverlays.playerLeftBanner(model.lastPlayerLeftName),
 
                     // Notification: pouvoir spécial utilisé sur nous
-                    if (gameProvider.specialPowerNotification)
-                      GameOverlays.specialPowerBanner(
-                          gameProvider.specialPowerByName),
+                    if (model.specialPowerNotification)
+                      GameOverlays.specialPowerBanner(model.specialPowerByName),
 
                     // Boutons en haut à droite
                     Positioned(
@@ -662,21 +643,21 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     ),
 
                     // Indicateur de reconnexion silencieuse
-                    if (gameProvider.isSilentReconnecting)
+                    if (model.isSilentReconnecting)
                       GameOverlays.reconnectingBanner(),
 
-                    if (gameProvider.isPaused)
+                    if (model.isPaused)
                       GameOverlays.pauseOverlay(
-                        pausedByName: gameProvider.pausedByName,
+                        pausedByName: model.pausedByName,
                         onResume: gameProvider.resumeGame,
-                        isLocalPauser: gameProvider.isLocalPauser,
-                        pauseDeadlineMs: gameProvider.pauseDeadlineMs,
+                        isLocalPauser: model.isLocalPauser,
+                        pauseDeadlineMs: model.pauseDeadlineMs,
                       ),
 
                     PresenceCheckOverlay(
-                      active: gameProvider.presenceCheckActive,
-                      deadlineMs: gameProvider.presenceCheckDeadlineMs,
-                      reason: gameProvider.presenceCheckReason,
+                      active: model.presenceCheckActive,
+                      deadlineMs: model.presenceCheckDeadlineMs,
+                      reason: model.presenceCheckReason,
                       onConfirm: gameProvider.confirmPresence,
                       onAbandon: () {
                         gameProvider.confirmPresence(); // Clear the check first
@@ -826,4 +807,190 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       });
     }
   }
+}
+
+class _MultiplayerGameScreenModel {
+  final GameState? gameState;
+  final bool roomClosedByHost;
+  final bool wasKicked;
+  final bool wasBanned;
+  final bool isProcessing;
+  final List<int> shakingCardIndices;
+  final String? playerId;
+  final Map<String, bool> playerConnections;
+  final Map<String, bool> playerAfkStatus;
+  final int serverTimeOffsetMs;
+  final int currentReactionTimeMs;
+  final Set<String> powerTargetPlayerIds;
+  final bool isPaused;
+  final String? pausedByName;
+  final bool isLocalPauser;
+  final int pauseDeadlineMs;
+  final int tournamentTotalRounds;
+  final bool? isPublicRoom;
+  final String? roomCode;
+  final bool playerLeftNotification;
+  final String? lastPlayerLeftName;
+  final bool specialPowerNotification;
+  final String? specialPowerByName;
+  final bool isSilentReconnecting;
+  final bool presenceCheckActive;
+  final int presenceCheckDeadlineMs;
+  final String? presenceCheckReason;
+
+  const _MultiplayerGameScreenModel({
+    required this.gameState,
+    required this.roomClosedByHost,
+    required this.wasKicked,
+    required this.wasBanned,
+    required this.isProcessing,
+    required this.shakingCardIndices,
+    required this.playerId,
+    required this.playerConnections,
+    required this.playerAfkStatus,
+    required this.serverTimeOffsetMs,
+    required this.currentReactionTimeMs,
+    required this.powerTargetPlayerIds,
+    required this.isPaused,
+    required this.pausedByName,
+    required this.isLocalPauser,
+    required this.pauseDeadlineMs,
+    required this.tournamentTotalRounds,
+    required this.isPublicRoom,
+    required this.roomCode,
+    required this.playerLeftNotification,
+    required this.lastPlayerLeftName,
+    required this.specialPowerNotification,
+    required this.specialPowerByName,
+    required this.isSilentReconnecting,
+    required this.presenceCheckActive,
+    required this.presenceCheckDeadlineMs,
+    required this.presenceCheckReason,
+  });
+
+  factory _MultiplayerGameScreenModel.from(MultiplayerGameProvider provider) {
+    final gameState = provider.gameState;
+    final shakingCardIndices = provider.shakingCardIndices.toList()..sort();
+    final powerTargetPlayerIds = provider.powerTargetPlayerIds;
+
+    return _MultiplayerGameScreenModel(
+      gameState: gameState,
+      roomClosedByHost: provider.roomClosedByHost,
+      wasKicked: provider.wasKicked,
+      wasBanned: provider.wasBanned,
+      isProcessing: provider.isProcessing,
+      shakingCardIndices: shakingCardIndices,
+      playerId: provider.playerId,
+      playerConnections: _buildConnectionMap(provider, gameState),
+      playerAfkStatus: _buildAfkMap(provider, gameState),
+      serverTimeOffsetMs: provider.serverTimeOffsetMs,
+      currentReactionTimeMs: provider.currentReactionTimeMs,
+      powerTargetPlayerIds: powerTargetPlayerIds,
+      isPaused: provider.isPaused,
+      pausedByName: provider.pausedByName,
+      isLocalPauser: provider.isLocalPauser,
+      pauseDeadlineMs: provider.pauseDeadlineMs,
+      tournamentTotalRounds: provider.tournamentTotalRounds,
+      isPublicRoom: provider.roomSettings?.isPublic,
+      roomCode: provider.roomCode,
+      playerLeftNotification: provider.playerLeftNotification,
+      lastPlayerLeftName: provider.lastPlayerLeftName,
+      specialPowerNotification: provider.specialPowerNotification,
+      specialPowerByName: provider.specialPowerByName,
+      isSilentReconnecting: provider.isSilentReconnecting,
+      presenceCheckActive: provider.presenceCheckActive,
+      presenceCheckDeadlineMs: provider.presenceCheckDeadlineMs,
+      presenceCheckReason: provider.presenceCheckReason,
+    );
+  }
+
+  static Map<String, bool> _buildConnectionMap(
+    MultiplayerGameProvider provider,
+    GameState? gameState,
+  ) {
+    final map = <String, bool>{};
+    for (final player in gameState?.players ?? []) {
+      final presence = provider.presenceById[player.id];
+      map[player.id] = presence == null || presence['connected'] == true;
+    }
+    return map;
+  }
+
+  static Map<String, bool> _buildAfkMap(
+    MultiplayerGameProvider provider,
+    GameState? gameState,
+  ) {
+    final map = <String, bool>{};
+    for (final player in gameState?.players ?? []) {
+      map[player.id] = provider.isPlayerAfk(player.id);
+    }
+    return map;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MultiplayerGameScreenModel &&
+        identical(gameState, other.gameState) &&
+        roomClosedByHost == other.roomClosedByHost &&
+        wasKicked == other.wasKicked &&
+        wasBanned == other.wasBanned &&
+        isProcessing == other.isProcessing &&
+        listEquals(shakingCardIndices, other.shakingCardIndices) &&
+        playerId == other.playerId &&
+        mapEquals(playerConnections, other.playerConnections) &&
+        mapEquals(playerAfkStatus, other.playerAfkStatus) &&
+        serverTimeOffsetMs == other.serverTimeOffsetMs &&
+        currentReactionTimeMs == other.currentReactionTimeMs &&
+        setEquals(powerTargetPlayerIds, other.powerTargetPlayerIds) &&
+        isPaused == other.isPaused &&
+        pausedByName == other.pausedByName &&
+        isLocalPauser == other.isLocalPauser &&
+        pauseDeadlineMs == other.pauseDeadlineMs &&
+        tournamentTotalRounds == other.tournamentTotalRounds &&
+        isPublicRoom == other.isPublicRoom &&
+        roomCode == other.roomCode &&
+        playerLeftNotification == other.playerLeftNotification &&
+        lastPlayerLeftName == other.lastPlayerLeftName &&
+        specialPowerNotification == other.specialPowerNotification &&
+        specialPowerByName == other.specialPowerByName &&
+        isSilentReconnecting == other.isSilentReconnecting &&
+        presenceCheckActive == other.presenceCheckActive &&
+        presenceCheckDeadlineMs == other.presenceCheckDeadlineMs &&
+        presenceCheckReason == other.presenceCheckReason;
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+        identityHashCode(gameState),
+        roomClosedByHost,
+        wasKicked,
+        wasBanned,
+        isProcessing,
+        Object.hashAll(shakingCardIndices),
+        playerId,
+        Object.hashAll(playerConnections.entries.map(
+          (entry) => Object.hash(entry.key, entry.value),
+        )),
+        Object.hashAll(playerAfkStatus.entries.map(
+          (entry) => Object.hash(entry.key, entry.value),
+        )),
+        serverTimeOffsetMs,
+        currentReactionTimeMs,
+        Object.hashAll(powerTargetPlayerIds),
+        isPaused,
+        pausedByName,
+        isLocalPauser,
+        pauseDeadlineMs,
+        tournamentTotalRounds,
+        isPublicRoom,
+        roomCode,
+        playerLeftNotification,
+        lastPlayerLeftName,
+        specialPowerNotification,
+        specialPowerByName,
+        isSilentReconnecting,
+        presenceCheckActive,
+        presenceCheckDeadlineMs,
+        presenceCheckReason,
+      ]);
 }
