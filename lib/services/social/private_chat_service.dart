@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,6 +13,15 @@ import 'chat_crypto_service.dart';
 import '../network/secure_api_headers.dart';
 
 enum ChatMessageType { text, image, audio }
+
+/// Échec d'un envoi média (timeout, annulation, ou erreur Storage) — remonté à
+/// l'UI pour affichage explicite, jamais silencieux.
+class MediaUploadException implements Exception {
+  final String message;
+  const MediaUploadException(this.message);
+  @override
+  String toString() => message;
+}
 
 class ChatMessage {
   final String id;
@@ -95,15 +105,26 @@ class PrivateChatService {
   static const _encryptedMessageUnavailable = 'Message chiffré indisponible';
   static const Duration _notificationTimeout = Duration(seconds: 5);
 
+  /// Plafond d'un envoi média. Plus large que les timeouts de contrôle (clé/
+  /// notification à 5 s) car un transfert d'image/audio est plus lourd, mais
+  /// borné pour ne jamais pendre indéfiniment sur réseau dégradé.
+  final Duration _mediaUploadTimeout;
+
+  /// Uploads média en cours (pour annulation quand l'utilisateur quitte l'écran).
+  final Set<UploadTask> _activeUploads = {};
+
   PrivateChatService({
     FirebaseFirestore? db,
     FirebaseStorage? storage,
     ChatCryptoService? crypto,
     http.Client? httpClient,
+    Duration? mediaUploadTimeout,
   })  : _injectedDb = db,
         _injectedStorage = storage,
         _crypto = crypto ?? ChatCryptoService(),
-        _httpClient = httpClient ?? http.Client();
+        _httpClient = httpClient ?? http.Client(),
+        _mediaUploadTimeout =
+            mediaUploadTimeout ?? const Duration(seconds: 30);
 
   FirebaseFirestore get _db => _injectedDb ?? FirebaseFirestore.instance;
   FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
@@ -254,14 +275,70 @@ class PrivateChatService {
     );
   }
 
-  Future<void> sendImageBytes(
-      String cId, String senderId, List<int> bytes) async {
+  /// Exécute un upload borné : reporte la progression (0..1), applique le
+  /// plafond média — en ANNULANT la tâche au dépassement pour ne pas la laisser
+  /// tourner en arrière-plan — puis renvoie l'URL de téléchargement. Toute
+  /// erreur/timeout devient une [MediaUploadException] visible (pas de silence,
+  /// pas de fallback dégradé).
+  Future<String> _runBoundedUpload(
+    UploadTask task, {
+    void Function(double progress)? onProgress,
+  }) async {
+    _activeUploads.add(task);
+    StreamSubscription<TaskSnapshot>? sub;
+    if (onProgress != null) {
+      sub = task.snapshotEvents.listen((snap) {
+        final total = snap.totalBytes;
+        if (total > 0) {
+          onProgress((snap.bytesTransferred / total).clamp(0.0, 1.0));
+        }
+      }, onError: (_) {});
+    }
+    try {
+      final snapshot = await task.timeout(
+        _mediaUploadTimeout,
+        onTimeout: () {
+          unawaited(task.cancel());
+          throw const MediaUploadException('Envoi média expiré');
+        },
+      );
+      return await snapshot.ref.getDownloadURL().timeout(_mediaUploadTimeout);
+    } on MediaUploadException {
+      rethrow;
+    } on TimeoutException {
+      unawaited(task.cancel());
+      throw const MediaUploadException('Envoi média expiré');
+    } on FirebaseException catch (e) {
+      throw MediaUploadException(
+          e.code == 'canceled' ? 'Envoi média annulé' : 'Échec envoi média');
+    } finally {
+      await sub?.cancel();
+      _activeUploads.remove(task);
+    }
+  }
+
+  /// Annule tous les envois média en cours. À appeler à la fermeture de l'écran
+  /// de chat pour ne pas laisser un upload pendre indéfiniment en arrière-plan.
+  Future<void> cancelActiveMediaUploads() async {
+    final pending = List<UploadTask>.of(_activeUploads);
+    _activeUploads.clear();
+    for (final task in pending) {
+      try {
+        await task.cancel();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> sendImageBytes(String cId, String senderId, List<int> bytes,
+      {void Function(double progress)? onProgress}) async {
     final ref = _storage
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await ref.putData(
-        Uint8List.fromList(bytes), SettableMetadata(contentType: 'image/jpeg'));
-    final url = await ref.getDownloadURL();
+    final url = await _runBoundedUpload(
+      ref.putData(Uint8List.fromList(bytes),
+          SettableMetadata(contentType: 'image/jpeg')),
+      onProgress: onProgress,
+    );
     await _messages(cId).add({
       'senderId': senderId,
       'type': 'image',
@@ -271,12 +348,15 @@ class PrivateChatService {
     });
   }
 
-  Future<void> sendImage(String cId, String senderId, File imageFile) async {
+  Future<void> sendImage(String cId, String senderId, File imageFile,
+      {void Function(double progress)? onProgress}) async {
     final ref = _storage
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await ref.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg'));
-    final url = await ref.getDownloadURL();
+    final url = await _runBoundedUpload(
+      ref.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg')),
+      onProgress: onProgress,
+    );
     await _messages(cId).add({
       'senderId': senderId,
       'type': 'image',
@@ -288,12 +368,15 @@ class PrivateChatService {
 
   Future<void> sendAudio(
       String cId, String senderId, File audioFile, int durationMs,
-      {List<double>? waveform}) async {
+      {List<double>? waveform,
+      void Function(double progress)? onProgress}) async {
     final ref = _storage
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
-    await ref.putFile(audioFile, SettableMetadata(contentType: 'audio/m4a'));
-    final url = await ref.getDownloadURL();
+    final url = await _runBoundedUpload(
+      ref.putFile(audioFile, SettableMetadata(contentType: 'audio/m4a')),
+      onProgress: onProgress,
+    );
     await _messages(cId).add({
       'senderId': senderId,
       'type': 'audio',
@@ -308,13 +391,16 @@ class PrivateChatService {
   /// Web uniquement : fetch le blob URL et upload les bytes vers Firebase Storage.
   Future<void> sendAudioFromUrl(
       String cId, String senderId, String blobUrl, int durationMs,
-      {List<double>? waveform}) async {
+      {List<double>? waveform,
+      void Function(double progress)? onProgress}) async {
     final bytes = await _fetchBytes(blobUrl);
     final ref = _storage
         .ref()
         .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
-    await ref.putData(bytes, SettableMetadata(contentType: 'audio/m4a'));
-    final url = await ref.getDownloadURL();
+    final url = await _runBoundedUpload(
+      ref.putData(bytes, SettableMetadata(contentType: 'audio/m4a')),
+      onProgress: onProgress,
+    );
     await _messages(cId).add({
       'senderId': senderId,
       'type': 'audio',
@@ -327,7 +413,8 @@ class PrivateChatService {
   }
 
   Future<Uint8List> _fetchBytes(String url) async {
-    final response = await _httpClient.get(Uri.parse(url));
+    final response =
+        await _httpClient.get(Uri.parse(url)).timeout(_mediaUploadTimeout);
     return response.bodyBytes;
   }
 
