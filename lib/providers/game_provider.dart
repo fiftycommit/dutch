@@ -800,27 +800,32 @@ class GameProvider with ChangeNotifier implements IGameController {
     isProcessing = true;
     notifyListeners();
 
-    await _botOrchestrator.playBotTurn(
-      _gameState!,
-      _playerMMR,
-      _isPaused,
-      _currentContext,
-      () async => _checkInstantEnd(),
-      hardcoreLevel: _hardcoreLevel,
-      playerSkillEstimate: _skillEstimator.estimatedSkill,
-      onStateChanged: () {
-        if (_gameState == null) return;
-        notifyListeners();
-      },
-    );
+    try {
+      await _botOrchestrator.playBotTurn(
+        _gameState!,
+        _playerMMR,
+        _isPaused,
+        _currentContext,
+        () async => _checkInstantEnd(),
+        hardcoreLevel: _hardcoreLevel,
+        playerSkillEstimate: _skillEstimator.estimatedSkill,
+        onStateChanged: () {
+          if (_gameState == null) return;
+          notifyListeners();
+        },
+      );
 
-    if (_gameState?.phase == GamePhase.dutchCalled) {
-      endGame();
-      return;
+      if (_gameState?.phase == GamePhase.dutchCalled) {
+        endGame();
+        return;
+      }
+    } finally {
+      if (isProcessing) {
+        isProcessing = false;
+        notifyListeners();
+      }
     }
 
-    isProcessing = false;
-    notifyListeners();
     if (_gameState?.phase == GamePhase.playing) {
       if (_currentActionTextDisplayMs > 0) {
         await Future.delayed(
@@ -862,6 +867,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void endGame() {
     if (_gameState == null) return;
+    isProcessing = false;
     _hapticService.success();
     _clearActiveGameFlag();
     _gameState!.phase = GamePhase.ended;

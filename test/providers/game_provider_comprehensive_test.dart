@@ -528,6 +528,17 @@ void main() {
       provider.handleCardTap(0);
       // Should not throw or modify state
     });
+
+    test('bot Dutch call resets isProcessing', () async {
+      _setupGameWithBotTurn(provider);
+      mockBotAI.callDutchOnPlay = true;
+
+      provider.resumeGame();
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      expect(provider.gameState!.phase, GamePhase.ended);
+      expect(provider.isProcessing, false);
+    });
   });
 
   group('GameProvider - Special Powers', () {

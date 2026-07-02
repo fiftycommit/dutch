@@ -136,7 +136,8 @@ class MockStatsService implements IStatsService {
   List<Map<String, dynamic>> aiTelemetryRecords = [];
 
   @override
-  Future<void> recordAiTelemetry(Map<String, dynamic> telemetry, {int slotId = 1}) async {
+  Future<void> recordAiTelemetry(Map<String, dynamic> telemetry,
+      {int slotId = 1}) async {
     aiTelemetryRecords.add(telemetry);
   }
 }
@@ -147,6 +148,7 @@ class MockBotAIService implements IBotAIService {
   int tryReactionMatchCount = 0;
   int useBotSpecialPowerCount = 0;
   bool reactionMatchResult = false;
+  bool callDutchOnPlay = false;
 
   @override
   Future<void> playBotTurn(
@@ -157,6 +159,10 @@ class MockBotAIService implements IBotAIService {
     int? playerSkillEstimate,
   }) async {
     playBotTurnCount++;
+    if (callDutchOnPlay) {
+      gameState.dutchCallerId = gameState.currentPlayer.id;
+      gameState.phase = GamePhase.dutchCalled;
+    }
   }
 
   @override
@@ -187,5 +193,6 @@ class MockBotAIService implements IBotAIService {
     tryReactionMatchCount = 0;
     useBotSpecialPowerCount = 0;
     reactionMatchResult = false;
+    callDutchOnPlay = false;
   }
 }
