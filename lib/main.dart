@@ -24,6 +24,7 @@ import 'providers/auth_provider.dart';
 import 'router/app_router.dart';
 import 'services/multiplayer/client_id_service.dart';
 import 'services/logging/error_reporting_service.dart';
+import 'services/network/network_probe_service.dart';
 import 'services/notifications/in_app_notification_service.dart';
 import 'services/push/push_notification_service.dart';
 import 'utils/ui_constants.dart';
@@ -31,6 +32,11 @@ import 'widgets/notifications/notification_overlay_controller.dart';
 
 /// Global navigator key for legacy code compatibility (bot_ai.dart)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+const Duration _startupNetworkProbeTimeout = Duration(milliseconds: 700);
+const Duration _firebaseStartupTimeout = Duration(seconds: 3);
+const Duration _appCheckStartupTimeout = Duration(seconds: 2);
+const Duration _authPersistenceStartupTimeout = Duration(seconds: 2);
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -55,32 +61,18 @@ void main() {
         FlutterError.presentError(details);
       }
     };
-    // Lancer Firebase et l'orientation en parallèle (non séquentiel)
-    await Future.wait([
-      Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ),
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]),
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
     ]);
 
-    try {
-      await activateFirebaseAppCheck();
-    } catch (error, stackTrace) {
-      errorService.reportZoneError(error, stackTrace);
+    final firebaseReady = await _bootstrapFirebaseForStartup(errorService);
+    if (firebaseReady) {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     }
-
-    // Sur macOS natif, ignorer les erreurs Keychain (ad-hoc signing)
-    // setPersistence n'est supporté que sur le web
-    if (kIsWeb) {
-      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-    }
-
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Initialiser le service locator avec tous les services
     ServiceLocator.setupDefaultServices();
@@ -101,6 +93,66 @@ void main() {
   }, (error, stackTrace) {
     errorService.reportZoneError(error, stackTrace);
   });
+}
+
+Future<bool> _bootstrapFirebaseForStartup(
+  ErrorReportingService errorService,
+) async {
+  final canReachBackend = await NetworkProbeService.canReachBackend(
+    timeout: _startupNetworkProbeTimeout,
+  ).timeout(
+    _startupNetworkProbeTimeout + const Duration(milliseconds: 250),
+    onTimeout: () => false,
+  );
+
+  if (!canReachBackend) {
+    if (kDebugMode) {
+      debugPrint('⚠️ Démarrage offline: Firebase différé.');
+    }
+    return false;
+  }
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(_firebaseStartupTimeout);
+  } catch (error, stackTrace) {
+    errorService.report(
+      error,
+      stackTrace: stackTrace,
+      context: 'Démarrage Firebase',
+      severity: ErrorSeverity.warning,
+    );
+    return false;
+  }
+
+  try {
+    await activateFirebaseAppCheck().timeout(_appCheckStartupTimeout);
+  } catch (error, stackTrace) {
+    errorService.report(
+      error,
+      stackTrace: stackTrace,
+      context: 'Démarrage App Check',
+      severity: ErrorSeverity.warning,
+    );
+  }
+
+  if (kIsWeb) {
+    try {
+      await FirebaseAuth.instance
+          .setPersistence(Persistence.LOCAL)
+          .timeout(_authPersistenceStartupTimeout);
+    } catch (error, stackTrace) {
+      errorService.report(
+        error,
+        stackTrace: stackTrace,
+        context: 'Démarrage Auth persistence',
+        severity: ErrorSeverity.warning,
+      );
+    }
+  }
+
+  return true;
 }
 
 ThemeData _buildLightTheme() => ThemeData(
