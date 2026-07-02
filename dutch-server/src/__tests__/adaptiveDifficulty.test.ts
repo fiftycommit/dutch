@@ -1,12 +1,21 @@
-import { describe, it, before } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { AdaptiveDifficultyService } from '../services/AdaptiveDifficultyService';
 
 describe('AdaptiveDifficultyService', () => {
   let service: AdaptiveDifficultyService;
+  let dataDir: string;
 
   before(() => {
-    service = new AdaptiveDifficultyService();
+    dataDir = mkdtempSync(path.join(tmpdir(), 'dutch-adaptive-test-'));
+    service = new AdaptiveDifficultyService(dataDir);
+  });
+
+  after(() => {
+    rmSync(dataDir, { recursive: true, force: true });
   });
 
   describe('constructor and basic getters', () => {

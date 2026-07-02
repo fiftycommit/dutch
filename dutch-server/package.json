@@ -7,8 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "test": "npm run build && node --test-concurrency=1 --test dist/__tests__/*.test.js",
-    "test:coverage": "npm run build && c8 --all --src src --exclude-after-remap --exclude 'src/__tests__/**' --reports-dir coverage --reporter=lcov --reporter=text node --enable-source-maps --test-force-exit --test-concurrency=1 --test dist/__tests__/*.test.js"
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "test": "npm run clean && npm run build && node --test-concurrency=1 --test dist/__tests__/*.test.js",
+    "test:coverage": "npm run clean && npm run build && c8 --all --src src --exclude-after-remap --exclude 'src/__tests__/**' --reports-dir coverage --reporter=lcov --reporter=text node --enable-source-maps --test-force-exit --test-concurrency=1 --test dist/__tests__/*.test.js"
   },
   "keywords": [],
   "author": "",
