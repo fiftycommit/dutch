@@ -27,6 +27,7 @@ class _FakeMultiProvider extends ChangeNotifier
 
   GameState? _gameState;
   int _presenceDeadline = 0;
+  int _reactionMs = 0;
 
   final StreamController<GameEvent> _events =
       StreamController<GameEvent>.broadcast();
@@ -36,6 +37,13 @@ class _FakeMultiProvider extends ChangeNotifier
   /// Simule un tick du compte à rebours de présence (champ d'overlay isolé).
   void tickPresence() {
     _presenceDeadline += 1000;
+    notifyListeners();
+  }
+
+  /// Simule un tick du timer de réaction (currentReactionTimeMs, ~30 ms) —
+  /// champ qui alimente GameTableWidget mais aucun overlay.
+  void tickReaction() {
+    _reactionMs += 30;
     notifyListeners();
   }
 
@@ -88,7 +96,7 @@ class _FakeMultiProvider extends ChangeNotifier
   @override
   int get serverTimeOffsetMs => 0;
   @override
-  int get currentReactionTimeMs => 0;
+  int get currentReactionTimeMs => _reactionMs;
   @override
   Set<String> get powerTargetPlayerIds => const {};
   @override
@@ -248,5 +256,25 @@ void main() {
 
     expect(RebuildProbe.countFor('gametable'), 3,
         reason: 'GameTableWidget doit se reconstruire sur une vraie action');
+  });
+
+  testWidgets(
+      'un tick du timer de réaction reconstruit GameTableWidget mais PAS '
+      'l\'overlay code salon (30 ms => 30 fps de rebuilds évités)',
+      (tester) async {
+    final provider = await pumpScreen(tester);
+
+    RebuildProbe.reset();
+    for (var i = 0; i < 5; i++) {
+      provider.tickReaction();
+      await tester.pump();
+    }
+
+    expect(RebuildProbe.countFor('gametable'), 5,
+        reason: 'GameTableWidget affiche le timer de réaction');
+    expect(RebuildProbe.countFor('roomcode'), 0,
+        reason: 'le code salon ne dépend pas du timer de réaction');
+    expect(RebuildProbe.countFor('presence'), 0);
+    expect(RebuildProbe.countFor('buttons'), 0);
   });
 }
