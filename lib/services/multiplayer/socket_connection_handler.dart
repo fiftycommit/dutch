@@ -17,7 +17,13 @@ enum SocketConnectionState {
 /// Gère la connexion Socket.IO, reconnexion et ping
 /// Principe GRASP: Information Expert - Gère tout ce qui concerne la connexion
 class SocketConnectionHandler {
-  static const String serverUrl = 'https://dutch-game.me';
+  // Prod par défaut ; surchargeable en dev/test local (émulateurs) via
+  // --dart-define=DEV_SERVER_URL=http://localhost:3000. La prod ne définit pas
+  // cette variable et garde donc l'URL de production.
+  static const String serverUrl = String.fromEnvironment(
+    'DEV_SERVER_URL',
+    defaultValue: 'https://dutch-game.me',
+  );
   static const int _maxReconnectAttempts = 5;
 
   io.Socket? _socket;

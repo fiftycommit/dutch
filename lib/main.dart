@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/service_locator.dart';
@@ -36,6 +38,25 @@ import 'widgets/notifications/notification_overlay_controller.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 const Duration _startupNetworkProbeTimeout = Duration(milliseconds: 700);
+
+/// Dev/test local uniquement : router Auth/Firestore/Storage vers les émulateurs
+/// Firebase (voir firebase.json). Activé par
+/// --dart-define=USE_FIREBASE_EMULATOR=true. La prod ne définit pas ces vars.
+const bool _useFirebaseEmulator =
+    bool.fromEnvironment('USE_FIREBASE_EMULATOR');
+const String _firebaseEmulatorHost =
+    String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: 'localhost');
+
+Future<void> _useFirebaseEmulatorsIfConfigured() async {
+  if (!_useFirebaseEmulator) return;
+  await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
+  FirebaseFirestore.instance.useFirestoreEmulator(_firebaseEmulatorHost, 8089);
+  await FirebaseStorage.instance.useStorageEmulator(_firebaseEmulatorHost, 9199);
+  if (kDebugMode) {
+    debugPrint('🧪 Émulateurs Firebase actifs sur $_firebaseEmulatorHost '
+        '(auth 9099 / firestore 8089 / storage 9199)');
+  }
+}
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -106,9 +127,12 @@ Future<bool> _bootstrapFirebaseForStartup(
       _startupNetworkProbeTimeout + const Duration(milliseconds: 250),
       onTimeout: () => false,
     ),
-    initializeApp: () => Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ),
+    initializeApp: () async {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      await _useFirebaseEmulatorsIfConfigured();
+    },
     activateAppCheck: activateFirebaseAppCheck,
     setAuthPersistence: kIsWeb
         ? () => FirebaseAuth.instance.setPersistence(Persistence.LOCAL)

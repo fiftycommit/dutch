@@ -2,8 +2,15 @@ import { auth as firebaseAuth } from './FirebaseAdmin';
 import { firestoreService, FirestoreUser } from './FirestoreService';
 import { ValidationService } from './ValidationService';
 
-const FIREBASE_PASSWORD_SIGN_IN_URL =
-  'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword';
+// En mode émulateur (dev/test local), l'Identity Toolkit est servi par
+// l'émulateur Auth (FIREBASE_AUTH_EMULATOR_HOST) au lieu de Google.
+function passwordSignInUrl(): string {
+  const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  if (emulatorHost) {
+    return `http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword`;
+  }
+  return 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword';
+}
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
 
 interface FirebaseUserRecordLike {
@@ -78,7 +85,10 @@ export class PasswordAuthService {
     adminAuth = firebaseAuth,
     firestore = firestoreService,
     fetchImpl = fetch,
-    apiKey = process.env.FIREBASE_WEB_API_KEY || '',
+    // En mode émulateur, l'API key n'est pas vérifiée : une valeur factice
+    // suffit pour que la requête REST parte vers l'émulateur.
+    apiKey = process.env.FIREBASE_WEB_API_KEY
+      || (process.env.FIREBASE_AUTH_EMULATOR_HOST ? 'emulator-fake-api-key' : ''),
   }: PasswordAuthServiceDeps = {}) {
     this.adminAuth = adminAuth;
     this.firestore = firestore;
@@ -285,7 +295,7 @@ export class PasswordAuthService {
     }
 
     const response = await this.fetchImpl(
-      `${FIREBASE_PASSWORD_SIGN_IN_URL}?key=${encodeURIComponent(this.apiKey)}`,
+      `${passwordSignInUrl()}?key=${encodeURIComponent(this.apiKey)}`,
       {
         method: 'POST',
         headers,

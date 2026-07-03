@@ -12,6 +12,23 @@ function initFirebase(): void {
         return;
     }
 
+    // 0. Émulateurs Firebase (dev/test local uniquement). Détectés via les
+    //    variables d'env standard posées par `firebase emulators:exec/start`
+    //    (FIREBASE_AUTH_EMULATOR_HOST / FIRESTORE_EMULATOR_HOST). Le SDK Admin
+    //    route alors Auth/Firestore vers les émulateurs et n'exige AUCUNE vraie
+    //    clé de service. Ne concerne jamais la prod (ces vars n'y sont pas).
+    if (process.env.FIREBASE_AUTH_EMULATOR_HOST
+        || process.env.FIRESTORE_EMULATOR_HOST) {
+        admin.initializeApp({
+            projectId: process.env.GCLOUD_PROJECT
+                || process.env.FIREBASE_PROJECT_ID
+                || 'dutch-game-1dd01',
+        });
+        initialized = true;
+        console.log('🧪 Firebase Admin initialisé (ÉMULATEURS locaux)');
+        return;
+    }
+
     // 1. Variable d'environnement (Production — injectée par PM2/GitHub Actions)
     if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
         try {
