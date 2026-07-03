@@ -213,7 +213,8 @@ void main() {
   }
 
   testWidgets(
-      'BASELINE : un tick de présence reconstruit tout le corps de l\'écran',
+      'un tick de présence ne reconstruit NI le corps NI GameTableWidget NI '
+      'les boutons — seulement la zone présence',
       (tester) async {
     final provider = await pumpScreen(tester);
 
@@ -223,27 +224,29 @@ void main() {
       await tester.pump();
     }
 
-    // Avant découpage : le corps entier (screen_body) rebuild à chaque tick,
-    // alors que presenceCheckDeadlineMs ne concerne que l'overlay de présence.
-    expect(RebuildProbe.countFor('screen_body'), 5);
+    // presenceCheckDeadlineMs a été sorti du modèle du corps : un tick ne
+    // reconstruit plus que la zone présence isolée.
+    expect(RebuildProbe.countFor('gametable'), 0,
+        reason: 'GameTableWidget ne dépend pas du compte à rebours de présence');
+    expect(RebuildProbe.countFor('screen_body'), 0);
+    expect(RebuildProbe.countFor('buttons'), 0);
+    expect(RebuildProbe.countFor('presence'), 5,
+        reason: 'seule la zone présence réagit à ses propres champs');
   });
 
   testWidgets(
-      'la barre de boutons ne rebuild PAS sur un tick de présence (isolée)',
+      'un changement de gameState reconstruit bien GameTableWidget (le vrai '
+      'contenu doit rester à jour)',
       (tester) async {
     final provider = await pumpScreen(tester);
 
     RebuildProbe.reset();
-    for (var i = 0; i < 5; i++) {
-      provider.tickPresence();
+    for (var i = 0; i < 3; i++) {
+      provider.pushGameState(_multiState()); // nouvelle instance = action de jeu
       await tester.pump();
     }
 
-    // Le corps monolithe rebuild encore (découpage des autres zones à suivre),
-    // mais la barre de boutons, isolée derrière un Selector constant, ne se
-    // reconstruit plus du tout.
-    expect(RebuildProbe.countFor('screen_body'), 5);
-    expect(RebuildProbe.countFor('buttons'), 0,
-        reason: 'les boutons ne dépendent d\'aucun champ provider');
+    expect(RebuildProbe.countFor('gametable'), 3,
+        reason: 'GameTableWidget doit se reconstruire sur une vraie action');
   });
 }

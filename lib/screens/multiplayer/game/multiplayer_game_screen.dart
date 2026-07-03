@@ -445,8 +445,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.emoji_emotions,
-                color: Colors.amber, size: 32),
+            icon:
+                const Icon(Icons.emoji_emotions, color: Colors.amber, size: 32),
             onPressed: () {
               setState(() {
                 _showEmoteOverlay = true;
@@ -522,43 +522,46 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 backgroundColor: AppColors.gradientBottom,
                 body: Stack(
                   children: [
-                    GameTableWidget(
-                      gameState: gameState,
-                      isProcessing: model.isProcessing,
-                      shakingCardIndices: model.shakingCardIndices,
-                      isSpectator: !gameState.players
-                          .any((p) => p.id == model.playerId && !p.isSpectator),
-                      callbacks: GameTableCallbacks.fromController(
-                        context: context,
-                        controller: gameProvider,
-                        onOpponentCardTap: (opponentIndex, cardIndex) {
-                          gameProvider.sendSpecialPowerTargetSelection(
-                              opponentIndex, null, null, null);
-                          gameProvider.usePower10SpyOpponent(
-                              opponentIndex, cardIndex);
+                    Builder(builder: (context) {
+                      RebuildProbe.bump('gametable');
+                      return GameTableWidget(
+                        gameState: gameState,
+                        isProcessing: model.isProcessing,
+                        shakingCardIndices: model.shakingCardIndices,
+                        isSpectator: !gameState.players.any(
+                            (p) => p.id == model.playerId && !p.isSpectator),
+                        callbacks: GameTableCallbacks.fromController(
+                          context: context,
+                          controller: gameProvider,
+                          onOpponentCardTap: (opponentIndex, cardIndex) {
+                            gameProvider.sendSpecialPowerTargetSelection(
+                                opponentIndex, null, null, null);
+                            gameProvider.usePower10SpyOpponent(
+                                opponentIndex, cardIndex);
+                          },
+                        ),
+                        onSpecialPowerAnimationComplete: (cardId) {
+                          if (!mounted) return;
+                          setState(() {
+                            _specialPowerReadyId = cardId;
+                            _specialPowerDialogShownId = null;
+                          });
                         },
-                      ),
-                      onSpecialPowerAnimationComplete: (cardId) {
-                        if (!mounted) return;
-                        setState(() {
-                          _specialPowerReadyId = cardId;
-                          _specialPowerDialogShownId = null;
-                        });
-                      },
-                      multiplayerConfig: MultiplayerConfig(
-                        playerId: model.playerId,
-                        playerConnections: model.playerConnections,
-                        playerAfkStatus: model.playerAfkStatus,
-                        turnStartTime: gameState.turnStartTime != null
-                            ? gameState.turnStartTime! -
-                                model.serverTimeOffsetMs
-                            : null,
-                        turnDuration: gameState.turnTimeoutMs,
-                        reactionTimeTotalMs: model.currentReactionTimeMs,
-                        powerTargetPlayerIds: model.powerTargetPlayerIds,
-                      ),
-                      isPaused: model.isPaused,
-                    ),
+                        multiplayerConfig: MultiplayerConfig(
+                          playerId: model.playerId,
+                          playerConnections: model.playerConnections,
+                          playerAfkStatus: model.playerAfkStatus,
+                          turnStartTime: gameState.turnStartTime != null
+                              ? gameState.turnStartTime! -
+                                  model.serverTimeOffsetMs
+                              : null,
+                          turnDuration: gameState.turnTimeoutMs,
+                          reactionTimeTotalMs: model.currentReactionTimeMs,
+                          powerTargetPlayerIds: model.powerTargetPlayerIds,
+                        ),
+                        isPaused: model.isPaused,
+                      );
+                    }),
 
                     // Room Code and Tournament Info Overlay
                     Positioned(
@@ -668,16 +671,30 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         pauseDeadlineMs: model.pauseDeadlineMs,
                       ),
 
-                    PresenceCheckOverlay(
-                      active: model.presenceCheckActive,
-                      deadlineMs: model.presenceCheckDeadlineMs,
-                      reason: model.presenceCheckReason,
-                      onConfirm: gameProvider.confirmPresence,
-                      onAbandon: () {
-                        gameProvider.confirmPresence(); // Clear the check first
-                        gameProvider.forfeitGame();
-                        // Don't navigate to /lobby - stay as spectator.
-                        // The game will end and navigate to results automatically.
+                    // Zone présence isolée : son propre Selector écoute
+                    // seulement les champs de présence, donc un tick du compte à
+                    // rebours ne reconstruit plus le corps ni GameTableWidget.
+                    Selector<MultiplayerGameProvider, _PresenceModel>(
+                      selector: (_, p) => _PresenceModel(
+                        active: p.presenceCheckActive,
+                        deadlineMs: p.presenceCheckDeadlineMs,
+                        reason: p.presenceCheckReason,
+                      ),
+                      builder: (context, presence, __) {
+                        RebuildProbe.bump('presence');
+                        final gp = context.read<MultiplayerGameProvider>();
+                        return PresenceCheckOverlay(
+                          active: presence.active,
+                          deadlineMs: presence.deadlineMs,
+                          reason: presence.reason,
+                          onConfirm: gp.confirmPresence,
+                          onAbandon: () {
+                            gp.confirmPresence(); // Clear the check first
+                            gp.forfeitGame();
+                            // Rester spectateur : la partie se terminera et
+                            // naviguera vers les résultats automatiquement.
+                          },
+                        );
                       },
                     ),
 
@@ -848,9 +865,6 @@ class _MultiplayerGameScreenModel {
   final bool specialPowerNotification;
   final String? specialPowerByName;
   final bool isSilentReconnecting;
-  final bool presenceCheckActive;
-  final int presenceCheckDeadlineMs;
-  final String? presenceCheckReason;
 
   const _MultiplayerGameScreenModel({
     required this.gameState,
@@ -877,9 +891,6 @@ class _MultiplayerGameScreenModel {
     required this.specialPowerNotification,
     required this.specialPowerByName,
     required this.isSilentReconnecting,
-    required this.presenceCheckActive,
-    required this.presenceCheckDeadlineMs,
-    required this.presenceCheckReason,
   });
 
   factory _MultiplayerGameScreenModel.from(MultiplayerGameProvider provider) {
@@ -912,9 +923,6 @@ class _MultiplayerGameScreenModel {
       specialPowerNotification: provider.specialPowerNotification,
       specialPowerByName: provider.specialPowerByName,
       isSilentReconnecting: provider.isSilentReconnecting,
-      presenceCheckActive: provider.presenceCheckActive,
-      presenceCheckDeadlineMs: provider.presenceCheckDeadlineMs,
-      presenceCheckReason: provider.presenceCheckReason,
     );
   }
 
@@ -967,10 +975,7 @@ class _MultiplayerGameScreenModel {
         lastPlayerLeftName == other.lastPlayerLeftName &&
         specialPowerNotification == other.specialPowerNotification &&
         specialPowerByName == other.specialPowerByName &&
-        isSilentReconnecting == other.isSilentReconnecting &&
-        presenceCheckActive == other.presenceCheckActive &&
-        presenceCheckDeadlineMs == other.presenceCheckDeadlineMs &&
-        presenceCheckReason == other.presenceCheckReason;
+        isSilentReconnecting == other.isSilentReconnecting;
   }
 
   @override
@@ -1003,8 +1008,29 @@ class _MultiplayerGameScreenModel {
         specialPowerNotification,
         specialPowerByName,
         isSilentReconnecting,
-        presenceCheckActive,
-        presenceCheckDeadlineMs,
-        presenceCheckReason,
       ]);
+}
+
+/// Modèle restreint de la zone de présence : seul un changement de ces champs
+/// reconstruit l'overlay de présence, sans toucher au corps ni à GameTableWidget.
+class _PresenceModel {
+  final bool active;
+  final int deadlineMs;
+  final String? reason;
+
+  const _PresenceModel({
+    required this.active,
+    required this.deadlineMs,
+    required this.reason,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PresenceModel &&
+      active == other.active &&
+      deadlineMs == other.deadlineMs &&
+      reason == other.reason;
+
+  @override
+  int get hashCode => Object.hash(active, deadlineMs, reason);
 }
