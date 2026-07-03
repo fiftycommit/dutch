@@ -47,6 +47,21 @@ const bool _useFirebaseEmulator =
 const String _firebaseEmulatorHost =
     String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: 'localhost');
 
+/// Dev/test uniquement : force l'arbre de sémantique (accessibilité) de Flutter,
+/// ce qui fait générer un DOM ARIA synthétique au-dessus du canvas CanvasKit —
+/// nécessaire pour piloter l'app par sélecteurs (Playwright), l'UI étant sinon un
+/// simple `<canvas>`. Activé par --dart-define=ENABLE_SEMANTICS=true. La prod ne
+/// pose pas ce flag et garde la sémantique à la demande (lecteur d'écran).
+const bool _enableSemantics = bool.fromEnvironment('ENABLE_SEMANTICS');
+
+void _enableSemanticsIfConfigured(WidgetsBinding binding) {
+  if (!_enableSemantics) return;
+  // Le handle est volontairement gardé (jamais disposé) pour laisser la
+  // sémantique active toute la session.
+  binding.ensureSemantics();
+  if (kDebugMode) debugPrint('🅰️ Arbre de sémantique Flutter activé (E2E)');
+}
+
 Future<void> _useFirebaseEmulatorsIfConfigured() async {
   if (!_useFirebaseEmulator) return;
   await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
@@ -71,7 +86,8 @@ void main() {
   // Capturer les erreurs async non gérées via runZonedGuarded
   // IMPORTANT : ensureInitialized() et runApp() doivent être dans la même zone
   runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+    final binding = WidgetsFlutterBinding.ensureInitialized();
+    _enableSemanticsIfConfigured(binding);
     GoogleFonts.config.allowRuntimeFetching = false;
 
     // Capturer les erreurs Flutter (widget build, layout, etc.)

@@ -83,9 +83,38 @@ Réinitialiser les données : arrêter les émulateurs (elles ne sont pas
 persistées). Pour repartir de zéro sans redémarrer, l'UI émulateurs
 (`http://127.0.0.1:4500`) permet de purger Auth/Firestore.
 
+## Piloter l'app par Playwright (arbre de sémantique)
+
+L'app rend via CanvasKit dans un `<canvas>` unique : sans aide, Playwright ne peut
+sélectionner ni bouton ni champ. Le flag `--dart-define=ENABLE_SEMANTICS=true`
+force l'arbre de sémantique (accessibilité) de Flutter, qui génère un DOM ARIA
+synthétique (rôles, `aria-label`, `<input>`) ciblable par sélecteurs.
+
+```bash
+flutter build web --no-web-resources-cdn \
+  --dart-define=ENABLE_SEMANTICS=true \
+  --dart-define=USE_FIREBASE_EMULATOR=true \
+  --dart-define=DEV_SERVER_URL=http://localhost:3000 \
+  -o /tmp/dutch-web && (cd /tmp/dutch-web && python3 -m http.server 8081)
+```
+
+Les tests vivent dans `e2e/` (voir `e2e/README.md`). Preuve fournie :
+`npm --prefix e2e run login` pré-crée un compte via l'API puis se connecte via
+l'UI (menu → multijoueur → formulaire) uniquement par sélecteurs sémantiques, et
+vérifie `login-password 200`.
+
+En prod, `ENABLE_SEMANTICS` n'est pas posé : la sémantique reste à la demande
+(lecteur d'écran), comportement Flutter par défaut.
+
+**Limite CanvasKit à connaître** : navigation et clics de boutons sont fiables ;
+la saisie de texte passe par un hôte d'édition partagé de Flutter (non relisible
+depuis le DOM) et rater un champ sur un long formulaire est systématique. D'où le
+choix de **pré-créer les données via l'API** et de ne piloter par l'UI que la
+connexion (2 champs) et le jeu.
+
 ## Prod : rien ne change
 
 Le serveur déployé ne pose aucune de ces variables (`FIREBASE_*_EMULATOR_HOST`,
 `AUTH_ABUSE_DISABLED`) et continue d'exiger la vraie clé de service ; le build web
-prod ne passe pas `USE_FIREBASE_EMULATOR` ni `DEV_SERVER_URL`. Le mode émulateur
-est purement additif.
+prod ne passe pas `USE_FIREBASE_EMULATOR`, `DEV_SERVER_URL` ni `ENABLE_SEMANTICS`.
+Le mode émulateur (et le pilotage E2E) est purement additif.

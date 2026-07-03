@@ -1,0 +1,13 @@
+{
+  "name": "dutch-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tests E2E Playwright de l'app web via l'arbre de sémantique Flutter (dev/émulateurs).",
+  "scripts": {
+    "login": "node login.e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

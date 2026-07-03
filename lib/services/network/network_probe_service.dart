@@ -8,7 +8,13 @@ import 'connectivity_probe_stub.dart'
 ///
 /// Objectif: éviter d'attendre des timeouts longs quand l'app est hors-ligne.
 class NetworkProbeService {
-  static const String _healthUrl = 'https://dutch-game.me/health';
+  // Même serveur que le reste de l'app : prod par défaut, surchargeable en dev
+  // via --dart-define=DEV_SERVER_URL (aligné sur SocketConnectionHandler).
+  static const String _serverBase = String.fromEnvironment(
+    'DEV_SERVER_URL',
+    defaultValue: 'https://dutch-game.me',
+  );
+  static const String _healthUrl = '$_serverBase/health';
   static const Duration _successCacheTtl = Duration(seconds: 4);
   static const Duration _failureCacheTtl = Duration(seconds: 1);
   static const Duration _optimisticGraceAfterSuccess = Duration(seconds: 12);
