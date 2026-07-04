@@ -1,5 +1,8 @@
-import { describe, it, before } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { TournamentService } from '../services/TournamentService';
 
 function makeParticipants(count: number) {
@@ -13,9 +16,19 @@ function makeParticipants(count: number) {
 
 describe('TournamentService', () => {
   let service: TournamentService;
+  let dataDir: string;
+  let originalLog: typeof console.log;
 
   before(() => {
-    service = new TournamentService();
+    originalLog = console.log;
+    console.log = () => {};
+    dataDir = mkdtempSync(path.join(tmpdir(), 'dutch-tournament-test-'));
+    service = new TournamentService(dataDir);
+  });
+
+  after(() => {
+    console.log = originalLog;
+    rmSync(dataDir, { recursive: true, force: true });
   });
 
   describe('constructor and basic getters', () => {
