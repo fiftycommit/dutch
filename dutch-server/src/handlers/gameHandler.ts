@@ -194,25 +194,28 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
-        const player = room.gameState.players.find(
-          (p: Player) => p.id === socket.id
-        );
-        if (!player || player.isSpectator) {
-          reply({ ok: false, error: player ? 'spectator' : 'player_not_found' });
+        if (room.gameState.phase !== GamePhase.playing || room.gameState.drawnCard) {
+          reply({ ok: false, error: 'invalid_phase' });
+          return;
+        }
+
+        const currentPlayer = getCurrentPlayer(room.gameState);
+        if (currentPlayer.id !== socket.id) {
+          reply({ ok: false, error: 'not_current_player' });
+          return;
+        }
+        if (currentPlayer.isSpectator) {
+          reply({ ok: false, error: 'spectator' });
           return;
         }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-        GameLogic.callDutch(room.gameState, player.id);
+        GameLogic.callDutch(room.gameState, currentPlayer.id);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT', {
-          message: `${player.name} appelle DUTCH !`,
+          message: `${currentPlayer.name} appelle DUTCH !`,
         });
         reply({ ok: true });
-
-        if (room.gameState.phase === GamePhase.ended) {
-          roomManager.handleGameEnd(data.roomCode);
-        }
       });
     } catch (error) {
       console.error('Error call_dutch:', error);

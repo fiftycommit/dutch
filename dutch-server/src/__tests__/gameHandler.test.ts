@@ -270,6 +270,7 @@ describe('gameHandler', () => {
   describe('game:call_dutch', () => {
     it('allows player to call Dutch', async () => {
       const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
 
       let ackPayload: any = null;
       await mockSocket.triggerEvent(
@@ -285,8 +286,54 @@ describe('gameHandler', () => {
       assert.deepStrictEqual(ackPayload, { actionId: 'dutch-1', ok: true });
     });
 
+    it('rejects Dutch from non-current player', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-2');
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:call_dutch',
+        { roomCode, actionId: 'dutch-2' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.gameState!.dutchCallerId, null);
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'dutch-2',
+        ok: false,
+        error: 'not_current_player',
+      });
+    });
+
+    it('rejects Dutch after the player has drawn a card', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.drawnCard = createCard('hearts', '5');
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:call_dutch',
+        { roomCode, actionId: 'dutch-3' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.gameState!.dutchCallerId, null);
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'dutch-3',
+        ok: false,
+        error: 'invalid_phase',
+      });
+    });
+
     it('rejects Dutch from spectator', async () => {
       const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
       room.players.find(p => p.id === 'player-1')!.isSpectator = true;
 
       await mockSocket.triggerEvent('game:call_dutch', { roomCode });
