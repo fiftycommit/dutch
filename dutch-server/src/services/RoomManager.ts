@@ -1737,6 +1737,19 @@ export class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room?.gameState) return;
     if (room.gameState.phase === GamePhase.ended) return;
+
+    // Plus AUCUN humain connecté : la partie tournerait toute seule avec des bots
+    // (salon fantôme : `anyConnected` de cleanupRooms compte les bots, donc la room
+    // ne se ferme jamais). On termine, même pendant la mémorisation (setup), sinon
+    // une partie abandonnée en plein démarrage reste bloquée à vie (bug n°2.4).
+    const connectedHumans = room.players.filter(
+      p => p.isHuman && p.connected && !p.isSpectator
+    ).length;
+    if (connectedHumans === 0) {
+      this.handleGameEnd(roomCode);
+      return;
+    }
+
     if (room.gameState.phase === GamePhase.setup) return; // Don't end during setup
 
     // If less than 2 active humans remain (and we are in a multiplayer game)
