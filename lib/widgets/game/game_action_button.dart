@@ -70,7 +70,11 @@ class _GameActionButtonState extends State<GameActionButton>
         isEnabled ? widget.color : widget.color.withValues(alpha: 0.35);
     final labelColor = isEnabled ? Colors.white : AppColors.textSecondary;
 
-    final button = Material(
+    final button = Semantics(
+      button: true,
+      label: widget.label,
+      enabled: isEnabled,
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: isEnabled ? widget.onTap : null,
@@ -100,6 +104,7 @@ class _GameActionButtonState extends State<GameActionButton>
             ),
           ),
         ),
+      ),
       ),
     );
 

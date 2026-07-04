@@ -708,7 +708,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               children: List.generate(config.localPlayer.hand.length, (index) {
                 final isSelected = _selectedCards.contains(index);
 
-                return GestureDetector(
+                return Semantics(
+                  label: 'Carte à mémoriser ${index + 1}',
+                  button: true,
+                  selected: isSelected,
+                  child: GestureDetector(
                   onTap: () => _onCardTap(index),
                   child: AnimatedBuilder(
                     animation: _pulseController,
@@ -757,6 +761,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ),
                       );
                     },
+                  ),
                   ),
                 );
               }),

@@ -376,13 +376,19 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       },
     );
 
-    Widget card = GestureDetector(
-      onTap: () {
-        if (widget.onCardTap != null && widget.isActive && !isHidden) {
-          widget.onCardTap!(index);
-        }
-      },
-      child: cardBody,
+    // Nœud sémantique stable et identifiable par joueur + position (accessibilité + E2E).
+    Widget card = Semantics(
+      label: 'Carte ${index + 1} de ${widget.player.name}',
+      button: widget.onCardTap != null && widget.isActive && !isHidden,
+      selected: isSelected,
+      child: GestureDetector(
+        onTap: () {
+          if (widget.onCardTap != null && widget.isActive && !isHidden) {
+            widget.onCardTap!(index);
+          }
+        },
+        child: cardBody,
+      ),
     );
 
     // Joker shuffle animation overlay (3 phases : pos1, pos2, retour)
