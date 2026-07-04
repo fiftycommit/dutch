@@ -1671,6 +1671,14 @@ export class RoomManager {
         room.playersInResults?.delete(socketId);
         this.tryResetEndedRoom(room, room.id);
       }
+      // Si l'HÔTE décroche, migrer le statut d'hôte AVANT de diffuser la présence,
+      // sinon le broadcast garde un hostPlayerId pointant sur un socket déconnecté
+      // et aucun client ne reçoit les contrôles d'hôte (bug n°2). Vaut en attente
+      // ET en partie (cleanupRooms ne migrait que les rooms `waiting`, et sans
+      // rediffuser). ensureHost migre vers un humain connecté non-spectateur.
+      if (room.hostPlayerId === socketId) {
+        this.ensureHost(room);
+      }
       this.touchRoom(room);
       this.broadcastPresence(room.id);
       // Rediffuser l'ÉTAT DE JEU pour que la pastille de présence in-game des
