@@ -1657,6 +1657,14 @@ export class RoomManager {
       player.connected = false;
       player.focused = false;
       player.lastSeenAt = this.now();
+      // Sur l'écran de résultats, un joueur qui décroche ne doit plus « retenir »
+      // les résultats : sinon `playersInResults` ne se vide jamais, la room reste
+      // bloquée en `ended` avec un gameState périmé, et un nouveau venu reçoit
+      // l'ancienne partie terminée (bug n°3). On le retire et on tente le reset.
+      if (room.status === RoomStatus.ended) {
+        room.playersInResults?.delete(socketId);
+        this.tryResetEndedRoom(room, room.id);
+      }
       this.touchRoom(room);
       this.broadcastPresence(room.id);
       this.checkGameEndCondition(room.id);
