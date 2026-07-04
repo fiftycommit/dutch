@@ -11,7 +11,8 @@
     "presence-offline": "node presence-offline.e2e.mjs",
     "room-reset": "node room-reset.e2e.mjs",
     "spectator": "node spectator.e2e.mjs",
-    "state-privacy": "node state-privacy.e2e.mjs"
+    "state-privacy": "node state-privacy.e2e.mjs",
+    "host-migration": "node host-migration.e2e.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1"
