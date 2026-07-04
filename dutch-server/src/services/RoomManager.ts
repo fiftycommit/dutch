@@ -2745,6 +2745,28 @@ export class RoomManager {
 
     state.deck = state.deck.map(() => ({ hidden: true }));
 
+    // ── Confidentialité des cartes privées (intégrité de jeu) ────────────────
+    // Ces champs portent une VRAIE carte dans le gameState partagé ; sans
+    // filtrage, chaque broadcast l'envoie en clair à tous (adversaires ET
+    // spectateurs), lisible dans les DevTools. On ne les laisse qu'au joueur
+    // légitime, masqués (hidden) pour les autres. La fin de partie révèle tout.
+    if (!isGameEnded) {
+      // drawnCard : la carte piochée n'appartient qu'au joueur courant, jusqu'à
+      // ce qu'il la garde ou la défausse.
+      const currentPlayerId = gameState.players[gameState.currentPlayerIndex]?.id;
+      if (gameState.drawnCard && currentPlayerId !== playerId) {
+        state.drawnCard = { hidden: true };
+      }
+
+      // lastSpiedCard : carte regardée via pouvoir 7/10, visible uniquement du
+      // joueur qui utilise le pouvoir (specialPowerPlayerId, ou le joueur courant
+      // par défaut quand il est null).
+      const spyId = gameState.specialPowerPlayerId ?? currentPlayerId;
+      if (gameState.lastSpiedCard && spyId !== playerId) {
+        state.lastSpiedCard = { hidden: true };
+      }
+    }
+
     // Précharger la prochaine carte du deck pour le joueur actuel
     // Cela permet d'éliminer la latence perçue lors de la pioche
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
