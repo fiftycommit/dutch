@@ -7,7 +7,8 @@
   "scripts": {
     "login": "node login.e2e.mjs",
     "rebuild-measure": "node rebuild-measure.e2e.mjs",
-    "gameplay": "node gameplay.e2e.mjs"
+    "gameplay": "node gameplay.e2e.mjs",
+    "presence-offline": "node presence-offline.e2e.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1"
