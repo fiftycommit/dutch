@@ -12,6 +12,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/service_locator.dart';
+import 'utils/rebuild_probe.dart';
 import 'core/firebase_app_check_bootstrap.dart';
 import 'core/interfaces/i_haptic_service.dart';
 import 'core/interfaces/i_bot_ai_service.dart';
@@ -62,6 +63,28 @@ void _enableSemanticsIfConfigured(WidgetsBinding binding) {
   if (kDebugMode) debugPrint('🅰️ Arbre de sémantique Flutter activé (E2E)');
 }
 
+/// Dev/test uniquement : active [RebuildProbe] (le MÊME compteur que le harnais
+/// unitaire) et publie ses compteurs par zone en lignes console structurées
+/// `[REBUILD_PROBE] {...}` toutes les 250 ms, pour échantillonnage par Playwright.
+/// Opt-in via `?rebuildprobe=1` (web) ou `--dart-define=REBUILD_PROBE=true`. La
+/// prod ne pose ni le flag ni le param : `enabled` reste `false`.
+void _enableRebuildProbeIfConfigured() {
+  final optIn = const bool.fromEnvironment('REBUILD_PROBE') ||
+      (kIsWeb && Uri.base.queryParameters['rebuildprobe'] == '1');
+  if (!optIn) return;
+  RebuildProbe.enabled = true;
+  Timer.periodic(const Duration(milliseconds: 250), (_) {
+    // Ligne structurée captée par Playwright via la console.
+    // ignore: avoid_print
+    print('[REBUILD_PROBE] {'
+        '"screen_body":${RebuildProbe.countFor('screen_body')},'
+        '"gametable":${RebuildProbe.countFor('gametable')},'
+        '"roomcode":${RebuildProbe.countFor('roomcode')},'
+        '"presence":${RebuildProbe.countFor('presence')},'
+        '"buttons":${RebuildProbe.countFor('buttons')}}');
+  });
+}
+
 Future<void> _useFirebaseEmulatorsIfConfigured() async {
   if (!_useFirebaseEmulator) return;
   await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
@@ -88,6 +111,7 @@ void main() {
   runZonedGuarded(() async {
     final binding = WidgetsFlutterBinding.ensureInitialized();
     _enableSemanticsIfConfigured(binding);
+    _enableRebuildProbeIfConfigured();
     GoogleFonts.config.allowRuntimeFetching = false;
 
     // Capturer les erreurs Flutter (widget build, layout, etc.)
