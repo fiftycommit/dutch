@@ -918,8 +918,11 @@ class _MultiplayerGameScreenModel {
   ) {
     final map = <String, bool>{};
     for (final player in gameState?.players ?? []) {
-      final presence = provider.presenceById[player.id];
-      map[player.id] = presence == null || presence['connected'] == true;
+      // Source de vérité : le `connected` réel porté par gameState.players,
+      // mis à jour par le serveur sur déconnexion/reconnexion (fail-safe, plus
+      // le défaut fail-open « présence inconnue = en ligne » d'avant). Les bots
+      // sont toujours connectés.
+      map[player.id] = player.isHuman ? player.connected : true;
     }
     return map;
   }

@@ -348,6 +348,12 @@ export class RoomManager {
 
       this.ensureHost(room);
       this.touchRoom(room);
+      // Reconnexion en pleine partie : rediffuser l'état de jeu pour que les
+      // autres clients voient ce joueur repasser EN LIGNE (id resocketé +
+      // connected=true). Sans ça la pastille resterait « Hors ligne » à vie.
+      if (room.gameState && room.status === RoomStatus.playing) {
+        this.broadcastGameState(roomCode, 'PLAYER_RECONNECTED');
+      }
       return { room, player: existing, previousSocketId: previousId === socketId ? undefined : previousId };
     }
 
@@ -1667,6 +1673,12 @@ export class RoomManager {
       }
       this.touchRoom(room);
       this.broadcastPresence(room.id);
+      // Rediffuser l'ÉTAT DE JEU pour que la pastille de présence in-game des
+      // autres clients reflète la déconnexion (bug n°1). gameState.players porte
+      // `connected` (objets partagés avec room.players), ici passé à false.
+      if (room.gameState && room.status === RoomStatus.playing) {
+        this.broadcastGameState(room.id, 'PLAYER_DISCONNECTED');
+      }
       this.checkGameEndCondition(room.id);
     }
     this.cleanupRooms();
