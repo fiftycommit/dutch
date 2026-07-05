@@ -186,6 +186,7 @@ class MultiplayerGameProvider
 
   /// Carte préchargée du deck pour éliminer la latence lors de la pioche
   PlayingCard? _preloadedDeckCard;
+  bool _hasOptimisticDrawnCard = false;
 
   final Set<String> _afkPlayerIds = {};
   Set<String> get afkPlayerIds => Set.unmodifiable(_afkPlayerIds);
@@ -730,6 +731,7 @@ class MultiplayerGameProvider
     }
 
     _gameState = gameState;
+    _hasOptimisticDrawnCard = false;
 
     // Clear pending valet selection when state updates natively
     _pendingValetPlayer1 = null;
@@ -1206,6 +1208,7 @@ class MultiplayerGameProvider
     // Le serveur confirmera la vraie carte mais l'affichage est immédiat
     if (_preloadedDeckCard != null && _gameState!.drawnCard == null) {
       _gameState!.drawnCard = _preloadedDeckCard;
+      _hasOptimisticDrawnCard = true;
       _preloadedDeckCard = null; // Consommer la carte préchargée
       notifyListeners(); // Afficher immédiatement
     }
@@ -1222,6 +1225,12 @@ class MultiplayerGameProvider
     final success = await actionResult;
     if (_isDisposed) return;
     if (success) return;
+
+    if (actionLabel == 'Pioche' && _hasOptimisticDrawnCard) {
+      _gameState?.drawnCard = null;
+      _hasOptimisticDrawnCard = false;
+      notifyListeners();
+    }
 
     _hapticService.error();
     _notificationManager.setError(

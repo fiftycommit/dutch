@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:dutch_game/services/multiplayer/game_actions_emitter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -39,6 +40,30 @@ void main() {
 
         expect(success, isTrue);
         expectAckPayload('game:draw_card', const {});
+      });
+
+      test('drawCard retourne false quand le serveur refuse l ACK', () async {
+        mockSocket.ackResponse = {'ok': false, 'error': 'invalid_phase'};
+
+        final success = await emitter.drawCard();
+
+        expect(success, isFalse);
+        expectAckPayload('game:draw_card', const {});
+      });
+
+      test('drawCard retourne false quand l ACK expire', () {
+        mockSocket.shouldAck = false;
+
+        fakeAsync((async) {
+          bool? result;
+          emitter.drawCard().then((value) => result = value);
+
+          async.elapse(const Duration(seconds: 5));
+          async.flushMicrotasks();
+
+          expect(result, isFalse);
+          expectAckPayload('game:draw_card', const {});
+        });
       });
 
       test('replaceCard émet payload avec ACK et cardIndex', () async {
@@ -171,6 +196,8 @@ class MockSocket implements io.Socket {
   Map<String, dynamic>? lastPayload;
   String? lastEventWithAck;
   Map<String, dynamic>? lastPayloadWithAck;
+  bool shouldAck = true;
+  dynamic ackResponse;
 
   @override
   void emit(String event, [dynamic data]) {
@@ -183,7 +210,10 @@ class MockSocket implements io.Socket {
       {Function? ack, bool binary = false}) {
     lastEventWithAck = event;
     lastPayloadWithAck = data as Map<String, dynamic>?;
-    ack?.call({'ok': true, 'actionId': lastPayloadWithAck?['actionId']});
+    if (shouldAck) {
+      ack?.call(ackResponse ??
+          {'ok': true, 'actionId': lastPayloadWithAck?['actionId']});
+    }
   }
 
   // Le getter connected doit être implémenté explicitement car il retourne un bool

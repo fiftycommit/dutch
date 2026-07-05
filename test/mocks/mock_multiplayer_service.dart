@@ -21,6 +21,7 @@ class MockMultiplayerService extends MultiplayerService {
   int startGameCount = 0;
   int setReadyCount = 0;
   int setFocusedCount = 0;
+  int requestFullStateCount = 0;
 
   // Mock state
   String? _mockPlayerId = 'test_player';
@@ -36,6 +37,12 @@ class MockMultiplayerService extends MultiplayerService {
   bool mockStartGameResult = true;
   bool mockCloseRoomResult = true;
   List<Map<String, dynamic>>? mockPublicRooms;
+  Future<bool> drawCardResult = Future.value(true);
+  Future<bool> replaceCardResult = Future.value(true);
+  Future<bool> discardDrawnCardResult = Future.value(true);
+  Future<bool> callDutchResult = Future.value(true);
+  Future<bool> attemptMatchResult = Future.value(true);
+  Future<bool> skipSpecialPowerResult = Future.value(true);
 
   @override
   String? get playerId => _mockPlayerId;
@@ -152,37 +159,42 @@ class MockMultiplayerService extends MultiplayerService {
   @override
   Future<bool> drawCard() async {
     drawCardCount++;
-    return true;
+    return drawCardResult;
   }
 
   @override
   Future<bool> replaceCard(int cardIndex) async {
     replaceCardCount++;
-    return true;
+    return replaceCardResult;
   }
 
   @override
   Future<bool> discardDrawnCard() async {
     discardDrawnCardCount++;
-    return true;
+    return discardDrawnCardResult;
   }
 
   @override
   Future<bool> callDutch() async {
     callDutchCount++;
-    return true;
+    return callDutchResult;
   }
 
   @override
   Future<bool> attemptMatch(int cardIndex) async {
     attemptMatchCount++;
-    return true;
+    return attemptMatchResult;
   }
 
   @override
   Future<bool> skipSpecialPower() async {
     skipSpecialPowerCount++;
-    return true;
+    return skipSpecialPowerResult;
+  }
+
+  @override
+  void requestFullState() {
+    requestFullStateCount++;
   }
 
   @override
@@ -209,6 +221,13 @@ class MockMultiplayerService extends MultiplayerService {
     startGameCount = 0;
     setReadyCount = 0;
     setFocusedCount = 0;
+    requestFullStateCount = 0;
+    drawCardResult = Future.value(true);
+    replaceCardResult = Future.value(true);
+    discardDrawnCardResult = Future.value(true);
+    callDutchResult = Future.value(true);
+    attemptMatchResult = Future.value(true);
+    skipSpecialPowerResult = Future.value(true);
   }
 
   /// Simulate receiving a game state update
