@@ -224,10 +224,31 @@ describe('gameHandler', () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
       room.gameState!.drawnCard = null;
+      room.gameState!.phase = GamePhase.playing;
+      const player = room.gameState!.players.find(p => p.id === 'player-1')!;
+      const handBefore = player.hand.map(card => card.id);
+      const discardSizeBefore = room.gameState!.discardPile.length;
+      const historySizeBefore = room.gameState!.actionHistory.length;
 
-      await mockSocket.triggerEvent('game:replace_card', { roomCode, cardIndex: 0 });
-      // Should not throw or change state
-      assert.ok(true);
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:replace_card',
+        { roomCode, cardIndex: 0, actionId: 'replace-no-drawn' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'replace-no-drawn',
+        ok: false,
+        error: 'no_drawn_card',
+      });
+      assert.deepStrictEqual(player.hand.map(card => card.id), handBefore);
+      assert.strictEqual(room.gameState!.discardPile.length, discardSizeBefore);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
+      assert.strictEqual(room.gameState!.phase, GamePhase.playing);
     });
   });
 
@@ -372,10 +393,30 @@ describe('gameHandler', () => {
     it('rejects match outside reaction phase', async () => {
       const room = roomManager.getRoom(roomCode)!;
       room.gameState!.phase = GamePhase.playing;
+      const player = room.gameState!.players.find(p => p.id === 'player-1')!;
+      const handBefore = player.hand.map(card => card.id);
+      const discardSizeBefore = room.gameState!.discardPile.length;
+      const historySizeBefore = room.gameState!.actionHistory.length;
 
-      await mockSocket.triggerEvent('game:attempt_match', { roomCode, cardIndex: 0 });
-      // Should be ignored
-      assert.ok(true);
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:attempt_match',
+        { roomCode, cardIndex: 0, actionId: 'match-invalid-phase' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'match-invalid-phase',
+        ok: false,
+        error: 'invalid_phase',
+      });
+      assert.deepStrictEqual(player.hand.map(card => card.id), handBefore);
+      assert.strictEqual(room.gameState!.discardPile.length, discardSizeBefore);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
+      assert.strictEqual(room.gameState!.phase, GamePhase.playing);
     });
   });
 
@@ -457,6 +498,71 @@ describe('gameHandler', () => {
 
       assert.strictEqual(room.gameState!.isWaitingForSpecialPower, false);
     });
+
+    it('rejects special power outside specialPower phase without mutation', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.playing;
+      room.gameState!.isWaitingForSpecialPower = false;
+      room.gameState!.specialCardToActivate = createCard('hearts', '7');
+      room.gameState!.lastSpiedCard = null;
+      const player = room.gameState!.players.find(p => p.id === 'player-1')!;
+      const knownBefore = [...player.knownCards];
+      const historySizeBefore = room.gameState!.actionHistory.length;
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:use_special_power',
+        { roomCode, cardIndex: 0, actionId: 'power-invalid-phase' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'power-invalid-phase',
+        ok: false,
+        error: 'invalid_phase',
+      });
+      assert.deepStrictEqual(player.knownCards, knownBefore);
+      assert.strictEqual(room.gameState!.lastSpiedCard, null);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
+      assert.strictEqual(room.gameState!.phase, GamePhase.playing);
+      assert.strictEqual(room.gameState!.isWaitingForSpecialPower, false);
+    });
+
+    it('rejects special power from wrong actor without mutation', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-2');
+      room.gameState!.phase = GamePhase.specialPower;
+      room.gameState!.isWaitingForSpecialPower = true;
+      room.gameState!.specialCardToActivate = createCard('hearts', '7');
+      room.gameState!.lastSpiedCard = null;
+      const player = room.gameState!.players.find(p => p.id === 'player-1')!;
+      const knownBefore = [...player.knownCards];
+      const historySizeBefore = room.gameState!.actionHistory.length;
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:use_special_power',
+        { roomCode, cardIndex: 0, actionId: 'power-wrong-actor' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'power-wrong-actor',
+        ok: false,
+        error: 'not_authorized',
+      });
+      assert.deepStrictEqual(player.knownCards, knownBefore);
+      assert.strictEqual(room.gameState!.lastSpiedCard, null);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
+      assert.strictEqual(room.gameState!.isWaitingForSpecialPower, true);
+    });
   });
 
   describe('game:skip_special_power', () => {
@@ -483,6 +589,62 @@ describe('gameHandler', () => {
         actionId: 'skip-power-1',
         ok: true,
       });
+    });
+
+    it('rejects skip special power outside specialPower phase without mutation', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.phase = GamePhase.playing;
+      room.gameState!.isWaitingForSpecialPower = false;
+      room.gameState!.specialCardToActivate = createCard('hearts', '7');
+      const historySizeBefore = room.gameState!.actionHistory.length;
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:skip_special_power',
+        { roomCode, actionId: 'skip-invalid-phase' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'skip-invalid-phase',
+        ok: false,
+        error: 'invalid_phase',
+      });
+      assert.strictEqual(room.gameState!.phase, GamePhase.playing);
+      assert.strictEqual(room.gameState!.isWaitingForSpecialPower, false);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
+    });
+
+    it('rejects skip special power from wrong actor without mutation', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-2');
+      room.gameState!.phase = GamePhase.specialPower;
+      room.gameState!.isWaitingForSpecialPower = true;
+      room.gameState!.specialCardToActivate = createCard('hearts', '7');
+      const historySizeBefore = room.gameState!.actionHistory.length;
+
+      let ackPayload: any = null;
+      await mockSocket.triggerEvent(
+        'game:skip_special_power',
+        { roomCode, actionId: 'skip-wrong-actor' },
+        (payload: any) => {
+          ackPayload = payload;
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.deepStrictEqual(ackPayload, {
+        actionId: 'skip-wrong-actor',
+        ok: false,
+        error: 'not_authorized',
+      });
+      assert.strictEqual(room.gameState!.phase, GamePhase.specialPower);
+      assert.strictEqual(room.gameState!.isWaitingForSpecialPower, true);
+      assert.strictEqual(room.gameState!.actionHistory.length, historySizeBefore);
     });
   });
 

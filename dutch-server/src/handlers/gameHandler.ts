@@ -29,6 +29,10 @@ function cardsFromValues(values: unknown): ReturnType<typeof createCard>[] | nul
   return values.map((value, index) => createCard(suits[index % suits.length], String(value)));
 }
 
+function readPhaseAfterMutation(gameState: { phase: GamePhase }): GamePhase {
+  return gameState.phase;
+}
+
 export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
   socket.on('test:force_special_power', async (data, ack?: ActionAck) => {
     const reply = createActionReply(data, ack);
@@ -148,14 +152,24 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           reply({ ok: false, error: 'spectator' });
           return;
         }
+        if (!room.gameState.drawnCard) {
+          reply({ ok: false, error: 'no_drawn_card' });
+          return;
+        }
+        const cardIndex = Number(data.cardIndex);
+        if (!Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= currentPlayer.hand.length) {
+          reply({ ok: false, error: 'invalid_card_index' });
+          return;
+        }
 
         roomManager.recordPlayerAction(data.roomCode, socket.id);
 
-        GameLogic.replaceCard(room.gameState, data.cardIndex);
+        GameLogic.replaceCard(room.gameState, cardIndex);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
         reply({ ok: true });
 
-        if (room.gameState.phase === GamePhase.ended) {
+        const phaseAfterPower = readPhaseAfterMutation(room.gameState);
+        if (phaseAfterPower === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
           return;
         }
@@ -165,7 +179,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
-        if (room.gameState.phase === GamePhase.reaction) {
+        if (phaseAfterPower === GamePhase.reaction) {
           const reactionTime =
             typeof room.settings?.reactionTimeMs === 'number'
               ? room.settings.reactionTimeMs
@@ -221,7 +235,8 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
         reply({ ok: true });
 
-        if (room.gameState.phase === GamePhase.ended) {
+        const phaseAfterSkip = readPhaseAfterMutation(room.gameState);
+        if (phaseAfterSkip === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
           return;
         }
@@ -232,7 +247,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
-        if (room.gameState.phase === GamePhase.reaction) {
+        if (phaseAfterSkip === GamePhase.reaction) {
           const reactionTime =
             typeof room.settings?.reactionTimeMs === 'number'
               ? room.settings.reactionTimeMs
@@ -378,6 +393,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
+        if (room.gameState.phase !== GamePhase.specialPower ||
+            !room.gameState.isWaitingForSpecialPower) {
+          reply({ ok: false, error: 'invalid_phase' });
+          return;
+        }
+
         const isMatchPower = room.gameState.specialPowerPlayerId != null;
         const authorizedPlayerId = isMatchPower
           ? room.gameState.specialPowerPlayerId
@@ -469,7 +490,8 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         });
         reply({ ok: true });
 
-        if (room.gameState.phase === GamePhase.ended) {
+        const phaseAfterPower = readPhaseAfterMutation(room.gameState);
+        if (phaseAfterPower === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
           return;
         }
@@ -480,7 +502,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
-        if (room.gameState.phase === GamePhase.reaction) {
+        if (phaseAfterPower === GamePhase.reaction) {
           const baseReactionTime =
             typeof room.settings?.reactionTimeMs === 'number'
               ? room.settings.reactionTimeMs
@@ -512,6 +534,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
+        if (room.gameState.phase !== GamePhase.specialPower ||
+            !room.gameState.isWaitingForSpecialPower) {
+          reply({ ok: false, error: 'invalid_phase' });
+          return;
+        }
+
         const isMatchPower = room.gameState.specialPowerPlayerId != null;
         const authorizedPlayerId = isMatchPower
           ? room.gameState.specialPowerPlayerId
@@ -533,7 +561,8 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
         reply({ ok: true });
 
-        if (room.gameState.phase === GamePhase.ended) {
+        const phaseAfterSkip = readPhaseAfterMutation(room.gameState);
+        if (phaseAfterSkip === GamePhase.ended) {
           roomManager.handleGameEnd(data.roomCode);
           return;
         }
@@ -544,7 +573,7 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           return;
         }
 
-        if (room.gameState.phase === GamePhase.reaction) {
+        if (phaseAfterSkip === GamePhase.reaction) {
           const baseReactionTime =
             typeof room.settings?.reactionTimeMs === 'number'
               ? room.settings.reactionTimeMs
