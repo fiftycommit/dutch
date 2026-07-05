@@ -25,11 +25,15 @@ jobs:
       - name: Test PWA service worker generator
         run: node --test 'scripts/__tests__/**/*.test.mjs'
 
-      # Suite Flutter complète. L'échec RL connu est tagué `known-failure` et
-      # exclu explicitement (voir dart_test.yaml) : tout AUTRE échec fait échouer
-      # le CI.
+      - name: Ensure no Flutter known-failure tests are active
+        run: |
+          if grep -R "known-failure" test integration_test --include='*.dart'; then
+            echo "known-failure tags are reserved and must not be active in CI."
+            exit 1
+          fi
+
       - name: Flutter tests
-        run: flutter test --exclude-tags known-failure
+        run: flutter test
 
   server:
     runs-on: ubuntu-latest
