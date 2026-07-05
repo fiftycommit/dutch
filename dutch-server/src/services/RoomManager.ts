@@ -334,15 +334,15 @@ export class RoomManager {
         this.clearPresenceCheck(roomCode, previousId);
       }
 
-      // Restore host status using persistent identity.
-      // Priority: room creator always gets host back, then old socket match,
-      // then fallback if current host is stale/disconnected.
-      const isCreator = normalizedUserId && room.creatorUserId === normalizedUserId;
+      // Restore host status using persistent identity only when this player was
+      // the current host, or when the current host is no longer valid. The room
+      // creator must not automatically steal host back after a legitimate
+      // transfer caused by a previous disconnect.
       const wasHost = room.hostPlayerId === previousId;
       const hostPlayerStale = !room.players.some(
         (p) => p.id === room.hostPlayerId && p.connected
       );
-      if (isCreator || wasHost || hostPlayerStale) {
+      if (wasHost || hostPlayerStale) {
         room.hostPlayerId = socketId;
       }
 
@@ -1678,6 +1678,12 @@ export class RoomManager {
       // rediffuser). ensureHost migre vers un humain connecté non-spectateur.
       if (room.hostPlayerId === socketId) {
         this.ensureHost(room);
+      }
+      if (room.status === RoomStatus.playing && !player.isSpectator) {
+        this.removePlayerFromActiveRoom(room.id, socketId, {
+          removeReason: `${player.name} a quitté la partie.`,
+        });
+        continue;
       }
       this.touchRoom(room);
       this.broadcastPresence(room.id);
