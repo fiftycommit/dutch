@@ -12,7 +12,10 @@
     "room-reset": "node room-reset.e2e.mjs",
     "spectator": "node spectator.e2e.mjs",
     "state-privacy": "node state-privacy.e2e.mjs",
-    "host-migration": "node host-migration.e2e.mjs"
+    "host-migration": "node host-migration.e2e.mjs",
+    "creator-reconnect": "node creator-reconnect.e2e.mjs",
+    "host-migration-in-game": "node host-migration-in-game.e2e.mjs",
+    "rapid-reconnect": "node rapid-reconnect.e2e.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1"

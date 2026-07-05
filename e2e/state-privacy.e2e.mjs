@@ -5,7 +5,7 @@
 // Complète les tests unitaires statePrivacy.test.ts (chemin broadcast réel).
 // Prérequis : émulateurs + serveur (npm run dev:emulators).
 import { createRequire } from 'module';
-const require = createRequire('../dutch-server/');
+const require = createRequire(new URL('../dutch-server/package.json', import.meta.url));
 const { io } = require('socket.io-client');
 const SERVER='http://127.0.0.1:3000', AUTH='http://127.0.0.1:9099', PROJ='dutch-game-1dd01';
 const log=(...a)=>console.log(...a);
