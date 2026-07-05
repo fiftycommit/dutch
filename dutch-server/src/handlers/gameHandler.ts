@@ -4,6 +4,7 @@ import { GameLogic } from '../services/GameLogic';
 import { GamePhase, getCurrentPlayer } from '../models/GameState';
 import { Player } from '../models/Player';
 import { SecurityService } from '../services/SecurityService';
+import { createCard } from '../models/Card';
 
 type ActionAck = (payload: Record<string, unknown>) => void;
 
@@ -17,7 +18,77 @@ function createActionReply(data: any, ack?: ActionAck): ActionAck {
   };
 }
 
+function areTestHooksEnabled(): boolean {
+  return process.env.NODE_ENV !== 'production' &&
+    (process.env.E2E_TEST_HOOKS === '1' || process.env.AUTH_ABUSE_DISABLED === '1');
+}
+
+function cardsFromValues(values: unknown): ReturnType<typeof createCard>[] | null {
+  if (!Array.isArray(values)) return null;
+  const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
+  return values.map((value, index) => createCard(suits[index % suits.length], String(value)));
+}
+
 export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
+  socket.on('test:force_special_power', async (data, ack?: ActionAck) => {
+    const reply = createActionReply(data, ack);
+    if (!areTestHooksEnabled()) {
+      reply({ ok: false, error: 'test_hooks_disabled' });
+      return;
+    }
+
+    try {
+      await roomManager.withRoomMutation(data.roomCode, async (room) => {
+        if (!room?.gameState) {
+          reply({ ok: false, error: 'room_not_ready' });
+          return;
+        }
+
+        const actorId = typeof data.actorId === 'string' ? data.actorId : socket.id;
+        const actorIndex = room.gameState.players.findIndex((p: Player) => p.id === actorId);
+        const requester = room.gameState.players.find((p: Player) => p.id === socket.id);
+        if (actorIndex < 0 || !requester || requester.isSpectator) {
+          reply({ ok: false, error: 'not_authorized' });
+          return;
+        }
+
+        const handValuesByPlayer = data.hands && typeof data.hands === 'object'
+          ? data.hands as Record<string, unknown>
+          : {};
+        for (const player of room.gameState.players) {
+          const cards = cardsFromValues(handValuesByPlayer[player.id]);
+          if (!cards) continue;
+          player.hand = cards;
+          player.knownCards = cards.map(() => false);
+        }
+
+        const power = String(data.power);
+        if (!['7', '10', 'V', 'JOKER'].includes(power)) {
+          reply({ ok: false, error: 'invalid_power' });
+          return;
+        }
+
+        roomManager.clearReactionTimer(data.roomCode);
+        roomManager.clearTurnTimer(data.roomCode);
+        room.gameState.currentPlayerIndex = actorIndex;
+        room.gameState.phase = GamePhase.specialPower;
+        room.gameState.isWaitingForSpecialPower = true;
+        room.gameState.specialCardToActivate = createCard(
+          power === 'JOKER' ? 'joker' : 'hearts',
+          power,
+        );
+        room.gameState.specialPowerPlayerId = null;
+        room.gameState.drawnCard = null;
+        room.gameState.lastSpiedCard = null;
+        roomManager.broadcastGameState(data.roomCode, 'TEST_FORCE_SPECIAL_POWER');
+        reply({ ok: true });
+      });
+    } catch (error) {
+      console.error('Error test:force_special_power:', error);
+      reply({ ok: false, error: 'internal_error' });
+    }
+  });
+
   socket.on('game:draw_card', async (data, ack?: (payload: Record<string, unknown>) => void) => {
     const reply = createActionReply(data, ack);
 
