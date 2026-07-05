@@ -1118,6 +1118,11 @@ class RlEnv {
   }
 
   /// ⚠ TEST-ONLY (non utilisé sur le chemin Python/PPO).
+  /// Émet une observation sans appliquer d'action, pour figer des invariants
+  /// de reward/debug après mutation contrôlée d'état dans les tests.
+  Map<String, dynamic> emitObservationForTest() => _observation();
+
+  /// ⚠ TEST-ONLY (non utilisé sur le chemin Python/PPO).
   /// Applique l'action de pouvoir du siège RL SANS dérouler la fin de tour
   /// (réaction adverse + tours suivants). Permet aux tests d'observer l'effet
   /// moteur immédiat d'un pouvoir avant que les adversaires ne rejouent.

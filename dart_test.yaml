@@ -1,6 +1,5 @@
 # Configuration de la suite de tests Flutter/Dart.
 tags:
-  # Échecs connus/pré-existants, exclus du CI via `--exclude-tags known-failure`.
-  # À ne pas confondre avec un skip global : seuls les cas explicitement tagués
-  # sont ignorés, les vrais futurs échecs restent bloquants.
+  # Réservé aux échecs connus explicitement documentés. Aucun test ne doit
+  # porter ce tag sans enquête et décision produit.
   known-failure:
