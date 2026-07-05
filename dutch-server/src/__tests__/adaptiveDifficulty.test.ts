@@ -8,13 +8,21 @@ import { AdaptiveDifficultyService } from '../services/AdaptiveDifficultyService
 describe('AdaptiveDifficultyService', () => {
   let service: AdaptiveDifficultyService;
   let dataDir: string;
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
 
   before(() => {
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = () => {};
+    console.error = () => {};
     dataDir = mkdtempSync(path.join(tmpdir(), 'dutch-adaptive-test-'));
     service = new AdaptiveDifficultyService(dataDir);
   });
 
   after(() => {
+    console.log = originalLog;
+    console.error = originalError;
     rmSync(dataDir, { recursive: true, force: true });
   });
 
