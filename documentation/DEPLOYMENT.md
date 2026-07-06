@@ -1,8 +1,12 @@
 # Déploiement Dutch Game
 
-## 🚀 Déploiement automatique (production)
+## 🚀 Déploiement manuel (production)
 
-Le déploiement se fait automatiquement via GitHub Actions à chaque push sur `main`.
+Le déploiement se fait via GitHub Actions, en lançant manuellement le workflow
+`Deploy to Production`.
+
+Un merge ou un push sur `main` ne doit pas déployer automatiquement en production :
+la CI valide d'abord la branche, puis le déploiement est déclenché séparément.
 
 ### Workflow
 `.github/workflows/deploy-server.yml` déploie :
@@ -12,13 +16,12 @@ Le déploiement se fait automatiquement via GitHub Actions à chaque push sur `m
 - ✅ Redémarrage PM2
 
 ### Pour déployer
-```bash
-git add .
-git commit -m "Your changes"
-git push origin main
-```
 
-Le workflow GitHub Actions s'occupe du reste !
+1. Merger uniquement une branche validée en CI.
+2. Vérifier que le serveur de production utilise Node.js 24.x.
+3. Lancer manuellement le workflow GitHub Actions `Deploy to Production`.
+
+Le workflow GitHub Actions s'occupe du reste.
 
 ## 🔧 Setup initial (une seule fois)
 
@@ -40,7 +43,7 @@ Pointer `dutch-game.me` vers l'IP du Droplet (enregistrement A)
 Le provisionnement initial n'est plus automatisé par un script du repo.
 
 À installer/configurer manuellement :
-- Node.js 20.x
+- Node.js 24.x
 - PM2
 - Nginx
 - Redis si tu veux activer le multijoueur partagé multi-instance
