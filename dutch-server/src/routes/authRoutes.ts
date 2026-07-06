@@ -15,6 +15,7 @@ const router = Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  skip: () => process.env.AUTH_ABUSE_DISABLED === '1' || process.env.E2E_TEST_HOOKS === '1',
   message: { success: false, error: 'Trop de tentatives, réessayez dans 15 minutes' },
 });
 const emailRegex = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;

@@ -31,31 +31,27 @@ void main() {
         );
       });
 
-      test('drawCard does not crash with null socket', () {
+      test('drawCard does not crash with null socket', () async {
         // Should not throw
-        emitter.drawCard();
+        expect(await emitter.drawCard(), isFalse);
       });
 
-      test('replaceCard does not crash with null socket', () {
-        emitter.replaceCard(0);
-        emitter.replaceCard(3);
+      test('replaceCard does not crash with null socket', () async {
+        expect(await emitter.replaceCard(0), isFalse);
+        expect(await emitter.replaceCard(3), isFalse);
       });
 
-      test('discardDrawnCard does not crash with null socket', () {
-        emitter.discardDrawnCard();
+      test('discardDrawnCard does not crash with null socket', () async {
+        expect(await emitter.discardDrawnCard(), isFalse);
       });
 
-      test('takeFromDiscard does not crash with null socket', () {
-        emitter.takeFromDiscard();
+      test('callDutch does not crash with null socket', () async {
+        expect(await emitter.callDutch(), isFalse);
       });
 
-      test('callDutch does not crash with null socket', () {
-        emitter.callDutch();
-      });
-
-      test('attemptMatch does not crash with null socket', () {
-        emitter.attemptMatch(0);
-        emitter.attemptMatch(3);
+      test('attemptMatch does not crash with null socket', () async {
+        expect(await emitter.attemptMatch(0), isFalse);
+        expect(await emitter.attemptMatch(3), isFalse);
       });
     });
 
@@ -69,28 +65,28 @@ void main() {
         );
       });
 
-      test('usePower7LookOwnCard does not crash', () {
-        emitter.usePower7LookOwnCard(0);
-        emitter.usePower7LookOwnCard(3);
+      test('usePower7LookOwnCard does not crash', () async {
+        expect(await emitter.usePower7LookOwnCard(0), isFalse);
+        expect(await emitter.usePower7LookOwnCard(3), isFalse);
       });
 
-      test('usePower10SpyOpponent does not crash', () {
-        emitter.usePower10SpyOpponent(1, 0);
-        emitter.usePower10SpyOpponent(2, 3);
+      test('usePower10SpyOpponent does not crash', () async {
+        expect(await emitter.usePower10SpyOpponent(1, 0), isFalse);
+        expect(await emitter.usePower10SpyOpponent(2, 3), isFalse);
       });
 
-      test('usePowerValetSwap does not crash', () {
-        emitter.usePowerValetSwap(0, 0, 1, 1);
-        emitter.usePowerValetSwap(0, 2, 2, 3);
+      test('usePowerValetSwap does not crash', () async {
+        expect(await emitter.usePowerValetSwap(0, 0, 1, 1), isFalse);
+        expect(await emitter.usePowerValetSwap(0, 2, 2, 3), isFalse);
       });
 
-      test('usePowerJokerShuffle does not crash', () {
-        emitter.usePowerJokerShuffle(0);
-        emitter.usePowerJokerShuffle(2);
+      test('usePowerJokerShuffle does not crash', () async {
+        expect(await emitter.usePowerJokerShuffle(0), isFalse);
+        expect(await emitter.usePowerJokerShuffle(2), isFalse);
       });
 
-      test('skipSpecialPower does not crash', () {
-        emitter.skipSpecialPower();
+      test('skipSpecialPower does not crash', () async {
+        expect(await emitter.skipSpecialPower(), isFalse);
       });
     });
 
@@ -104,19 +100,18 @@ void main() {
         );
       });
 
-      test('all actions work with null roomCode', () {
+      test('all actions work with null roomCode', () async {
         // None of these should throw
-        emitter.drawCard();
-        emitter.replaceCard(0);
-        emitter.discardDrawnCard();
-        emitter.takeFromDiscard();
-        emitter.callDutch();
-        emitter.attemptMatch(0);
-        emitter.usePower7LookOwnCard(0);
-        emitter.usePower10SpyOpponent(1, 0);
-        emitter.usePowerValetSwap(0, 0, 1, 1);
-        emitter.usePowerJokerShuffle(0);
-        emitter.skipSpecialPower();
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.replaceCard(0), isFalse);
+        expect(await emitter.discardDrawnCard(), isFalse);
+        expect(await emitter.callDutch(), isFalse);
+        expect(await emitter.attemptMatch(0), isFalse);
+        expect(await emitter.usePower7LookOwnCard(0), isFalse);
+        expect(await emitter.usePower10SpyOpponent(1, 0), isFalse);
+        expect(await emitter.usePowerValetSwap(0, 0, 1, 1), isFalse);
+        expect(await emitter.usePowerJokerShuffle(0), isFalse);
+        expect(await emitter.skipSpecialPower(), isFalse);
       });
     });
 
@@ -130,17 +125,17 @@ void main() {
         );
       });
 
-      test('can call multiple actions in sequence', () {
-        emitter.drawCard();
-        emitter.replaceCard(0);
-        emitter.callDutch();
+      test('can call multiple actions in sequence', () async {
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.replaceCard(0), isFalse);
+        expect(await emitter.callDutch(), isFalse);
         // No exception = pass
       });
 
-      test('can call same action multiple times', () {
-        emitter.drawCard();
-        emitter.drawCard();
-        emitter.drawCard();
+      test('can call same action multiple times', () async {
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.drawCard(), isFalse);
+        expect(await emitter.drawCard(), isFalse);
       });
     });
   });

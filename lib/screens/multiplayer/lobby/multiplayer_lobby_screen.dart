@@ -126,10 +126,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         provider.gameState != null &&
         provider.gameState!.phase != GamePhase.ended) {
       _hasNavigatedToGame = true;
+      // Un spectateur (ou un joueur) qui arrive alors que la partie est DÉJÀ en
+      // cours (phase != setup) doit aller directement à la table. La mémorisation
+      // n'a lieu qu'en phase `setup` : y router un spectateur mid-partie le laisse
+      // bloqué sur « VOUS ÊTES SPECTATEUR / La partie va commencer... » (bug n°4).
+      final route = provider.gameState!.phase == GamePhase.setup
+          ? '/multiplayer/memorization'
+          : '/multiplayer/game';
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (ModalRoute.of(context)?.isCurrent == true) {
-          context.go('/multiplayer/memorization');
+          context.go(route);
         }
       });
     }

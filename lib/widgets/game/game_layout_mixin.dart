@@ -344,13 +344,25 @@ mixin GameLayoutMixin<T extends StatefulWidget> on State<T> {
           Positioned(
             right: 0,
             bottom: 0,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: isConnected ? Colors.green : Colors.red,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
+            // Label texte de la pastille, branché sur la connexion RÉELLE
+            // (gameState.players[].connected). Semantics = lisible dans l'arbre
+            // sans interaction (test + lecteur d'écran) ; Tooltip = survol souris
+            // + appui long tactile.
+            child: Tooltip(
+              message: isConnected ? 'En ligne' : 'Hors ligne',
+              triggerMode: TooltipTriggerMode.longPress,
+              child: Semantics(
+                label: isConnected ? 'En ligne' : 'Hors ligne',
+                container: true,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: isConnected ? Colors.green : Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
               ),
             ),
           ),

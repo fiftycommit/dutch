@@ -481,30 +481,6 @@ describe('GameLogic', () => {
     });
   });
 
-  describe('takeFromDiscard', () => {
-    it('takes top card from discard as drawn card', () => {
-      const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
-      const topCard = state.discardPile[state.discardPile.length - 1];
-      const discardSizeBefore = state.discardPile.length;
-
-      GameLogic.takeFromDiscard(state);
-
-      assert.strictEqual(state.drawnCard, topCard);
-      assert.strictEqual(state.discardPile.length, discardSizeBefore - 1);
-    });
-
-    it('does nothing if discard pile is empty', () => {
-      const state = createInitializedGameState();
-      state.phase = GamePhase.playing;
-      state.discardPile = [];
-
-      GameLogic.takeFromDiscard(state);
-
-      assert.strictEqual(state.drawnCard, null);
-    });
-  });
-
   describe('attemptMatch', () => {
     it('finds player by id and attempts match', () => {
       const state = createInitializedGameState();

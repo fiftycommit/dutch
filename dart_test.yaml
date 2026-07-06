@@ -1,0 +1,5 @@
+# Configuration de la suite de tests Flutter/Dart.
+tags:
+  # Réservé aux échecs connus explicitement documentés. Aucun test ne doit
+  # porter ce tag sans enquête et décision produit.
+  known-failure:

@@ -11,7 +11,6 @@ class MockMultiplayerService extends MultiplayerService {
   int drawCardCount = 0;
   int replaceCardCount = 0;
   int discardDrawnCardCount = 0;
-  int takeFromDiscardCount = 0;
   int callDutchCount = 0;
   int attemptMatchCount = 0;
   int skipSpecialPowerCount = 0;
@@ -22,6 +21,7 @@ class MockMultiplayerService extends MultiplayerService {
   int startGameCount = 0;
   int setReadyCount = 0;
   int setFocusedCount = 0;
+  int requestFullStateCount = 0;
 
   // Mock state
   String? _mockPlayerId = 'test_player';
@@ -37,6 +37,12 @@ class MockMultiplayerService extends MultiplayerService {
   bool mockStartGameResult = true;
   bool mockCloseRoomResult = true;
   List<Map<String, dynamic>>? mockPublicRooms;
+  Future<bool> drawCardResult = Future.value(true);
+  Future<bool> replaceCardResult = Future.value(true);
+  Future<bool> discardDrawnCardResult = Future.value(true);
+  Future<bool> callDutchResult = Future.value(true);
+  Future<bool> attemptMatchResult = Future.value(true);
+  Future<bool> skipSpecialPowerResult = Future.value(true);
 
   @override
   String? get playerId => _mockPlayerId;
@@ -151,38 +157,44 @@ class MockMultiplayerService extends MultiplayerService {
   }
 
   @override
-  void drawCard() {
+  Future<bool> drawCard() async {
     drawCardCount++;
+    return drawCardResult;
   }
 
   @override
-  void replaceCard(int cardIndex) {
+  Future<bool> replaceCard(int cardIndex) async {
     replaceCardCount++;
+    return replaceCardResult;
   }
 
   @override
-  void discardDrawnCard() {
+  Future<bool> discardDrawnCard() async {
     discardDrawnCardCount++;
+    return discardDrawnCardResult;
   }
 
   @override
-  void takeFromDiscard() {
-    takeFromDiscardCount++;
-  }
-
-  @override
-  void callDutch() {
+  Future<bool> callDutch() async {
     callDutchCount++;
+    return callDutchResult;
   }
 
   @override
-  void attemptMatch(int cardIndex) {
+  Future<bool> attemptMatch(int cardIndex) async {
     attemptMatchCount++;
+    return attemptMatchResult;
   }
 
   @override
-  void skipSpecialPower() {
+  Future<bool> skipSpecialPower() async {
     skipSpecialPowerCount++;
+    return skipSpecialPowerResult;
+  }
+
+  @override
+  void requestFullState() {
+    requestFullStateCount++;
   }
 
   @override
@@ -199,7 +211,6 @@ class MockMultiplayerService extends MultiplayerService {
     drawCardCount = 0;
     replaceCardCount = 0;
     discardDrawnCardCount = 0;
-    takeFromDiscardCount = 0;
     callDutchCount = 0;
     attemptMatchCount = 0;
     skipSpecialPowerCount = 0;
@@ -210,6 +221,13 @@ class MockMultiplayerService extends MultiplayerService {
     startGameCount = 0;
     setReadyCount = 0;
     setFocusedCount = 0;
+    requestFullStateCount = 0;
+    drawCardResult = Future.value(true);
+    replaceCardResult = Future.value(true);
+    discardDrawnCardResult = Future.value(true);
+    callDutchResult = Future.value(true);
+    attemptMatchResult = Future.value(true);
+    skipSpecialPowerResult = Future.value(true);
   }
 
   /// Simulate receiving a game state update

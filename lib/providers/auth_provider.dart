@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart' as fb_core;
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../services/auth/auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
+  static const Duration _startupAuthTimeout = Duration(seconds: 2);
+
   final AuthService _authService = AuthService();
 
   UserInfo? _user;
@@ -26,12 +29,20 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      if (fb_core.Firebase.apps.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('Auth init skipped: Firebase non initialisé');
+        }
+        return;
+      }
+
       // Charger l'utilisateur courant (session persistée par Firebase)
       final fbUser = fb.FirebaseAuth.instance.currentUser;
       if (fbUser != null) {
         try {
-          _token = await fbUser.getIdToken();
-          _user = await _authService.fetchProfile();
+          _token = await fbUser.getIdToken().timeout(_startupAuthTimeout);
+          _user =
+              await _authService.fetchProfile().timeout(_startupAuthTimeout);
         } catch (e) {
           // Sur macOS, keychain peut échouer - ignorer silencieusement
           if (kDebugMode) debugPrint('Auth init token/profile error: $e');
@@ -41,28 +52,35 @@ class AuthProvider with ChangeNotifier {
       // Écouter les changements d'état auth
       _authSub = fb.FirebaseAuth.instance.authStateChanges().listen(
         (fbUser) async {
-          if (fbUser != null) {
-            _token = await fbUser.getIdToken();
-            // Récupérer le vrai profil depuis Firestore
-            _user = await _authService.fetchProfile();
-          } else {
-            _token = null;
-            _user = null;
+          try {
+            if (fbUser != null) {
+              _token = await fbUser.getIdToken().timeout(_startupAuthTimeout);
+              // Récupérer le vrai profil depuis Firestore
+              _user = await _authService
+                  .fetchProfile()
+                  .timeout(_startupAuthTimeout);
+            } else {
+              _token = null;
+              _user = null;
+            }
+          } catch (e) {
+            if (kDebugMode) debugPrint('Auth state refresh error: $e');
           }
           notifyListeners();
         },
       );
     } catch (e) {
       if (kDebugMode) debugPrint('Auth init error: $e');
+    } finally {
+      _isLoading = false;
+      _isInitialized = true;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    _isInitialized = true;
-    notifyListeners();
   }
 
   /// Rafraîchit le token Firebase (auto-refresh)
   Future<String?> getFreshToken() async {
+    if (fb_core.Firebase.apps.isEmpty) return null;
     final fbUser = fb.FirebaseAuth.instance.currentUser;
     if (fbUser == null) return null;
     _token = await fbUser.getIdToken();

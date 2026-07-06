@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 /// Émetteur d'actions de jeu vers le serveur
 /// Principe GRASP: Information Expert - Sait comment envoyer les actions de jeu
 class GameActionsEmitter {
+  static const Duration _actionAckTimeout = Duration(seconds: 5);
+
   final io.Socket? Function() _getSocket;
   final String? Function() _getRoomCode;
+  int _actionSequence = 0;
 
   GameActionsEmitter({
     required io.Socket? Function() getSocket,
@@ -15,6 +20,12 @@ class GameActionsEmitter {
 
   io.Socket? get _socket => _getSocket();
   String? get _roomCode => _getRoomCode();
+
+  String _nextActionId(String event) {
+    _actionSequence += 1;
+    final sanitizedEvent = event.replaceAll(':', '_');
+    return '$sanitizedEvent-${DateTime.now().microsecondsSinceEpoch}-$_actionSequence';
+  }
 
   /// Émet un événement de manière sécurisée
   /// Retourne true si l'émission a été faite, false sinon
@@ -34,75 +45,116 @@ class GameActionsEmitter {
     return true;
   }
 
-  void drawCard() {
-    if (kDebugMode) debugPrint('🃏 Pioche une carte');
-    _safeEmit('game:draw_card', {'roomCode': _roomCode});
+  Future<bool> _safeEmitWithAck(String event, Map<String, dynamic> data) {
+    final socket = _socket;
+    final roomCode = _roomCode;
+    if (socket == null || !socket.connected) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Socket non connecté, action $event ignorée');
+      }
+      return Future.value(false);
+    }
+    if (roomCode == null) {
+      if (kDebugMode) debugPrint('⚠️ Pas de roomCode, action $event ignorée');
+      return Future.value(false);
+    }
+
+    final completer = Completer<bool>();
+    Timer? timeout;
+
+    void complete(bool value) {
+      if (completer.isCompleted) return;
+      timeout?.cancel();
+      completer.complete(value);
+    }
+
+    final actionId = _nextActionId(event);
+    final payload = <String, dynamic>{
+      ...data,
+      'roomCode': roomCode,
+      'actionId': actionId,
+    };
+
+    timeout = Timer(_actionAckTimeout, () {
+      if (kDebugMode) {
+        debugPrint('⏱️ ACK $event expiré actionId=$actionId');
+      }
+      complete(false);
+    });
+
+    socket.emitWithAck(event, payload, ack: (response) {
+      final success = response is Map
+          ? response['success'] == true || response['ok'] == true
+          : response == true;
+      if (!success && kDebugMode) {
+        debugPrint('⚠️ Action $event refusée: $response');
+      }
+      complete(success);
+    });
+
+    return completer.future;
   }
 
-  void replaceCard(int cardIndex) {
+  Future<bool> drawCard() {
+    if (kDebugMode) debugPrint('🃏 Pioche une carte');
+    return _safeEmitWithAck('game:draw_card', const {});
+  }
+
+  Future<bool> replaceCard(int cardIndex) {
     if (kDebugMode) debugPrint('🔄 Remplace carte $cardIndex');
-    _safeEmit('game:replace_card', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:replace_card', {
       'cardIndex': cardIndex,
     });
   }
 
-  void discardDrawnCard() {
+  Future<bool> discardDrawnCard() {
     if (kDebugMode) debugPrint('🗑️ Rejette la carte piochée');
-    _safeEmit('game:discard_card', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:discard_card', const {});
   }
 
-  void takeFromDiscard() {
-    if (kDebugMode) debugPrint('♻️ Prend de la défausse');
-    _safeEmit('game:take_from_discard', {'roomCode': _roomCode});
-  }
-
-  void callDutch() {
+  Future<bool> callDutch() {
     if (kDebugMode) debugPrint('📢 DUTCH !');
-    _safeEmit('game:call_dutch', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:call_dutch', const {});
   }
 
-  void attemptMatch(int cardIndex) {
+  Future<bool> attemptMatch(int cardIndex) {
     if (kDebugMode) debugPrint('🎯 Tente de matcher carte $cardIndex');
-    _safeEmit('game:attempt_match', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:attempt_match', {
       'cardIndex': cardIndex,
     });
   }
 
   /// Carte 7 : Regarder sa propre carte
-  void usePower7LookOwnCard(int cardIndex) {
+  Future<bool> usePower7LookOwnCard(int cardIndex) {
     if (kDebugMode) {
       debugPrint('👁️ Pouvoir 7 : Regarde sa carte #${cardIndex + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'cardIndex': cardIndex,
     });
   }
 
   /// Carte 10 : Espionner une carte adversaire
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) {
+  Future<bool> usePower10SpyOpponent(
+      int targetPlayerIndex, int targetCardIndex) {
     if (kDebugMode) {
       debugPrint(
           '🔍 Pouvoir 10 : Espionne joueur $targetPlayerIndex carte #${targetCardIndex + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'targetPlayerIndex': targetPlayerIndex,
       'targetCardIndex': targetCardIndex,
     });
   }
 
   /// Carte V (Valet) : Échange universel entre 2 joueurs
-  void usePowerValetSwap(
+  Future<bool> usePowerValetSwap(
       int player1Index, int card1Index, int player2Index, int card2Index) {
     if (kDebugMode) {
       debugPrint(
           '🔄 Pouvoir Valet : Échange joueur $player1Index carte #${card1Index + 1} ↔ joueur $player2Index carte #${card2Index + 1}');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'player1Index': player1Index,
       'card1Index': card1Index,
       'player2Index': player2Index,
@@ -111,12 +163,11 @@ class GameActionsEmitter {
   }
 
   /// JOKER : Mélanger la main d'un joueur (y compris soi-même)
-  void usePowerJokerShuffle(int targetPlayerIndex) {
+  Future<bool> usePowerJokerShuffle(int targetPlayerIndex) {
     if (kDebugMode) {
       debugPrint('🃏 Pouvoir Joker : Mélange joueur $targetPlayerIndex');
     }
-    _safeEmit('game:use_special_power', {
-      'roomCode': _roomCode,
+    return _safeEmitWithAck('game:use_special_power', {
       'targetPlayerIndex': targetPlayerIndex,
     });
   }
@@ -138,9 +189,9 @@ class GameActionsEmitter {
     });
   }
 
-  void skipSpecialPower() {
+  Future<bool> skipSpecialPower() {
     if (kDebugMode) debugPrint('⏭️ Ignore le pouvoir spécial');
-    _safeEmit('game:skip_special_power', {'roomCode': _roomCode});
+    return _safeEmitWithAck('game:skip_special_power', const {});
   }
 
   void setReady(bool ready) {

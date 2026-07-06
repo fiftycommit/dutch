@@ -12,13 +12,15 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockMultiplayerService mockService;
+  late MockHapticService mockHapticService;
   late MultiplayerGameProvider provider;
 
   setUp(() {
     mockService = MockMultiplayerService();
+    mockHapticService = MockHapticService();
     provider = MultiplayerGameProvider(
       multiplayerService: mockService,
-      hapticService: MockHapticService(),
+      hapticService: mockHapticService,
     );
   });
 
@@ -134,6 +136,43 @@ void main() {
       expect(mockService.drawCardCount, 1);
     });
 
+    test('drawCard ACK refuse restaure l etat optimiste et demande resync',
+        () async {
+      mockService.drawCardResult = Future.value(false);
+      mockService.onPreloadedDeckCardUpdate
+          ?.call(PlayingCard.create('hearts', 'R'));
+
+      provider.drawCard();
+
+      expect(provider.gameState!.drawnCard?.value, 'R');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(provider.gameState!.drawnCard, isNull);
+      expect(provider.errorMessage, contains('Pioche non confirmé'));
+      expect(mockService.requestFullStateCount, 1);
+      expect(mockService.drawCardCount, 1);
+      expect(mockHapticService.errorCount, 1);
+    });
+
+    test('action timeout retournee false stocke erreur et demande resync',
+        () async {
+      mockService.replaceCardResult = Future<bool>.delayed(
+        const Duration(milliseconds: 10),
+        () => false,
+      );
+
+      provider.replaceCard(0);
+      expect(mockService.requestFullStateCount, 0);
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(provider.errorMessage, contains('Remplacement non confirmé'));
+      expect(mockService.requestFullStateCount, 1);
+      expect(mockService.replaceCardCount, 1);
+      expect(provider.gameState!.drawnCard, isNull);
+      expect(mockHapticService.errorCount, 1);
+    });
+
     test('replaceCard calls service', () {
       provider.replaceCard(0);
       expect(mockService.replaceCardCount, 1);
@@ -142,11 +181,6 @@ void main() {
     test('discardDrawnCard calls service', () {
       provider.discardDrawnCard();
       expect(mockService.discardDrawnCardCount, 1);
-    });
-
-    test('takeFromDiscard calls service', () {
-      provider.takeFromDiscard();
-      expect(mockService.takeFromDiscardCount, 1);
     });
 
     test('callDutch calls service', () {

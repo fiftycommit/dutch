@@ -31,6 +31,11 @@ class Player {
   final int position;
   final bool isSpectator;
 
+  /// Statut de connexion réel du joueur (fourni par le serveur dans le gameState).
+  /// Source de vérité de la pastille de présence in-game (les bots sont toujours
+  /// connectés). Défaut `true` uniquement en l'absence d'info (bots).
+  final bool connected;
+
   List<PlayingCard> hand;
   List<bool> knownCards;
   List<PlayingCard?> mentalMap;
@@ -97,6 +102,7 @@ class Player {
     this.aiParameters,
     this.position = 0,
     this.isSpectator = false,
+    this.connected = true,
     List<PlayingCard>? hand,
     List<bool>? knownCards,
     List<PlayingCard?>? mentalMap,
@@ -145,6 +151,7 @@ class Player {
             : Map<String, double>.from(other.aiParameters!),
         position = other.position,
         isSpectator = other.isSpectator,
+        connected = other.connected,
         hand = List.from(other.hand),
         knownCards = List.from(other.knownCards),
         mentalMap = List.from(other.mentalMap),
@@ -844,6 +851,7 @@ class Player {
           : null,
       position: json['position'] as int? ?? 0,
       isSpectator: json['isSpectator'] as bool? ?? false,
+      connected: json['connected'] as bool? ?? true,
       hand: (json['hand'] as List?)
               ?.map((e) => PlayingCard.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -867,6 +875,7 @@ class Player {
       'botSkillLevel': botSkillLevel?.index,
       'position': position,
       'isSpectator': isSpectator,
+      'connected': connected,
       'hand': hand.map((c) => c.toJson()).toList(),
       'knownCards': knownCards,
       'memorizedCardIndices': memorizedCardIndices,
@@ -885,6 +894,7 @@ class Player {
     Map<String, double>? aiParameters,
     int? position,
     bool? isSpectator,
+    bool? connected,
     bool? jokerInferenceActive,
     String? jokerInferenceMode,
     List<PlayingCard>? jokerInferenceKnownPool,
@@ -907,6 +917,7 @@ class Player {
               : null),
       position: position ?? this.position,
       isSpectator: isSpectator ?? this.isSpectator,
+      connected: connected ?? this.connected,
       hand: List.from(hand),
       knownCards: List.from(knownCards),
       mentalMap: List.from(mentalMap),

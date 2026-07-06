@@ -16,6 +16,8 @@ export 'saved_rooms_repository.dart' show SavedRoom;
 /// MultiplayerService refactoré - Orchestrateur (~350 lignes au lieu de 1136)
 /// Principe GRASP: Controller - Coordonne les sous-modules
 class MultiplayerService {
+  static const Duration _roomAckTimeout = Duration(seconds: 6);
+
   final SocketConnectionHandler _connectionHandler = SocketConnectionHandler();
   final SavedRoomsRepository _roomsRepository = SavedRoomsRepository();
   late final GameActionsEmitter _actionsEmitter;
@@ -195,6 +197,7 @@ class MultiplayerService {
     if (!isConnected) await connect();
 
     final completer = Completer<String?>();
+    var isSettled = false;
     final clientId = await _connectionHandler.ensureClientId();
     _connectionHandler.lastPlayerName = playerName;
 
@@ -205,6 +208,8 @@ class MultiplayerService {
       'playerName': playerName,
       'clientId': clientId,
     }, ack: (response) {
+      if (isSettled) return;
+      isSettled = true;
       if (response == null) {
         completer.completeError('Pas de réponse du serveur');
         return;
@@ -218,7 +223,18 @@ class MultiplayerService {
       }
     });
 
-    return completer.future;
+    return completer.future.timeout(
+      _roomAckTimeout,
+      onTimeout: () {
+        isSettled = true;
+        final error = TimeoutException(
+          'Timeout ACK room:create',
+          _roomAckTimeout,
+        );
+        ErrorReportingService().reportNetwork(error, endpoint: 'room:create');
+        throw error;
+      },
+    );
   }
 
   Future<List<Map<String, dynamic>>?> getPublicRooms() async {
@@ -255,6 +271,7 @@ class MultiplayerService {
     if (!isConnected) await connect();
 
     final completer = Completer<Map<String, dynamic>?>();
+    var isSettled = false;
     final clientId = await _connectionHandler.ensureClientId();
     _connectionHandler.lastPlayerName = playerName;
 
@@ -263,6 +280,8 @@ class MultiplayerService {
       'playerName': playerName,
       'clientId': clientId,
     }, ack: (response) {
+      if (isSettled) return;
+      isSettled = true;
       if (response == null) {
         completer.completeError('Pas de réponse du serveur');
         return;
@@ -276,7 +295,18 @@ class MultiplayerService {
       }
     });
 
-    return completer.future;
+    return completer.future.timeout(
+      _roomAckTimeout,
+      onTimeout: () {
+        isSettled = true;
+        final error = TimeoutException(
+          'Timeout ACK room:join',
+          _roomAckTimeout,
+        );
+        ErrorReportingService().reportNetwork(error, endpoint: 'room:join');
+        throw error;
+      },
+    );
   }
 
   void leaveRoom() {
@@ -426,23 +456,25 @@ class MultiplayerService {
   // ACTIONS DE JEU (délégation)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void drawCard() => _actionsEmitter.drawCard();
-  void replaceCard(int cardIndex) => _actionsEmitter.replaceCard(cardIndex);
-  void discardDrawnCard() => _actionsEmitter.discardDrawnCard();
-  void takeFromDiscard() => _actionsEmitter.takeFromDiscard();
-  void callDutch() => _actionsEmitter.callDutch();
-  void attemptMatch(int cardIndex) => _actionsEmitter.attemptMatch(cardIndex);
-  void usePower7LookOwnCard(int cardIndex) =>
+  Future<bool> drawCard() => _actionsEmitter.drawCard();
+  Future<bool> replaceCard(int cardIndex) =>
+      _actionsEmitter.replaceCard(cardIndex);
+  Future<bool> discardDrawnCard() => _actionsEmitter.discardDrawnCard();
+  Future<bool> callDutch() => _actionsEmitter.callDutch();
+  Future<bool> attemptMatch(int cardIndex) =>
+      _actionsEmitter.attemptMatch(cardIndex);
+  Future<bool> usePower7LookOwnCard(int cardIndex) =>
       _actionsEmitter.usePower7LookOwnCard(cardIndex);
-  void usePower10SpyOpponent(int targetPlayerIndex, int targetCardIndex) =>
+  Future<bool> usePower10SpyOpponent(
+          int targetPlayerIndex, int targetCardIndex) =>
       _actionsEmitter.usePower10SpyOpponent(targetPlayerIndex, targetCardIndex);
-  void usePowerValetSwap(int p1, int c1, int p2, int c2) =>
+  Future<bool> usePowerValetSwap(int p1, int c1, int p2, int c2) =>
       _actionsEmitter.usePowerValetSwap(p1, c1, p2, c2);
   void sendSpecialPowerTargetSelection(int? p1, int? c1, int? p2, int? c2) =>
       _actionsEmitter.sendSpecialPowerTargetSelection(p1, c1, p2, c2);
-  void usePowerJokerShuffle(int targetPlayerIndex) =>
+  Future<bool> usePowerJokerShuffle(int targetPlayerIndex) =>
       _actionsEmitter.usePowerJokerShuffle(targetPlayerIndex);
-  void skipSpecialPower() => _actionsEmitter.skipSpecialPower();
+  Future<bool> skipSpecialPower() => _actionsEmitter.skipSpecialPower();
   void setReady(bool ready) => _actionsEmitter.setReady(ready);
   void sendChatMessage(String message) =>
       _actionsEmitter.sendChatMessage(message);

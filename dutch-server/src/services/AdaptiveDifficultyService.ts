@@ -32,8 +32,8 @@ export class AdaptiveDifficultyService {
   private dataDir: string;
   private playerStats: Map<string, PlayerStats>;
 
-  constructor() {
-    this.dataDir = path.join(__dirname, '../../data/bot-learning/adaptive');
+  constructor(dataDir?: string) {
+    this.dataDir = dataDir ?? path.join(__dirname, '../../data/bot-learning/adaptive');
     this.playerStats = new Map();
     this.ensureDataDirectory();
     this.loadPlayerStatsSync();

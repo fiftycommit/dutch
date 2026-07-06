@@ -1117,7 +1117,13 @@ class RlEnv {
     return _advanceToRlOrTerminal();
   }
 
-  /// ⚠ TEST-ONLY (non utilisé sur le chemin Python/PPO).
+  /// ⚠ TEST-ONLY (non utilisé sur le chemin Python/PPO, ni par `main()`).
+  /// Émet une observation sans appliquer d'action, pour figer des invariants
+  /// de reward/debug après mutation contrôlée d'état dans les tests. Ne pas
+  /// appeler depuis le protocole NDJSON de production.
+  Map<String, dynamic> emitObservationForTest() => _observation();
+
+  /// ⚠ TEST-ONLY (non utilisé sur le chemin Python/PPO, ni par `main()`).
   /// Applique l'action de pouvoir du siège RL SANS dérouler la fin de tour
   /// (réaction adverse + tours suivants). Permet aux tests d'observer l'effet
   /// moteur immédiat d'un pouvoir avant que les adversaires ne rejouent.

@@ -206,8 +206,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   Future<void> _showRevealedCardsDialog() async {
     // Toutes les cartes avec leurs indices
     final allCards = config.localPlayer.hand;
+    const revealDuration = Duration(seconds: 4);
+    var dialogClosed = false;
+    final navigator = Navigator.of(context, rootNavigator: true);
 
-    showDialog(
+    final dialogFuture = showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => PopScope(
@@ -350,7 +353,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             width: constraints.maxWidth,
                             child: TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0.0, end: 1.0),
-                              duration: const Duration(seconds: 4),
+                              duration: revealDuration,
                               builder: (context, value, child) {
                                 return Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -365,7 +368,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                     FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Text(
-                                        "${((1 - value) * 4).ceil()}s",
+                                        "${((1 - value) * revealDuration.inSeconds).ceil()}s",
                                         style: TextStyle(
                                           color: AppColors.textDisabled,
                                           fontSize: textSize,
@@ -387,13 +390,17 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           },
         ),
       ),
-    );
+    ).whenComplete(() {
+      dialogClosed = true;
+    });
 
-    await Future.delayed(const Duration(seconds: 4));
+    await Future.delayed(revealDuration);
 
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+    if (mounted && !dialogClosed && navigator.canPop()) {
+      navigator.pop();
     }
+
+    await dialogFuture;
   }
 
   @override
@@ -701,7 +708,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
               children: List.generate(config.localPlayer.hand.length, (index) {
                 final isSelected = _selectedCards.contains(index);
 
-                return GestureDetector(
+                return Semantics(
+                  label: 'Carte à mémoriser ${index + 1}',
+                  button: true,
+                  selected: isSelected,
+                  child: GestureDetector(
                   onTap: () => _onCardTap(index),
                   child: AnimatedBuilder(
                     animation: _pulseController,
@@ -750,6 +761,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         ),
                       );
                     },
+                  ),
                   ),
                 );
               }),

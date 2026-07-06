@@ -17,7 +17,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 class MultiplayerMenuScreen extends StatefulWidget {
@@ -446,7 +445,8 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
                     ),
                   ),
                   content: SizedBox(
-                    width: (MediaQuery.of(dialogContext).size.width - 48).clamp(0.0, 440.0),
+                    width: (MediaQuery.of(dialogContext).size.width - 48)
+                        .clamp(0.0, 440.0),
                     child: SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,7 +808,7 @@ class _MultiplayerMenuScreenState extends State<MultiplayerMenuScreen>
     final compactHeader = width < 980;
 
     final themed = Theme.of(context).copyWith(
-      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
     );
 
     return Theme(

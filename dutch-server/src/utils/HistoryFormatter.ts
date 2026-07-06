@@ -29,10 +29,6 @@ export class HistoryFormatter {
         return `${playerName} a remplacé ${possessif} ${cardName} par la carte piochée`;
     }
 
-    static formatTakeFromDiscard(playerName: string): string {
-        return `${playerName} a pris de la défausse.`;
-    }
-
     static formatMatchSuccess(playerName: string, card: PlayingCard): string {
         const isDame = card.value === 'Q';
         const cardName = isDame ? 'Dame' : card.value;

@@ -52,7 +52,8 @@ class SideDeckWidget extends StatelessWidget {
                 bottom: -2,
                 right: -2,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(8),
@@ -78,8 +79,6 @@ class SideDeckWidget extends StatelessWidget {
 /// Défausse latérale (entre centre et adversaires droite)
 class SideDiscardWidget extends StatelessWidget {
   final GameState gameState;
-  final bool canTakeDiscard;
-  final VoidCallback? onTakeFromDiscard;
   final VoidCallback onShowDiscardPile;
   final PlayingCard? discardCard;
   final GlobalKey discardKey;
@@ -87,8 +86,6 @@ class SideDiscardWidget extends StatelessWidget {
   const SideDiscardWidget({
     super.key,
     required this.gameState,
-    required this.canTakeDiscard,
-    this.onTakeFromDiscard,
     required this.onShowDiscardPile,
     required this.discardCard,
     required this.discardKey,
@@ -109,9 +106,7 @@ class SideDiscardWidget extends StatelessWidget {
             border: Border.all(color: Colors.white12, width: 1.5),
           ),
           child: GestureDetector(
-            onTap: canTakeDiscard
-                ? onTakeFromDiscard
-                : onShowDiscardPile,
+            onTap: onShowDiscardPile,
             child: CardWidget(
               key: discardKey,
               card: discardCard,

@@ -10,8 +10,6 @@
 // 6. ⭐ Changement d'identité de proxy entre 2 steps => reward_destab == 0
 //    (pas de récompense gratuite due au changement de leader).
 
-import 'dart:math';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/models/game_settings.dart';
 import 'package:dutch_game/models/game_state.dart';
@@ -93,20 +91,6 @@ GameState _gameStateWith(List<Player> players, {int turnCount = 5}) {
     difficulty: Difficulty.medium,
     turnCount: turnCount,
   );
-}
-
-// Pioche d'action légale aléatoire (compact) pour le test #6.
-Map<String, dynamic> _pick(Map<String, dynamic> obs, Random rng) {
-  final mp = obs['micro_phase'];
-  final mask = obs['action_mask'] as Map<String, dynamic>;
-  if (mp == 'dutchOrDraw') return {'kind': 'continue_draw'};
-  if (mp == 'postDraw') {
-    final rep = (mask['replace'] as List).cast<bool>();
-    final idxs = [for (var i = 0; i < rep.length; i++) if (rep[i]) i];
-    if (idxs.isEmpty || rng.nextBool()) return {'kind': 'discard_drawn'};
-    return {'kind': 'replace', 'params': {'index': idxs[rng.nextInt(idxs.length)]}};
-  }
-  return {'kind': 'skip_power'};
 }
 
 void main() {
@@ -259,34 +243,34 @@ void main() {
   // 6 ──────────────────────────────────────────────────────────────────────
   test('6. changement d\'identité de proxy => reward_destab == 0 ce step-là',
       () async {
-    final rng = Random(7);
-    var proxyChanges = 0;
+    final env = RlEnv(
+      episodeId: 'proxy-switch',
+      forcedNumPlayers: 3,
+      forcedOpponentBehavior: BotBehavior.balanced,
+      forcedOpponentSkill: BotSkillLevel.silver,
+    );
 
-    for (var seed = 0; seed < 40; seed++) {
-      final env = RlEnv(episodeId: 'pc$seed');
-      var obs = await env.reset(seed);
-      String? prevProxy = obs['proxy_seat'] as String?;
-      var safety = 0;
-      while (obs['done'] != true && safety++ < 5000) {
-        obs = await env.step(_pick(obs, rng));
-        if (obs['type'] == 'error') break;
-        final curProxy = obs['proxy_seat'] as String?;
-        final destab = (obs['rewards'] as Map)['destab'] as num;
+    final first = await env.reset(7);
+    expect(first['proxy_seat'], 'p1');
 
-        if (prevProxy != null && curProxy != null && curProxy != prevProxy) {
-          proxyChanges++;
-          expect(destab, 0,
-              reason: 'seed $seed : proxy $prevProxy->$curProxy doit donner '
-                  'destab=0 (pas de comparaison entre deux joueurs)');
-        }
-        // destab toujours >= 0 (max(0, .))
-        expect(destab, greaterThanOrEqualTo(0));
-        prevProxy = curProxy;
-      }
-    }
+    final p1 = env.players.singleWhere((p) => p.id == 'p1');
+    final p2 = env.players.singleWhere((p) => p.id == 'p2');
+    p1.hand = [
+      PlayingCard.create('hearts', 'R'),
+      PlayingCard.create('clubs', 'R'),
+      PlayingCard.create('spades', 'D'),
+      PlayingCard.create('diamonds', 'V'),
+    ];
+    p2.hand = [PlayingCard.create('hearts', 'A')];
 
-    expect(proxyChanges, greaterThan(0),
-        reason: 'aucun changement de proxy observé sur 40 épisodes — '
-            'le test ne prouve rien, augmenter la variété/seed');
+    final switched = env.emitObservationForTest();
+    expect(switched['proxy_seat'], 'p2');
+    expect((switched['rewards'] as Map)['destab'], 0,
+        reason: 'proxy p1->p2 doit donner destab=0 '
+            '(pas de comparaison entre deux joueurs)');
+
+    final stable = env.emitObservationForTest();
+    expect(stable['proxy_seat'], 'p2');
+    expect((stable['rewards'] as Map)['destab'], greaterThanOrEqualTo(0));
   });
 }

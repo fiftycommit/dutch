@@ -75,6 +75,7 @@ function handleServiceWorkerUpdates() {
 _flutter.loader.load({
   serviceWorkerSettings: {
     serviceWorkerVersion: flutterServiceWorkerVersion,
+    serviceWorkerUrl: "/dutch_service_worker.js?v=" + flutterServiceWorkerVersion,
   },
   onEntrypointLoaded: async function (engineInitializer) {
     handleServiceWorkerUpdates();
@@ -82,5 +83,11 @@ _flutter.loader.load({
       renderer: "canvaskit",
     });
     await appRunner.runApp();
+    if (typeof window.flutterReady === "function") {
+      window.flutterReady();
+    }
+    if (typeof window.hideSplash === "function") {
+      window.hideSplash();
+    }
   },
 });

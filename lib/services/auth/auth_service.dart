@@ -61,7 +61,7 @@ class AuthService {
     return cleaned.length > 20 ? cleaned.substring(0, 20) : cleaned;
   }
 
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  FirebaseAuth get _firebaseAuth => FirebaseAuth.instance;
 
   /// Flag pour n'initialiser GoogleSignIn qu'une seule fois (requis par v7)
   bool _googleSignInInitialized = false;

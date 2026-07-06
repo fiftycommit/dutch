@@ -15,7 +15,6 @@ import '../services/ui/stats_service.dart';
 import '../core/interfaces/i_bot_ai_service.dart';
 import '../core/interfaces/i_game_controller.dart';
 import '../services/game/bot/bot_config.dart';
-import '../services/game/bot/bot_dutch_strategy.dart';
 import '../services/game/bot/bot_personality.dart';
 import '../services/game/bot/bot_power_handler.dart';
 import '../services/game/bot/human_threat_tracker.dart';
@@ -495,34 +494,6 @@ class GameProvider with ChangeNotifier implements IGameController {
   }
 
   @override
-  void takeFromDiscard() {
-    if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
-    if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) {
-      return;
-    }
-    if (_gameState!.discardPile.isEmpty) return;
-
-    final human = _gameState!.currentPlayer;
-    final beforeScore = human.getEstimatedScore();
-    _gameState!.drawnCard = _gameState!.discardPile.removeLast();
-    BotDutchStrategy.discardTracker.recordTakeFromDiscard(human.id);
-    _hapticService.cardTap();
-    _gameState!.addToHistory(ActionHistoryMessages.takeFromDiscard(
-        human.name, _gameState!.drawnCard!));
-
-    _trackingProvider.recordPlayerActionWithResult(
-      actionType: 'draw',
-      gameState: _gameState!,
-      actionDetails: {
-        'source': 'discard',
-        'drawnCard': _gameState!.drawnCard?.toJson()
-      },
-      result: {'scoreChange': human.getEstimatedScore() - beforeScore},
-    );
-    notifyListeners();
-  }
-
-  @override
   void callDutch() {
     if (_gameState == null || _gameState!.phase != GamePhase.playing) return;
     if (!_gameState!.currentPlayer.isHuman || _gameState!.drawnCard != null) {
@@ -829,27 +800,32 @@ class GameProvider with ChangeNotifier implements IGameController {
     isProcessing = true;
     notifyListeners();
 
-    await _botOrchestrator.playBotTurn(
-      _gameState!,
-      _playerMMR,
-      _isPaused,
-      _currentContext,
-      () async => _checkInstantEnd(),
-      hardcoreLevel: _hardcoreLevel,
-      playerSkillEstimate: _skillEstimator.estimatedSkill,
-      onStateChanged: () {
-        if (_gameState == null) return;
-        notifyListeners();
-      },
-    );
+    try {
+      await _botOrchestrator.playBotTurn(
+        _gameState!,
+        _playerMMR,
+        _isPaused,
+        _currentContext,
+        () async => _checkInstantEnd(),
+        hardcoreLevel: _hardcoreLevel,
+        playerSkillEstimate: _skillEstimator.estimatedSkill,
+        onStateChanged: () {
+          if (_gameState == null) return;
+          notifyListeners();
+        },
+      );
 
-    if (_gameState?.phase == GamePhase.dutchCalled) {
-      endGame();
-      return;
+      if (_gameState?.phase == GamePhase.dutchCalled) {
+        endGame();
+        return;
+      }
+    } finally {
+      if (isProcessing) {
+        isProcessing = false;
+        notifyListeners();
+      }
     }
 
-    isProcessing = false;
-    notifyListeners();
     if (_gameState?.phase == GamePhase.playing) {
       if (_currentActionTextDisplayMs > 0) {
         await Future.delayed(
@@ -891,6 +867,7 @@ class GameProvider with ChangeNotifier implements IGameController {
 
   void endGame() {
     if (_gameState == null) return;
+    isProcessing = false;
     _hapticService.success();
     _clearActiveGameFlag();
     _gameState!.phase = GamePhase.ended;

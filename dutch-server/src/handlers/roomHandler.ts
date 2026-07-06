@@ -120,15 +120,30 @@ export function setupRoomHandler(socket: Socket, roomManager: RoomManager, io?: 
       }
       roomRegistryService.ensureAvailable();
 
-      // Rate limit sur les tentatives de join
-      const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket);
-      if (!joinAllowed) {
-        callback({ success: false, error: 'Trop de tentatives, réessayez dans une minute' });
-        return;
-      }
-
       const playerName = socketUser.displayName || 'Joueur';
-      await roomManager.loadRoom(roomCode);
+      const loadedRoom = await roomManager.loadRoom(roomCode);
+      const normalizedClientId = data.clientId?.toString().trim();
+      const normalizedUsername = socketUser.username?.trim().toLowerCase();
+      const normalizedUserId = socketUser.uid.trim();
+      const isExistingRoomMember = loadedRoom?.players.some((player) => {
+        if (!player.isHuman) return false;
+        if (player.userId?.trim() === normalizedUserId) return true;
+        if (normalizedUsername && player.username?.trim().toLowerCase() === normalizedUsername) {
+          return true;
+        }
+        return !!normalizedClientId && player.clientId?.trim() === normalizedClientId;
+      }) === true;
+
+      // Rate limit sur les nouveaux joins / codes invalides. Une reconnexion
+      // authentifiée d'un joueur déjà membre de cette room ne doit pas être
+      // bloquée par l'anti-bruteforce de codes.
+      if (!isExistingRoomMember) {
+        const joinAllowed = await SecurityService.checkJoinAttemptLimit(socket);
+        if (!joinAllowed) {
+          callback({ success: false, error: 'Trop de tentatives, réessayez dans une minute' });
+          return;
+        }
+      }
 
       const duplicateConnected = roomManager.findConnectedPlayerByUserId(
         roomCode,

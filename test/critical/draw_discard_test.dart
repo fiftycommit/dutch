@@ -82,7 +82,7 @@ void main() {
       });
     });
 
-    group('takeFromDiscard', () {
+    group('topDiscardCard', () {
       test('topDiscardCard retourne la dernière carte', () {
         final gs = _createGameState();
         final lastCard = gs.discardPile.last;

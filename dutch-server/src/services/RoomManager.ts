@@ -334,20 +334,26 @@ export class RoomManager {
         this.clearPresenceCheck(roomCode, previousId);
       }
 
-      // Restore host status using persistent identity.
-      // Priority: room creator always gets host back, then old socket match,
-      // then fallback if current host is stale/disconnected.
-      const isCreator = normalizedUserId && room.creatorUserId === normalizedUserId;
+      // Restore host status using persistent identity only when this player was
+      // the current host, or when the current host is no longer valid. The room
+      // creator must not automatically steal host back after a legitimate
+      // transfer caused by a previous disconnect.
       const wasHost = room.hostPlayerId === previousId;
       const hostPlayerStale = !room.players.some(
         (p) => p.id === room.hostPlayerId && p.connected
       );
-      if (isCreator || wasHost || hostPlayerStale) {
+      if (wasHost || hostPlayerStale) {
         room.hostPlayerId = socketId;
       }
 
       this.ensureHost(room);
       this.touchRoom(room);
+      // Reconnexion en pleine partie : rediffuser l'état de jeu pour que les
+      // autres clients voient ce joueur repasser EN LIGNE (id resocketé +
+      // connected=true). Sans ça la pastille resterait « Hors ligne » à vie.
+      if (room.gameState && room.status === RoomStatus.playing) {
+        this.broadcastGameState(roomCode, 'PLAYER_RECONNECTED');
+      }
       return { room, player: existing, previousSocketId: previousId === socketId ? undefined : previousId };
     }
 
@@ -1657,8 +1663,36 @@ export class RoomManager {
       player.connected = false;
       player.focused = false;
       player.lastSeenAt = this.now();
+      // Sur l'écran de résultats, un joueur qui décroche ne doit plus « retenir »
+      // les résultats : sinon `playersInResults` ne se vide jamais, la room reste
+      // bloquée en `ended` avec un gameState périmé, et un nouveau venu reçoit
+      // l'ancienne partie terminée (bug n°3). On le retire et on tente le reset.
+      if (room.status === RoomStatus.ended) {
+        room.playersInResults?.delete(socketId);
+        this.tryResetEndedRoom(room, room.id);
+      }
+      // Si l'HÔTE décroche, migrer le statut d'hôte AVANT de diffuser la présence,
+      // sinon le broadcast garde un hostPlayerId pointant sur un socket déconnecté
+      // et aucun client ne reçoit les contrôles d'hôte (bug n°2). Vaut en attente
+      // ET en partie (cleanupRooms ne migrait que les rooms `waiting`, et sans
+      // rediffuser). ensureHost migre vers un humain connecté non-spectateur.
+      if (room.hostPlayerId === socketId) {
+        this.ensureHost(room);
+      }
+      if (room.status === RoomStatus.playing && !player.isSpectator) {
+        this.removePlayerFromActiveRoom(room.id, socketId, {
+          removeReason: `${player.name} a quitté la partie.`,
+        });
+        continue;
+      }
       this.touchRoom(room);
       this.broadcastPresence(room.id);
+      // Rediffuser l'ÉTAT DE JEU pour que la pastille de présence in-game des
+      // autres clients reflète la déconnexion (bug n°1). gameState.players porte
+      // `connected` (objets partagés avec room.players), ici passé à false.
+      if (room.gameState && room.status === RoomStatus.playing) {
+        this.broadcastGameState(room.id, 'PLAYER_DISCONNECTED');
+      }
       this.checkGameEndCondition(room.id);
     }
     this.cleanupRooms();
@@ -1709,6 +1743,19 @@ export class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room?.gameState) return;
     if (room.gameState.phase === GamePhase.ended) return;
+
+    // Plus AUCUN humain connecté : la partie tournerait toute seule avec des bots
+    // (salon fantôme : `anyConnected` de cleanupRooms compte les bots, donc la room
+    // ne se ferme jamais). On termine, même pendant la mémorisation (setup), sinon
+    // une partie abandonnée en plein démarrage reste bloquée à vie (bug n°2.4).
+    const connectedHumans = room.players.filter(
+      p => p.isHuman && p.connected && !p.isSpectator
+    ).length;
+    if (connectedHumans === 0) {
+      this.handleGameEnd(roomCode);
+      return;
+    }
+
     if (room.gameState.phase === GamePhase.setup) return; // Don't end during setup
 
     // If less than 2 active humans remain (and we are in a multiplayer game)
@@ -2724,6 +2771,28 @@ export class RoomManager {
     });
 
     state.deck = state.deck.map(() => ({ hidden: true }));
+
+    // ── Confidentialité des cartes privées (intégrité de jeu) ────────────────
+    // Ces champs portent une VRAIE carte dans le gameState partagé ; sans
+    // filtrage, chaque broadcast l'envoie en clair à tous (adversaires ET
+    // spectateurs), lisible dans les DevTools. On ne les laisse qu'au joueur
+    // légitime, masqués (hidden) pour les autres. La fin de partie révèle tout.
+    if (!isGameEnded) {
+      // drawnCard : la carte piochée n'appartient qu'au joueur courant, jusqu'à
+      // ce qu'il la garde ou la défausse.
+      const currentPlayerId = gameState.players[gameState.currentPlayerIndex]?.id;
+      if (gameState.drawnCard && currentPlayerId !== playerId) {
+        state.drawnCard = { hidden: true };
+      }
+
+      // lastSpiedCard : carte regardée via pouvoir 7/10, visible uniquement du
+      // joueur qui utilise le pouvoir (specialPowerPlayerId, ou le joueur courant
+      // par défaut quand il est null).
+      const spyId = gameState.specialPowerPlayerId ?? currentPlayerId;
+      if (gameState.lastSpiedCard && spyId !== playerId) {
+        state.lastSpiedCard = { hidden: true };
+      }
+    }
 
     // Précharger la prochaine carte du deck pour le joueur actuel
     // Cela permet d'éliminer la latence perçue lors de la pioche

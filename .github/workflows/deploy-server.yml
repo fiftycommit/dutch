@@ -1,8 +1,6 @@
 name: Deploy to Production
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 # Prevent concurrent deploys
@@ -30,8 +28,10 @@ jobs:
             --release \
             --base-href / \
             --tree-shake-icons \
+            --no-web-resources-cdn \
             ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"} \
             ${FIREBASE_APP_CHECK_WEB_SITE_KEY:+--dart-define=FIREBASE_APP_CHECK_WEB_SITE_KEY="$FIREBASE_APP_CHECK_WEB_SITE_KEY"}
+          node scripts/generate-pwa-service-worker.mjs build/web
           cp build/web/index.html build/web/404.html
         env:
           FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
@@ -48,6 +48,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify production Node.js version
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 164.92.234.245
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 2m
+          script: |
+            set -euo pipefail
+
+            REQUIRED_NODE_MAJOR=24
+            if ! command -v node > /dev/null 2>&1; then
+              echo "❌ Node.js is not installed on the production server."
+              exit 1
+            fi
+
+            NODE_VERSION=$(node -p "process.versions.node")
+            NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]")
+            echo "Production Node.js: v${NODE_VERSION}"
+
+            if [ "$NODE_MAJOR" != "$REQUIRED_NODE_MAJOR" ]; then
+              echo "❌ Production Node.js major must be ${REQUIRED_NODE_MAJOR} before deploying."
+              exit 1
+            fi
 
       - name: Upload server release
         uses: appleboy/scp-action@v0.1.7

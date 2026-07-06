@@ -40,15 +40,28 @@ export async function startServer() {
     ? process.env.ALLOWED_ORIGINS.split(',')
     : ['https://dutch-game.me', 'http://localhost:3000', 'http://localhost:8080'];
 
+  // Hors production (dev/test local), on accepte n'importe quel origine localhost
+  // pour ne pas dépendre du port sur lequel le build web est servi. La prod garde
+  // l'allowlist stricte.
+  const isDev = process.env.NODE_ENV !== 'production';
+  const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+  const corsOrigin: cors.CorsOptions['origin'] = isDev
+    ? (origin, cb) =>
+        cb(
+          null,
+          !origin || localhostOrigin.test(origin) || allowedOrigins.includes(origin),
+        )
+    : allowedOrigins;
+
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(cors({ origin: allowedOrigins }));
+  app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
   app.use(SecurityService.apiLimiter); // API Rate Limiting
 
   const io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: corsOrigin,
       methods: ['GET', 'POST'],
     },
     pingTimeout: 60000,

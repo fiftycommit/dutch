@@ -110,3 +110,7 @@ dutch-server/data/firebase-service-account.json
 
 # Artefact npm généré à la racine par erreur (le projet Node est dans dutch-server/)
 /package-lock.json
+# E2E Playwright
+e2e/node_modules/
+e2e/package-lock.json
+e2e/test-results/

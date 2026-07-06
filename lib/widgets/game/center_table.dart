@@ -18,7 +18,6 @@ class CenterTable extends StatefulWidget {
   final bool isCompactMode;
   final VoidCallback? onShowDiscard;
   final VoidCallback? onDrawCard;
-  final VoidCallback? onTakeFromDiscard;
   final int reactionTimeTotalMs;
   final int specialPowerTimeTotalMs;
   final bool enableHaptics;
@@ -44,7 +43,6 @@ class CenterTable extends StatefulWidget {
     required this.isCompactMode,
     this.onShowDiscard,
     this.onDrawCard,
-    this.onTakeFromDiscard,
     this.reactionTimeTotalMs = 3000,
     this.specialPowerTimeTotalMs = 15000,
     this.enableHaptics = false,
@@ -556,12 +554,6 @@ class _CenterTableState extends State<CenterTable>
         widget.isMyTurn &&
         !widget.hasDrawn &&
         gs.phase == GamePhase.playing;
-    final canTakeDiscard = widget.onTakeFromDiscard != null &&
-        widget.isMyTurn &&
-        !widget.hasDrawn &&
-        gs.phase == GamePhase.playing &&
-        gs.discardPile.isNotEmpty;
-
     final deckWidgetWithKey = DeckCardWidget(
       key: widget.deckKey,
       deckCount: deckCount,
@@ -576,7 +568,7 @@ class _CenterTableState extends State<CenterTable>
       key: widget.discardKey,
       card: widget.discardCardOverride ?? gs.topDiscardCard,
       cardSize: cardSize,
-      onTap: canTakeDiscard ? widget.onTakeFromDiscard : widget.onShowDiscard,
+      onTap: widget.onShowDiscard,
       svgBuilder: widget.svgBuilder,
     );
 

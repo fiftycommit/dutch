@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, listEquals, mapEquals, setEquals;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,7 @@ import 'package:dutch_game/widgets/multiplayer/game_overlays.dart';
 import 'package:dutch_game/screens/shared/game_screen_mixin.dart';
 import 'package:dutch_game/widgets/game/game_table_widget.dart';
 import 'package:dutch_game/utils/tournament_labels.dart';
+import 'package:dutch_game/utils/rebuild_probe.dart';
 import 'package:dutch_game/services/platform/wake_lock_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
@@ -395,23 +397,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     maybeNavigateToEnd(gameState: gameState, routeLocation: routeLocation);
   }
 
-  Map<String, bool> _buildConnectionMap(MultiplayerGameProvider gp) {
-    final map = <String, bool>{};
-    for (final player in gp.gameState?.players ?? []) {
-      final presence = gp.presenceById[player.id];
-      map[player.id] = presence == null || presence['connected'] == true;
-    }
-    return map;
-  }
-
-  Map<String, bool> _buildAfkMap(MultiplayerGameProvider gp, GameState gs) {
-    final map = <String, bool>{};
-    for (final player in gs.players) {
-      map[player.id] = gp.isPlayerAfk(player.id);
-    }
-    return map;
-  }
-
   bool _connectionErrorDialogShown = false;
 
   Future<void> _showConnectionErrorDialog(
@@ -448,14 +433,55 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     _connectionErrorDialogShown = false;
   }
 
+  /// Barre de boutons (émotes / pause / quitter). Aucune dépendance au provider :
+  /// passée en `child` du Selector du corps, elle n'est construite qu'une fois.
+  Widget _buildTopRightButtons(BuildContext context) {
+    RebuildProbe.bump('buttons');
+    final gp = context.read<MultiplayerGameProvider>();
+    return Positioned(
+      top: 10,
+      right: 10,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon:
+                const Icon(Icons.emoji_emotions, color: Colors.amber, size: 32),
+            onPressed: () {
+              setState(() {
+                _showEmoteOverlay = true;
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.pause_circle_filled,
+                color: AppColors.textDisabled, size: 32),
+            onPressed: () => gp.pauseGame(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.exit_to_app,
+                color: AppColors.textDisabled, size: 32),
+            onPressed: () => _showQuitConfirmation(context, gp),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Consume MultiplayerGameProvider
     return PopScope(
       canPop: false,
-      child: Consumer<MultiplayerGameProvider>(
-        builder: (context, gameProvider, child) {
-          final gameState = gameProvider.gameState;
+      child: Selector<MultiplayerGameProvider, _MultiplayerGameScreenModel>(
+        selector: (_, gameProvider) =>
+            _MultiplayerGameScreenModel.from(gameProvider),
+        // Zone sans dépendance provider : construite une seule fois puis passée
+        // inchangée à chaque rebuild du corps.
+        child: _buildTopRightButtons(context),
+        builder: (context, model, child) {
+          RebuildProbe.bump('screen_body');
+          final gameProvider = context.read<MultiplayerGameProvider>();
+          final gameState = model.gameState;
 
           if (gameState == null) {
             return const Scaffold(
@@ -467,13 +493,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           }
 
           // Early returns pour états bloquants (dialogs déclenchés par le listener)
-          if (gameProvider.roomClosedByHost && _hostClosedDialogShown) {
+          if (model.roomClosedByHost && _hostClosedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
-          if (gameProvider.wasKicked && _kickedDialogShown) {
+          if (model.wasKicked && _kickedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
-          if (gameProvider.wasBanned && _bannedDialogShown) {
+          if (model.wasBanned && _bannedDialogShown) {
             return Scaffold(backgroundColor: AppColors.gradientBottom);
           }
 
@@ -491,112 +517,130 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
               }
             },
             child: GamePauseScope(
-              isPaused: gameProvider.isPaused,
+              isPaused: model.isPaused,
               child: Scaffold(
                 backgroundColor: AppColors.gradientBottom,
                 body: Stack(
                   children: [
-                    GameTableWidget(
-                      gameState: gameState,
-                      isProcessing: gameProvider.isProcessing,
-                      shakingCardIndices:
-                          gameProvider.shakingCardIndices.toList(),
-                      isSpectator: !gameState.players.any((p) =>
-                          p.id == gameProvider.playerId && !p.isSpectator),
-                      callbacks: GameTableCallbacks.fromController(
-                        context: context,
-                        controller: gameProvider,
-                        onOpponentCardTap: (opponentIndex, cardIndex) {
-                          gameProvider.sendSpecialPowerTargetSelection(
-                              opponentIndex, null, null, null);
-                          gameProvider.usePower10SpyOpponent(
-                              opponentIndex, cardIndex);
-                        },
-                        supportsTakeFromDiscard:
-                            true, // Multiplayer allows taking from discard
-                      ),
-                      onSpecialPowerAnimationComplete: (cardId) {
-                        if (!mounted) return;
-                        setState(() {
-                          _specialPowerReadyId = cardId;
-                          _specialPowerDialogShownId = null;
-                        });
+                    // Zone table de jeu isolée : son propre Selector projette
+                    // SES entrées (dont currentReactionTimeMs, qui tick ~30 ms).
+                    // Ces champs étant sortis du modèle du corps, un tick du
+                    // timer de réaction ne reconstruit plus que GameTableWidget,
+                    // pas les overlays inline (code salon, notifications…).
+                    Selector<MultiplayerGameProvider, _GameTableModel>(
+                      selector: (_, p) => _GameTableModel.from(p),
+                      builder: (context, gt, __) {
+                        RebuildProbe.bump('gametable');
+                        final gp = context.read<MultiplayerGameProvider>();
+                        final gs = gt.gameState!;
+                        return GameTableWidget(
+                          gameState: gs,
+                          isProcessing: gt.isProcessing,
+                          shakingCardIndices: gt.shakingCardIndices,
+                          isSpectator: !gs.players.any(
+                              (p) => p.id == gt.playerId && !p.isSpectator),
+                          callbacks: GameTableCallbacks.fromController(
+                            context: context,
+                            controller: gp,
+                            onOpponentCardTap: (opponentIndex, cardIndex) {
+                              gp.sendSpecialPowerTargetSelection(
+                                  opponentIndex, null, null, null);
+                              gp.usePower10SpyOpponent(
+                                  opponentIndex, cardIndex);
+                            },
+                          ),
+                          onSpecialPowerAnimationComplete: (cardId) {
+                            if (!mounted) return;
+                            setState(() {
+                              _specialPowerReadyId = cardId;
+                              _specialPowerDialogShownId = null;
+                            });
+                          },
+                          multiplayerConfig: MultiplayerConfig(
+                            playerId: gt.playerId,
+                            playerConnections: gt.playerConnections,
+                            playerAfkStatus: gt.playerAfkStatus,
+                            turnStartTime: gs.turnStartTime != null
+                                ? gs.turnStartTime! - gt.serverTimeOffsetMs
+                                : null,
+                            turnDuration: gs.turnTimeoutMs,
+                            reactionTimeTotalMs: gt.currentReactionTimeMs,
+                            powerTargetPlayerIds: gt.powerTargetPlayerIds,
+                          ),
+                          isPaused: gt.isPaused,
+                        );
                       },
-                      multiplayerConfig: MultiplayerConfig(
-                        playerId: gameProvider.playerId,
-                        playerConnections: _buildConnectionMap(gameProvider),
-                        playerAfkStatus: _buildAfkMap(gameProvider, gameState),
-                        turnStartTime: gameState.turnStartTime != null
-                            ? gameState.turnStartTime! -
-                                gameProvider.serverTimeOffsetMs
-                            : null,
-                        turnDuration: gameState.turnTimeoutMs,
-                        reactionTimeTotalMs: gameProvider.currentReactionTimeMs,
-                        powerTargetPlayerIds: gameProvider.powerTargetPlayerIds,
-                      ),
-                      isPaused: gameProvider
-                          .isPaused, // Multiplayer currently has no concept of "isPaused", but we pass it anyway for consistency
                     ),
 
-                    // Room Code and Tournament Info Overlay
+                    // Overlay code salon / info tournoi. Ne dépend que de champs
+                    // quasi-statiques (mode, code, round) : son propre Selector
+                    // l'empêche de se reconstruire sur les ticks du timer de
+                    // réaction (currentReactionTimeMs, ~30 ms) ou toute autre
+                    // notification qui ne le concerne pas.
                     Positioned(
                       top: 10,
                       left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                            color: Colors.black45,
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      child: Selector<MultiplayerGameProvider, _RoomInfoModel>(
+                        selector: (_, p) => _RoomInfoModel.from(p),
+                        builder: (context, info, __) {
+                          RebuildProbe.bump('roomcode');
+                          final isTournament =
+                              info.gameMode == GameMode.tournament;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: Colors.black45,
+                                borderRadius: BorderRadius.circular(20)),
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  gameState.gameMode == GameMode.tournament
-                                      ? Icons.emoji_events
-                                      : Icons.videogame_asset,
-                                  color:
-                                      gameState.gameMode == GameMode.tournament
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isTournament
+                                          ? Icons.emoji_events
+                                          : Icons.videogame_asset,
+                                      color: isTournament
                                           ? Colors.amber
                                           : AppColors.textSecondary,
-                                  size: 16,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isTournament
+                                          ? tournamentStageLabel(
+                                              info.tournamentRound,
+                                              totalRounds:
+                                                  info.tournamentTotalRounds,
+                                            )
+                                          // Masquer le code pour les parties publiques
+                                          : (info.isPublicRoom == true
+                                              ? "Partie publique"
+                                              : "Room: ${info.roomCode ?? '?'}"),
+                                      style: const TextStyle(
+                                        color: Colors.amber,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  gameState.gameMode == GameMode.tournament
-                                      ? tournamentStageLabel(
-                                          gameState.tournamentRound,
-                                          totalRounds: gameProvider
-                                              .tournamentTotalRounds,
-                                        )
-                                      // Masquer le code pour les parties publiques
-                                      : (gameProvider.roomSettings?.isPublic ==
-                                              true
-                                          ? "Partie publique"
-                                          : "Room: ${gameProvider.roomCode ?? '?'}"),
-                                  style: const TextStyle(
-                                    color: Colors.amber,
-                                    fontWeight: FontWeight.bold,
+                                if (isTournament) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Manches restantes : ${(info.tournamentTotalRounds - info.tournamentRound).clamp(0, 99)}",
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
-                            if (gameState.gameMode == GameMode.tournament) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                "Manches restantes : ${(gameProvider.tournamentTotalRounds - gameState.tournamentRound).clamp(0, 99)}",
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
 
@@ -610,7 +654,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                     if (gameState.phase == GamePhase.specialPower)
                       _buildSpecialPowerOverlay(gameProvider, gameState),
 
-                    if (gameProvider.isProcessing)
+                    if (model.isProcessing)
                       const Positioned(
                         top: 20,
                         right: 60,
@@ -622,69 +666,55 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       ),
 
                     // Notification: joueur a quitté
-                    if (gameProvider.playerLeftNotification)
-                      GameOverlays.playerLeftBanner(
-                          gameProvider.lastPlayerLeftName),
+                    if (model.playerLeftNotification)
+                      GameOverlays.playerLeftBanner(model.lastPlayerLeftName),
 
                     // Notification: pouvoir spécial utilisé sur nous
-                    if (gameProvider.specialPowerNotification)
-                      GameOverlays.specialPowerBanner(
-                          gameProvider.specialPowerByName),
+                    if (model.specialPowerNotification)
+                      GameOverlays.specialPowerBanner(model.specialPowerByName),
 
-                    // Boutons en haut à droite
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Bouton Émotes
-                          IconButton(
-                            icon: const Icon(Icons.emoji_emotions,
-                                color: Colors.amber, size: 32),
-                            onPressed: () {
-                              setState(() {
-                                _showEmoteOverlay = true;
-                              });
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.pause_circle_filled,
-                                color: AppColors.textDisabled, size: 32),
-                            onPressed: () => gameProvider.pauseGame(),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.exit_to_app,
-                                color: AppColors.textDisabled, size: 32),
-                            onPressed: () =>
-                                _showQuitConfirmation(context, gameProvider),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // Boutons en haut à droite. Ils ne lisent AUCUN champ du
+                    // provider : passés en `child` du Selector (construits une
+                    // fois), ils ne se reconstruisent plus quand le corps
+                    // rebuild sur une notification (tick de présence, gameState…).
+                    if (child != null) child,
 
                     // Indicateur de reconnexion silencieuse
-                    if (gameProvider.isSilentReconnecting)
+                    if (model.isSilentReconnecting)
                       GameOverlays.reconnectingBanner(),
 
-                    if (gameProvider.isPaused)
+                    if (model.isPaused)
                       GameOverlays.pauseOverlay(
-                        pausedByName: gameProvider.pausedByName,
+                        pausedByName: model.pausedByName,
                         onResume: gameProvider.resumeGame,
-                        isLocalPauser: gameProvider.isLocalPauser,
-                        pauseDeadlineMs: gameProvider.pauseDeadlineMs,
+                        isLocalPauser: model.isLocalPauser,
+                        pauseDeadlineMs: model.pauseDeadlineMs,
                       ),
 
-                    PresenceCheckOverlay(
-                      active: gameProvider.presenceCheckActive,
-                      deadlineMs: gameProvider.presenceCheckDeadlineMs,
-                      reason: gameProvider.presenceCheckReason,
-                      onConfirm: gameProvider.confirmPresence,
-                      onAbandon: () {
-                        gameProvider.confirmPresence(); // Clear the check first
-                        gameProvider.forfeitGame();
-                        // Don't navigate to /lobby - stay as spectator.
-                        // The game will end and navigate to results automatically.
+                    // Zone présence isolée : son propre Selector écoute
+                    // seulement les champs de présence, donc un tick du compte à
+                    // rebours ne reconstruit plus le corps ni GameTableWidget.
+                    Selector<MultiplayerGameProvider, _PresenceModel>(
+                      selector: (_, p) => _PresenceModel(
+                        active: p.presenceCheckActive,
+                        deadlineMs: p.presenceCheckDeadlineMs,
+                        reason: p.presenceCheckReason,
+                      ),
+                      builder: (context, presence, __) {
+                        RebuildProbe.bump('presence');
+                        final gp = context.read<MultiplayerGameProvider>();
+                        return PresenceCheckOverlay(
+                          active: presence.active,
+                          deadlineMs: presence.deadlineMs,
+                          reason: presence.reason,
+                          onConfirm: gp.confirmPresence,
+                          onAbandon: () {
+                            gp.confirmPresence(); // Clear the check first
+                            gp.forfeitGame();
+                            // Rester spectateur : la partie se terminera et
+                            // naviguera vers les résultats automatiquement.
+                          },
+                        );
                       },
                     ),
 
@@ -791,10 +821,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     return Container(color: Colors.black54);
   }
 
-  Widget _buildPowerLotteryOverlay(
-      MultiplayerGameProvider gp, GameState gs) {
-    final lotteryId =
-        gs.pendingMatchPowers.map((p) => p.playerId).join('_');
+  Widget _buildPowerLotteryOverlay(MultiplayerGameProvider gp, GameState gs) {
+    final lotteryId = gs.pendingMatchPowers.map((p) => p.playerId).join('_');
     if (_lotteryDialogShownId != lotteryId) {
       _lotteryDialogShownId = lotteryId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -830,4 +858,265 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       });
     }
   }
+}
+
+class _MultiplayerGameScreenModel {
+  final GameState? gameState;
+  final bool roomClosedByHost;
+  final bool wasKicked;
+  final bool wasBanned;
+  final bool isProcessing;
+  final bool isPaused;
+  final String? pausedByName;
+  final bool isLocalPauser;
+  final int pauseDeadlineMs;
+  final bool playerLeftNotification;
+  final String? lastPlayerLeftName;
+  final bool specialPowerNotification;
+  final String? specialPowerByName;
+  final bool isSilentReconnecting;
+
+  const _MultiplayerGameScreenModel({
+    required this.gameState,
+    required this.roomClosedByHost,
+    required this.wasKicked,
+    required this.wasBanned,
+    required this.isProcessing,
+    required this.isPaused,
+    required this.pausedByName,
+    required this.isLocalPauser,
+    required this.pauseDeadlineMs,
+    required this.playerLeftNotification,
+    required this.lastPlayerLeftName,
+    required this.specialPowerNotification,
+    required this.specialPowerByName,
+    required this.isSilentReconnecting,
+  });
+
+  factory _MultiplayerGameScreenModel.from(MultiplayerGameProvider provider) {
+    return _MultiplayerGameScreenModel(
+      gameState: provider.gameState,
+      roomClosedByHost: provider.roomClosedByHost,
+      wasKicked: provider.wasKicked,
+      wasBanned: provider.wasBanned,
+      isProcessing: provider.isProcessing,
+      isPaused: provider.isPaused,
+      pausedByName: provider.pausedByName,
+      isLocalPauser: provider.isLocalPauser,
+      pauseDeadlineMs: provider.pauseDeadlineMs,
+      playerLeftNotification: provider.playerLeftNotification,
+      lastPlayerLeftName: provider.lastPlayerLeftName,
+      specialPowerNotification: provider.specialPowerNotification,
+      specialPowerByName: provider.specialPowerByName,
+      isSilentReconnecting: provider.isSilentReconnecting,
+    );
+  }
+
+  static Map<String, bool> _buildConnectionMap(
+    MultiplayerGameProvider provider,
+    GameState? gameState,
+  ) {
+    final map = <String, bool>{};
+    for (final player in gameState?.players ?? []) {
+      // Source de vérité : le `connected` réel porté par gameState.players,
+      // mis à jour par le serveur sur déconnexion/reconnexion (fail-safe, plus
+      // le défaut fail-open « présence inconnue = en ligne » d'avant). Les bots
+      // sont toujours connectés.
+      map[player.id] = player.isHuman ? player.connected : true;
+    }
+    return map;
+  }
+
+  static Map<String, bool> _buildAfkMap(
+    MultiplayerGameProvider provider,
+    GameState? gameState,
+  ) {
+    final map = <String, bool>{};
+    for (final player in gameState?.players ?? []) {
+      map[player.id] = provider.isPlayerAfk(player.id);
+    }
+    return map;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MultiplayerGameScreenModel &&
+        identical(gameState, other.gameState) &&
+        roomClosedByHost == other.roomClosedByHost &&
+        wasKicked == other.wasKicked &&
+        wasBanned == other.wasBanned &&
+        isProcessing == other.isProcessing &&
+        isPaused == other.isPaused &&
+        pausedByName == other.pausedByName &&
+        isLocalPauser == other.isLocalPauser &&
+        pauseDeadlineMs == other.pauseDeadlineMs &&
+        playerLeftNotification == other.playerLeftNotification &&
+        lastPlayerLeftName == other.lastPlayerLeftName &&
+        specialPowerNotification == other.specialPowerNotification &&
+        specialPowerByName == other.specialPowerByName &&
+        isSilentReconnecting == other.isSilentReconnecting;
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+        identityHashCode(gameState),
+        roomClosedByHost,
+        wasKicked,
+        wasBanned,
+        isProcessing,
+        isPaused,
+        pausedByName,
+        isLocalPauser,
+        pauseDeadlineMs,
+        playerLeftNotification,
+        lastPlayerLeftName,
+        specialPowerNotification,
+        specialPowerByName,
+        isSilentReconnecting,
+      ]);
+}
+
+/// Modèle restreint de GameTableWidget : ses seules entrées réelles, dont
+/// currentReactionTimeMs (tick ~30 ms). Ces champs étant SORTIS du modèle du
+/// corps, un tick du timer de réaction ne reconstruit que cette zone, pas les
+/// overlays inline.
+class _GameTableModel {
+  final GameState? gameState;
+  final bool isProcessing;
+  final bool isPaused;
+  final String? playerId;
+  final List<int> shakingCardIndices;
+  final Map<String, bool> playerConnections;
+  final Map<String, bool> playerAfkStatus;
+  final int serverTimeOffsetMs;
+  final int currentReactionTimeMs;
+  final Set<String> powerTargetPlayerIds;
+
+  const _GameTableModel({
+    required this.gameState,
+    required this.isProcessing,
+    required this.isPaused,
+    required this.playerId,
+    required this.shakingCardIndices,
+    required this.playerConnections,
+    required this.playerAfkStatus,
+    required this.serverTimeOffsetMs,
+    required this.currentReactionTimeMs,
+    required this.powerTargetPlayerIds,
+  });
+
+  factory _GameTableModel.from(MultiplayerGameProvider provider) {
+    final gameState = provider.gameState;
+    return _GameTableModel(
+      gameState: gameState,
+      isProcessing: provider.isProcessing,
+      isPaused: provider.isPaused,
+      playerId: provider.playerId,
+      shakingCardIndices: provider.shakingCardIndices.toList()..sort(),
+      playerConnections:
+          _MultiplayerGameScreenModel._buildConnectionMap(provider, gameState),
+      playerAfkStatus:
+          _MultiplayerGameScreenModel._buildAfkMap(provider, gameState),
+      serverTimeOffsetMs: provider.serverTimeOffsetMs,
+      currentReactionTimeMs: provider.currentReactionTimeMs,
+      powerTargetPlayerIds: provider.powerTargetPlayerIds,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _GameTableModel &&
+      identical(gameState, other.gameState) &&
+      isProcessing == other.isProcessing &&
+      isPaused == other.isPaused &&
+      playerId == other.playerId &&
+      listEquals(shakingCardIndices, other.shakingCardIndices) &&
+      mapEquals(playerConnections, other.playerConnections) &&
+      mapEquals(playerAfkStatus, other.playerAfkStatus) &&
+      serverTimeOffsetMs == other.serverTimeOffsetMs &&
+      currentReactionTimeMs == other.currentReactionTimeMs &&
+      setEquals(powerTargetPlayerIds, other.powerTargetPlayerIds);
+
+  @override
+  int get hashCode => Object.hashAll([
+        identityHashCode(gameState),
+        isProcessing,
+        isPaused,
+        playerId,
+        Object.hashAll(shakingCardIndices),
+        Object.hashAll(
+            playerConnections.entries.map((e) => Object.hash(e.key, e.value))),
+        Object.hashAll(
+            playerAfkStatus.entries.map((e) => Object.hash(e.key, e.value))),
+        serverTimeOffsetMs,
+        currentReactionTimeMs,
+        Object.hashAll(powerTargetPlayerIds),
+      ]);
+}
+
+/// Modèle restreint de la zone de présence : seul un changement de ces champs
+/// reconstruit l'overlay de présence, sans toucher au corps ni à GameTableWidget.
+class _PresenceModel {
+  final bool active;
+  final int deadlineMs;
+  final String? reason;
+
+  const _PresenceModel({
+    required this.active,
+    required this.deadlineMs,
+    required this.reason,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PresenceModel &&
+      active == other.active &&
+      deadlineMs == other.deadlineMs &&
+      reason == other.reason;
+
+  @override
+  int get hashCode => Object.hash(active, deadlineMs, reason);
+}
+
+/// Modèle restreint de l'overlay code salon / tournoi. Ne projette que des
+/// champs quasi-statiques (mode, round, code) : reconstruit ~jamais en cours de
+/// partie, notamment pas sur les ticks du timer de réaction.
+class _RoomInfoModel {
+  final GameMode? gameMode;
+  final int tournamentRound;
+  final int tournamentTotalRounds;
+  final bool? isPublicRoom;
+  final String? roomCode;
+
+  const _RoomInfoModel({
+    required this.gameMode,
+    required this.tournamentRound,
+    required this.tournamentTotalRounds,
+    required this.isPublicRoom,
+    required this.roomCode,
+  });
+
+  factory _RoomInfoModel.from(MultiplayerGameProvider p) {
+    final gs = p.gameState;
+    return _RoomInfoModel(
+      gameMode: gs?.gameMode,
+      tournamentRound: gs?.tournamentRound ?? 0,
+      tournamentTotalRounds: p.tournamentTotalRounds,
+      isPublicRoom: p.roomSettings?.isPublic,
+      roomCode: p.roomCode,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _RoomInfoModel &&
+      gameMode == other.gameMode &&
+      tournamentRound == other.tournamentRound &&
+      tournamentTotalRounds == other.tournamentTotalRounds &&
+      isPublicRoom == other.isPublicRoom &&
+      roomCode == other.roomCode;
+
+  @override
+  int get hashCode => Object.hash(
+      gameMode, tournamentRound, tournamentTotalRounds, isPublicRoom, roomCode);
 }

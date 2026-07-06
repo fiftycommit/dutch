@@ -41,8 +41,8 @@ export class TournamentService {
   private dataDir: string;
   private activeTournaments: Map<string, Tournament>;
 
-  constructor() {
-    this.dataDir = path.join(__dirname, '../../data/bot-learning/tournaments');
+  constructor(dataDir?: string) {
+    this.dataDir = dataDir ?? path.join(__dirname, '../../data/bot-learning/tournaments');
     this.activeTournaments = new Map();
     this.ensureDataDirectory();
   }

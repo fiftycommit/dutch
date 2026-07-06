@@ -36,11 +36,18 @@ class DeckCardWidget extends StatelessWidget {
     final deckWidget = enabled && onTap != null
         ? GestureDetector(onTap: onTap, child: deckCard)
         : deckCard;
+    // Nœud sémantique stable pour piloter la pioche (accessibilité + E2E).
+    final semanticDeck = Semantics(
+      label: 'Pioche',
+      button: true,
+      enabled: enabled && onTap != null,
+      child: deckWidget,
+    );
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        deckWidget,
+        semanticDeck,
         Positioned(
           bottom: -2,
           right: -2,
@@ -91,8 +98,14 @@ class DiscardCardWidget extends StatelessWidget {
       svgBuilder: svgBuilder,
     );
 
-    return onTap != null
-        ? GestureDetector(onTap: onTap, child: discardCard)
-        : discardCard;
+    // Nœud sémantique stable pour piloter la défausse (accessibilité + E2E).
+    return Semantics(
+      label: 'Défausse',
+      button: onTap != null,
+      enabled: onTap != null,
+      child: onTap != null
+          ? GestureDetector(onTap: onTap, child: discardCard)
+          : discardCard,
+    );
   }
 }

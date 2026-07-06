@@ -230,45 +230,6 @@ void main() {
     });
   });
 
-  group('GameProvider - Take From Discard', () {
-    test('takeFromDiscard sets drawn card from discard', () {
-      _setupGameWithHumanTurn(provider);
-      final topDiscard = provider.gameState!.discardPile.last;
-
-      provider.takeFromDiscard();
-
-      expect(provider.gameState!.drawnCard, topDiscard);
-    });
-
-    test('takeFromDiscard does nothing when not playing', () {
-      _setupGameWithHumanTurn(provider);
-      provider.gameState!.phase = GamePhase.reaction;
-
-      provider.takeFromDiscard();
-
-      expect(provider.gameState!.drawnCard, isNull);
-    });
-
-    test('takeFromDiscard does nothing when already have drawn card', () {
-      _setupGameWithHumanTurn(provider);
-      provider.drawCard();
-      final drawnCard = provider.gameState!.drawnCard;
-
-      provider.takeFromDiscard();
-
-      expect(provider.gameState!.drawnCard, drawnCard);
-    });
-
-    test('takeFromDiscard does nothing when discard empty', () {
-      _setupGameWithHumanTurn(provider);
-      provider.gameState!.discardPile.clear();
-
-      provider.takeFromDiscard();
-
-      expect(provider.gameState!.drawnCard, isNull);
-    });
-  });
-
   group('GameProvider - Attempt Match', () {
     test('attemptMatch succeeds when cards match', () {
       _setupGameWithHumanTurn(provider);
@@ -566,6 +527,17 @@ void main() {
 
       provider.handleCardTap(0);
       // Should not throw or modify state
+    });
+
+    test('bot Dutch call resets isProcessing', () async {
+      _setupGameWithBotTurn(provider);
+      mockBotAI.callDutchOnPlay = true;
+
+      provider.resumeGame();
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      expect(provider.gameState!.phase, GamePhase.ended);
+      expect(provider.isProcessing, false);
     });
   });
 

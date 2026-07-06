@@ -42,6 +42,9 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
+  // Progression d'un envoi image en cours (0..1), null si aucun.
+  double? _mediaUploadProgress;
+
   // Meta (wallpaper, read receipts, typing)
   String? _wallpaperUrl;
   // Fichier local affiché immédiatement pendant l'upload
@@ -393,6 +396,9 @@ class _ChatPageState extends State<ChatPage> {
     _scrollController.dispose();
     _focusNode.dispose();
     _chatService.updateTyping(_chatId, _myUserId, false);
+    // Quitter l'écran annule les envois média en cours (pas de tâche qui pend
+    // en arrière-plan).
+    unawaited(_chatService.cancelActiveMediaUploads());
     super.dispose();
   }
 
@@ -403,9 +409,22 @@ class _ChatPageState extends State<ChatPage> {
     _typingDebounce?.cancel();
     _chatService.updateTyping(_chatId, _myUserId, false);
     _isTyping = false;
-    await _chatService.sendMessage(
-        _chatId, _myUserId, text, widget.friendUserId);
-    _scrollToBottom();
+    try {
+      await _chatService.sendMessage(
+          _chatId, _myUserId, text, widget.friendUserId);
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      _controller.text = text;
+      _controller.selection = TextSelection.collapsed(offset: text.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Message non envoyé : chiffrement indisponible.',
+          ),
+        ),
+      );
+    }
   }
 
   void _scrollToBottom() {
@@ -441,14 +460,21 @@ class _ChatPageState extends State<ChatPage> {
     }
     if (xfile == null) return;
 
+    void onProgress(double p) {
+      if (mounted) setState(() => _mediaUploadProgress = p);
+    }
+
+    if (mounted) setState(() => _mediaUploadProgress = 0);
     try {
       if (kIsWeb) {
         final bytes = await xfile.readAsBytes();
         final compressed = await _compressImageBytes(bytes, maxDim: 1200);
-        await _chatService.sendImageBytes(_chatId, _myUserId, compressed);
+        await _chatService.sendImageBytes(_chatId, _myUserId, compressed,
+            onProgress: onProgress);
       } else {
         final file = File(xfile.path);
-        await _chatService.sendImage(_chatId, _myUserId, file);
+        await _chatService.sendImage(_chatId, _myUserId, file,
+            onProgress: onProgress);
       }
       _scrollToBottom();
     } catch (e) {
@@ -457,6 +483,8 @@ class _ChatPageState extends State<ChatPage> {
           SnackBar(content: Text('Erreur envoi photo: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _mediaUploadProgress = null);
     }
   }
 
@@ -671,6 +699,16 @@ class _ChatPageState extends State<ChatPage> {
                           cs: cs,
                           hasWallpaper: hasWallpaper,
                           wallpaperIsDark: _wallpaperIsDark),
+                    ),
+                  // Progression d'envoi image (upload borné).
+                  if (_mediaUploadProgress != null)
+                    LinearProgressIndicator(
+                      value: _mediaUploadProgress == 0
+                          ? null
+                          : _mediaUploadProgress,
+                      minHeight: 2,
+                      backgroundColor: cs.separator,
+                      color: cs.primary,
                     ),
                   // Barre de suppression en mode sélection
                   if (_selectionMode)
@@ -1751,16 +1789,26 @@ class _InputBarState extends State<_InputBar> {
     final waveform = _downsampleWaveform(_waveformSamples, 40);
     setState(() => _recordState = _RecordState.idle);
     widget.onPendingAudio(_recordPath!, _recordDurationMs, waveform);
-    if (kIsWeb) {
-      await widget.chatService.sendAudioFromUrl(
-          widget.chatId, widget.myUserId, _recordPath!, _recordDurationMs,
-          waveform: waveform);
-    } else {
-      await widget.chatService.sendAudio(
-          widget.chatId, widget.myUserId, File(_recordPath!), _recordDurationMs,
-          waveform: waveform);
+    // Échec/timeout d'envoi audio : visible pour l'utilisateur, pas silencieux.
+    try {
+      if (kIsWeb) {
+        await widget.chatService.sendAudioFromUrl(
+            widget.chatId, widget.myUserId, _recordPath!, _recordDurationMs,
+            waveform: waveform);
+      } else {
+        await widget.chatService.sendAudio(
+            widget.chatId, widget.myUserId, File(_recordPath!),
+            _recordDurationMs,
+            waveform: waveform);
+      }
+      widget.onMediaSent();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur envoi audio: $e')),
+        );
+      }
     }
-    widget.onMediaSent();
   }
 
   Future<void> _cancelRecord() async {

@@ -47,8 +47,6 @@ class ReactionTimerManager {
         onTimerEnd();
         return;
       }
-
-      onTimerUpdate();
     });
 
     onTimerUpdate();
@@ -90,9 +88,8 @@ class ReactionTimerManager {
         if (remaining <= 0) {
           timer.cancel();
           onTimerEnd();
+          return;
         }
-
-        onTimerUpdate();
       });
 
       _remainingReactionTimeMs = null;

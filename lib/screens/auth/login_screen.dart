@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sign_in_button/sign_in_button.dart';
 
@@ -491,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Theme(
       data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.montserratTextTheme(Theme.of(context).textTheme),
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Montserrat'),
       ),
       child: Scaffold(
         backgroundColor: colors.bg,

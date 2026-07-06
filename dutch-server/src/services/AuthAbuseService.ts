@@ -63,6 +63,13 @@ export class AuthAbuseService {
   }
 
   assess(req: Request, action: AuthAbuseAction): AbuseDecision {
+    // Bypass explicite pour le dev/test local (émulateurs) : sinon deux clients
+    // qui s'inscrivent/se connectent en rafale se font bloquer. N'affecte ni la
+    // prod ni les tests unitaires (variable posée seulement par le lancement dev).
+    if (process.env.AUTH_ABUSE_DISABLED === '1') {
+      return { blocked: false, score: 0, reasons: [] };
+    }
+
     const now = this.nowProvider();
     const ip = this.getClientIp(req);
     const userAgent = this.getUserAgent(req);
