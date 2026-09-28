@@ -10,12 +10,12 @@
 
 /* ── Firebase Config ── */
 const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
+  apiKey: 'AIzaSyCtKT2FJRKax7KtsNX65-J8RbTvO1w8fVM',
   // Same-origin authDomain: nginx proxie /__/auth/ vers Firebase (conf ligne 218)
   // et l'app Flutter web l'utilise aussi. Safari bloque les cookies popup
   // cross-origin, d'où l'auth/internal-error quand on tape firebaseapp.com.
   authDomain: 'dutch-game.me',
-  projectId: 'dutch-game-1dd01',
+  projectId: 'dutch-game-max',
 };
 
 let _firebaseApp = null;
@@ -117,7 +117,7 @@ async function initFirebase() {
 
 async function signInWithGoogleForAdmin() {
   // signInWithRedirect casse sur Safari à cause du handler cross-domain
-  // (dutch-game-1dd01.firebaseapp.com). On reste sur popup partout, comme
+  // (dutch-game-max.firebaseapp.com). On reste sur popup partout, comme
   // l'app Flutter web.
   const provider = new firebase.auth.GoogleAuthProvider();
   await _firebaseAuth.signInWithPopup(provider);

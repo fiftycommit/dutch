@@ -3,8 +3,16 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cryptography/cryptography.dart';
 
 import 'package:dutch_game/services/social/private_chat_service.dart';
+import 'package:dutch_game/services/social/chat_crypto_service.dart';
+
+class _FakeCrypto extends ChatCryptoService {
+  @override
+  Future<SecretKey> getChatKey(String chatId, String friendId) async =>
+      SecretKey(List.filled(32, 7));
+}
 
 /// UploadTask qui ne se résout JAMAIS : simule un upload média qui pend sur
 /// réseau dégradé. Seuls `timeout`, `cancel` et `snapshotEvents` sont utilisés
@@ -68,12 +76,13 @@ void main() {
     final task = _NeverUploadTask();
     final service = PrivateChatService(
       storage: _FakeStorage(task),
+      crypto: _FakeCrypto(),
       mediaUploadTimeout: const Duration(milliseconds: 200),
     );
 
     final sw = Stopwatch()..start();
     await expectLater(
-      () => service.sendImageBytes('chat1', 'user1', const [1, 2, 3]),
+      () => service.sendImageBytes('user1_user2', 'user1', const [1, 2, 3]),
       throwsA(isA<MediaUploadException>()),
     );
     sw.stop();

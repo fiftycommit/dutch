@@ -3,14 +3,12 @@ name: Deploy to Production
 on:
   workflow_dispatch:
 
-# Prevent concurrent deploys
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  # ── 1. Build Flutter Web ──────────────────────────────────────────────
-  build-frontend:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,249 +20,53 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Build Web
+      - name: Build Flutter web
         run: |
-          flutter build web \
-            --release \
-            --base-href / \
-            --tree-shake-icons \
-            --no-web-resources-cdn \
-            ${FCM_WEB_VAPID_KEY:+--dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"} \
-            ${FIREBASE_APP_CHECK_WEB_SITE_KEY:+--dart-define=FIREBASE_APP_CHECK_WEB_SITE_KEY="$FIREBASE_APP_CHECK_WEB_SITE_KEY"}
+          flutter build web --release --base-href / --tree-shake-icons --no-web-resources-cdn \
+            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY" \
+            --dart-define=FIREBASE_APP_CHECK_WEB_SITE_KEY="$FIREBASE_APP_CHECK_WEB_SITE_KEY"
           node scripts/generate-pwa-service-worker.mjs build/web
           cp build/web/index.html build/web/404.html
         env:
           FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
           FIREBASE_APP_CHECK_WEB_SITE_KEY: ${{ secrets.FIREBASE_APP_CHECK_WEB_SITE_KEY }}
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: flutter-web
-          path: build/web
-          retention-days: 1
-
-  # ── 2. Deploy Backend ─────────────────────────────────────────────────
-  deploy-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Verify production Node.js version
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 164.92.234.245
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 2m
-          script: |
-            set -euo pipefail
-
-            REQUIRED_NODE_MAJOR=24
-            if ! command -v node > /dev/null 2>&1; then
-              echo "❌ Node.js is not installed on the production server."
-              exit 1
-            fi
-
-            NODE_VERSION=$(node -p "process.versions.node")
-            NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]")
-            echo "Production Node.js: v${NODE_VERSION}"
-
-            if [ "$NODE_MAJOR" != "$REQUIRED_NODE_MAJOR" ]; then
-              echo "❌ Production Node.js major must be ${REQUIRED_NODE_MAJOR} before deploying."
-              exit 1
-            fi
-
-      - name: Upload server release
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 164.92.234.245
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "dutch-server/*"
-          target: "/root/apps/dutch-server/releases/${{ github.sha }}"
-          strip_components: 1
-
-      - name: Build and switch backend
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Configure SSH for getFilms
         env:
-          GIT_SHA: ${{ github.sha }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' '88.96.63.215 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEwbhjISAMz1GpAzI5vWKM3QBc6XGYoQNizeH9bzyNeT' > ~/.ssh/known_hosts
+
+      - name: Upload and build backend release
+        run: |
+          set -euo pipefail
+          release="/srv/dutch/releases/$GITHUB_SHA"
+          ssh max@88.96.63.215 "mkdir -p '$release' /srv/dutch/shared/data"
+          rsync -az --exclude=data --exclude=node_modules --exclude=dist --exclude=coverage \
+            dutch-server/ "max@88.96.63.215:$release/"
+          ssh max@88.96.63.215 "cd '$release' && npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev && ln -sfn /srv/dutch/shared/data data"
+
+      - name: Install secrets and start backend
+        env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          REDIS_ENABLED: ${{ secrets.REDIS_ENABLED }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-        with:
-          host: 164.92.234.245
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GIT_SHA,FIREBASE_SERVICE_ACCOUNT_JSON,FIREBASE_WEB_API_KEY,ADMIN_SECRET,ADMIN_EMAIL,REDIS_ENABLED,REDIS_URL
-          command_timeout: 10m
-          script: |
-            set -euo pipefail
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" | ssh max@88.96.63.215 \
+            'umask 077; cat > /srv/dutch/shared/data/firebase-service-account.json'
+          {
+            printf 'FIREBASE_WEB_API_KEY=%s\n' "$FIREBASE_WEB_API_KEY"
+            printf 'ADMIN_EMAIL=%s\n' "$ADMIN_EMAIL"
+            printf 'ADMIN_SECRET=%s\n' "$ADMIN_SECRET"
+          } | ssh max@88.96.63.215 'umask 077; cat > /srv/dutch/shared/dutch.env'
+          ssh max@88.96.63.215 "ln -sfn /srv/dutch/releases/$GITHUB_SHA /srv/dutch/current && sudo systemctl restart dutch-server && sleep 3 && curl -fsS http://127.0.0.1:3001/health"
 
-            APP_ROOT=/root/apps/dutch-server
-            RELEASES_DIR=$APP_ROOT/releases
-            SHARED_DIR=$APP_ROOT/shared
-            RELEASE_DIR=$RELEASES_DIR/$GIT_SHA
-            CURRENT_LINK=$APP_ROOT/current
-            ACTIVE_PORT_FILE=$SHARED_DIR/active-port
-            LEGACY_APP_NAME=dutch-server
-
-            mkdir -p "$RELEASES_DIR" "$SHARED_DIR/data" /etc/nginx/snippets
-
-            ACTIVE_PORT=3000
-            if [ -f "$ACTIVE_PORT_FILE" ]; then
-              ACTIVE_PORT=$(cat "$ACTIVE_PORT_FILE")
-            fi
-
-            if [ "$ACTIVE_PORT" = "3001" ]; then
-              NEXT_PORT=3000
-              NEXT_COLOR=blue
-              PREVIOUS_COLOR=green
-            else
-              ACTIVE_PORT=3000
-              NEXT_PORT=3001
-              NEXT_COLOR=green
-              PREVIOUS_COLOR=blue
-            fi
-
-            NEXT_APP_NAME="dutch-server-$NEXT_COLOR"
-            PREVIOUS_APP_NAME="dutch-server-$PREVIOUS_COLOR"
-
-            # ── Shared secrets/data ──
-            echo "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$SHARED_DIR/data/firebase-service-account.json"
-            chmod 600 "$SHARED_DIR/data/firebase-service-account.json"
-
-            mkdir -p "$SHARED_DIR/data/bot-learning"/{games,profiles,qlearning,neural,clones,personalities,tournaments,genetic,adaptive,leaderboard}
-            mkdir -p "$SHARED_DIR/data/player-learning"/{profiles,history}
-            chmod -R 755 "$SHARED_DIR/data"
-
-            ln -sfn "$SHARED_DIR/data" "$RELEASE_DIR/data"
-
-            # ── Nginx Config ──
-            mkdir -p /etc/nginx/snippets
-            cat > /etc/nginx/snippets/dutch-backend-upstream.conf <<UPSTREAM
-            upstream dutch_backend {
-                keepalive 64;
-                server 127.0.0.1:${ACTIVE_PORT};
-            }
-            UPSTREAM
-            cp "$RELEASE_DIR/nginx/security-headers.conf" /etc/nginx/snippets/security-headers.conf
-            cp "$RELEASE_DIR/nginx/dutch-server.conf" /etc/nginx/sites-available/dutch-server
-            ln -sf /etc/nginx/sites-available/dutch-server /etc/nginx/sites-enabled/
-            nginx -t
-            systemctl reload nginx
-
-            # ── Backend build ──
-            echo "🔨 Building backend release $GIT_SHA on port $NEXT_PORT..."
-            cd "$RELEASE_DIR"
-            npm ci || npm install
-            npm run build || { echo "❌ Build failed"; exit 1; }
-            npm prune --production || true
-
-            # ── PM2 blue/green handoff ──
-            BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            cat > ecosystem.config.cjs << 'PMCFG'
-            const fs = require('fs');
-            let firebaseCreds = '';
-            try {
-              firebaseCreds = fs.readFileSync('/root/apps/dutch-server/shared/data/firebase-service-account.json', 'utf-8').trim();
-            } catch(e) {}
-            module.exports = {
-              apps: [{
-                name: process.env.PM2_APP_NAME || 'dutch-server-green',
-                cwd: process.env.RELEASE_DIR || '/root/apps/dutch-server/current',
-                script: 'dist/index.js',
-                instances: 1,
-                exec_mode: 'fork',
-                env: {
-                  NODE_ENV: 'production',
-                  PORT: Number(process.env.APP_PORT || '3001'),
-                  GIT_SHA: process.env.GIT_SHA || '',
-                  BUILD_TIME: process.env.BUILD_TIME || '',
-                  FIREBASE_SERVICE_ACCOUNT_JSON: firebaseCreds,
-                  FIREBASE_WEB_API_KEY: process.env.FIREBASE_WEB_API_KEY || '',
-                  ADMIN_SECRET: process.env.ADMIN_SECRET || '',
-                  ADMIN_EMAIL: process.env.ADMIN_EMAIL || '',
-                  REDIS_ENABLED: process.env.REDIS_ENABLED || '',
-                  REDIS_URL: process.env.REDIS_URL || '',
-                },
-                max_memory_restart: '700M',
-              }],
-            };
-            PMCFG
-            # Inject shell vars that the quoted heredoc can't expand
-            export BUILD_TIME
-            export GIT_SHA
-            export ADMIN_SECRET
-            export ADMIN_EMAIL
-            export REDIS_ENABLED
-            export REDIS_URL
-            export APP_PORT=$NEXT_PORT
-            export PM2_APP_NAME=$NEXT_APP_NAME
-            export RELEASE_DIR
-
-            pm2 startOrRestart ecosystem.config.cjs --only "$NEXT_APP_NAME" --update-env
-
-            # Health check on inactive port before switching traffic
-            sleep 8
-            if curl -sf "http://localhost:${NEXT_PORT}/health" > /dev/null; then
-              echo "✅ New backend is healthy on port ${NEXT_PORT}"
-            else
-              echo "❌ Backend health check failed on port ${NEXT_PORT}"
-              pm2 logs "$NEXT_APP_NAME" --lines 20 --nostream
-              exit 1
-            fi
-
-            cat > /etc/nginx/snippets/dutch-backend-upstream.conf <<UPSTREAM
-            upstream dutch_backend {
-                keepalive 64;
-                server 127.0.0.1:${NEXT_PORT};
-            }
-            UPSTREAM
-            nginx -t
-            systemctl reload nginx
-
-            echo "$NEXT_PORT" > "$ACTIVE_PORT_FILE"
-            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
-
-            # Petit délai de drain pour éviter la fenêtre de 502 pendant la bascule.
-            sleep 15
-
-            if pm2 describe "$PREVIOUS_APP_NAME" > /dev/null 2>&1; then
-              pm2 delete "$PREVIOUS_APP_NAME"
-            fi
-            if pm2 describe "$LEGACY_APP_NAME" > /dev/null 2>&1; then
-              pm2 delete "$LEGACY_APP_NAME"
-            fi
-
-            pm2 save
-
-            # Nettoyer les anciens releases en gardant les 3 plus récents
-            cd "$RELEASES_DIR"
-            ls -1dt */ 2>/dev/null | tail -n +4 | xargs -r rm -rf
-
-            echo "✅ Deploy complete"
-
-  # ── 3. Deploy Frontend ────────────────────────────────────────────────
-  deploy-frontend:
-    runs-on: ubuntu-latest
-    needs: [build-frontend, deploy-backend]
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: flutter-web
-          path: build/web
-
-      - name: Upload to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 164.92.234.245
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/web/*"
-          target: "/var/www/dutch/"
-          strip_components: 1
-          overwrite: true
-          rm: true
+      - name: Upload frontend
+        run: |
+          rsync -az --delete build/web/ max@88.96.63.215:/srv/dutch/web/
+          ssh max@88.96.63.215 'sudo nginx -t && sudo systemctl reload nginx'

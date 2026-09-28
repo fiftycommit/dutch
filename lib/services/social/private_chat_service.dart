@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -29,6 +30,7 @@ class ChatMessage {
   final String text;
   final ChatMessageType type;
   final String? mediaUrl;
+  final Uint8List? mediaBytes;
   final int? audioDurationMs;
   final List<double>? waveform; // amplitudes normalisées 0-1
   final DateTime timestamp;
@@ -43,6 +45,7 @@ class ChatMessage {
     required this.type,
     required this.timestamp,
     this.mediaUrl,
+    this.mediaBytes,
     this.audioDurationMs,
     this.waveform,
     this.snapshot,
@@ -50,8 +53,11 @@ class ChatMessage {
     this.deletedForAll = false,
   });
 
-  factory ChatMessage.fromDoc(DocumentSnapshot doc,
-      {required String decryptedText}) {
+  factory ChatMessage.fromDoc(
+    DocumentSnapshot doc, {
+    required String decryptedText,
+    Uint8List? mediaBytes,
+  }) {
     final data = doc.data() as Map<String, dynamic>;
     final typeStr = data['type'] as String? ?? 'text';
     final type = typeStr == 'image'
@@ -71,6 +77,7 @@ class ChatMessage {
       text: decryptedText,
       type: type,
       mediaUrl: data['mediaUrl'] as String?,
+      mediaBytes: mediaBytes,
       audioDurationMs: data['audioDurationMs'] as int?,
       waveform: waveform,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -83,12 +90,12 @@ class ChatMessage {
 
 /// Données de présence du chat (wallpaper + read receipts + typing).
 class ChatMeta {
-  final String? wallpaperUrl;
+  final Uint8List? wallpaperBytes;
   final DateTime? friendReadAt;
   final bool friendIsTyping;
 
   const ChatMeta({
-    this.wallpaperUrl,
+    this.wallpaperBytes,
     this.friendReadAt,
     this.friendIsTyping = false,
   });
@@ -123,11 +130,18 @@ class PrivateChatService {
         _injectedStorage = storage,
         _crypto = crypto ?? ChatCryptoService(),
         _httpClient = httpClient ?? http.Client(),
-        _mediaUploadTimeout =
-            mediaUploadTimeout ?? const Duration(seconds: 30);
+        _mediaUploadTimeout = mediaUploadTimeout ?? const Duration(seconds: 30);
 
   FirebaseFirestore get _db => _injectedDb ?? FirebaseFirestore.instance;
   FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
+
+  String _otherParticipant(String cId, String senderId) {
+    final parts = cId.split('_');
+    if (parts.length != 2 || !parts.contains(senderId)) {
+      throw ArgumentError('Identifiant de chat invalide');
+    }
+    return parts.first == senderId ? parts.last : parts.first;
+  }
 
   /// Identifiant déterministe : toujours le plus petit userId en premier.
   static String chatId(String myId, String friendId) {
@@ -141,11 +155,25 @@ class PrivateChatService {
   DocumentReference<Map<String, dynamic>> _chatDoc(String cId) =>
       _db.collection('private_chats').doc(cId);
 
-  /// Stream combiné : wallpaperUrl + friendReadAt + typing
+  /// Stream combiné : fond déchiffré + friendReadAt + typing.
   Stream<ChatMeta> metaStream(String cId, String friendId) {
-    return _chatDoc(cId).snapshots().map((doc) {
+    return _chatDoc(cId).snapshots().asyncMap((doc) async {
       final data = doc.data();
-      final wallpaperUrl = data?['wallpaperUrl'] as String?;
+      Uint8List? wallpaperBytes;
+      final wallpaperPath = data?['wallpaperPath'] as String?;
+      if (wallpaperPath != null) {
+        try {
+          final key = await _crypto.getChatKey(cId, friendId);
+          final encrypted = await _storage
+              .ref()
+              .child(wallpaperPath)
+              .getData(5 * 1024 * 1024)
+              .timeout(_mediaUploadTimeout);
+          if (encrypted != null) {
+            wallpaperBytes = await _crypto.decryptBytes(key, encrypted);
+          }
+        } catch (_) {}
+      }
       final receipts = data?['readReceipts'] as Map<String, dynamic>?;
       final friendTs = receipts?[friendId] as Timestamp?;
       // Typing : on considère actif si la valeur date de moins de 5s
@@ -157,11 +185,29 @@ class PrivateChatService {
         friendIsTyping = diff.inSeconds < 5;
       }
       return ChatMeta(
-        wallpaperUrl: wallpaperUrl,
+        wallpaperBytes: wallpaperBytes,
         friendReadAt: friendTs?.toDate(),
         friendIsTyping: friendIsTyping,
       );
     });
+  }
+
+  Future<void> setWallpaper(
+      String cId, String senderId, Uint8List bytes) async {
+    final key = await _crypto.getChatKey(cId, _otherParticipant(cId, senderId));
+    final encrypted = await _crypto.encryptBytes(key, bytes);
+    final ref = _storage.ref().child('chat_wallpapers/$cId.enc');
+    await _runBoundedUpload(ref.putData(
+        encrypted, SettableMetadata(contentType: 'application/octet-stream')));
+    await _chatDoc(cId)
+        .set({'wallpaperPath': ref.fullPath}, SetOptions(merge: true));
+  }
+
+  Future<void> removeWallpaper(String cId) async {
+    await _chatDoc(cId).update({'wallpaperPath': FieldValue.delete()});
+    try {
+      await _storage.ref().child('chat_wallpapers/$cId.enc').delete();
+    } catch (_) {}
   }
 
   /// Stream du nombre de messages non lus pour un chat donné.
@@ -210,7 +256,10 @@ class PrivateChatService {
 
   /// Charge les [_pageSize] messages précédant [before].
   Future<List<ChatMessage>> loadMoreMessages(
-      String cId, String friendId, DocumentSnapshot before) async {
+    String cId,
+    String friendId,
+    DocumentSnapshot before,
+  ) async {
     final snap = await _messages(cId)
         .orderBy('timestamp', descending: false)
         .endBeforeDocument(before)
@@ -220,12 +269,18 @@ class PrivateChatService {
   }
 
   Future<List<ChatMessage>> _decryptSnapshot(
-      QuerySnapshot snap, String cId, String friendId) async {
+    QuerySnapshot snap,
+    String cId,
+    String friendId,
+  ) async {
     return _decryptSnapshotList(snap.docs, cId, friendId);
   }
 
   Future<List<ChatMessage>> _decryptSnapshotList(
-      List<QueryDocumentSnapshot> docs, String cId, String friendId) async {
+    List<QueryDocumentSnapshot> docs,
+    String cId,
+    String friendId,
+  ) async {
     SecretKey? key;
     try {
       key = await _crypto.getChatKey(cId, friendId);
@@ -247,13 +302,32 @@ class PrivateChatService {
               await _crypto.decrypt(key, raw) ?? _encryptedMessageUnavailable;
         }
       }
-      results.add(ChatMessage.fromDoc(doc, decryptedText: decrypted));
+      Uint8List? mediaBytes;
+      final mediaPath = data['mediaPath'] as String?;
+      if (type != 'text' && mediaPath != null && key != null) {
+        try {
+          final encrypted = await _storage
+              .ref()
+              .child(mediaPath)
+              .getData(10 * 1024 * 1024)
+              .timeout(_mediaUploadTimeout);
+          if (encrypted != null) {
+            mediaBytes = await _crypto.decryptBytes(key, encrypted);
+          }
+        } catch (_) {}
+      }
+      results.add(ChatMessage.fromDoc(doc,
+          decryptedText: decrypted, mediaBytes: mediaBytes));
     }
     return results;
   }
 
   Future<void> sendMessage(
-      String cId, String senderId, String text, String friendId) async {
+    String cId,
+    String senderId,
+    String text,
+    String friendId,
+  ) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
@@ -268,19 +342,15 @@ class PrivateChatService {
     });
 
     // Push notification
-    _sendChatNotification(
-      chatId: cId,
-      recipientId: friendId,
-      preview: trimmed.length > 100 ? '${trimmed.substring(0, 100)}…' : trimmed,
-    );
+    _sendChatNotification(chatId: cId, recipientId: friendId);
   }
 
   /// Exécute un upload borné : reporte la progression (0..1), applique le
   /// plafond média — en ANNULANT la tâche au dépassement pour ne pas la laisser
-  /// tourner en arrière-plan — puis renvoie l'URL de téléchargement. Toute
+  /// tourner en arrière-plan. Toute
   /// erreur/timeout devient une [MediaUploadException] visible (pas de silence,
   /// pas de fallback dégradé).
-  Future<String> _runBoundedUpload(
+  Future<void> _runBoundedUpload(
     UploadTask task, {
     void Function(double progress)? onProgress,
   }) async {
@@ -295,14 +365,13 @@ class PrivateChatService {
       }, onError: (_) {});
     }
     try {
-      final snapshot = await task.timeout(
+      await task.timeout(
         _mediaUploadTimeout,
         onTimeout: () {
           unawaited(task.cancel());
           throw const MediaUploadException('Envoi média expiré');
         },
       );
-      return await snapshot.ref.getDownloadURL().timeout(_mediaUploadTimeout);
     } on MediaUploadException {
       rethrow;
     } on TimeoutException {
@@ -310,7 +379,8 @@ class PrivateChatService {
       throw const MediaUploadException('Envoi média expiré');
     } on FirebaseException catch (e) {
       throw MediaUploadException(
-          e.code == 'canceled' ? 'Envoi média annulé' : 'Échec envoi média');
+        e.code == 'canceled' ? 'Envoi média annulé' : 'Échec envoi média',
+      );
     } finally {
       await sub?.cancel();
       _activeUploads.remove(task);
@@ -329,87 +399,78 @@ class PrivateChatService {
     }
   }
 
-  Future<void> sendImageBytes(String cId, String senderId, List<int> bytes,
-      {void Function(double progress)? onProgress}) async {
-    final ref = _storage
-        .ref()
-        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
-    final url = await _runBoundedUpload(
-      ref.putData(Uint8List.fromList(bytes),
-          SettableMetadata(contentType: 'image/jpeg')),
-      onProgress: onProgress,
-    );
-    await _messages(cId).add({
-      'senderId': senderId,
-      'type': 'image',
-      'text': '',
-      'mediaUrl': url,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+  Future<void> sendImageBytes(
+    String cId,
+    String senderId,
+    List<int> bytes, {
+    void Function(double progress)? onProgress,
+  }) async {
+    await _sendEncryptedMedia(
+        cId, senderId, Uint8List.fromList(bytes), ChatMessageType.image,
+        onProgress: onProgress);
   }
 
-  Future<void> sendImage(String cId, String senderId, File imageFile,
-      {void Function(double progress)? onProgress}) async {
-    final ref = _storage
-        .ref()
-        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.jpg');
-    final url = await _runBoundedUpload(
-      ref.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg')),
-      onProgress: onProgress,
-    );
-    await _messages(cId).add({
-      'senderId': senderId,
-      'type': 'image',
-      'text': '',
-      'mediaUrl': url,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> sendAudio(
-      String cId, String senderId, File audioFile, int durationMs,
-      {List<double>? waveform,
+  Future<void> _sendEncryptedMedia(
+      String cId, String senderId, Uint8List bytes, ChatMessageType type,
+      {int? durationMs,
+      List<double>? waveform,
       void Function(double progress)? onProgress}) async {
-    final ref = _storage
-        .ref()
-        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
-    final url = await _runBoundedUpload(
-      ref.putFile(audioFile, SettableMetadata(contentType: 'audio/m4a')),
-      onProgress: onProgress,
-    );
+    final friendId = _otherParticipant(cId, senderId);
+    final key = await _crypto.getChatKey(cId, friendId);
+    final encrypted = await _crypto.encryptBytes(key, bytes);
+    final ref = _storage.ref().child(
+          'chat_media/$cId/${DateTime.now().microsecondsSinceEpoch}.enc',
+        );
+    await _runBoundedUpload(
+        ref.putData(encrypted,
+            SettableMetadata(contentType: 'application/octet-stream')),
+        onProgress: onProgress);
     await _messages(cId).add({
       'senderId': senderId,
-      'type': 'audio',
+      'type': type.name,
       'text': '',
-      'mediaUrl': url,
-      'audioDurationMs': durationMs,
+      'mediaPath': ref.fullPath,
+      if (durationMs != null) 'audioDurationMs': durationMs,
       if (waveform != null) 'waveform': waveform,
       'timestamp': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<void> sendImage(
+    String cId,
+    String senderId,
+    File imageFile, {
+    void Function(double progress)? onProgress,
+  }) async {
+    await sendImageBytes(cId, senderId, await imageFile.readAsBytes(),
+        onProgress: onProgress);
+  }
+
+  Future<void> sendAudio(
+    String cId,
+    String senderId,
+    File audioFile,
+    int durationMs, {
+    List<double>? waveform,
+    void Function(double progress)? onProgress,
+  }) async {
+    await _sendEncryptedMedia(
+        cId, senderId, await audioFile.readAsBytes(), ChatMessageType.audio,
+        durationMs: durationMs, waveform: waveform, onProgress: onProgress);
   }
 
   /// Web uniquement : fetch le blob URL et upload les bytes vers Firebase Storage.
   Future<void> sendAudioFromUrl(
-      String cId, String senderId, String blobUrl, int durationMs,
-      {List<double>? waveform,
-      void Function(double progress)? onProgress}) async {
+    String cId,
+    String senderId,
+    String blobUrl,
+    int durationMs, {
+    List<double>? waveform,
+    void Function(double progress)? onProgress,
+  }) async {
     final bytes = await _fetchBytes(blobUrl);
-    final ref = _storage
-        .ref()
-        .child('chat_media/$cId/${DateTime.now().millisecondsSinceEpoch}.m4a');
-    final url = await _runBoundedUpload(
-      ref.putData(bytes, SettableMetadata(contentType: 'audio/m4a')),
-      onProgress: onProgress,
-    );
-    await _messages(cId).add({
-      'senderId': senderId,
-      'type': 'audio',
-      'text': '',
-      'mediaUrl': url,
-      'audioDurationMs': durationMs,
-      if (waveform != null) 'waveform': waveform,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    await _sendEncryptedMedia(cId, senderId, bytes, ChatMessageType.audio,
+        durationMs: durationMs, waveform: waveform, onProgress: onProgress);
   }
 
   Future<Uint8List> _fetchBytes(String url) async {
@@ -420,7 +481,10 @@ class PrivateChatService {
 
   /// Supprime un message uniquement pour [myUserId] (les autres le voient toujours).
   Future<void> deleteMessageForMe(
-      String cId, String messageId, String myUserId) async {
+    String cId,
+    String messageId,
+    String myUserId,
+  ) async {
     await _messages(cId).doc(messageId).update({
       'deletedFor': FieldValue.arrayUnion([myUserId]),
     });
@@ -428,16 +492,13 @@ class PrivateChatService {
 
   /// Supprime un message pour tout le monde (marque deletedForAll = true).
   Future<void> deleteMessageForAll(String cId, String messageId) async {
-    await _messages(cId).doc(messageId).update({
-      'deletedForAll': true,
-    });
+    await _messages(cId).doc(messageId).update({'deletedForAll': true});
   }
 
   /// Envoie une push notification au destinataire (best-effort, silencieux en cas d'erreur).
   Future<void> _sendChatNotification({
     required String chatId,
     required String recipientId,
-    required String preview,
   }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -449,8 +510,10 @@ class PrivateChatService {
           .post(
             Uri.parse('$_baseUrl/api/chats/$chatId/notify'),
             headers: await SecureApiHeaders.json(bearerToken: token),
-            body:
-                '{"recipientId":"$recipientId","senderName":"$senderName","preview":"${preview.replaceAll('"', '\\"')}"}',
+            body: jsonEncode({
+              'recipientId': recipientId,
+              'senderName': senderName,
+            }),
           )
           .timeout(_notificationTimeout);
     } catch (_) {

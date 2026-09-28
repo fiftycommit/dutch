@@ -37,7 +37,7 @@ dynamic _buildWebProvider() {
     );
   }
 
-  return ReCaptchaV3Provider(siteKey);
+  return ReCaptchaEnterpriseProvider(siteKey);
 }
 
 AndroidAppCheckProvider _buildAndroidProvider() {

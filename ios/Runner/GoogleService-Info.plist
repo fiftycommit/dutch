@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>751846261054-istm3u30c0p35nptqpiudv90fn7ml521.apps.googleusercontent.com</string>
+	<string>143424334887-lpka83528b7a7tsrj0rpgr5ggo274kso.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.751846261054-istm3u30c0p35nptqpiudv90fn7ml521</string>
+	<string>com.googleusercontent.apps.143424334887-lpka83528b7a7tsrj0rpgr5ggo274kso</string>
 	<key>API_KEY</key>
-	<string>AIzaSyAcfxXvhaAxn4GyGgqsn4DEbVaYwVtUGrA</string>
+	<string>AIzaSyDbPmhH7D7BjPhTnyM11G18_j7fQ2FeAGU</string>
 	<key>GCM_SENDER_ID</key>
-	<string>751846261054</string>
+	<string>143424334887</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.max.dutchGame</string>
 	<key>PROJECT_ID</key>
-	<string>dutch-game-1dd01</string>
+	<string>dutch-game-max</string>
 	<key>STORAGE_BUCKET</key>
-	<string>dutch-game-1dd01.firebasestorage.app</string>
+	<string>dutch-game-max.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -29,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:751846261054:ios:55bf37868bd96d55056c6f</string>
+	<string>1:143424334887:ios:b412b57e55c6fcbce1f202</string>
 </dict>
 </plist>

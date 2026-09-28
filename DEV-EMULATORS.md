@@ -16,7 +16,7 @@ Firebase (les variables ci-dessous ne sont posées qu'en local).
 ### 1. Les émulateurs
 
 ```bash
-firebase emulators:start --only auth,firestore,storage --project dutch-game-1dd01
+firebase emulators:start --only auth,firestore,storage --project dutch-game-max
 ```
 
 Ports (définis dans `firebase.json`) : Auth `9099`, Firestore `8089`,

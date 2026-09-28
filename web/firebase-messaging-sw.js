@@ -3,13 +3,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
-  appId: '1:751846261054:web:29d46acb9a6c102d056c6f',
-  messagingSenderId: '751846261054',
-  projectId: 'dutch-game-1dd01',
+  apiKey: 'AIzaSyCtKT2FJRKax7KtsNX65-J8RbTvO1w8fVM',
+  appId: '1:143424334887:web:e540c11d1234d47ce1f202',
+  messagingSenderId: '143424334887',
+  projectId: 'dutch-game-max',
+  storageBucket: 'dutch-game-max.firebasestorage.app',
   authDomain: 'dutch-game.me',
-  storageBucket: 'dutch-game-1dd01.firebasestorage.app',
-  measurementId: 'G-SXR0DN53BW',
 });
 
 const messaging = firebase.messaging();

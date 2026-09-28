@@ -8,24 +8,28 @@ service firebase.storage {
       allow read: if request.auth != null
         && (chatId.split('_')[0] == request.auth.uid
          || chatId.split('_')[1] == request.auth.uid);
-      allow write: if request.auth != null
+      allow create: if request.auth != null
         && (chatId.split('_')[0] == request.auth.uid
          || chatId.split('_')[1] == request.auth.uid)
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|audio/.*');
+        && fileName.matches('^.+\\.enc$')
+        && request.resource.contentType == 'application/octet-stream';
     }
 
-    // Fonds d'écran de chat — fileName attendu au format "{uid1}_{uid2}.jpg"
+    // Fonds d'écran de chat — fileName attendu au format "{uid1}_{uid2}.enc"
     // (chatId trié). On exige que l'uid soit participant du chat.
     match /chat_wallpapers/{fileName} {
       allow read: if request.auth != null
-        && (fileName.matches('^' + request.auth.uid + '_.+\\.jpg$')
-         || fileName.matches('^.+_' + request.auth.uid + '\\.jpg$'));
-      allow write: if request.auth != null
-        && (fileName.matches('^' + request.auth.uid + '_.+\\.jpg$')
-         || fileName.matches('^.+_' + request.auth.uid + '\\.jpg$'))
+        && (fileName.matches('^' + request.auth.uid + '_.+\\.enc$')
+         || fileName.matches('^.+_' + request.auth.uid + '\\.enc$'));
+      allow create, update: if request.auth != null
+        && (fileName.matches('^' + request.auth.uid + '_.+\\.enc$')
+         || fileName.matches('^.+_' + request.auth.uid + '\\.enc$'))
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && request.resource.contentType == 'application/octet-stream';
+      allow delete: if request.auth != null
+        && (fileName.matches('^' + request.auth.uid + '_.+\\.enc$')
+         || fileName.matches('^.+_' + request.auth.uid + '\\.enc$'));
     }
 
     // Refuser tout le reste

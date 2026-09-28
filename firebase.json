@@ -9,35 +9,35 @@
     "platforms": {
       "android": {
         "default": {
-          "projectId": "dutch-game-1dd01",
-          "appId": "1:751846261054:android:b36dc858eaeb77ef056c6f",
+          "projectId": "dutch-game-max",
+          "appId": "1:143424334887:android:e05e9df5c9528057e1f202",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "ios": {
         "default": {
-          "projectId": "dutch-game-1dd01",
-          "appId": "1:751846261054:ios:55bf37868bd96d55056c6f",
+          "projectId": "dutch-game-max",
+          "appId": "1:143424334887:ios:b412b57e55c6fcbce1f202",
           "uploadDebugSymbols": false,
           "fileOutput": "ios/Runner/GoogleService-Info.plist"
         }
       },
       "macos": {
         "default": {
-          "projectId": "dutch-game-1dd01",
-          "appId": "1:751846261054:ios:a4bf72265f60f5ca056c6f",
+          "projectId": "dutch-game-max",
+          "appId": "1:143424334887:ios:15f1e93ca47421d9e1f202",
           "uploadDebugSymbols": false,
           "fileOutput": "macos/Runner/GoogleService-Info.plist"
         }
       },
       "dart": {
         "lib/firebase_options.dart": {
-          "projectId": "dutch-game-1dd01",
+          "projectId": "dutch-game-max",
           "configurations": {
-            "android": "1:751846261054:android:b36dc858eaeb77ef056c6f",
-            "ios": "1:751846261054:ios:55bf37868bd96d55056c6f",
-            "macos": "1:751846261054:ios:a4bf72265f60f5ca056c6f",
-            "web": "1:751846261054:web:29d46acb9a6c102d056c6f"
+            "android": "1:143424334887:android:e05e9df5c9528057e1f202",
+            "ios": "1:143424334887:ios:b412b57e55c6fcbce1f202",
+            "macos": "1:143424334887:ios:15f1e93ca47421d9e1f202",
+            "web": "1:143424334887:web:e540c11d1234d47ce1f202"
           }
         }
       }
@@ -61,5 +61,17 @@
       "port": 4501
     },
     "singleProjectMode": true
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Dutch Game",
+        "supportEmail": "maxmbey@gmail.com",
+        "authorizedRedirectUris": [
+          "https://dutch-game.me/__/auth/handler"
+        ]
+      }
+    }
   }
 }

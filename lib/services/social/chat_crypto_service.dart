@@ -19,6 +19,7 @@ class ChatCryptoService {
   static const Duration _keyRequestTimeout = Duration(seconds: 5);
 
   final _algorithm = AesGcm.with256bits();
+  static const _mediaPrefix = [0x44, 0x43, 0x4d, 0x31]; // DCM1
 
   // ── Clé de chat ──────────────────────────────────────────────────────────
 
@@ -99,6 +100,40 @@ class ChatCryptoService {
       final secretBox = SecretBox(cipherText, nonce: iv, mac: mac);
       final plainBytes = await _algorithm.decrypt(secretBox, secretKey: key);
       return utf8.decode(plainBytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Chiffre un média avant son envoi dans Firebase Storage.
+  /// Format : DCM1 || nonce[12] || ciphertext || tag[16].
+  Future<Uint8List> encryptBytes(SecretKey key, Uint8List plaintext) async {
+    final nonce = _randomIv();
+    final box =
+        await _algorithm.encrypt(plaintext, secretKey: key, nonce: nonce);
+    return Uint8List.fromList([
+      ..._mediaPrefix,
+      ...nonce,
+      ...box.cipherText,
+      ...box.mac.bytes,
+    ]);
+  }
+
+  Future<Uint8List?> decryptBytes(SecretKey key, Uint8List encrypted) async {
+    if (encrypted.length < _mediaPrefix.length + 12 + 16 ||
+        !List.generate(_mediaPrefix.length, (i) => i)
+            .every((i) => encrypted[i] == _mediaPrefix[i])) {
+      return null;
+    }
+    final nonce = encrypted.sublist(4, 16);
+    final ciphertext = encrypted.sublist(16, encrypted.length - 16);
+    final tag = Mac(encrypted.sublist(encrypted.length - 16));
+    try {
+      final result = await _algorithm.decrypt(
+        SecretBox(ciphertext, nonce: nonce, mac: tag),
+        secretKey: key,
+      );
+      return Uint8List.fromList(result);
     } catch (_) {
       return null;
     }

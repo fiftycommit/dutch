@@ -83,10 +83,9 @@ router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, re
   const authReq = req as AuthenticatedRequest;
   const senderId = authReq.user!.uid;
   const chatId = req.params.chatId as string;
-  const { recipientId, senderName, preview } = req.body as {
+  const { recipientId, senderName } = req.body as {
     recipientId?: string;
     senderName?: string;
-    preview?: string;
   };
 
   if (!recipientId || !senderName) {
@@ -96,7 +95,8 @@ router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, re
 
   // Vérifier que le sender fait partie du chat (chatId = sorted(uid1, uid2))
   const parts = chatId.split('_');
-  if (!parts.includes(senderId)) {
+  if (parts.length !== 2 || !parts.includes(senderId) ||
+      !parts.includes(recipientId) || recipientId === senderId) {
     res.status(403).json({ success: false, error: 'Accès refusé' });
     return;
   }
@@ -104,7 +104,7 @@ router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, re
   try {
     await PushNotificationService.sendToUser(recipientId, {
       title: senderName,
-      body: preview || '📩 Nouveau message',
+      body: '📩 Nouveau message',
       data: { type: 'chat_message', chatId, senderId },
     });
 
@@ -114,7 +114,7 @@ router.post('/:chatId/notify', SecurityService.chatNotifyLimiter, async (req, re
         chatId,
         senderId,
         senderName,
-        preview: preview || '📩 Nouveau message',
+        preview: '📩 Nouveau message',
       });
     }
 

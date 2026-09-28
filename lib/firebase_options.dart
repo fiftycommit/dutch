@@ -44,38 +44,37 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAbECOaA-3eC5MQasl7K12h0drKkm4rKfc',
-    appId: '1:751846261054:web:29d46acb9a6c102d056c6f',
-    messagingSenderId: '751846261054',
-    projectId: 'dutch-game-1dd01',
+    apiKey: 'AIzaSyCtKT2FJRKax7KtsNX65-J8RbTvO1w8fVM',
+    appId: '1:143424334887:web:e540c11d1234d47ce1f202',
+    messagingSenderId: '143424334887',
+    projectId: 'dutch-game-max',
     authDomain: 'dutch-game.me',
-    storageBucket: 'dutch-game-1dd01.firebasestorage.app',
-    measurementId: 'G-SXR0DN53BW',
+    storageBucket: 'dutch-game-max.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCH0yDjB0v_qU0Him383AoRVC3bI5oP-to',
-    appId: '1:751846261054:android:b36dc858eaeb77ef056c6f',
-    messagingSenderId: '751846261054',
-    projectId: 'dutch-game-1dd01',
-    storageBucket: 'dutch-game-1dd01.firebasestorage.app',
+    apiKey: 'AIzaSyAvZkwvCD2uyt5yalhghPeabuYAgsM6v5Q',
+    appId: '1:143424334887:android:e05e9df5c9528057e1f202',
+    messagingSenderId: '143424334887',
+    projectId: 'dutch-game-max',
+    storageBucket: 'dutch-game-max.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAcfxXvhaAxn4GyGgqsn4DEbVaYwVtUGrA',
-    appId: '1:751846261054:ios:55bf37868bd96d55056c6f',
-    messagingSenderId: '751846261054',
-    projectId: 'dutch-game-1dd01',
-    storageBucket: 'dutch-game-1dd01.firebasestorage.app',
+    apiKey: 'AIzaSyDbPmhH7D7BjPhTnyM11G18_j7fQ2FeAGU',
+    appId: '1:143424334887:ios:b412b57e55c6fcbce1f202',
+    messagingSenderId: '143424334887',
+    projectId: 'dutch-game-max',
+    storageBucket: 'dutch-game-max.firebasestorage.app',
     iosBundleId: 'com.max.dutchGame',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAcfxXvhaAxn4GyGgqsn4DEbVaYwVtUGrA',
-    appId: '1:751846261054:ios:a4bf72265f60f5ca056c6f',
-    messagingSenderId: '751846261054',
-    projectId: 'dutch-game-1dd01',
-    storageBucket: 'dutch-game-1dd01.firebasestorage.app',
+    apiKey: 'AIzaSyDbPmhH7D7BjPhTnyM11G18_j7fQ2FeAGU',
+    appId: '1:143424334887:ios:15f1e93ca47421d9e1f202',
+    messagingSenderId: '143424334887',
+    projectId: 'dutch-game-max',
+    storageBucket: 'dutch-game-max.firebasestorage.app',
     iosBundleId: 'com.example.dutchGame',
   );
 }

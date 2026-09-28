@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +45,7 @@ class _ChatPageState extends State<ChatPage> {
   double? _mediaUploadProgress;
 
   // Meta (wallpaper, read receipts, typing)
-  String? _wallpaperUrl;
+  Uint8List? _wallpaperBytes;
   // Fichier local affiché immédiatement pendant l'upload
   String? _localWallpaperPath;
   bool _wallpaperIsDark = true;
@@ -91,14 +90,14 @@ class _ChatPageState extends State<ChatPage> {
     _metaSub =
         _chatService.metaStream(_chatId, widget.friendUserId).listen((meta) {
       if (!mounted) return;
-      final oldUrl = _wallpaperUrl;
+      final oldBytes = _wallpaperBytes;
       setState(() {
-        _wallpaperUrl = meta.wallpaperUrl;
+        _wallpaperBytes = meta.wallpaperBytes;
         _friendReadAt = meta.friendReadAt;
         _friendIsTyping = meta.friendIsTyping;
       });
-      if (meta.wallpaperUrl != oldUrl) {
-        _analyzeWallpaperBrightness(meta.wallpaperUrl);
+      if (meta.wallpaperBytes != oldBytes) {
+        _analyzeWallpaperBrightness(meta.wallpaperBytes);
       }
     });
   }
@@ -110,8 +109,7 @@ class _ChatPageState extends State<ChatPage> {
         targetWidth: maxDim, targetHeight: maxDim);
     final frame = await codec.getNextFrame();
     final image = frame.image;
-    final byteData =
-        await image.toByteData(format: ui.ImageByteFormat.png);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) return bytes;
     return byteData.buffer.asUint8List();
   }
@@ -143,14 +141,14 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _analyzeWallpaperBrightness(String? url) async {
-    if (url == null) {
+  Future<void> _analyzeWallpaperBrightness(Uint8List? bytes) async {
+    if (bytes == null) {
       if (mounted) setState(() => _wallpaperIsDark = true);
       return;
     }
     try {
       final completer = Completer<ui.Image>();
-      final provider = NetworkImage('$url&t=${url.hashCode}');
+      final provider = MemoryImage(bytes);
       final stream = provider.resolve(ImageConfiguration.empty);
       late ImageStreamListener listener;
       listener = ImageStreamListener(
@@ -343,23 +341,14 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     try {
-      final ref =
-          FirebaseStorage.instance.ref().child('chat_wallpapers/$_chatId.jpg');
+      Uint8List bytes;
       if (kIsWeb) {
-        final bytes = await xfile.readAsBytes();
-        final compressed = await _compressImageBytes(bytes, maxDim: 1920);
-        await ref.putData(
-            Uint8List.fromList(compressed),
-            SettableMetadata(contentType: 'image/jpeg'));
+        bytes = Uint8List.fromList(
+            await _compressImageBytes(await xfile.readAsBytes(), maxDim: 1920));
       } else {
-        await ref.putFile(
-            File(xfile.path), SettableMetadata(contentType: 'image/jpeg'));
+        bytes = await File(xfile.path).readAsBytes();
       }
-      final url = await ref.getDownloadURL();
-      await FirebaseFirestore.instance
-          .collection('private_chats')
-          .doc(_chatId)
-          .set({'wallpaperUrl': url}, SetOptions(merge: true));
+      await _chatService.setWallpaper(_chatId, _myUserId, bytes);
       // Le stream Firestore mettra à jour _wallpaperUrl, on retire le local
       if (mounted) setState(() => _localWallpaperPath = null);
     } catch (e) {
@@ -373,16 +362,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _removeWallpaper() async {
-    await FirebaseFirestore.instance
-        .collection('private_chats')
-        .doc(_chatId)
-        .update({'wallpaperUrl': FieldValue.delete()});
-    try {
-      await FirebaseStorage.instance
-          .ref()
-          .child('chat_wallpapers/$_chatId.jpg')
-          .delete();
-    } catch (_) {}
+    await _chatService.removeWallpaper(_chatId);
   }
 
   @override
@@ -570,7 +550,7 @@ class _ChatPageState extends State<ChatPage> {
                 _pickWallpaper();
               },
             ),
-            if (_wallpaperUrl != null)
+            if (_wallpaperBytes != null)
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: cs.danger,
@@ -593,7 +573,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final cs = MultiplayerColors.of(context);
-    final hasWallpaper = _wallpaperUrl != null || _localWallpaperPath != null;
+    final hasWallpaper = _wallpaperBytes != null || _localWallpaperPath != null;
     final wallpaperTextColor =
         hasWallpaper ? (_wallpaperIsDark ? Colors.white : Colors.black) : null;
 
@@ -656,9 +636,7 @@ class _ChatPageState extends State<ChatPage> {
                         image: _localWallpaperPath != null
                             ? FileImage(File(_localWallpaperPath!))
                                 as ImageProvider
-                            : NetworkImage(
-                                '$_wallpaperUrl&t=${_wallpaperUrl.hashCode}',
-                              ),
+                            : MemoryImage(_wallpaperBytes!),
                         fit: BoxFit.cover,
                       ),
                     )
@@ -1195,25 +1173,19 @@ class _MessageBubble extends StatelessWidget {
           bottomRight: Radius.circular(isMe ? 4 : 18),
         );
         return GestureDetector(
-          onTap: () => _openFullScreen(context, message.mediaUrl ?? ''),
+          onTap: () => _openFullScreen(context, message.mediaBytes),
           child: ClipRRect(
             borderRadius: radius,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 220, maxHeight: 180),
-              child: Image.network(
-                message.mediaUrl ?? '',
-                fit: BoxFit.cover,
-                width: 220,
-                cacheWidth: 440,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const SizedBox(
-                        width: 220,
-                        height: 140,
-                        child: Center(
-                            child: CircularProgressIndicator(strokeWidth: 2)),
-                      ),
-              ),
+              child: message.mediaBytes == null
+                  ? const Center(child: Icon(Icons.broken_image))
+                  : Image.memory(
+                      message.mediaBytes!,
+                      fit: BoxFit.cover,
+                      width: 220,
+                      cacheWidth: 440,
+                    ),
             ),
           ),
         );
@@ -1221,6 +1193,7 @@ class _MessageBubble extends StatelessWidget {
       case ChatMessageType.audio:
         return _AudioBubble(
           mediaUrl: message.mediaUrl ?? '',
+          mediaBytes: message.mediaBytes,
           durationMs: message.audioDurationMs ?? 0,
           isMe: isMe,
           cs: cs,
@@ -1268,7 +1241,8 @@ class _SelectionCircle extends StatelessWidget {
   }
 }
 
-void _openFullScreen(BuildContext context, String url) {
+void _openFullScreen(BuildContext context, Uint8List? bytes) {
+  if (bytes == null) return;
   Navigator.of(context).push(
     PageRouteBuilder(
       opaque: false,
@@ -1282,7 +1256,7 @@ void _openFullScreen(BuildContext context, String url) {
             child: InteractiveViewer(
               minScale: 0.5,
               maxScale: 4.0,
-              child: Image.network(url, fit: BoxFit.contain),
+              child: Image.memory(bytes, fit: BoxFit.contain),
             ),
           ),
         ),
@@ -1359,6 +1333,7 @@ class _LinkifiedText extends StatelessWidget {
 class _AudioBubble extends StatefulWidget {
   const _AudioBubble({
     required this.mediaUrl,
+    this.mediaBytes,
     required this.durationMs,
     required this.isMe,
     required this.cs,
@@ -1366,6 +1341,7 @@ class _AudioBubble extends StatefulWidget {
   });
 
   final String mediaUrl;
+  final Uint8List? mediaBytes;
   final int durationMs;
   final bool isMe;
   final MultiplayerColorScheme cs;
@@ -1428,7 +1404,8 @@ class _AudioBubbleState extends State<_AudioBubble> {
           : kIsWeb
               ? UrlSource(url)
               : DeviceFileSource(url);
-      await _player.play(source);
+      await _player.play(
+          widget.mediaBytes != null ? BytesSource(widget.mediaBytes!) : source);
       if (mounted) setState(() => _playing = true);
     }
   }
@@ -1471,10 +1448,7 @@ class _AudioBubbleState extends State<_AudioBubble> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-              _playing
-                  ? '-${_fmt(_remainingMs)}'
-                  : _fmt(widget.durationMs),
+          Text(_playing ? '-${_fmt(_remainingMs)}' : _fmt(widget.durationMs),
               style: TextStyle(color: color, fontSize: 11)),
         ],
       ),
@@ -1551,8 +1525,7 @@ class _LiveWaveformPainter extends CustomPainter {
     const gap = 1.5;
     const step = barWidth + gap;
     final maxBars = (size.width / step).floor();
-    final start =
-        samples.length > maxBars ? samples.length - maxBars : 0;
+    final start = samples.length > maxBars ? samples.length - maxBars : 0;
     final visible = samples.sublist(start);
     final centerY = size.height / 2;
 
@@ -1594,7 +1567,6 @@ class _InputBar extends StatefulWidget {
     required this.onPendingAudio,
     required this.cs,
   });
-
 
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -1775,8 +1747,7 @@ class _InputBarState extends State<_InputBar> {
     _timer?.cancel();
     _amplitudeTimer?.cancel();
     if (_recordStart == null) return;
-    _recordDurationMs =
-        DateTime.now().difference(_recordStart!).inMilliseconds;
+    _recordDurationMs = DateTime.now().difference(_recordStart!).inMilliseconds;
     _recorderReady = false;
     // Ignorer les enregistrements trop courts (< 300ms)
     if (_recordDurationMs < 300) {
@@ -1796,9 +1767,8 @@ class _InputBarState extends State<_InputBar> {
             widget.chatId, widget.myUserId, _recordPath!, _recordDurationMs,
             waveform: waveform);
       } else {
-        await widget.chatService.sendAudio(
-            widget.chatId, widget.myUserId, File(_recordPath!),
-            _recordDurationMs,
+        await widget.chatService.sendAudio(widget.chatId, widget.myUserId,
+            File(_recordPath!), _recordDurationMs,
             waveform: waveform);
       }
       widget.onMediaSent();
@@ -1900,9 +1870,8 @@ class _InputBarState extends State<_InputBar> {
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: isCancelling
-              ? cs.danger.withValues(alpha: 0.15)
-              : cs.surfaceHigh,
+          color:
+              isCancelling ? cs.danger.withValues(alpha: 0.15) : cs.surfaceHigh,
           borderRadius: BorderRadius.circular(26),
         ),
         child: Row(
@@ -1912,8 +1881,7 @@ class _InputBarState extends State<_InputBar> {
               tween: Tween(begin: 0.85, end: 1.0),
               duration: const Duration(milliseconds: 600),
               curve: Curves.easeInOut,
-              builder: (_, v, child) =>
-                  Transform.scale(scale: v, child: child),
+              builder: (_, v, child) => Transform.scale(scale: v, child: child),
               onEnd: () {},
               child: Icon(Icons.mic, color: cs.danger, size: 22),
             ),
@@ -1921,9 +1889,7 @@ class _InputBarState extends State<_InputBar> {
             Text(
               _fmtSeconds(_elapsedSeconds),
               style: TextStyle(
-                  color: cs.danger,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600),
+                  color: cs.danger, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             const SizedBox(width: 10),
             // Waveform en temps réel
@@ -2022,9 +1988,8 @@ class _InputBarState extends State<_InputBar> {
         else
           RawGestureDetector(
             gestures: <Type, GestureRecognizerFactory>{
-              LongPressGestureRecognizer:
-                  GestureRecognizerFactoryWithHandlers<
-                      LongPressGestureRecognizer>(
+              LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+                  LongPressGestureRecognizer>(
                 () => LongPressGestureRecognizer(
                     duration: const Duration(milliseconds: 100)),
                 (instance) {

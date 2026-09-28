@@ -1,0 +1,26 @@
+[Unit]
+Description=Dutch game backend
+After=network-online.target redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=max
+Group=max
+WorkingDirectory=/srv/dutch/current
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=REDIS_ENABLED=true
+Environment=REDIS_URL=redis://127.0.0.1:6379
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/srv/dutch/shared/data/firebase-service-account.json
+EnvironmentFile=-/srv/dutch/shared/dutch.env
+ExecStart=/usr/bin/node /srv/dutch/current/dist/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/dutch/shared/data
+
+[Install]
+WantedBy=multi-user.target

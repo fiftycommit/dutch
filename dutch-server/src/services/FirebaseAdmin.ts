@@ -22,7 +22,7 @@ function initFirebase(): void {
         admin.initializeApp({
             projectId: process.env.GCLOUD_PROJECT
                 || process.env.FIREBASE_PROJECT_ID
-                || 'dutch-game-1dd01',
+                || 'dutch-game-max',
         });
         initialized = true;
         console.log('🧪 Firebase Admin initialisé (ÉMULATEURS locaux)');
