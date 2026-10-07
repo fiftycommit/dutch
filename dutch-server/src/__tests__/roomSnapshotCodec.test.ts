@@ -113,4 +113,18 @@ test('RoomSnapshotCodec préserve les structures nécessaires à la reprise Redi
     Date.parse('2026-04-13T10:16:30.000Z')
   );
   assert.equal(restored.gameState?.discardPile[0].id, 'R_spades');
+  assert.strictEqual(restored.players[0], restored.gameState!.players[0]);
+  restored.players[0].id = 'reconnected-host';
+  assert.equal(restored.gameState!.players[0].id, 'reconnected-host');
+  restored.gameState!.players[0].hand.push(createCard('hearts', '7'));
+  assert.equal(restored.players[0].hand[0].id, '7_hearts');
+
+  const oldSnapshot = JSON.parse(RoomSnapshotCodec.serialize(room));
+  oldSnapshot.players[0].hand = [createCard('spades', 'R')];
+  oldSnapshot.players[0].connected = false;
+  oldSnapshot.gameState.players[0].hand = [createCard('hearts', '7')];
+  oldSnapshot.gameState.players[0].connected = true;
+  const repaired = RoomSnapshotCodec.deserialize(JSON.stringify(oldSnapshot));
+  assert.equal(repaired.players[0].hand[0].id, '7_hearts');
+  assert.equal(repaired.gameState!.players[0].connected, false);
 });

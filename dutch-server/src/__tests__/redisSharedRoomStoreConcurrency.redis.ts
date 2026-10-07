@@ -71,6 +71,7 @@ test('Redis saves a real pause and resumes its reaction after restart and reconn
   await restored.withRoomMutation(room.id, async () => {
     restored.joinRoom(room.id, 'host-new', 'Host', 'c1', 'u1');
     assert.equal(restored.getRoom(room.id)!.pausedByPlayerId, 'host-new');
+    assert.equal(restored.getRoom(room.id)!.gameState!.players.find((p) => p.clientId === 'c1')!.id, 'host-new');
     restored.resumeGame(room.id, 'host-new', 'Host');
   });
   await wait(600);

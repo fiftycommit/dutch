@@ -63,9 +63,29 @@ export class RoomSnapshotCodec {
 
   static deserialize(raw: string): Room {
     const payload = JSON.parse(raw) as SerializedRoom;
+    const gameState = deserializeGameState(payload.gameState);
+    // JSON duplique les joueurs présents dans les deux tableaux. Restaurer
+    // leurs références communes, en gardant les cartes de l'état de jeu et
+    // les informations de connexion du salon.
+    const players = payload.players.map((player) => {
+      const gamePlayer = gameState?.players.find((candidate) => candidate.id === player.id);
+      if (!gamePlayer) return player;
+      Object.assign(gamePlayer, {
+        name: player.name,
+        username: player.username,
+        clientId: player.clientId,
+        userId: player.userId,
+        connected: player.connected,
+        focused: player.focused,
+        lastSeenAt: player.lastSeenAt,
+        ready: player.ready,
+      });
+      return gamePlayer;
+    });
 
     return {
       ...payload,
+      players,
       createdAt: new Date(payload.createdAt),
       cumulativeScores: payload.cumulativeScores
         ? new Map(Object.entries(payload.cumulativeScores))
@@ -77,7 +97,7 @@ export class RoomSnapshotCodec {
         ? new Set(payload.playersInResults)
         : undefined,
       pauseTimeoutHandle: undefined,
-      gameState: deserializeGameState(payload.gameState),
+      gameState,
     };
   }
 }
