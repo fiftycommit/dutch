@@ -40,7 +40,8 @@ class BotFactory {
     'Marlo Stanfield',
     'Manboy',
     'Bramsou',
-    'Keyser Söze'
+    'Keyser Söze',
+    'Fares'
   ];
 
   static final Set<String> _usedNames = {};
