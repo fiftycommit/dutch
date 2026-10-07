@@ -10,18 +10,24 @@ la CI valide d'abord la branche, puis le déploiement est déclenché séparéme
 
 ### Workflow
 `.github/workflows/deploy-server.yml` déploie :
-- ✅ Frontend Flutter → `/var/www/dutch/web/`
-- ✅ Backend Node.js → `/root/apps/dutch-server/`
-- ✅ Configuration Nginx (si nécessaire)
-- ✅ Redémarrage PM2
+- ✅ Frontend Flutter → `/srv/dutch/web/`
+- ✅ Backend Node.js → `/srv/dutch/releases/<commit>/`, lien `/srv/dutch/current`
+- ✅ Service systemd → `dutch-server.service`
+- ✅ Données persistantes → `/srv/dutch/shared/data/`
 
 ### Pour déployer
 
 1. Merger uniquement une branche validée en CI.
-2. Vérifier que le serveur de production utilise Node.js 24.x.
+2. Vérifier que `/opt/dutch-node24/bin/node --version` indique Node.js 24.x.
 3. Lancer manuellement le workflow GitHub Actions `Deploy to Production`.
 
 Le workflow GitHub Actions s'occupe du reste.
+
+Le service et les commandes npm de déploiement utilisent le runtime dédié
+`/opt/dutch-node24/bin`. La CI utilise également Node 24. Installer une distribution
+officielle Node 24 correspondant à l'architecture du serveur, vérifier son SHA-256
+avec `SHASUMS256.txt`, puis placer le lien `/opt/dutch-node24` vers cette installation.
+Ce runtime est indépendant du Node système utilisé par les autres applications.
 
 ## 🔧 Setup initial (une seule fois)
 
@@ -44,7 +50,7 @@ Le provisionnement initial n'est plus automatisé par un script du repo.
 
 À installer/configurer manuellement :
 - Node.js 24.x
-- PM2
+- systemd (`dutch-server/deploy/dutch-server.service`)
 - Nginx
 - Redis si tu veux activer le multijoueur partagé multi-instance
 - Certbot
@@ -57,7 +63,8 @@ Si tu veux activer Redis en production, ajoute aussi :
 - `REDIS_ENABLED` : `true`
 - `REDIS_URL` : ex. `redis://127.0.0.1:6379` ou URL de ton Redis managé
 
-Le workflow de déploiement les injecte maintenant dans PM2. Sans ces secrets, le serveur reste en mode local sans Redis.
+Le service systemd configure Redis local via `REDIS_ENABLED=true` et
+`REDIS_URL=redis://127.0.0.1:6379`. Adapter ces valeurs dans le service si nécessaire.
 
 ## 📊 URLs en production
 
@@ -72,17 +79,17 @@ Le workflow de déploiement les injecte maintenant dans PM2. Sans ces secrets, l
 
 ### Vérifier l'état du serveur
 ```bash
-ssh root@dutch-game.me "pm2 status"
+ssh max@88.96.63.215 "systemctl status dutch-server"
 ```
 
 ### Voir les logs
 ```bash
-ssh root@dutch-game.me "pm2 logs dutch-server"
+ssh max@88.96.63.215 "sudo journalctl -u dutch-server -n 100 --no-pager"
 ```
 
 ### Redémarrer manuellement
 ```bash
-ssh root@dutch-game.me "pm2 restart dutch-server"
+ssh max@88.96.63.215 "sudo systemctl restart dutch-server"
 ```
 
 ## 🛡️ Sécurité

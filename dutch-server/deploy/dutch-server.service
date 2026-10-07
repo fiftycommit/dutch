@@ -10,11 +10,12 @@ Group=max
 WorkingDirectory=/srv/dutch/current
 Environment=NODE_ENV=production
 Environment=PORT=3001
+Environment=PATH=/opt/dutch-node24/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=REDIS_ENABLED=true
 Environment=REDIS_URL=redis://127.0.0.1:6379
 Environment=GOOGLE_APPLICATION_CREDENTIALS=/srv/dutch/shared/data/firebase-service-account.json
 EnvironmentFile=-/srv/dutch/shared/dutch.env
-ExecStart=/usr/bin/node /srv/dutch/current/dist/index.js
+ExecStart=/opt/dutch-node24/bin/node /srv/dutch/current/dist/index.js
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

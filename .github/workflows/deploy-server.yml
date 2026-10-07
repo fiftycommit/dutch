@@ -47,7 +47,21 @@ jobs:
           ssh max@88.96.63.215 "mkdir -p '$release' /srv/dutch/shared/data"
           rsync -az --exclude=data --exclude=node_modules --exclude=dist --exclude=coverage \
             dutch-server/ "max@88.96.63.215:$release/"
-          ssh max@88.96.63.215 "cd '$release' && npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev && ln -sfn /srv/dutch/shared/data data"
+          ssh max@88.96.63.215 bash -s -- "$release" <<'REMOTE'
+          set -euo pipefail
+          export PATH=/opt/dutch-node24/bin:$PATH
+          test "$(node -p 'process.versions.node.split(".")[0]')" = 24
+          cd "$1"
+          npm ci --no-audit --no-fund
+          npm run build
+          npm prune --omit=dev
+          ln -sfn /srv/dutch/shared/data data
+          REMOTE
+
+      - name: Install Node 24 backend service
+        run: |
+          scp dutch-server/deploy/dutch-server.service "max@88.96.63.215:/tmp/dutch-server-$GITHUB_SHA.service"
+          ssh max@88.96.63.215 "sudo install -m 0644 /tmp/dutch-server-$GITHUB_SHA.service /etc/systemd/system/dutch-server.service && sudo systemctl daemon-reload"
 
       - name: Install secrets and start backend
         env:
