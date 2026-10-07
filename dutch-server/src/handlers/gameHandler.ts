@@ -122,6 +122,11 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
         GameLogic.drawCard(room.gameState);
         roomManager.broadcastGameState(data.roomCode, 'ACTION_RESULT');
         reply({ ok: true });
+
+        // Pioche impossible (deck vide sans Dutch) : la manche est finie.
+        if (readPhaseAfterMutation(room.gameState) === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+        }
       });
     } catch (error) {
       console.error('Error draw_card:', error);
@@ -302,6 +307,12 @@ export function setupGameHandler(socket: Socket, roomManager: RoomManager) {
           message: `${currentPlayer.name} appelle DUTCH !`,
         });
         reply({ ok: true });
+
+        // Dutch termine la manche : sans handleGameEnd la room reste en
+        // "playing" (pas de RP, retour au salon refusé, bouton "Regarder").
+        if (readPhaseAfterMutation(room.gameState) === GamePhase.ended) {
+          roomManager.handleGameEnd(data.roomCode);
+        }
       });
     } catch (error) {
       console.error('Error call_dutch:', error);

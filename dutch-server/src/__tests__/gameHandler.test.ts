@@ -5,6 +5,7 @@ import { RoomManager } from '../services/RoomManager';
 import { setupGameHandler } from '../handlers/gameHandler';
 import { GamePhase, GameMode, getCurrentPlayer } from '../models/GameState';
 import { createCard } from '../models/Card';
+import { RoomStatus } from '../models/Room';
 import { SecurityService } from '../services/SecurityService';
 
 // Mock Socket implementation
@@ -133,6 +134,19 @@ describe('gameHandler', () => {
         room.gameState!.deck.length < deckSizeBefore
       );
       assert.deepStrictEqual(ackPayload, { actionId: 'draw-1', ok: true });
+    });
+
+    it('ends the room when the deck cannot be refilled', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+      room.gameState!.deck = [];
+      room.gameState!.discardPile = [];
+
+      await mockSocket.triggerEvent('game:draw_card', { roomCode, actionId: 'draw-end' }, () => {});
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.gameState!.phase, GamePhase.ended);
+      assert.strictEqual(room.status, RoomStatus.ended);
     });
 
     it('rejects draw from non-current player', async () => {
@@ -305,6 +319,24 @@ describe('gameHandler', () => {
 
       assert.strictEqual(room.gameState!.dutchCallerId, 'player-1');
       assert.deepStrictEqual(ackPayload, { actionId: 'dutch-1', ok: true });
+    });
+
+    it('ends the room so players can go back to the lobby', async () => {
+      const room = roomManager.getRoom(roomCode)!;
+      room.gameState!.currentPlayerIndex = room.players.findIndex(p => p.id === 'player-1');
+
+      await mockSocket.triggerEvent('game:call_dutch', { roomCode, actionId: 'dutch-end' }, () => {});
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.status, RoomStatus.ended);
+      assert.ok(
+        mockServer.events.some(e => e.event === 'presence:update' && e.data.status === 'ended'),
+        'le client doit recevoir le statut ended'
+      );
+
+      assert.strictEqual(roomManager.backToLobby(roomCode, 'player-1'), true);
+      assert.strictEqual(roomManager.backToLobby(roomCode, 'player-2'), true);
+      assert.strictEqual(room.status, RoomStatus.waiting);
     });
 
     it('rejects Dutch from non-current player', async () => {
