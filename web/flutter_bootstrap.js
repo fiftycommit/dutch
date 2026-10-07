@@ -73,6 +73,9 @@ function handleServiceWorkerUpdates() {
 }
 
 _flutter.loader.load({
+  config: {
+    canvasKitBaseUrl: "/canvaskit/",
+  },
   serviceWorkerSettings: {
     serviceWorkerVersion: flutterServiceWorkerVersion,
     serviceWorkerUrl: "/dutch_service_worker.js?v=" + flutterServiceWorkerVersion,
@@ -81,7 +84,6 @@ _flutter.loader.load({
     handleServiceWorkerUpdates();
     const appRunner = await engineInitializer.initializeEngine({
       renderer: "canvaskit",
-      canvasKitBaseUrl: "/canvaskit/",
     });
     await appRunner.runApp();
     if (typeof window.flutterReady === "function") {
