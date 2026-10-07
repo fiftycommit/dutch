@@ -246,6 +246,26 @@ test('markPlayerReady transitions to playing when all ready', (t) => {
 
 // ============ Tests pauseGame/resumeGame ============
 
+test('the pause owner can resume after reconnecting with a new socket', (t) => {
+  const { manager, io } = createManager();
+  t.after(() => manager.dispose());
+  const room = manager.createRoom('host-1', { minPlayers: 2, maxPlayers: 2, fillBots: false }, 'Host', 'c1', 'u1');
+  manager.joinRoom(room.id, 'p2', 'P2', 'c2', 'u2');
+  manager.setReady(room.id, 'host-1', true);
+  manager.setReady(room.id, 'p2', true);
+  assert.equal(manager.startGame(room.id, { fillBots: false }), true);
+  manager.pauseGame(room.id, 'host-1', 'Host');
+  const deadline = room.pauseStartTime;
+  manager.joinRoom(room.id, 'host-2', 'Host', 'c1', 'u1');
+  assert.equal(room.pausedByPlayerId, 'host-2');
+  assert.equal(room.pauseStartTime, deadline);
+  assert.ok(io.events.some((e) => e.target === 'host-2' && e.data.type === 'GAME_PAUSED' && e.data.pausedByPlayerId === 'host-2'));
+  manager.resumeGame(room.id, 'p2', 'P2');
+  assert.equal(room.isPaused, true);
+  manager.resumeGame(room.id, 'host-2', 'Host');
+  assert.equal(room.isPaused, false);
+});
+
 test('pauseGame sets isPaused to true', (t) => {
   const { io, manager } = createManager();
   t.after(() => manager.dispose());

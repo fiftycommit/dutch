@@ -1,4 +1,5 @@
 import { Room } from '../models/Room';
+import { GamePhase } from '../models/GameState';
 
 export interface TimerRoomAccess {
   getRoom(roomCode: string): Room | undefined;
@@ -95,7 +96,8 @@ export class TimerManager {
   }
 
   resumeTimer(roomCode: string) {
-    const remaining = this.pausedRemainingTimes.get(roomCode);
+    const remaining = this.pausedRemainingTimes.get(roomCode)
+      ?? this.roomAccess.getRoom(roomCode)?.gameState?.reactionTimeRemaining;
     if (remaining !== undefined) {
       this.startReactionTimer(roomCode, remaining);
       this.pausedRemainingTimes.delete(roomCode);
@@ -104,6 +106,12 @@ export class TimerManager {
 
   private endReaction(roomCode: string) {
     this.clearTimer(roomCode);
-    void this.roomAccess.endReactionPhase(roomCode);
+    void this.roomAccess.endReactionPhase(roomCode).catch((error) => {
+      console.error(`[TIMER] Impossible de terminer la réaction du salon ${roomCode}:`, error);
+      const room = this.roomAccess.getRoom(roomCode);
+      if (room?.gameState?.phase === GamePhase.reaction && !room.isPaused) {
+        this.startReactionTimer(roomCode, 1000);
+      }
+    });
   }
 }

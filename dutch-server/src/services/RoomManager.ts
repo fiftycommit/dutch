@@ -328,6 +328,19 @@ export class RoomManager {
       existing.focused = true;
       existing.lastSeenAt = this.now();
 
+      // Le propriétaire de la pause doit suivre le joueur après reconnexion.
+      if (room.isPaused && room.pausedByPlayerId === previousId) {
+        const handle = room.pauseTimeoutHandle;
+        if (handle !== undefined) {
+          clearTimeout(handle);
+          if ((handle as any)._warn1) clearTimeout((handle as any)._warn1);
+          if ((handle as any)._warn2) clearTimeout((handle as any)._warn2);
+        }
+        room.pausedByPlayerId = socketId;
+        room.pausedByName = existing.name;
+        this.schedulePauseTimers(roomCode, socketId, existing.name, room.pauseStartTime!);
+      }
+
       // Clear any pending presence check for this player
       const pendingCheck = this.presenceChecks.get(roomCode);
       if (pendingCheck?.playerId === previousId) {
@@ -353,6 +366,13 @@ export class RoomManager {
       // connected=true). Sans ça la pastille resterait « Hors ligne » à vie.
       if (room.gameState && room.status === RoomStatus.playing) {
         this.broadcastGameState(roomCode, 'PLAYER_RECONNECTED');
+        if (room.isPaused) {
+          this.broadcastGameState(roomCode, 'GAME_PAUSED', {
+            pausedBy: room.pausedByName,
+            pausedByPlayerId: room.pausedByPlayerId,
+            pauseDeadline: room.pauseStartTime! + 90_000,
+          });
+        }
       }
       return { room, player: existing, previousSocketId: previousId === socketId ? undefined : previousId };
     }
@@ -2575,11 +2595,9 @@ export class RoomManager {
 
     if (room.gameState.phase === GamePhase.reaction && room.gameState.reactionDeadlineAt) {
       const remaining = room.gameState.reactionDeadlineAt - this.now();
-      if (remaining <= 0) {
-        void this.endReactionPhase(room.id);
-        return;
-      }
-      this.timerManager.startReactionTimer(room.id, remaining);
+      // La récupération peut se faire sous verrou Redis : attendre le timer
+      // avant d'acquérir un nouveau verrou, même si la réaction est expirée.
+      this.timerManager.startReactionTimer(room.id, Math.max(0, remaining));
       return;
     }
 
