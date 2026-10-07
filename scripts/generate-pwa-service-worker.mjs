@@ -90,6 +90,8 @@ const CORE = [
   '/assets/FontManifest.json'
 ].filter((resource) => RESOURCES.has(resource));
 const NETWORK_ONLY_PREFIXES = [
+  // Handler Firebase Auth (popup Google) proxifié par nginx : jamais l'index SPA.
+  '/__/',
   '/api/',
   '/socket.io/',
   '/health',
