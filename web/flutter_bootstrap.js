@@ -81,6 +81,7 @@ _flutter.loader.load({
     handleServiceWorkerUpdates();
     const appRunner = await engineInitializer.initializeEngine({
       renderer: "canvaskit",
+      canvasKitBaseUrl: "/canvaskit/",
     });
     await appRunner.runApp();
     if (typeof window.flutterReady === "function") {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -65,6 +65,27 @@ async function buildVersion(files) {
   }
 
   return hash.digest('hex').slice(0, 16);
+}
+
+// CanvasKit JS and WASM must always come from the same Flutter build.
+// Their original URLs can remain cached for a year by browsers/CDNs.
+const canvasKitFiles = (await listFiles(buildDir)).filter(file => file.startsWith('canvaskit/')).sort();
+if (canvasKitFiles.length > 0) {
+  const rendererHash = createHash('sha256');
+  for (const file of canvasKitFiles) {
+    rendererHash.update(file);
+    rendererHash.update(await readFile(path.join(buildDir, file)));
+  }
+  const rendererDir = `canvaskit-${rendererHash.digest('hex').slice(0, 16)}`;
+  const bootstrapPath = path.join(buildDir, 'flutter_bootstrap.js');
+  const bootstrap = await readFile(bootstrapPath, 'utf8');
+  if (!bootstrap.includes('canvasKitBaseUrl: "/canvaskit/"')) {
+    throw new Error('Missing CanvasKit base URL in Flutter bootstrap');
+  }
+  await rename(path.join(buildDir, 'canvaskit'), path.join(buildDir, rendererDir));
+  await writeFile(bootstrapPath, bootstrap.replace(
+    'canvasKitBaseUrl: "/canvaskit/"', `canvasKitBaseUrl: "/${rendererDir}/"`,
+  ));
 }
 
 const files = (await listFiles(buildDir)).sort();
