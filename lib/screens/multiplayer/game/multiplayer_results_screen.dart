@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../models/game_state.dart';
 import '../../../models/player.dart';
 import '../../../providers/multiplayer_game_provider.dart';
-import '../../../services/game/rp_result_helper.dart';
-import '../../../services/multiplayer/competitive_service.dart';
 import '../../../utils/tournament_labels.dart';
 import '../../../utils/ui_constants.dart';
 import '../../shared/unified_results_screen.dart' as shared;
@@ -28,26 +26,6 @@ class MultiplayerResultsScreen extends StatefulWidget {
 }
 
 class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
-  int? _localMMR;
-  int _localWinStreak = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLocalCompetitiveStats();
-  }
-
-  Future<void> _loadLocalCompetitiveStats() async {
-    final playerId = widget.localPlayerId;
-    if (playerId == null) return;
-    final stats = await CompetitiveService.getStats(playerId);
-    if (!mounted) return;
-    setState(() {
-      _localMMR = stats.mmr;
-      _localWinStreak = stats.winStreak;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MultiplayerGameProvider>();
@@ -151,7 +129,7 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
           },
           buildActionButtons: (ctx) => _buildMultiplayerButtons(ctx, provider,
               isTournament: isTournament, isTournamentOver: isTournamentOver),
-          rpCalculator: (player, rank) => _calculateRP(player, rank, gameState),
+          rpCalculator: (player, rank) => _calculateRP(player),
         ),
       ),
     );
@@ -214,21 +192,9 @@ class _MultiplayerResultsScreenState extends State<MultiplayerResultsScreen> {
     );
   }
 
-  shared.PlayerRPResult? _calculateRP(Player player, int rank, GameState gs) {
-    // Si les stats ne sont pas encore chargées, ne pas calculer pour éviter
-    // d'afficher un rang Bronze par défaut (MMR=0) à la place du vrai rang.
-    if (_localMMR == null) return null;
-    final currentMMR = _localMMR!;
-    final isLocalPlayer = player.id == widget.localPlayerId;
-    final winStreak = isLocalPlayer && rank == 1 ? _localWinStreak + 1 : 0;
-
-    return RPResultHelper.build(
-      gameState: gs,
-      player: player,
-      rank: rank,
-      currentMMR: currentMMR,
-      winStreak: winStreak,
-    );
+  shared.PlayerRPResult? _calculateRP(Player player) {
+    final points = player.serverRPChange;
+    return points == null ? null : shared.PlayerRPResult(rpChange: points);
   }
 
   List<Widget> _buildMultiplayerButtons(

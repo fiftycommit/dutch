@@ -998,7 +998,7 @@ export class RoomManager {
 
   handleGameEnd(roomCode: string) {
     const room = this.rooms.get(roomCode);
-    if (!room?.gameState) return;
+    if (!room?.gameState || room.status === RoomStatus.ended) return;
 
     // Calculer les scores de carte de cette manche pour chaque joueur
     const playersWithScores = room.gameState.players.map((player) => ({
@@ -1008,8 +1008,8 @@ export class RoomManager {
 
     // Séparer les joueurs éliminés et non-éliminés
     const eliminatedIds = room.gameState.eliminatedPlayerIds || [];
-    const activePlayers = playersWithScores.filter(p => !eliminatedIds.includes(p.player.id));
-    const eliminatedPlayers = playersWithScores.filter(p => eliminatedIds.includes(p.player.id));
+    const activePlayers = playersWithScores.filter(p => !p.player.isSpectator && !eliminatedIds.includes(p.player.id));
+    const eliminatedPlayers = playersWithScores.filter(p => p.player.isSpectator || eliminatedIds.includes(p.player.id));
 
     // Trier les actifs par score de cartes (le plus bas est le meilleur)
     // En cas d'égalité, si l'un d'eux a appelé le Dutch, il gagne l'égalité (il passe devant, donc score considéré plus petit temporairement dans le tri)
@@ -1032,35 +1032,52 @@ export class RoomManager {
       return indexB - indexA; // Le dernier éliminé (index max) est "meilleur" que le premier éliminé
     });
 
-    const sortedPlayers = [...activePlayers, ...eliminatedPlayers];
     const totalPlayers = playersWithScores.length;
-
-    // Déterminer qui a le meilleur score (pour vérifier si le Dutch a réussi)
-    // Le gagnant de la manche est la première personne du tableau `sortedPlayers`
-    const roundWinner = sortedPlayers.length > 0 ? sortedPlayers[0].player.id : null;
+    const roundWinner = activePlayers[0]?.player.id ?? null;
     const isDutchSuccessful = dutchCallerId ? roundWinner === dutchCallerId : false;
+
+    // Un Dutch raté est dernier des joueurs actifs, quel que soit son score.
+    if (dutchCallerId && !isDutchSuccessful) {
+      const callerIndex = activePlayers.findIndex(p => p.player.id === dutchCallerId);
+      if (callerIndex >= 0) activePlayers.push(...activePlayers.splice(callerIndex, 1));
+    }
+    const sortedPlayers = [...activePlayers, ...eliminatedPlayers];
 
     // Calculer les rangs et appliquer pénalités Dutch
     // Calculer les rangs avec égalités
     const ranks: Map<string, number> = new Map();
     let currentRank = 1;
+    let previousScore: number | undefined;
+    const dutchCallerScore = isDutchSuccessful ? activePlayers[0]?.cardScore : undefined;
 
     for (let i = 0; i < sortedPlayers.length; i++) {
       const pId = sortedPlayers[i].player.id;
 
-      if (eliminatedIds.includes(pId)) {
-        currentRank = i + 1; // Les éliminés prennent la place exacte restante
-      } else if (i > 0 &&
-        !eliminatedIds.includes(sortedPlayers[i - 1].player.id) &&
-        sortedPlayers[i].cardScore > sortedPlayers[i - 1].cardScore) {
+      const score = sortedPlayers[i].cardScore;
+      if (sortedPlayers[i].player.isSpectator || eliminatedIds.includes(pId)) {
+        ranks.set(pId, totalPlayers);
+        continue;
+      }
+      if (pId === dutchCallerId && !isDutchSuccessful) {
+        ranks.set(pId, activePlayers.length);
+        continue;
+      }
+      if (isDutchSuccessful && pId === dutchCallerId) {
+        ranks.set(pId, 1);
+        previousScore = score;
+        continue;
+      }
+      if (isDutchSuccessful && score === dutchCallerScore) {
+        currentRank = 2;
+      } else if (previousScore === undefined || score !== previousScore) {
         currentRank = i + 1;
       }
       ranks.set(pId, currentRank);
+      previousScore = score;
     }
 
     // Calculer les points RP de BASE selon la position (en se calquant sur le rang Bronze du client par défaut).
-    // Sur le client, des bonus supplémentaires (série de victoires, rang exact du joueur) seront appliqués
-    // mais pour le classement du salon (points bruts gagnés pendant la session), on utilise la base.
+    // Les résultats et le classement du salon utilisent ces mêmes points.
     const getRPForRank = (rank: number, totalPlayers: number): number => {
       const points = {
         win: 30,
@@ -1084,12 +1101,12 @@ export class RoomManager {
       } else if (totalPlayers === 5) {
         if (rank === 2) baseRP = points.second;
         else if (rank === 3) baseRP = points.third;
-        else baseRP = Math.floor((points.third + points.last) / 2);
+        else baseRP = Math.trunc((points.third + points.last) / 2);
       } else if (totalPlayers === 6) {
         if (rank === 2) baseRP = points.second;
         else if (rank === 3) baseRP = points.third;
-        else if (rank === 4) baseRP = Math.floor((points.third + points.last) / 2);
-        else baseRP = Math.floor((points.third + points.last * 2) / 3);
+        else if (rank === 4) baseRP = Math.trunc((points.third + points.last) / 2);
+        else baseRP = Math.trunc((points.third + points.last * 2) / 3);
       } else {
         baseRP = points.last;
       }
@@ -1135,6 +1152,7 @@ export class RoomManager {
 
     room.status = RoomStatus.ended;
     room.gameState.phase = GamePhase.ended;
+    room.gameState.roundScores = roundScores;
 
     // Tous les humains connectés sont sur l'écran de résultats
     room.playersInResults = new Set(
@@ -1229,10 +1247,14 @@ export class RoomManager {
     // En mode tournoi, gérer l'élimination
     let eliminatedPlayerId: string | null = null;
     if (room.gameMode === GameMode.tournament && room.gameState) {
-      // Calculer le classement final (score le plus bas = meilleur)
+      const finalRanks = new Map(room.gameState.roundScores?.map(score => [score.playerId, score.rank]));
+      // Utiliser le classement qui a servi à attribuer les points de la manche.
       const ranking = [...room.gameState.players]
         .filter(p => !room.gameState!.eliminatedPlayerIds.includes(p.id))
-        .sort((a, b) => calculateScore(a) - calculateScore(b));
+        .sort((a, b) => {
+          const rankDifference = (finalRanks.get(a.id) ?? 0) - (finalRanks.get(b.id) ?? 0);
+          return rankDifference || calculateScore(a) - calculateScore(b);
+        });
 
       if (ranking.length >= 2) {
         const eliminated = ranking[ranking.length - 1];
@@ -2769,8 +2791,12 @@ export class RoomManager {
     state.players = state.players.map((player: Player) => {
       // Si la partie est terminée, révéler toutes les cartes à tous les joueurs
       if (isGameEnded) {
+        const roundScore = gameState.roundScores?.find((score: { playerId: string; clientId?: string }) =>
+          score.playerId === player.id || (player.clientId && score.clientId === player.clientId));
         return {
           ...player,
+          rpChange: roundScore?.rpChange,
+          score: roundScore?.cardScore,
           // S'assurer que les cartes sont visibles
           hand: player.hand.map((card: any) => ({
             ...card,

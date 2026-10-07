@@ -4,6 +4,18 @@ import 'package:dutch_game/models/playing_card.dart';
 import 'package:dutch_game/models/game_settings.dart';
 
 void main() {
+  test('multiplayer RP survive JSON and player copies', () {
+    final player = Player.fromJson({
+      'id': 'p1', 'name': 'Test', 'isHuman': true, 'rpChange': -100, 'score': 100,
+    });
+    expect(player.serverRPChange, -100);
+    expect(Player.fromJson(player.toJson()).serverRPChange, -100);
+    expect(player.copyWith().serverRPChange, -100);
+    expect(Player.clone(player).serverRPChange, -100);
+    expect(Player.fromJson(player.toJson()).serverScore, 100);
+    expect(player.copyWith().serverScore, 100);
+    expect(Player(id: 'solo', name: 'Solo', isHuman: true).serverRPChange, isNull);
+  });
   group('Player - Creation', () {
     test('human player created correctly', () {
       final player = Player(id: 'p1', name: 'Test', isHuman: true);

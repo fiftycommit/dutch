@@ -92,6 +92,8 @@ class Player {
   /// Score envoyé par le serveur (multi). Utilisé comme fallback quand les
   /// cartes sont hidden (points=0) et que le score calculé localement est faux.
   int? serverScore;
+  /// Points de manche attribués par le serveur multijoueur.
+  int? serverRPChange;
 
   Player({
     required this.id,
@@ -127,6 +129,7 @@ class Player {
     this.lastTargetedByPowerTurn = -999,
     List<int>? memorizedCardIndices,
     this.serverScore,
+    this.serverRPChange,
   })  : hand = hand ?? [],
         knownCards = knownCards ?? [],
         mentalMap = mentalMap ?? [],
@@ -176,7 +179,9 @@ class Player {
         lastBronzeBlackoutActionCount = other.lastBronzeBlackoutActionCount,
         lastBronzeValetTargetTurn = other.lastBronzeValetTargetTurn,
         lastTargetedByPowerTurn = other.lastTargetedByPowerTurn,
-        memorizedCardIndices = List<int>.from(other.memorizedCardIndices);
+        memorizedCardIndices = List<int>.from(other.memorizedCardIndices),
+        serverScore = other.serverScore,
+        serverRPChange = other.serverRPChange;
 
   int calculateScore() {
     // En multi, le serveur envoie le score calculé côté serveur.
@@ -861,6 +866,7 @@ class Player {
           .map((e) => (e as num).toInt())
           .toList(),
       serverScore: json['score'] as int?,
+      serverRPChange: (json['rpChange'] as num?)?.toInt(),
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas sérialisés
       // car ils sont gérés côté serveur pour les bots
     );
@@ -879,6 +885,8 @@ class Player {
       'hand': hand.map((c) => c.toJson()).toList(),
       'knownCards': knownCards,
       'memorizedCardIndices': memorizedCardIndices,
+      if (serverScore != null) 'score': serverScore,
+      if (serverRPChange != null) 'rpChange': serverRPChange,
       // Note: mentalMap, dutchHistory et consecutiveBadDraws ne sont pas inclus
     };
   }
@@ -918,6 +926,8 @@ class Player {
       position: position ?? this.position,
       isSpectator: isSpectator ?? this.isSpectator,
       connected: connected ?? this.connected,
+      serverScore: serverScore,
+      serverRPChange: serverRPChange,
       hand: List.from(hand),
       knownCards: List.from(knownCards),
       mentalMap: List.from(mentalMap),

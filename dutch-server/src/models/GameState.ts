@@ -29,6 +29,16 @@ export interface PendingMatchPower {
 }
 
 export interface GameState {
+  roundScores?: Array<{
+    playerId: string;
+    clientId?: string;
+    name: string;
+    cardScore: number;
+    rank: number;
+    rpChange: number;
+    hand: PlayingCard[];
+    calledDutch: boolean;
+  }>;
   players: Player[];
   deck: PlayingCard[];
   discardPile: PlayingCard[];
