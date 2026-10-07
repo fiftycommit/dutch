@@ -25,6 +25,14 @@ function build(js, wasm) {
     assert.ok(readFileSync(path.join(dir, 'dutch_service_worker.js'), 'utf8').includes(base + 'chromium/canvaskit.wasm'));
     execFileSync('node', [generator, dir]);
     assert.equal(readFileSync(path.join(dir, 'flutter_bootstrap.js'), 'utf8'), bootstrap);
+    // Flutter can regenerate the unversioned directory without cleaning the
+    // versioned output from a preceding build.
+    mkdirSync(path.join(dir, 'canvaskit/chromium'), { recursive: true });
+    writeFileSync(path.join(dir, 'canvaskit/chromium/canvaskit.js'), js);
+    writeFileSync(path.join(dir, 'canvaskit/chromium/canvaskit.wasm'), wasm);
+    writeFileSync(path.join(dir, 'flutter_bootstrap.js'), 'canvasKitBaseUrl: "/canvaskit/"');
+    execFileSync('node', [generator, dir]);
+    assert.equal(readFileSync(path.join(dir, 'flutter_bootstrap.js'), 'utf8'), bootstrap);
     return base;
   } finally {
     rmSync(dir, { recursive: true, force: true });

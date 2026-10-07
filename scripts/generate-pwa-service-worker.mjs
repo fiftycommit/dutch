@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -99,7 +99,14 @@ if (canvasKitFiles.length > 0) {
   if (!bootstrap.includes('canvasKitBaseUrl: "/canvaskit/"')) {
     throw new Error('Missing CanvasKit base URL in Flutter bootstrap');
   }
-  await rename(path.join(buildDir, 'canvaskit'), path.join(buildDir, rendererDir));
+  try {
+    await rename(path.join(buildDir, 'canvaskit'), path.join(buildDir, rendererDir));
+  } catch (error) {
+    if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST') throw error;
+    // An incremental Flutter build recreated an identical renderer. Its
+    // content-addressed destination already exists from the previous build.
+    await rm(path.join(buildDir, 'canvaskit'), { recursive: true });
+  }
   await writeFile(bootstrapPath, bootstrap.replace(
     'canvasKitBaseUrl: "/canvaskit/"', `canvasKitBaseUrl: "/${rendererDir}/"`,
   ));
