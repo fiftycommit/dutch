@@ -6,7 +6,7 @@ import { createPlayer } from '../models/Player';
 import { createRoom } from '../models/Room';
 import { RoomSnapshotCodec } from '../services/RoomSnapshotCodec';
 
-test('RoomSnapshotCodec préserve les structures nécessaires à la reprise Redis', () => {
+test('RoomSnapshotCodec préserve les structures nécessaires à la reprise Redis', (t) => {
   const host = createPlayer(
     'socket-host',
     'Hôte',
@@ -58,6 +58,8 @@ test('RoomSnapshotCodec préserve les structures nécessaires à la reprise Redi
   room.pausedByPlayerId = host.id;
   room.pausedByName = host.name;
   room.pauseStartTime = Date.parse('2026-04-13T10:16:30.000Z');
+  room.pauseTimeoutHandle = setTimeout(() => {}, 90_000);
+  t.after(() => clearTimeout(room.pauseTimeoutHandle));
 
   room.gameState = createGameState(room.players, GameMode.quick, Difficulty.medium);
   room.gameState.deck = [createCard('hearts', '7')];
@@ -103,6 +105,7 @@ test('RoomSnapshotCodec préserve les structures nécessaires à la reprise Redi
   );
   assert.equal(restored.gameState?.turnTimeoutMs, 90_000);
   assert.equal(restored.isPaused, true);
+  assert.equal(restored.pauseTimeoutHandle, undefined);
   assert.equal(restored.pausedByPlayerId, host.id);
   assert.equal(restored.pausedByName, host.name);
   assert.equal(

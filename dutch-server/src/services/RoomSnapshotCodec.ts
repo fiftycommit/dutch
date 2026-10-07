@@ -42,8 +42,9 @@ function deserializeGameState(gameState: SerializedGameState | null): GameState 
 
 export class RoomSnapshotCodec {
   static serialize(room: Room): string {
+    const { pauseTimeoutHandle: _pauseTimeoutHandle, ...persistentRoom } = room;
     const payload: SerializedRoom = {
-      ...room,
+      ...persistentRoom,
       createdAt: room.createdAt.toISOString(),
       cumulativeScores: room.cumulativeScores
         ? Object.fromEntries(room.cumulativeScores.entries())

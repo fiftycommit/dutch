@@ -5,6 +5,7 @@ import { createClient } from 'redis';
 import { Server } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
 import { SharedRoomStore } from '../services/SharedRoomStore';
+import { GamePhase } from '../models/GameState';
 
 type RedisConnection = ReturnType<typeof createClient>;
 
@@ -38,11 +39,45 @@ async function createRedisClient(url: string): Promise<RedisConnection> {
 
 async function deleteKeysByPrefix(client: RedisConnection, prefix: string): Promise<void> {
   for await (const key of client.scanIterator({ MATCH: `${prefix}:*`, COUNT: 100 })) {
-    await client.del(key);
+    if (key.length > 0) await client.del(key);
   }
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('Redis saves a real pause and resumes its reaction after restart and reconnect', async (t) => {
+  assert.ok(process.env.REDIS_URL);
+  const client = await createRedisClient(process.env.REDIS_URL);
+  const keyPrefix = `ci:${randomUUID()}`;
+  const store = new SharedRoomStore(client, { keyPrefix });
+  const source = new RoomManager(new FakeServer() as unknown as Server, { roomTtlMs: 120_000 });
+  const restored = createManager(store);
+  t.after(async () => {
+    source.dispose();
+    restored.dispose();
+    try { await deleteKeysByPrefix(client, keyPrefix); }
+    finally { await client.quit(); }
+  });
+  const room = source.createRoom('host', { minPlayers: 2, maxPlayers: 2, fillBots: false }, 'Host', 'c1', 'u1');
+  source.joinRoom(room.id, 'guest', 'Guest', 'c2', 'u2');
+  for (const id of ['host', 'guest']) source.setReady(room.id, id, true);
+  assert.equal(source.startGame(room.id, { fillBots: false }), true);
+  room.gameState!.phase = GamePhase.reaction;
+  source.startReactionTimer(room.id, 100);
+  source.pauseGame(room.id, 'host', 'Host');
+  await store.saveRoom(room);
+  source.dispose();
+  await restored.hydrateFromSharedStore();
+  await restored.withRoomMutation(room.id, async () => {
+    restored.joinRoom(room.id, 'host-new', 'Host', 'c1', 'u1');
+    assert.equal(restored.getRoom(room.id)!.pausedByPlayerId, 'host-new');
+    restored.resumeGame(room.id, 'host-new', 'Host');
+  });
+  await wait(600);
+  const saved = await store.loadRoom(room.id);
+  assert.equal(saved?.isPaused, false);
+  assert.equal(saved?.gameState?.phase, GamePhase.playing);
+});
 
 test('Redis-backed SharedRoomStore serializes concurrent room mutations across managers', async (t) => {
   const redisUrl = process.env.REDIS_URL;
