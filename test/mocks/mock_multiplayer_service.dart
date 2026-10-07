@@ -10,6 +10,7 @@ class MockMultiplayerService extends MultiplayerService {
   int disconnectCount = 0;
   int drawCardCount = 0;
   int replaceCardCount = 0;
+  int? lastReplacedCardIndex;
   int discardDrawnCardCount = 0;
   int callDutchCount = 0;
   int attemptMatchCount = 0;
@@ -165,6 +166,7 @@ class MockMultiplayerService extends MultiplayerService {
   @override
   Future<bool> replaceCard(int cardIndex) async {
     replaceCardCount++;
+    lastReplacedCardIndex = cardIndex;
     return replaceCardResult;
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dutch_game/providers/multiplayer_game_provider.dart';
 import 'package:dutch_game/models/game_state.dart';
@@ -201,6 +202,94 @@ void main() {
   });
 
   group('MultiplayerGameProvider - handleCardTap', () {
+    test('optimistic draw still waits for ACK before sending a replacement',
+        () async {
+      final state = _createTestGameState(mockService.playerId!);
+      mockService.simulateGameStateUpdate(state);
+      mockService.onPreloadedDeckCardUpdate
+          ?.call(PlayingCard.create('hearts', 'R'));
+      final ack = Completer<bool>();
+      mockService.drawCardResult = ack.future;
+      provider.drawCard();
+      provider.drawCard();
+      provider.handleCardTap(0);
+      expect(mockService.drawCardCount, 1);
+      expect(mockService.replaceCardCount, 0);
+      ack.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(mockService.replaceCardCount, 1);
+    });
+
+    test('failed draw discards the queued card choice', () async {
+      mockService
+          .simulateGameStateUpdate(_createTestGameState(mockService.playerId!));
+      final ack = Completer<bool>();
+      mockService.drawCardResult = ack.future;
+      provider.drawCard();
+      provider.handleCardTap(0);
+      ack.complete(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(mockService.replaceCardCount, 0);
+      expect(mockService.requestFullStateCount, 1);
+    });
+
+    test(
+        'turn change cancels the queued card choice even if draw ACK arrives later',
+        () async {
+      mockService
+          .simulateGameStateUpdate(_createTestGameState(mockService.playerId!));
+      final ack = Completer<bool>();
+      mockService.drawCardResult = ack.future;
+      provider.drawCard();
+      provider.handleCardTap(0);
+      final next = _createTestGameState(mockService.playerId!);
+      next.currentPlayerIndex = 1;
+      mockService.simulateGameStateUpdate(next);
+      final returned = _createTestGameState(mockService.playerId!);
+      returned.drawnCard = PlayingCard.create('hearts', 'A');
+      mockService.simulateGameStateUpdate(returned);
+      ack.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(mockService.replaceCardCount, 0);
+    });
+
+    test('discard chosen during draw is sent once after confirmation',
+        () async {
+      mockService
+          .simulateGameStateUpdate(_createTestGameState(mockService.playerId!));
+      final ack = Completer<bool>();
+      mockService.drawCardResult = ack.future;
+      provider.drawCard();
+      provider.discardDrawnCard();
+      provider.discardDrawnCard();
+      expect(mockService.discardDrawnCardCount, 0);
+      final confirmed = _createTestGameState(mockService.playerId!);
+      confirmed.drawnCard = PlayingCard.create('hearts', 'A');
+      mockService.simulateGameStateUpdate(confirmed);
+      ack.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(mockService.discardDrawnCardCount, 1);
+    });
+    test('retains the first card tap while the draw awaits server confirmation',
+        () async {
+      final state = _createTestGameState(mockService.playerId!);
+      state.phase = GamePhase.playing;
+      mockService.simulateGameStateUpdate(state);
+      final drawAck = Completer<bool>();
+      mockService.drawCardResult = drawAck.future;
+      provider.drawCard();
+      provider.handleCardTap(0);
+      provider.handleCardTap(1);
+      expect(mockService.replaceCardCount, 0);
+      final confirmed = _createTestGameState(mockService.playerId!);
+      confirmed.phase = GamePhase.playing;
+      confirmed.drawnCard = PlayingCard.create('hearts', 'A');
+      mockService.simulateGameStateUpdate(confirmed);
+      drawAck.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(mockService.replaceCardCount, 1);
+      expect(mockService.lastReplacedCardIndex, 0);
+    });
     test('handleCardTap does nothing without game state', () {
       provider.handleCardTap(0);
       // Should not throw

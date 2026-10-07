@@ -76,6 +76,8 @@ class MultiplayerGameProvider
   String? get _myAuthUid => _multiplayerService.authUid;
 
   bool _isProcessingAction = false;
+  Future<bool>? _pendingDrawResult;
+  VoidCallback? _queuedDrawAction;
   @override
   bool get isProcessing => _isProcessingAction;
 
@@ -451,6 +453,7 @@ class MultiplayerGameProvider
     };
     _multiplayerService.onRoomClosed = _notificationManager.handleRoomClosed;
     _multiplayerService.onRoomRestarted = (data) {
+      _clearPendingDraw();
       _gameState = null;
       _isPlaying = false;
       _isInLobby = true;
@@ -732,6 +735,10 @@ class MultiplayerGameProvider
 
     _gameState = gameState;
     _hasOptimisticDrawnCard = false;
+    if (gameState.phase != GamePhase.playing ||
+        gameState.currentPlayer.id != playerId) {
+      _clearPendingDraw();
+    }
 
     // Clear pending valet selection when state updates natively
     _pendingValetPlayer1 = null;
@@ -1119,6 +1126,7 @@ class MultiplayerGameProvider
 
   /// Retour indépendant au salon depuis l'écran de résultats (tout joueur)
   void returnToLobbyFromResults() {
+    _clearPendingDraw();
     _multiplayerService.backToLobby();
     _gameState = null;
     _isPlaying = false;
@@ -1200,7 +1208,7 @@ class MultiplayerGameProvider
 
   @override
   void drawCard() {
-    if (_gameState == null) return;
+    if (_gameState == null || _pendingDrawResult != null) return;
 
     _hapticService.cardTap();
 
@@ -1213,7 +1221,37 @@ class MultiplayerGameProvider
       notifyListeners(); // Afficher immédiatement
     }
 
-    _trackActionAck('Pioche', _multiplayerService.drawCard());
+    final result = _multiplayerService.drawCard();
+    _pendingDrawResult = result;
+    _trackActionAck('Pioche', result);
+    unawaited(_finishPendingDraw(result));
+  }
+
+  void _clearPendingDraw() {
+    _pendingDrawResult = null;
+    _queuedDrawAction = null;
+  }
+
+  Future<void> _finishPendingDraw(Future<bool> result) async {
+    final success = await result;
+    if (_isDisposed || !identical(_pendingDrawResult, result)) return;
+    final action = _queuedDrawAction;
+    _clearPendingDraw();
+    final state = _gameState;
+    if (success &&
+        state != null &&
+        state.phase == GamePhase.playing &&
+        state.currentPlayer.id == playerId &&
+        state.drawnCard != null) {
+      action?.call();
+    }
+  }
+
+  bool _queueUntilDrawConfirmed(VoidCallback action) {
+    if (_pendingDrawResult == null) return false;
+    // Keep the first choice: repeated taps must not send several replacements.
+    _queuedDrawAction ??= action;
+    return true;
   }
 
   void _trackActionAck(String actionLabel, Future<bool> actionResult) {
@@ -1241,6 +1279,7 @@ class MultiplayerGameProvider
 
   @override
   void replaceCard(int cardIndex) {
+    if (_queueUntilDrawConfirmed(() => replaceCard(cardIndex))) return;
     if (_gameState != null) {
       _hapticService.cardTap();
       _trackActionAck(
@@ -1252,6 +1291,7 @@ class MultiplayerGameProvider
 
   @override
   void discardDrawnCard() {
+    if (_queueUntilDrawConfirmed(discardDrawnCard)) return;
     if (_gameState != null) {
       _hapticService.cardTap();
       _trackActionAck('Défausse', _multiplayerService.discardDrawnCard());
@@ -1326,7 +1366,7 @@ class MultiplayerGameProvider
       attemptMatch(cardIndex);
     } else if (_gameState!.phase == GamePhase.playing &&
         isLocalTurn &&
-        _gameState!.drawnCard != null) {
+        (_gameState!.drawnCard != null || _pendingDrawResult != null)) {
       replaceCard(cardIndex);
     }
   }
@@ -1531,6 +1571,7 @@ class MultiplayerGameProvider
   }
 
   void _resetRoomState() {
+    _clearPendingDraw();
     WebSessionStorage.clearSession();
     _roomCode = null;
     _hostPlayerId = null;
