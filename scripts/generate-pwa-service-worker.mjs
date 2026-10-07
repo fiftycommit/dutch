@@ -67,6 +67,23 @@ async function buildVersion(files) {
   return hash.digest('hex').slice(0, 16);
 }
 
+// Deferred screens must match main.dart.js, even when a CDN/browser cached
+// the old chunk at its unversioned URL.
+const deferredFiles = (await listFiles(buildDir)).filter(file => /^main\.dart\.js_\d+\.part\.js$/.test(file));
+if (deferredFiles.length > 0) {
+  const mainPath = path.join(buildDir, 'main.dart.js');
+  let main = await readFile(mainPath, 'utf8');
+  for (const file of deferredFiles) {
+    const content = await readFile(path.join(buildDir, file));
+    const hash = createHash('sha256').update(content).digest('hex').slice(0, 16);
+    const versioned = file.replace('.part.js', `.${hash}.part.js`);
+    if (!main.includes(`"${file}"`)) throw new Error(`Missing deferred reference: ${file}`);
+    main = main.replaceAll(`"${file}"`, `"${versioned}"`);
+    await rename(path.join(buildDir, file), path.join(buildDir, versioned));
+  }
+  await writeFile(mainPath, main);
+}
+
 // CanvasKit JS and WASM must always come from the same Flutter build.
 // Their original URLs can remain cached for a year by browsers/CDNs.
 const canvasKitFiles = (await listFiles(buildDir)).filter(file => file.startsWith('canvaskit/')).sort();
