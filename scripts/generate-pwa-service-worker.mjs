@@ -138,6 +138,13 @@ const NETWORK_ONLY_PREFIXES = [
   // Handler Firebase Auth (popup Google) proxifié par nginx : jamais l'index SPA.
   '/__/',
   '/api/',
+  // Pages admin servies par Node : ne jamais retourner l'accueil Flutter.
+  '/admin',
+  '/status',
+  '/bot-stats',
+  '/bot-dashboard',
+  '/shuffle-analysis',
+  '/player-profile',
   '/socket.io/',
   '/health',
   '/rooms',

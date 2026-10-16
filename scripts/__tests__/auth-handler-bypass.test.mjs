@@ -68,6 +68,17 @@ for (const [label, source] of [
     assert.equal(interceptsNavigation(onFetch, '/__/auth/iframe'), false);
   });
 
+  test(`SW ${label} laisse passer les pages admin et leur connexion`, () => {
+    const onFetch = loadFetchHandler(source());
+    for (const route of [
+      '/admin-home', '/admin', '/admin-login?next=%2Fadmin-home',
+      '/admin-auth.js', '/admin-assets/admin-login.js', '/status',
+      '/bot-stats', '/bot-dashboard', '/shuffle-analysis', '/player-profile',
+    ]) {
+      assert.equal(interceptsNavigation(onFetch, route), false, route);
+    }
+  });
+
   test(`SW ${label} sert toujours l'index SPA pour les routes de l'app`, () => {
     const onFetch = loadFetchHandler(source());
     assert.equal(interceptsNavigation(onFetch, '/profil'), true);
