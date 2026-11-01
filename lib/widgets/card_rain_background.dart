@@ -58,13 +58,15 @@ class _FallingCard {
 
   // The SVG and its opacity do not change while this card is falling.
   // Reuse the subtree rather than rebuilding it on every tick.
-  late final Widget visual = Opacity(
-    opacity: opacity,
-    child: SvgPicture.asset(
-      asset,
-      height: size,
-      width: width,
-      fit: BoxFit.contain,
+  late final Widget visual = RepaintBoundary(
+    child: Opacity(
+      opacity: opacity,
+      child: SvgPicture.asset(
+        asset,
+        height: size,
+        width: width,
+        fit: BoxFit.contain,
+      ),
     ),
   );
 }

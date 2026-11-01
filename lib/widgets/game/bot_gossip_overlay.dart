@@ -18,7 +18,23 @@ class _BotGossipOverlayState extends State<BotGossipOverlay> {
   // Reconstruit l'overlay quand speeches/alliance changent (remplace
   // ValueListenableBuilder : GossipValue est un observable pur Dart).
   void _onGossipChanged() {
+    _syncSweepTimer();
     if (mounted) setState(() {});
+  }
+
+  void _syncSweepTimer() {
+    if (BotGossipService.instance.speeches.value.isEmpty) {
+      _sweepTimer?.cancel();
+      _sweepTimer = null;
+      return;
+    }
+    _sweepTimer ??= Timer.periodic(const Duration(milliseconds: 500), (_) {
+      final current = BotGossipService.instance.speeches.value;
+      final fresh = current.where((s) => !s.isExpired).toList();
+      if (fresh.length != current.length) {
+        BotGossipService.instance.speeches.value = fresh;
+      }
+    });
   }
 
   @override
@@ -26,19 +42,7 @@ class _BotGossipOverlayState extends State<BotGossipOverlay> {
     super.initState();
     BotGossipService.instance.speeches.addListener(_onGossipChanged);
     BotGossipService.instance.alliance.addListener(_onGossipChanged);
-    // Rafraîchit l'UI toutes les 500ms pour expirer les speeches visuellement.
-    _sweepTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (!mounted) return;
-      final current = BotGossipService.instance.speeches.value;
-      final fresh = current.where((s) => !s.isExpired).toList();
-      if (fresh.length != current.length) {
-        // déclenche _onGossipChanged via le setter GossipValue
-        BotGossipService.instance.speeches.value = fresh;
-      } else {
-        // expiration temporelle sans changement de liste : rebuild quand même
-        setState(() {});
-      }
-    });
+    _syncSweepTimer();
   }
 
   @override

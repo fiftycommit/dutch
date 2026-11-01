@@ -12,6 +12,7 @@ import '../screens/web_splash_helper.dart'
     if (dart.library.io) '../screens/web_splash_helper_stub.dart';
 import '../services/web/web_session_storage.dart'
     if (dart.library.io) '../services/web/web_session_storage_stub.dart';
+import '../services/startup/deferred_fonts.dart';
 
 // ── Eager imports (critical path: splash → menu → solo game) ──
 import '../screens/splash_screen.dart';
@@ -59,16 +60,37 @@ import '../screens/friends/friends_page.dart' deferred as friends_page;
 import '../screens/friends/chat_page.dart' deferred as friends_chat;
 
 /// Widget wrapper pour charger un module deferred avant d'afficher l'écran
-class _DeferredScreen extends StatelessWidget {
+class _DeferredScreen extends StatefulWidget {
   final Future<void> Function() loader;
   final Widget Function() builder;
 
   const _DeferredScreen({required this.loader, required this.builder});
 
   @override
+  State<_DeferredScreen> createState() => _DeferredScreenState();
+}
+
+class _DeferredScreenState extends State<_DeferredScreen> {
+  late Future<void> _load;
+
+  @override
+  void initState() {
+    super.initState();
+    _load = widget.loader();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeferredScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loader != widget.loader) {
+      _load = widget.loader();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: loader(),
+    return FutureBuilder<void>(
+      future: _load,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
           if (snapshot.hasError) {
@@ -93,7 +115,7 @@ class _DeferredScreen extends StatelessWidget {
               ),
             );
           }
-          return builder();
+          return widget.builder();
         }
         return const Scaffold(
           backgroundColor: Color(0xFF1a472a),
@@ -365,7 +387,12 @@ class AppRouter {
               pageBuilder: (context, state) => _adaptivePage(
                 state: state,
                 child: _DeferredScreen(
-                  loader: login.loadLibrary,
+                  loader: () async {
+                    await Future.wait([
+                      login.loadLibrary(),
+                      DeferredFonts.montserrat(),
+                    ]);
+                  },
                   builder: () => login.LoginScreen(),
                 ),
               ),
@@ -376,7 +403,12 @@ class AppRouter {
               pageBuilder: (context, state) => _adaptivePage(
                 state: state,
                 child: _DeferredScreen(
-                  loader: login.loadLibrary,
+                  loader: () async {
+                    await Future.wait([
+                      login.loadLibrary(),
+                      DeferredFonts.montserrat(),
+                    ]);
+                  },
                   builder: () => login.LoginScreen(startWithRegister: true),
                 ),
               ),
@@ -387,7 +419,12 @@ class AppRouter {
               pageBuilder: (context, state) => _adaptivePage(
                 state: state,
                 child: _DeferredScreen(
-                  loader: forgot_pwd.loadLibrary,
+                  loader: () async {
+                    await Future.wait([
+                      forgot_pwd.loadLibrary(),
+                      DeferredFonts.inter(),
+                    ]);
+                  },
                   builder: () => forgot_pwd.ForgotPasswordScreen(),
                 ),
               ),
@@ -400,7 +437,12 @@ class AppRouter {
               pageBuilder: (context, state) => _adaptivePage(
                 state: state,
                 child: _DeferredScreen(
-                  loader: mp_menu.loadLibrary,
+                  loader: () async {
+                    await Future.wait([
+                      mp_menu.loadLibrary(),
+                      DeferredFonts.inter(),
+                    ]);
+                  },
                   builder: () => mp_menu.MultiplayerMenuScreen(),
                 ),
               ),

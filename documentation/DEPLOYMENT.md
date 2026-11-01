@@ -37,6 +37,11 @@ d'une première visite ou avant la fin d'une mise à jour. Les fichiers
 indispensables doivent être téléchargés avant l'activation ; les ressources
 optionnelles indisponibles pourront être mises en cache à leur première demande.
 Les fichiers de symboles de débogage ne sont pas précachés.
+Les familles Inter et Montserrat sont chargées à la demande avant l'ouverture
+des écrans qui les utilisent. Le service worker conserve ces fichiers pour le
+hors-ligne et réutilise les ressources inchangées du cache précédent lors d'une
+mise à jour.
+
 
 Les URL Flutter sous `/assets/`, les manifestes et les scripts principaux ne
 sont pas adressés par contenu : elles doivent être revalidées, pas marquées
@@ -46,8 +51,11 @@ configuration Nginx du dépôt active aussi gzip pour JavaScript, JSON et WASM ;
 Cloudflare peut appliquer sa propre compression. Après avoir appliqué la
 nouvelle configuration, purger les anciennes entrées Cloudflare de `/assets/*`
 et des autres URL stables précédemment servies `immutable` avant de publier un
-build modifiant ces fichiers. Les navigateurs peuvent conserver leurs anciennes
-entrées : le précache de la nouvelle version les recharge explicitement.
+build modifiant ces fichiers. Le service worker télécharge les ressources
+modifiées avec une URL versionnée pour éviter les anciennes entrées CDN, puis
+les conserve sous leur URL normale. Les premières visites sans service worker
+et les navigateurs ayant conservé une ancienne réponse restent concernés par
+les anciennes entrées jusqu'à leur purge ou expiration.
 
 Après publication, contrôler les en-têtes des URL stables et hashées ainsi que
 le comportement en première visite, mise à jour et hors-ligne ; ne pas supposer

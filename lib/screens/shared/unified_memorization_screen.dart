@@ -96,7 +96,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 900),
       vsync: this,
-    )..repeat(reverse: true);
+    );
 
     // Setup countdown if enabled
     if (config.countdownSeconds != null) {
@@ -111,6 +111,25 @@ class _MemorizationScreenState extends State<MemorizationScreen>
           _navigateToGame();
         }
       });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    final shouldPulse = _selectedCards.isNotEmpty &&
+        !_isRevealing &&
+        !_isWaiting &&
+        !MediaQuery.disableAnimationsOf(context);
+    if (shouldPulse && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (!shouldPulse && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.value = 0;
     }
   }
 
@@ -172,12 +191,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         _selectedCards.add(index);
       }
     });
+    _syncPulse();
   }
 
   void _confirmAndStart() async {
     if (_selectedCards.length != 2 || _isRevealing || _isWaiting) return;
 
     setState(() => _isRevealing = true);
+    _syncPulse();
     _countdownTicker?.stop();
 
     if (!mounted) return;
@@ -713,55 +734,54 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   button: true,
                   selected: isSelected,
                   child: GestureDetector(
-                  onTap: () => _onCardTap(index),
-                  child: AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      return Transform.scale(
+                    onTap: () => _onCardTap(index),
+                    child: AnimatedBuilder(
+                      animation: isSelected
+                          ? _pulseController
+                          : kAlwaysDismissedAnimation,
+                      builder: (context, child) => Transform.scale(
                         scale: isSelected
                             ? 1.0 + (_pulseController.value * 0.05)
                             : 1.0,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          transform: Matrix4.translationValues(
-                              0, isSelected ? -lift : 0, 0),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(
-                              ScreenUtils.borderRadius(context, 8),
-                            ),
-                            border: isSelected
-                                ? Border.all(
-                                    color: Colors.amber,
-                                    width: isCompact ? 2 : 3)
-                                : null,
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color:
-                                          Colors.amber.withValues(alpha: 0.5),
-                                      blurRadius: isCompact ? 10 : 15,
-                                      spreadRadius: isCompact ? 2 : 3,
-                                    )
-                                  ]
-                                : null,
+                        child: child,
+                      ),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        transform: Matrix4.translationValues(
+                            0, isSelected ? -lift : 0, 0),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            ScreenUtils.borderRadius(context, 8),
                           ),
-                          child: SizedBox(
-                            width: cardWidth,
-                            height: cardHeight,
-                            child: FittedBox(
-                              fit: BoxFit.contain,
-                              // Pendant la sélection, toutes les cartes restent dos visible
-                              child: CardWidget(
-                                card: null,
-                                size: CardSize.large,
-                                isRevealed: false,
-                              ),
+                          border: isSelected
+                              ? Border.all(
+                                  color: Colors.amber, width: isCompact ? 2 : 3)
+                              : null,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.amber.withValues(alpha: 0.5),
+                                    blurRadius: isCompact ? 10 : 15,
+                                    spreadRadius: isCompact ? 2 : 3,
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            // Pendant la sélection, toutes les cartes restent dos visible
+                            child: CardWidget(
+                              card: null,
+                              size: CardSize.large,
+                              isRevealed: false,
                             ),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
                   ),
                 );
               }),

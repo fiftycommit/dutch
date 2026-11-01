@@ -38,19 +38,30 @@ class _GameActionButtonState extends State<GameActionButton>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
-    if (widget.withPulse) {
-      _controller.repeat(reverse: true);
-    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
   }
 
   @override
   void didUpdateWidget(GameActionButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.withPulse && !_controller.isAnimating) {
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    final shouldPulse = widget.withPulse &&
+        widget.enabled &&
+        widget.onTap != null &&
+        !MediaQuery.disableAnimationsOf(context);
+    if (shouldPulse && !_controller.isAnimating) {
       _controller.repeat(reverse: true);
-    } else if (!widget.withPulse && _controller.isAnimating) {
+    } else if (!shouldPulse && _controller.isAnimating) {
       _controller.stop();
-      _controller.value = 1.0;
+      _controller.value = 0.0;
     }
   }
 
@@ -75,36 +86,36 @@ class _GameActionButtonState extends State<GameActionButton>
       label: widget.label,
       enabled: isEnabled,
       child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: isEnabled ? widget.onTap : null,
-        borderRadius: BorderRadius.circular(radius),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: baseColor.withValues(alpha: isEnabled ? 0.3 : 0.2),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: baseColor, width: borderWidth),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                widget.label,
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: labelColor,
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled ? widget.onTap : null,
+          borderRadius: BorderRadius.circular(radius),
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: baseColor.withValues(alpha: isEnabled ? 0.3 : 0.2),
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: baseColor, width: borderWidth),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: labelColor,
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
 

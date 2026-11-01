@@ -45,10 +45,7 @@ class _PlayerAvatarState extends State<PlayerAvatar>
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1), // Sera écrasé par la vraie durée
-    )..addListener(() {
-        if (mounted) setState(() {});
-        _checkHaptic();
-      });
+    )..addListener(_checkHaptic);
 
     _updateTimer();
   }
@@ -187,11 +184,14 @@ class _PlayerAvatarState extends State<PlayerAvatar>
                 // Barre de progression en arrière-plan
                 if (widget.isActive && widget.turnStartTime != null)
                   Positioned.fill(
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: _progressController.value,
-                      child: Container(
-                        color: _timerColor().withValues(alpha: 0.7),
+                    child: AnimatedBuilder(
+                      animation: _progressController,
+                      builder: (context, child) => FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _progressController.value,
+                        child: ColoredBox(
+                          color: _timerColor().withValues(alpha: 0.7),
+                        ),
                       ),
                     ),
                   ),

@@ -43,8 +43,7 @@ const Duration _startupNetworkProbeTimeout = Duration(milliseconds: 700);
 /// Dev/test local uniquement : router Auth/Firestore/Storage vers les émulateurs
 /// Firebase (voir firebase.json). Activé par
 /// --dart-define=USE_FIREBASE_EMULATOR=true. La prod ne définit pas ces vars.
-const bool _useFirebaseEmulator =
-    bool.fromEnvironment('USE_FIREBASE_EMULATOR');
+const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 const String _firebaseEmulatorHost =
     String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: 'localhost');
 
@@ -89,7 +88,8 @@ Future<void> _useFirebaseEmulatorsIfConfigured() async {
   if (!_useFirebaseEmulator) return;
   await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
   FirebaseFirestore.instance.useFirestoreEmulator(_firebaseEmulatorHost, 8089);
-  await FirebaseStorage.instance.useStorageEmulator(_firebaseEmulatorHost, 9199);
+  await FirebaseStorage.instance
+      .useStorageEmulator(_firebaseEmulatorHost, 9199);
   if (kDebugMode) {
     debugPrint('🧪 Émulateurs Firebase actifs sur $_firebaseEmulatorHost '
         '(auth 9099 / firestore 8089 / storage 9199)');
@@ -123,7 +123,7 @@ void main() {
       }
     };
 
-    await SystemChrome.setPreferredOrientations([
+    final orientation = SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
       DeviceOrientation.portraitUp,
@@ -131,6 +131,7 @@ void main() {
     ]);
 
     final firebaseReady = await _bootstrapFirebaseForStartup(errorService);
+    await orientation;
     if (firebaseReady) {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     }

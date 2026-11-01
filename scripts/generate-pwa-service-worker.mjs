@@ -52,19 +52,24 @@ function toResourcePath(file) {
   return `/${file}`;
 }
 
-async function buildVersion(files) {
-  const hash = createHash('sha256');
-  // A worker implementation change also needs a fresh cache, so an installing
-  // worker never mutates the cache still used by the active worker.
-  hash.update(await readFile(new URL(import.meta.url)));
+async function buildManifest(files) {
+  const versionHash = createHash('sha256');
+  // Include the worker implementation in the cache version, but retain
+  // per-file hashes so unchanged responses can be reused across versions.
+  versionHash.update(await readFile(new URL(import.meta.url)));
+  const hashes = {};
   for (const file of files) {
-    hash.update(file);
+    const hash = createHash('sha256');
     for await (const chunk of createReadStream(path.join(buildDir, file))) {
       hash.update(chunk);
     }
+    const digest = hash.digest('hex');
+    hashes[toResourcePath(file)] = digest;
+    versionHash.update(file);
+    versionHash.update(digest);
   }
 
-  return hash.digest('hex').slice(0, 16);
+  return { hashes, version: versionHash.digest('hex').slice(0, 16) };
 }
 
 // Deferred screens must match main.dart.js, even when a CDN/browser cached
@@ -113,19 +118,17 @@ if (canvasKitFiles.length > 0) {
 }
 
 const files = (await listFiles(buildDir)).sort();
-const version = await buildVersion(files);
-const resources = Array.from(new Set([
-  '/',
-  ...files.map(toResourcePath),
-])).sort();
+const { hashes, version } = await buildManifest(files);
+const resources = files.map(toResourcePath);
 
 const serviceWorker = `'use strict';
 
 const CACHE_PREFIX = 'dutch78-static-';
 const CACHE_NAME = 'dutch78-static-${version}';
 const RESOURCES = new Set(${JSON.stringify(resources, null, 2)});
+const HASHES = ${JSON.stringify(hashes)};
+const MANIFEST_KEY = '/__dutch_static_manifest__';
 const CORE = [
-  '/',
   '/index.html',
   '/flutter_bootstrap.js',
   '/main.dart.js',
@@ -165,8 +168,12 @@ const NETWORK_ONLY_PATHS = new Set([
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await Promise.all(CORE.map((resource) => cache.add(new Request(resource, { cache: 'reload' }))));
-    await cacheResources(cache, Array.from(RESOURCES).filter((resource) => !CORE.includes(resource)));
+    const previous = await findPreviousCaches();
+    await cacheResources(cache, CORE, previous, true);
+    await cacheResources(cache, Array.from(RESOURCES).filter((resource) => !CORE.includes(resource)), previous, false);
+    await cache.put(MANIFEST_KEY, new Response(JSON.stringify(HASHES), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
     await self.skipWaiting();
   })());
 });
@@ -210,15 +217,47 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-async function cacheResources(cache, resources) {
-  const uniqueResources = Array.from(new Set(resources));
-  for (let index = 0; index < uniqueResources.length; index += 20) {
-    const chunk = uniqueResources.slice(index, index + 20);
+async function findPreviousCaches() {
+  const names = await caches.keys();
+  const previous = [];
+  for (const name of names) {
+    if (!name.startsWith(CACHE_PREFIX) || name === CACHE_NAME) continue;
+    const cache = await caches.open(name);
+    const manifest = await cache.match(MANIFEST_KEY);
+    if (!manifest) continue;
+    try {
+      previous.push({ cache, hashes: await manifest.json() });
+    } catch (_) {
+      // A missing or invalid manifest only prevents reuse, not installation.
+    }
+  }
+  return previous;
+}
+
+async function cacheResources(cache, resources, previous, required) {
+  for (let index = 0; index < resources.length; index += 20) {
+    const chunk = resources.slice(index, index + 20);
     await Promise.all(chunk.map(async (resource) => {
       try {
-        await cache.add(new Request(resource, { cache: 'reload' }));
-      } catch (_) {
-        // Keep install resilient if an optional generated resource disappears between builds.
+        for (const old of previous) {
+          if (old.hashes[resource] !== HASHES[resource]) continue;
+          const response = await old.cache.match(resource);
+          if (response) {
+            await cache.put(resource, response);
+            return;
+          }
+        }
+        // Stable URLs may still have an old immutable response at the CDN.
+        // Fetch by content version, but store under the canonical URL.
+        const response = await fetch(new Request(
+          resource + '?v=' + HASHES[resource],
+          { cache: 'no-cache' }
+        ));
+        if (!response.ok) throw new Error('Failed to cache ' + resource);
+        await cache.put(resource, response);
+      } catch (error) {
+        if (required) throw error;
+        // Optional resources can still be fetched on demand.
       }
     }));
   }

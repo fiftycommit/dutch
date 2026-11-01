@@ -85,6 +85,27 @@ test('toutes les polices de FontManifest sont dans le cache du SW', () => {
   }
 });
 
+test('les polices chargées à la demande restent disponibles hors-ligne', () => {
+  const deferredFonts = [
+    'assets/fonts/Inter.ttf',
+    'assets/fonts/Inter-Italic.ttf',
+    'assets/fonts/Montserrat.ttf',
+    'assets/fonts/Montserrat-Italic.ttf',
+  ];
+  const dir = makeBuild({
+    manifest: sampleManifest,
+    presentAssets: [...fontAssets(sampleManifest), ...deferredFonts],
+  });
+  try {
+    const resources = generatedResources(dir);
+    for (const asset of deferredFonts) {
+      assert.ok(resources.has(servedPath(asset)), `${asset} absent du cache`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // Test du test : si une police déclarée est absente du build, la vérification
 // doit la signaler (sinon le test de régression ne protège rien).
 test('détecte une police déclarée mais absente du build', () => {

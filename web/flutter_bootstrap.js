@@ -2,7 +2,6 @@
 {{flutter_build_config}}
 
 const flutterServiceWorkerVersion = {{flutter_service_worker_version}};
-const swReloadSessionKey = 'dutch_sw_reloaded_version';
 
 function handleServiceWorkerUpdates() {
   if (!('serviceWorker' in navigator)) {
@@ -17,9 +16,6 @@ function handleServiceWorkerUpdates() {
       return;
     }
     reloadTriggered = true;
-    try {
-      sessionStorage.setItem(swReloadSessionKey, String(flutterServiceWorkerVersion));
-    } catch (_) {}
     window.location.reload();
   };
 
@@ -35,15 +31,7 @@ function handleServiceWorkerUpdates() {
       return;
     }
 
-    let alreadyReloadedForThisVersion = false;
-    try {
-      alreadyReloadedForThisVersion =
-        sessionStorage.getItem(swReloadSessionKey) === String(flutterServiceWorkerVersion);
-    } catch (_) {}
-
-    if (!alreadyReloadedForThisVersion) {
-      triggerReloadOnce();
-    }
+    triggerReloadOnce();
   });
 
   // Register only after the first screen has had time to load. The worker
@@ -69,8 +57,6 @@ function handleServiceWorkerUpdates() {
             }
           });
         });
-
-        registration.update().catch(() => {});
       }).catch(() => {});
     }, 15000);
   };

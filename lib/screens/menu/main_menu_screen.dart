@@ -335,7 +335,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     });
 
     if (selectionChanged) {
-      _saveSelectedSlot(slotId);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (selectedSlot == slotId) {
+          unawaited(_saveSelectedSlot(slotId));
+        }
+      });
     }
     _slotTapPulseController.stop();
     _slotTapPulseController.value = 0;
@@ -458,10 +462,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     final cardWidth = compact ? 78.0 : 100.0;
     final openGap = compact ? 12.0 : 14.0;
     final openWidth = (cardWidth * 3) + (openGap * 2);
-    final closedSpread = compact ? 38.0 : 46.0;
-    final closedWidth = cardWidth + (closedSpread * 2);
-    final stackWidth = _isProfileStackOpen ? openWidth : closedWidth;
+    // Avoid relayout of the surrounding menu on every animation frame.
+    final stackWidth = openWidth;
     final stackHeight = compact ? 88.0 : 126.0;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
 
     final centerLeft = (stackWidth - cardWidth) / 2;
     final openStart = (stackWidth - openWidth) / 2;
@@ -516,32 +522,39 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         if (_isProfileStackOpen) return;
         setState(() => _isProfileStackOpen = true);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
+      child: SizedBox(
         width: stackWidth,
         height: stackHeight,
         child: Stack(
           clipBehavior: Clip.none,
           children: paintOrder.map((slotId) {
             final pose = poses[slotId]!;
-            return AnimatedPositioned(
+            return Positioned(
               key: ValueKey('profile_card_$slotId'),
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              left: pose.left,
-              top: pose.top,
-              child: AnimatedRotation(
-                duration: const Duration(milliseconds: 320),
+              left: 0,
+              top: 0,
+              child: TweenAnimationBuilder<Offset>(
+                tween: Tween(end: Offset(pose.left, pose.top)),
+                duration: duration,
                 curve: Curves.easeOutCubic,
-                turns: pose.rotationRadians / (2 * pi),
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 320),
+                builder: (context, offset, child) => Transform.translate(
+                  offset: offset,
+                  child: child,
+                ),
+                child: AnimatedRotation(
+                  duration: duration,
                   curve: Curves.easeOutCubic,
-                  scale: pose.scale,
-                  child: _buildProfileCard(
-                    slotId: slotId,
-                    compact: compact,
+                  turns: pose.rotationRadians / (2 * pi),
+                  child: AnimatedScale(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    scale: pose.scale,
+                    child: RepaintBoundary(
+                      child: _buildProfileCard(
+                        slotId: slotId,
+                        compact: compact,
+                      ),
+                    ),
                   ),
                 ),
               ),
