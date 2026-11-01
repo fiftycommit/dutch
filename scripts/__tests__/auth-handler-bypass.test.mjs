@@ -79,6 +79,14 @@ for (const [label, source] of [
     }
   });
 
+  test(`SW ${label} laisse passer les pages et fichiers SEO servis par nginx`, () => {
+    const onFetch = loadFetchHandler(source());
+    for (const route of ['/rules', '/about', '/strategies', '/faq', '/version', '/sitemap.xml', '/robots.txt']) {
+      assert.equal(interceptsNavigation(onFetch, route), false, route);
+    }
+    assert.equal(interceptsNavigation(onFetch, '/rules-extra'), true);
+  });
+
   test(`SW ${label} sert toujours l'index SPA pour les routes de l'app`, () => {
     const onFetch = loadFetchHandler(source());
     assert.equal(interceptsNavigation(onFetch, '/profil'), true);

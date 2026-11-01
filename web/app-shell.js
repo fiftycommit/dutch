@@ -1,13 +1,4 @@
 (function () {
-  function hideSplashBeforeFlutterBoot() {
-    try {
-      if (sessionStorage.getItem('dutch_room_code')) {
-        document.write('<style>#splash{display:none!important}</style>');
-      }
-    } catch (_) {}
-  }
-
-  hideSplashBeforeFlutterBoot();
 
   var GAME_ROUTES = ['/game', '/memorization', '/results', '/dutch-reveal', '/setup'];
 

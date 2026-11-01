@@ -36,6 +36,10 @@ const NETWORK_ONLY_PREFIXES = [
   '/notifications'
 ];
 
+const NETWORK_ONLY_PATHS = new Set([
+  '/rules', '/about', '/strategies', '/faq', '/version', '/sitemap.xml', '/robots.txt'
+]);
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
@@ -113,5 +117,6 @@ function normalizeResourcePath(url) {
 }
 
 function shouldUseNetworkOnly(url) {
-  return NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
+  return NETWORK_ONLY_PATHS.has(url.pathname) ||
+    NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 }

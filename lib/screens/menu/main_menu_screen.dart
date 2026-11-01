@@ -15,7 +15,6 @@ import '../../services/ui/stats_service.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/card_rain_background.dart';
-import '../../services/ui/svg_precache_service.dart';
 import 'main_menu_widgets.dart';
 import '../web_splash_helper.dart'
     if (dart.library.io) '../web_splash_helper_stub.dart';
@@ -76,8 +75,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _loadDataParallel();
     // Vérifier si un tournoi a été abandonné (fermeture d'app)
     unawaited(GameProvider.checkForAbandonedGame());
-    // Précache les SVGs restants en arrière-plan (non bloquant)
-    unawaited(SvgPrecacheService().precacheRemainingSvgs());
     // Préparer l'entrée multijoueur après le 1er frame pour éviter
     // des notifyListeners() pendant la phase de build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -609,7 +606,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           ),
           if (_cardRainReady &&
               settings.cardRainEnabled &&
-              settings.animationsEnabled)
+              settings.animationsEnabled &&
+              !MediaQuery.disableAnimationsOf(context))
             Positioned.fill(
               child: CardRainBackground(
                 obstacleKeys: [

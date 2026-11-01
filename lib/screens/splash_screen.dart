@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
@@ -7,11 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../utils/screen_utils.dart';
 import '../providers/auth_provider.dart';
-import '../services/ui/svg_precache_service.dart';
 import 'web_splash_helper.dart'
     if (dart.library.io) 'web_splash_helper_stub.dart';
-import 'web_connection_helper.dart'
-    if (dart.library.io) 'web_connection_helper_stub.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -93,43 +92,36 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _runInitializationSteps() async {
-    final skipPrecache = kIsWeb && WebConnectionHelper.isLowBandwidth();
-    if (!skipPrecache) {
-      _setStatus('Chargement...', progress: 0.10);
-
-      // Précache uniquement les SVGs critiques (dos + joker = 3 fichiers)
-      // Les .vec pré-compilés sont chargés en priorité (quasi-instantané)
-      await SvgPrecacheService()
-          .precacheCriticalSvgs()
-          .timeout(const Duration(seconds: 3));
-
-      _setProgress(0.80);
-    } else {
-      _setStatus('Mode léger (connexion lente)', progress: 0.80);
-    }
-
-    // Attendre que l'AuthProvider soit initialisé (session Firebase).
-    // Timeout court pour ne pas bloquer si le réseau est lent.
-    // Cela évite un flash "non connecté" au menu quand l'user est déjà auth.
+    // La restauration de session reste prioritaire pour éviter un flash
+    // déconnecté ; les cartes sont chargées à la demande hors du démarrage.
     _setStatus('Connexion...', progress: 0.88);
     try {
       final authProvider = context.read<AuthProvider>();
       if (!authProvider.isInitialized) {
-        await _waitForAuth(authProvider).timeout(const Duration(seconds: 3));
+        await _waitForAuth(authProvider);
       }
     } catch (_) {
-      // Timeout ou erreur : on continue sans bloquer
+      // Timeout ou erreur : on continue sans bloquer.
     }
 
     _setStatus('Préparation...', progress: 0.95);
   }
 
-  /// Attend que l'AuthProvider termine son init (poll léger).
+  /// Attend la notification d'initialisation sans scruter périodiquement.
   Future<void> _waitForAuth(AuthProvider auth) async {
-    // L'init a déjà été lancée par le create du Provider (..init())
-    // On attend simplement que isInitialized devienne true.
-    while (!auth.isInitialized && mounted) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (auth.isInitialized) return;
+    final initialized = Completer<void>();
+    void onAuthChanged() {
+      if (auth.isInitialized && !initialized.isCompleted) {
+        initialized.complete();
+      }
+    }
+
+    auth.addListener(onAuthChanged);
+    try {
+      await initialized.future.timeout(const Duration(seconds: 3));
+    } finally {
+      auth.removeListener(onAuthChanged);
     }
   }
 
@@ -137,13 +129,17 @@ class _SplashScreenState extends State<SplashScreen>
     if (_didNavigate || !mounted) return;
     _didNavigate = true;
     AppRouter.markSplashDone();
-    if (kIsWeb) {
-      WebSplashHelper.hideSplash();
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final deepLink = AppRouter.consumePendingDeepLink();
       context.go(deepLink ?? '/');
+      if (kIsWeb) {
+        // L'écran Flutter du splash est transparent sur le web : garder le
+        // splash HTML jusqu'à ce que la destination ait rendu son premier frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          WebSplashHelper.hideSplash();
+        });
+      }
     });
   }
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -15,6 +16,7 @@ const excludedFiles = new Set([
 
 const excludedExtensions = new Set([
   '.map',
+  '.symbols',
 ]);
 
 async function listFiles(dir, prefix = '') {
@@ -52,15 +54,13 @@ function toResourcePath(file) {
 
 async function buildVersion(files) {
   const hash = createHash('sha256');
-
+  // A worker implementation change also needs a fresh cache, so an installing
+  // worker never mutates the cache still used by the active worker.
+  hash.update(await readFile(new URL(import.meta.url)));
   for (const file of files) {
-    const fullPath = path.join(buildDir, file);
-    const fileStat = await stat(fullPath);
     hash.update(file);
-    hash.update(String(fileStat.size));
-
-    if (fileStat.size <= 1024 * 1024) {
-      hash.update(await readFile(fullPath));
+    for await (const chunk of createReadStream(path.join(buildDir, file))) {
+      hash.update(chunk);
     }
   }
 
@@ -158,11 +158,15 @@ const NETWORK_ONLY_PREFIXES = [
   '/notifications'
 ];
 
+const NETWORK_ONLY_PATHS = new Set([
+  '/rules', '/about', '/strategies', '/faq', '/version', '/sitemap.xml', '/robots.txt'
+]);
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cacheResources(cache, CORE);
-    await cacheResources(cache, Array.from(RESOURCES));
+    await Promise.all(CORE.map((resource) => cache.add(new Request(resource, { cache: 'reload' }))));
+    await cacheResources(cache, Array.from(RESOURCES).filter((resource) => !CORE.includes(resource)));
     await self.skipWaiting();
   })());
 });
@@ -212,7 +216,7 @@ async function cacheResources(cache, resources) {
     const chunk = uniqueResources.slice(index, index + 20);
     await Promise.all(chunk.map(async (resource) => {
       try {
-        await cache.add(resource);
+        await cache.add(new Request(resource, { cache: 'reload' }));
       } catch (_) {
         // Keep install resilient if an optional generated resource disappears between builds.
       }
@@ -244,7 +248,8 @@ function normalizeResourcePath(url) {
 }
 
 function shouldUseNetworkOnly(url) {
-  return NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
+  return NETWORK_ONLY_PATHS.has(url.pathname) ||
+    NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 }
 `;
 

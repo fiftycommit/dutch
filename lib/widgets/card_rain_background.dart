@@ -55,6 +55,18 @@ class _FallingCard {
     required this.asset,
     this.ignoresObstacles = false,
   });
+
+  // The SVG and its opacity do not change while this card is falling.
+  // Reuse the subtree rather than rebuilding it on every tick.
+  late final Widget visual = Opacity(
+    opacity: opacity,
+    child: SvgPicture.asset(
+      asset,
+      height: size,
+      width: width,
+      fit: BoxFit.contain,
+    ),
+  );
 }
 
 /// Notifier léger qui évite de reconstruire tout le widget tree parent
@@ -92,6 +104,7 @@ class _CardRainBackgroundState extends State<CardRainBackground>
   @override
   void dispose() {
     _ticker.dispose();
+    _notifier.dispose();
     super.dispose();
   }
 
@@ -135,8 +148,9 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     for (final key in widget.obstacleKeys) {
       final renderObj = key.currentContext?.findRenderObject();
       if (renderObj is RenderBox && renderObj.hasSize) {
-        final position =
-            renderObj.localToGlobal(Offset.zero, ancestor: myRenderBox);
+        final position = myRenderBox.globalToLocal(
+          renderObj.localToGlobal(Offset.zero),
+        );
         rects.add(position & renderObj.size);
       }
     }
@@ -330,17 +344,9 @@ class _CardRainBackgroundState extends State<CardRainBackground>
                 return Positioned(
                   left: card.x,
                   top: card.y,
-                  child: Opacity(
-                    opacity: card.opacity,
-                    child: Transform.rotate(
-                      angle: card.rotation,
-                      child: SvgPicture.asset(
-                        card.asset,
-                        height: card.size,
-                        width: card.width,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+                  child: Transform.rotate(
+                    angle: card.rotation,
+                    child: card.visual,
                   ),
                 );
               }).toList(),

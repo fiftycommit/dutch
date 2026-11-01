@@ -171,6 +171,11 @@
       }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      #splash { transition: none; }
+      #splash-progress.indeterminate::before { animation: none; left: 32.5%; }
+    }
+
     #splash-status {
       color: rgba(255, 255, 255, 0.5);
       font-size: 12px;
@@ -181,7 +186,6 @@
 
 <body>
   <!-- Native HTML splash (visible before Flutter loads) -->
-  <!-- Cacher immédiatement si on a une session à restaurer (reload en jeu) -->
   <script src="app-shell.js"></script>
   <div id="splash">
     <div id="splash-title">DUTCH</div>

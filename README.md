@@ -58,7 +58,7 @@ Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose un jo
 
 - Vitesse de réaction de la défausse collective.
 - Méthode de mélange : Détendu, Tactique ou Challenger (branchée sur `ShuffleStrategy`).
-- Effets sonores, vibrations, SBMM.
+- Effets sonores, vibrations, SBMM et animations ; la pluie de cartes respecte aussi la préférence système de réduction des animations.
 
 ## Mélange et pioche
 
@@ -78,6 +78,10 @@ Pour lancer dans le navigateur :
 ```bash
 flutter run -d chrome
 ```
+
+Les cartes sont chargées à la demande : le menu n'attend pas le décodage
+de tout le jeu de cartes. Le premier affichage d'une carte peut donc demander
+un court chargement, notamment sur les appareils plus lents.
 
 ### Push web (FCM)
 

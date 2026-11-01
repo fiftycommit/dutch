@@ -21,7 +21,38 @@ la CI valide d'abord la branche, puis le déploiement est déclenché séparéme
 2. Vérifier que `/opt/dutch-node24/bin/node --version` indique Node.js 24.x.
 3. Lancer manuellement le workflow GitHub Actions `Deploy to Production`.
 
-Le workflow GitHub Actions s'occupe du reste.
+Le workflow envoie le frontend avec `rsync` et recharge Nginx, mais **n'installe
+pas** la configuration Nginx du dépôt. Pour appliquer un changement de
+`dutch-server/nginx/dutch-server.conf`, reporter manuellement les directives
+concernées dans le site actif en conservant les blocs TLS Certbot et les
+particularités du serveur, puis vérifier `nginx -t` avant de recharger Nginx.
+
+### Chargement web et cache PWA
+
+Le bootstrap lance Flutter sans attendre l'installation du service worker. Il
+enregistre celui-ci 15 secondes après `runApp` pour éviter de concurrencer le
+premier affichage. L'installation prépare ensuite les ressources de la version
+pour le hors-ligne ; le hors-ligne n'est donc pas garanti immédiatement lors
+d'une première visite ou avant la fin d'une mise à jour. Les fichiers
+indispensables doivent être téléchargés avant l'activation ; les ressources
+optionnelles indisponibles pourront être mises en cache à leur première demande.
+Les fichiers de symboles de débogage ne sont pas précachés.
+
+Les URL Flutter sous `/assets/`, les manifestes et les scripts principaux ne
+sont pas adressés par contenu : elles doivent être revalidées, pas marquées
+`immutable`. Seuls les chunks différés et le répertoire CanvasKit renommés par
+le générateur portent un hash et peuvent être mis en cache un an. La
+configuration Nginx du dépôt active aussi gzip pour JavaScript, JSON et WASM ;
+Cloudflare peut appliquer sa propre compression. Après avoir appliqué la
+nouvelle configuration, purger les anciennes entrées Cloudflare de `/assets/*`
+et des autres URL stables précédemment servies `immutable` avant de publier un
+build modifiant ces fichiers. Les navigateurs peuvent conserver leurs anciennes
+entrées : le précache de la nouvelle version les recharge explicitement.
+
+Après publication, contrôler les en-têtes des URL stables et hashées ainsi que
+le comportement en première visite, mise à jour et hors-ligne ; ne pas supposer
+que le rechargement Nginx a déployé sa configuration.
+
 
 Le service et les commandes npm de déploiement utilisent le runtime dédié
 `/opt/dutch-node24/bin`. La CI utilise également Node 24. Installer une distribution
@@ -113,5 +144,5 @@ Protections en place :
 ## 📝 Notes
 
 - Les déploiements quotidiens se font via **GitHub Actions**
-- La config Nginx est automatiquement mise à jour si nécessaire
+- Les changements Nginx nécessitent une application manuelle sur le serveur
 - L'ancien script `scripts/deploy-server.sh` a été supprimé car il ne reflétait plus l'infra réelle

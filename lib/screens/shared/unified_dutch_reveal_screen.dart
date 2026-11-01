@@ -75,7 +75,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       _currentScores[player.id] = 0;
     }
 
-    Future.delayed(const Duration(milliseconds: 800), _startRevealSequence);
+    Future.delayed(const Duration(milliseconds: 300), _startRevealSequence);
   }
 
   @override
@@ -87,6 +87,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   }
 
   Future<void> _startRevealSequence() async {
+    if (!mounted) return;
     final players = gameState.players;
     int maxCards = players.map((p) => p.hand.length).reduce(math.max);
 
@@ -95,8 +96,10 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
       // Scroll si le rang courant dépasse la zone visible
       await _ensureRowVisible(waveIndex);
+      if (!mounted) return;
 
       await _flipController.forward(from: 0.0);
+      if (!mounted) return;
       setState(() {
         for (var player in players) {
           if (waveIndex < player.hand.length) {
@@ -106,7 +109,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
         }
       });
       await _scorePopController.forward(from: 0.0);
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
     }
 
     // En multi, les cartes adversaires sont hidden (points=0).

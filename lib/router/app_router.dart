@@ -218,7 +218,10 @@ class AppRouter {
                   final targetRoute = savedRoute ?? path;
                   _webSplashDone = true;
                   WebSplashHelper.flutterReady();
-                  WebSplashHelper.hideSplash();
+                  // Garder le splash jusqu'au premier frame restauré.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    WebSplashHelper.hideSplash();
+                  });
                   return '/room/$savedRoom?restore=${Uri.encodeComponent(targetRoute)}';
                 } else {
                   _pendingDeepLink = null;
