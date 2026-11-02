@@ -80,8 +80,9 @@ flutter run -d chrome
 ```
 
 Les cartes sont chargées à la demande : le menu n'attend pas le décodage
-de tout le jeu de cartes. Le premier affichage d'une carte peut donc demander
-un court chargement, notamment sur les appareils plus lents.
+de tout le jeu. Pendant la mémorisation, les deux faces choisies sont décodées
+et rasterisées à l'avance ; si nécessaire, la confirmation indique que leur
+préparation est en cours avant de lancer le retournement.
 
 ### Push web (FCM)
 

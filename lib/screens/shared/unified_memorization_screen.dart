@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -80,6 +81,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
   final Set<int> _selectedCards = {};
   final Map<int, Future<void>> _faceLoads = {};
+  final Map<int, ui.Image> _preparedFaces = {};
   bool _isRevealing = false;
   bool _isWaiting = false;
   late AnimationController _pulseController;
@@ -139,6 +141,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _pulseController.dispose();
     _countdownTicker?.dispose();
     _gameStartSubscription?.cancel();
+    for (final image in _preparedFaces.values) {
+      image.dispose();
+    }
     super.dispose();
   }
 
@@ -184,9 +189,34 @@ class _MemorizationScreenState extends State<MemorizationScreen>
 
   Future<void> _prepareFace(int index) {
     return _faceLoads.putIfAbsent(index, () async {
+      // Bound bitmap memory while retaining detail on high-density screens.
+      final media = MediaQuery.of(context);
+      final width = (media.size.width * media.devicePixelRatio / 4)
+          .ceil()
+          .clamp(256, 1024);
       final loader = SvgAssetLoader(config.localPlayer.hand[index].imagePath);
-      await svg.cache
-          .putIfAbsent(loader.cacheKey(null), () => loader.loadBytes(null));
+      final picture = await vg.loadPicture(loader, null);
+      try {
+        final height =
+            (width * picture.size.height / picture.size.width).ceil();
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder)
+          ..scale(width / picture.size.width, height / picture.size.height)
+          ..drawPicture(picture.picture);
+        final rasterPicture = recorder.endRecording();
+        try {
+          final image = await rasterPicture.toImage(width, height);
+          if (mounted) {
+            _preparedFaces[index] = image;
+          } else {
+            image.dispose();
+          }
+        } finally {
+          rasterPicture.dispose();
+        }
+      } finally {
+        picture.picture.dispose();
+      }
     });
   }
 
@@ -357,6 +387,20 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                                     card: allCards[i],
                                                     size: CardSize.large,
                                                     isRevealed: true,
+                                                    svgBuilder: _preparedFaces[
+                                                                i] ==
+                                                            null
+                                                        ? null
+                                                        : (_, width, height) =>
+                                                            RawImage(
+                                                              image:
+                                                                  _preparedFaces[
+                                                                      i],
+                                                              width: width,
+                                                              height: height,
+                                                              fit: BoxFit
+                                                                  .contain,
+                                                            ),
                                                   ),
                                                 ],
                                               ),
