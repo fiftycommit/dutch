@@ -7,7 +7,7 @@ Jeu de cartes de mémoire et stratégie en Flutter/Dart. Une partie oppose un jo
 ## Fonctionnalités
 
 - Modes Partie rapide et Tournoi (trois manches, le dernier est éliminé à chaque tour)
-- Phase de mémorisation au début de la manche, avec sélection animée des cartes respectant la réduction des animations système, puis révélation après un Dutch
+- Phase de mémorisation au début de la manche : les deux cartes choisies sont préparées puis montrées directement, avant la révélation animée après un Dutch
 - Défausse collective avec fenêtre de réaction et pénalité en cas d'erreur
 - Pouvoirs spéciaux interactifs (7, 10, Valet, Joker)
 - Bots à comportements distincts et matchmaking adaptatif (SBMM) basé sur le RP

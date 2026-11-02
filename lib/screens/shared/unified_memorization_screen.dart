@@ -3,10 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../models/player.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/game/card_widget.dart';
-import '../../widgets/game/flip_card_widget.dart';
 import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/screen_utils.dart';
 import '../../core/service_locator.dart';
@@ -79,6 +79,7 @@ class MemorizationScreen extends StatefulWidget {
 class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
   final Set<int> _selectedCards = {};
+  final Map<int, Future<void>> _faceLoads = {};
   bool _isRevealing = false;
   bool _isWaiting = false;
   late AnimationController _pulseController;
@@ -181,6 +182,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _confirmAndStart();
   }
 
+  Future<void> _prepareFace(int index) {
+    return _faceLoads.putIfAbsent(index, () async {
+      final loader = SvgAssetLoader(config.localPlayer.hand[index].imagePath);
+      await svg.cache
+          .putIfAbsent(loader.cacheKey(null), () => loader.loadBytes(null));
+    });
+  }
+
   void _onCardTap(int index) {
     if (_isRevealing || _isWaiting) return;
 
@@ -191,6 +200,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         _selectedCards.add(index);
       }
     });
+    if (_selectedCards.contains(index)) {
+      unawaited(_prepareFace(index).catchError((Object _) {}));
+    }
     _syncPulse();
   }
 
@@ -200,6 +212,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     setState(() => _isRevealing = true);
     _syncPulse();
     _countdownTicker?.stop();
+    try {
+      await Future.wait(_selectedCards.map(_prepareFace));
+    } catch (_) {
+      // Rendering the card will surface its normal asset error.
+    }
 
     if (!mounted) return;
     await _showRevealedCardsDialog();
@@ -313,14 +330,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                   child: FittedBox(
                                     fit: BoxFit.contain,
                                     child: _selectedCards.contains(i)
-                                        ? AnimatedFlipCard(
+                                        ? CardWidget(
                                             card: allCards[i],
                                             isRevealed: true,
-                                            cardSize: CardSize.large,
-                                            delay: Duration(
-                                                milliseconds: 200 + i * 150),
-                                            duration: const Duration(
-                                                milliseconds: 500),
+                                            size: CardSize.large,
                                           )
                                         : CardWidget(
                                             card: null,
@@ -595,7 +608,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                         SizedBox(height: verticalSpacing * 1.2),
                         Center(
                           child: AnimatedOpacity(
-                            opacity: canConfirm && !_isRevealing ? 1.0 : 0.3,
+                            opacity: canConfirm ? 1.0 : 0.3,
                             duration: const Duration(milliseconds: 300),
                             child: ElevatedButton(
                               onPressed: canConfirm && !_isRevealing
@@ -624,11 +637,13 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                 ),
                               ),
                               child: Text(
-                                canConfirm
-                                    ? "C'EST BON !"
-                                    : _selectedCards.isEmpty
-                                        ? "CHOISIS 2 CARTES"
-                                        : "ENCORE 1 CARTE",
+                                _isRevealing
+                                    ? "PRÉPARATION..."
+                                    : canConfirm
+                                        ? "C'EST BON !"
+                                        : _selectedCards.isEmpty
+                                            ? "CHOISIS 2 CARTES"
+                                            : "ENCORE 1 CARTE",
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold),
                               ),
