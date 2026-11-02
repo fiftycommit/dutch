@@ -330,10 +330,37 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                   child: FittedBox(
                                     fit: BoxFit.contain,
                                     child: _selectedCards.contains(i)
-                                        ? CardWidget(
-                                            card: allCards[i],
-                                            isRevealed: true,
-                                            size: CardSize.large,
+                                        ? TweenAnimationBuilder<double>(
+                                            tween: Tween(begin: 0, end: 1),
+                                            duration:
+                                                MediaQuery.disableAnimationsOf(
+                                                        context)
+                                                    ? Duration.zero
+                                                    : const Duration(
+                                                        milliseconds: 350),
+                                            curve: Curves.easeInOut,
+                                            builder: (context, value, child) =>
+                                                Transform.scale(
+                                              scaleX: math
+                                                  .cos(value * math.pi)
+                                                  .abs(),
+                                              child: IndexedStack(
+                                                index: value < 0.5 ? 0 : 1,
+                                                alignment: Alignment.center,
+                                                children: [
+                                                  const CardWidget(
+                                                    card: null,
+                                                    size: CardSize.large,
+                                                    isRevealed: false,
+                                                  ),
+                                                  CardWidget(
+                                                    card: allCards[i],
+                                                    size: CardSize.large,
+                                                    isRevealed: true,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           )
                                         : CardWidget(
                                             card: null,
