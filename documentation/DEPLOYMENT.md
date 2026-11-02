@@ -37,6 +37,8 @@ d'une première visite ou avant la fin d'une mise à jour. Les fichiers
 indispensables doivent être téléchargés avant l'activation ; les ressources
 optionnelles indisponibles pourront être mises en cache à leur première demande.
 Les fichiers de symboles de débogage ne sont pas précachés.
+La barre du splash HTML indique une activité indéterminée dès son affichage ;
+elle ne représente pas un pourcentage de téléchargement.
 Les familles Inter et Montserrat sont chargées à la demande avant l'ouverture
 des écrans qui les utilisent. Le service worker conserve ces fichiers pour le
 hors-ligne et réutilise les ressources inchangées du cache précédent lors d'une
