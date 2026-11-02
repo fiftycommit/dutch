@@ -715,7 +715,6 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         final cardWidth =
             math.max(0.0, math.min(widthLimit, heightLimit / aspect));
         final cardHeight = cardWidth * aspect;
-        final lift = cardHeight * liftFactor;
         final topInset = cardHeight * extraTopFactor;
 
         return Center(
@@ -745,38 +744,46 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                             : 1.0,
                         child: child,
                       ),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        transform: Matrix4.translationValues(
-                            0, isSelected ? -lift : 0, 0),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            ScreenUtils.borderRadius(context, 8),
-                          ),
-                          border: isSelected
-                              ? Border.all(
-                                  color: Colors.amber, width: isCompact ? 2 : 3)
-                              : null,
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.amber.withValues(alpha: 0.5),
-                                    blurRadius: isCompact ? 10 : 15,
-                                    spreadRadius: isCompact ? 2 : 3,
-                                  )
-                                ]
-                              : null,
-                        ),
-                        child: SizedBox(
-                          width: cardWidth,
-                          height: cardHeight,
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            // Pendant la sélection, toutes les cartes restent dos visible
-                            child: CardWidget(
-                              card: null,
-                              size: CardSize.large,
-                              isRevealed: false,
+                      child: AnimatedSlide(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
+                        offset: Offset(0, isSelected ? -liftFactor : 0),
+                        curve: Curves.easeOut,
+                        child: RepaintBoundary(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                ScreenUtils.borderRadius(context, 8),
+                              ),
+                              border: isSelected
+                                  ? Border.all(
+                                      color: Colors.amber,
+                                      width: isCompact ? 2 : 3)
+                                  : null,
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color:
+                                            Colors.amber.withValues(alpha: 0.5),
+                                        blurRadius: isCompact ? 10 : 15,
+                                        spreadRadius: isCompact ? 2 : 3,
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: SizedBox(
+                              width: cardWidth,
+                              height: cardHeight,
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                // Pendant la sélection, toutes les cartes restent dos visible
+                                child: CardWidget(
+                                  card: null,
+                                  size: CardSize.large,
+                                  isRevealed: false,
+                                ),
+                              ),
                             ),
                           ),
                         ),
