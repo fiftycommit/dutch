@@ -1,0 +1,80 @@
+(() => {
+  const images = new Map();
+  let active;
+
+  function prepare(asset) {
+    if (!images.has(asset)) {
+      const image = new Image();
+      image.src = new URL('assets/' + asset, document.baseURI).href;
+      const decoded = image.decode();
+      decoded.catch(() => {}); // show() observes this error if it needs this asset.
+      images.set(asset, { image, decoded });
+    }
+    return images.get(asset);
+  }
+
+  function cancel() {
+    active?.finish();
+    images.clear();
+  }
+
+  async function show(assets, back) {
+    active?.finish();
+    const dialog = document.createElement('dialog');
+    dialog.className = 'dutch-card-reveal';
+    dialog.setAttribute('aria-labelledby', 'dutch-reveal-title');
+    dialog.addEventListener('cancel', event => event.preventDefault());
+    dialog.innerHTML = `<header><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg><h2 id="dutch-reveal-title" tabindex="-1" autofocus>VOS CARTES</h2></header><div class="dutch-reveal-cards"></div><p>Mémorisez bien ces cartes !</p><div class="dutch-reveal-clock"><div><i></i></div><span>4s</span></div>`;
+    let resolve;
+    const completed = new Promise(done => { resolve = done; });
+    let interval, hold, leave;
+    const session = { finish() {
+      clearInterval(interval);
+      clearTimeout(hold);
+      clearTimeout(leave);
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      if (active === session) active = undefined;
+      resolve();
+    } };
+    active = session;
+    try {
+      const cards = dialog.querySelector('.dutch-reveal-cards');
+      const decodes = [];
+      function addImage(card, asset, side) {
+        const source = prepare(asset);
+        const image = source.image.cloneNode();
+        image.className = side;
+        image.alt = '';
+        card.append(image);
+        decodes.push(source.decoded, image.decode());
+      }
+      for (const asset of assets) {
+        const card = document.createElement('div');
+        card.className = asset === back ? 'dutch-reveal-card' : 'dutch-reveal-card dutch-reveal-flip';
+        addImage(card, back, 'dutch-reveal-back');
+        if (asset !== back) addImage(card, asset, 'dutch-reveal-front');
+        cards.append(card);
+      }
+      await Promise.race([Promise.all(decodes), completed]);
+      if (active !== session) return;
+      document.body.append(dialog);
+      dialog.showModal();
+      let seconds = 4;
+      const count = dialog.querySelector('.dutch-reveal-clock span');
+      interval = setInterval(() => { count.textContent = `${--seconds}s`; }, 1000);
+      hold = setTimeout(() => {
+        clearInterval(interval);
+        dialog.classList.add('dutch-reveal-closing');
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        leave = setTimeout(session.finish, reduced ? 0 : 150);
+      }, 4000);
+      await completed;
+    } finally {
+      session.finish();
+      if (!active) images.clear();
+    }
+  }
+
+  window.dutchCardReveal = { prepare, show, cancel };
+})();

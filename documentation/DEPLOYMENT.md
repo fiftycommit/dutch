@@ -46,9 +46,9 @@ des écrans qui les utilisent. Le service worker conserve ces fichiers pour le
 hors-ligne et réutilise les ressources inchangées du cache précédent lors d'une
 mise à jour.
 
-La mémorisation prépare le dos et les faces choisies en images, ombres et
-coins inclus, avant le retournement. Pour vérifier le rendu à froid dans
-Firefox, mesurer séparément la première sélection et le clic « C’est bon ! ».
+Sur le web, la fenêtre de mémorisation utilise les SVG originaux et une
+animation CSS dans un dialogue natif, au-dessus de Flutter. Les scripts et
+styles sont précachés. La version native conserve le dialogue Flutter.
 
 
 Les URL Flutter sous `/assets/`, les manifestes et les scripts principaux ne

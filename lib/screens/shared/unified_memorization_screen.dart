@@ -13,6 +13,8 @@ import '../../widgets/dialogs/responsive_dialog.dart';
 import '../../utils/screen_utils.dart';
 import '../../core/service_locator.dart';
 import '../../core/interfaces/i_haptic_service.dart';
+import 'memorization_reveal_stub.dart'
+    if (dart.library.js_interop) 'memorization_reveal_web.dart';
 
 /// Configuration pour l'écran de mémorisation
 class MemorizationConfig {
@@ -143,6 +145,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _pulseController.dispose();
     _countdownTicker?.dispose();
     _gameStartSubscription?.cancel();
+    if (webRevealAvailable) cancelWebReveal();
     for (final card in _preparedCards.values) {
       card.image.dispose();
     }
@@ -280,9 +283,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       }
     });
     if (_selectedCards.contains(index)) {
-      unawaited(_prepareCard(CardWidget.backAsset).catchError((Object _) {}));
       final asset = config.localPlayer.hand[index].imagePath;
-      unawaited(_prepareCard(asset).catchError((Object _) {}));
+      if (webRevealAvailable) {
+        prepareWebReveal(CardWidget.backAsset);
+        prepareWebReveal(asset);
+      } else {
+        unawaited(_prepareCard(CardWidget.backAsset).catchError((Object _) {}));
+        unawaited(_prepareCard(asset).catchError((Object _) {}));
+      }
     }
     _syncPulse();
   }
@@ -293,18 +301,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     setState(() => _isRevealing = true);
     _syncPulse();
     _countdownTicker?.stop();
-    try {
-      await Future.wait([
-        _prepareCard(CardWidget.backAsset),
-        for (final index in _selectedCards)
-          _prepareCard(config.localPlayer.hand[index].imagePath),
-      ]);
-    } catch (_) {
-      // Rendering the card will surface its normal asset error.
-    }
-
-    if (!mounted) return;
-    await _showRevealedCardsDialog();
+    await _revealSelectedCards();
 
     if (!mounted) return;
 
@@ -320,6 +317,34 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     } else {
       _navigateToGame();
     }
+  }
+
+  Future<void> _revealSelectedCards() async {
+    final hand = config.localPlayer.hand;
+    if (webRevealAvailable) {
+      try {
+        await showWebReveal([
+          for (var index = 0; index < hand.length; index++)
+            _selectedCards.contains(index)
+                ? hand[index].imagePath
+                : CardWidget.backAsset,
+        ], CardWidget.backAsset);
+        return;
+      } catch (error) {
+        debugPrint('Native card reveal failed: $error');
+        if (!mounted) return;
+      }
+    }
+
+    try {
+      await Future.wait([
+        _prepareCard(CardWidget.backAsset),
+        for (final index in _selectedCards) _prepareCard(hand[index].imagePath),
+      ]);
+    } catch (_) {
+      // Rendering the card will surface its normal asset error.
+    }
+    if (mounted) await _showRevealedCardsDialog();
   }
 
   void _navigateToGame() {

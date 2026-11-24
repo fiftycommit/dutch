@@ -1,0 +1,125 @@
+@font-face {
+  font-family: Dutch Reveal;
+  src: url('assets/assets/fonts/Roboto-Regular.ttf');
+}
+@font-face {
+  font-family: Dutch Reveal;
+  src: url('assets/assets/fonts/Roboto-Bold.ttf');
+  font-weight: 700;
+}
+.dutch-card-reveal {
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 16px;
+  width: 84vw;
+  height: 88dvh;
+  max-width: none;
+  max-height: none;
+  padding: clamp(8px, 2.6vh, 20px);
+  background: rgb(0 0 0 / .87);
+  color: white;
+  font-family: Dutch Reveal, Arial, sans-serif;
+  text-align: center;
+  overflow: hidden;
+}
+.dutch-card-reveal[open] {
+  display: grid;
+  grid-template-rows: 20% 54% 10% 16%;
+  align-items: center;
+}
+.dutch-card-reveal[open], .dutch-card-reveal[open]::backdrop {
+  animation: dutch-reveal-fade 150ms ease-out both;
+}
+.dutch-card-reveal::backdrop { background: rgb(0 0 0 / .54); }
+.dutch-card-reveal.dutch-reveal-closing,
+.dutch-card-reveal.dutch-reveal-closing::backdrop {
+  animation: dutch-reveal-fade 150ms ease-in reverse both;
+}
+@keyframes dutch-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+.dutch-card-reveal svg {
+  display: block;
+  width: clamp(22px, 7vh, 58px);
+  margin: 0 auto;
+  color: #ffc107;
+}
+.dutch-card-reveal h2 {
+  outline: none;
+  color: #ffc107;
+  margin: 1.5vh 0 0;
+  font-size: clamp(16px, 4.2vh, 32px);
+}
+.dutch-reveal-cards {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(4px, 1vw, 14px);
+  height: 100%;
+}
+.dutch-reveal-card {
+  position: relative;
+  flex: 0 1 auto;
+  width: min(calc((84vw - 50px) / 4), 30.4dvh);
+  aspect-ratio: 5 / 7;
+  border-radius: 6px;
+  box-shadow: 2px 2px 4px rgb(0 0 0 / .3);
+}
+.dutch-reveal-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: contain;
+}
+.dutch-reveal-front { opacity: 0; }
+.dutch-reveal-flip { animation: dutch-reveal-flip 350ms linear both; }
+.dutch-reveal-flip .dutch-reveal-front {
+  animation: dutch-reveal-face 350ms steps(1, end) both;
+}
+.dutch-reveal-flip .dutch-reveal-back {
+  animation: dutch-reveal-back 350ms steps(1, end) both;
+}
+@keyframes dutch-reveal-face { 0% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes dutch-reveal-back { 0% { opacity: 1; } 50%, 100% { opacity: 0; } }
+/* Samples of abs(cos(pi * Flutter Curves.easeInOut(t))). */
+@keyframes dutch-reveal-flip {
+  0%, 100% { transform: scaleX(1); }
+  5%, 95% { transform: scaleX(.99988); }
+  10%, 90% { transform: scaleX(.99808); }
+  15%, 85% { transform: scaleX(.98993); }
+  20%, 80% { transform: scaleX(.96727); }
+  25%, 75% { transform: scaleX(.91880); }
+  30%, 70% { transform: scaleX(.83165); }
+  35%, 65% { transform: scaleX(.69482); }
+  40%, 60% { transform: scaleX(.50394); }
+  45%, 55% { transform: scaleX(.26587); }
+  50% { transform: scaleX(0); }
+}
+.dutch-card-reveal p {
+  margin: 0;
+  color: #dedede;
+  font-size: clamp(14px, 4.6vh, 36px);
+}
+.dutch-reveal-clock {
+  align-self: start;
+  padding-top: 1vh;
+  color: #aaa;
+  font-size: clamp(13px, 4.4vh, 34px);
+}
+.dutch-reveal-clock div { height: 6px; background: #333; margin-bottom: 2vh; }
+.dutch-reveal-clock i {
+  display: block;
+  height: 100%;
+  background: #ffc107;
+  transform-origin: left;
+  animation: dutch-reveal-progress 4s linear both;
+}
+@keyframes dutch-reveal-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dutch-card-reveal[open], .dutch-card-reveal[open]::backdrop,
+  .dutch-reveal-flip, .dutch-reveal-flip .dutch-reveal-front,
+  .dutch-reveal-flip .dutch-reveal-back { animation-duration: 0s; }
+}

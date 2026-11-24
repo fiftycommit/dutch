@@ -138,6 +138,8 @@ const CORE = [
   '/index.html',
   '/flutter_bootstrap.js',
   '/main.dart.js',
+  '/card-reveal.css',
+  '/card-reveal.js',
   '/manifest.json',
   '/assets/AssetManifest.bin',
   '/assets/AssetManifest.bin.json',
