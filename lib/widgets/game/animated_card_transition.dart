@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/playing_card.dart';
 import '../../utils/ui_constants.dart';
+import 'card_flight_stub.dart'
+    if (dart.library.js_interop) 'card_flight_web.dart';
 import 'card_widget.dart';
 
 /// Carte volante entre deux positions de la table (pioche, défausse,
@@ -20,6 +22,7 @@ class AnimatedCardTransition extends StatefulWidget {
   final VoidCallback? onComplete;
   final Duration duration;
   final Curve curve;
+  final bool preferBrowser;
 
   const AnimatedCardTransition({
     super.key,
@@ -31,6 +34,7 @@ class AnimatedCardTransition extends StatefulWidget {
     this.onComplete,
     this.duration = AppDurations.cardMove,
     this.curve = Curves.easeOutCubic,
+    this.preferBrowser = false,
   });
 
   @override
@@ -44,6 +48,8 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
   late final Animation<double> _scaleAnimation;
   late final Animation<double> _rotationAnimation;
   late final Animation<double> _opacityAnimation;
+  late bool _useBrowser;
+  VoidCallback? _cancelBrowser;
 
   @override
   void initState() {
@@ -78,17 +84,67 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
       ),
     );
 
-    _controller.forward().then((_) => widget.onComplete?.call());
+    _useBrowser = widget.preferBrowser && webFlightAvailable;
+    if (_useBrowser) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startBrowser());
+    } else {
+      _startFlutter();
+    }
+  }
+
+  void _startFlutter() {
+    _controller.forward().then((_) {
+      if (mounted) widget.onComplete?.call();
+    });
+  }
+
+  void _startBrowser() {
+    if (!mounted) return;
+    final box = context.findRenderObject()! as RenderBox;
+    final start = box.localToGlobal(Offset.zero);
+    final delta = widget.endPosition - widget.startPosition;
+    final asset = widget.isRevealed
+        ? widget.card?.imagePath ?? CardWidget.backAsset
+        : CardWidget.backAsset;
+    _cancelBrowser = startWebFlight(
+      asset,
+      start.dx,
+      start.dy,
+      delta.dx,
+      delta.dy,
+      box.size.width,
+      box.size.height,
+      widget.duration.inMilliseconds,
+      (success) {
+        if (!mounted) return;
+        if (success) {
+          widget.onComplete?.call();
+        } else {
+          setState(() => _useBrowser = false);
+          _startFlutter();
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
+    _cancelBrowser?.call();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_useBrowser) {
+      return Positioned(
+        left: widget.startPosition.dx,
+        top: widget.startPosition.dy,
+        child: SizedBox.fromSize(
+          size: CardWidget.visualSize(context, widget.size),
+        ),
+      );
+    }
     return Positioned(
       left: widget.startPosition.dx,
       top: widget.startPosition.dy,

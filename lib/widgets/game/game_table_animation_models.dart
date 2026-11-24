@@ -26,6 +26,7 @@ class DiscardAnimation {
   final Offset start;
   final Offset end;
   final CardSize size;
+  final bool isExchange;
 
   DiscardAnimation({
     required this.id,
@@ -33,6 +34,7 @@ class DiscardAnimation {
     required this.start,
     required this.end,
     required this.size,
+    this.isExchange = false,
   });
 }
 

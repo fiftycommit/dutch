@@ -450,6 +450,10 @@ class _GameTableContentState extends State<_GameTableContent>
           cardIndex: removedIndex,
           previousHandCount: previousHand.length,
           previousTop: previousTop,
+          isExchange: _lastDrawnCard != null &&
+              gs.drawnCard == null &&
+              previousHand.length == human.hand.length &&
+              human.hand[removedIndex].id == _lastDrawnCard!.id,
         );
       }
     }
@@ -1060,6 +1064,7 @@ class _GameTableContentState extends State<_GameTableContent>
     required int cardIndex,
     required int previousHandCount,
     required PlayingCard? previousTop,
+    required bool isExchange,
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1096,6 +1101,7 @@ class _GameTableContentState extends State<_GameTableContent>
         start: start,
         end: end,
         size: cardSize,
+        isExchange: isExchange,
       );
 
       setState(() {
@@ -1767,6 +1773,7 @@ class _GameTableContentState extends State<_GameTableContent>
                   startPosition: anim.start,
                   endPosition: anim.end,
                   duration: const Duration(milliseconds: 360),
+                  preferBrowser: anim.isExchange,
                   onComplete: () => _removeDiscardAnimation(anim.id),
                 );
               }),
@@ -1779,6 +1786,7 @@ class _GameTableContentState extends State<_GameTableContent>
                   startPosition: anim.start,
                   endPosition: anim.end,
                   duration: const Duration(milliseconds: 380),
+                  preferBrowser: true,
                   onComplete: () => _removeDrawnToHandAnimation(anim.id),
                 );
               }),

@@ -123,3 +123,12 @@
   .dutch-reveal-flip, .dutch-reveal-flip .dutch-reveal-front,
   .dutch-reveal-flip .dutch-reveal-back { animation-duration: 0s; }
 }
+
+.dutch-card-flight {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: 0 3px 10px rgb(0 0 0 / .35), 2px 2px 4px rgb(0 0 0 / .3);
+}

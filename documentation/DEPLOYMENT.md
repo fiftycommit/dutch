@@ -49,6 +49,9 @@ mise à jour.
 Sur le web, la fenêtre de mémorisation utilise les SVG originaux et une
 animation CSS dans un dialogue natif, au-dessus de Flutter. Les scripts et
 styles sont précachés. La version native conserve le dialogue Flutter.
+Quand un joueur garde la carte piochée, les deux vols de l'échange utilisent
+les mêmes scripts et styles, avec les positions calculées par Flutter. Les
+autres animations de la table restent dans Flutter.
 
 
 Les URL Flutter sous `/assets/`, les manifestes et les scripts principaux ne

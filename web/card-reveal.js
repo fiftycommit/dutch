@@ -76,5 +76,70 @@
     }
   }
 
-  window.dutchCardReveal = { prepare, show, cancel };
+  function easeOutCubic(x) {
+    const bezier = (a, b, t) => 3 * (1 - t) ** 2 * t * a +
+      3 * (1 - t) * t ** 2 * b + t ** 3;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 18; i++) {
+      const t = (lo + hi) / 2;
+      if (bezier(.215, .355, t) < x) lo = t;
+      else hi = t;
+    }
+    return x === 0 || x === 1 ? x : bezier(.61, 1, (lo + hi) / 2);
+  }
+
+  const flightFrames = Array.from({ length: 21 }, (_, i) => {
+    const t = i / 20;
+    return {
+      t,
+      distance: easeOutCubic(t),
+      scale: 1 + .08 * (t <= .2 ? t / .2 : (1 - t) / .8),
+    };
+  });
+
+  function fly(asset, x, y, dx, dy, width, height, duration, onDone) {
+    const card = new Image();
+    card.src = new URL('assets/' + asset, document.baseURI).href;
+    card.className = 'dutch-card-flight';
+    card.alt = '';
+    card.setAttribute('aria-hidden', 'true');
+    Object.assign(card.style, {
+      left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px`,
+    });
+    let cancelled = false;
+    let move, fade;
+    const cancelFlight = () => {
+      cancelled = true;
+      move?.cancel();
+      fade?.cancel();
+      card.remove();
+    };
+    (async () => {
+      let success = false;
+      try {
+        await card.decode();
+        if (cancelled) return;
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          document.body.append(card);
+          move = card.animate(flightFrames.map(({ t, distance, scale }) => ({
+            offset: t,
+            transform: `translate(${dx * distance}px,${dy * distance}px) scale(${scale}) rotate(${.06 * distance}rad)`,
+          })), { duration, fill: 'both' });
+          fade = card.animate([{ opacity: .7 }, { opacity: 1 }], {
+            duration: duration * .3, easing: 'ease-out', fill: 'both',
+          });
+          await move.finished;
+        }
+        success = true;
+      } finally {
+        if (!cancelled) {
+          cancelFlight();
+          onDone(success);
+        }
+      }
+    })().catch(() => {}); // Dart uses its existing flight if the browser fails.
+    return cancelFlight;
+  }
+
+  window.dutchCardReveal = { prepare, show, cancel, fly };
 })();
