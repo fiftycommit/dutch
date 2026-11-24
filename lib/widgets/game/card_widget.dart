@@ -12,6 +12,7 @@ class CardWidget extends StatelessWidget {
   final CardSize size;
   final bool isRevealed;
   final VoidCallback? onTap;
+  final bool showShadow;
   final SvgBuilder? svgBuilder;
 
   const CardWidget({
@@ -20,6 +21,7 @@ class CardWidget extends StatelessWidget {
     required this.size,
     required this.isRevealed,
     this.onTap,
+    this.showShadow = true,
     this.svgBuilder,
   });
 
@@ -50,23 +52,26 @@ class CardWidget extends StatelessWidget {
     width = ScreenUtils.scale(context, width) * ScreenUtils.cardScaleFactor;
     height = ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
 
+    final borderRadius =
+        BorderRadius.circular(ScreenUtils.borderRadius(context, 4));
+
     final card = Container(
       width: width,
       height: height,
-      decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 4,
-            offset: const Offset(2, 2),
-          )
-        ],
-      ),
+      decoration: showShadow
+          ? BoxDecoration(
+              borderRadius: borderRadius,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 4,
+                  offset: const Offset(2, 2),
+                ),
+              ],
+            )
+          : null,
       child: ClipRRect(
-        borderRadius:
-            BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
+        borderRadius: borderRadius,
         child: _buildCardImage(context, width, height),
       ),
     );

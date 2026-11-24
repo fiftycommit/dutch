@@ -15,6 +15,7 @@ Terminer la manche avec le **moins de points possible** en gérant intelligemmen
 ### Phase de mémorisation
 1. Chaque joueur reçoit 4 cartes face cachée
 2. Vous pouvez regarder 2 cartes de votre choix (une seule fois)
+   Seules les deux cartes choisies se retournent dans la fenêtre de mémorisation.
 3. Une carte de départ est placée dans la défausse
 
 ### Tour de jeu
@@ -24,6 +25,7 @@ Terminer la manche avec le **moins de points possible** en gérant intelligemmen
 **1️⃣ Piocher une carte**
 - Regarder la carte piochée
 - **Option A** : Échanger avec une de vos cartes (la carte remplacée va dans la défausse)
+  La carte piochée glisse vers votre main pendant que l'ancienne rejoint la défausse.
 - **Option B** : Défausser directement la carte piochée
 - Si la carte défaussée a un pouvoir, vous pouvez l'activer
 - ⚠️ **Si vous piochez, vous ne pouvez PLUS annoncer Dutch ce tour**

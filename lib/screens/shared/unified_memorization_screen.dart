@@ -281,6 +281,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     final dialogFuture = showDialog<void>(
       context: context,
       barrierDismissible: false,
+      // The cards already provide the entrance motion. Fading the entire
+      // dialog at the same time adds a large offscreen pass on CanvasKit.
+      animationStyle: AnimationStyle.noAnimation,
       builder: (ctx) => PopScope(
         canPop: false,
         child: ResponsiveDialog(
@@ -382,33 +385,34 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                                     card: null,
                                                     size: CardSize.large,
                                                     isRevealed: false,
+                                                    showShadow: false,
                                                   ),
-                                                  CardWidget(
-                                                    card: allCards[i],
-                                                    size: CardSize.large,
-                                                    isRevealed: true,
-                                                    svgBuilder: _preparedFaces[
-                                                                i] ==
-                                                            null
-                                                        ? null
-                                                        : (_, width, height) =>
-                                                            RawImage(
-                                                              image:
-                                                                  _preparedFaces[
-                                                                      i],
-                                                              width: width,
-                                                              height: height,
-                                                              fit: BoxFit
-                                                                  .contain,
-                                                            ),
-                                                  ),
+                                                  child!,
                                                 ],
                                               ),
+                                            ),
+                                            child: CardWidget(
+                                              card: allCards[i],
+                                              size: CardSize.large,
+                                              isRevealed: true,
+                                              showShadow: false,
+                                              svgBuilder:
+                                                  _preparedFaces[i] == null
+                                                      ? null
+                                                      : (_, width, height) =>
+                                                          RawImage(
+                                                            image:
+                                                                _preparedFaces[i],
+                                                            width: width,
+                                                            height: height,
+                                                            fit: BoxFit.contain,
+                                                          ),
                                             ),
                                           )
                                         : CardWidget(
                                             card: null,
                                             size: CardSize.large,
+                                            showShadow: false,
                                             isRevealed: false,
                                           ),
                                   ),
