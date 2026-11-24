@@ -117,7 +117,13 @@ if (canvasKitFiles.length > 0) {
   ));
 }
 
-const files = (await listFiles(buildDir)).sort();
+const allFiles = (await listFiles(buildDir)).sort();
+// Flutter includes Skwasm artifacts in a JavaScript-only build too. Only
+// precache them if this build can actually launch the Dart Wasm entrypoint.
+const hasWasmEntrypoint = allFiles.includes('main.dart.wasm');
+const files = hasWasmEntrypoint ? allFiles : allFiles.filter(file =>
+  !/^canvaskit-[a-f0-9]{16}\/(?:skwasm(?:_heavy)?|wimp)\.(?:js|mjs|wasm)$/.test(file)
+);
 const { hashes, version } = await buildManifest(files);
 const resources = files.map(toResourcePath);
 
@@ -247,12 +253,15 @@ async function cacheResources(cache, resources, previous, required) {
             return;
           }
         }
-        // Stable URLs may still have an old immutable response at the CDN.
-        // Fetch by content version, but store under the canonical URL.
-        const response = await fetch(new Request(
-          resource + '?v=' + HASHES[resource],
-          { cache: 'no-cache' }
-        ));
+        // Content-addressed URLs already identify the exact bytes. Reuse
+        // the HTTP response loaded by Flutter instead of refetching it.
+        const immutable = /^\\/canvaskit-[a-f0-9]{16}\\//.test(resource) ||
+          /^\\/main\\.dart\\.js_\\d+\\.[a-f0-9]{16}\\.part\\.js$/.test(resource);
+        // Stable URLs still need a content version to bypass old CDN entries.
+        const request = immutable
+          ? new Request(resource)
+          : new Request(resource + '?v=' + HASHES[resource], { cache: 'no-cache' });
+        const response = await fetch(request);
         if (!response.ok) throw new Error('Failed to cache ' + resource);
         await cache.put(resource, response);
       } catch (error) {

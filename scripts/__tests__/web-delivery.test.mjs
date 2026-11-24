@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -80,6 +80,9 @@ test('worker reuses unchanged cached resources and fetches changed or missing on
     writeFileSync(path.join(dir, 'index.html'), 'app');
     writeFileSync(path.join(dir, 'main.dart.js'), 'new main');
     writeFileSync(path.join(dir, 'manifest.json'), 'manifest');
+    const renderer = '/canvaskit-0123456789abcdef/canvaskit.wasm';
+    mkdirSync(path.join(dir, path.dirname(renderer)));
+    writeFileSync(path.join(dir, renderer), 'engine');
     execFileSync('node', [generator, dir]);
     const source = readFileSync(path.join(dir, 'dutch_service_worker.js'), 'utf8');
     const hashes = JSON.parse(source.match(/const HASHES = (.*);/)[1]);
@@ -92,7 +95,7 @@ test('worker reuses unchanged cached resources and fetches changed or missing on
         if (key === '/__dutch_static_manifest__') {
           return { json: async () => ({ ...hashes, '/main.dart.js': 'old hash' }) };
         }
-        if (key === '/manifest.json') return undefined;
+        if (key === '/manifest.json' || key === renderer) return undefined;
         return { key };
       },
     };
@@ -104,7 +107,7 @@ test('worker reuses unchanged cached resources and fetches changed or missing on
       open: async (name) => name === 'dutch78-static-previous' ? previous : current,
     };
     class Request {
-      constructor(url, options) { this.url = url; this.cache = options.cache; }
+      constructor(url, options) { this.url = url; this.cache = options?.cache; }
     }
     class Response {
       constructor(body) { this.body = body; }
@@ -112,7 +115,7 @@ test('worker reuses unchanged cached resources and fetches changed or missing on
     vm.runInNewContext(source, {
       caches, Request, Response,
       fetch: async (request) => {
-        fetched.push(request.url.split('?')[0]);
+        fetched.push([request.url, request.cache]);
         return { ok: true };
       },
       self: {
@@ -123,7 +126,11 @@ test('worker reuses unchanged cached resources and fetches changed or missing on
     let completion;
     install({ waitUntil: (promise) => { completion = promise; } });
     await completion;
-    assert.deepEqual(fetched.sort(), ['/main.dart.js', '/manifest.json']);
+    assert.deepEqual(fetched.sort(), [
+      [renderer, undefined],
+      ['/main.dart.js?v=' + hashes['/main.dart.js'], 'no-cache'],
+      ['/manifest.json?v=' + hashes['/manifest.json'], 'no-cache'],
+    ]);
     assert.ok(copied.includes('/index.html'));
     assert.ok(copied.includes('/__dutch_static_manifest__'));
     assert.equal(skipped, true);

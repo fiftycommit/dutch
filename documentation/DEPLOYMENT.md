@@ -37,6 +37,8 @@ d'une première visite ou avant la fin d'une mise à jour. Les fichiers
 indispensables doivent être téléchargés avant l'activation ; les ressources
 optionnelles indisponibles pourront être mises en cache à leur première demande.
 Les fichiers de symboles de débogage ne sont pas précachés.
+Un build JavaScript ne précache pas Skwasm ; les variantes CanvasKit standard
+et Chromium restent disponibles hors ligne.
 La barre du splash HTML indique une activité indéterminée dès son affichage ;
 elle ne représente pas un pourcentage de téléchargement.
 Les familles Inter et Montserrat sont chargées à la demande avant l'ouverture
@@ -49,15 +51,16 @@ Les URL Flutter sous `/assets/`, les manifestes et les scripts principaux ne
 sont pas adressés par contenu : elles doivent être revalidées, pas marquées
 `immutable`. Seuls les chunks différés et le répertoire CanvasKit renommés par
 le générateur portent un hash et peuvent être mis en cache un an. La
-configuration Nginx du dépôt active aussi gzip pour JavaScript, JSON et WASM ;
+configuration Nginx du dépôt compresse aussi JavaScript, JSON, WASM et les
+polices TTF/OTF. Les polices restent identiques après décompression.
 Cloudflare peut appliquer sa propre compression. Après avoir appliqué la
 nouvelle configuration, purger les anciennes entrées Cloudflare de `/assets/*`
-et des autres URL stables précédemment servies `immutable` avant de publier un
-build modifiant ces fichiers. Le service worker télécharge les ressources
-modifiées avec une URL versionnée pour éviter les anciennes entrées CDN, puis
-les conserve sous leur URL normale. Les premières visites sans service worker
-et les navigateurs ayant conservé une ancienne réponse restent concernés par
-les anciennes entrées jusqu'à leur purge ou expiration.
+et des autres URL stables précédemment servies `immutable`. Vérifier notamment
+`Content-Encoding: gzip` sur les polices avec `Accept-Encoding: gzip`.
+Le service worker réutilise les URL immuables telles quelles et ajoute une
+version de contenu aux URL stables lors du précache. Les premières visites
+sans service worker et les navigateurs ayant conservé une ancienne réponse
+restent concernés par les anciennes entrées jusqu'à leur purge ou expiration.
 
 Après publication, contrôler les en-têtes des URL stables et hashées ainsi que
 le comportement en première visite, mise à jour et hors-ligne ; ne pas supposer
