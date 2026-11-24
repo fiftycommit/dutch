@@ -8,6 +8,8 @@ enum CardSize { tiny, small, medium, large, drawn }
 const double _cardAspectRatio = 7 / 5;
 
 class CardWidget extends StatelessWidget {
+  static const backAsset = 'assets/images/cards/dos-bleu.svg';
+
   final PlayingCard? card;
   final CardSize size;
   final bool isRevealed;
@@ -23,10 +25,8 @@ class CardWidget extends StatelessWidget {
     this.svgBuilder,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    double width;
-    double height;
+  static Size visualSize(BuildContext context, CardSize size) {
+    final double height;
 
     switch (size) {
       case CardSize.tiny:
@@ -46,14 +46,12 @@ class CardWidget extends StatelessWidget {
         break;
     }
 
-    width = height / _cardAspectRatio;
-    width = ScreenUtils.scale(context, width) * ScreenUtils.cardScaleFactor;
-    height = ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
+    final scaledHeight =
+        ScreenUtils.scale(context, height) * ScreenUtils.cardScaleFactor;
+    return Size(scaledHeight / _cardAspectRatio, scaledHeight);
+  }
 
-    final card = Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
+  static BoxDecoration decorationFor(BuildContext context) => BoxDecoration(
         borderRadius:
             BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
         boxShadow: [
@@ -63,11 +61,19 @@ class CardWidget extends StatelessWidget {
             offset: const Offset(2, 2),
           )
         ],
-      ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final dimensions = visualSize(context, size);
+    final decoration = decorationFor(context);
+    final card = Container(
+      width: dimensions.width,
+      height: dimensions.height,
+      decoration: decoration,
       child: ClipRRect(
-        borderRadius:
-            BorderRadius.circular(ScreenUtils.borderRadius(context, 4)),
-        child: _buildCardImage(context, width, height),
+        borderRadius: decoration.borderRadius!.resolve(null),
+        child: _buildCardImage(context, dimensions.width, dimensions.height),
       ),
     );
 
@@ -80,7 +86,7 @@ class CardWidget extends StatelessWidget {
     final builder = svgBuilder ?? SvgBuilderProvider.maybeOf(context);
 
     if (card == null || !isRevealed) {
-      return builder('assets/images/cards/dos-bleu.svg', w, h);
+      return builder(backAsset, w, h);
     }
 
     return builder(card!.imagePath, w, h);

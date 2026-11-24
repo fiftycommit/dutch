@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../models/playing_card.dart';
 import '../../models/player.dart';
 import '../../utils/ui_constants.dart';
 import '../../widgets/game/card_widget.dart';
@@ -80,8 +81,9 @@ class MemorizationScreen extends StatefulWidget {
 class _MemorizationScreenState extends State<MemorizationScreen>
     with TickerProviderStateMixin {
   final Set<int> _selectedCards = {};
-  final Map<int, Future<void>> _faceLoads = {};
-  final Map<int, ui.Image> _preparedFaces = {};
+  final Map<String, Future<void>> _cardLoads = {};
+  final Map<String, ({ui.Image image, Size cardSize, Size bitmapSize})>
+      _preparedCards = {};
   bool _isRevealing = false;
   bool _isWaiting = false;
   late AnimationController _pulseController;
@@ -141,8 +143,8 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _pulseController.dispose();
     _countdownTicker?.dispose();
     _gameStartSubscription?.cancel();
-    for (final image in _preparedFaces.values) {
-      image.dispose();
+    for (final card in _preparedCards.values) {
+      card.image.dispose();
     }
     super.dispose();
   }
@@ -187,27 +189,52 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _confirmAndStart();
   }
 
-  Future<void> _prepareFace(int index) {
-    return _faceLoads.putIfAbsent(index, () async {
-      // Bound bitmap memory while retaining detail on high-density screens.
+  Future<void> _prepareCard(String asset) {
+    return _cardLoads.putIfAbsent(asset, () async {
       final media = MediaQuery.of(context);
+      final size = CardWidget.visualSize(context, CardSize.large);
+      final decoration = CardWidget.decorationFor(context);
+      // Include enough transparent space for the existing offset and blur.
+      const padding = 16.0;
+      final bitmapSize = Size(
+        size.width + 2 * padding,
+        size.height + 2 * padding,
+      );
       final width = (media.size.width * media.devicePixelRatio / 4)
           .ceil()
           .clamp(256, 1024);
-      final loader = SvgAssetLoader(config.localPlayer.hand[index].imagePath);
-      final picture = await vg.loadPicture(loader, null);
+      final scale = width / size.width;
+      final pixelWidth = (bitmapSize.width * scale).ceil();
+      final pixelHeight = (bitmapSize.height * scale).ceil();
+      final picture = await vg.loadPicture(SvgAssetLoader(asset), null);
       try {
-        final height =
-            (width * picture.size.height / picture.size.width).ceil();
+        if (!mounted) return;
         final recorder = ui.PictureRecorder();
-        Canvas(recorder)
-          ..scale(width / picture.size.width, height / picture.size.height)
+        final canvas = Canvas(recorder)
+          ..scale(pixelWidth / bitmapSize.width, pixelHeight / bitmapSize.height)
+          ..translate(padding, padding);
+        final painter = decoration.createBoxPainter();
+        try {
+          painter.paint(canvas, Offset.zero, ImageConfiguration(size: size));
+        } finally {
+          painter.dispose();
+        }
+        final fitted = applyBoxFit(BoxFit.contain, picture.size, size);
+        final destination =
+            Alignment.center.inscribe(fitted.destination, Offset.zero & size);
+        canvas
+          ..clipRRect(
+            decoration.borderRadius!.resolve(null).toRRect(Offset.zero & size),
+          )
+          ..translate(destination.left, destination.top)
+          ..scale(destination.width / picture.size.width)
           ..drawPicture(picture.picture);
         final rasterPicture = recorder.endRecording();
         try {
-          final image = await rasterPicture.toImage(width, height);
+          final image = await rasterPicture.toImage(pixelWidth, pixelHeight);
           if (mounted) {
-            _preparedFaces[index] = image;
+            _preparedCards[asset] =
+                (image: image, cardSize: size, bitmapSize: bitmapSize);
           } else {
             image.dispose();
           }
@@ -218,6 +245,28 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         picture.picture.dispose();
       }
     });
+  }
+
+  Widget _buildRevealCard(PlayingCard? card) {
+    final sprite = _preparedCards[card?.imagePath ?? CardWidget.backAsset];
+    if (sprite == null) {
+      return CardWidget(
+        card: card,
+        size: CardSize.large,
+        isRevealed: card != null,
+      );
+    }
+    final bitmap = sprite.bitmapSize;
+    return SizedBox.fromSize(
+      size: sprite.cardSize,
+      child: OverflowBox(
+        minWidth: bitmap.width,
+        maxWidth: bitmap.width,
+        minHeight: bitmap.height,
+        maxHeight: bitmap.height,
+        child: RawImage(image: sprite.image, fit: BoxFit.fill),
+      ),
+    );
   }
 
   void _onCardTap(int index) {
@@ -231,7 +280,9 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       }
     });
     if (_selectedCards.contains(index)) {
-      unawaited(_prepareFace(index).catchError((Object _) {}));
+      unawaited(_prepareCard(CardWidget.backAsset).catchError((Object _) {}));
+      final asset = config.localPlayer.hand[index].imagePath;
+      unawaited(_prepareCard(asset).catchError((Object _) {}));
     }
     _syncPulse();
   }
@@ -243,7 +294,11 @@ class _MemorizationScreenState extends State<MemorizationScreen>
     _syncPulse();
     _countdownTicker?.stop();
     try {
-      await Future.wait(_selectedCards.map(_prepareFace));
+      await Future.wait([
+        _prepareCard(CardWidget.backAsset),
+        for (final index in _selectedCards)
+          _prepareCard(config.localPlayer.hand[index].imagePath),
+      ]);
     } catch (_) {
       // Rendering the card will surface its normal asset error.
     }
@@ -346,6 +401,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                           math.min(cardWidthByWidth, cardWidthByHeight),
                         );
                         final cardHeight = cardWidth * aspect;
+                        final back = _buildRevealCard(null);
 
                         return Center(
                           child: Row(
@@ -378,39 +434,14 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                                                 index: value < 0.5 ? 0 : 1,
                                                 alignment: Alignment.center,
                                                 children: [
-                                                  const CardWidget(
-                                                    card: null,
-                                                    size: CardSize.large,
-                                                    isRevealed: false,
-                                                  ),
-                                                  CardWidget(
-                                                    card: allCards[i],
-                                                    size: CardSize.large,
-                                                    isRevealed: true,
-                                                    svgBuilder: _preparedFaces[
-                                                                i] ==
-                                                            null
-                                                        ? null
-                                                        : (_, width, height) =>
-                                                            RawImage(
-                                                              image:
-                                                                  _preparedFaces[
-                                                                      i],
-                                                              width: width,
-                                                              height: height,
-                                                              fit: BoxFit
-                                                                  .contain,
-                                                            ),
-                                                  ),
+                                                  back,
+                                                  child!,
                                                 ],
                                               ),
                                             ),
+                                            child: _buildRevealCard(allCards[i]),
                                           )
-                                        : CardWidget(
-                                            card: null,
-                                            size: CardSize.large,
-                                            isRevealed: false,
-                                          ),
+                                        : back,
                                   ),
                                 ),
                               ],
