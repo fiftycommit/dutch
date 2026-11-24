@@ -3,6 +3,14 @@ import '../../models/playing_card.dart';
 import '../../utils/ui_constants.dart';
 import 'card_widget.dart';
 
+/// Carte volante entre deux positions de la table (pioche, défausse,
+/// pénalité, échange Valet).
+///
+/// Coût par frame limité au compositing : la carte reste ancrée à
+/// [startPosition] (pas de relayout via Positioned animé), le déplacement,
+/// l'échelle et la rotation passent par une seule matrice [Transform], et
+/// l'opacité par [FadeTransition]. L'ombre est statique et peinte une fois
+/// dans le RepaintBoundary.
 class AnimatedCardTransition extends StatefulWidget {
   final PlayingCard? card;
   final Offset startPosition;
@@ -31,28 +39,21 @@ class AnimatedCardTransition extends StatefulWidget {
 
 class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _positionAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _rotationAnimation;
-  late Animation<double> _shadowAnimation;
-  late Animation<double> _opacityAnimation;
+  late final AnimationController _controller;
+  late final Animation<Offset> _offsetAnimation;
+  late final Animation<double> _scaleAnimation;
+  late final Animation<double> _rotationAnimation;
+  late final Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: widget.duration,
-      vsync: this,
-    );
+    _controller = AnimationController(duration: widget.duration, vsync: this);
 
-    _positionAnimation = Tween<Offset>(
-      begin: widget.startPosition,
-      end: widget.endPosition,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: widget.curve,
-    ));
+    _offsetAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: widget.endPosition - widget.startPosition,
+    ).animate(CurvedAnimation(parent: _controller, curve: widget.curve));
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
@@ -68,35 +69,16 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
     _rotationAnimation = Tween<double>(
       begin: 0,
       end: 0.06,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    _shadowAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 4.0, end: 16.0),
-        weight: 30,
+    _opacityAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
       ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 16.0, end: 4.0),
-        weight: 70,
-      ),
-    ]).animate(_controller);
+    );
 
-    _opacityAnimation = Tween<double>(
-      begin: 0.7,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
-    ));
-
-    _controller.forward().then((_) {
-      if (widget.onComplete != null) {
-        widget.onComplete!();
-      }
-    });
+    _controller.forward().then((_) => widget.onComplete?.call());
   }
 
   @override
@@ -107,43 +89,46 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Positioned(
-          left: _positionAnimation.value.dx,
-          top: _positionAnimation.value.dy,
-          child: IgnorePointer(
+    return Positioned(
+      left: widget.startPosition.dx,
+      top: widget.startPosition.dy,
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final offset = _offsetAnimation.value;
+            final transform = Matrix4.translationValues(offset.dx, offset.dy, 0)
+              ..scaleByDouble(
+                  _scaleAnimation.value, _scaleAnimation.value, 1, 1)
+              ..rotateZ(_rotationAnimation.value);
+            return Transform(
+              transform: transform,
+              alignment: Alignment.center,
+              child: child,
+            );
+          },
+          child: FadeTransition(
+            opacity: _opacityAnimation,
             child: RepaintBoundary(
-              child: Opacity(
-                opacity: _opacityAnimation.value,
-                child: Container(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        blurRadius: _shadowAnimation.value,
-                        offset: Offset(0, _shadowAnimation.value * 0.3),
-                      ),
-                    ],
-                  ),
-                  child: Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Transform.rotate(
-                      angle: _rotationAnimation.value,
-                      child: child!,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
-                  ),
+                  ],
+                ),
+                child: CardWidget(
+                  card: widget.card,
+                  size: widget.size,
+                  isRevealed: widget.isRevealed,
                 ),
               ),
             ),
           ),
-        );
-      },
-      child: CardWidget(
-        card: widget.card,
-        size: widget.size,
-        isRevealed: widget.isRevealed,
+        ),
       ),
     );
   }

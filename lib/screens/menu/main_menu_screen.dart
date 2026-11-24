@@ -220,56 +220,14 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
   Future<void> _promptRenameSlot(int slotId) async {
     final initialName = slotNames[slotId] ?? _defaultSlotName(slotId);
-    final controller = TextEditingController(text: initialName);
-    controller.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: initialName.length,
+    // Le contrôleur appartient au dialogue : showDialog se termine dès le
+    // pop, mais la route rebâtit encore le TextField pendant son animation
+    // de sortie. Un dispose() ici provoquait « used after being disposed ».
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _RenameSlotDialog(slotId: slotId, initialName: initialName),
     );
-    String? nextName;
-
-    try {
-      nextName = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: Text('Renommer Joueur $slotId'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: 18,
-              style: const TextStyle(color: Colors.black),
-              cursorColor: Colors.black,
-              decoration: const InputDecoration(
-                labelText: 'Nom du profil',
-                labelStyle: TextStyle(color: Colors.black87),
-                floatingLabelStyle: TextStyle(color: Colors.black87),
-                counterStyle: TextStyle(color: Colors.black54),
-              ),
-              onSubmitted: (value) {
-                Navigator.of(dialogContext).pop(value);
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Annuler'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  ServiceLocator().get<IHapticService>().buttonTap();
-                  Navigator.of(dialogContext).pop(
-                    controller.text,
-                  );
-                },
-                child: const Text('Enregistrer'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
 
     if (nextName == null) return;
     final trimmed = nextName.trim();
@@ -1025,4 +983,63 @@ class _ProfileCardPose {
   final double rotationRadians;
   final double scale;
   final int zIndex;
+}
+
+class _RenameSlotDialog extends StatefulWidget {
+  final int slotId;
+  final String initialName;
+
+  const _RenameSlotDialog({required this.slotId, required this.initialName});
+
+  @override
+  State<_RenameSlotDialog> createState() => _RenameSlotDialogState();
+}
+
+class _RenameSlotDialogState extends State<_RenameSlotDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  )..selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: widget.initialName.length,
+    );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Renommer Joueur ${widget.slotId}'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 18,
+        style: const TextStyle(color: Colors.black),
+        cursorColor: Colors.black,
+        decoration: const InputDecoration(
+          labelText: 'Nom du profil',
+          labelStyle: TextStyle(color: Colors.black87),
+          floatingLabelStyle: TextStyle(color: Colors.black87),
+          counterStyle: TextStyle(color: Colors.black54),
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            ServiceLocator().get<IHapticService>().buttonTap();
+            Navigator.of(context).pop(_controller.text);
+          },
+          child: const Text('Enregistrer'),
+        ),
+      ],
+    );
+  }
 }

@@ -193,24 +193,19 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       // Forcer un déplacement significatif pour chaque carte
       int t1 = _randomFarIndex(rng, index, count);
       int t2 = _randomFarIndex(rng, t1, count);
-      return _ShuffleCardData(
-        targetIndex1: t1,
-        targetIndex2: t2,
-      );
+      return _ShuffleCardData(targetIndex1: t1, targetIndex2: t2);
     });
 
-    _shuffleController!.addListener(() {
-      if (mounted) setState(() {});
-    });
-
-    _shuffleController!.forward().then((_) {
-      if (mounted) {
-        setState(() {
-          _shuffleOffsets = [];
-        });
-      }
-      _shuffleController?.dispose();
-      _shuffleController = null;
+    final controller = _shuffleController!;
+    controller.forward().then((_) {
+      if (!mounted || _shuffleController != controller) return;
+      setState(() {
+        _shuffleOffsets = [];
+        _shuffleController = null;
+      });
+      // Les AnimatedBuilder des cartes se désabonnent au prochain build :
+      // libérer le contrôleur après cette frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     });
   }
 
@@ -303,11 +298,13 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
     final highlightColor = widget.isPowerHighlighted
         ? const Color(0xFFFFD700)
         : const Color(0xFFB8FF32);
-    final highlightGlowColor =
-        widget.isPowerHighlighted ? Colors.amber : Colors.cyanAccent;
+    final highlightGlowColor = widget.isPowerHighlighted
+        ? Colors.amber
+        : Colors.cyanAccent;
     final isPenaltyHighlight = _penaltyHighlightIndex == index;
     final cardId = widget.player.hand[index].id;
-    final isHidden = (widget.hiddenIndices?.contains(index) ?? false) ||
+    final isHidden =
+        (widget.hiddenIndices?.contains(index) ?? false) ||
         (widget.hiddenCardIds?.contains(cardId) ?? false);
     const bool shouldReveal = false;
 
@@ -319,37 +316,37 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
             ? (shakeValue < 0.5 ? shakeValue * 20 : (1 - shakeValue) * 20)
             : 0.0;
 
-        return Transform.translate(
-          offset: Offset(offset, 0),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected
-                  ? Border.all(color: Colors.red, width: 3)
-                  : (isPenaltyHighlight
-                      ? Border.all(color: Colors.redAccent, width: 2)
-                      : (isHighlighted
+        return Transform.translate(offset: Offset(offset, 0), child: child);
+      },
+      // Bordure/halo hors du builder : construits une fois par changement
+      // d'état, pas interpolés frame par frame (repaint d'un flou coûteux).
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+              ? Border.all(color: Colors.red, width: 3)
+              : (isPenaltyHighlight
+                    ? Border.all(color: Colors.redAccent, width: 2)
+                    : (isHighlighted
                           ? Border.all(color: highlightColor, width: 2)
                           : null)),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: Colors.red.withValues(alpha: 0.5),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      )
-                    ]
-                  : (isPenaltyHighlight
-                      ? [
-                          BoxShadow(
-                            color: Colors.red.withValues(alpha: 0.45),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ]
-                      : (isHighlighted
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.red.withValues(alpha: 0.5),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : (isPenaltyHighlight
+                    ? [
+                        BoxShadow(
+                          color: Colors.red.withValues(alpha: 0.45),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : (isHighlighted
                           ? [
                               BoxShadow(
                                 color: highlightColor.withValues(alpha: 0.65),
@@ -357,23 +354,22 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
                                 spreadRadius: 1.5,
                               ),
                               BoxShadow(
-                                color:
-                                    highlightGlowColor.withValues(alpha: 0.35),
+                                color: highlightGlowColor.withValues(
+                                  alpha: 0.35,
+                                ),
                                 blurRadius: 20,
                                 spreadRadius: 1,
                               ),
                             ]
                           : null)),
-            ),
-            child: CardWidget(
-              card: null,
-              size: widget.cardSize,
-              isRevealed: shouldReveal,
-              svgBuilder: widget.svgBuilder,
-            ),
-          ),
-        );
-      },
+        ),
+        child: CardWidget(
+          card: null,
+          size: widget.cardSize,
+          isRevealed: shouldReveal,
+          svgBuilder: widget.svgBuilder,
+        ),
+      ),
     );
 
     // Nœud sémantique stable et identifiable par joueur + position (accessibilité + E2E).
@@ -392,30 +388,33 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
     );
 
     // Joker shuffle animation overlay (3 phases : pos1, pos2, retour)
-    if (_shuffleController != null && index < _shuffleOffsets.length) {
-      final t = _shuffleController!.value;
+    // Seule la translation est recalculée à chaque frame (pas de setState
+    // sur toute la main).
+    final shuffleController = _shuffleController;
+    if (shuffleController != null && index < _shuffleOffsets.length) {
       final data = _shuffleOffsets[index];
-
-      double dx = 0.0;
       final dx1 = (data.targetIndex1 - index) * overlap;
       final dx2 = (data.targetIndex2 - index) * overlap;
 
-      if (t < 0.33) {
-        // Phase 1 : aller vers targetIndex1
-        final p = Curves.easeInOut.transform(t / 0.33);
-        dx = dx1 * p;
-      } else if (t < 0.66) {
-        // Phase 2 : aller de targetIndex1 vers targetIndex2
-        final p = Curves.easeInOut.transform((t - 0.33) / 0.33);
-        dx = dx1 + (dx2 - dx1) * p;
-      } else {
-        // Phase 3 : retour à la position d'origine
-        final p = Curves.easeInOut.transform((t - 0.66) / 0.34);
-        dx = dx2 * (1 - p);
-      }
-
-      card = Transform.translate(
-        offset: Offset(dx, 0),
+      card = AnimatedBuilder(
+        animation: shuffleController,
+        builder: (context, child) {
+          final t = shuffleController.value;
+          final double dx;
+          if (t < 0.33) {
+            // Phase 1 : aller vers targetIndex1
+            dx = dx1 * Curves.easeInOut.transform(t / 0.33);
+          } else if (t < 0.66) {
+            // Phase 2 : aller de targetIndex1 vers targetIndex2
+            final p = Curves.easeInOut.transform((t - 0.33) / 0.33);
+            dx = dx1 + (dx2 - dx1) * p;
+          } else {
+            // Phase 3 : retour à la position d'origine
+            final p = Curves.easeInOut.transform((t - 0.66) / 0.34);
+            dx = dx2 * (1 - p);
+          }
+          return Transform.translate(offset: Offset(dx, 0), child: child);
+        },
         child: card,
       );
     }

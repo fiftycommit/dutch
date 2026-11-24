@@ -443,9 +443,9 @@ class _CenterTableState extends State<CenterTable>
     const baseScale = 1.0;
     final expandedScale = widget.isCompactMode ? 1.6 : 1.4;
     final cardSize = widget.isCompactMode ? CardSize.medium : CardSize.large;
-    final frame = AnimatedContainer(
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOutCubic,
+    // Cadre non interpolé : dégradé, bordure et halo flou (blur 20) changent
+    // d'un coup ; seul le zoom (AnimatedScale) est animé.
+    final frame = Container(
       padding: EdgeInsets.all(widget.isCompactMode ? 12 : 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -540,10 +540,11 @@ class _CenterTableState extends State<CenterTable>
       },
       child: AnimatedScale(
         scale: scale,
-        duration: const Duration(milliseconds: 500),
+        duration: AppDurations.normal,
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
-        child: frame,
+        // Cadre + carte peints une fois, puis seulement recomposés.
+        child: RepaintBoundary(child: frame),
       ),
     );
   }

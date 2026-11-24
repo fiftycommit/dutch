@@ -62,7 +62,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     super.initState();
 
     _flipController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+      duration: AppDurations.cardFlip,
       vsync: this,
     );
 
@@ -103,7 +103,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
       setState(() {
         for (var player in players) {
           if (waveIndex < player.hand.length) {
-            _currentScores[player.id] = (_currentScores[player.id] ?? 0) +
+            _currentScores[player.id] =
+                (_currentScores[player.id] ?? 0) +
                 player.hand[waveIndex].points;
           }
         }
@@ -277,41 +278,41 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         return Expanded(
                           child: Container(
                             margin: EdgeInsets.symmetric(
-                                horizontal: isCompact ? 2 : 3),
+                              horizontal: isCompact ? 2 : 3,
+                            ),
                             decoration: BoxDecoration(
                               color: bgColor,
                               borderRadius: BorderRadius.circular(12),
                               border: isWinner
                                   ? Border.all(
-                                      color:
-                                          Colors.amber.withValues(alpha: 0.5),
-                                      width: 1.5)
+                                      color: Colors.amber.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      width: 1.5,
+                                    )
                                   : (isEliminated
-                                      ? Border.all(
-                                          color: Colors.redAccent
-                                              .withValues(alpha: 0.5),
-                                          width: 1.5)
-                                      : null),
+                                        ? Border.all(
+                                            color: Colors.redAccent.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                            width: 1.5,
+                                          )
+                                        : null),
                             ),
                           ),
                         );
                       }),
                     ),
-                    // Grille de cartes scrollable par rang
-                    AnimatedBuilder(
-                      animation: _flipController,
-                      builder: (context, _) {
-                        return SingleChildScrollView(
-                          controller: _gridScrollController,
-                          physics: const NeverScrollableScrollPhysics(),
-                          child: Column(
-                            children: List.generate(maxCards, (rowIndex) {
-                              return _buildCardRow(
-                                  players, rowIndex, isCompact);
-                            }),
-                          ),
-                        );
-                      },
+                    // Grille de cartes scrollable par rang. Seul le rang en
+                    // cours de retournement écoute _flipController.
+                    SingleChildScrollView(
+                      controller: _gridScrollController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Column(
+                        children: List.generate(maxCards, (rowIndex) {
+                          return _buildCardRow(players, rowIndex, isCompact);
+                        }),
+                      ),
                     ),
                   ],
                 ),
@@ -336,7 +337,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
           final isDutchCaller = gameState.dutchCallerId == player.id;
           final isWinner = _winnerId == player.id;
           final isEliminated = _revealComplete && _eliminatedId == player.id;
-          final isLocalPlayer = player.id == widget.config.localPlayerId ||
+          final isLocalPlayer =
+              player.id == widget.config.localPlayerId ||
               (widget.config.localPlayerId == null && player.isHuman);
           final displayName = isLocalPlayer ? "Vous" : player.name;
           return Expanded(
@@ -347,8 +349,8 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                 color: isWinner
                     ? Colors.amber.withValues(alpha: 0.15)
                     : (isEliminated
-                        ? Colors.red.withValues(alpha: 0.12)
-                        : Colors.transparent),
+                          ? Colors.red.withValues(alpha: 0.12)
+                          : Colors.transparent),
               ),
               child: Column(
                 children: [
@@ -372,7 +374,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                     Container(
                       margin: const EdgeInsets.only(top: 2),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.amber,
                         borderRadius: BorderRadius.circular(4),
@@ -400,31 +404,42 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   Widget _buildCardRow(List<Player> players, int rowIndex, bool isCompact) {
     final bool shouldReveal = rowIndex <= _currentRevealIndex;
     final bool isCurrentRow = rowIndex == _currentRevealIndex;
-    final double animValue =
-        isCurrentRow ? _flipController.value : (shouldReveal ? 1.0 : 0.0);
     final cardSize = isCompact ? CardSize.tiny : CardSize.small;
+
+    Widget buildRow(double animValue) => Row(
+      children: players.map((player) {
+        final hasCard = rowIndex < player.hand.length;
+        return Expanded(
+          child: Center(
+            child: hasCard
+                ? FlipCardWidget(
+                    card: player.hand[rowIndex],
+                    isRevealed: shouldReveal,
+                    animationValue: animValue,
+                    cardSize: cardSize,
+                  )
+                : const SizedBox(),
+          ),
+        );
+      }).toList(),
+    );
 
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: isCompact ? 4 : 8,
         vertical: isCompact ? 3 : 5,
       ),
-      child: Row(
-        children: players.map((player) {
-          final hasCard = rowIndex < player.hand.length;
-          return Expanded(
-            child: Center(
-              child: hasCard
-                  ? FlipCardWidget(
-                      card: player.hand[rowIndex],
-                      isRevealed: shouldReveal,
-                      animationValue: animValue,
-                      cardSize: cardSize,
-                    )
-                  : const SizedBox(),
-            ),
-          );
-        }).toList(),
+      // Arbre identique pour tous les rangs (pas de remontage des cartes) ;
+      // seul le rang courant écoute _flipController.
+      child: AnimatedBuilder(
+        animation: isCurrentRow
+            ? _flipController
+            : (shouldReveal
+                  ? kAlwaysCompleteAnimation
+                  : kAlwaysDismissedAnimation),
+        builder: (context, _) => buildRow(
+          isCurrentRow ? _flipController.value : (shouldReveal ? 1.0 : 0.0),
+        ),
       ),
     );
   }
@@ -464,10 +479,11 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                             color: isWinner
                                 ? Colors.amber
                                 : (isEliminated
-                                    ? Colors.red.withValues(alpha: 0.7)
-                                    : Colors.black45),
-                            borderRadius:
-                                BorderRadius.circular(isCompact ? 6 : 10),
+                                      ? Colors.red.withValues(alpha: 0.7)
+                                      : Colors.black45),
+                            borderRadius: BorderRadius.circular(
+                              isCompact ? 6 : 10,
+                            ),
                             border: isEliminated
                                 ? Border.all(color: Colors.redAccent, width: 2)
                                 : null,
@@ -483,8 +499,9 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         ),
                         if (isWinner && _revealComplete)
                           Padding(
-                            padding:
-                                EdgeInsets.only(top: isCompact ? 2.0 : 4.0),
+                            padding: EdgeInsets.only(
+                              top: isCompact ? 2.0 : 4.0,
+                            ),
                             child: Icon(
                               Icons.emoji_events,
                               color: Colors.amber,
