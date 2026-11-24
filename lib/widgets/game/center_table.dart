@@ -10,6 +10,8 @@ import 'card_widget.dart';
 import 'deck_discard_widget.dart';
 import 'svg_builder_provider.dart';
 import '../../utils/history_personalizer.dart';
+import '../../utils/screen_utils.dart';
+import 'table_card_motion.dart';
 
 class CenterTable extends StatefulWidget {
   final GameState gameState;
@@ -440,41 +442,50 @@ class _CenterTableState extends State<CenterTable>
   }
 
   Widget _buildDrawnCardDisplay(GameState gs) {
+    final useBrowser =
+        browserTableCardMotionAvailable &&
+        widget.svgBuilder == null &&
+        SvgBuilderProvider.maybeOf(context) == defaultSvgBuilder;
+    final drawnCard = gs.drawnCard!;
+    final label =
+        _isDrawnCardExpanded ? "CARTE PIOCHÉE" : "TAP POUR AGRANDIR";
+    final score = "${drawnCard.displayName} (${drawnCard.points} pts)";
+    final fontSize = widget.isCompactMode ? 11.0 : 14.0;
     const baseScale = 1.0;
     final expandedScale = widget.isCompactMode ? 1.6 : 1.4;
     final cardSize = widget.isCompactMode ? CardSize.medium : CardSize.large;
-    // Cadre non interpolé : dégradé, bordure et halo flou (blur 20) changent
-    // d'un coup ; seul le zoom (AnimatedScale) est animé.
-    final frame = Container(
-      padding: EdgeInsets.all(widget.isCompactMode ? 12 : 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _isDrawnCardExpanded
-              ? [
-                  Colors.amber.shade700,
-                  Colors.amber.shade900,
-                ]
-              : [
-                  Colors.green.shade800,
-                  Colors.green.shade900,
-                ],
-        ),
-        borderRadius: BorderRadius.circular(widget.isCompactMode ? 16 : 24),
-        border: Border.all(
-          color: _isDrawnCardExpanded ? Colors.amber : Colors.green.shade600,
-          width: 3,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (_isDrawnCardExpanded ? Colors.amber : Colors.green)
-                .withValues(alpha: 0.5),
-            blurRadius: 20,
-            spreadRadius: 5,
-          ),
-        ],
+    final dimensions = useBrowser
+        ? CardWidget.visualSize(context, cardSize)
+        : null;
+    final decoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: _isDrawnCardExpanded
+            ? [Colors.amber.shade700, Colors.amber.shade900]
+            : [Colors.green.shade800, Colors.green.shade900],
       ),
+      borderRadius: BorderRadius.circular(widget.isCompactMode ? 16 : 24),
+      border: Border.all(
+        color: _isDrawnCardExpanded ? Colors.amber : Colors.green.shade600,
+        width: 3,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: (_isDrawnCardExpanded ? Colors.amber : Colors.green)
+              .withValues(alpha: 0.5),
+          blurRadius: 20,
+          spreadRadius: 5,
+        ),
+      ],
+    );
+    // Sur le web, Flutter réserve le même cadre et garde ses nœuds
+    // sémantiques ; le navigateur peint et zoome le cadre d'un seul bloc.
+    final frame = Container(
+      padding: EdgeInsets.all(
+        (widget.isCompactMode ? 12.0 : 20.0) + (useBrowser ? 3.0 : 0.0),
+      ),
+      decoration: useBrowser ? null : decoration,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -488,10 +499,10 @@ class _CenterTableState extends State<CenterTable>
               ),
               SizedBox(width: widget.isCompactMode ? 4 : 8),
               Text(
-                _isDrawnCardExpanded ? "CARTE PIOCHÉE" : "TAP POUR AGRANDIR",
+                label,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: widget.isCompactMode ? 11 : 14,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.2,
                 ),
@@ -501,12 +512,14 @@ class _CenterTableState extends State<CenterTable>
           SizedBox(height: widget.isCompactMode ? 8 : 12),
           Container(
             key: widget.drawnCardKey,
-            child: CardWidget(
-              card: gs.drawnCard,
-              size: cardSize,
-              isRevealed: true,
-              svgBuilder: widget.svgBuilder,
-            ),
+            child: dimensions == null
+                ? CardWidget(
+                    card: drawnCard,
+                    size: cardSize,
+                    isRevealed: true,
+                    svgBuilder: widget.svgBuilder,
+                  )
+                : SizedBox.fromSize(size: dimensions),
           ),
           SizedBox(height: widget.isCompactMode ? 8 : 12),
           Container(
@@ -519,10 +532,10 @@ class _CenterTableState extends State<CenterTable>
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              "${gs.drawnCard!.displayName} (${gs.drawnCard!.points} pts)",
+              score,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: widget.isCompactMode ? 11 : 14,
+                fontSize: fontSize,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -532,12 +545,55 @@ class _CenterTableState extends State<CenterTable>
     );
     final scale = _isDrawnCardExpanded ? expandedScale : baseScale;
 
+    if (dimensions != null) {
+      final textStyle = DefaultTextStyle.of(context).style;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggleDrawnCardZoom,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Opacity(
+              opacity: 0,
+              alwaysIncludeSemantics: true,
+              child: Transform.scale(scale: scale, child: frame),
+            ),
+            Positioned(
+              left: -tableDrawnMotionPadding,
+              right: -tableDrawnMotionPadding,
+              top: -tableDrawnMotionPadding,
+              bottom: -tableDrawnMotionPadding,
+              child: FractionallySizedBox(
+                widthFactor: expandedScale,
+                heightFactor: expandedScale,
+                child: TableCardMotion.drawn(
+                  style: (
+                    asset: drawnCard.imagePath,
+                    label: label,
+                    score: score,
+                    cardWidth: dimensions.width,
+                    cardHeight: dimensions.height,
+                    radius: ScreenUtils.borderRadius(context, 4),
+                    fontSize: MediaQuery.textScalerOf(context).scale(fontSize),
+                    lineHeight: textStyle.height,
+                    scoreSpacing: textStyle.letterSpacing ?? 0,
+                    compact: widget.isCompactMode,
+                    expanded: _isDrawnCardExpanded,
+                    scale: scale,
+                    safeScale: expandedScale,
+                    zoomMs: AppDurations.normal.inMilliseconds,
+                    reduceMotion: MediaQuery.disableAnimationsOf(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isDrawnCardExpanded = !_isDrawnCardExpanded;
-        });
-      },
+      onTap: _toggleDrawnCardZoom,
       child: AnimatedScale(
         scale: scale,
         duration: AppDurations.normal,
@@ -547,6 +603,12 @@ class _CenterTableState extends State<CenterTable>
         child: RepaintBoundary(child: frame),
       ),
     );
+  }
+
+  void _toggleDrawnCardZoom() {
+    setState(() {
+      _isDrawnCardExpanded = !_isDrawnCardExpanded;
+    });
   }
 
   Widget _buildDeckAndDiscard(

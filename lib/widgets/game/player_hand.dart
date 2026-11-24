@@ -6,8 +6,10 @@ import '../../models/player.dart';
 import 'card_widget.dart';
 import 'svg_builder_provider.dart';
 import '../../utils/screen_utils.dart';
+import 'table_card_motion.dart';
 
 const double _cardAspectRatio = 7 / 5;
+const _shuffleDuration = Duration(milliseconds: 700);
 
 class HandMetrics {
   final double cardWidth;
@@ -128,7 +130,14 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
   // Joker shuffle animation
   AnimationController? _shuffleController;
   bool _wasShuffled = false;
+  int _shuffleGeneration = 0;
+  int _shuffleStartedAt = 0;
   late List<_ShuffleCardData> _shuffleOffsets;
+
+  bool get _useBrowserCards =>
+      browserTableCardMotionAvailable &&
+      widget.svgBuilder == null &&
+      SvgBuilderProvider.maybeOf(context) == defaultSvgBuilder;
 
   @override
   void initState() {
@@ -154,6 +163,11 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       _penaltyTimer?.cancel();
       _penaltyHighlightIndex = null;
       _lastHandLength = widget.player.hand.length;
+      if (_useBrowserCards) {
+        _shuffleOffsets = [];
+        _shuffleStartedAt = 0;
+        _wasShuffled = widget.isBeingShuffled;
+      }
       return;
     }
 
@@ -182,10 +196,7 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
 
   void _startShuffleAnimation() {
     _shuffleController?.dispose();
-    _shuffleController = AnimationController(
-      duration: const Duration(milliseconds: 700),
-      vsync: this,
-    );
+    _shuffleController = null;
 
     final rng = math.Random();
     final count = widget.player.hand.length;
@@ -195,6 +206,17 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       int t2 = _randomFarIndex(rng, t1, count);
       return _ShuffleCardData(targetIndex1: t1, targetIndex2: t2);
     });
+
+    if (_useBrowserCards) {
+      _shuffleGeneration++;
+      _shuffleStartedAt = DateTime.now().millisecondsSinceEpoch;
+      return;
+    }
+
+    _shuffleController = AnimationController(
+      duration: _shuffleDuration,
+      vsync: this,
+    );
 
     final controller = _shuffleController!;
     controller.forward().then((_) {
@@ -251,21 +273,98 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
           }
 
           final needsScroll = totalWidth > maxWidth + 0.5;
+          final useBrowser = count > 0 && _useBrowserCards;
+          final browserCards = useBrowser ? <TableHandCard>[] : null;
+          final slots = List.generate(count, (index) {
+            final id = widget.player.hand[index].id;
+            final selected = widget.selectedIndices?.contains(index) ?? false;
+            final hidden =
+                (widget.hiddenIndices?.contains(index) ?? false) ||
+                (widget.hiddenCardIds?.contains(id) ?? false);
+            final highlighted =
+                widget.highlightedIndices?.contains(index) ?? false;
+            final penalty = _penaltyHighlightIndex == index;
+            final Widget card;
+            if (browserCards != null) {
+              final shuffle = index < _shuffleOffsets.length
+                  ? _shuffleOffsets[index]
+                  : null;
+              final accent = selected
+                  ? 'selected'
+                  : penalty
+                  ? 'penalty'
+                  : highlighted
+                  ? (widget.isPowerHighlighted ? 'power' : 'highlight')
+                  : '';
+              browserCards.add((
+                identity: id,
+                hidden: hidden,
+                accent: accent,
+                firstMove: (shuffle?.targetIndex1 ?? index) - index,
+                secondMove: (shuffle?.targetIndex2 ?? index) - index,
+              ));
+              card = hidden
+                  ? SizedBox(
+                      width: metrics.cardWidth,
+                      height: metrics.cardHeight,
+                    )
+                  : _buildCardInteraction(
+                      index,
+                      selected,
+                      false,
+                      SizedBox(
+                        width: metrics.cardWidth,
+                        height: metrics.cardHeight,
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                    );
+            } else {
+              card = _buildCard(
+                context,
+                index,
+                overlap,
+                selected,
+                hidden,
+                highlighted,
+                penalty,
+              );
+            }
+
+            return Positioned(
+              key: ValueKey('hand-card-${widget.player.id}-$index-$id'),
+              left: index * overlap,
+              child: card,
+            );
+          });
           final content = SizedBox(
             width: totalWidth,
             height: metrics.cardHeight,
             child: Stack(
               clipBehavior: Clip.none,
-              children: List.generate(
-                count,
-                (index) => Positioned(
-                  key: ValueKey(
-                    'hand-card-${widget.player.id}-$index-${widget.player.hand[index].id}',
+              children: [
+                if (browserCards != null)
+                  Positioned(
+                    left: -tableHandMotionPadding,
+                    right: -tableHandMotionPadding,
+                    top: -tableHandMotionPadding,
+                    bottom: -tableHandMotionPadding,
+                    child: TableCardMotion.hand(
+                      key: ValueKey(widget.player.id),
+                      style: (
+                        backAsset: CardWidget.backAsset,
+                        cardWidth: metrics.cardWidth,
+                        overlap: overlap,
+                        radius: ScreenUtils.borderRadius(context, 4),
+                        shuffle: _shuffleGeneration,
+                        shuffleStartedAt: _shuffleStartedAt,
+                        shuffleMs: _shuffleDuration.inMilliseconds,
+                        reduceMotion: MediaQuery.disableAnimationsOf(context),
+                      ),
+                      cards: browserCards,
+                    ),
                   ),
-                  left: index * overlap,
-                  child: _buildCard(context, index, overlap),
-                ),
-              ),
+                ...slots,
+              ],
             ),
           );
 
@@ -292,21 +391,21 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
     );
   }
 
-  Widget _buildCard(BuildContext context, int index, double overlap) {
-    final isSelected = widget.selectedIndices?.contains(index) ?? false;
-    final isHighlighted = widget.highlightedIndices?.contains(index) ?? false;
+  Widget _buildCard(
+    BuildContext context,
+    int index,
+    double overlap,
+    bool isSelected,
+    bool isHidden,
+    bool isHighlighted,
+    bool isPenaltyHighlight,
+  ) {
     final highlightColor = widget.isPowerHighlighted
         ? const Color(0xFFFFD700)
         : const Color(0xFFB8FF32);
     final highlightGlowColor = widget.isPowerHighlighted
         ? Colors.amber
         : Colors.cyanAccent;
-    final isPenaltyHighlight = _penaltyHighlightIndex == index;
-    final cardId = widget.player.hand[index].id;
-    final isHidden =
-        (widget.hiddenIndices?.contains(index) ?? false) ||
-        (widget.hiddenCardIds?.contains(cardId) ?? false);
-    const bool shouldReveal = false;
 
     final cardBody = TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
@@ -366,26 +465,13 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
         child: CardWidget(
           card: null,
           size: widget.cardSize,
-          isRevealed: shouldReveal,
+          isRevealed: false,
           svgBuilder: widget.svgBuilder,
         ),
       ),
     );
 
-    // Nœud sémantique stable et identifiable par joueur + position (accessibilité + E2E).
-    Widget card = Semantics(
-      label: 'Carte ${index + 1} de ${widget.player.name}',
-      button: widget.onCardTap != null && widget.isActive && !isHidden,
-      selected: isSelected,
-      child: GestureDetector(
-        onTap: () {
-          if (widget.onCardTap != null && widget.isActive && !isHidden) {
-            widget.onCardTap!(index);
-          }
-        },
-        child: cardBody,
-      ),
-    );
+    Widget card = _buildCardInteraction(index, isSelected, isHidden, cardBody);
 
     // Joker shuffle animation overlay (3 phases : pos1, pos2, retour)
     // Seule la translation est recalculée à chaque frame (pas de setState
@@ -427,6 +513,30 @@ class _PlayerHandWidgetState extends State<PlayerHandWidget>
       maintainAnimation: true,
       maintainState: true,
       child: IgnorePointer(child: card),
+    );
+  }
+
+  Widget _buildCardInteraction(
+    int index,
+    bool isSelected,
+    bool isHidden,
+    Widget body, {
+    HitTestBehavior? behavior,
+  }) {
+    // Nœud sémantique stable et identifiable par joueur + position (accessibilité + E2E).
+    return Semantics(
+      label: 'Carte ${index + 1} de ${widget.player.name}',
+      button: widget.onCardTap != null && widget.isActive && !isHidden,
+      selected: isSelected,
+      child: GestureDetector(
+        behavior: behavior,
+        onTap: () {
+          if (widget.onCardTap != null && widget.isActive && !isHidden) {
+            widget.onCardTap!(index);
+          }
+        },
+        child: body,
+      ),
     );
   }
 }

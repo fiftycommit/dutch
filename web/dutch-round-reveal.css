@@ -1,0 +1,63 @@
+.dutch-round-reveal {
+  --dutch-round-styles-ready: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dutch-round-reveal[hidden] {
+  display: none;
+}
+
+.dutch-round-reveal-row {
+  display: flex;
+  height: var(--dutch-round-card-height);
+  padding: var(--dutch-round-padding-y) var(--dutch-round-padding-x);
+  box-sizing: content-box;
+}
+
+.dutch-round-reveal-cell {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  place-items: center;
+}
+
+.dutch-round-reveal-card {
+  position: relative;
+  width: min(var(--dutch-round-card-width), 100%);
+  height: 100%;
+  border-radius: var(--dutch-round-card-radius);
+}
+
+.dutch-round-reveal-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  box-shadow: 2px 2px 4px rgb(0 0 0 / .3);
+  object-fit: contain;
+}
+
+.dutch-round-reveal-front,
+.dutch-round-reveal-card.is-revealed .dutch-round-reveal-back {
+  visibility: hidden;
+}
+
+.dutch-round-reveal-card.is-revealed .dutch-round-reveal-front,
+.dutch-round-reveal-card.is-flipping .dutch-round-reveal-face {
+  visibility: visible;
+}
+
+.dutch-round-reveal-card.is-flipping {
+  transform-style: preserve-3d;
+}
+
+.dutch-round-reveal-card.is-flipping .dutch-round-reveal-face {
+  backface-visibility: hidden;
+}
+
+.dutch-round-reveal-card.is-flipping .dutch-round-reveal-front {
+  transform: rotateY(180deg);
+}

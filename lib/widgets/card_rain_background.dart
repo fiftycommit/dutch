@@ -1,8 +1,13 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
+import 'card_rain_batch.dart';
+import 'card_rain_view_stub.dart'
+    if (dart.library.js_interop) 'card_rain_view_web.dart';
 
 /// Liste des assets de cartes SVG utilisables pour la pluie
 const _cardAssets = [
@@ -40,8 +45,6 @@ class _FallingCard {
       ignoresObstacles; // true = passes through buttons, only card-card collisions
 
   double get width => size * _aspectRatio;
-
-  Rect get rect => Rect.fromLTWH(x, y, width, size);
 
   _FallingCard({
     required this.x,
@@ -90,22 +93,39 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     with SingleTickerProviderStateMixin {
   final _random = Random();
   final List<_FallingCard> _cards = [];
-  late final Ticker _ticker;
+  late final bool _usesWebView = webCardRainAvailable;
+  Ticker? _ticker;
+  bool _motionDisabled = false;
   Duration _lastTick = Duration.zero;
   bool _initialized = false;
-  List<Rect> _obstacleRects = [];
+  final _obstacleRects = <Rect>[];
   int _frameCount = 0;
 
+  static const _stepsPerWebBatch = 60;
+  static const _stepsPerWebSample = 3;
+  late final _webCards = _cards.toList(growable: false);
+  late final _webFrames = Float64List(
+    (_stepsPerWebBatch ~/ _stepsPerWebSample + 1) * _cardCount * 3,
+  );
+
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onTick);
-    _ticker.start();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _motionDisabled = MediaQuery.disableAnimationsOf(context);
+    if (_usesWebView) return;
+
+    if (_motionDisabled) {
+      _ticker?.stop();
+      _lastTick = Duration.zero;
+    } else {
+      final ticker = _ticker ??= createTicker(_onTick);
+      if (!ticker.isActive) ticker.start();
+    }
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _ticker?.dispose();
     _notifier.dispose();
     super.dispose();
   }
@@ -138,25 +158,24 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     );
   }
 
-  /// Resolve obstacle Rects from GlobalKeys (every 10 frames for perf)
   void _updateObstacleRects() {
-    _frameCount++;
-    if (_frameCount % 10 != 0 && _obstacleRects.isNotEmpty) return;
+    if (widget.obstacleKeys.isEmpty) {
+      _obstacleRects.clear();
+      return;
+    }
+    final myRenderBox = context.findRenderObject();
+    if (myRenderBox is! RenderBox || !myRenderBox.hasSize) return;
 
-    final rects = <Rect>[];
-    final myRenderBox = context.findRenderObject() as RenderBox?;
-    if (myRenderBox == null) return;
-
+    _obstacleRects.clear();
     for (final key in widget.obstacleKeys) {
       final renderObj = key.currentContext?.findRenderObject();
       if (renderObj is RenderBox && renderObj.hasSize) {
         final position = myRenderBox.globalToLocal(
           renderObj.localToGlobal(Offset.zero),
         );
-        rects.add(position & renderObj.size);
+        _obstacleRects.add(position & renderObj.size);
       }
     }
-    _obstacleRects = rects;
   }
 
   void _resolveCardCollisions() {
@@ -227,27 +246,28 @@ class _CardRainBackgroundState extends State<CardRainBackground>
   }
 
   void _resolveObstacleCollisions() {
+    if (_obstacleRects.isEmpty) return;
     for (final card in _cards) {
       if (card.ignoresObstacles) continue;
-      final cardRect = card.rect;
+      final cardWidth = card.width;
+      final left = card.x;
+      final top = card.y;
+      final right = left + cardWidth;
+      final bottom = top + card.size;
+      final centerX = left + cardWidth / 2;
+      final centerY = top + card.size / 2;
       for (final obstacle in _obstacleRects) {
-        if (!cardRect.overlaps(obstacle)) continue;
+        if (right <= obstacle.left ||
+            left >= obstacle.right ||
+            bottom <= obstacle.top ||
+            top >= obstacle.bottom) {
+          continue;
+        }
 
-        // Calculate penetration on each axis
-        final cCx = cardRect.center.dx;
-        final cCy = cardRect.center.dy;
-        final oCx = obstacle.center.dx;
-        final oCy = obstacle.center.dy;
-
-        final dx = cCx - oCx;
-        final dy = cCy - oCy;
-
-        final halfW = (cardRect.width + obstacle.width) / 2;
-        final halfH = (cardRect.height + obstacle.height) / 2;
-
-        final penX = halfW - dx.abs();
-        final penY = halfH - dy.abs();
-
+        final dx = centerX - (obstacle.left + obstacle.width / 2);
+        final dy = centerY - (obstacle.top + obstacle.height / 2);
+        final penX = (cardWidth + obstacle.width) / 2 - dx.abs();
+        final penY = (card.size + obstacle.height) / 2 - dy.abs();
         if (penX <= 0 || penY <= 0) continue;
 
         if (penX < penY) {
@@ -292,7 +312,15 @@ class _CardRainBackgroundState extends State<CardRainBackground>
       _initCards(size);
     }
 
-    _updateObstacleRects();
+    if (++_frameCount % 10 == 0 || _obstacleRects.isEmpty) {
+      _updateObstacleRects();
+    }
+    _advanceCards(size, dt);
+    _notifier.notify();
+  }
+
+  bool _advanceCards(Size size, double dt) {
+    var replaced = false;
 
     // Move cards
     for (int i = 0; i < _cards.length; i++) {
@@ -317,6 +345,7 @@ class _CardRainBackgroundState extends State<CardRainBackground>
           card.x > size.width ||
           card.y > size.height + card.size) {
         _cards[i] = _randomCard(size);
+        replaced = true;
       }
     }
 
@@ -324,7 +353,56 @@ class _CardRainBackgroundState extends State<CardRainBackground>
     _resolveCardCollisions();
     _resolveObstacleCollisions();
 
-    _notifier.notify();
+    return replaced;
+  }
+
+  CardRainBatch _nextWebBatch(double width, double height) {
+    const stepsPerBatch = _stepsPerWebBatch;
+    const sampleEvery = _stepsPerWebSample;
+    const stepSeconds = 1 / 60;
+    const stepMilliseconds = stepSeconds * 1000;
+    final size = Size(width, height);
+    if (!_initialized) _initCards(size);
+    _updateObstacleRects();
+
+    // Keep the old card through its exit frame before swapping in its replacement.
+    _webCards.setAll(0, _cards);
+    var frameCount = 1;
+    var step = 0;
+    _recordWebFrame(0);
+    while (step < stepsPerBatch) {
+      step++;
+      final replaced = _advanceCards(size, stepSeconds);
+      if (replaced || step % sampleEvery == 0) {
+        _recordWebFrame(frameCount++);
+      }
+      if (replaced) break;
+    }
+
+    return (
+      duration: step * stepMilliseconds,
+      sampleInterval: sampleEvery * stepMilliseconds,
+      frameCount: frameCount,
+      tracks: [
+        for (final card in _webCards)
+          (
+            asset: card.asset,
+            width: card.width,
+            height: card.size,
+            opacity: card.opacity,
+          ),
+      ],
+      frames: _webFrames,
+    );
+  }
+
+  void _recordWebFrame(int frame) {
+    var offset = frame * _cardCount * 3;
+    for (final card in _webCards) {
+      _webFrames[offset++] = card.x;
+      _webFrames[offset++] = card.y;
+      _webFrames[offset++] = card.rotation;
+    }
   }
 
   // Notifier léger pour éviter setState à chaque frame
@@ -332,6 +410,14 @@ class _CardRainBackgroundState extends State<CardRainBackground>
 
   @override
   Widget build(BuildContext context) {
+    if (_motionDisabled) return const SizedBox.expand();
+    if (_usesWebView) {
+      return buildWebCardRain(
+        active: TickerMode.of(context),
+        nextBatch: _nextWebBatch,
+      );
+    }
+
     return IgnorePointer(
       child: RepaintBoundary(
         child: ListenableBuilder(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -15,6 +16,8 @@ import '../../core/service_locator.dart';
 import '../../core/interfaces/i_haptic_service.dart';
 import 'memorization_reveal_stub.dart'
     if (dart.library.js_interop) 'memorization_reveal_web.dart';
+import 'memorization_selection_stub.dart'
+    if (dart.library.js_interop) 'memorization_selection_web.dart';
 
 /// Configuration pour l'écran de mémorisation
 class MemorizationConfig {
@@ -88,7 +91,7 @@ class _MemorizationScreenState extends State<MemorizationScreen>
       _preparedCards = {};
   bool _isRevealing = false;
   bool _isWaiting = false;
-  late AnimationController _pulseController;
+  AnimationController? _pulseController;
 
   Ticker? _countdownTicker;
   DateTime? _countdownStartTime;
@@ -100,10 +103,12 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 900),
-      vsync: this,
-    );
+    if (!kIsWeb) {
+      _pulseController = AnimationController(
+        duration: const Duration(milliseconds: 900),
+        vsync: this,
+      );
+    }
 
     // Setup countdown if enabled
     if (config.countdownSeconds != null) {
@@ -128,21 +133,23 @@ class _MemorizationScreenState extends State<MemorizationScreen>
   }
 
   void _syncPulse() {
+    final controller = _pulseController;
+    if (controller == null) return;
     final shouldPulse = _selectedCards.isNotEmpty &&
         !_isRevealing &&
         !_isWaiting &&
         !MediaQuery.disableAnimationsOf(context);
-    if (shouldPulse && !_pulseController.isAnimating) {
-      _pulseController.repeat(reverse: true);
-    } else if (!shouldPulse && _pulseController.isAnimating) {
-      _pulseController.stop();
-      _pulseController.value = 0;
+    if (shouldPulse && !controller.isAnimating) {
+      controller.repeat(reverse: true);
+    } else if (!shouldPulse && controller.isAnimating) {
+      controller.stop();
+      controller.value = 0;
     }
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _pulseController?.dispose();
     _countdownTicker?.dispose();
     _gameStartSubscription?.cancel();
     if (webRevealAvailable) cancelWebReveal();
@@ -859,6 +866,29 @@ class _MemorizationScreenState extends State<MemorizationScreen>
         final cardHeight = cardWidth * aspect;
         final topInset = cardHeight * extraTopFactor;
 
+        if (kIsWeb) {
+          final count = config.localPlayer.hand.length;
+          if (count == 0) return const SizedBox.shrink();
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.only(top: topInset),
+              child: buildWebMemorizationSelection(
+                cardSize: Size(cardWidth, cardHeight),
+                maxWidth: maxWidth,
+                spacing: spacing,
+                liftFactor: liftFactor,
+                maxScale: maxScale,
+                compact: isCompact,
+                pulseEnabled: !_isRevealing && !_isWaiting,
+                cardCount: count,
+                selected: _selectedCards,
+                onTap: _onCardTap,
+              ),
+            ),
+          );
+        }
+
+        final controller = _pulseController!;
         return Center(
           child: Padding(
             padding: EdgeInsets.only(top: topInset),
@@ -877,13 +907,10 @@ class _MemorizationScreenState extends State<MemorizationScreen>
                   child: GestureDetector(
                     onTap: () => _onCardTap(index),
                     child: AnimatedBuilder(
-                      animation: isSelected
-                          ? _pulseController
-                          : kAlwaysDismissedAnimation,
+                      animation:
+                          isSelected ? controller : kAlwaysDismissedAnimation,
                       builder: (context, child) => Transform.scale(
-                        scale: isSelected
-                            ? 1.0 + (_pulseController.value * 0.05)
-                            : 1.0,
+                        scale: isSelected ? 1.0 + (controller.value * 0.05) : 1.0,
                         child: child,
                       ),
                       child: AnimatedSlide(

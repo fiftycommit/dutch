@@ -5,6 +5,8 @@ import '../../models/player.dart';
 import '../../widgets/game/card_widget.dart';
 import '../../widgets/game/flip_card_widget.dart';
 import '../../utils/ui_constants.dart';
+import 'dutch_reveal_grid_stub.dart'
+    if (dart.library.js_interop) 'dutch_reveal_grid_web.dart';
 
 /// Configuration pour l'écran de révélation Dutch
 class DutchRevealConfig {
@@ -41,7 +43,10 @@ class DutchRevealScreen extends StatefulWidget {
 
 class _DutchRevealScreenState extends State<DutchRevealScreen>
     with TickerProviderStateMixin {
-  int _currentRevealIndex = -1;
+  int _revealedThrough = -1;
+  int? _flippingRowIndex;
+  WebDutchRevealGrid? _webGrid;
+  bool _useWebGrid = false;
   final Map<String, int> _currentScores = {};
 
   late AnimationController _flipController;
@@ -61,6 +66,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
   void initState() {
     super.initState();
 
+    _webGrid = WebDutchRevealGrid.create();
     _flipController = AnimationController(
       duration: AppDurations.cardFlip,
       vsync: this,
@@ -80,6 +86,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
 
   @override
   void dispose() {
+    _webGrid?.dispose();
     _flipController.dispose();
     _scorePopController.dispose();
     _gridScrollController.dispose();
@@ -92,15 +99,19 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     int maxCards = players.map((p) => p.hand.length).reduce(math.max);
 
     for (int waveIndex = 0; waveIndex < maxCards; waveIndex++) {
-      setState(() => _currentRevealIndex = waveIndex);
-
       // Scroll si le rang courant dépasse la zone visible
       await _ensureRowVisible(waveIndex);
       if (!mounted) return;
 
-      await _flipController.forward(from: 0.0);
+      try {
+        await _flipRow(waveIndex);
+      } on TickerCanceled {
+        return;
+      }
       if (!mounted) return;
       setState(() {
+        _revealedThrough = waveIndex;
+        _flippingRowIndex = null;
         for (var player in players) {
           if (waveIndex < player.hand.length) {
             _currentScores[player.id] =
@@ -125,6 +136,28 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     });
 
     _highlightWinner();
+  }
+
+  Future<void> _flipRow(int rowIndex) async {
+    final browserFlip = _webGrid?.flip(
+      rowIndex,
+      AppDurations.cardFlip,
+      MediaQuery.disableAnimationsOf(context),
+    );
+    if (browserFlip != null) {
+      if (!_useWebGrid) setState(() => _useWebGrid = true);
+      if (await browserFlip || !mounted) return;
+    }
+
+    if (_useWebGrid) {
+      _webGrid?.dispose();
+      _webGrid = null;
+    }
+    setState(() {
+      _useWebGrid = false;
+      _flippingRowIndex = rowIndex;
+    });
+    await _flipController.forward(from: 0).orCancel;
   }
 
   Future<void> _ensureRowVisible(int rowIndex) async {
@@ -303,16 +336,11 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
                         );
                       }),
                     ),
-                    // Grille de cartes scrollable par rang. Seul le rang en
-                    // cours de retournement écoute _flipController.
+                    // Le viewport Flutter clippe la grille dans les deux modes.
                     SingleChildScrollView(
                       controller: _gridScrollController,
                       physics: const NeverScrollableScrollPhysics(),
-                      child: Column(
-                        children: List.generate(maxCards, (rowIndex) {
-                          return _buildCardRow(players, rowIndex, isCompact);
-                        }),
-                      ),
+                      child: _buildCardGrid(players, maxCards, isCompact),
                     ),
                   ],
                 ),
@@ -401,10 +429,61 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
   }
 
-  Widget _buildCardRow(List<Player> players, int rowIndex, bool isCompact) {
-    final bool shouldReveal = rowIndex <= _currentRevealIndex;
-    final bool isCurrentRow = rowIndex == _currentRevealIndex;
+  Widget _buildCardGrid(List<Player> players, int maxCards, bool isCompact) {
     final cardSize = isCompact ? CardSize.tiny : CardSize.small;
+    final padding = EdgeInsets.symmetric(
+      horizontal: isCompact ? 4 : 8,
+      vertical: isCompact ? 3 : 5,
+    );
+    final flutterRows = _useWebGrid
+        ? null
+        : Column(
+            children: List.generate(
+              maxCards,
+              (row) => _buildCardRow(players, row, cardSize, padding),
+            ),
+          );
+    final webGrid = _webGrid;
+    if (webGrid == null) return flutterRows!;
+
+    final size = CardWidget.visualSize(context, cardSize);
+    final decoration = CardWidget.decorationFor(context);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        flutterRows ??
+            SizedBox(
+              width: double.infinity,
+              height: (size.height + padding.vertical) * maxCards,
+            ),
+        Positioned.fill(
+          child: webGrid.build(
+            rows: () => [
+              for (var row = 0; row < maxCards; row++)
+                [
+                  for (final player in players)
+                    row < player.hand.length ? player.hand[row].imagePath : null,
+                ],
+            ],
+            back: CardWidget.backAsset,
+            size: size,
+            padding: padding,
+            radius: decoration.borderRadius!.resolve(null).topLeft.x,
+            direction: Directionality.of(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCardRow(
+    List<Player> players,
+    int rowIndex,
+    CardSize cardSize,
+    EdgeInsets padding,
+  ) {
+    final isCurrentRow = rowIndex == _flippingRowIndex;
+    final shouldReveal = isCurrentRow || rowIndex <= _revealedThrough;
 
     Widget buildRow(double animValue) => Row(
       children: players.map((player) {
@@ -425,10 +504,7 @@ class _DutchRevealScreenState extends State<DutchRevealScreen>
     );
 
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 4 : 8,
-        vertical: isCompact ? 3 : 5,
-      ),
+      padding: padding,
       // Arbre identique pour tous les rangs (pas de remontage des cartes) ;
       // seul le rang courant écoute _flipController.
       child: AnimatedBuilder(

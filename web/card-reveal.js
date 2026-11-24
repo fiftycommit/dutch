@@ -76,28 +76,29 @@
     }
   }
 
-  function easeOutCubic(x) {
+  function cubic(x, x1, y1, x2, y2) {
     const bezier = (a, b, t) => 3 * (1 - t) ** 2 * t * a +
       3 * (1 - t) * t ** 2 * b + t ** 3;
     let lo = 0, hi = 1;
     for (let i = 0; i < 18; i++) {
       const t = (lo + hi) / 2;
-      if (bezier(.215, .355, t) < x) lo = t;
+      if (bezier(x1, x2, t) < x) lo = t;
       else hi = t;
     }
-    return x === 0 || x === 1 ? x : bezier(.61, 1, (lo + hi) / 2);
+    return x === 0 || x === 1 ? x : bezier(y1, y2, (lo + hi) / 2);
   }
 
   const flightFrames = Array.from({ length: 21 }, (_, i) => {
     const t = i / 20;
     return {
       t,
-      distance: easeOutCubic(t),
+      distance: cubic(t, .215, .61, .355, 1),
+      swapDistance: cubic(t, .645, .045, .355, 1),
       scale: 1 + .08 * (t <= .2 ? t / .2 : (1 - t) / .8),
     };
   });
 
-  function fly(asset, x, y, dx, dy, width, height, duration, onDone) {
+  function fly(asset, x, y, dx, dy, width, height, duration, easeInOut, onDone) {
     const card = new Image();
     card.src = new URL('assets/' + asset, document.baseURI).href;
     card.className = 'dutch-card-flight';
@@ -121,10 +122,13 @@
         if (cancelled) return;
         if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
           document.body.append(card);
-          move = card.animate(flightFrames.map(({ t, distance, scale }) => ({
-            offset: t,
-            transform: `translate(${dx * distance}px,${dy * distance}px) scale(${scale}) rotate(${.06 * distance}rad)`,
-          })), { duration, fill: 'both' });
+          move = card.animate(flightFrames.map(({ t, distance, swapDistance, scale }) => {
+            const position = easeInOut ? swapDistance : distance;
+            return {
+              offset: t,
+              transform: `translate(${dx * position}px,${dy * position}px) scale(${scale}) rotate(${.06 * distance}rad)`,
+            };
+          }), { duration, fill: 'both' });
           fade = card.animate([{ opacity: .7 }, { opacity: 1 }], {
             duration: duration * .3, easing: 'ease-out', fill: 'both',
           });

@@ -1,0 +1,164 @@
+@font-face {
+  font-family: Dutch Table Card;
+  src: url('assets/assets/fonts/Roboto-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+.dutch-table-motion,
+.dutch-table-motion * {
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.dutch-table-motion .dutch-table-card-image {
+  border-radius: var(--dutch-table-radius);
+  box-shadow: 2px 2px 6px rgb(0 0 0 / .3);
+}
+
+.dutch-table-motion .dutch-table-card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: contain;
+}
+
+.dutch-table-hand .dutch-table-shuffle-slot {
+  position: absolute;
+  top: var(--dutch-hand-pad);
+  bottom: var(--dutch-hand-pad);
+  width: var(--dutch-hand-width);
+}
+
+.dutch-table-hand .dutch-table-shake-card,
+.dutch-table-hand .dutch-table-card-image {
+  position: absolute;
+  inset: 0;
+}
+
+.dutch-table-hand [data-accent]:not([data-accent=''])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 2px solid var(--dutch-accent-ring);
+  box-shadow: var(--dutch-accent-shadow);
+}
+
+.dutch-table-hand [data-accent='selected'] {
+  --dutch-accent-ring: #f44336;
+  --dutch-accent-shadow: 0 0 13px 2px rgb(244 67 54 / .5);
+}
+
+.dutch-table-hand [data-accent='selected']::before {
+  border-width: 3px;
+}
+
+.dutch-table-hand [data-accent='penalty'] {
+  --dutch-accent-ring: #ff5252;
+  --dutch-accent-shadow: 0 0 10px 1px rgb(244 67 54 / .45);
+}
+
+.dutch-table-hand [data-accent='highlight'] {
+  --dutch-accent-ring: #b8ff32;
+  --dutch-accent-shadow: 0 0 15px 1.5px rgb(184 255 50 / .65), 0 0 24px 1px rgb(24 255 255 / .35);
+}
+
+.dutch-table-hand [data-accent='power'] {
+  --dutch-accent-ring: #ffd700;
+  --dutch-accent-shadow: 0 0 15px 1.5px rgb(255 215 0 / .65), 0 0 24px 1px rgb(255 193 7 / .35);
+}
+
+.dutch-table-drawn {
+  --dutch-frame-padding: 20px;
+  --dutch-frame-radius: 24px;
+  --dutch-frame-gap: 12px;
+  --dutch-heading-gap: 8px;
+  --dutch-icon-size: 20px;
+  --dutch-score-padding: 6px 12px;
+}
+
+.dutch-table-drawn[data-compact] {
+  --dutch-frame-padding: 12px;
+  --dutch-frame-radius: 16px;
+  --dutch-frame-gap: 8px;
+  --dutch-heading-gap: 4px;
+  --dutch-icon-size: 16px;
+  --dutch-score-padding: 4px 8px;
+}
+
+.dutch-table-drawn .dutch-table-drawn-origin {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: var(--dutch-drawn-base-size);
+  height: var(--dutch-drawn-base-size);
+}
+
+.dutch-table-drawn .dutch-table-drawn-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dutch-frame-gap);
+  padding: var(--dutch-frame-padding);
+  color: white;
+  font-family: Dutch Table Card, Roboto, Arial, sans-serif;
+  font-size: var(--dutch-drawn-font-size);
+  font-weight: 700;
+  line-height: var(--dutch-drawn-line-height);
+  border: 3px solid #43a047;
+  border-radius: var(--dutch-frame-radius);
+  background: linear-gradient(to bottom right, #2e7d32, #1b5e20);
+  box-shadow: 0 0 24px 5px rgb(76 175 80 / .5);
+  transform: scale(var(--dutch-drawn-scale));
+}
+
+.dutch-table-drawn .dutch-table-drawn-frame[data-expanded] {
+  background: linear-gradient(to bottom right, #ffa000, #ff6f00);
+  border-color: #ffc107;
+  box-shadow: 0 0 24px 5px rgb(255 193 7 / .5);
+}
+
+.dutch-table-drawn .dutch-table-card-image {
+  flex: none;
+  width: var(--dutch-drawn-card-width);
+  height: var(--dutch-drawn-card-height);
+}
+
+.dutch-table-drawn .dutch-table-drawn-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--dutch-heading-gap);
+  letter-spacing: 1.2px;
+  white-space: nowrap;
+}
+
+.dutch-table-drawn .dutch-table-drawn-heading svg {
+  flex: none;
+  width: var(--dutch-icon-size);
+  height: var(--dutch-icon-size);
+  fill: currentColor;
+}
+
+.dutch-table-drawn .dutch-table-drawn-score {
+  padding: var(--dutch-score-padding);
+  background: rgb(0 0 0 / .45);
+  border-radius: 8px;
+  white-space: nowrap;
+  letter-spacing: var(--dutch-drawn-score-spacing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dutch-table-hand .dutch-table-shuffle-slot,
+  .dutch-table-hand .dutch-table-shake-card {
+    transform: none !important;
+  }
+
+  .dutch-table-drawn .dutch-table-drawn-frame {
+    transform: scale(var(--dutch-drawn-scale)) !important;
+  }
+}

@@ -22,7 +22,6 @@ class AnimatedCardTransition extends StatefulWidget {
   final VoidCallback? onComplete;
   final Duration duration;
   final Curve curve;
-  final bool preferBrowser;
 
   const AnimatedCardTransition({
     super.key,
@@ -34,7 +33,6 @@ class AnimatedCardTransition extends StatefulWidget {
     this.onComplete,
     this.duration = AppDurations.cardMove,
     this.curve = Curves.easeOutCubic,
-    this.preferBrowser = false,
   });
 
   @override
@@ -84,7 +82,9 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
       ),
     );
 
-    _useBrowser = widget.preferBrowser && webFlightAvailable;
+    _useBrowser = webFlightAvailable &&
+        (widget.curve == Curves.easeOutCubic ||
+            widget.curve == Curves.easeInOutCubic);
     if (_useBrowser) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _startBrowser());
     } else {
@@ -115,6 +115,7 @@ class _AnimatedCardTransitionState extends State<AnimatedCardTransition>
       box.size.width,
       box.size.height,
       widget.duration.inMilliseconds,
+      widget.curve == Curves.easeInOutCubic,
       (success) {
         if (!mounted) return;
         if (success) {
